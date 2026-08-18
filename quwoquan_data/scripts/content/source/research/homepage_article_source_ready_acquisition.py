@@ -45,6 +45,7 @@ from content.source.research.homepage_article_seed_selection import (
 
 SOURCE_POOL_SHORTFALL = "DATA.SOURCE.POOL_SHORTFALL"
 SOURCE_INVALID_EVIDENCE = "DATA.SOURCE.INVALID_EVIDENCE"
+SOURCE_ACQUISITION_FAILED = "DATA.SOURCE.ACQUISITION_FAILED"
 _SOURCE_SET_ID = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$")
 _COVERAGE_FILES = (
     "manifest.json",
@@ -323,7 +324,6 @@ def _acquire_carrier(
     *,
     carrier: str,
     required: int,
-    acquisition_concurrency: int,
     identity: Mapping[str, str],
     captured_at: str,
     evidence_root: Path,
@@ -496,14 +496,15 @@ def _acquire_carrier(
     pending_rows = [
         row for row in eligible if _seed_id(row) not in existing_by_seed
     ]
-    executor = ThreadPoolExecutor(max_workers=acquisition_concurrency)
+    if not pending_rows:
+        return bindings, accepted_coverage_ids, attempted
+    executor = ThreadPoolExecutor(max_workers=len(pending_rows))
     futures: list[tuple[dict[str, Any], Future[AcquiredSourceReadyCandidate]]] = [
-        (row, executor.submit(acquire, row)) for row in pending_rows[:remaining]
+        (row, executor.submit(acquire, row)) for row in pending_rows
     ]
-    next_candidate = len(futures)
     future_index = 0
     try:
-        while future_index < len(futures) and len(bindings) < required:
+        while future_index < len(futures):
             row, future = futures[future_index]
             future_index += 1
             attempted += 1
@@ -513,6 +514,8 @@ def _acquire_carrier(
             source = source if isinstance(source, Mapping) else {}
             try:
                 acquired = future.result()
+                if len(bindings) >= required:
+                    continue
                 physical = _physical_content(acquired)
                 if physical & used_content:
                     raise MediaWikiSourceReadyRejected(
@@ -545,13 +548,25 @@ def _acquire_carrier(
                         "reason": reason,
                     }
                 )
+            except Exception as exc:  # noqa: BLE001 - one source must not abort its batch
+                rejected = True
+                reason = (
+                    f"{SOURCE_ACQUISITION_FAILED}: "
+                    f"{type(exc).__name__}: {exc}"
+                )
+                rejection_counts[reason] += 1
+                rejections.append(
+                    {
+                        "carrier": carrier,
+                        "coverageEntityIdentity": coverage_id,
+                        "candidateName": str(row.get("candidateName") or ""),
+                        "entityType": str(row.get("entityType") or ""),
+                        "sourceKind": str(source.get("sourceKind") or ""),
+                        "sourceUrl": str(source.get("sourceUrl") or ""),
+                        "reason": reason,
+                    }
+                )
             if rejected:
-                if next_candidate < len(pending_rows):
-                    replacement = pending_rows[next_candidate]
-                    next_candidate += 1
-                    futures.append(
-                        (replacement, executor.submit(acquire, replacement))
-                    )
                 continue
             bindings.append(binding)
             accepted_coverage_ids.add(coverage_id)
@@ -574,7 +589,6 @@ def acquire_homepage_article_source_ready_batch(
     homepage_count: int,
     article_count: int,
     seed_selection: Path,
-    acquisition_concurrency: int = 1,
 ) -> dict[str, Any]:
     """Acquire exact source-ready counts and freeze a physical batch manifest."""
 
@@ -593,11 +607,6 @@ def acquire_homepage_article_source_ready_batch(
                 "homepage/article candidate counts must be non-negative "
                 "and at least one carrier must be active"
             ],
-        )
-    if not 1 <= acquisition_concurrency <= 32:
-        raise HomepageArticleSourceReadyAcquisitionError(
-            SOURCE_INVALID_EVIDENCE,
-            ["acquisition concurrency must be between 1 and 32"],
         )
     identity = _identity(
         source_revision=source_revision,
@@ -687,7 +696,6 @@ def acquire_homepage_article_source_ready_batch(
         active_selected["homepage"],
         carrier="homepage",
         required=homepage_count,
-        acquisition_concurrency=acquisition_concurrency,
         identity=identity,
         captured_at=captured_at,
         evidence_root=evidence_root,
@@ -702,7 +710,6 @@ def acquire_homepage_article_source_ready_batch(
         active_selected["article"],
         carrier="article",
         required=article_count,
-        acquisition_concurrency=acquisition_concurrency,
         identity=identity,
         captured_at=captured_at,
         evidence_root=evidence_root,

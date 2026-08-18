@@ -7,7 +7,13 @@ from types import SimpleNamespace
 import pytest
 from content.execution.queue import backend as queue_backend
 from content.execution.queue import jobs
-from content.execution.queue.partition import partition_count, partition_key
+from content.execution.queue.partition import (
+    MAX_PARTITION_COUNT,
+    MIN_PARTITION_COUNT,
+    checkpoint_policy_document,
+    partition_count,
+    partition_key,
+)
 from content.execution.queue.reliabletask import job_set as job_set_module
 from content.execution.queue.reliabletask import jobs as reliable_jobs
 from content.execution.queue.reliabletask.attempt import (
@@ -16,6 +22,7 @@ from content.execution.queue.reliabletask.attempt import (
 from content.execution.runtime_contract import canonical_sha256
 from core.control_types import QueueBackend, QueueJobStage
 from core.io import read_json, write_json
+from core.schema import assert_valid, load_schema
 
 EXECUTION_ID = "20260805--travel-image-m100--china--scale-101"
 M3_EXECUTION_ID = "20260805--travel-image-m3--china--scale-102"
@@ -183,15 +190,128 @@ def test_scale_semantic_stages_never_use_delivery_transport(
     ) is True
 
 
+def _declared_partition_bands() -> tuple[tuple[int, int | None, int], ...]:
+    """Read the governed partition topology straight from its declared contract."""
+    schema = load_schema("execution", "data_content_fleet_request")
+    bands: list[tuple[int, int | None, int]] = []
+    for branch in schema.get("allOf") or ():
+        rule = branch["if"]["properties"]["jobs"]
+        bands.append(
+            (
+                int(rule["minItems"]),
+                int(rule["maxItems"]) if "maxItems" in rule else None,
+                int(branch["then"]["properties"]["partitionCount"]["const"]),
+            )
+        )
+    if not bands:
+        raise AssertionError(
+            "data_content_fleet_request must declare the partition topology bands"
+        )
+    return tuple(bands)
+
+
+def _declared_partition_boundaries() -> tuple[tuple[int, int], ...]:
+    rows: list[tuple[int, int]] = []
+    for minimum, maximum, count in _declared_partition_bands():
+        rows.append((minimum, count))
+        if maximum is not None and maximum > minimum:
+            rows.append((maximum, count))
+    return tuple(rows)
+
+
 @pytest.mark.parametrize(
-    ("required_workers", "expected_count"),
-    ((1, 16), (4, 16), (5, 32), (16, 64), (33, 256), (65, 256)),
+    ("work_unit_count", "expected_count"),
+    _declared_partition_boundaries(),
 )
-def test_partition_count_is_power_of_two_and_capped(
-    required_workers: int,
+def test_partition_count_matches_declared_topology_bands(
+    work_unit_count: int,
     expected_count: int,
 ) -> None:
-    assert partition_count(required_workers) == expected_count
+    """Pin this side to the same declaration the Service importer validates against."""
+    assert partition_count(work_unit_count) == expected_count
+
+
+def _fleet_request_document(work_unit_count: int, partitions: int) -> dict[str, object]:
+    execution_id = "20260805--travel-image-m1000--china--scale-104"
+    revision = "sha256:" + "a" * 64
+
+    def work_unit(index: int) -> dict[str, object]:
+        entity_ref = f"/entity/地点/景区/西湖-{index:04d}"
+        object_ref = f"west-lake-{index:04d}"
+        return {
+            "entityRef": entity_ref,
+            "carrier": "image",
+            "sourceRevision": revision,
+            "idempotencyKey": (
+                f"{execution_id}|{entity_ref}|image|{revision}|author"
+            ),
+            "jobId": f"job-author-{index:04d}",
+            "executionId": execution_id,
+            "ref": object_ref,
+            "stage": "author",
+            "partitionKey": partition_key("image", object_ref, partitions),
+            "maxAttempts": 3,
+        }
+
+    return {
+        "schema": "quwoquan.data_content_fleet_request",
+        "executionId": execution_id,
+        "campaignScale": "M1000",
+        "scaleClass": "M100_PLUS",
+        "executionEnvelopeDigest": "sha256:" + "e" * 64,
+        "jobSetEnvelopeDigest": "sha256:" + "d" * 64,
+        "jobSetDigest": "sha256:" + "c" * 64,
+        "actualTaskDigest": "sha256:" + "b" * 64,
+        # requiredWorkers carries the approved quota; it must never reach the
+        # partition topology, which is why it is deliberately off-band here.
+        "requiredWorkers": work_unit_count,
+        "partitionCount": partitions,
+        "partitionAlgorithm": "sha256_carrier_object_ref_mod_v1",
+        "checkpointPolicy": checkpoint_policy_document(),
+        "recoverDeadTasks": False,
+        "objectTimeoutMilliseconds": 120000,
+        "globalRequiredQuota": work_unit_count,
+        "requiredQuota": work_unit_count,
+        "jobs": [work_unit(index) for index in range(work_unit_count)],
+    }
+
+
+@pytest.mark.parametrize("work_unit_count", (3, 7, 10, 18, 100, 180, 1000))
+def test_fleet_request_contract_rejects_worker_derived_partition_count(
+    work_unit_count: int,
+) -> None:
+    """The declared contract admits only the job-count derivation, fail-closed."""
+    expected = partition_count(work_unit_count)
+    assert_valid(
+        _fleet_request_document(work_unit_count, expected),
+        "execution",
+        "data_content_fleet_request",
+        label="data_content_fleet_request",
+    )
+    for drifted in (16, 32, 64, 128, 256):
+        if drifted == expected:
+            continue
+        with pytest.raises(ValueError, match="partitionCount"):
+            assert_valid(
+                _fleet_request_document(work_unit_count, drifted),
+                "execution",
+                "data_content_fleet_request",
+                label="data_content_fleet_request",
+            )
+
+
+def test_declared_partition_topology_covers_the_governed_bounds() -> None:
+    schema = load_schema("execution", "data_content_fleet_request")
+    bands = _declared_partition_bands()
+    declared_counts = sorted({count for _, _, count in bands})
+    assert sorted(schema["properties"]["partitionCount"]["enum"]) == declared_counts
+    assert declared_counts[0] == MIN_PARTITION_COUNT
+    assert declared_counts[-1] == MAX_PARTITION_COUNT
+    # Bands must tile every work-unit count without a gap or an overlap.
+    assert bands[0][0] == 1
+    assert bands[-1][1] is None
+    for (_, previous_max, _), (current_min, _, _) in zip(bands, bands[1:]):
+        assert previous_max is not None and current_min == previous_max + 1
 
 
 def test_m10000_semantic_backend_is_independent_from_governed_pool_delivery(

@@ -11,7 +11,6 @@ import json
 import os
 import re
 import tempfile
-import unicodedata
 from collections import Counter
 from collections.abc import Iterable, Mapping
 from pathlib import Path
@@ -20,6 +19,7 @@ from typing import Any
 from core.io import read_json
 from core.schema import assert_valid
 from core.source_attribution import canonical_source_attribution
+from content.execution.campaign.lane import normalize_workloads
 
 from content.source.research.scale_source_pool_evidence_path import (
     ScaleSourcePoolEvidencePathError,
@@ -27,6 +27,11 @@ from content.source.research.scale_source_pool_evidence_path import (
     resolve_evidence_directory,
     resolve_evidence_file,
     resolve_evidence_root,
+)
+from content.source.research.scale_source_pool_metrics import (
+    image_mix as _image_mix,
+    normalized_provider as _normalized_provider,
+    video_popularity_ready as _video_popularity_ready,
 )
 
 SOURCE_POOL_SHORTFALL = "DATA.SOURCE.POOL_SHORTFALL"
@@ -36,6 +41,7 @@ SOURCE_POOL_EVIDENCE_INVALID = "DATA.SOURCE.POOL_EVIDENCE_INVALID"
 
 _CARRIERS = ("homepage", "article", "image", "video")
 _MILESTONES = frozenset({"M100", "M1000", "M10000"})
+_WORKLOAD_SCALE = "WORKLOAD"
 _DEFAULT_WAVE_CANDIDATE_COUNTS = {
     "homepage": 12,
     "article": 12,
@@ -43,21 +49,6 @@ _DEFAULT_WAVE_CANDIDATE_COUNTS = {
     "video": 12,
 }
 _SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
-_PIN_ALIASES = frozenset({"pinterest", "pinterest.com", "www.pinterest.com"})
-_TUCHONG_ALIASES = frozenset(
-    {
-        "tuchong",
-        "tuchong.com",
-        "www.tuchong.com",
-        "图虫",
-        "图虫社区",
-        "图虫创意",
-        "tuchong stock",
-        "tuchong_stock_authorized",
-    }
-)
-
-
 class ScaleSourcePoolError(ValueError):
     """Typed source-pool blocker."""
 
@@ -89,16 +80,6 @@ def _canonical_digest(document: Mapping[str, Any]) -> str:
         separators=(",", ":"),
     ).encode("utf-8")
     return "sha256:" + hashlib.sha256(payload).hexdigest()
-
-
-def _normalized_provider(value: object) -> str:
-    provider = unicodedata.normalize("NFKC", str(value or "")).strip().casefold()
-    provider = re.sub(r"\s+", " ", provider)
-    if provider in _PIN_ALIASES:
-        return "pinterest"
-    if provider in _TUCHONG_ALIASES:
-        return "tuchong"
-    return provider
 
 
 def _safe_ref(value: object, *, label: str) -> str:
@@ -174,89 +155,6 @@ def _video_issues(candidate: Mapping[str, Any], *, candidate_id: str) -> list[st
     return issues
 
 
-def _video_popularity_ready(candidate: Mapping[str, Any]) -> bool:
-    readiness = candidate.get("videoReadiness")
-    if not isinstance(readiness, Mapping):
-        return False
-    for field in ("playCount", "likeCount", "commentCount", "shareCount", "favoriteCount"):
-        value = readiness.get(field)
-        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-            return False
-    if not str(readiness.get("observedAt") or "").strip():
-        return False
-    percentile = readiness.get("popularityPercentile")
-    if (
-        isinstance(percentile, bool)
-        or not isinstance(percentile, (int, float))
-        or not 0 <= float(percentile) <= 1
-    ):
-        return False
-    comparison = readiness.get("comparisonBucket")
-    if not isinstance(comparison, Mapping):
-        return False
-    if _normalized_provider(comparison.get("provider")) != _normalized_provider(
-        candidate.get("provider")
-    ):
-        return False
-    if any(
-        not str(comparison.get(field) or "").strip()
-        for field in ("topic", "timeBucket")
-    ):
-        return False
-    count = comparison.get("candidateCount")
-    return not isinstance(count, bool) and isinstance(count, int) and count >= 2
-
-
-def _image_mix(counts: Counter[str], *, total: int) -> dict[str, Any]:
-    pinterest = counts["pinterest"]
-    tuchong = counts["tuchong"]
-    professional = pinterest + tuchong
-    largest_other = max(
-        (count for provider, count in counts.items() if provider != "pinterest"),
-        default=0,
-    )
-    dominant = sorted(
-        provider for provider, count in counts.items() if count * 10 > total * 7
-    )
-    rows = [
-        {
-            "provider": provider,
-            "candidateCount": count,
-            "candidateRatio": round(count / total, 6) if total else 0.0,
-        }
-        for provider, count in sorted(counts.items())
-    ]
-    largest_provider = (
-        min(
-            provider
-            for provider, count in counts.items()
-            if count == max(counts.values())
-        )
-        if counts
-        else ""
-    )
-    return {
-        "totalCandidateCount": total,
-        "pinterestCandidateCount": pinterest,
-        "tuchongCandidateCount": tuchong,
-        "pinterestTuchongCandidateRatio": (
-            round(professional / total, 6) if total else 0.0
-        ),
-        "largestProvider": largest_provider,
-        "maxProviderCandidateRatio": max(
-            (round(count / total, 6) for count in counts.values()),
-            default=0.0,
-        ),
-        "providerCandidateCounts": rows,
-        "policyObservations": {
-            "pinterestUniqueLargest": bool(pinterest > largest_other),
-            "tuchongPresent": bool(tuchong),
-            "pinterestTuchongAtLeastHalf": bool(total and professional * 2 >= total),
-            "providerAboveSeventyPercent": dominant,
-        },
-    }
-
-
 def _assert_pool_document(plan: Mapping[str, Any]) -> tuple[str, str, str]:
     try:
         assert_valid(dict(plan), "source", "scale_source_pool", label="scale source pool")
@@ -272,6 +170,23 @@ def validate_scale_source_pool(plan: Mapping[str, Any]) -> dict[str, Any]:
     """Validate one immutable source-ready pool and return derived evidence."""
 
     plan_identity = _assert_pool_document(plan)
+    expected_mode = (
+        "milestone_preset"
+        if plan["targetScale"] in _MILESTONES
+        and tuple(plan["activeCarriers"]) == _CARRIERS
+        else "explicit"
+    )
+    if plan["workloadMode"] != expected_mode:
+        raise ScaleSourcePoolError(
+            SOURCE_POOL_INVALID, ["workloadMode drifts from targetScale adapter"]
+        )
+    active = tuple(plan["activeCarriers"])
+    try:
+        workloads = normalize_workloads(
+            plan["workloadTargets"], active_carriers=active
+        )
+    except (TypeError, ValueError) as exc:
+        raise ScaleSourcePoolError(SOURCE_POOL_INVALID, [exc]) from exc
     declared_wave = {
         str(row["carrier"]): int(row["minimumCandidateCount"])
         for row in plan["waveCandidateCounts"]
@@ -341,12 +256,25 @@ def validate_scale_source_pool(plan: Mapping[str, Any]) -> dict[str, Any]:
         ):
             issues.append(f"{candidate_id} non-video playability evidence must be null")
 
-    actual_wave = {carrier: counts[carrier] for carrier in _CARRIERS}
+    actual_wave = {carrier: counts[carrier] for carrier in active}
     if declared_wave != actual_wave:
         issues.append(
             "waveCandidateCounts drift from current physical candidates: "
             f"declared={declared_wave} actual={actual_wave}"
         )
+    inactive_counts = {
+        carrier: counts[carrier]
+        for carrier in _CARRIERS
+        if carrier not in active and counts[carrier]
+    }
+    if inactive_counts:
+        issues.append(f"inactive carrier candidates are forbidden: {inactive_counts}")
+    for carrier, target in workloads.items():
+        if counts[carrier] < target:
+            issues.append(
+                f"{carrier} candidateCount={counts[carrier]} "
+                f"workloadTarget={target}"
+            )
     if duplicate_count:
         issues.append(f"cross-carrier duplicateCount={duplicate_count}, required=0")
     if entity_mismatch_count:
@@ -361,6 +289,8 @@ def validate_scale_source_pool(plan: Mapping[str, Any]) -> dict[str, Any]:
         "schema": "quwoquan_data.scale_source_pool_validation",
         "poolId": plan["poolId"],
         "targetScale": plan["targetScale"],
+        "activeCarriers": list(active),
+        "workloadTargets": workloads,
         "planDigest": plan["planDigest"],
         "sourceRevision": plan["sourceRevision"],
         "sourceDigest": plan["sourceDigest"],
@@ -371,7 +301,7 @@ def validate_scale_source_pool(plan: Mapping[str, Any]) -> dict[str, Any]:
                 "minimumCandidateCount": declared_wave[carrier],
                 "actualCandidateCount": counts[carrier],
             }
-            for carrier in _CARRIERS
+            for carrier in active
         ],
         "duplicateCount": 0,
         "entityMismatchCount": 0,
@@ -470,25 +400,56 @@ def validate_scale_source_pool_evidence(
 def build_scale_source_pool_plan(
     *,
     pool_id: str,
-    target_scale: str,
+    target_scale: str | None,
     source_revision: str,
     source_digest: str,
     entity_catalog_digest: str,
     created_at: str,
     candidates: Iterable[Mapping[str, Any]],
+    workload_targets: Mapping[str, int] | None = None,
 ) -> dict[str, Any]:
     """Build and validate a deterministic source-ready pool document."""
 
-    if str(target_scale).strip() not in _MILESTONES:
-        required_candidate_counts(target_scale)
+    scale_descriptor = str(target_scale or "").strip() or _WORKLOAD_SCALE
+    if scale_descriptor not in _MILESTONES | {_WORKLOAD_SCALE}:
+        raise ScaleSourcePoolError(
+            SOURCE_POOL_INVALID,
+            [f"unsupported targetScale={target_scale!r}"],
+        )
+    if scale_descriptor == _WORKLOAD_SCALE and workload_targets is None:
+        raise ScaleSourcePoolError(
+            SOURCE_POOL_INVALID,
+            ["WORKLOAD source pool requires explicit workloadTargets"],
+        )
     ordered = sorted(
         (dict(candidate) for candidate in candidates),
         key=lambda row: (str(row.get("carrier")), str(row.get("objectRef"))),
     )
+    physical_counts = Counter(
+        str(candidate.get("carrier") or "") for candidate in ordered
+    )
+    if workload_targets is None:
+        active = tuple(
+            carrier for carrier in _CARRIERS if physical_counts[carrier] > 0
+        )
+        workloads = {carrier: physical_counts[carrier] for carrier in active}
+    else:
+        try:
+            workloads = normalize_workloads(workload_targets)
+        except (TypeError, ValueError) as exc:
+            raise ScaleSourcePoolError(SOURCE_POOL_INVALID, [exc]) from exc
+        active = tuple(workloads)
     stable: dict[str, Any] = {
         "schema": "quwoquan_data.scale_source_pool",
         "poolId": str(pool_id).strip(),
-        "targetScale": target_scale,
+        "targetScale": scale_descriptor,
+        "workloadMode": (
+            "milestone_preset"
+            if scale_descriptor in _MILESTONES and active == _CARRIERS
+            else "explicit"
+        ),
+        "activeCarriers": list(active),
+        "workloadTargets": workloads,
         "sourceRevision": source_revision,
         "sourceDigest": source_digest,
         "entityCatalogDigest": entity_catalog_digest,
@@ -501,7 +462,7 @@ def build_scale_source_pool_plan(
                     for candidate in ordered
                 ),
             }
-            for carrier in _CARRIERS
+            for carrier in active
         ],
         "candidates": ordered,
     }

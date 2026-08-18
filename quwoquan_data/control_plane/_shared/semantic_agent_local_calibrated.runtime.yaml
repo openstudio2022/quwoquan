@@ -23,14 +23,21 @@ policy:
       sampleRate: 0.1
       minimumSampleCount: 10
       smallBatchPolicy: all
-    # Cursor Grok 是四路内容生产的显式首选；Cursor Auto 只允许在 Grok
+    # Cursor Grok 是内容生产的显式首选；Cursor Auto 只允许在 Grok
     # execution 留下 typed provider/model failure journal 后，由操作者显式
     # 创建新的 retryOf execution。任何 execution 都不得原地换 Provider/model。
+    # model 与 modelParameters 是运行绑定而非架构常量：schema 只约束
+    # provider/runtime，具体取值由本文件声明，并由 preflight 对账号 model
+    # catalog 实测校验（effort=xhigh 只在 4.6 起提供，4.5 仅到 high）。
     explicitSelections:
       - selectionId: cursor_grok
         provider: cursor_sdk
-        model: grok-4.5
-        modelParameters: []
+        model: grok-4.6
+        modelParameters:
+          - id: effort
+            value: xhigh
+          - id: fast
+            value: "false"
         runtime: local
         requiresNewRetryOf: false
       - selectionId: cursor_auto
@@ -39,63 +46,34 @@ policy:
         modelParameters: []
         runtime: local
         requiresNewRetryOf: true
-    # Opaque scope IDs never contain credentials. The provider/account/host
-    # tuple owns one shared token bucket and per-lane concurrency ceiling.
-    capacity:
-      accountScopeId: primary-semantic-account
-      hostScopeId: local-data-host
-      requestsPerMinute: 60
-      burstLimit: 4
-      laneConcurrencyLimit: 2
-      receiptTtlSeconds: 600
-  workers:
-    # 每个 detached carrier 只保留一个语义工作槽，四载体并发由 campaign
-    # lane 提供；跨进程 capacity broker 负责 provider 公平配额与快速熔断。
-    author: 1
-    reviewer: 1
-    research: 1
-    download: 4
-    campaignLaneWorkers: 4
-    # ReliableTask job-set 按 worker 数扩展确定性分区；partition helper 与
-    # M1000/M10000 capacity planner 只读取这一处治理值。
-    partitionsPerWorker: 4
-    # 主机级并发 bridge 上限，按 campaignLaneWorkers 对齐：每条 lane 在自己的
-    # execution root 里独占一个 bridge。lane 内语义工作槽仍由 author 限为 1。
-    cursorBridgeInstances: 4
   selection:
-    # 候选池 = ceil(准出配额 * oversampleFactor)。1.8 来自实测首过率，
+    # 首轮候选池 = ceil(准出配额 * oversampleFactor)。1.8 来自实测首过率，
     # 质量不达标的对象直接丢弃、不重试，靠过采补足配额。
     oversampleFactor: 1.8
+    # 首轮过采只覆盖实测首过率；剩余缺口靠 quotaPursuit 逐轮补货，而不是把
+    # oversampleFactor 调到覆盖最坏情况。十级/百级/千级只改配额，本段不变。
+    quotaPursuit:
+      # 每轮补货池 = ceil(剩余缺口 * replenishFactor)。
+      replenishFactor: 1.5
+      # 含首轮在内的轮次硬顶；耗尽即 round_budget_exhausted 失败。
+      maxRounds: 8
+      # 连续多少轮零新增合格产出即判定 stall 并停止。
+      stallRounds: 2
   runtimeEvidence:
     # 固定 OS process inspection 和 queue fault-event observation 都由本 profile
     # 统一治理；CLI 不接受调用者覆盖，runner 也不保留数字默认。
     processInspectionTimeoutSeconds: 5.0
     queueFaultEventTimeoutSeconds: 120.0
+    semanticPreflightReceiptTtlSeconds: 600
   budgets:
     startupTimeoutSeconds: 600
     campaignSubmissionTimeoutSeconds: 3600
-    # 单 lane 保持一个语义槽。按 M100 实测，M1000 的 1800
-    # 候选采集约 32 小时、1000 对象创作约 17 小时；72 小时给 review、
-    # publish 与有界恢复留出余量，同时仍由 controller 超时硬终止。
-    campaignLaneTimeoutSeconds:
-      BELOW_M100: 86400
-      M100: 259200
-      M1000: 259200
-      M10000: 604800
     preflightNetworkTimeoutSeconds: 5
     agentTimeoutSeconds: 2400
     authRetryLimit: 3
     authRetryDelaySeconds: 30
     noProgressRoundLimit: 6
-    # 12 个对象共享一个 research writer 生命周期；每个 lane 进程最多处理
-    # 4 waves（48 对象）后以 create-once checkpoint 让同一 execution resume。
-    # 四 lane × 每 lane 1 research worker = ReliableTask/host burst capacity 4。
-    researchWaveSize: 12
-    researchMaxWavesPerRun: 4
     sourcePlanRecoveryPasses: 1
-    sourcePlanRecoveryWorkers: 1
-    coldStartMaxWorkers: 1
-    workerStaggerSeconds: 15.0
     managedFutureGraceSeconds: 15
     schedulerStaleSeconds: 900
     controllerLeaseStaleSeconds: 900
@@ -116,7 +94,6 @@ policy:
     downloadTextTimeoutSeconds: 20
     downloadBytesTimeoutSeconds: 8
     stageNoProgressTimeoutSeconds: 1800
-    researchWaveBudgetSeconds: 1800
     networkBreakerThreshold: 6
     localProcessProbeTimeoutSeconds: 2
     processTerminationTimeoutSeconds: 5
@@ -166,7 +143,6 @@ policy:
     retryBackoffMultiplier: 2.0
     wikidataSparqlEndpoint: https://query.wikidata.org/sparql
     wikidataResultLimit: 500
-    overpassConcurrency: 4
     overpassResultLimit: 500
     overpassEndpoints:
       - https://maps.mail.ru/osm/tools/overpass/api/interpreter

@@ -22,9 +22,36 @@ from quwoquan_ops.cli.lib import deployment_candidate_manifest as subject
 class DeploymentCandidateManifestContractBase(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
+        compiled = {
+            "schema": "compiled-external-provider-bindings",
+            "issues": [],
+            "selectedBindings": {
+                "alpha": {
+                    "identity.sms.otp": {
+                        "state": "enabled",
+                        "adapter_id": "ext.sms.local_capture",
+                        "endpoint_ref": "local_topology:sms-provider-substitute",
+                        "endpoint_envs": {
+                            "endpoint": "INTEGRATION_SMS_ENDPOINT",
+                        },
+                        "secret_refs": ["INTEGRATION_SMS_TOKEN"],
+                    },
+                    "runtime.log.sink": {
+                        "state": "enabled",
+                        "adapter_id": "ext.obs.elasticsearch",
+                        "endpoint_ref": "local_topology:alpha.elasticsearch",
+                        "endpoint_envs": {
+                            "endpoint": "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT",
+                        },
+                        "secret_refs": [],
+                    },
+                },
+            },
+        }
         cls.provider_runtime_fixture = subject.compile_provider_runtime_composition(
             environment="alpha",
             target="alpha-local",
+            compiled=compiled,
         )
 
     def setUp(self) -> None:
@@ -50,6 +77,14 @@ class DeploymentCandidateManifestContractBase(unittest.TestCase):
         digest = "sha256:" + "a" * 64
         self.configuration_digest = "sha256:" + "1" * 64
         self.runtime_config_digest = "sha256:" + "2" * 64
+        self.workspace_digest = digest
+        self.environment_artifact_schema = json.loads(
+            (
+                subject.ROOT
+                / "quwoquan_service/contracts/metadata/_schemas"
+                / "environment_artifact_identity.schema.json"
+            ).read_text(encoding="utf-8")
+        )
         self.contract_graph = self.root / "contract_graph.json"
         self.contract_graph.write_text(
             json.dumps({"objects": [], "operations": []}) + "\n",
@@ -73,6 +108,10 @@ class DeploymentCandidateManifestContractBase(unittest.TestCase):
                     "schema": "environment-runtime-package",
                     "environment": "alpha",
                     "target": "alpha-local",
+                    "publicBases": {
+                        "api": "https://api.alpha.example",
+                        "publicWeb": "https://www.alpha.example",
+                    },
                 }
             )
             + "\n",
@@ -86,7 +125,12 @@ class DeploymentCandidateManifestContractBase(unittest.TestCase):
             json.dumps(
                 {
                     "candidateType": subject.RUNTIME_CANDIDATE_TYPE,
+                    "environment": "alpha",
+                    "target": "alpha-local",
                     "includeServices": True,
+                    "baselineId": self.snapshot["baselineId"],
+                    "sourceRevision": self.snapshot["sourceRevision"],
+                    "workspaceStatusDigest": self.snapshot["workspaceStatusDigest"],
                     "releaseInputClassification": "commercial_inputs",
                     "contractGraphDigest": self.contract_graph_digest,
                     "graphqlReadRegistry": self.graphql_read_registry,
@@ -103,6 +147,23 @@ class DeploymentCandidateManifestContractBase(unittest.TestCase):
                     "buildInputDigest": digest,
                     "imageDigest": "sha256:" + "e" * 64,
                 }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        self.runtime_topology_path = (
+            self.shared / "runtime-topology" / "manifest.json"
+        )
+        self.runtime_topology_path.parent.mkdir(parents=True)
+        self.runtime_topology_path.write_text(
+            json.dumps(
+                {
+                    "schema": "qwq.runtime_topology_package.v3",
+                    "environment": "alpha",
+                    "target": "alpha-local",
+                    "topologyDigest": "sha256:" + "f" * 64,
+                },
+                sort_keys=True,
             )
             + "\n",
             encoding="utf-8",
@@ -184,7 +245,11 @@ class DeploymentCandidateManifestContractBase(unittest.TestCase):
                 self.provider_runtime,
             )
         )
-        subject.materialize_provider_runtime_package("alpha", "alpha-local")
+        subject.materialize_provider_runtime_package(
+            "alpha",
+            "alpha-local",
+            source_root=subject.ROOT,
+        )
         self.provider_images = {}
         for index, workload in enumerate(self.provider_runtime["workloads"], start=4):
             role = str(workload["role"])

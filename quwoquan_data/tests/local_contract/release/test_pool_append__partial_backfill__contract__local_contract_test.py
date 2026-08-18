@@ -13,6 +13,7 @@ sys.path.insert(0, str(DATA_SCRIPTS))
 
 from content.release.canonical import (  # noqa: E402
     creator_projection,
+    pool_append as pool_append_subject,
     pool_attribution_repair,
     pool_backfill_canonical,
 )
@@ -27,6 +28,9 @@ from content.release.canonical.content_pool_record import (  # noqa: E402
 from content.release.canonical.object_source_identity import (  # noqa: E402
     source_identity_digest,
 )
+from content.release.canonical.object_transaction_contract import (  # noqa: E402
+    ObjectTransactionError,
+)
 from content.release.canonical.pool_append import (  # noqa: E402
     BATCH_SCHEMA,
     append_pool_batch,
@@ -37,9 +41,10 @@ from content.release.canonical.pool_attribution_repair import (  # noqa: E402
 )
 from core.io import write_json  # noqa: E402
 from core.source_digest import (  # noqa: E402
-    SourceDigest,
+    SourceDefinitionSnapshot,
     content_source_revision,
 )
+from support.media_fixture import admit_media_body  # noqa: E402
 
 
 def _digest(path: Path) -> str:
@@ -126,7 +131,6 @@ def _creator_fixture(
     monkeypatch.setattr(
         creator_projection, "CONTROL_PLANE_CREATOR_POOL_ROOT", creator_pool
     )
-    monkeypatch.setattr(creator_projection, "PUBLISH_ROOT", publish)
     return creator_pool, publish, profile_path, evidence
 
 
@@ -138,7 +142,9 @@ def _content_item(root: Path, index: int, *, passed: bool) -> dict[str, object]:
             "contentId": f"content-{index}",
             "version": 1,
             "executionId": "execution-a",
-            "sourceDigest": SourceDigest("sha256:" + "2" * 64).to_document(),
+            "sourceDigest": SourceDefinitionSnapshot(
+                "sha256:" + "2" * 64
+            ).to_document(),
             "sourceIdentity": _source_identity(),
             "sourceAttribution": _source_attribution(),
             "contentType": "article",
@@ -173,7 +179,7 @@ def _content_item(root: Path, index: int, *, passed: bool) -> dict[str, object]:
     }
 
 
-def test_pool_append_rejects_mixed_admission_batch_without_mutation(
+def test_pool_append_applies_good_objects_and_keeps_pending_siblings_typed(
     tmp_path: Path,
 ) -> None:
     publish = tmp_path / "publish"
@@ -186,18 +192,74 @@ def test_pool_append_rejects_mixed_admission_batch_without_mutation(
 
     report = append_pool_batch(input_path=batch, publish_root=publish, apply=True)
 
-    assert report["result"] == "blocked"
+    assert report["result"] == "partial"
     assert report["counts"] == {
         "total": 10,
-        "ready": 0,
+        "ready": 7,
         "eligibilityPending": 3,
-        "failed": 7,
+        "failed": 0,
     }
     for index in range(10):
         record = latest_pool_record(
             publish / "posts" / "article" / f"work-{index}" / "1", "content"
         )
-        assert record is None
+        if index < 7:
+            assert record is not None
+            assert is_pool_record_admitted(record)
+        else:
+            assert record is None
+    assert {
+        row["itemId"] for row in report["items"] if row["status"] == "pending"
+    } == {"content-7", "content-8", "content-9"}
+    assert {
+        row["itemId"] for row in report["reasons"]
+    } == {"content-7", "content-8", "content-9"}
+
+
+def test_pool_append_isolates_business_apply_failure_from_successful_sibling(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    publish = tmp_path / "publish"
+    items = [_content_item(publish, index, passed=True) for index in range(2)]
+    batch = tmp_path / "business-failure.json"
+    write_json(
+        batch,
+        {"schema": BATCH_SCHEMA, "appendSetId": "business-failure", "items": items},
+    )
+    real_apply = pool_append_subject._apply_item
+
+    def flaky_apply(item: object, **kwargs: object) -> dict[str, object]:
+        assert isinstance(item, dict)
+        if kwargs["apply"] and item["itemId"] == "content-1":
+            raise ObjectTransactionError("DATA.POOL.ADMISSION_FAILED")
+        return real_apply(item, **kwargs)
+
+    monkeypatch.setattr(pool_append_subject, "_apply_item", flaky_apply)
+
+    report = append_pool_batch(input_path=batch, publish_root=publish, apply=True)
+
+    assert report["result"] == "partial"
+    assert report["counts"] == {
+        "total": 2,
+        "ready": 1,
+        "eligibilityPending": 0,
+        "failed": 1,
+    }
+    assert latest_pool_record(
+        publish / "posts/article/work-0/1", "content"
+    ) is not None
+    assert latest_pool_record(
+        publish / "posts/article/work-1/1", "content"
+    ) is None
+    assert report["items"][1]["status"] == "excluded"
+    assert report["reasons"] == [
+        {
+            "category": "eligibility",
+            "itemId": "content-1",
+            "code": "DATA.POOL.ADMISSION_FAILED",
+        }
+    ]
 
 
 def test_same_version_same_record_replays_and_different_record_only_rejects_item(
@@ -261,7 +323,6 @@ def test_author_append_is_independent_and_avatar_is_optional(
     monkeypatch.setattr(
         creator_projection, "CONTROL_PLANE_CREATOR_POOL_ROOT", creator_pool
     )
-    monkeypatch.setattr(creator_projection, "PUBLISH_ROOT", publish)
 
     plan = plan_pool_backfill(
         publish_root=publish, creator_pool_root=creator_pool
@@ -371,11 +432,9 @@ def test_modern_video_record_is_not_replanned_and_ready_matches_admitted(
 ) -> None:
     publish = tmp_path / "publish"
     post = publish / "posts/video/体验/已准入视频/1"
-    video = post / "assets/video.mp4"
-    poster = post / "assets/poster.webp"
-    video.parent.mkdir(parents=True)
-    video.write_bytes(b"video")
-    poster.write_bytes(b"poster")
+    post.mkdir(parents=True)
+    video_digest = admit_media_body(b"video")
+    poster_digest = admit_media_body(b"poster")
     write_json(
         post / "manifest.json",
         {
@@ -384,16 +443,18 @@ def test_modern_video_record_is_not_replanned_and_ready_matches_admitted(
             "contentType": "video",
             "authorId": "author-a",
             "executionId": "execution-a",
-            "sourceDigest": SourceDigest("sha256:" + "2" * 64).to_document(),
+                "sourceDigest": SourceDefinitionSnapshot(
+                    "sha256:" + "2" * 64
+                ).to_document(),
             "sourceIdentity": _source_identity(),
             "sourceAttribution": _source_attribution(),
             "assets": [
                 {
                     "kind": "video",
                     "fileName": "assets/video.mp4",
-                    "sha256": _digest(video),
+                    "sha256": video_digest,
                     "posterFileName": "assets/poster.webp",
-                    "posterSha256": _digest(poster),
+                    "posterSha256": poster_digest,
                 }
             ],
         },
@@ -445,11 +506,9 @@ def test_identity_invalid_video_is_typed_excluded(
 ) -> None:
     publish = tmp_path / "publish"
     post = publish / "posts/video/体验/身份无效视频/1"
-    video = post / "assets/video.mp4"
-    poster = post / "assets/poster.webp"
-    video.parent.mkdir(parents=True)
-    video.write_bytes(b"video")
-    poster.write_bytes(b"poster")
+    post.mkdir(parents=True)
+    video_digest = admit_media_body(b"video")
+    poster_digest = admit_media_body(b"poster")
     write_json(
         post / "manifest.json",
         {
@@ -462,9 +521,9 @@ def test_identity_invalid_video_is_typed_excluded(
                 {
                     "kind": "video",
                     "fileName": "assets/video.mp4",
-                    "sha256": _digest(video),
+                    "sha256": video_digest,
                     "posterFileName": "assets/poster.webp",
-                    "posterSha256": _digest(poster),
+                    "posterSha256": poster_digest,
                 }
             ],
         },
@@ -521,7 +580,9 @@ def test_backfill_keeps_unverified_redistribution_pending(tmp_path: Path) -> Non
                 **_source_attribution(),
             },
             "executionId": "execution-a",
-            "sourceDigest": SourceDigest("sha256:" + "2" * 64).to_document(),
+                "sourceDigest": SourceDefinitionSnapshot(
+                    "sha256:" + "2" * 64
+                ).to_document(),
             "sourceIdentity": _source_identity(),
         },
     )
@@ -599,7 +660,9 @@ def test_pre_sequence_record_shape_blocks_backfill(tmp_path: Path) -> None:
             "authorId": "author-a",
             "reviewDecision": "approved",
             "executionId": "pre-contract-execution-a",
-            "sourceDigest": SourceDigest("sha256:" + "2" * 64).to_document(),
+                "sourceDigest": SourceDefinitionSnapshot(
+                    "sha256:" + "2" * 64
+                ).to_document(),
             "sourceAttribution": _source_attribution(),
         },
     )
@@ -652,7 +715,9 @@ def test_backfill_emits_typed_attribution_repair_requirement(tmp_path: Path) -> 
             "contentType": "image",
             "authorId": "author-a",
             "executionId": "execution-a",
-            "sourceDigest": SourceDigest("sha256:" + "2" * 64).to_document(),
+                "sourceDigest": SourceDefinitionSnapshot(
+                    "sha256:" + "2" * 64
+                ).to_document(),
             "sourceIdentity": _source_identity(),
             "sourceAttribution": {"isOriginal": False},
         },
@@ -685,11 +750,9 @@ def test_video_migration_reprobes_motion_and_access_safety(
 ) -> None:
     publish = tmp_path / "publish"
     post = publish / "posts/video/体验/旧视频/1"
-    video = post / "assets/video.mp4"
-    poster = post / "assets/poster.webp"
-    video.parent.mkdir(parents=True)
-    video.write_bytes(b"real-video-bytes")
-    poster.write_bytes(b"poster-bytes")
+    post.mkdir(parents=True)
+    video_digest = admit_media_body(b"real-video-bytes")
+    poster_digest = admit_media_body(b"poster-bytes")
     write_json(
         post / "manifest.json",
         {
@@ -698,16 +761,18 @@ def test_video_migration_reprobes_motion_and_access_safety(
             "contentType": "video",
             "authorId": "author-a",
             "executionId": "execution-a",
-            "sourceDigest": SourceDigest("sha256:" + "2" * 64).to_document(),
+                "sourceDigest": SourceDefinitionSnapshot(
+                    "sha256:" + "2" * 64
+                ).to_document(),
             "sourceIdentity": _source_identity(),
             "sourceAttribution": _source_attribution(),
             "assets": [
                 {
                     "kind": "video",
                     "fileName": "assets/video.mp4",
-                    "sha256": _digest(video),
+                    "sha256": video_digest,
                     "posterFileName": "assets/poster.webp",
-                    "posterSha256": _digest(poster),
+                    "posterSha256": poster_digest,
                 }
             ],
         },
@@ -775,7 +840,9 @@ def test_repair_producer_rejects_pre_sequence_sidecar_without_rewrite(
             "contentType": "image",
             "authorId": "author-a",
             "executionId": "legacy-execution-a",
-            "sourceDigest": SourceDigest("sha256:" + "2" * 64).to_document(),
+                "sourceDigest": SourceDefinitionSnapshot(
+                    "sha256:" + "2" * 64
+                ).to_document(),
         },
     )
     evidence = _attestation(post)

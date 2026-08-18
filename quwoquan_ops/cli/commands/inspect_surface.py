@@ -221,6 +221,23 @@ def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
                 "issues": [str(error)],
             }
             findings.append(f"release distribution: {error}")
+    try:
+        user_availability = _stackctl._read_only_user_availability_report(args.target)
+    except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as error:
+        detail = f"read-only availability aggregation blocked: {error}"
+        user_availability = {
+            "schema": "stackctl.read_only_user_availability/v1",
+            "target": args.target,
+            "environment": env_name,
+            "status": "failed",
+            "firstBlockerClass": "startup_identity",
+            "firstBlocker": detail,
+            "userAvailability": [],
+            "metrics": [],
+            "evidence": {},
+        }
+        findings.append(detail)
+    inspection["userAvailability"] = user_availability
     output_inspection = dict(inspection)
     timing = _stackctl._finish_timing(started_monotonic, started_at)
     _stackctl.write_json(
@@ -240,11 +257,21 @@ def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
         report_dir / "findings.json",
         {"target": args.target, "scope": args.scope, "issues": findings},
     )
-    details = findings or [f"{key}: collected" for key in inspection]
-    status = "failed" if findings else "ok"
+    details = findings or (
+        [
+            "user availability/"
+            + str(user_availability.get("firstBlockerClass") or "unknown")
+            + " failed: "
+            + str(user_availability.get("firstBlocker") or "required evidence is unavailable")
+        ]
+        if user_availability.get("status") != "ready"
+        else [f"{key}: collected" for key in inspection]
+    )
+    availability_failed = user_availability.get("status") != "ready"
+    status = "failed" if findings or availability_failed else "ok"
     summary = (
         f"stackctl inspect failed for {args.target}"
-        if findings
+        if findings or availability_failed
         else f"stackctl inspect completed for {args.target}"
     )
     _stackctl._write_summary_bundle(
@@ -258,10 +285,12 @@ def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
         timing=timing,
     )
     return {
-        "exitCode": 1 if findings else 0,
+        "exitCode": 1 if findings or availability_failed else 0,
         "summary": summary,
         "details": details,
         "reportDir": _stackctl.relpath(report_dir),
+        "userAvailability": user_availability.get("userAvailability", []),
+        "firstBlockerClass": user_availability.get("firstBlockerClass", "startup_identity"),
         **timing,
     }
 

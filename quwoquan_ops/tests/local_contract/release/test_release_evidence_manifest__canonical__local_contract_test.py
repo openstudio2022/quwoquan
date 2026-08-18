@@ -61,6 +61,7 @@ class ReleaseEvidenceManifestCanonicalContractTest(unittest.TestCase):
         manifest = finalizer.seal_manifest(
             {
                 "schema": finalizer.SCHEMA,
+                "releaseTrainId": None,
                 "candidateId": None,
                 "status": "build-input",
                 "generatedAt": "2026-07-28T00:00:00Z",
@@ -72,21 +73,36 @@ class ReleaseEvidenceManifestCanonicalContractTest(unittest.TestCase):
                     "sourceArchiveDigest": None,
                 },
                 "artifactDigest": None,
-                "images": {
-                    "content-service": {
-                        "repository": "ghcr.io/owner/repo/content-service",
-                        "transportRef": (
-                            "ghcr.io/owner/repo/content-service:sha-" + ("b" * 40)
-                        ),
+                "environmentArtifacts": {
+                    environment: {
+                        "environment": environment,
+                        "environmentArtifactDigest": None,
+                        "images": {
+                            "content-service": {
+                                "repository": (
+                                    "ghcr.io/owner/repo/content-service-" + environment
+                                ),
+                                "transportRef": (
+                                    "ghcr.io/owner/repo/content-service-"
+                                    + environment
+                                    + ":sha-"
+                                    + ("b" * 40)
+                                ),
+                            }
+                        },
+                        "configurationPackages": configuration_packages[environment],
                     }
+                    for environment in finalizer.ENVIRONMENTS
                 },
-                "configurationPackages": configuration_packages,
                 "applicationPackages": {
                     environment: {} for environment in finalizer.ENVIRONMENTS
                 },
                 "contractGraphDigest": None,
                 "requiredEvidence": {
-                    "images": ["content-service"],
+                    "environmentArtifacts": {
+                        environment: ["content-service"]
+                        for environment in finalizer.ENVIRONMENTS
+                    },
                     "configurationPackages": {
                         environment: ["content-service"]
                         for environment in finalizer.ENVIRONMENTS
@@ -112,7 +128,10 @@ class ReleaseEvidenceManifestCanonicalContractTest(unittest.TestCase):
                     "whole-application-evidence-pending",
                 ],
                 "missingEvidence": [
-                    "images.content-service.digest",
+                    *(
+                        f"environmentArtifacts.{environment}.images.content-service.digest"
+                        for environment in finalizer.ENVIRONMENTS
+                    ),
                     *(
                         f"applicationPackages.{environment}.{surface}"
                         for environment in finalizer.ENVIRONMENTS
@@ -265,9 +284,19 @@ class ReleaseEvidenceManifestCanonicalContractTest(unittest.TestCase):
                         )
                     },
                     "candidateMaterial": {
-                        "images": {
-                            service: descriptor["digest"]
-                            for service, descriptor in manifest["images"].items()
+                        "environmentArtifacts": {
+                            environment: {
+                                "environmentArtifactDigest": artifact[
+                                    "environmentArtifactDigest"
+                                ],
+                                "images": {
+                                    owner: descriptor["digest"]
+                                    for owner, descriptor in artifact["images"].items()
+                                },
+                            }
+                            for environment, artifact in manifest[
+                                "environmentArtifacts"
+                            ].items()
                         },
                         "contractGraphDigest": finalizer.sha256_file(contract_graph),
                     },
@@ -323,17 +352,24 @@ class ReleaseEvidenceManifestCanonicalContractTest(unittest.TestCase):
                 )
         test_payload = json.loads(sources["testEvidence"].read_text(encoding="utf-8"))
         test_payload["layers"]["user_acceptance"]["candidateMaterial"] = {
-            "images": {
-                service: descriptor["digest"]
-                for service, descriptor in manifest["images"].items()
-            },
-            "configurationPackages": {
+            "environmentArtifacts": {
                 environment: {
-                    service: descriptor["digest"]
-                    for service, descriptor in packages.items()
+                    "environmentArtifactDigest": artifact[
+                        "environmentArtifactDigest"
+                    ],
+                    "images": {
+                        owner: descriptor["digest"]
+                        for owner, descriptor in artifact["images"].items()
+                    },
+                    "configurationPackages": {
+                        service: descriptor["digest"]
+                        for service, descriptor in artifact[
+                            "configurationPackages"
+                        ].items()
+                    },
                 }
-                for environment, packages in manifest[
-                    "configurationPackages"
+                for environment, artifact in manifest[
+                    "environmentArtifacts"
                 ].items()
             },
             "applicationPackages": application_material,
@@ -449,7 +485,9 @@ class ReleaseEvidenceManifestCanonicalContractTest(unittest.TestCase):
             mock.patch.object(
                 image_collector,
                 "resolve_registry_digest",
-                return_value=DIGEST,
+                side_effect=(
+                    f"sha256:{index:064x}" for index in range(1, 5)
+                ),
             ),
             mock.patch.object(image_collector, "verify_oci_supply_chain"),
         ):
@@ -509,7 +547,9 @@ class ReleaseEvidenceManifestCanonicalContractTest(unittest.TestCase):
                 mock.patch.object(
                     image_collector,
                     "resolve_registry_digest",
-                    return_value=DIGEST,
+                    side_effect=(
+                        f"sha256:{index:064x}" for index in range(1, 5)
+                    ),
                 ),
                 mock.patch.object(image_collector, "verify_oci_supply_chain"),
             ):
@@ -568,9 +608,14 @@ class ReleaseEvidenceManifestCanonicalContractTest(unittest.TestCase):
                     set(finalizer.APPLICATION_PACKAGES[environment]),
                 )
             changed_configuration = json.loads(json.dumps(candidate))
-            changed_configuration["configurationPackages"]["gamma"][
-                "content-service"
-            ]["digest"] = "sha256:" + ("d" * 64)
+            changed_configuration["environmentArtifacts"]["gamma"][
+                "configurationPackages"
+            ]["content-service"]["digest"] = "sha256:" + ("d" * 64)
+            changed_configuration["environmentArtifacts"]["gamma"][
+                "environmentArtifactDigest"
+            ] = finalizer.canonical_environment_artifact_digest(
+                changed_configuration, "gamma"
+            )
             self.assertNotEqual(
                 finalizer.canonical_candidate_digest(changed_configuration),
                 candidate["candidateId"],
@@ -650,9 +695,9 @@ class ReleaseEvidenceManifestCanonicalContractTest(unittest.TestCase):
             collect_keys(deployable)
             self.assertTrue(all_keys.isdisjoint(finalizer.FORBIDDEN_FIELDS))
 
-            transport_tag = deployable["images"]["content-service"][
-                "transportRef"
-            ].rsplit(":", 1)[1]
+            transport_tag = deployable["environmentArtifacts"]["prod"]["images"][
+                "content-service"
+            ]["transportRef"].rsplit(":", 1)[1]
             digest, images = load_prod_plane_images._release_image_sources(
                 artifact / "manifest.json",
                 services=["content-service"],
@@ -661,7 +706,9 @@ class ReleaseEvidenceManifestCanonicalContractTest(unittest.TestCase):
             self.assertEqual(digest, deployable["artifactDigest"])
             self.assertEqual(
                 images["content-service"],
-                deployable["images"]["content-service"]["ref"],
+                deployable["environmentArtifacts"]["prod"]["images"][
+                    "content-service"
+                ]["ref"],
             )
 
             prod_receipts = root / "prod-receipts"
@@ -718,7 +765,9 @@ class ReleaseEvidenceManifestCanonicalContractTest(unittest.TestCase):
             finalizer.validate_manifest(historical)
 
             canonical["source"]["repository"] = "tampered/repo"
-            with self.assertRaisesRegex(ValueError, "digest mismatch"):
+            with self.assertRaisesRegex(
+                ValueError, "releaseTrainId mismatch|digest mismatch"
+            ):
                 finalizer.validate_manifest(canonical)
 
     def test_receipts_fail_closed_on_source_tree_and_lifecycle_order(self) -> None:
@@ -810,24 +859,35 @@ class ReleaseEvidenceManifestCanonicalContractTest(unittest.TestCase):
                 (artifact / "manifest.json").read_text(encoding="utf-8")
             )
             digest = DIGEST
-            repository = manifest["images"]["content-service"]["repository"]
-            transport = manifest["images"]["content-service"]["transportRef"]
+            repository = manifest["environmentArtifacts"]["alpha"]["images"][
+                "content-service"
+            ]["repository"]
+            transport = manifest["environmentArtifacts"]["alpha"]["images"][
+                "content-service"
+            ]["transportRef"]
             ref = f"{repository}@{digest}"
             descriptor_dir = root / "images"
-            self._write_json(
-                descriptor_dir / "content-service.json",
-                {
-                    "service": "content-service",
-                    "repository": repository,
-                    "transportRef": transport,
-                    "digest": digest,
-                    "ref": ref,
-                    "attestations": {
-                        "spdxSbom": f"oci://{ref}#spdxSbom",
-                        "slsaProvenance": f"oci://{ref}#slsaProvenance",
+            for index, environment in enumerate(finalizer.ENVIRONMENTS, start=1):
+                image = manifest["environmentArtifacts"][environment]["images"][
+                    "content-service"
+                ]
+                environment_digest = f"sha256:{index:064x}"
+                environment_ref = f"{image['repository']}@{environment_digest}"
+                self._write_json(
+                    descriptor_dir / environment / "content-service.json",
+                    {
+                        "environment": environment,
+                        "runtimeImageOwner": "content-service",
+                        "repository": image["repository"],
+                        "transportRef": image["transportRef"],
+                        "digest": environment_digest,
+                        "ref": environment_ref,
+                        "attestations": {
+                            "spdxSbom": f"oci://{environment_ref}#spdxSbom",
+                            "slsaProvenance": f"oci://{environment_ref}#slsaProvenance",
+                        },
                     },
-                },
-            )
+                )
             finalizer.finalize(artifact, descriptor_dir)
             sources = self._evidence_sources(root)
             provider = json.loads(
@@ -859,24 +919,28 @@ class ReleaseEvidenceManifestCanonicalContractTest(unittest.TestCase):
             manifest = json.loads(
                 (artifact / "manifest.json").read_text(encoding="utf-8")
             )
-            repository = manifest["images"]["content-service"]["repository"]
-            transport = manifest["images"]["content-service"]["transportRef"]
-            ref = f"{repository}@{DIGEST}"
             descriptor_dir = root / "images"
-            self._write_json(
-                descriptor_dir / "content-service.json",
-                {
-                    "service": "content-service",
-                    "repository": repository,
-                    "transportRef": transport,
-                    "digest": DIGEST,
-                    "ref": ref,
-                    "attestations": {
-                        "spdxSbom": f"oci://{ref}#spdxSbom",
-                        "slsaProvenance": f"oci://{ref}#slsaProvenance",
+            for index, environment in enumerate(finalizer.ENVIRONMENTS, start=1):
+                image = manifest["environmentArtifacts"][environment]["images"][
+                    "content-service"
+                ]
+                environment_digest = f"sha256:{index:064x}"
+                environment_ref = f"{image['repository']}@{environment_digest}"
+                self._write_json(
+                    descriptor_dir / environment / "content-service.json",
+                    {
+                        "environment": environment,
+                        "runtimeImageOwner": "content-service",
+                        "repository": image["repository"],
+                        "transportRef": image["transportRef"],
+                        "digest": environment_digest,
+                        "ref": environment_ref,
+                        "attestations": {
+                            "spdxSbom": f"oci://{environment_ref}#spdxSbom",
+                            "slsaProvenance": f"oci://{environment_ref}#slsaProvenance",
+                        },
                     },
-                },
-            )
+                )
             finalizer.finalize(artifact, descriptor_dir)
             sources = self._evidence_sources(root)
             self._write_json(
@@ -909,9 +973,9 @@ class ReleaseEvidenceManifestCanonicalContractTest(unittest.TestCase):
             manifest = json.loads(
                 (artifact / "manifest.json").read_text(encoding="utf-8")
             )
-            config = artifact / manifest["configurationPackages"]["alpha"][
-                "content-service"
-            ]["path"]
+            config = artifact / manifest["environmentArtifacts"]["alpha"][
+                "configurationPackages"
+            ]["content-service"]["path"]
             outside = root / "outside.yaml"
             outside.write_text("config: escaped\n", encoding="utf-8")
             config.unlink()

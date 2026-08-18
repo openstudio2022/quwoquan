@@ -244,7 +244,13 @@ class StackctlGammaOperationLockContractTest(
         )
 
     def test_missing_or_stopped_receipt_never_executes_local_teardown(self) -> None:
-        for receipt in (None, {"status": "stopped", "workload": "full"}):
+        # 两种缺席各有自己的判据：回执缺失时连身份都没有，回执已停止时身份还在但
+        # 没有东西要停。清理可重建状态是后者的唯一例外，由绑定层的契约单独锁定。
+        cases = (
+            (None, "canonical startup receipt"),
+            ({"status": "stopped", "workload": "full"}, "non-stopped canonical startup receipt"),
+        )
+        for receipt, expected_detail in cases:
             with self.subTest(receipt=receipt), tempfile.TemporaryDirectory() as temporary_dir:
                 report_dir = Path(temporary_dir) / "report"
                 with (
@@ -302,10 +308,7 @@ class StackctlGammaOperationLockContractTest(
                     )
 
             self.assertEqual(result["exitCode"], 2, result)
-            self.assertIn(
-                "non-stopped canonical startup receipt",
-                "\n".join(result["details"]),
-            )
+            self.assertIn(expected_detail, "\n".join(result["details"]))
             candidate_provider.assert_not_called()
             candidate_observability.assert_not_called()
             run.assert_not_called()

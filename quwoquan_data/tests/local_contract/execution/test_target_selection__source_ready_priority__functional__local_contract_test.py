@@ -1,6 +1,7 @@
 """Canonical execution target-selection contracts."""
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 
 import pytest
@@ -172,10 +173,12 @@ def test_video_source_ready_priority_fills_oversample_pool(
     assert [item["name"] for item in targets[:2]] == ["视频景区1", "视频景区2"]
     assert report["sourceQualification"]["acceptedCount"] == 2
     assert report["sourceQualification"]["oversampleFilled"] == 3
-    # Qualification may overshoot by one worker batch, but must include the
-    # accepted quota and must not evaluate the entire reference set.
-    assert {"视频景区1", "视频景区2"}.issubset(set(calls))
-    assert "视频景区5" not in calls
+    # The complete frozen candidate set is the exact pending workload. A quota
+    # hit shapes the output pool; it must not cancel candidates already admitted
+    # to this qualification batch.
+    # Qualification starts all admitted candidates concurrently. Completion
+    # order is intentionally not a scheduling contract; only exact coverage is.
+    assert sorted(calls) == [f"视频景区{index}" for index in range(1, 6)]
 
 
 def test_retry_inherit_frozen_targets_skips_source_requalification(
@@ -557,3 +560,79 @@ def test_source_ready_priority_reports_exhaustion_only_after_all_candidates(tmp_
     assert dict(issue.attributes)["candidateCount"] == "3"
     assert dict(issue.attributes)["evaluatedCount"] == "3"
     assert dict(issue.attributes)["rejectionCounts"] == "DATA.SOURCE.PRIMARY_AUTHORITY_MISSING:3"
+
+
+def test_external_input_scope_qualifies_only_frozen_candidates_without_padding(
+    tmp_path: Path,
+) -> None:
+    """Frozen supply scopes work; unrelated catalog rows never become fake supply."""
+    path = tmp_path / "冻结视频供给市.yaml"
+    frozen_names = tuple(f"冻结视频实体{index}" for index in range(13))
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "districts": [
+                    {
+                        "district": "测试区",
+                        "leaves": [
+                            {
+                                "name": name,
+                                "aliases": (["冻结别名"] if index == 0 else []),
+                                "selectionPriority": index + 1,
+                            }
+                            for index, name in enumerate(frozen_names)
+                        ]
+                        + [
+                            {
+                                "name": f"无关 catalog 实体{index}",
+                                "selectionPriority": 100 + index,
+                            }
+                            for index in range(80)
+                        ],
+                    }
+                ]
+            },
+            allow_unicode=True,
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    barrier = threading.Barrier(len(frozen_names))
+    calls: list[str] = []
+    thread_ids: set[int] = set()
+    calls_lock = threading.Lock()
+
+    def qualify(target: TargetSourceCandidate) -> TargetSourceQualification:
+        with calls_lock:
+            calls.append(target.name)
+            thread_ids.add(threading.get_ident())
+        barrier.wait(timeout=5)
+        return TargetSourceQualification(
+            True,
+            QualifiedHomepageSource(
+                provider=HomepageAuthorityProvider.WIKIPEDIA,
+                title=target.name,
+                url=f"https://commons.wikimedia.org/wiki/File:{target.name}",
+            ),
+        )
+
+    targets, report = select_targets(
+        discovery_path=path,
+        limit=27,
+        quota=15,
+        target_selector=TargetSelector.SOURCE_READY_PRIORITY,
+        source_qualifier=qualify,
+        qualification_source_key="qualifiedVideoSource",
+        persist_qualified_source=False,
+        qualification_candidate_names=("冻结别名", *frozen_names[1:]),
+        qualification_supply_count=13,
+    )
+
+    assert {row["name"] for row in targets} == set(frozen_names)
+    assert len(calls) == 13
+    assert len(thread_ids) == 13
+    assert not any("无关 catalog" in name for name in calls)
+    qualification = report["sourceQualification"]
+    assert qualification["availableSupplyCount"] == 13
+    assert qualification["supplyShortfallCount"] == 2
+    assert qualification["oversampleFilled"] == 0

@@ -45,7 +45,7 @@
 .PHONY: verify-retired-terms-zero
 .PHONY: verify-app-production-data-source-single-path
 .PHONY: verify-production-wiring-purity
-.PHONY: verify-provider-substitute-prod-purity
+.PHONY: verify-provider-substitute-prod-purity verify-cloud-environment-artifact-binding
 .PHONY: verify-test-data-architecture
 .PHONY: verify-test-data-environment-results
 .PHONY: verify-test-data-performance
@@ -102,7 +102,7 @@
 .PHONY: beta-status
 .PHONY: verify
 .PHONY: verify-global-increment-constraints
-.PHONY: verify-agent-context-contract
+.PHONY: verify-agent-context-budget
 .PHONY: verify-retired-runtime-architecture
 .PHONY: verify-service-ddd-cqrs-baseline
 .PHONY: verify-commercial-contract-generation
@@ -130,7 +130,7 @@
 .PHONY: verify-observability-catalog
 .PHONY: verify-runtime-log-governance
 .PHONY: codegen-app
-.PHONY: codegen-app-shell-navigation
+.PHONY: codegen-app-shell-navigation codegen-app-identity verify-app-identity verify-app-identity-state-isolation
 .PHONY: codegen-ops-portal
 .PHONY: codegen-control-plane-runtime
 .PHONY: codegen-content-service
@@ -211,6 +211,10 @@ verify-app-behavior-error-stack-convergence:
 verify-app-catch-swallow-budget:
 	@python3 quwoquan_app/scripts/runtime/observability/verify_catch_swallow_budget.py
 
+# 空引用与失败隔离：catch 内 return null 必须是 try 前缀解析器或留有观测证据
+verify-app-null-failure-isolation:
+	@python3 quwoquan_app/scripts/runtime/observability/verify_null_failure_isolation.py
+
 # 主题绑定门禁：业务层禁硬绑 AppColors.light/dark，isDark 三元只减不增
 verify-app-theme-binding-ratchet:
 	@python3 quwoquan_app/scripts/runtime/observability/verify_theme_binding_ratchet.py
@@ -226,6 +230,10 @@ verify-app-component-reuse-ratchet:
 # recovery 对齐：errors.yaml recovery_action -> 生成 Go .WithRecovery（factory 风格域）
 verify-service-error-recovery-alignment:
 	@python3 quwoquan_service/scripts/verify/consistency/verify_error_recovery_alignment.py
+
+# nil 语义：wire 边界禁止值类型 bool+omitempty；领域端口空返回兼作未命中信号只减不增
+verify-service-nil-semantics:
+	@python3 quwoquan_service/scripts/verify/structure/verify_nil_semantics.py
 
 # API 鉴权契约：security.auth_mode 真相源与端侧鉴权快照一致，核心受限入口必须 required
 verify-app-auth-policy:
@@ -350,7 +358,11 @@ verify-app-production-data-source-single-path:
 	@python3 -m unittest \
 		quwoquan_app.test.local_contract.runtime.production_release_artifact__local_contract_test
 
-verify-production-wiring-purity: verify-app-mock-isolation verify-app-lib-test-only-symbols verify-app-production-data-source-single-path verify-app-cloud-package-boundaries verify-provider-substitute-prod-purity
+verify-production-wiring-purity: verify-app-mock-isolation verify-app-lib-test-only-symbols verify-app-production-data-source-single-path verify-app-cloud-package-boundaries verify-provider-substitute-prod-purity verify-cloud-environment-artifact-binding
+
+verify-cloud-environment-artifact-binding:
+	@PYTHONPATH="$(REPO_ROOT)" PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_cloud_environment_artifact_binding.py
+	@PYTHONPATH="$(REPO_ROOT)" PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/tests/local_contract/gate/test_cloud_environment_artifact_binding__gate__local_contract_test.py
 
 verify-provider-substitute-prod-purity:
 	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_provider_substitute_prod_purity.py
@@ -759,8 +771,9 @@ verify-app-cloud-tag-strict-typing:
 verify-global-increment-constraints:
 	@bash quwoquan_ops/gate/scaffold/verify_global_increment_constraints.sh
 
-verify-agent-context-contract:
-	@python3 quwoquan_ops/gate/verify_agent_context_contract.py
+# Agent 上下文治理：三家 harness 的预算、载体分配、引用有效性与 checklist 分级。
+verify-agent-context-budget:
+	@python3 quwoquan_ops/gate/verify_agent_context_budget.py
 
 verify-retired-runtime-architecture:
 	@python3 quwoquan_ops/gate/verify_retired_runtime_architecture.py
@@ -911,7 +924,7 @@ verify-assistant-agent-replay-evaluation:
 
 gate:
 	@$(MAKE) verify-global-increment-constraints
-	@$(MAKE) verify-agent-context-contract
+	@$(MAKE) verify-agent-context-budget
 	@$(MAKE) verify-retired-runtime-architecture
 	@$(MAKE) verify-service-ddd-cqrs-baseline
 	@$(MAKE) verify-service-architecture
@@ -1004,7 +1017,7 @@ verify-feature-tree:
 
 verify:
 	@$(MAKE) verify-global-increment-constraints
-	@$(MAKE) verify-agent-context-contract
+	@$(MAKE) verify-agent-context-budget
 	@$(MAKE) verify-retired-runtime-architecture
 	@$(MAKE) verify-service-ddd-cqrs-baseline
 	@$(MAKE) verify-service-architecture
@@ -1040,10 +1053,24 @@ verify-runtime-log-governance:
 
 codegen-app:
 	@$(MAKE) verify-app-contract-handoff
+	@$(MAKE) codegen-app-identity
 	@$(MAKE) -C quwoquan_service codegen-app
 	@$(MAKE) -C quwoquan_service codegen-graphql-app-client
 	@$(MAKE) codegen-app-shell-navigation
 	@$(MAKE) verify-app-generated-manifest
+
+# App identity gate contract:
+# - Trigger: app_artifact_manifest、identity codegen/native 配置与 App 启动入口发生变化。
+# - Block: 生成投影陈旧、共享可写 identity 状态、未 flavor 化入口或默认 Alpha 缺失。
+# - Repair: 运行 make codegen-app-identity，删除退役状态并恢复静态 flavor/scheme 后重跑两道 verify。
+codegen-app-identity:
+	@$(MAKE) -C quwoquan_service codegen-app-identity
+
+verify-app-identity:
+	@$(MAKE) -C quwoquan_service verify-app-identity
+
+verify-app-identity-state-isolation:
+	@python3 quwoquan_app/scripts/runtime/platform/verify_app_identity_state_isolation.py
 
 codegen-app-shell-navigation:
 	@$(MAKE) -C quwoquan_service codegen-app-shell-navigation
@@ -1128,6 +1155,7 @@ test-gate-companion-local-contract: prepare-test-python
 		quwoquan_ops/tests/local_contract/provider/test_provider_conformance_evidence_two_device_remote__contract__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/provider/test_provider_conformance_evidence_source_coverage__contract__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/provider/test_provider_conformance_evidence_attestation_promotion__contract__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_agent_context_budget__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_api_path_unversioned__contract__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_app_architecture__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_app_client_contract_kind_alignment__gate__local_contract_test.py \
@@ -1146,6 +1174,8 @@ test-gate-companion-local-contract: prepare-test-python
 		quwoquan_ops/tests/local_contract/gate/test_error_code_assertion_coverage__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_ratchet_baseline_governance__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_ratchet_baseline_io__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_nil_semantics__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_null_failure_isolation__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_service_contract_view_pruning__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_object_evidence_work_root_pruning__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_app_network_image_baseline_monotonicity__local_contract_test.py \

@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     hide ContentDiscoveryFeedQuery;
+import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/content_activation_identity.dart';
 import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/discovery_feed_page.dart';
 import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/discovery_feed_query.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_detail_payload.dart';
@@ -64,6 +65,175 @@ CachedContentPostReader _cachedContentPostReader({
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  group('runtime ContentActivationIdentity 四态解析', () {
+    const digest =
+        'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+
+    test('release-bound 页面必须携带完整身份，缺一半属协议失败', () {
+      final identity = resolveContentActivationIdentity(
+        releaseId: 'release-2026-08-01',
+        manifestDigest: digest,
+        emptyReason: null,
+      );
+      expect(identity, isNotNull);
+      expect(identity!.releaseId, 'release-2026-08-01');
+      expect(identity.manifestDigest, digest);
+
+      expect(
+        () => resolveContentActivationIdentity(
+          releaseId: 'release-2026-08-01',
+          manifestDigest: null,
+          emptyReason: null,
+        ),
+        throwsFormatException,
+      );
+      expect(
+        () => resolveContentActivationIdentity(
+          releaseId: null,
+          manifestDigest: digest,
+          emptyReason: ContentFeedEmptyReason.noEligibleContent,
+        ),
+        throwsFormatException,
+      );
+      expect(
+        () => resolveContentActivationIdentity(
+          releaseId: 'release-2026-08-01',
+          manifestDigest: 'not-a-digest',
+          emptyReason: null,
+        ),
+        throwsFormatException,
+      );
+    });
+
+    test('no_active_release 必须明确缺席身份，携带身份属协议失败', () {
+      expect(
+        resolveContentActivationIdentity(
+          releaseId: null,
+          manifestDigest: null,
+          emptyReason: ContentFeedEmptyReason.noActiveRelease,
+        ),
+        isNull,
+      );
+      expect(
+        () => resolveContentActivationIdentity(
+          releaseId: 'release-2026-08-01',
+          manifestDigest: digest,
+          emptyReason: ContentFeedEmptyReason.noActiveRelease,
+        ),
+        throwsFormatException,
+      );
+    });
+
+    test('不绑定 release 的响应（following 等）合法缺席身份', () {
+      expect(
+        resolveContentActivationIdentity(
+          releaseId: null,
+          manifestDigest: null,
+          emptyReason: null,
+        ),
+        isNull,
+      );
+    });
+  });
+
+  group('ContentQuerySnapshotStore runtime identity 切换', () {
+    const digestA =
+        'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    const digestB =
+        'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+    final identityA = ContentActivationIdentity(
+      releaseId: 'release-a',
+      manifestDigest: digestA,
+    );
+    final identityB = ContentActivationIdentity(
+      releaseId: 'release-b',
+      manifestDigest: digestB,
+    );
+    final feedKey = contentFeedQueryKey(
+      category: 'all',
+      channelId: 'recommend',
+      sort: 'recent',
+      limit: 20,
+    );
+
+    ContentQuerySnapshotStore newStore() =>
+        ContentQuerySnapshotStore(persistToPreferences: false);
+
+    void putBoundSnapshot(
+      ContentQuerySnapshotStore store,
+      ContentActivationIdentity identity,
+    ) {
+      store.put(
+        key: feedKey,
+        items: <ContentPostViewData>[contentCachePostFixture('post_1')],
+        activationIdentity: identity,
+      );
+    }
+
+    test('未采纳权威身份前 release-bound 快照按 LKG 语义可回放', () {
+      final store = newStore();
+      putBoundSnapshot(store, identityA);
+
+      expect(store.get(feedKey), isNotNull);
+    });
+
+    test('采纳新身份原子停用旧 release 快照，服务端回滚后可恢复', () {
+      final store = newStore();
+      putBoundSnapshot(store, identityA);
+      store.adoptContentActivationIdentity(identityA);
+      expect(store.get(feedKey), isNotNull);
+
+      // 服务端切到 release B：旧快照保留但不回放。
+      store.adoptContentActivationIdentity(identityB);
+      expect(store.get(feedKey), isNull);
+
+      // 服务端回滚到 release A：保留 namespace 原子恢复。
+      store.adoptContentActivationIdentity(identityA);
+      expect(store.get(feedKey), isNotNull);
+    });
+
+    test('采纳 no_active_release（缺席身份）后不回放任何 release-bound 快照', () {
+      final store = newStore();
+      putBoundSnapshot(store, identityA);
+      store.adoptContentActivationIdentity(identityA);
+      expect(store.get(feedKey), isNotNull);
+
+      store.adoptContentActivationIdentity(null);
+      expect(store.get(feedKey), isNull);
+    });
+
+    test('不绑定 release 的快照不受身份切换影响', () {
+      final store = newStore();
+      final userPostsKey = contentUserPostsQueryKey(
+        userId: 'user_1',
+        limit: 20,
+      );
+      store.put(
+        key: userPostsKey,
+        items: <ContentPostViewData>[contentCachePostFixture('post_2')],
+      );
+
+      store.adoptContentActivationIdentity(identityB);
+      expect(store.get(userPostsKey), isNotNull);
+      store.adoptContentActivationIdentity(null);
+      expect(store.get(userPostsKey), isNotNull);
+    });
+
+    test('no_active_release 空页快照禁止携带激活身份', () {
+      final store = newStore();
+      expect(
+        () => store.put(
+          key: feedKey,
+          items: const <ContentPostViewData>[],
+          outcome: ContentFeedOutcome.empty,
+          emptyReason: ContentFeedEmptyReason.noActiveRelease,
+          activationIdentity: identityA,
+        ),
+        throwsFormatException,
+      );
+    });
+  });
 
   group('CachedContentRepository', () {
     test('冷启动本地 hydration 超时仍在请求期限内访问 Remote，重试创建新 hydration', () async {

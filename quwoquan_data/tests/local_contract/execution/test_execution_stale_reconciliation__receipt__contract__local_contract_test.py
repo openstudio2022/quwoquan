@@ -151,6 +151,36 @@ def _assert_global_gates_accept_only_as_historical(
     assert verify_runtime_input_ownership.runtime_input_ownership_issues() == []
 
 
+def test_succeeded_journal_is_a_natural_read_only_terminal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = _fixture(tmp_path, monkeypatch)
+    state = context.load_execution_state(EXECUTION_ID)
+    state.status = ExecutionStateStatus.SUCCEEDED
+    context.save_execution_state(state)
+    _drift_manifest(root)
+
+    terminal = load_terminal_execution_evidence(root)
+
+    assert terminal is not None
+    assert terminal.decision == "succeeded"
+    assert terminal.path == root / "_shared" / "execution_state.json"
+    _assert_global_gates_accept_only_as_historical(root, monkeypatch)
+
+
+def test_manual_required_state_remains_resumable_without_terminal_receipt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = _fixture(tmp_path, monkeypatch)
+    state = context.load_execution_state(EXECUTION_ID)
+    state.status = ExecutionStateStatus.MANUAL_REQUIRED
+    context.save_execution_state(state)
+
+    assert load_terminal_execution_evidence(root) is None
+
+
 def test_stale_execution_writes_create_once_receipt_and_terminal_snapshot(
     tmp_path: Path,
     monkeypatch,

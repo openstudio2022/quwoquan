@@ -286,12 +286,8 @@ def load_reviewer_results(
         if "sourceReview" in result:
             request_path = resolve_ref(result["sourceReviewRequestRef"])
             attempt_path = resolve_ref(result["sourceReviewAttemptRef"])
-            capacity_path = resolve_ref(result["sourceCapacityReceiptRef"])
             request = read_json(request_path)
             attempt = read_json(attempt_path)
-            capacity = load_document(
-                capacity_path, group="execution", name="semantic_capacity_receipt"
-            )
             if not isinstance(request, Mapping) or not isinstance(attempt, Mapping):
                 raise TypeError("source review journal documents must be objects")
             source = result["sourceReview"]
@@ -306,19 +302,16 @@ def load_reviewer_results(
                 **common_checks,
                 "sourceRequestSha256": file_sha256(request_path) == result["sourceReviewRequestSha256"],
                 "sourceAttemptSha256": file_sha256(attempt_path) == result["sourceReviewAttemptSha256"],
-                "sourceCapacitySha256": file_sha256(capacity_path) == result["sourceCapacityReceiptSha256"],
                 "journalSourceIdentity": request.get("sourceReview") == source,
                 "sourceReviewRequestDigest": source.get("requestDigest") == review_request.get("requestDigest"),
                 "journalDigest": request.get("journalDigest") == source_digest(request_stable),
                 "attemptRequestDigest": attempt.get("requestDigest") == request.get("journalDigest"),
                 "attemptDigest": attempt.get("attemptDigest") == source_digest(attempt_stable),
                 "attemptFinished": attempt.get("status") == "finished",
+                "attemptProvider": attempt.get("provider") == result["provider"],
                 "attemptProviderRun": attempt.get("runId") == result["runId"],
                 "attemptResultSha256": attempt.get("resultSha256") == result["resultSha256"],
-                "capacitySourceIdentity": capacity.get("sourceReview") == source,
-                "capacityProviderModel": capacity.get("provider") == result["provider"] and capacity.get("model") == result["model"],
-                "capacityRunResult": capacity.get("runId") == result["runId"] and capacity.get("resultSha256") == result["resultSha256"],
-                "capacityPrompt": capacity.get("promptSha256") == result["reviewRequestSha256"],
+                "attemptRecordedAt": attempt.get("recordedAt") == result["reviewedAt"],
             }
             execution_binding: dict[str, Any] | None = None
         else:

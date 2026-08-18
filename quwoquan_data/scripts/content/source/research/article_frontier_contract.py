@@ -13,11 +13,53 @@ from typing import Any, Protocol
 from content.source.research.plan_state import _source
 from core.data_issue import DataIssue
 from core.schema import assert_valid
+from core.source_attribution import canonical_source_attribution
 
 
 EVIDENCE_SCHEMA = "quwoquan.content.article_source_discovery_evidence"
 ALLOWED_ADMISSION = "commercial_release"
 _PAGE_BUDGET_LOCK = threading.Lock()
+
+
+def public_article_source_attribution(
+    *,
+    platform: str,
+    canonical_url: str,
+    terms_url: str,
+    captured_at: str,
+) -> dict[str, Any]:
+    """Attribution for one registry-admitted public article page.
+
+    The article carrier admits non-encyclopedia sites, so its attribution cannot
+    come from the encyclopedia resolver. Every producer of an article base source
+    must mint it here, otherwise a source reaches the source unit unattributable
+    and its whole entity fails at write time.
+    """
+    editor = f"{platform}公开页面编辑者"
+    return canonical_source_attribution(
+        {
+            "isOriginal": False,
+            "originalCreatorId": None,
+            "originalCreatorName": editor,
+            "originalCreatorProfileUrl": None,
+            "platform": platform,
+            "sourcePostUrl": canonical_url,
+            "originalAssetUrl": canonical_url,
+            "attributionText": f"正文参考来源：{platform}（{editor}）",
+            "rightsBasis": "factual_reference_only",
+            "commercialAuthorizationStatus": "unverified",
+            "publicationAdmission": "research_release",
+            "authorizationProofUrl": None,
+            "termsUrl": terms_url or None,
+            "riskAcceptanceId": None,
+            "watermarkStatus": "absent",
+            "audioRightsStatus": "no_audio",
+            "modelReleaseStatus": "not_required",
+            "propertyReleaseStatus": "not_required",
+            "collectedAt": captured_at,
+            "takedownPolicy": "remove_on_verified_rights_or_source_dispute",
+        }
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,7 +128,12 @@ class ArticleSourceCandidate:
     profile_digest: str
     discovery_query: str = ""
 
-    def as_source(self) -> dict[str, object]:
+    def as_source(
+        self,
+        *,
+        captured_at: str = "",
+        terms_url: str = "",
+    ) -> dict[str, object]:
         source = _source(
             source_id=self.source_id,
             platform=self.platform,
@@ -109,6 +156,13 @@ class ArticleSourceCandidate:
         source["articleSiteId"] = self.site_id
         source["sourceDiscoveryProfileDigest"] = self.profile_digest
         source["researchLane"] = "article"
+        if captured_at:
+            source["sourceAttribution"] = public_article_source_attribution(
+                platform=self.platform,
+                canonical_url=self.canonical_url,
+                terms_url=terms_url,
+                captured_at=captured_at,
+            )
         return source
 
     def as_evidence(self) -> dict[str, object]:
@@ -171,7 +225,14 @@ class ArticleSourceDiscoveryOutcome:
         return tuple(issue for site in self.sites for issue in site.issues)
 
     def source_documents(self) -> list[dict[str, object]]:
-        return [candidate.as_source() for candidate in self.candidates]
+        terms_by_site = {site.site_id: site.terms_url for site in self.sites}
+        return [
+            candidate.as_source(
+                captured_at=self.observed_at,
+                terms_url=terms_by_site.get(candidate.site_id, ""),
+            )
+            for candidate in self.candidates
+        ]
 
     def as_evidence(self) -> dict[str, object]:
         evidence: dict[str, object] = {

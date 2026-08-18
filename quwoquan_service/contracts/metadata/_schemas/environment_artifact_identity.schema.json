@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quwoquan.local/contracts/metadata/environment_artifact_identity.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "environment",
+    "target",
+    "releaseTrainId",
+    "sourceCapsule",
+    "packageDigest",
+    "imageBuildInputDigest",
+    "imageSetDigest",
+    "configuration",
+    "provider",
+    "endpointAuthorityDigest",
+    "runtimeTopologyDigest",
+    "contractGraphDigest",
+    "identityCoreDigest",
+    "environmentArtifactDigest"
+  ],
+  "properties": {
+    "schema": { "const": "environment-artifact-identity" },
+    "environment": { "enum": ["alpha", "beta", "gamma", "prod"] },
+    "target": {
+      "enum": ["alpha-local", "beta-local", "gamma-local", "prod-sim", "prod-hosted"]
+    },
+    "releaseTrainId": { "$ref": "#/$defs/digest" },
+    "sourceCapsule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["baselineId", "digest", "sourceRevision", "workspaceStatusDigest"],
+      "properties": {
+        "baselineId": { "$ref": "#/$defs/digest" },
+        "digest": { "$ref": "#/$defs/digest" },
+        "sourceRevision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "workspaceStatusDigest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "packageDigest": { "$ref": "#/$defs/digest" },
+    "imageBuildInputDigest": { "$ref": "#/$defs/digest" },
+    "imageSetDigest": { "$ref": "#/$defs/digest" },
+    "configuration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["serviceDigest", "appRuntimeDigest", "environmentRuntimeDigest"],
+      "properties": {
+        "serviceDigest": { "$ref": "#/$defs/digest" },
+        "appRuntimeDigest": { "$ref": "#/$defs/digest" },
+        "environmentRuntimeDigest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bindingDigest", "runtimeCompositionDigest"],
+      "properties": {
+        "bindingDigest": { "$ref": "#/$defs/digest" },
+        "runtimeCompositionDigest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "endpointAuthorityDigest": { "$ref": "#/$defs/digest" },
+    "runtimeTopologyDigest": { "$ref": "#/$defs/digest" },
+    "contractGraphDigest": { "$ref": "#/$defs/digest" },
+    "identityCoreDigest": { "$ref": "#/$defs/digest" },
+    "environmentArtifactDigest": { "$ref": "#/$defs/digest" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "environment": { "const": "alpha" } }, "required": ["environment"] },
+      "then": { "properties": { "target": { "const": "alpha-local" } } }
+    },
+    {
+      "if": { "properties": { "environment": { "const": "beta" } }, "required": ["environment"] },
+      "then": { "properties": { "target": { "const": "beta-local" } } }
+    },
+    {
+      "if": { "properties": { "environment": { "const": "gamma" } }, "required": ["environment"] },
+      "then": { "properties": { "target": { "const": "gamma-local" } } }
+    },
+    {
+      "if": { "properties": { "environment": { "const": "prod" } }, "required": ["environment"] },
+      "then": { "properties": { "target": { "enum": ["prod-sim", "prod-hosted"] } } }
+    }
+  ],
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

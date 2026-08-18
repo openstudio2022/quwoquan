@@ -92,11 +92,7 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildCreationFilters(
-            notifier,
-            state,
-            totalCount: settledTotalCount,
-          ),
+          _buildCreationFilters(notifier, state, totalCount: settledTotalCount),
           if (isLoading)
             AppRequestFeedback.section(showSlowHint: state.isWorksSlow)
           else if (blockingFailure != null && !widget.suppressFailure)
@@ -138,19 +134,13 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
                       AppSpacing.feedContentHorizontal(context),
                       AppSpacing.interGroupLg,
                     ),
-                    child: GridView.builder(
+                    child: MasonryGridView.count(
                       shrinkWrap: true,
-                      primary: false,
                       padding: EdgeInsets.zero,
                       physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: AppSpacing.responsiveGridColumns(
-                          context,
-                        ),
-                        mainAxisSpacing: AppSpacing.postPreviewGridSpacing,
-                        crossAxisSpacing: AppSpacing.postPreviewGridSpacing,
-                        mainAxisExtent: _inlineGridMainAxisExtent(context),
-                      ),
+                      crossAxisCount: AppSpacing.responsiveGridColumns(context),
+                      mainAxisSpacing: AppSpacing.postPreviewGridSpacing,
+                      crossAxisSpacing: AppSpacing.postPreviewGridSpacing,
                       itemCount: filtered.length,
                       itemBuilder: (context, index) {
                         final post = filtered[index];
@@ -176,11 +166,7 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
 
     return Column(
       children: [
-        _buildCreationFilters(
-          notifier,
-          state,
-          totalCount: settledTotalCount,
-        ),
+        _buildCreationFilters(notifier, state, totalCount: settledTotalCount),
         Expanded(
           child: isLoading
               ? AppRequestFeedback.section(showSlowHint: state.isWorksSlow)
@@ -269,14 +255,6 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
         context.go(AppRoutePaths.home);
       }
     }
-  }
-
-  double _inlineGridMainAxisExtent(BuildContext context) {
-    final columns = AppSpacing.responsiveGridColumns(context);
-    if (columns <= 1) {
-      return AppSpacing.threeHundredTwenty + AppSpacing.twoHundredTwenty;
-    }
-    return AppSpacing.threeHundredTwenty + AppSpacing.buttonHeight * 2;
   }
 
   /// 二级过滤（全部/图片/视频/长文）：与互动页同源的横滑二级页签，

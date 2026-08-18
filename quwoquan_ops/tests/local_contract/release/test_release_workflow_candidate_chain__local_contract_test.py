@@ -10,6 +10,8 @@ from unittest.mock import patch
 
 from quwoquan_ops.ci.plan_service_release_images import (
     ALL_SERVICES,
+    ENVIRONMENTS,
+    RUNTIME_IMAGE_OWNERS,
     affected_services,
     build_plan,
 )
@@ -25,23 +27,40 @@ RELEASE_REF = "ghcr.io/owner/repo/release-artifact@" + DIGEST
 
 
 class ServiceReleaseImagePlanTest(unittest.TestCase):
+    def test_runtime_owner_set_is_derived_as_six_canonical_images(self) -> None:
+        self.assertEqual(
+            set(RUNTIME_IMAGE_OWNERS),
+            {
+                "service-core",
+                "recommendation-service",
+                "realtime-gateway",
+                "rtc-service",
+                "product-ops-service",
+                "platform-ops-service",
+            },
+        )
+
     def _previous_manifest(self, root: Path) -> Path:
-        images = {
-            service: {
-                "digest": DIGEST,
-                "ref": f"ghcr.io/owner/repo/{service}@{DIGEST}",
-            }
-            for service in ALL_SERVICES
-        }
+        environment_artifacts: dict[str, dict[str, object]] = {}
+        for environment_index, environment in enumerate(ENVIRONMENTS, start=1):
+            images = {}
+            for owner_index, owner in enumerate(RUNTIME_IMAGE_OWNERS, start=1):
+                digest = f"sha256:{environment_index * 100 + owner_index:064x}"
+                images[owner] = {
+                    "digest": digest,
+                    "ref": f"ghcr.io/owner/repo/{owner}-{environment}@{digest}",
+                }
+            environment_artifacts[environment] = {"images": images}
         path = root / "manifest.json"
         path.write_text(
             json.dumps(
                 {
                     "schema": "release-evidence-manifest",
+                    "releaseTrainId": DIGEST,
                     "candidateId": DIGEST,
                     "artifactDigest": ARTIFACT_DIGEST,
                     "status": "candidate-ready",
-                    "images": images,
+                    "environmentArtifacts": environment_artifacts,
                 }
             ),
             encoding="utf-8",
@@ -54,9 +73,23 @@ class ServiceReleaseImagePlanTest(unittest.TestCase):
                 ["quwoquan_service/services/chat-service/internal/chat.go"],
                 self._previous_manifest(Path(directory)),
             )
-        actions = {item["service"]: item["action"] for item in plan}
-        self.assertEqual(actions["chat-service"], "build")
-        self.assertEqual(actions["content-service"], "reuse")
+        actions = {
+            (item["environment"], item["runtime_image_owner"]): item["action"]
+            for item in plan
+        }
+        self.assertEqual(len(plan), len(ENVIRONMENTS) * len(RUNTIME_IMAGE_OWNERS))
+        for environment in ENVIRONMENTS:
+            self.assertEqual(actions[(environment, "service-core")], "build")
+            self.assertEqual(
+                actions[(environment, "recommendation-service")], "reuse"
+            )
+        self.assertTrue(
+            all(
+                item["image_name"]
+                == f"{item['runtime_image_owner']}-{item['environment']}"
+                for item in plan
+            )
+        )
 
     def test_shared_contract_change_expands_to_every_service(self) -> None:
         affected, reasons = affected_services(
@@ -72,7 +105,7 @@ class ServiceReleaseImagePlanTest(unittest.TestCase):
             ["specs/feature-tree/travel-journey/spec.md"]
         )
 
-        self.assertEqual(affected, frozenset({"circle-service"}))
+        self.assertEqual(affected, frozenset({"service-core"}))
 
     def test_service_contract_change_expands_to_every_consumer(self) -> None:
         affected, reasons = affected_services(
@@ -102,8 +135,7 @@ class ServiceReleaseImagePlanTest(unittest.TestCase):
         self.assertEqual(
             affected,
             {
-                "chat-service",
-                "notification-service",
+                "service-core",
                 "realtime-gateway",
                 "rtc-service",
             },
@@ -115,6 +147,43 @@ class ServiceReleaseImagePlanTest(unittest.TestCase):
         )
         self.assertTrue(all(item["action"] == "build" for item in plan))
         self.assertIn("previous-canonical-evidence-unavailable", reasons)
+
+    def test_previous_flat_images_are_rejected_without_compatibility_read(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "manifest.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "schema": "release-evidence-manifest",
+                        "releaseTrainId": DIGEST,
+                        "candidateId": DIGEST,
+                        "artifactDigest": ARTIFACT_DIGEST,
+                        "status": "candidate-ready",
+                        "images": {},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "retired flat images"):
+                build_plan(
+                    ["quwoquan_service/services/chat-service/internal/chat.go"],
+                    path,
+                )
+
+    def test_previous_cross_environment_digest_reuse_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = self._previous_manifest(Path(directory))
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            owner = RUNTIME_IMAGE_OWNERS[0]
+            payload["environmentArtifacts"]["beta"]["images"][owner] = payload[
+                "environmentArtifacts"
+            ]["alpha"]["images"][owner]
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "across environments"):
+                build_plan(
+                    ["quwoquan_service/services/chat-service/internal/chat.go"],
+                    path,
+                )
 
 
 class WorkflowCandidateBindingTest(unittest.TestCase):

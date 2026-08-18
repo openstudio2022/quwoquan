@@ -68,7 +68,10 @@ def cursor_startup_probe_suite(
     if include_catalog:
         from core.cursor_workspace_probe import cursor_model_catalog
 
-        catalog = cursor_model_catalog()
+        # The catalog must prove this exact model/parameter binding, not merely
+        # that some model list came back: a reasoning tier such as effort=xhigh
+        # exists only on some model versions.
+        catalog = cursor_model_catalog(selection)
     else:
         catalog = None
     rows: list[dict] = []
@@ -79,9 +82,9 @@ def cursor_startup_probe_suite(
     startup_timeout_count = 0
     bridge_disconnect_count = 0
     cold_start_5xx_observed = 0
-    # 主机级 bridge 容量，与 codex 套件同口径。author_workers 是单条 lane 进程内
-    # 的语义工作槽，不是本机可并发的 bridge 数，不能用来限制容量探针。
-    worker_limit = min(total, runtime_policy.cursor_bridge_instances)
+    # 探针按调用方明确请求的 attempt 数全部发起。这里观测真实 Provider/主机
+    # 行为，不再用 runtime profile 中未经实测证明的 bridge 数预先限流。
+    worker_limit = total
     active_workers = 0
     maximum_active_workers = 0
     active_lock = threading.Lock()

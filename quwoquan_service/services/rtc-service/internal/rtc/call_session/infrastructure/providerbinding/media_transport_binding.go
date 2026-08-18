@@ -30,10 +30,7 @@ func ResolveMediaTransport(
 	if configProvider == nil {
 		return MediaTransportBinding{}, fmt.Errorf("rtc media transport has no runtime config provider")
 	}
-	binding, found := rtcgenerated.ExternalProviderBindingFor(
-		appEnv,
-		mediaTransportCapabilityID,
-	)
+	binding, found := rtcgenerated.CompiledBindingFor(mediaTransportCapabilityID)
 	if !found {
 		return MediaTransportBinding{}, fmt.Errorf(
 			"rtc media transport binding is missing for environment=%s",

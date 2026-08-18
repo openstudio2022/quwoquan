@@ -20,9 +20,6 @@ from content.execution.queue.reliabletask.report import ReliableTaskFleetReport
 def run_multi_host_fleet(
     execution_id: str,
     stage: QueueJobStage,
-    *,
-    workers: int,
-    completion_grace_seconds: int,
 ) -> ReliableTaskFleetReport:
     from content.execution import store
     from content.execution.queue.reliabletask.fleet import (
@@ -32,12 +29,7 @@ def run_multi_host_fleet(
     policy = store.load_spec(execution_id).get("executionPolicy") or {}
     binding = policy.get("workerHostSetBinding")
     if binding is None:
-        return _run_reliabletask_host(
-            execution_id,
-            stage,
-            workers=workers,
-            completion_grace_seconds=completion_grace_seconds,
-        )
+        return _run_reliabletask_host(execution_id, stage)
     if not isinstance(binding, Mapping):
         raise TypeError("governed fleet workerHostSetBinding is invalid")
     assignments = binding.get("hosts")
@@ -63,8 +55,6 @@ def run_multi_host_fleet(
     return _run_reliabletask_host(
         execution_id,
         stage,
-        workers=workers,
-        completion_grace_seconds=completion_grace_seconds,
         host_scope_id=host_ids[0],
     )
 

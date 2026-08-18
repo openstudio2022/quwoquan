@@ -1,9 +1,12 @@
 """Fail-closed semantic evidence for research scale promotion.
 
-Primary authoring and independent review use the governed Terra binding. Sol is
-not the primary reviewer: it independently calibrates a deterministic sample of
-accepted objects. The immutable campaign evidence records both run classes and
-rebinds every projection to an audited file below ``QWQ_OUTPUT_ROOT``.
+Primary authoring and independent review use the exact governed binding frozen
+by the execution (normally the ``cursor_grok`` selection resolved from the
+runtime profile; ``cursor_auto`` is only a typed ``retryOf`` path). Sol is not
+the primary reviewer: it independently
+calibrates a deterministic sample of accepted objects. The immutable campaign
+evidence records both run classes and rebinds every projection to an audited
+file below ``QWQ_OUTPUT_ROOT``.
 """
 from __future__ import annotations
 
@@ -316,7 +319,7 @@ def build_scale_semantic_calibration(
     accepted_object_count: int,
     output_root: Path,
 ) -> dict[str, Any]:
-    """Bind primary Terra runs and all required Sol calibration samples."""
+    """Bind the frozen primary runs and required Sol calibration samples."""
 
     manifest = _load_validated(
         execution_manifest_path,

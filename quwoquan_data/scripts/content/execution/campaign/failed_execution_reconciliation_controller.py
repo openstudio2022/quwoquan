@@ -6,12 +6,13 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from content.execution.campaign.lane import CAMPAIGN_CARRIERS
 from content.execution.campaign.runtime_process import _pid_alive
 from content.execution.campaign.submission_reconciliation_contract import (
     campaigns_root,
     canonical_digest,
     file_digest,
+    frozen_plan_workload,
+    frozen_submission_workload,
     safe_regular_ref,
     typed,
 )
@@ -87,16 +88,28 @@ def controller_interrupted_before_claim_evidence(
         raise typed("CAMPAIGN_EVIDENCE_INVALID", "campaign planDigest drifted")
 
     distributed = plan.get("distributedRun")
+    active_carriers, _workloads, plan_execution_ids, _root = frozen_plan_workload(
+        plan,
+        root_execution_id=root_execution_id,
+    )
+    submission_carriers, _submission_workloads, _submission_root = (
+        frozen_submission_workload(
+            submissions,
+            root_execution_id=root_execution_id,
+        )
+    )
     expected_execution_ids = {
         carrier: str(submissions[carrier]["executionId"])
-        for carrier in CAMPAIGN_CARRIERS
+        for carrier in active_carriers
     }
     expected_submission_digests = {
         carrier: str(submissions[carrier]["requestDigest"])
-        for carrier in CAMPAIGN_CARRIERS
+        for carrier in active_carriers
     }
     if (
         plan.get("rootExecutionId") != root_execution_id
+        or active_carriers != submission_carriers
+        or plan_execution_ids != expected_execution_ids
         or plan.get("executionIds") != expected_execution_ids
         or plan.get("submissionDigests") != expected_submission_digests
         or plan.get("sourceRevision")
@@ -109,7 +122,7 @@ def controller_interrupted_before_claim_evidence(
     ):
         raise typed(
             "IDENTITY_DRIFT",
-            "campaign plan is not bound to the four immutable submissions",
+            "campaign plan is not bound to the active immutable submissions",
         )
 
     if (
@@ -171,10 +184,11 @@ def failed_campaign_execution_absence(
     *,
     output_root: Path,
 ) -> dict[str, Any]:
-    """Prove that none of the four submitted lanes owns a task root."""
+    """Prove that no active submitted lane owns a task root."""
 
     lanes: list[dict[str, Any]] = []
-    for carrier in CAMPAIGN_CARRIERS:
+    active_carriers, _workloads, _root = frozen_submission_workload(submissions)
+    for carrier in active_carriers:
         execution_id = str(submissions[carrier]["executionId"])
         execution_root = output_root / "data/tasks" / execution_id
         if execution_root.exists():

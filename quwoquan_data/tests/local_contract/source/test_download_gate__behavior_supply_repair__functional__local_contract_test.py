@@ -20,7 +20,6 @@ from content.execution.recovery.download_repair import (
     _record_download_repair,
 )
 from content.execution.recovery.download_research_gate import (
-    _commercial_video_candidate_issues,
     _download_research_lane_issues,
 )
 from content.source.gate import download_requirements
@@ -155,34 +154,6 @@ def test_video_download_does_not_accept_image_quota_as_video_supply(monkeypatch)
 
     assert requirements.min_images == 0
     assert not hasattr(requirements, "min_video_frames")
-
-
-def test_commercial_video_candidate_requires_exact_rights_closure():
-    admitted = {
-        "publicationAdmission": "commercial_release",
-        "commercialAuthorizationStatus": "verified",
-        "rightsStatus": "verified",
-        "rightsIssues": [],
-        "authorizationProofUrl": "https://media.example/proof",
-        "termsUrl": "https://media.example/terms",
-    }
-    assert _commercial_video_candidate_issues(admitted) == []
-
-    stale_research = {
-        **admitted,
-        "publicationAdmission": "research_release",
-        "commercialAuthorizationStatus": "unverified",
-        "rightsStatus": "unverified",
-        "rightsIssues": ["authorization pending"],
-        "authorizationProofUrl": "",
-    }
-    assert _commercial_video_candidate_issues(stale_research) == [
-        "publicationAdmission must be commercial_release",
-        "commercialAuthorizationStatus must be verified",
-        "rightsStatus must be verified",
-        "rightsIssues must be empty",
-        "authorizationProofUrl must use HTTPS",
-    ]
 
 
 def test_download_repair_active_issues_only_decodes_typed_records():

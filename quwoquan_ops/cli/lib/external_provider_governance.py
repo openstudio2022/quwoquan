@@ -94,6 +94,9 @@ from quwoquan_ops.cli.lib.external_provider_governance_lib.go_descriptors import
     render_go_bindings,
     write_go_bindings,
 )
+from quwoquan_ops.cli.lib.external_provider_governance_lib.single_environment import (  # noqa: E402,F401
+    compile_single_environment_bindings,
+)
 
 
 def main(argv: list[str] | None = None) -> int:

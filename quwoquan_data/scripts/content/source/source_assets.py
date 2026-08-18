@@ -8,6 +8,7 @@ from typing import Any
 from core.io import read_json
 from core.paths import relative_execution_ref
 
+from content.source.rights_decision_projection import projected_distribution_decision
 from content.source.source_unit import (
     SOURCE_UNIT_ASSET_INDEX,
     SOURCE_UNIT_MANIFEST,
@@ -75,7 +76,7 @@ def object_image_candidates(object_dir: Path, execution_id: str) -> list[dict[st
                     "acquisitionStatus": asset_meta.get("acquisitionStatus") or "",
                     "rightsStatus": asset_meta.get("rightsStatus") or "",
                     "authorizationRequired": asset_meta.get("authorizationRequired"),
-                    "distributionDecision": asset_meta.get("distributionDecision") or "",
+                    **projected_distribution_decision(asset_meta),
                     "rightsIssues": list(asset_meta.get("rightsIssues") or []),
                     "rightsAuditStatus": asset_meta.get("rightsAuditStatus") or "",
                     "rightsAuditIssues": list(asset_meta.get("rightsAuditIssues") or []),

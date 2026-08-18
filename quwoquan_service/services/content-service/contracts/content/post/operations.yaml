@@ -240,6 +240,8 @@ api_routes:
       - feedRequestId
       - policyDigest
       - objectCards
+      - releaseId
+      - manifestDigest
     security:
       auth_mode: optional
       principal: owner

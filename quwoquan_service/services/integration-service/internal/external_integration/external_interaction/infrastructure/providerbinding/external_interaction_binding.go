@@ -75,7 +75,7 @@ func resolveExternalInteractionBinding(
 			capabilityID,
 		)
 	}
-	binding, found := integrationgenerated.ExternalProviderBindingFor(appEnv, capabilityID)
+	binding, found := integrationgenerated.CompiledBindingFor(capabilityID)
 	if !found {
 		return ExternalInteractionBinding{}, fmt.Errorf(
 			"%s binding is missing for environment=%s",

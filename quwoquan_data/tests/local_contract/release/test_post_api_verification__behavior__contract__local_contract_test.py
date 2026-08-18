@@ -440,11 +440,21 @@ def test_post_api_verification__binds_releaseimport_posts__contract__local_contr
 
     monkeypatch.setattr(subject.PublicApiClient, "get_bytes", _get_bytes)
     monkeypatch.setattr(subject.PublicApiClient, "get_json", _get_json)
+    search_bodies: list[dict[str, object]] = []
 
     def _post_json(_client, path: str, *, page_id: str, body, **_kwargs):
         assert path == "search"
         assert page_id == "search.global"
+        search_bodies.append(dict(body))
         object_id = str((body.get("ids") or [""])[0])
+        post = next((row for row in POSTS if row["postId"] == object_id), None)
+        if post is not None:
+            assert body["objectTypes"] == ["content.post"]
+            assert body["contentTypes"] == [post["contentType"]]
+        else:
+            assert object_id in {row["personaId"] for row in CREATORS}
+            assert body["objectTypes"] == ["user.profile"]
+            assert "contentTypes" not in body
         return PublicApiResponse(
             status=200,
             payload={"hits": [{"objectId": object_id}]},
@@ -516,9 +526,14 @@ def test_post_api_verification__binds_releaseimport_posts__contract__local_contr
     assert payload["readinessPhase"] == readiness_phase
     assert queries["typed_video"]["query"] == "identity=work&type=video&limit=2"
     assert queries["typed_video"]["matchedPostIds"] == ["post-video-a"]
-    # App 视频书唯一消费 premium_stream：consumer 与 commercial 都必须携带
-    # premium_stream release-bound 读回证据（typed_video 绿不代表视频书绿）。
-    assert queries["premium_stream"]["matchedPostIds"] == ["post-video-a"]
+    if readiness_phase == "commercial":
+        assert queries["premium_stream"]["matchedPostIds"] == ["post-video-a"]
+        assert len(payload["searchQueries"]) == len(POSTS) + len(CREATORS)
+        assert len(search_bodies) == len(POSTS) + len(CREATORS)
+    else:
+        assert "premium_stream" not in queries
+        assert "searchQueries" not in payload
+        assert search_bodies == []
     assert payload["guestActorHash"] == "sha256:" + "a" * 64
     assert payload["guestLogin"]["pageId"] == "user.login.anonymous"
     assert {request["pageId"] for row in queries.values() for request in row["requests"]} == {
@@ -588,6 +603,36 @@ def test_feed_item_match__accepts_canonical_projection_subset__local_contract() 
     )
 
     assert matched == "post-article-a"
+
+
+def test_author_profile__rejects_avatar_version_query__local_contract() -> None:
+    canonical_url = (
+        "https://media.test/media/avatar/s/asset/creator-avatar-1/v1/source.jpg"
+    )
+    creator = SimpleNamespace(
+        persona_id="author-profile-1",
+        creator_ref="creator-1",
+        display_name="内容作者 1",
+        avatar_url=canonical_url,
+        avatar_asset_id="creator-avatar-1",
+    )
+    client = SimpleNamespace(
+        get_json=lambda *_args, **_kwargs: PublicApiResponse(
+            status=200,
+            payload={
+                "personaId": creator.persona_id,
+                "displayName": creator.display_name,
+                "avatarUrl": f"{canonical_url}?v=1",
+            },
+            operation=_operation("user/author-profile-1", "user.profile", status=200),
+        )
+    )
+
+    with pytest.raises(
+        subject.PostApiVerificationError,
+        match="creator public avatar URL drift",
+    ):
+        subject._verify_author_profile(client, creator)
 
 
 @pytest.mark.parametrize("missing_field", ["authorDisplayName", "authorAvatarUrl"])
@@ -746,6 +791,42 @@ def test_video_source_attribution_drift_blocks_consumer_verification() -> None:
     with pytest.raises(subject.PostApiVerificationError, match="sourceAttribution drift"):
         subject._verify_source_attribution(
             {"sourceAttribution": {**VIDEO_ATTRIBUTION, "rightsBasis": "unknown"}},
+            case,
+        )
+
+
+@pytest.mark.parametrize("payload", [{}, {"sourceAttribution": None}])
+def test_absent_source_attribution_requires_absent_or_null_live_projection(
+    payload: dict[str, object],
+) -> None:
+    case = subject.PostApiCase(
+        post_ref="article/test/1",
+        post_id="post-article",
+        content_type=subject.ContentType.ARTICLE,
+        author_id="author-article",
+        source_attribution=None,
+    )
+
+    assert subject._verify_source_attribution(payload, case) is True
+
+
+def test_absent_source_attribution_rejects_partial_live_projection() -> None:
+    case = subject.PostApiCase(
+        post_ref="article/test/1",
+        post_id="post-article",
+        content_type=subject.ContentType.ARTICLE,
+        author_id="author-article",
+        source_attribution=None,
+    )
+
+    with pytest.raises(subject.PostApiVerificationError, match="expected absent/null"):
+        subject._verify_source_attribution(
+            {
+                "sourceAttribution": {
+                    "isOriginal": False,
+                    "collectedAt": "0001-01-01T00:00:00Z",
+                }
+            },
             case,
         )
 

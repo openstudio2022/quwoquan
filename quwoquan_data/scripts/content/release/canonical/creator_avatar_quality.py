@@ -7,6 +7,7 @@ import re
 from collections.abc import Mapping
 from pathlib import Path
 
+from core.content_library import MediaHoldingError, resolve_media_holding
 from core.media_asset_url import is_cas_media_object_key, sha256_file
 
 
@@ -19,6 +20,20 @@ def _object(path: Path) -> Mapping[str, object] | None:
     except (OSError, json.JSONDecodeError):
         return None
     return value if isinstance(value, Mapping) else None
+
+
+def _avatar_body_readable(sha256: str, byte_count: int) -> bool:
+    """Whether the library still holds the exact avatar body a creator publishes.
+
+    The projection records the avatar by digest; publish never carries the image
+    itself. Readability is therefore a question the content library answers.
+    """
+
+    try:
+        entry = resolve_media_holding(sha256, expected_bytes=byte_count)
+    except (MediaHoldingError, ValueError):
+        return False
+    return sha256_file(entry) == sha256
 
 
 def creator_avatar_quality_issues(
@@ -75,15 +90,12 @@ def creator_avatar_quality_issues(
         object_key = str(matches[0].get("objectKey") or "")
         byte_count = matches[0].get("bytes")
         mime_type = str(matches[0].get("mimeType") or "")
-        physical = publish_root / object_key
         if (
             not is_cas_media_object_key(object_key)
-            or not physical.is_file()
-            or sha256_file(physical) != digest
             or not isinstance(byte_count, int)
             or isinstance(byte_count, bool)
-            or physical.stat().st_size != byte_count
             or not mime_type.startswith("image/")
+            or not _avatar_body_readable(digest, byte_count)
         ):
             issues.append({"code": "creator_avatar_cas_invalid", "ref": creator_ref})
             continue

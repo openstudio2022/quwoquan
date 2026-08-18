@@ -265,7 +265,19 @@ def _bind_local_teardown_runtime(
     import quwoquan_ops.cli.stackctl as _stackctl
 
     current_attempt = _stackctl.load_startup_attempt(target_name)
-    if current_attempt is None or current_attempt.get("status") == "stopped":
+    if current_attempt is None:
+        raise ValueError(
+            "local teardown requires a canonical startup receipt; "
+            "use an explicit repair action for orphaned resources"
+        )
+    if current_attempt.get("status") == "stopped" and not purge_rebuildable_state:
+        # 停止一个已停止的运行时无事可做，所以普通 teardown 仍然要求非 stopped。
+        #
+        # 清理可重建状态不同：一次启动失败会自己回滚并把回执写成 stopped，而挡住
+        # 下一次启动的数据卷仍留在原处（例如 pre-alias 物理索引占了读别名名）。
+        # 把 stopped 一并拒掉，等于让唯一受支持的清理入口只在不需要它的时候可用，
+        # 运营者只剩手工删卷一条路。stopped 回执携带的正是刚被拆掉那次运行的
+        # composeProject/candidate/workload，清理因此依然是绑定的而非盲删。
         raise ValueError(
             "local teardown requires a non-stopped canonical startup receipt; "
             "use an explicit repair action for orphaned resources"
@@ -356,7 +368,10 @@ def _bind_local_teardown_runtime(
             "runtime receipt observability composition differs from active candidate"
         )
     environment["QWQ_WORKLOAD"] = runtime_workload
-    runtime_receipt = _stackctl._load_gamma_runtime_image_composition(target_name)
+    runtime_receipt = _stackctl._load_gamma_runtime_image_composition(
+        target_name,
+        include_stopped=purge_rebuildable_state,
+    )
     if runtime_receipt is None:
         raise ValueError("local teardown requires an exact runtime receipt")
 
@@ -401,6 +416,14 @@ def _command_down_unlocked(args: argparse.Namespace) -> dict[str, Any]:
             if selection_issue:
                 pass
             elif immutable_attempt and immutable_status != "stopped":
+                if mutable_status == "partial" and not purge_rebuildable_state:
+                    return _stackctl._command_mutable_test_live_down(
+                        args,
+                        env_name=env_name,
+                        report_dir=report_dir,
+                        receipt=mutable_attempt,
+                        allow_active_immutable_ports=True,
+                    )
                 selection_issue = (
                     "mutable and immutable runtime receipts are both active; "
                     "teardown identity is ambiguous"
@@ -658,5 +681,4 @@ def _command_down_unlocked(args: argparse.Namespace) -> dict[str, Any]:
         "details": _stackctl._command_details(result),
         "reportDir": _stackctl.relpath(report_dir),
     }
-
 

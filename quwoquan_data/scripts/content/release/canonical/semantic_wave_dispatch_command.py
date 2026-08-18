@@ -33,12 +33,10 @@ def task_execute_argv(
         str(request.quota),
         "--count",
         str(request.count),
-        "--required-workers",
-        str(request.required_workers),
-        "--partition-count",
-        str(request.partition_count),
-        "--capacity-plan-digest",
-        request.capacity_plan_digest,
+        "--capacity-calibration-receipt",
+        str(
+            request.capacity_calibration["calibrationReceiptRef"]
+        ),
         "--semantic-selection-id",
         "cursor_grok",
         "--semantic-preflight-receipt",

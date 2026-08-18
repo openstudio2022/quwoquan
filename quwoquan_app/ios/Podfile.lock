@@ -9,7 +9,7 @@ PODS:
   - CryptoSwift (1.8.4)
   - device_info_plus (0.0.1):
     - Flutter
-  - file_picker (0.0.1):
+  - file_picker_darwin (1.0.0):
     - Flutter
     - FlutterMacOS
   - Firebase/CoreOnly (12.15.0):
@@ -162,7 +162,7 @@ DEPENDENCIES:
   - camera_avfoundation (from `.symlinks/plugins/camera_avfoundation/ios`)
   - connectivity_plus (from `.symlinks/plugins/connectivity_plus/ios`)
   - device_info_plus (from `.symlinks/plugins/device_info_plus/ios`)
-  - file_picker (from `.symlinks/plugins/file_picker/darwin`)
+  - file_picker_darwin (from `.symlinks/plugins/file_picker_darwin/darwin`)
   - firebase_core (from `.symlinks/plugins/firebase_core/ios`)
   - firebase_messaging (from `.symlinks/plugins/firebase_messaging/ios`)
   - Flutter (from `Flutter`)
@@ -219,8 +219,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/connectivity_plus/ios"
   device_info_plus:
     :path: ".symlinks/plugins/device_info_plus/ios"
-  file_picker:
-    :path: ".symlinks/plugins/file_picker/darwin"
+  file_picker_darwin:
+    :path: ".symlinks/plugins/file_picker_darwin/darwin"
   firebase_core:
     :path: ".symlinks/plugins/firebase_core/ios"
   firebase_messaging:
@@ -285,7 +285,7 @@ SPEC CHECKSUMS:
   connectivity_plus: 2a701ffec2c0ae28a48cf7540e279787e77c447d
   CryptoSwift: e64e11850ede528a02a0f3e768cec8e9d92ecb90
   device_info_plus: bf2e3232933866d73fe290f2942f2156cdd10342
-  file_picker: e81e2d2db6261a4e98febeae383bd2173ba8b396
+  file_picker_darwin: 49d73317e75d1828d33a2a50338c6caebd6e24ff
   Firebase: a8539b633d474fbeb654c7043f9c1649e274045b
   firebase_core: ee2e6c050e05882c2453c21efd082627351c9d38
   firebase_messaging: 98a853b361e297a7825720ea9ab3e98a9cb55536
@@ -293,10 +293,10 @@ SPEC CHECKSUMS:
   FirebaseCoreInternal: 6ab6a02c94446c026d2cf35cf5383842ebaa4992
   FirebaseInstallations: eb29ccbf64eaedf86fd5b2ccc7fabde567660b52
   FirebaseMessaging: 40017d7bc8457ee295b0f41d480a80fdabc9994e
-  Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
+  Flutter: 71a624a5bc0c04062bf19101d501e466baf2fb47
   flutter_callkit_incoming: 139fb358c785e109854158086fd399aa64d77891
   flutter_contacts: 8d2ecfb85b529297c9924aefd4699ded455dea8a
-  flutter_secure_storage_darwin: 557817588b80e60213cbecb573c45c76b788018d
+  flutter_secure_storage_darwin: 79a377dfb00a246ccab2c64fe79d4d78c89e0fbc
   flutter_webrtc: 5aa37bfb8b834bff989a03182d1c4266a4f93377
   geolocator_apple: 66b711889fd333205763b83c9dcf0a57a28c7afd
   GoogleDataTransport: aae35b7ea0c09004c3797d53c8c41f66f219d6a7
@@ -327,6 +327,6 @@ SPEC CHECKSUMS:
   webview_flutter_wkwebview: 29eb20d43355b48fe7d07113835b9128f84e3af4
   WechatOpenSDK-XCFramework: ff342ae616bb86df3d236aca38059dfd4bc4a949
 
-PODFILE CHECKSUM: 39e81972947d3011d75dbd95f0474b5914b4df94
+PODFILE CHECKSUM: 52a6f89109232b7eba9408b45a365eec8553c651
 
 COCOAPODS: 1.16.2

@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -25,6 +25,7 @@ from content.source.external_acquisition_inputs import (
     professional_image_specs_from_plan,
     professional_video_plan_binding,
 )
+from content.source.rights_decision_projection import projected_distribution_decision
 from content.source.source_unit import resolve_entity_object_dir
 
 if TYPE_CHECKING:
@@ -195,7 +196,7 @@ def curated_sources_for_entity(
             if dedupe_key in seen:
                 continue
             seen.add(dedupe_key)
-            out.append(
+            row: dict[str, Any] = (
                 {
                     "source_id": source_id,
                     "platform": src.get("platform") or "web",
@@ -233,6 +234,14 @@ def curated_sources_for_entity(
                     "imageUrls": _normalize_image_specs(src.get("imageUrls") or []),
                 }
             )
+            # 这个投影是白名单：没列出的字段在 fetch 阶段就消失了。计划阶段已为
+            # 非百科来源铸好的 sourceAttribution 一旦在这里丢掉，写单元时就只剩
+            # 百科兜底解析器，携程/维基导游必然 fail-closed 并连带踢掉整个实体。
+            # 缺席与在场必须可区分，所以只在计划真的带了归因时才落这个键。
+            planned_attribution = src.get("sourceAttribution")
+            if isinstance(planned_attribution, Mapping) and planned_attribution:
+                row["sourceAttribution"] = dict(planned_attribution)
+            out.append(row)
     return out
 
 
@@ -292,7 +301,7 @@ def _normalize_image_specs(raw: Any) -> list[dict[str, Any]]:
                 "acquisitionStatus": item.get("acquisitionStatus", ""),
                 "rightsStatus": item.get("rightsStatus", ""),
                 "authorizationRequired": item.get("authorizationRequired"),
-                "distributionDecision": item.get("distributionDecision", ""),
+                **projected_distribution_decision(item),
                 "rightsAuditStatus": item.get("rightsAuditStatus") or item.get("rightsStatus") or "",
                 "rightsIssues": list(item.get("rightsIssues") or []),
                 "acquisitionReceiptRef": item.get("acquisitionReceiptRef", ""),

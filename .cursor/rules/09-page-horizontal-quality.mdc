@@ -1,45 +1,8 @@
 ---
-description: 页面横向质量 — 新增或变更页面必须更新 canonical metadata 并通过动态门禁
-alwaysApply: true
+description: 页面横向质量指针 — 新增或变更页面必须更新 canonical metadata 并通过动态门禁
+globs: quwoquan_app/lib/service/**/presentation/**/*_page.dart,quwoquan_app/lib/runtime/shell/*.dart,quwoquan_app/lib/design_system/**/*_page.dart
+alwaysApply: false
 ---
 
-# 页面横向质量（page-horizontal-quality）
-
-## 适用范围
-
-改动或新增以下路径时适用：
-
-- `quwoquan_app/lib/ui/**/pages/**/*_page.dart`
-- `quwoquan_app/lib/ui/welcome/pages/welcome_screen.dart`
-- `quwoquan_app/lib/components/**/*_page.dart`
-- `quwoquan_app/lib/runtime/shell/*.dart`
-
-仅占位 export 的 barrel 与 `chat_display_fallbacks.dart` 不作为独立页面。
-
-## 唯一真相源
-
-- 行为规格：`specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/spec.md`
-- 页面对象：`quwoquan_service/contracts/metadata/_shared/page_object_contract.yaml`
-- 路由与 Surface：`app_routes.yaml`、`ui_surfaces.yaml`
-- 页面集合：上述目录的实时扫描结果。
-
-禁止新增页面矩阵、inventory、checklist 或人工页面索引。
-
-## 强制要求
-
-1. `page_object_contract.yaml` 必须声明 owner、对象、Query Slice、typed presentation、鉴权、能力、观测和装配证据。
-2. route/surface 只修改 metadata 并重新 codegen；页面和 Router 不维护第二份字符串表。
-3. 页面不得以 `Map` / `dynamic` 充当业务展示模型，不得回退 Mock。
-4. 响应式、语义 token、等待恢复、可访问性与 iOS 原生壳由实现和测试证明。
-5. 未完成能力写入所属 L3 `spec.md` 的 `OPEN`，完成后转成现行 `REQ/GWT` 并删除 `OPEN`。
-
-## 门禁
-
-```bash
-make verify-app-page-horizontal-quality
-bash quwoquan_ops/gate/gate_repo.sh --scope app
-```
-
-- `verify_page_object_contract.py`：磁盘页面必须由 metadata 唯一拥有，且对象、Query Slice、typed presentation、route、surface、权限和观测引用有效。
-- `verify_page_abc_governance.py`：直接扫描页面实现的结构、布局与弱类型回归。
-- `verify_ios_native_surface_gate.py`、`verify_dart_semantic.py`、`verify_ui_mock_isolation.py`：校验 iOS 壳、语义 token 与 Mock 隔离。
+新增、移动、重命名或删除页面，接线 route/surface 时，先读
+`.agents/skills/review/references/roles/architect/references/page-ownership.md`。

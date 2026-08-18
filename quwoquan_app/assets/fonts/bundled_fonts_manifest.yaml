@@ -32,7 +32,7 @@ fonts:
     pinnedCommit: v32
   sha256: 8e8cb127554bdd9c8685788dce557e2725a9b62e183d9151fb506b3007ca6a07
 - family: Noto Sans SC
-  assetPath: assets/fonts/noto_sans_sc/NotoSansSC[wght].ttf
+  assetPath: assets/fonts/noto_sans_sc/NotoSansSC-wght.ttf
   weight: 400
   license: OFL-1.1
   variable: true
@@ -42,7 +42,7 @@ fonts:
     pinnedCommit: 2894aab31764f10f29c421bdfd2340d3b382d384
   sha256: a3041811a78c361b1de50f953c805e0244951c21c5bd412f7232ef0d899af0da
 - family: Noto Serif SC
-  assetPath: assets/fonts/noto_serif_sc/NotoSerifSC[wght].ttf
+  assetPath: assets/fonts/noto_serif_sc/NotoSerifSC-wght.ttf
   weight: 400
   license: OFL-1.1
   variable: true
@@ -52,7 +52,7 @@ fonts:
     pinnedCommit: 2e61f4355afd22b801791b0df176065082423b87
   sha256: 050080d9255a86808f2945bffac582b31ef32bc36411ce29563b4961670c66f9
 - family: Noto Sans Mono
-  assetPath: assets/fonts/noto_sans_mono/NotoSansMono[wdth,wght].ttf
+  assetPath: assets/fonts/noto_sans_mono/NotoSansMono-wdth-wght.ttf
   weight: 400
   license: OFL-1.1
   variable: true

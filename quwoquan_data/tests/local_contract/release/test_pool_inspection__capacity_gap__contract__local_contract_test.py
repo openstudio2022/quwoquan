@@ -23,7 +23,10 @@ from content.release.canonical.pool_semantic_scheduling import (  # noqa: E402
 )
 from core.io import write_json  # noqa: E402
 from core.schema import assert_valid  # noqa: E402
-from core.source_digest import SourceDigest, content_source_revision  # noqa: E402
+from core.source_digest import (  # noqa: E402
+    SourceDefinitionSnapshot,
+    content_source_revision,
+)
 
 
 def _source_attribution() -> dict[str, object]:
@@ -46,7 +49,9 @@ def _source_attribution() -> dict[str, object]:
     }
 
 
-def _source_identity(execution_id: str) -> tuple[dict[str, object], SourceDigest]:
+def _source_identity(
+    execution_id: str,
+) -> tuple[dict[str, object], SourceDefinitionSnapshot]:
     source_digest = "sha256:" + "1" * 64
     entity_catalog_digest = "sha256:" + "2" * 64
     identity: dict[str, object] = {
@@ -59,7 +64,7 @@ def _source_identity(execution_id: str) -> tuple[dict[str, object], SourceDigest
         "entityCatalogDigest": entity_catalog_digest,
     }
     identity["identityDigest"] = source_identity_digest(identity)
-    return identity, SourceDigest(source_digest)
+    return identity, SourceDefinitionSnapshot(source_digest)
 
 
 def _execution_identity_files(output: Path, execution_id: str) -> None:
@@ -100,6 +105,31 @@ def _author(publish: Path, author_id: str = "author-a") -> None:
             },
         },
     )
+
+
+def _legacy_author_history(publish: Path, author_id: str = "author-a") -> None:
+    payload_digest = "sha256:" + "d" * 64
+    legacy = {
+        "schema": "quwoquan_data.pool_object_record",
+        "objectType": "author",
+        "objectId": author_id,
+        "objectRef": author_id,
+        "status": "active",
+        "processResult": "completed",
+        "qualityResult": "passed",
+        "eligibilityResult": "passed",
+        "usageScope": None,
+        "evidenceRef": "evidence.json",
+        "evidenceDigest": "sha256:" + "a" * 64,
+        "payloadDigest": payload_digest,
+        "version": 1,
+    }
+    versions = publish / f"creators/{author_id}/_pool/versions"
+    write_json(versions / "1.json", legacy)
+    canonical = dict(legacy)
+    canonical.pop("version")
+    canonical.update(recordSequence=2, contentVersion=1)
+    write_json(versions / "2.json", canonical)
 
 
 def _homepage(
@@ -250,6 +280,28 @@ def test_pre_sequence_record_shape_stays_excluded(tmp_path: Path) -> None:
     )
 
 
+def test_pool_inspection_uses_canonical_author_after_exact_legacy_repair(
+    tmp_path: Path,
+) -> None:
+    publish = tmp_path / "publish"
+    _author(publish)
+    _legacy_author_history(publish)
+    _homepage(publish)
+    _post(publish, carrier="article", work="ready")
+
+    report = inspect_pool(
+        publish_root=publish,
+        include_issues=True,
+        strict_delivery=False,
+    )
+
+    assert report["authors"] == {"observed": 1, "admitted": 1}
+    assert report["supply"]["article"]["publishable"] == 1
+    assert not any(
+        row["ref"] == "creators/author-a" for row in report["issues"]
+    )
+
+
 def test_pool_inspection_reports_partial_without_blocking_publishable_supply(
     tmp_path: Path,
 ) -> None:
@@ -344,9 +396,9 @@ def test_pool_inspection_reports_partial_without_blocking_publishable_supply(
     assert report["milestone"] == "M100"
     assert report["targetAttained"] is False
     assert report["nextWave"] == [
-        {"carrier": "homepage", "requestedCandidateCount": 12},
-        {"carrier": "article", "requestedCandidateCount": 12},
-        {"carrier": "image", "requestedCandidateCount": 12},
+        {"carrier": "homepage", "requestedCandidateCount": 99},
+        {"carrier": "article", "requestedCandidateCount": 99},
+        {"carrier": "image", "requestedCandidateCount": 99},
         {"carrier": "video", "requestedCandidateCount": 9},
     ]
 
@@ -459,10 +511,10 @@ def test_m1000_inspection_uses_cumulative_target_and_deterministic_wave(
     assert report["supply"]["video"]["target"] == 100
     assert report["supply"]["video"]["gap"] == 99
     assert report["nextWave"] == [
-        {"carrier": "article", "requestedCandidateCount": 12},
-        {"carrier": "image", "requestedCandidateCount": 12},
-        {"carrier": "homepage", "requestedCandidateCount": 12},
-        {"carrier": "video", "requestedCandidateCount": 12},
+        {"carrier": "article", "requestedCandidateCount": 1_000},
+        {"carrier": "image", "requestedCandidateCount": 1_000},
+        {"carrier": "homepage", "requestedCandidateCount": 999},
+        {"carrier": "video", "requestedCandidateCount": 99},
     ]
 
 
@@ -491,7 +543,12 @@ def test_m10000_inspection_is_a_lower_bound_and_keeps_rolling_wave(
     assert report["supply"]["article"]["target"] == 10_000
     assert report["supply"]["image"]["target"] == 10_000
     assert report["supply"]["video"]["target"] == 1_000
-    assert all(row["requestedCandidateCount"] == 12 for row in report["nextWave"])
+    assert report["nextWave"] == [
+        {"carrier": "article", "requestedCandidateCount": 10_000},
+        {"carrier": "image", "requestedCandidateCount": 10_000},
+        {"carrier": "homepage", "requestedCandidateCount": 9_999},
+        {"carrier": "video", "requestedCandidateCount": 999},
+    ]
 
 
 def test_admission_missing_pool_is_blocked_but_reports_observed_homepage(tmp_path: Path) -> None:
@@ -638,18 +695,18 @@ def test_semantic_scheduling_requires_physical_backlog() -> None:
         supply=supply,
     )
 
-    assert projection["idleSlots"] == 4
+    assert projection["totalSemanticSlots"] == 0
     assert projection["dispatchBlockedWithoutPhysicalBacklog"] is True
     assert projection["waveInput"]["candidates"] == []
     assert [row["sourceReadyHighWater"] for row in projection["carriers"]] == [
-        48,
-        24,
-        24,
+        0,
+        0,
+        0,
         0,
     ]
 
 
-def test_semantic_scheduling_reallocates_to_largest_remaining_hours() -> None:
+def test_semantic_scheduling_dispatches_all_physical_source_ready_slots() -> None:
     supply = {
         carrier: {"gap": gap}
         for carrier, gap in {
@@ -683,21 +740,16 @@ def test_semantic_scheduling_reallocates_to_largest_remaining_hours() -> None:
         milestone="M100",
         supply=supply,
         source_ready_backlog={key: len(value) for key, value in candidates.items()},
-        p10_per_slot_throughput={
-            "homepage": 1.0,
-            "article": 0.1,
-            "image": 1.0,
-            "video": 1.0,
-        },
         source_ready_candidates=candidates,
     )
 
     assigned = {
         row["carrier"]: row["assignedSlots"] for row in projection["carriers"]
     }
-    assert assigned == {"homepage": 1, "article": 2, "image": 1, "video": 0}
-    assert projection["nextReallocationCarrier"] == "article"
-    assert len(projection["waveInput"]["candidates"]) == 48
+    assert assigned == {"homepage": 1, "article": 3, "image": 1, "video": 0}
+    assert projection["totalSemanticSlots"] == 5
+    assert projection["totalSemanticSlots"] > 4
+    assert len(projection["waveInput"]["candidates"]) == 60
 
 
 def test_semantic_scheduling_defers_same_entity_candidates_to_later_waves() -> None:
@@ -762,7 +814,7 @@ def test_video_gap_never_allocates_empty_semantic_slots() -> None:
         row for row in projection["carriers"] if row["carrier"] == "video"
     )
     assert video["assignedSlots"] == 1
-    assert video["sourceReadyHighWater"] == 24
+    assert video["sourceReadyHighWater"] == 10
     assert video["dispatchCandidateCount"] == 10
 
 

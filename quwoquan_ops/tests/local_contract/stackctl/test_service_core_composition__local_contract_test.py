@@ -121,6 +121,38 @@ class ServiceCoreCompositionContractTest(unittest.TestCase):
             self.assertIn(key, core_env)
             self.assertEqual(core_env[key], f"${{{key}:-}}")
 
+    def test_assistant_skill_release_and_trust_share_the_config_mount(self) -> None:
+        services = {
+            service: {
+                "image": f"${{{service}_IMAGE}}",
+                "environment": {"APP_ENV": "alpha"},
+            }
+            for service in SERVICE_CORE_MODULES
+        }
+        services["assistant-service"].update(
+            {
+                "environment": {
+                    "APP_ENV": "alpha",
+                    "ASSISTANT_SKILL_PACKAGE_TRUSTED_PUBLIC_KEYS_JSON": (
+                        "${ASSISTANT_SKILL_PACKAGE_TRUSTED_PUBLIC_KEYS_JSON:?required}"
+                    ),
+                },
+                "volumes": ["${QWQ_COMPOSE_CONFIG_ROOT}:/etc/qwq-config:ro"],
+            }
+        )
+
+        projected = project_compose_document({"services": services})
+        core = projected["services"][SERVICE_CORE_WORKLOAD]
+
+        self.assertEqual(
+            core["environment"]["ASSISTANT_SKILL_PACKAGE_TRUSTED_PUBLIC_KEYS_JSON"],
+            "${ASSISTANT_SKILL_PACKAGE_TRUSTED_PUBLIC_KEYS_JSON:?required}",
+        )
+        self.assertIn(
+            "${QWQ_COMPOSE_CONFIG_ROOT}:/etc/qwq-config:ro",
+            core["volumes"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -20,6 +20,10 @@ type downloadPageModel struct {
 	Platform string
 }
 
+type iosInstallPageModel struct {
+	AppStoreURL string
+}
+
 func NewHandler(service *apprelease.Service) *Handler { return &Handler{service: service} }
 
 func (h *Handler) Register(mux *http.ServeMux) {
@@ -144,7 +148,16 @@ func (h *Handler) renderLanding(w http.ResponseWriter, platform string) {
 
 func (h *Handler) renderIOSInstall(w http.ResponseWriter) {
 	h.writeHTMLHeaders(w)
-	_ = iosInstallPage.Execute(w, nil)
+	// iOS 网页版不提供二进制下载：App Store 跳转（有已登记 release 时）与
+	// PWA 添加主屏指引共存；AppStoreURL 已由 app_release 校验固定在
+	// apps.apple.com，不渲染任何第三方下载地址。
+	model := iosInstallPageModel{}
+	if h.service != nil {
+		if release, ok := h.service.Release(apprelease.PlatformIOS); ok {
+			model.AppStoreURL = strings.TrimSpace(release.UpdateURL)
+		}
+	}
+	_ = iosInstallPage.Execute(w, model)
 }
 
 func (h *Handler) writeHTMLHeaders(w http.ResponseWriter) {
@@ -210,6 +223,8 @@ var iosInstallPage = template.Must(template.New("ios-install").Parse(`<!doctype 
 body{margin:0;min-height:100vh;display:grid;place-items:center}.wrap{width:min(320px,calc(100vw - 48px))}
 h1{text-align:center;font-size:28px;line-height:1.3;margin:0 0 16px;font-weight:600}p,ol{font-size:17px;line-height:1.7;color:#6b707c}ol{padding-left:24px;margin:0 0 28px}
 a{display:flex;height:50px;align-items:center;justify-content:center;border-radius:25px;text-decoration:none;font-size:17px;font-weight:500;background:#087bff;color:#fff}
-</style></head><body><main class="wrap"><h1>安装趣我圈 iOS 网页版</h1>
-<p>请在 Safari 中完成以下操作：</p><ol><li>点击浏览器的“分享”按钮</li><li>选择“添加到主屏幕”</li><li>确认后从主屏幕打开趣我圈</li></ol>
-<a href="/">立即使用网页版</a></main></body></html>`))
+.secondary{background:transparent;border:1px solid #087bff;color:#087bff;margin-top:12px}
+</style></head><body><main class="wrap"><h1>安装趣我圈 iOS 版</h1>
+{{if .AppStoreURL}}<p>从 App Store 安装官方应用：</p><a href="{{.AppStoreURL}}" rel="noreferrer">前往 App Store</a>
+<p>或添加网页版到主屏幕：</p>{{else}}<p>请在 Safari 中完成以下操作：</p>{{end}}<ol><li>点击浏览器的“分享”按钮</li><li>选择“添加到主屏幕”</li><li>确认后从主屏幕打开趣我圈</li></ol>
+<a class="secondary" href="/">立即使用网页版</a></main></body></html>`))

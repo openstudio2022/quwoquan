@@ -1,3 +1,4 @@
+# spec_ref: specs/feature-tree/runtime/runtime-data-engineering/spec.md#sit-001.t3
 """场景组：aggregate release 多载体对象闭包（article/image/video 全链路）。
 
 Aggregate homepage releases use one immutable payload tree.
@@ -29,10 +30,11 @@ from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
 )
 from core import paths as core_paths
+from core.content_library import resolve_media_holding
 from core.release_layout import payload_file
 from core.source_digest import (
     content_source_revision,
-    current_source_digest,
+    current_source_definition_snapshot,
 )
 from tests.support.release_admission_fixture import (
     article_render_profile,
@@ -44,12 +46,40 @@ from support.aggregate_release_payload_fixture import (
     _release_source_identity,
     _research_rights,
     _source_attribution,
-    _use_research_distribution,
+    _admit_media,
+    _use_release_test_output,
     _write_avatar_rights_snapshot,
-    _write_cas,
     _write_json,
     _write_rights_snapshot,
 )
+
+
+def _commercial_rights(asset: dict[str, object]) -> dict[str, object]:
+    rights = _research_rights(asset)
+    rights.update(
+        {
+            "license": "CC BY 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by/4.0",
+            "authorizationProof": "https://rights.example/authorization",
+            "rightsAuditStatus": "verified",
+            "rightsAuditIssues": [],
+        }
+    )
+    return rights
+
+
+def _commercial_source_attribution(content_type: str) -> dict[str, object]:
+    attribution = _source_attribution(content_type)
+    attribution.update(
+        {
+            "rightsBasis": "CC BY 4.0",
+            "commercialAuthorizationStatus": "verified",
+            "publicationAdmission": "commercial_release",
+            "authorizationProofUrl": "https://rights.example/authorization",
+            "termsUrl": "https://creativecommons.org/licenses/by/4.0",
+        }
+    )
+    return attribution
 
 
 def test_release__multi_carrier_object_closure__contract__local_contract(
@@ -60,10 +90,10 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
     release_root = tmp_path / "releases"
     entity_ref = "地点/景区/测试实体甲"
     creator_ref = "test_creator_a"
-    for relative in ("creators", "entities", "posts", "tags", "media/objects"):
+    for relative in ("creators", "entities", "posts", "tags"):
         (publish_root / relative).mkdir(parents=True, exist_ok=True)
     entity_root = publish_root / "entities" / entity_ref
-    _entity_key, entity_asset = _write_cas(publish_root, b"entity-homepage-hero")
+    _entity_key, entity_asset = _admit_media(b"entity-homepage-hero")
     entity_asset["role"] = "cover"
     _write_json(
         entity_root / "manifest.json",
@@ -74,7 +104,7 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
             "admission": {
                 "processResult": "completed",
                 "qualityResult": "passed",
-                "usageScope": "research",
+                "usageScope": "commercial",
                 "evidenceRef": "homepage-admission.json",
                 "evidenceDigest": "sha256:" + "c" * 64,
             },
@@ -92,14 +122,14 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
     _write_json(entity_root / "source_catalog.json", {"sources": []})
     _write_json(
         entity_root / "rights.json",
-        {"assets": [_research_rights(entity_asset)]},
+        {"assets": [_commercial_rights(entity_asset)]},
     )
     _write_json(entity_root / "creator.refs.json", {"creatorRefs": [creator_ref]})
     _write_json(entity_root / "tag.refs.json", {"tagRefs": []})
     _write_json(entity_root / "asset.refs.json", {"assets": [entity_asset]})
     _write_rights_snapshot(entity_root, entity_asset)
     creator_root = publish_root / "creators" / creator_ref
-    _avatar_key, avatar_asset = _write_cas(publish_root, b"creator-avatar")
+    _avatar_key, avatar_asset = _admit_media(b"creator-avatar")
     avatar_asset["kind"] = "avatar"
     _write_json(
         creator_root / "_creator.json",
@@ -133,15 +163,15 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
             },
         },
     )
-    avatar_asset["bytes"] = (
-        publish_root / str(avatar_asset["objectKey"])
+    avatar_asset["bytes"] = resolve_media_holding(
+        str(avatar_asset["sha256"])
     ).stat().st_size
     _write_json(creator_root / "assets.refs.json", {"assets": [avatar_asset]})
     _write_avatar_rights_snapshot(creator_root, avatar_asset)
     (creator_root / "works.refs.ndjson").write_text("", encoding="utf-8")
 
     executions: list[str] = []
-    frozen_source_digest = current_source_digest().to_document()
+    frozen_source_digest = current_source_definition_snapshot().to_document()
 
     def add_execution(
         execution_id: str,
@@ -172,8 +202,11 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
                     "identityDigest": source_identity_digest(source_identity),
                 }
                 if kind == "entities":
-                    manifest["sourceAttribution"] = _source_attribution(
-                        "homepage"
+                    manifest["sourceAttribution"] = (
+                        _commercial_source_attribution("homepage")
+                        if manifest.get("admission", {}).get("usageScope")
+                        == "commercial"
+                        else _source_attribution("homepage")
                     )
                 admission = manifest.get("admission")
                 if isinstance(admission, dict):
@@ -220,8 +253,8 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
         post_root = publish_root / "posts" / post_ref
         object_keys: list[str] = []
         if content_type == "article":
-            cover_key, cover = _write_cas(publish_root, b"article-cover")
-            body_key, body = _write_cas(publish_root, b"article-body")
+            cover_key, cover = _admit_media(b"article-cover")
+            body_key, body = _admit_media(b"article-body")
             article_source_ref = "sources/article-source-unit/source.md"
             cover.update(
                 role="cover",
@@ -234,20 +267,19 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
             assets = [cover, body]
             object_keys.extend((cover_key, body_key))
         elif content_type == "video":
-            video_key, video = _write_cas(
-                publish_root,
+            video_key, video = _admit_media(
                 b"video-asset",
                 suffix=".mp4",
                 kind="video",
                 mime_type="video/mp4",
             )
-            poster_key, poster = _write_cas(publish_root, b"video-poster")
+            poster_key, poster = _admit_media(b"video-poster")
             poster["role"] = "cover"
             video["posterAssetId"] = poster["assetId"]
             assets = [video, poster]
             object_keys.extend((video_key, poster_key))
         else:
-            image_key, image = _write_cas(publish_root, b"image-asset")
+            image_key, image = _admit_media(b"image-asset")
             image["role"] = "cover"
             assets = [image]
             object_keys.append(image_key)
@@ -264,13 +296,21 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
                 "creatorProfileId": creator_ref,
                 "authorId": creator_ref,
                 "reviewDecision": "approved",
-                    "entityRefs": [f"/entity/{entity_ref}"],
-                    "sourceAttribution": _source_attribution(content_type),
+                "entityRefs": [f"/entity/{entity_ref}"],
+                "sourceAttribution": (
+                    _commercial_source_attribution(content_type)
+                    if content_type in {"image", "video"}
+                    else _source_attribution(content_type)
+                ),
                 "variantPurpose": "original",
                 "admission": {
                     "processResult": "completed",
                     "qualityResult": "passed",
-                    "usageScope": "research",
+                    "usageScope": (
+                        "commercial"
+                        if content_type in {"image", "video"}
+                        else "research"
+                    ),
                     "evidenceRef": "attestation.json",
                     "evidenceDigest": "sha256:" + "b" * 64,
                 },
@@ -304,7 +344,16 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
         _write_json(post_root / "source_catalog.json", {"sources": []})
         _write_json(
             post_root / "rights.json",
-            {"assets": [_research_rights(asset) for asset in assets]},
+            {
+                "assets": [
+                    (
+                        _commercial_rights(asset)
+                        if content_type == "image"
+                        else _research_rights(asset)
+                    )
+                    for asset in assets
+                ]
+            },
         )
         if content_type == "video":
             video_asset = next(
@@ -329,13 +378,20 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
             entities=[],
             posts=[post_ref],
         )
-        assert all((publish_root / object_key).is_file() for object_key in object_keys)
+        # Publish records the reference and the library owns the body, so what
+        # every object key has to prove is that the holding is reachable — not
+        # that a file sits under the versioned tree.
+        for object_key in object_keys:
+            assert not (publish_root / object_key).exists()
+        for asset in assets:
+            assert resolve_media_holding(str(asset["sha256"])).is_file()
 
     result = build_aggregate_release(
         publish_root=publish_root,
         release_root=release_root,
         release_id="20260718--travel-multi-carrier--test-release-b--001",
         execution_ids=executions,
+        release_class="research",
         target_environment="alpha",
         **_release_source_identity(str(frozen_source_digest["digest"])),
     )
@@ -392,6 +448,7 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
             release_root=release_root,
             release_id="20260718--travel-multi-carrier--mixed-source--001",
             execution_ids=executions,
+            release_class="research",
             **_release_source_identity(str(frozen_source_digest["digest"])),
         )
     article_manifest = original_article_manifest
@@ -402,8 +459,8 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
         "20260718--travel-homepage-coverage--test-region-b--scale-902"
     )
     standalone_root = publish_root / "entities" / standalone_entity_ref
-    _standalone_key, standalone_asset = _write_cas(
-        publish_root, b"standalone-entity-homepage-hero"
+    _standalone_key, standalone_asset = _admit_media(
+        b"standalone-entity-homepage-hero"
     )
     standalone_asset["role"] = "cover"
     _write_json(
@@ -495,6 +552,7 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
         release_root=release_root,
         release_id="20260718--travel-pool-alpha--001",
         target_environment="alpha",
+        release_class="research",
     )
     assert pool_result["postCount"] == 3
     assert pool_result["entityCount"] == 2
@@ -606,7 +664,59 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
         release_root=release_root,
         release_id=pool_result["releaseId"],
         target_environment="alpha",
+        release_class="research",
     )["idempotent"] is True
+
+    commercial_result = build_pool_release(
+        publish_root=publish_root,
+        release_root=release_root,
+        release_id="20260718--travel-pool-alpha-commercial--001",
+        target_environment="alpha",
+        release_class="commercial",
+    )
+    assert commercial_result["postCount"] == 1
+    assert commercial_result["entityCount"] == 1
+    assert commercial_result["creatorCount"] == 1
+    assert commercial_result["counts"] == {
+        "article": 0,
+        "image": 1,
+        "video": 0,
+        "total": 1,
+    }
+    assert commercial_result["poolDigest"] == pool_result["poolDigest"]
+    assert {
+        row["code"] for row in commercial_result["excluded"]
+    } == {"DATA.POOL.COMMERCIAL_RIGHTS_REQUIRED"}
+    assert {
+        row["category"] for row in commercial_result["excluded"]
+    } == {"eligibility"}
+    assert any(
+        row["postRef"] == "video/测试实体甲/short"
+        and row["code"] == "DATA.POOL.COMMERCIAL_RIGHTS_REQUIRED"
+        for row in commercial_result["excluded"]
+    )
+    commercial_header = json.loads(
+        payload_file(
+            release_root / commercial_result["releaseId"],
+            "release.json",
+        ).read_text(encoding="utf-8")
+    )
+    assert commercial_header["releaseClass"] == "commercial"
+    assert commercial_header["productLifecycleState"] == "commercial"
+    assert commercial_header["sourceIdentitySetDigest"].startswith("sha256:")
+    assert commercial_header["authors"] == [
+        {"authorId": creator_ref, "version": 1, "creatorRef": creator_ref}
+    ]
+    commercial_desired = json.loads(
+        payload_file(
+            release_root / commercial_result["releaseId"],
+            "desired_state.json",
+        ).read_text(encoding="utf-8")
+    )
+    assert commercial_desired["desiredRefs"]["posts"] == [
+        "image/测试实体甲/gallery"
+    ]
+    assert independent_creator_ref not in commercial_desired["desiredRefs"]["creators"]
 
     invalid_article = json.loads(
         article_manifest_path.read_text(encoding="utf-8")
@@ -619,6 +729,7 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
         release_root=release_root,
         release_id="20260718--travel-pool-alpha-media-partial--001",
         target_environment="alpha",
+        release_class="research",
     )
     assert media_partial["postCount"] == 2
     assert media_partial["excludedCount"] == 1
@@ -646,6 +757,7 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
         release_root=release_root,
         release_id="20260718--travel-pool-alpha-partial--001",
         target_environment="alpha",
+        release_class="research",
     )
     assert partial_result["postCount"] == 2
     assert partial_result["excludedCount"] == 1

@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import shutil
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -13,6 +12,8 @@ from core.asset_identity import (
     compute_post_asset_id as _compute_post_asset_id,
     parse_post_asset_id as _parse_post_asset_id,
 )
+from core.content_library import link_from_library
+from core.media_normalization import publishable_media_issue
 
 MARKDOWN_DIALECT = "qwq-rich-md"
 
@@ -258,24 +259,37 @@ def copy_asset_files(
         file_name = item.get("fileName") or f"{item['assetId']}.jpg"
         dest = assets_dir / file_name
         src_path = item.get("sourcePath")
-        copied = False
+        digest = ""
         if src_path:
             src = Path(src_path)
             if src.is_file():
-                shutil.copy2(src, dest)
-                copied = True
+                digest = _reference_asset(src, dest)
             else:
                 raise FileNotFoundError(f"asset sourcePath missing: {src_path} (assetId={item.get('assetId')})")
         elif download_images_dir and download_images_dir.is_dir():
             candidate = download_images_dir / file_name
             if candidate.is_file():
-                shutil.copy2(candidate, dest)
-                copied = True
+                digest = _reference_asset(candidate, dest)
         else:
             raise FileNotFoundError(f"asset has no sourcePath and no download image dir: {item.get('assetId')}")
-        if not copied and not dest.is_file():
+        if not digest and not dest.is_file():
             raise FileNotFoundError(f"asset file could not be resolved: {file_name} (assetId={item.get('assetId')})")
         if dest.is_file():
-            item = {**item, "sha256": sha256_file(dest)}
+            item = {**item, "sha256": digest or sha256_file(dest)}
         out.append(item)
     return out
+
+
+def _reference_asset(source: Path, destination: Path) -> str:
+    """Bind one post asset to its library entry and return the manifest digest.
+
+    Post assets are the first surface a body reaches that the product actually
+    serves, so this is where an un-normalized original has to be refused: past
+    this point it is inside an immutable package and can only be rewritten by
+    cutting a new one.
+    """
+
+    issue = publishable_media_issue(source, label=destination.name)
+    if issue is not None:
+        raise ValueError(f"post asset is not publishable: {issue}")
+    return "sha256:" + link_from_library(source, destination, kind="media")

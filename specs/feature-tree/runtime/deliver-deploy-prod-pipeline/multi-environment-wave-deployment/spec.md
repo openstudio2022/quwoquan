@@ -9,8 +9,8 @@
 ## 1. 用户价值
 
 作为开发、测试或运维角色，
-我希望按 alpha、beta、gamma、prod 的准入顺序发布同一制品，任一波次失败即停止晋级，
-从而让调用方获得稳定结果，并让维护者能够定位和恢复失败。
+我希望同一 source release train 在候选就绪前封存四份环境专属制品，并按 alpha、beta、gamma、prod 的准入顺序验证，任一波次失败即停止晋级，
+从而确保环境差异在构建期可审计，且维护者能以同环境精确制品定位和恢复失败。
 
 ## 2. 范围与非目标
 
@@ -27,8 +27,8 @@
 <a id="req-001"></a>
 ### REQ-001 多环境波次部署
 
-- 同一 `ReleaseEvidenceManifest.candidateId` 必须贯穿 Alpha、Beta、Gamma-local 与 Prod，禁止在环境间重新生成候选身份。
-- `candidate-ready` 必须由同一 Service component、四环境 configuration package、四环境 App 实际 payload、ContractGraph、真实 Provider readiness 和三层测试摘要共同派生；环境阶段不得重新打包或替换其中任一输入。
+- 同一 `releaseTrainId` 必须贯穿 Alpha、Beta、Gamma-local 与 Prod，并绑定同一 source capsule、ContractGraph 和 toolchain；每个环境拥有独立 `environmentArtifactDigest`，禁止跨环境引用同一最终镜像 digest。
+- `candidate-ready` 必须在环境验证前一次性封存四份环境 artifact；每份 artifact 绑定本环境六类镜像、configuration、Provider binding、endpoint authority、runtime topology、App payload、SBOM/provenance 与 purity attestation。进入波次后不得重新构建、codegen 或替换其中任一输入。
 - Alpha、Beta、Gamma-local 可以在隔离 runner 并行执行 package/up/health/verify；准入聚合必须严格按 `alpha -> beta -> gamma` 接受回执，任一失败即停止晋级。
 - Gamma-local 是正式阻断阶段，不由旧 nightly 或其他候选摘要的证据替代；仓库不新增 `gamma-hosted`。
 - 三个前置环境全部通过后，Prod 才能进入同一个受审批事务 job，并按 `canary -> 5 -> 20 -> 50 -> 100` 晋级。
@@ -52,8 +52,8 @@
 
 - GIVEN 开发、测试或运维角色具备有效身份，且父能力声明的输入与上游事实成立。
 - WHEN 参与者执行“多环境波次部署”对应的公开行为。
-- THEN 按 alpha、beta、gamma、prod 的准入顺序发布同一制品，任一波次失败即停止晋级。
-- AND Alpha、Beta、Gamma-local 的隔离并行执行不改变准入顺序，且每个回执均绑定同一 candidate digest。
+- THEN 按 alpha、beta、gamma、prod 的准入顺序验证同一 release train 下对应环境的封存 artifact，任一波次失败即停止晋级。
+- AND Alpha、Beta、Gamma-local 的隔离并行执行不改变准入顺序；每个回执同时绑定共同 `releaseTrainId` 与自身 `environmentArtifactDigest`，且镜像/config/binding 不跨环境复用。
 - AND App 四个测试 shard 的实际最长 job 时长进入 Delivery Gate 关键路径。
 - AND 达到 1500 秒后不会开始下一阶段，超过 1800 秒时发布门禁失败。
 - AND 失败时返回 canonical failure，且不产生伪成功事实。

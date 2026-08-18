@@ -35,7 +35,7 @@ from content.release.environment.research_isolation_verification import (
 from core.io import read_json, write_json
 from core.release_layout import payload_digest
 from core.schema import load_schema
-from core.source_digest import SourceDigest, content_source_revision
+from core.source_digest import SourceDefinitionSnapshot, content_source_revision
 
 RELEASE_ID = "research-isolation-a"
 VERIFY_RUN_ID = "verify-research-a"
@@ -46,7 +46,7 @@ SOURCE_REVISION = content_source_revision(
     source_digest=SOURCE_DIGEST,
     entity_catalog_digest=ENTITY_CATALOG_DIGEST,
 )
-SOURCE_DIGEST_DOCUMENT = SourceDigest(SOURCE_DIGEST).to_document()
+SOURCE_DIGEST_DOCUMENT = SourceDefinitionSnapshot(SOURCE_DIGEST).to_document()
 
 
 def _checksum(value: dict[str, object]) -> str:

@@ -46,7 +46,6 @@ func dataJob(i int) DataContentJob {
 		Ref:            entity,
 		Stage:          "author",
 		PartitionKey:   entity,
-		MaxAttempts:    3,
 	}
 	return bindDataJob(job)
 }
@@ -57,9 +56,6 @@ func bindDataJob(job DataContentJob) DataContentJob {
 		panic(err)
 	}
 	job.IdempotencyKey = key
-	job.JobSetEnvelopeDigest = "sha256:" + strings.Repeat("e", 64)
-	job.JobSetDigest = "sha256:" + strings.Repeat("f", 64)
-	job.ActualTaskDigest = job.JobSetDigest
 	return job
 }
 
@@ -68,26 +64,6 @@ func dataPublishJob(i int) DataContentJob {
 	job.JobID = fmt.Sprintf("publish-job-%03d", i)
 	job.Stage = "publish"
 	return bindDataJob(job)
-}
-
-func TestDataContentTaskDigestBindsPerJobMaxAttempts(t *testing.T) {
-	job := dataJob(1)
-	digest, err := DataContentTaskDigest([]DataContentJob{job})
-	if err != nil {
-		t.Fatal(err)
-	}
-	const pythonCanonicalDigest = "sha256:dc34c4fcdb4316ce53ae642a595808acc1a61e8bc1d3a8331e6e1c9cd2311edd"
-	if digest != pythonCanonicalDigest {
-		t.Fatalf("Python/Go canonical task digest drift: %s", digest)
-	}
-	job.MaxAttempts = 2
-	changed, err := DataContentTaskDigest([]DataContentJob{job})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if changed == digest {
-		t.Fatal("maxAttempts changed without changing the frozen task digest")
-	}
 }
 
 func TestDataContentFleetIdempotencySurvivesCompletion(t *testing.T) {
@@ -168,118 +144,6 @@ func TestDataContentFleetRetryExecutionDoesNotReusePriorTask(t *testing.T) {
 	}
 }
 
-func TestDataContentFleetEnqueuesOnlyHostAssignedPartitions(t *testing.T) {
-	ctx := context.Background()
-	store := NewMemoryStore()
-	ready := &captureReadyIndex{}
-	first := dataJob(41)
-	second := dataJob(42)
-	fleet := DataContentFleet{
-		Store: store, ExecutionID: first.ExecutionID, Ready: ready,
-		AllowedPartitions: map[string]struct{}{first.PartitionKey: {}},
-	}
-	if _, err := fleet.Declare(ctx, first); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := fleet.Declare(ctx, second); err != nil {
-		t.Fatal(err)
-	}
-	dispatched, err := fleet.Dispatch(ctx, 10)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(dispatched) != 1 || len(ready.tasks) != 1 || ready.tasks[0].PartitionKey != first.PartitionKey {
-		t.Fatalf("host claimed cross-partition work: dispatched=%#v ready=%#v", dispatched, ready.tasks)
-	}
-	ready.tasks = nil
-	count, err := fleet.ReconcileReadyIndex(ctx, 10)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if count != 1 || len(ready.tasks) != 1 || ready.tasks[0].PartitionKey != first.PartitionKey {
-		t.Fatalf("host reconciled cross-partition work: count=%d ready=%#v", count, ready.tasks)
-	}
-}
-
-func TestDataContentWorkerFenceRevokesLiveOldGenerationLease(t *testing.T) {
-	ctx := context.Background()
-	store := NewMemoryStore()
-	oldFence := DataContentWorkerFence{
-		HostSetDigest: "sha256:" + strings.Repeat("1", 64), Generation: 1,
-		FencingToken: "sha256:" + strings.Repeat("2", 64), HostScopeID: "worker-old",
-	}
-	job := dataJob(51)
-	job.WorkerFence = &oldFence
-	fleet := DataContentFleet{Store: store, ExecutionID: job.ExecutionID}
-	if _, err := fleet.Declare(ctx, job); err != nil {
-		t.Fatal(err)
-	}
-	tasks, err := fleet.Dispatch(ctx, 10)
-	if err != nil || len(tasks) != 1 {
-		t.Fatalf("dispatch: tasks=%#v err=%v", tasks, err)
-	}
-	oldTask, err := store.ClaimReadyTaskByIDWithFence(
-		ctx, tasks[0].TaskID, "old-worker", time.Minute, time.Now().UTC(), oldFence.payload(),
-	)
-	if err != nil || oldTask == nil {
-		t.Fatalf("old claim: task=%#v err=%v", oldTask, err)
-	}
-	newFence := DataContentWorkerFence{
-		HostSetDigest: "sha256:" + strings.Repeat("3", 64), Generation: 2,
-		FencingToken: "sha256:" + strings.Repeat("4", 64), HostScopeID: "worker-new",
-	}
-	if ok, err := store.AdvanceDataContentTaskFence(ctx, tasks[0].TaskID, newFence, time.Now().UTC()); err != nil || !ok {
-		t.Fatalf("advance fence: ok=%v err=%v", ok, err)
-	}
-	if err := store.CompleteTask(ctx, oldTask.TaskID, oldTask.LeaseToken); err == nil {
-		t.Fatal("revoked old generation lease completed task")
-	}
-	stale, err := store.ClaimReadyTaskByIDWithFence(
-		ctx, tasks[0].TaskID, "old-worker", time.Minute, time.Now().UTC(), oldFence.payload(),
-	)
-	if err != nil || stale != nil {
-		t.Fatalf("old generation reclaimed: task=%#v err=%v", stale, err)
-	}
-	fresh, err := store.ClaimReadyTaskByIDWithFence(
-		ctx, tasks[0].TaskID, "new-worker", time.Minute, time.Now().UTC(), newFence.payload(),
-	)
-	if err != nil || fresh == nil {
-		t.Fatalf("new generation claim: task=%#v err=%v", fresh, err)
-	}
-}
-
-func TestDecodeDataContentWorkItemCarriesExactWorkerHostFence(t *testing.T) {
-	job := dataJob(52)
-	job.WorkerFence = &DataContentWorkerFence{
-		HostSetDigest: "sha256:" + strings.Repeat("5", 64), Generation: 3,
-		FencingToken: "sha256:" + strings.Repeat("6", 64), HostScopeID: "worker-host-a",
-	}
-	task := ReliableAsyncTask{
-		TaskID:         "runtime-task-52",
-		TaskType:       DataContentTaskType,
-		AggregateID:    job.EntityRef,
-		IdempotencyKey: job.IdempotencyKey,
-		PartitionKey:   job.PartitionKey,
-		Payload:        job.payload(job.IdempotencyKey),
-		LeaseToken:     "lease-52",
-	}
-	item, err := DecodeDataContentWorkItem(task)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if item.WorkerHostSetDigest != job.WorkerFence.HostSetDigest ||
-		item.WorkerHostGeneration != job.WorkerFence.Generation ||
-		item.WorkerFencingToken != job.WorkerFence.FencingToken ||
-		item.WorkerHostScopeID != job.WorkerFence.HostScopeID {
-		t.Fatalf("worker host fence transit drift: %#v", item)
-	}
-	delete(task.Payload, "workerFencingToken")
-	if _, err := DecodeDataContentWorkItem(task); err == nil ||
-		!strings.Contains(err.Error(), "host fence is incomplete") {
-		t.Fatalf("incomplete worker host fence was accepted: %v", err)
-	}
-}
-
 func TestDataContentFleetAuditedRecoveryReleasesNewLease(t *testing.T) {
 	ctx := context.Background()
 	store := NewMemoryStore()
@@ -290,7 +154,6 @@ func TestDataContentFleetAuditedRecoveryReleasesNewLease(t *testing.T) {
 		Retry:       RetryPolicy{MaxAttempts: 1},
 	}
 	job := dataPublishJob(3)
-	job.MaxAttempts = 1
 	if _, err := fleet.Declare(ctx, job); err != nil {
 		t.Fatal(err)
 	}
@@ -333,7 +196,7 @@ func TestDataContentFleetLoadRecoveryAndDeadLetter(t *testing.T) {
 		ExecutionID: dataJob(1).ExecutionID,
 		WorkerID:    "worker-load",
 		LeaseTTL:    20 * time.Millisecond,
-		Retry:       RetryPolicy{MaxAttempts: 2, Backoff: []time.Duration{time.Millisecond}},
+		Retry:       RetryPolicy{MaxAttempts: 3, Backoff: []time.Duration{time.Millisecond}},
 		Now:         clock,
 	}
 	const total = 100
@@ -380,12 +243,6 @@ func TestDataContentFleetLoadRecoveryAndDeadLetter(t *testing.T) {
 	}
 	if len(dead) != 1 {
 		t.Fatalf("expected one dead task, got %d", len(dead))
-	}
-	if attempts[dead[0].TaskID] != 3 {
-		t.Fatalf(
-			"per-job maxAttempts=3 must allow the third execution despite fleet default=2: attempts=%d",
-			attempts[dead[0].TaskID],
-		)
 	}
 	recovered := total - len(dead)
 	if float64(recovered)/total < 0.95 {
@@ -655,7 +512,6 @@ func TestDataContentFleetWritesAcceptedObjectTransactionResultBeforeCompletion(t
 				CanonicalObjectRef:    item.Ref,
 				CanonicalObjectSHA256: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 				ObjectTransactionID:   "txn-object-001",
-				PoolDeliveryIntentID:  "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 				ResultEnvelopeRef:     "posts/homepage/result_envelope.json",
 				AcceptanceClass:       DataContentAcceptanceCommercialCanonical,
 				CompletedAt:           time.Now().UTC(),
@@ -683,7 +539,6 @@ func TestDataContentFleetRejectsCommercialResultWithoutEvidenceVerifier(t *testi
 	ctx := context.Background()
 	store := NewMemoryStore()
 	job := dataPublishJob(1)
-	job.MaxAttempts = 1
 	fleet := DataContentFleet{
 		Store:       store,
 		ExecutionID: job.ExecutionID,
@@ -709,7 +564,6 @@ func TestDataContentFleetRejectsCommercialResultWithoutEvidenceVerifier(t *testi
 				CanonicalObjectRef:    item.Ref,
 				CanonicalObjectSHA256: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 				ObjectTransactionID:   "txn-unverified",
-				PoolDeliveryIntentID:  "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 				ResultEnvelopeRef:     "result_envelope.json",
 				AcceptanceClass:       DataContentAcceptanceCommercialCanonical,
 				CompletedAt:           time.Now().UTC(),
@@ -812,64 +666,10 @@ func TestDataContentResultRejectsCommercialAcceptanceBeforePublish(t *testing.T)
 	}
 }
 
-func TestDataContentResultAcceptsResearchCanonicalPublishWithoutCommercialCount(t *testing.T) {
-	job := dataPublishJob(1)
-	item := DataContentWorkItem{
-		JobID:       job.JobID,
-		ExecutionID: job.ExecutionID,
-		Stage:       job.Stage,
-	}
-	completed := time.Now().UTC()
-	result := DataContentExecutionResult{
-		ExecutionID:           job.ExecutionID,
-		JobID:                 job.JobID,
-		CanonicalObjectRef:    job.Ref,
-		CanonicalObjectSHA256: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-		ObjectTransactionID:   "txn-research-object-001",
-		PoolDeliveryIntentID:  "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-		ResultEnvelopeRef:     "result_envelope.json",
-		AcceptanceClass:       DataContentAcceptanceResearchCanonical,
-		CompletedAt:           completed,
-	}
-	if err := result.validate(item); err != nil {
-		t.Fatalf("research canonical result rejected: %v", err)
-	}
-	key, err := job.ValidateIdentity()
-	if err != nil {
-		t.Fatal(err)
-	}
-	researchTask := ReliableAsyncTask{
-		TaskID:  "research-publish",
-		Status:  TaskStatusSucceeded,
-		Payload: job.payload(key),
-		Result:  result.document(),
-	}
-	report := BuildDataContentFleetReport(
-		[]ReliableAsyncTask{researchTask},
-		completed.Add(-2*time.Hour),
-		completed.Add(-time.Hour),
-		completed,
-		0,
-		0,
-		1,
-		1,
-	)
-	if !report.Passed ||
-		report.Succeeded != 1 ||
-		report.ObjectTransactionResultCount != 1 ||
-		report.ResearchAcceptedCount != 1 ||
-		report.FinalizedObjectCount != 1 ||
-		report.CommercialAcceptedCount != 0 ||
-		report.EndToEndAcceptedThroughputPerHour <= 0 {
-		t.Fatalf("research canonical report drift: %#v", report)
-	}
-}
-
 func TestDataContentFleetRejectsControlPlaneOnlySuccess(t *testing.T) {
 	ctx := context.Background()
 	store := NewMemoryStore()
 	publishJob := dataPublishJob(1)
-	publishJob.MaxAttempts = 1
 	fleet := DataContentFleet{
 		Store:       store,
 		ExecutionID: publishJob.ExecutionID,
@@ -981,7 +781,6 @@ func TestDataContentFleetReportSeparatesAcceptedFromControlPlaneThroughput(t *te
 		CanonicalObjectRef:    publishJob.Ref,
 		CanonicalObjectSHA256: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		ObjectTransactionID:   "txn-object-001",
-		PoolDeliveryIntentID:  "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 		ResultEnvelopeRef:     "result_envelope.json",
 		AcceptanceClass:       DataContentAcceptanceCommercialCanonical,
 		CompletedAt:           completed,
@@ -1022,9 +821,8 @@ func TestDataContentFleetReportRejectsUnboundOrMalformedCommercialEvidence(t *te
 			ExecutionID:           job.ExecutionID,
 			JobID:                 "different-job",
 			CanonicalObjectRef:    job.Ref,
-			CanonicalObjectSHA256: invalidSHA256Fixture("sha256:not-a-digest"),
+			CanonicalObjectSHA256: "sha256:not-a-digest",
 			ObjectTransactionID:   "txn-invalid-001",
-			PoolDeliveryIntentID:  "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 			ResultEnvelopeRef:     "result_envelope.json",
 			AcceptanceClass:       DataContentAcceptanceCommercialCanonical,
 			CompletedAt:           completed,
@@ -1047,8 +845,4 @@ func TestDataContentFleetReportRejectsUnboundOrMalformedCommercialEvidence(t *te
 		report.EndToEndAcceptedThroughputPerHour != 0 {
 		t.Fatalf("invalid commercial evidence was accepted: %#v", report)
 	}
-}
-
-func invalidSHA256Fixture(value string) string {
-	return value
 }

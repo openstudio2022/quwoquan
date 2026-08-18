@@ -97,6 +97,9 @@
 - Android `BuildConfig` 与 iOS `QWQNativeRuntime.plist` 必须内嵌 effective launch manifest 摘要；启动失败标记、runtime probe 和制品 provenance 必须回报同一摘要，禁止跨 target、跨环境或重打包复用。
 - package-only 四环境编译只能证明组件可构建，不得标记为 runtime UAT。运行证据必须来自真实 `MAIN/LAUNCHER` 或 iOS scene 启动，且包含非 `unknown` 的本次 attempt ID、当前 motion contract、safe terminal、Gate/Main 或 scene 结果和单一 task。
 - Prod Android AAB/APK 与 iOS IPA 必须先验证平台签名、禁止 Mock/test/local transport 泄漏，并证明内嵌清单摘要与发布 handoff 一致，才可从 component-ready 推进到 deployable。
+- Debug、Profile 与 Release 对同一启动错误必须渲染同一 canonical surface；Debug 只允许追加脱敏日志与诊断面，不得保留开发红屏或第二套用户终态。BuildMode 不得改变路由、数据源、空态、错误态或恢复动作。
+- 应用市场可能对上传制品重签、拆分或优化；安装后启动必须回读嵌入 launch manifest 摘要、version/build 与当前签名身份，并与发布 provenance 的 source candidate 绑定验证，不得要求下载二进制与上传二进制逐字节相同，也不得因市场处理差异改变启动行为。
+- 安装后首次点击图标冷启动与后续任意次点击图标启动必须读取同一嵌入 manifest 与 runtime package，进入同一安全 Shell 行为；首启只在性能采样中以 first-install 维度区分，不得拥有独立业务分支。
 
 ## 4. 契约引用
 
@@ -143,6 +146,16 @@
 - THEN package、native identity、runtime probe 与发布 provenance 的环境、target、URL、entrypoint 和摘要完全一致；Android launcher task 唯一，iOS fatal recovery scene 不创建 implicit Flutter Engine。
 - AND 缺失真实设备、签名、hosted Prod、telemetry readback 或公网恢复通道时保持 `GATE_BLOCK`/`OPEN-001`，不得以编译成功、模拟器或 package-only 报告替代。
 
+<a id="gwt-005"></a>
+### GWT-005 安装后首启、后续图标启动与市场身份回读一致
+
+- GIVEN 设备经任一有效渠道完成安装——脚本安装、打包 Debug 安装、`prod-sim`/`prod-hosted` Release、应用市场客户端安装（含市场重签/优化后的制品）、官网签名 APK，或在旧版本上覆盖升级。
+- WHEN 首次点击图标冷启动，随后杀进程再次点击图标启动。
+- THEN 两次启动读取同一嵌入 launch manifest 与 runtime package，进入同一安全 Shell 行为；首启只在性能采样中携带 first-install 维度。
+- AND 市场安装制品的回读证明当前签名身份、version/build 与发布 provenance 的 source candidate 绑定一致，市场处理差异不改变任何启动行为。
+- AND Debug 与 Release 对同一注入启动错误渲染同一 canonical surface，Debug 仅追加脱敏诊断。
+- AND 覆盖升级后的启动行为指纹与全新安装一致，不存在升级用户独有的启动死路。
+
 ## 6. 依赖
 
 - 前置要求：[`runtime-client-foundation`](../spec.md) 的范围、要求与 SIT。
@@ -179,3 +192,12 @@
 - 影响或价值：Prod 真实 Elasticsearch Log sink Provider、Android/iPhone 受保护真机与可供销毁的账号尚未就绪，无法补齐恢复异常断网补报的真实环境证据。
 - 完成判定：`GWT-003` 在受保护真机上证明端侧加密队列、服务接收、损坏记录安全处置和断网补报；旧 `/ops/startup-events` 不承载恢复异常。
 - 依赖：Prod Elasticsearch Log sink endpoint、受保护认证材料与 Provider receipt，受保护 Android/iPhone 设备与可销毁账号。
+
+<a id="open-004"></a>
+### OPEN-004 安装后首启与市场身份回读证据
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：安装后首启/后续图标启动等价、Debug/Release 同 surface 与市场处理后身份回读尚无实现与真实证据；市场渠道依赖外部账号、审核与真机（见 [`environment-topology-and-packaging OPEN-003`](../../runtime-config/environment-topology-and-packaging/spec.md#open-003)），非市场渠道的首启等价与同 surface 断言可先在本地设备矩阵闭环。
+- 完成判定：`GWT-005` 的全部结果子句由真实测试逐条绑定（gwt-005.t1..t5）：脚本/Debug/官网 APK/覆盖升级路径由设备矩阵 runner 产出安装回执与启动回读，市场路径绑定真实市场安装回执；缺失渠道保持显式阻断。

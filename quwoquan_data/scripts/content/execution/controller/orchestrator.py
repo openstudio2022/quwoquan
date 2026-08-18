@@ -1,8 +1,18 @@
 """Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
 import os
+import time
 
 from core.control_types import ExecutionStage, ExecutionStateStatus, StageStatus
+from content.execution.controller.failure_isolation import (
+    infrastructure_backoff_seconds,
+    infrastructure_retry_budget,
+    stage_is_infrastructure_retryable,
+)
+from content.execution.controller.resume_progress import (
+    admit_execution_resume,
+    record_stage_progress,
+)
 from core.runtime_observability import (
     DataRuntimeLogger,
     DataRuntimeLogResource,
@@ -71,6 +81,79 @@ def _record_stage_runtime(
         print(f"[task execute] runtime diagnostic write failed: {exc}", file=sys.stderr)
 
 
+def _retry_stage_infrastructure_fault(
+    state,
+    *,
+    stage_name: str,
+    result: StageResult,
+) -> bool:
+    """Absorb a purely infrastructural stage failure as a bounded backoff retry.
+
+    An unwritable transport, an exhausted provider quota or a network timeout
+    left the objects untouched, so re-running the identical stage is the
+    recovery. Content verdicts, governance blocks and unclassified failures fall
+    through to ReAct rewind or manual disposition unchanged. The per-stage
+    counter is the same one the success path clears, so a stage that recovers
+    starts its next fault from a full budget.
+    """
+
+    if not stage_is_infrastructure_retryable(result.issue_records):
+        return False
+    budget = infrastructure_retry_budget()
+    counts = state.infrastructure_retry_counts
+    attempt = int(counts.get(stage_name, 0)) + 1
+    if attempt > budget:
+        return False
+    counts[stage_name] = attempt
+    state.infrastructure_retry_counts = counts
+    delay = infrastructure_backoff_seconds(attempt)
+    state.status = ExecutionStateStatus.REPAIRING
+    state.waiting_checkpoint = None
+    state.failed_objects = list(result.issues)
+    state.failed_issue_records = [issue.as_dict() for issue in result.issue_records]
+    state.next_action = (
+        f"{stage_name}: infrastructure fault; retrying after {delay}s "
+        f"(attempt {attempt}/{budget})"
+    )
+    state.heartbeat_at = store.now_iso()
+    save_execution_state(state)
+    print(f"[task execute] ⟲ {state.next_action}", flush=True)
+    time.sleep(delay)
+    return True
+
+
+def _record_stage_progress(
+    ctx: ExecutionContext,
+    state,
+    *,
+    completed: set[str],
+    total_stages: int,
+    next_stage: str | None,
+) -> None:
+    """Project batch progress after a stage closes.
+
+    审计口径与 stage 日志一致：配额缺席时不投影，因为没有分母的进度率是编造的；
+    落盘失败只留证据，不把可观测写入升级成 stage 失败。
+    """
+    approved_quota = int(
+        (ctx.spec.to_dict().get("executionPolicy") or {}).get("approvedQuota") or 0
+    )
+    if approved_quota < 1:
+        return
+    try:
+        record_stage_progress(
+            ctx.execution_id,
+            approved_quota=approved_quota,
+            completed_stages=tuple(sorted(completed)),
+            total_stages=total_stages,
+            current_stage=next_stage,
+            started_at=state.started_at,
+            failed_count=len([item for item in (state.failed_objects or []) if item]),
+        )
+    except OSError as exc:
+        print(f"[task execute] progress projection write failed: {exc}", file=sys.stderr)
+
+
 def run_controller(ctx: ExecutionContext) -> int:
     """按 DAG 顺序执行；遇 waiting checkpoint 停（10），failed 走 ReAct 回退或停（1）。"""
     from content.execution.controller.dag import DAG, STAGE_NAMES
@@ -100,6 +183,25 @@ def run_controller(ctx: ExecutionContext) -> int:
         save_execution_state(state)
         print("[task execute] FAILED: frozen execution contains no coverage targets", file=sys.stderr)
         return 1
+    # 断点续跑准入必须在任何 stage 之前判：身份漂移或被取代的 execution 不是
+    # 「继续」，只能新建 retryOf；已收口的对象在任何情况下都不再重入。
+    resume = admit_execution_resume(ctx.execution_id)
+    if not resume.admitted:
+        state.status = ExecutionStateStatus.MANUAL_REQUIRED
+        state.failed_objects = [resume.blocker_reason]
+        state.next_action = f"{resume.blocker}: create a new execution with retryOf"
+        save_execution_state(state)
+        print(
+            f"[task execute] FAILED: in-place resume refused — {resume.blocker_reason}",
+            file=sys.stderr,
+        )
+        return 1
+    if resume.finished_refs:
+        print(
+            f"[task execute] resume 准入：{len(resume.finished_refs)} 个已收口对象不重入，"
+            f"{len(resume.resumable_refs)} 个未收口对象可原地续跑",
+            flush=True,
+        )
     state.status = ExecutionStateStatus.RUNNING
     state.owner = "managed-local" if ctx.managed else "execution-cli"
     if not state.started_at and not state.completed:
@@ -241,6 +343,13 @@ def run_controller(ctx: ExecutionContext) -> int:
                 print(result.checkpoint_hint)
                 return 10
             if result.status is StageStatus.FAILED:
+                if _retry_stage_infrastructure_fault(
+                    state,
+                    stage_name=stage_name,
+                    result=result,
+                ):
+                    progressed = True
+                    break
                 completed, rewound = _react_rewind(ctx, state, completed, result)
                 _write_execution_packet(
                     ctx,
@@ -298,6 +407,13 @@ def run_controller(ctx: ExecutionContext) -> int:
                 state=state,
             )
             print(f"[task execute] ✓ {stage_name} ({kind}): {result.message}")
+            _record_stage_progress(
+                ctx,
+                state,
+                completed=completed,
+                total_stages=len(DAG),
+                next_stage=next_stage,
+            )
             if ctx.until and stage_name == ctx.until:
                 state = load_execution_state(ctx.execution_id)
                 return _stop_at_until(ctx, state, completed, next_stage=next_stage)

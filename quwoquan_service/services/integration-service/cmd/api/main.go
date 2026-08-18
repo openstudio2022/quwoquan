@@ -662,7 +662,7 @@ func (module *Module) build() error {
 			return fmt.Errorf("otp code reference sealer invalid: %w", err)
 		}
 	}
-	externalProviders, policies, err := buildExternalProviders(
+	externalProviders, policies, smsReadinessProvider, err := buildExternalProviders(
 		cfg,
 		externalObservedClient,
 		accessTokenConfig,
@@ -715,7 +715,11 @@ func (module *Module) build() error {
 		cfg.Integration.Location.DefaultLatitude,
 		cfg.Integration.Location.DefaultLongitude,
 	).RegisterRoutes(operationMux)
-	externalhttp.NewHandler(externalService).RegisterRoutes(operationMux)
+	smsReadinessQueries := application.NewSmsOtpDeliveryReadinessQueryFacade(
+		smsReadinessProvider,
+		externalResultRelay,
+	)
+	externalhttp.NewHandler(externalService, smsReadinessQueries).RegisterRoutes(operationMux)
 	handler := http.Handler(operationMux)
 
 	rootMux := http.NewServeMux()

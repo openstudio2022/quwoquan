@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/runtime/config/cloud_runtime_environment.dart';
 import 'package:quwoquan_app/runtime/context/cloud_client_context.dart';
 import 'package:quwoquan_app/runtime/context/cloud_operation_header_factory.dart';
@@ -13,6 +14,7 @@ import 'package:quwoquan_app/runtime/transport/generated/integration/integration
 import 'package:quwoquan_app/runtime/observability/cloud_operation_telemetry.dart';
 import 'package:quwoquan_app/runtime/transport/cloud_json_transport.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 void main() {
   final searchOperation =
@@ -706,6 +708,82 @@ void main() {
       expect(telemetry.events.map((event) => event.attempt), <int>[1, 2]);
       expect(telemetry.events.first.retryReason, 'retryable_status');
       expect(telemetry.events.last.succeeded, isTrue);
+    });
+
+    test('已确认 unavailable 不在同一 generation 内重复发网', () async {
+      final unavailableCases = <CloudException>[
+        CloudErrorMapper.fromException(
+          http.ClientException('network unreachable'),
+          requestPath: searchOperation.pathTemplate,
+        ),
+        CloudErrorMapper.fromStatusCode(
+          504,
+          requestPath: searchOperation.pathTemplate,
+        ),
+        CloudErrorMapper.fromStatusCode(
+          503,
+          body: '{"code":"CONTENT.SYSTEM.required_dependency_unavailable"}',
+          requestPath: searchOperation.pathTemplate,
+        ),
+        CloudException(
+          type: CloudErrorType.server,
+          statusCode: 503,
+          message: 'owner unavailable',
+          code: 'GATEWAY.MIDDLEWARE.graphql_owner_unavailable',
+          runtimeFailure: RuntimeFailure(
+            code: 'GATEWAY.MIDDLEWARE.graphql_owner_unavailable',
+            semanticReason: 'graphql_owner_unavailable',
+            transportStatus: 503,
+            origin: RuntimeFailureOrigin.remoteDependency,
+            kind: RuntimeFailureKind.unavailable,
+            nature: RuntimeFailureNature.transient,
+            location: const RuntimeFailureLocation(
+              businessObject: 'gateway.persisted_query_execution',
+              functionModule: 'graphql_owner_proxy',
+            ),
+            context: const RuntimeFailureContext(),
+          ),
+        ),
+      ];
+
+      for (final unavailable in unavailableCases) {
+        final transport = _RecordingTransport(error: unavailable);
+        final executor = AppGeneratedCloudOperationExecutor(
+          environment: CloudRuntimeEnvironment(
+            environment: CloudEnvironment.gamma,
+            gatewayBaseUri: Uri.parse('https://api.example.test'),
+          ),
+          transport: transport,
+          headerFactory: CloudOperationHeaderFactory(
+            clientContextProvider: clientContext,
+            now: () => fixedNow,
+          ),
+          telemetrySink: _RecordingTelemetry(),
+          now: () => fixedNow,
+          sleeper: (_) async {},
+        );
+
+        await expectLater(
+          executor.send<Object?>(
+            searchOperation,
+            context: invocation(),
+            responseDecoder: (value) => value,
+            requestEncoder: _emptyRequestEncoder,
+          ),
+          throwsA(
+            isA<CloudException>().having(
+              (error) => error.runtimeFailure.kind,
+              'kind',
+              unavailable.runtimeFailure.kind,
+            ),
+          ),
+        );
+        expect(
+          transport.requests,
+          hasLength(1),
+          reason: '${unavailable.runtimeFailure.code} 应由当前 generation 快速收敛',
+        );
+      }
     });
 
     test('429 尊重 Retry-After，401 刷新也受同一 operation deadline 约束', () async {

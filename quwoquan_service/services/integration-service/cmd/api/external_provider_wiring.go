@@ -106,10 +106,12 @@ func buildExternalProviders(
 ) (
 	map[string]reliabletask.ExternalProvider,
 	map[string]reliabletask.ProviderPolicy,
+	*externalprovider.HTTPExternalProvider,
 	error,
 ) {
 	providers := map[string]reliabletask.ExternalProvider{}
 	policies := map[string]reliabletask.ProviderPolicy{}
+	var smsReadinessProvider *externalprovider.HTTPExternalProvider
 	smsCfg := cfg.Integration.ExternalInteraction.SMS
 	if smsCfg.Enabled {
 		timeout := time.Duration(smsCfg.TimeoutMs) * time.Millisecond
@@ -120,7 +122,7 @@ func buildExternalProviders(
 		case "ext.sms.local_capture":
 			canonicalProviderName = "local_capture_sms"
 		default:
-			return nil, nil, fmt.Errorf(
+			return nil, nil, nil, fmt.Errorf(
 				"SMS adapter %s has no canonical provider mapping",
 				smsCfg.Provider,
 			)
@@ -138,12 +140,13 @@ func buildExternalProviders(
 			client,
 		)
 		if err != nil {
-			return nil, nil, fmt.Errorf(
+			return nil, nil, nil, fmt.Errorf(
 				"external provider init failed for %s: %w",
 				reliabletask.ExternalInteractionOperationSmsOTP,
 				err,
 			)
 		}
+		smsReadinessProvider = smsProvider
 		providers[smsCfg.Provider] = smsProvider
 		policies[reliabletask.ExternalInteractionOperationSmsOTP] = reliabletask.ProviderPolicy{
 			Providers:   []string{smsCfg.Provider},
@@ -154,7 +157,7 @@ func buildExternalProviders(
 
 	pushCfg := cfg.Integration.ExternalInteraction.Push
 	if !pushCfg.Enabled {
-		return providers, policies, nil
+		return providers, policies, smsReadinessProvider, nil
 	}
 	pushTimeout := time.Duration(pushCfg.TimeoutMs) * time.Millisecond
 	const pushDispatchProviderName = "push_dispatch"
@@ -165,14 +168,14 @@ func buildExternalProviders(
 			pushTimeout,
 		)
 		if err != nil {
-			return nil, nil, fmt.Errorf(
+			return nil, nil, nil, fmt.Errorf(
 				"push protocol substitute adapter init failed: %w",
 				err,
 			)
 		}
 		pushProvider, err := pushruntime.NewProvider(protocolProvider)
 		if err != nil {
-			return nil, nil, fmt.Errorf(
+			return nil, nil, nil, fmt.Errorf(
 				"push protocol substitute runtime adapter init failed: %w",
 				err,
 			)
@@ -183,7 +186,7 @@ func buildExternalProviders(
 			Timeout:     pushTimeout,
 			RetryPolicy: reliabletask.DefaultRetryPolicy(),
 		}
-		return providers, policies, nil
+		return providers, policies, smsReadinessProvider, nil
 	}
 
 	userCredentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
@@ -195,7 +198,7 @@ func buildExternalProviders(
 		},
 	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("user push endpoint credentials invalid: %w", err)
+		return nil, nil, nil, fmt.Errorf("user push endpoint credentials invalid: %w", err)
 	}
 	endpointClient, err := pushprovider.NewUserPushEndpointClient(
 		pushprovider.UserPushEndpointClientConfig{
@@ -206,7 +209,7 @@ func buildExternalProviders(
 		client,
 	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("user push endpoint client init failed: %w", err)
+		return nil, nil, nil, fmt.Errorf("user push endpoint client init failed: %w", err)
 	}
 	apnsProvider, err := pushprovider.NewAPNsVoIPProvider(
 		pushprovider.APNsVoIPConfig{
@@ -220,7 +223,7 @@ func buildExternalProviders(
 		client,
 	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("APNs VoIP provider init failed: %w", err)
+		return nil, nil, nil, fmt.Errorf("APNs VoIP provider init failed: %w", err)
 	}
 	fcmProvider, err := pushprovider.NewFCMProvider(
 		pushprovider.FCMConfig{
@@ -231,7 +234,7 @@ func buildExternalProviders(
 		client,
 	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("FCM provider init failed: %w", err)
+		return nil, nil, nil, fmt.Errorf("FCM provider init failed: %w", err)
 	}
 	pushProvider, err := pushapp.NewPushDispatchProvider(
 		endpointClient,
@@ -241,11 +244,11 @@ func buildExternalProviders(
 		slog.Default(),
 	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("push dispatch provider init failed: %w", err)
+		return nil, nil, nil, fmt.Errorf("push dispatch provider init failed: %w", err)
 	}
 	runtimePushProvider, err := pushruntime.NewProvider(pushProvider)
 	if err != nil {
-		return nil, nil, fmt.Errorf("push delivery adapter init failed: %w", err)
+		return nil, nil, nil, fmt.Errorf("push delivery adapter init failed: %w", err)
 	}
 	providers[pushDispatchProviderName] = runtimePushProvider
 	policies[reliabletask.ExternalInteractionOperationPush] = reliabletask.ProviderPolicy{
@@ -253,7 +256,7 @@ func buildExternalProviders(
 		Timeout:     pushTimeout,
 		RetryPolicy: reliabletask.DefaultRetryPolicy(),
 	}
-	return providers, policies, nil
+	return providers, policies, smsReadinessProvider, nil
 }
 
 func materializeReleaseExternalInteractionBindings(

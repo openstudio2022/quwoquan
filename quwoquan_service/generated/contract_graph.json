@@ -29070,6 +29070,71 @@
       }
     },
     {
+      "id": "integration.external_interaction.GetSmsOtpDeliveryReadiness",
+      "localId": "GetSmsOtpDeliveryReadiness",
+      "domain": "integration",
+      "objectId": "integration.external_interaction",
+      "method": "GET",
+      "pathTemplate": "/internal/integrations/external-requests/capabilities/identity.sms.otp/readiness",
+      "kind": "query",
+      "kindExplicit": true,
+      "facet": "ExternalInteractionQueryFacade",
+      "facadeMethod": "getSmsOtpDeliveryReadiness",
+      "reader": "SmsOtpDeliveryReadinessReader",
+      "slice": "SmsOtpDeliveryReadiness",
+      "actorRequirement": "none",
+      "transport": "json",
+      "transportRole": "readiness",
+      "responseEntity": "SmsOtpDeliveryReadiness",
+      "sourcePath": "integration/external_integration/external_interaction/operations.yaml",
+      "security": {
+        "anonymous_policy": "deny",
+        "auth_mode": "required",
+        "principal": "service",
+        "token_transport": "bearer",
+        "visibility": "internal"
+      },
+      "authMode": "required",
+      "principal": "service",
+      "scopes": [
+        "integration.identity.sms.otp.readiness.read"
+      ],
+      "ownershipPolicy": "trusted_user_service_sms_otp_readiness_only",
+      "commercial": {
+        "status": "ready",
+        "explicit": true
+      },
+      "reliability": {
+        "timeoutMilliseconds": 800,
+        "cancellation": "supported",
+        "retryMode": "none",
+        "maxAttempts": 1,
+        "idempotency": "none"
+      },
+      "concurrency": {},
+      "errorCodes": [
+        "INTEGRATION.USER.external_interaction_readiness_forbidden",
+        "INTEGRATION.SYSTEM.external_interaction_internal_error"
+      ],
+      "privacy": {
+        "requestClassification": "INTERNAL",
+        "responseClassification": "INTERNAL",
+        "logPolicy": "metadata_only"
+      },
+      "telemetry": {
+        "metric": "integration_sms_otp_delivery_readiness",
+        "trace": true,
+        "attributes": [
+          "outcome",
+          "capability"
+        ]
+      },
+      "slo": {
+        "latencyP95Milliseconds": 300,
+        "availabilityPercent": 99.9
+      }
+    },
+    {
       "id": "integration.external_interaction.ListExternalInteractionAttempts",
       "localId": "ListExternalInteractionAttempts",
       "domain": "integration",
@@ -48740,12 +48805,14 @@
         "emptyReason",
         "feedRequestId",
         "items",
+        "manifestDigest",
         "nextCursor",
         "objectCards",
         "outcome",
         "paginationExpiresAt",
         "policyDigest",
-        "previousCursor"
+        "previousCursor",
+        "releaseId"
       ],
       "sourceEntities": [
         "Homepage",
@@ -83280,6 +83347,50 @@
     },
     {
       "objectId": "integration.external_interaction",
+      "specRef": "specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md#gwt-012",
+      "caseId": "get-sms-otp-delivery-readiness-api",
+      "producer": "service",
+      "layer": "api_integration",
+      "target": {
+        "kind": "operation",
+        "id": "integration.external_interaction.GetSmsOtpDeliveryReadiness"
+      },
+      "runnerSourcePath": "quwoquan_service/services/integration-service/tests/api_integration/external_integration/external_interaction/sms_otp_delivery_readiness__api_integration_test.go",
+      "executions": [
+        {
+          "environment": "beta",
+          "platform": "service",
+          "deviceClass": "runner",
+          "provider": "https-provider",
+          "digestBinding": "candidate"
+        }
+      ],
+      "sourcePath": "integration/external_integration/external_interaction/operations.yaml"
+    },
+    {
+      "objectId": "integration.external_interaction",
+      "specRef": "specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md#gwt-012",
+      "caseId": "get-sms-otp-delivery-readiness-local",
+      "producer": "service",
+      "layer": "local_contract",
+      "target": {
+        "kind": "operation",
+        "id": "integration.external_interaction.GetSmsOtpDeliveryReadiness"
+      },
+      "runnerSourcePath": "quwoquan_service/services/integration-service/tests/local_contract/external_integration/external_interaction/sms_otp_delivery_readiness__local_contract_test.go",
+      "executions": [
+        {
+          "environment": "alpha",
+          "platform": "service",
+          "deviceClass": "runner",
+          "provider": "none",
+          "digestBinding": "candidate"
+        }
+      ],
+      "sourcePath": "integration/external_integration/external_interaction/operations.yaml"
+    },
+    {
+      "objectId": "integration.external_interaction",
       "specRef": "specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001",
       "caseId": "list-external-interaction-attempts-api",
       "producer": "service",
@@ -99927,7 +100038,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/assistant_service/assistant/assistant_learning_fact/application/assistant_learning_fact_outbox.dart",
-            "sha256": "1ae743e414694e2fbeba85d2bf431dc9caf7b5fcb10a4d78079ff000526c3e08"
+            "sha256": "105f60d9649fb31756bd33b72d146d8ccbdc9e367c5e89404390930077c657b6"
           },
           {
             "path": "quwoquan_app/lib/service/assistant_service/assistant/assistant_learning_fact/application/assistant_learning_fact_outbox_notifier.dart",
@@ -102722,7 +102833,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/assistant_service/assistant/assistant_turn_view/domain/assistant_turn_contract.dart",
-            "sha256": "ce4be39723975a7492c442cbc6a8c8d4684095c884b0da8eb4d3ca3928a9031e"
+            "sha256": "27b0c4c7579fd6d8387913f65faa9ac34367af18de3e31808d80d2fe9c0954e8"
           },
           {
             "path": "quwoquan_app/lib/service/assistant_service/assistant/assistant_turn_view/domain/generated/assistant_turn.g.dart",
@@ -103508,7 +103619,7 @@
         "application": [
           {
             "path": "quwoquan_app/lib/service/assistant_service/assistant/skill_data_control_request/application/skill_data_control_coordinator.dart",
-            "sha256": "3417414e9ef75d34d5e71c968942af83645795c38d8bdff92eab81e083398ee4"
+            "sha256": "fb32154382f86f9a3f7af4884b6a906fd0ba05721d6f190eeed690660ba413d1"
           },
           {
             "path": "quwoquan_app/lib/service/assistant_service/assistant/skill_data_control_request/application/skill_data_control_facet.dart",
@@ -104255,7 +104366,7 @@
         "application": [
           {
             "path": "quwoquan_app/lib/service/chat_service/chat/chat_inbox_view/application/chat_inbox_provider.dart",
-            "sha256": "3daeb485ed312eea651b6481515440f93c280e3946d592ee36e749b0076c971a"
+            "sha256": "7f1769c8acb94e5fb435fbf1794c9641dfe9f8aedc8e4eab3b7a7498793739e0"
           },
           {
             "path": "quwoquan_app/lib/service/chat_service/chat/chat_inbox_view/application/chat_inbox_repository.dart",
@@ -104306,6 +104417,10 @@
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/chat_inbox_view/chat_inbox_dto_contract__local_contract_test.dart",
             "sha256": "d8ed0c07f96b27057375d72ac5dd90ad95ddd33051c2e8df00873fcef5c6cb22"
+          },
+          {
+            "path": "quwoquan_app/test/local_contract/service/chat_service/chat/chat_inbox_view/chat_inbox_open_scroll_budget__performance__local_contract_test.dart",
+            "sha256": "8ca253e6b9325655e3c1b09f3eb8f8407c8cc9a8aaf9a8cfde1d82ccfb7e48c7"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/chat_inbox_view/chat_inbox_provider__local_contract_test.dart",
@@ -105066,7 +105181,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/chat_service/chat/conversation/application/conversation_avatar_members_provider.dart",
-            "sha256": "68d5cb2260da781a143a33c9d9c073c83a46271b259cfb00194c1bb6c706544f"
+            "sha256": "af80b27d09df6f2c2f01c275ccd341085d06a1ad6b5dbc55766f2dd923fa9e22"
           },
           {
             "path": "quwoquan_app/lib/service/chat_service/chat/conversation/application/conversation_query.dart",
@@ -105166,7 +105281,7 @@
         "presentation": [
           {
             "path": "quwoquan_app/lib/service/chat_service/chat/conversation/presentation/chat_announcement_page.dart",
-            "sha256": "0b2438081a0b2e83377d54f1dcbdd45cf4e3361d6d760ed1be0b113622425411"
+            "sha256": "47f05f842d62353d3cedcaf434fed990cd2e93c118535a1ab96da5bcd21ea546"
           },
           {
             "path": "quwoquan_app/lib/service/chat_service/chat/conversation/presentation/chat_conversation_page.dart",
@@ -105188,7 +105303,7 @@
         "localContract": [
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation/chat_announcement_page_widget__local_contract_test.dart",
-            "sha256": "5ab082c986681d3bfd8e8ef741ee53affae7be8bd03679519e83556d754e200b"
+            "sha256": "d74735e334ac1460d27d4591ea5260b1de33c82e292aaf3cc8145e1e9e08eaa7"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation/chat_assistant_journey__local_contract_test.dart",
@@ -105244,7 +105359,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation/chat_production_composition__local_contract_test.dart",
-            "sha256": "c5c3e244627205a38057f27109050f350b672343f44943e7b54388603e88dcff"
+            "sha256": "edb0b1925a531040d3253e125b1ca06f73317c9f2996aa7bf582f8a0f37fa28b"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation/chat_reply_to_message__local_contract_test.dart",
@@ -105264,7 +105379,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation/conversation_avatar_sync_contract__local_contract_test.dart",
-            "sha256": "071ea9b393de68eb9a1ce77832f9376bf9e993d3bfc8ea4fe7ab5a95f352c0c2"
+            "sha256": "76c007c4962a55c582821e0a223e1b450a4a393353683a1abf9d902d7d470ce2"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation/conversation_cache_public_seams__local_contract_test.dart",
@@ -105272,7 +105387,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation/conversation_commercial_ready_facets__local_contract_test.dart",
-            "sha256": "5917b64911d1f9af523e5f744541744aa801d2c66d14cb32f284260335006b78"
+            "sha256": "2cad9c9ac365b700fed2b26e2cc57a43b3f6cb322485b9819f53e45620f7f0b2"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation/conversation_commercial_remote__local_contract_test.dart",
@@ -105284,23 +105399,23 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation/conversation_contracts__local_contract_test.dart",
-            "sha256": "51cf17dc6c194847351994066011261703bfbefd2cafe08a15713e36bbebf126"
+            "sha256": "10bbc88da7631ed0cf8664e2be366c8f30f81bdb5ba234890cae429a7989a3e1"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation/conversation_dto_contract__local_contract_test.dart",
-            "sha256": "299c277fb9eb197724debd378eac47b5bc972fb48312d02573a2ca7516934a5a"
+            "sha256": "fa258196d64dc57ebb8fb92a29db9a605b6eb1c474a3b3b20b54a8c7729d8883"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation/conversation_intersection_header__local_contract_test.dart",
-            "sha256": "82be6940fc1a51ff40ad3ddb895e5986ec5e63953b6e3aa91df04ddc08d20d7c"
+            "sha256": "8e4d6d93c7ff759c6cb2e21360721466045759462bfac7fd9f11b6f5af0c3cf8"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation/conversation_remote__local_contract_test.dart",
-            "sha256": "4afd12f6eb9b17fe7f55e0f084857581d407aa4366176b78ca7d5cfd70e509d8"
+            "sha256": "d25a61ae92fa3af2a6536c23aec73fca60156d96720edac70e751ef71937b4ac"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation/conversation_sync_governance_board_remote__local_contract_test.dart",
-            "sha256": "a500687ecc015fa62e14c885aa961ca65e1d155191f79fd8524a831fcb3e2480"
+            "sha256": "7d0fc0f60703ede7ca4110ca75932101b2f222c162cc4820df4e25be28a7174f"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation/customizable_chat_input_bar__local_contract_test.dart",
@@ -105524,7 +105639,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/chat_service/chat/conversation_membership/presentation/group_member_search_page.dart",
-            "sha256": "a5db2644dd8f1cecd472b6ab6828f7a75868c6f83ee7620bcc775c728a1502fa"
+            "sha256": "4c4ab56dedbf2b48feda58c6af789d78b1b6def71e8bcdfd462cd625f509b91d"
           },
           {
             "path": "quwoquan_app/lib/service/chat_service/chat/conversation_membership/presentation/transfer_ownership_page.dart",
@@ -105562,7 +105677,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation_membership/group_member_search_page_widget__local_contract_test.dart",
-            "sha256": "1738d25761d8bc9812c4597ce2ae90dce97d15e358b63c309230b14df41e3881"
+            "sha256": "75f1abeea4abe6346b37a4511df33338c93ef71f416125161a1fc5b8e806b0da"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation_membership/transfer_ownership_page_widget__local_contract_test.dart",
@@ -105757,7 +105872,7 @@
         "store": [
           {
             "path": "quwoquan_service/services/chat-service/internal/chat/message/infrastructure/external/media_asset_delivery_reader.go",
-            "sha256": "01abf206c6c52a10243e5cb8c1b039ea12790651bae8b43ea2c5da480b9b2909"
+            "sha256": "1507dc9dadbe6b43025e1d247f0cbb72a1c8729d72c1b3b41a8e8095a611ddc4"
           }
         ],
         "outbox": [
@@ -105792,7 +105907,7 @@
         "localContract": [
           {
             "path": "quwoquan_service/services/chat-service/tests/local_contract/chat/message/media_asset_delivery_reader__local_contract_test.go",
-            "sha256": "f85e7d38f3fecd7b6fe8ff01b92d1e9b4ebffac84ae6b98fe5a5904b71d0e9b0"
+            "sha256": "a99dca9126b89b13afc4d804ba852274d167ead9a20acb876746a7fbbd48635d"
           },
           {
             "path": "quwoquan_service/services/chat-service/tests/local_contract/chat/message/message_card_kind__contract__local_contract_test.go",
@@ -105818,7 +105933,7 @@
         "apiIntegration": [
           {
             "path": "quwoquan_service/services/chat-service/tests/api_integration/chat/message/http_routes__api_integration_test.go",
-            "sha256": "a1b168a0c2d0db4721fdcb53280834d4377aae0cf17e8779371ffc0742efe210"
+            "sha256": "e308b6fc1dbabee2cdccfcb11b2e0c2f787096726fd571a88da7ab6522b5a3e7"
           },
           {
             "path": "quwoquan_service/services/chat-service/tests/api_integration/chat/message/rtc_call_log_consumer__api_integration_test.go",
@@ -106027,7 +106142,7 @@
         "apiIntegration": [
           {
             "path": "quwoquan_app/test/api_integration/service/chat_service/chat/message/message_media_reply_remote__api_integration_test.dart",
-            "sha256": "b960a03d812c3a2fd452ace35a8cb7b03d094977be4b23a1b7369f3774079425"
+            "sha256": "35ad9db06975678c84df5b4d03e0520c5de206655340850ae0447be7263a7f5e"
           },
           {
             "path": "quwoquan_app/test/api_integration/service/chat_service/chat/message/message_remote__api_integration_test.dart",
@@ -108235,7 +108350,7 @@
         "presentation": [
           {
             "path": "quwoquan_app/lib/service/circle_service/circle_management/gathering/presentation/gathering_actions_discovery_page.dart",
-            "sha256": "30b7fa762d41001fcff35b7a2a51938749b4cf7997a88197fd8ccfb9171e648b"
+            "sha256": "7b94b909f5b05294801bbdf5765ef43b4c461ff560c53b300ba189f6561ad622"
           },
           {
             "path": "quwoquan_app/lib/service/circle_service/circle_management/gathering/presentation/gathering_create_page.dart",
@@ -108606,7 +108721,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/comment/application/contracts.go",
-            "sha256": "6563655179059c7b956e2cf1c6f1ec6d18a3e3b08aef33247ceb17be197e09cb"
+            "sha256": "f8756ec12e87beb63e601c517c9454a2ceb09902fd916778118888abca4918a9"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/comment/application/data_ports.go",
@@ -108636,6 +108751,10 @@
           }
         ],
         "localContract": [
+          {
+            "path": "quwoquan_service/services/content-service/tests/local_contract/content/comment/adapters/inbound/http/command_result_false_boolean_wire__local_contract_test.go",
+            "sha256": "e0e53973369f0f5facb3fc5def2e6ddac33f200a21667ca4cf2a02eea3409cae"
+          },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/comment/adapters/inbound/http/comment_operations__local_contract_test.go",
             "sha256": "437367dacc0ea1e576547dccf3454ecede431ec405773f5189eb5c6aadfbb146"
@@ -108732,7 +108851,7 @@
         "adapters": [
           {
             "path": "quwoquan_app/lib/service/content_service/content/comment/adapters/comment_draft_store.dart",
-            "sha256": "7b94f05b89a70b632432b513c3b4818b160836838ae09621b0a28ddd8ca84061"
+            "sha256": "137c1e7796fa90d4e9a1404c725390cf3c2220ca6fe9d183610954f942c526f9"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/comment/adapters/comment_facets_remote.dart",
@@ -109240,7 +109359,7 @@
         "reader": [
           {
             "path": "quwoquan_service/services/content-service/internal/content/content_reaction/application/reaction/contracts.go",
-            "sha256": "1300145b81f5857d56594a002d1635988ab0d10abb16087511831aa6acce3bcc"
+            "sha256": "e79a1ef9ca7fbc8fd4f19250bb17eea80e5180bc833edf1472187132499894e4"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/content_reaction/application/reaction/data_ports.go",
@@ -109538,8 +109657,12 @@
         ],
         "application": [
           {
+            "path": "quwoquan_app/lib/service/content_service/content/feed_delivery_page/application/public/content_activation_identity.dart",
+            "sha256": "599a51270830af3023213e63ede770e9d2a1e9e0dd2bee08e1fefff19209e741"
+          },
+          {
             "path": "quwoquan_app/lib/service/content_service/content/feed_delivery_page/application/public/discovery_feed_page.dart",
-            "sha256": "1d4ef22740259499a1d30a5242938cd33fb4a912af312642fa4455622ef3d093"
+            "sha256": "3ed2cf7a536aa946cd488230fd98820d2e9ce4f3e1d02ee224bb774345236868"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/feed_delivery_page/application/public/discovery_feed_query.dart",
@@ -109549,7 +109672,7 @@
         "adapters": [
           {
             "path": "quwoquan_app/lib/service/content_service/content/feed_delivery_page/adapters/discovery_feed_query_remote.dart",
-            "sha256": "e535b20b04d4784d11558f863a69c87f77b4e2dc3da62b0f3b8a505808a668eb"
+            "sha256": "b653137742d0cec12c9158a80d3ff2f14ca9c7e9ab477d5c1d35a00c1e5c9a84"
           }
         ],
         "presentation": [],
@@ -109815,7 +109938,7 @@
         "presentation": [
           {
             "path": "quwoquan_app/lib/service/content_service/media/filter_catalog_release/presentation/image_editor_page.dart",
-            "sha256": "540751b7818cfe33adc8d0684fa59b0e6e690fcdf93fa17d33cb3aa31ad0e1a5"
+            "sha256": "b11760f0e09f960f1ea82a5416faf19ed18e1f46ddd27f6bda206a13325393c0"
           }
         ],
         "localContract": [
@@ -109849,7 +109972,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/filter_catalog_release/image_editor_export_pipeline__functional__local_contract_test.dart",
-            "sha256": "a24379150802f963cdc2c017ecdb413c9289df19951b188ebb1eeb810d7e201b"
+            "sha256": "a46a13e1494cb6f3f08a4e2879b3c7ab23b9018c737a83394308c97ea0480ae8"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/filter_catalog_release/image_editor_filter_catalog__local_contract_test.dart",
@@ -109962,7 +110085,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/intersection_visit_state/application/intersection/intersection_service.go",
-            "sha256": "a575a5959190011517a0b9c7bd9c6ccdbca829e9bddf771a3c9c124270f980c2"
+            "sha256": "2e6dee98223fd53f51c00e7e1c9445e14406670abc00a0ed0f82b7fa0e57d4fb"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/intersection_visit_state/application/intersection/intersection_statement_template.go",
@@ -109974,7 +110097,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/intersection_visit_state/application/intersection/intersection_views.go",
-            "sha256": "f4860039b8231c36fe6438ba19fd1149713f24e45d52ec8ac2fd7c264704d2c5"
+            "sha256": "8d905dd2401d218c23ae2a70f44073080d8040a29ff992d5cf2ec02817de989f"
           }
         ],
         "transport": [
@@ -110243,7 +110366,7 @@
         "reader": [
           {
             "path": "quwoquan_service/services/content-service/internal/media/media_asset/application/contracts.go",
-            "sha256": "a58c919a258ec5237ad30e50a5b4cc5bcdc59d19b7588cbb4e473c5fa969d00b"
+            "sha256": "656249c7a8c4ea66cd17bffff50f0978b7264a2605c25be6c08ff267cc16cf93"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/media/media_asset/application/creation.go",
@@ -110557,7 +110680,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/media_asset/works_immersive_viewer_widget__local_contract_test.dart",
-            "sha256": "e327a257c161d84e65016d59a9d9ee56c83e31739776d76396ebbe4e99d06b51"
+            "sha256": "5a05f0710eecbb9cce4a7c3b7c48a0297fb2f883faa76ece94a04a53c3c021d6"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/media_asset/works_immersive_viewer_wishlist__local_contract_test.dart",
@@ -110946,7 +111069,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/media/media_upload_session/adapters/desktop_picker_services.dart",
-            "sha256": "0b20d270e7dfdbc7798d0c670cddb55ae61edab3ff1997b00d426bcbff0a39f5"
+            "sha256": "733106139baff4eedaf764b34ba1c11621e876976883caefce101c6fa6f54827"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/media/media_upload_session/adapters/exif_media_capture_metadata_extractor.dart",
@@ -111712,7 +111835,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/application/feed/feed_delivery_page_support.go",
-            "sha256": "90dea28a7a3c5a71fc2514867ee2e261882a346ee90ff234d26e24a1c012d651"
+            "sha256": "612f1f4889a3176b6c8a7adbeabf85576dd7d18b94030647cfbd76e908e88e7f"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/application/feed/feed_delivery_policy_helpers.go",
@@ -111728,11 +111851,11 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/application/feed/feed_outcome.go",
-            "sha256": "f0eb75ed6061592c62b2d2e034f6380e2d848ec104a01aea5a9eba3b6a57379a"
+            "sha256": "836215b932e7eb21fdc022de94d168e11501379631f9d72404c519cbe67cc990"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/application/feed/feed_service.go",
-            "sha256": "d8fa05e9bbbedde487ec11092d601abcb4142a1d020cfd97a5ae0a5ca02918d6"
+            "sha256": "b478fead638140f267ee61b6128ea662cd7986dc28914bb83faa91c3abcc00b9"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/application/feed/ranked_recommendation_support.go",
@@ -111752,7 +111875,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/application/importer/data_fleet.go",
-            "sha256": "e1315f35f8541407f6cd49d17a2a05aac7e5f2f73876cf62c0011be083d2ad8c"
+            "sha256": "def6031c8117417249a37951f8242d4ee611bcdce3cbee9a4a78d764be5186a1"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/application/media_visibility_reader.go",
@@ -112004,7 +112127,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/application/feed/feed_terminal__local_contract_test.go",
-            "sha256": "1efb3fce8f809e6a41cbaa8bd67bf522723d02e857fffc68f6e301758213f933"
+            "sha256": "8a2b151e73814fa59f72dc28af485bf1c422a1d2ceef7988f194deec1b390ef8"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/application/feed/feed_viewer_liked_attach__local_contract_test.go",
@@ -112116,7 +112239,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/data_fleet__local_contract_test.go",
-            "sha256": "b3f7c19fcc3c6309b4443811c7e9daac2507353b45fc83549d135241abab68a1"
+            "sha256": "d4b809554dbc4df0021654d37ac33e286251baf97dc813be9f3de759f04f5bca"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/data_release_staged_activation__contract__local_contract_test.go",
@@ -112764,7 +112887,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/application/discovery_feed_loading.dart",
-            "sha256": "f9c680d5fdb4d9baf65b7f6b3e9df0b4af581eb2c78f94ee6a6fe6ec221b790a"
+            "sha256": "44833320a71a332ebd87cef650d2984d185d2f8ccfec10b7ad6e9e7cac655376"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/application/discovery_feed_pagination_lifecycle.dart",
@@ -112772,7 +112895,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/application/discovery_feed_provider.dart",
-            "sha256": "4d64860b763b0291bdb4222928b772a0de12fe98a5e3e7340b8e85a0a655cf27"
+            "sha256": "8c35fdae9bc689b5979048469e89d2672e7b545c0b3b6a41fc3df6f5c102cd1a"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/application/discovery_state_provider.dart",
@@ -112958,11 +113081,11 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/adapters/cached_content_post_reader.dart",
-            "sha256": "ed7dbe91f8fbef01a6cb3b65f5c5c45e7260dd41525d285f65ff1f05ca5c2854"
+            "sha256": "0ac9062b056d5c451dac88453d11d429ce131b73f7ffb0774010c49d0d7d9df4"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/adapters/cached_content_repository.dart",
-            "sha256": "ed76f85a86c431e2eed3eb174073424a688cbb64fbe56a97bb16c28e8f3415ea"
+            "sha256": "e859ab8348a0a81e1bd0f0cba73aa353e6126babdcd28337f60540fe4e2e7191"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/adapters/content_app_config_remote.dart",
@@ -112970,7 +113093,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/adapters/content_cache_services.dart",
-            "sha256": "cece28f2ea82b2fa50c0ad3710992fdb33650ded4056eda6895496154b02505e"
+            "sha256": "b0bfdbc0b6385b3bd420ec8cbe21214b128a77c520c5c9af77c0d29459052a85"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/adapters/content_media_cover_selection.dart",
@@ -113076,11 +113199,11 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/presentation/home_featured_immersive_page.dart",
-            "sha256": "1de7c754ce60de13acfef8b8e5bec449c88ab59ca7e97aa32579c5d2334068ff"
+            "sha256": "7855cdf993a0f8ee1e86afcb57b88a8d1265218713739f4c180840457bda5d99"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/presentation/home_page.dart",
-            "sha256": "4aecb4e850b43883845bbc86c74b64272dcae07b723f4081f612c82302ca1d72"
+            "sha256": "ad1d0934db96e79a2c775ec3cd9c6186b66d9e3f0b04c7b216fe8ff8ca57d55b"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/presentation/interest_onboarding_page.dart",
@@ -113190,7 +113313,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/content_cache_services__local_contract_test.dart",
-            "sha256": "4a65f327fc02c0c17e707fa85bbb44d5aa56b3ac6be0832b9a685b8350fa803f"
+            "sha256": "661a9d88626728724148985b2bb9e928c8e9bcdfd2cd6ab286ac60824345bd81"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/content_component_structure__contract__local_contract_test.dart",
@@ -113334,11 +113457,11 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/discovery_feed_home_channel_lifecycle__local_contract_test.dart",
-            "sha256": "12d9efa9466e851e12170652de9102ca8677834166f25e95af089c13529329bc"
+            "sha256": "5975e0c9c4bef6eb7d73bf4a8f2ed6b81bcd157f79853149d5dcf4e2f8e37d7f"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/discovery_feed_query_contract__local_contract_test.dart",
-            "sha256": "d4637d901a5b0b1e7df6fd1d2d93d19459e7f8cdd520d509b9c60a2d50527774"
+            "sha256": "a3e587e5e533681a711456d795f53b79aed91feade9957b9f0a6c886f5cd3324"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/discovery_feed_resident_page_window__local_contract_test.dart",
@@ -113422,7 +113545,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/home_intersection_multiform_feed_widget__local_contract_test.dart",
-            "sha256": "6f21e728c74267ecc7bff0698670efb0303f432d6c87e806ebcbff35683fba55"
+            "sha256": "6487efc93a56afcdfe80f5dcbe3ff3aa268bdb90c2051b6d82be545cb1d8d644"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/home_multi_form_feed_tracker_lifecycle__local_contract_test.dart",
@@ -113434,7 +113557,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/home_page_widget__local_contract_test.dart",
-            "sha256": "30f5b4bbe12161c5d162b484c4315c2fd364bd16cc0d90b8acf0fdb7278cc9a1"
+            "sha256": "8f81b650229aaf9ff2e2ab9b4cce7e03f3d622a72a6eff385658d98408b994a8"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/homepage_reference_draft_codec__local_contract_test.dart",
@@ -113526,7 +113649,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/post_ui_config_contract__local_contract_test.dart",
-            "sha256": "d0c244ae9cb6a98f222e763865470af548060e7629b9f38dfd45d04ca3ad5acc"
+            "sha256": "c13a1f66102de1d7638d60d40261ac4048efcb5249fd3a29473677b017815292"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/post_view_projection_contract__local_contract_test.dart",
@@ -113650,7 +113773,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/work_browser_entry_page__local_contract_test.dart",
-            "sha256": "5edc90b3e0751aa69448f6a582e641f445e08b495fc373213458d373958fc49f"
+            "sha256": "69b67213ae61d16d74aa0dc17218d6bdbfe67f46b2e6e134f01107b03921e575"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/work_detail_fault_recovery__reliability__local_contract_test.dart",
@@ -116283,6 +116406,7 @@
       "operationIds": [
         "integration.external_interaction.GetExternalInteractionMetricsSnapshot",
         "integration.external_interaction.GetExternalInteractionRequest",
+        "integration.external_interaction.GetSmsOtpDeliveryReadiness",
         "integration.external_interaction.ListExternalInteractionAttempts",
         "integration.external_interaction.ListExternalInteractionDeadLetters",
         "integration.external_interaction.RecoverExternalInteractionDeadLetter",
@@ -116306,7 +116430,7 @@
           },
           {
             "path": "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/provider/http_external_provider.go",
-            "sha256": "0437768d2d4126c653ae38fbc65de8d90ae2c135fc248b2d661e53b309aa0692"
+            "sha256": "e44962a9006483334df628833237128b68bbb56b45d33a46afb79922bffd5e00"
           },
           {
             "path": "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/provider/mongo_otp_code_reference_store.go",
@@ -116326,7 +116450,7 @@
           },
           {
             "path": "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/resultrelay/result_relay.go",
-            "sha256": "80bb5ff1568290f3df5ce6136a05f805877bd420714225a15f773de84c55f4eb"
+            "sha256": "a307fd5271151588513928a1b2db1eb6cbb1f2041c77ee47184a2983ab074470"
           },
           {
             "path": "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/runtimeconfig/bindings.go",
@@ -116352,6 +116476,10 @@
             "sha256": "3d872bde01c6b83ba852b0fe966a4b1b51d7430fc370c15cdacd5aa560809925"
           },
           {
+            "path": "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/application/sms_otp_delivery_readiness.go",
+            "sha256": "7df6a81cceaf79c8932345b2da5f4d881a9026ae497cf2d7de986dbf42e9ce23"
+          },
+          {
             "path": "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/application/user_account_closed_projection.go",
             "sha256": "7637acd8a3244400d5564edcf5d4779d140001a5cc0f9352d6e7cdc73fa00201"
           }
@@ -116359,11 +116487,11 @@
         "transport": [
           {
             "path": "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/adapters/inbound/http/external_interaction_handler.go",
-            "sha256": "278d6673750a6c4daa8819db3dfd0682c9df5ab84cd58998e450cff205323f15"
+            "sha256": "ef162748de79d2c283b4166fc9cbd2c004286b80d102be2b5314378afaca16f1"
           },
           {
             "path": "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/adapters/inbound/http/handler.go",
-            "sha256": "8866afc83331611408611ec283f75ab894e883bd83cf7b97df190fa2e9726120"
+            "sha256": "94eefcdfeef8010d2931a8518ea60b802a24cbd8c8ea4e389f06ed3cfd2cf85b"
           },
           {
             "path": "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/adapters/inbound/stream/user_account_closed_consumer.go",
@@ -116424,6 +116552,10 @@
             "sha256": "d54b214fa7c547bc4fb595d3e956d1b0a525327cff1aff1b8f65d0b7d7f6093d"
           },
           {
+            "path": "quwoquan_service/services/integration-service/tests/local_contract/external_integration/external_interaction/sms_otp_delivery_readiness__local_contract_test.go",
+            "sha256": "aa83c0c6f22a12f05cba98690e0ab23458d7ad6f9bc6a42f9776c816175d4df2"
+          },
+          {
             "path": "quwoquan_service/services/integration-service/tests/local_contract/external_integration/external_interaction/user_account_closed_event__privacy__local_contract_test.go",
             "sha256": "35b1725cbe4f6de54b2e358d8b1a54c71c6fc10f8cc1dfd98f5257f7430c6b9b"
           }
@@ -116444,6 +116576,10 @@
           {
             "path": "quwoquan_service/services/integration-service/tests/api_integration/external_integration/external_interaction/provider_protocol/sms_local_capture__api_integration_test.go",
             "sha256": "f71ad8e2ef035a7febba595359a74808d1a3a2ddc27e09b6a2d081ebd315f73c"
+          },
+          {
+            "path": "quwoquan_service/services/integration-service/tests/api_integration/external_integration/external_interaction/sms_otp_delivery_readiness__api_integration_test.go",
+            "sha256": "c53f89b41b4de3b7f23c5bf1a9215b3ad5374f714d630edfb29651684bd27423"
           },
           {
             "path": "quwoquan_service/services/integration-service/tests/api_integration/external_integration/external_interaction/testmain__reliability__api_integration_test.go",
@@ -117600,13 +117736,13 @@
         "transport": [
           {
             "path": "quwoquan_service/services/product-ops-service/internal/product_ops/app_release/adapters/inbound/http/routes.go",
-            "sha256": "fbc3e9f05ccbedc33e2d921e80238f05dd98c2ef518cb21ca5269d128585fe76"
+            "sha256": "87bf67e8f287c1db2b292ae1c93e6983fc4100038c6aa4be73c8ef857c419aec"
           }
         ],
         "localContract": [
           {
             "path": "quwoquan_service/services/product-ops-service/tests/local_contract/product_ops/app_release/app_release_recovery__local_contract_test.go",
-            "sha256": "8e35acc31599d5cfa0ed5dfd2f9952bba3e6f94d2bed3394a46569e8092be050"
+            "sha256": "bea04d094a092eaef5fd897bc5cc8d79c30af261dc02d6ef8ceb1882ed1060f0"
           },
           {
             "path": "quwoquan_service/services/product-ops-service/tests/local_contract/product_ops/app_release/recovery_operation_actor__contract__local_contract_test.go",
@@ -118868,7 +119004,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/realtime_gateway/realtime/connection/realtime_message_sent_handler__local_contract_test.dart",
-            "sha256": "f7fa993bfe7fbc1b29fbdeaef97d1030f373d2367d5470268286b5e96b083135"
+            "sha256": "1a066e27f58b486c0c8ab79fbfc471c17a58f2a93ea64c53d7d94c0969e2dc1f"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/realtime_gateway/realtime/connection/realtime_reconnect_gap_recovery__local_contract_test.dart",
@@ -119801,7 +119937,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/recommendation_service/recommendation/recommendation_feature_profile_view/object_intersection_golden__local_contract_test.dart",
-            "sha256": "311653a54faa6289a60ef5a429ad86d22bbad80e99bf95cdeb9f7c756832f255"
+            "sha256": "3e8b902394b1ecc33642f4347f781fc475718d5eb7c38156dcf5b390e7c3fe2b"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/recommendation_service/recommendation/recommendation_feature_profile_view/object_intersection_list_page__local_contract_test.dart",
@@ -120707,6 +120843,10 @@
           {
             "path": "quwoquan_service/services/rtc-service/tests/api_integration/rtc/call_session/one_to_one_relationship_gate__api_integration_test.go",
             "sha256": "7dc466bdcd5b050eb299b7dc2892ed7722d03e9a2cd84bcd719871f263c2aaf7"
+          },
+          {
+            "path": "quwoquan_service/services/rtc-service/tests/api_integration/rtc/call_session/realtime_payload_nullability_evidence__api_integration_test.go",
+            "sha256": "da3ef99a3e43d4ab14c565286ad492fc70ed72656e2f7ff14e0610d028963f29"
           },
           {
             "path": "quwoquan_service/services/rtc-service/tests/api_integration/rtc/call_session/room_management_contract__api_integration_test.go",
@@ -121819,7 +121959,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/search_service/search/search_index_view/local_chat_search_sync_service__local_contract_test.dart",
-            "sha256": "e38683922ae113e387ec311573e93d2536e6deb37f40ab0c3c7df064aa92a507"
+            "sha256": "aa11bb00cde62c04f881044b5d20cceb65fad6daf9024a8922d09315fd53ba56"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/search_service/search/search_index_view/location_place_landing_page_widget__local_contract_test.dart",
@@ -122813,7 +122953,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/account/account_session/login_page_widget__local_contract_test.dart",
-            "sha256": "bd6aea0134b6a4c4ad2a10e9e269bdda33634f7dea98362426ae40231224d17f"
+            "sha256": "6626a6115e0a9652b23de96929a6ac0b56878053d7da48b98ab1a2cd9f8f6ac1"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/account/account_session/research_identity_remote__security__local_contract_test.dart",
@@ -122930,13 +123070,13 @@
           },
           {
             "path": "quwoquan_service/services/user-service/tests/local_contract/account/authentication_challenge/otp_delivery_readiness__local_contract_test.go",
-            "sha256": "50aae7e2d1f26ab93ecfd80504d8b1fee9d4e6eaec655bb678ee016bfdb98ca1"
+            "sha256": "01fc227ce7bfbc74e6d149408f988c697d39376255fdc3669413bfce64c176cc"
           }
         ],
         "apiIntegration": [
           {
             "path": "quwoquan_service/services/user-service/tests/api_integration/account/authentication_challenge/postgres_challenge__api_integration_test.go",
-            "sha256": "4694f3758bb71f5e514033aaba1d44f48fc79f510850e8d6710b582ec9d707f2"
+            "sha256": "02e6f25ea2fc6fdb4da6d645c0836d95215e2e9f51494989303d322676e635dd"
           }
         ]
       },
@@ -122966,7 +123106,7 @@
         "localContract": [
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/account/authentication_challenge/authentication_challenge_remote__local_contract_test.dart",
-            "sha256": "26934949d1e68e435b2bda492f63bc2a1d0f262ae610be0c2c08611925087a80"
+            "sha256": "bb4130e9d92a3a8c2576eadd6b508970f8676ec4937fbb5417627901477cb708"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/account/authentication_challenge/pending_otp_attempt_store__local_contract_test.dart",
@@ -125145,7 +125285,7 @@
           },
           {
             "path": "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/integration/external_interaction_client.go",
-            "sha256": "c7566d39958b6d27be7183b7dc74b78c13ec47ce4eb8d7928f0d51c379b43c4d"
+            "sha256": "8407725e8bee04dddbac61297c917da1cd0f105655107d02b6562faee1bd74c0"
           },
           {
             "path": "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/integration/protocol_substitute_identity.go",
@@ -125287,7 +125427,7 @@
           },
           {
             "path": "quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration/auth_service.go",
-            "sha256": "08dffd661b5cdd3e113f9df3ce439a9494dab7ab778f462705c019956790011b"
+            "sha256": "dd0d3c2b0972efb44d3133443059de3c4ee1dab6c4a8c566c14bb8bcdfc217b4"
           },
           {
             "path": "quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration/auth_service_device_login.go",
@@ -125295,7 +125435,7 @@
           },
           {
             "path": "quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration/auth_service_otp_profile_view.go",
-            "sha256": "8ca133ee7d6e4d1772a227f93a03a9f0a5851973990886a4c7e56ee0be32b75e"
+            "sha256": "4b3f45e40f4c601149fd26de3c24f6736ccc1d2a7a7677b5b09d1c5b9a9b441b"
           },
           {
             "path": "quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration/auth_service_session.go",
@@ -125331,7 +125471,7 @@
           },
           {
             "path": "quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration/otp_dispatch_contract.go",
-            "sha256": "2744c7fc4917f8a263067884543f8586edea0c5afa04859c452b40616f372cd0"
+            "sha256": "05978a37470a1efec17cd2285c90182ff38d767185d624e30622cf63d39b49b5"
           },
           {
             "path": "quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration/persona_commands.go",
@@ -125535,7 +125675,7 @@
           },
           {
             "path": "quwoquan_service/services/user-service/tests/local_contract/account/user_account/external_interaction_client_idempotency__local_contract_test.go",
-            "sha256": "83a1a96f7ac76f10443539c69c70061ec7eaf926b49997b658f21d897c5f6b31"
+            "sha256": "2bf6220e70d693734b417659e5b06afd5d8d429a32e67adcb3b3cd64a049489a"
           },
           {
             "path": "quwoquan_service/services/user-service/tests/local_contract/account/user_account/federated_carrier_identity__error_codes__local_contract_test.go",
@@ -125733,7 +125873,7 @@
           },
           {
             "path": "quwoquan_service/services/user-service/tests/api_integration/account/user_account/external_interaction_contract_runtime__api_integration_test.go",
-            "sha256": "c4f7df6ce687daf74be8081ecac0c761202e7e709cad67b4664dc4f0791a5110"
+            "sha256": "99bc87bbff023bcd96dee3ce47bb78ed52500fc7e1940c8e444d14cfbc633dab"
           },
           {
             "path": "quwoquan_service/services/user-service/tests/api_integration/account/user_account/external_provider_contract_runtime__api_integration_test.go",
@@ -127733,6 +127873,10 @@
       "sha256": "005d5a243386bbbee4563ffcc9276b7521287a4b3fa91f950a90c3876d69e2f9"
     },
     {
+      "path": "_schemas/environment_artifact_identity.schema.json",
+      "sha256": "72e036a81935a762e7894a4ade01d8423158d73eb8f2cd071e37b42ca4cc43fb"
+    },
+    {
       "path": "_schemas/errors.schema.json",
       "sha256": "0f1b6f0c03c2ac194f8302d0852bdacec78dc9a28cbef5b439159236c9b41800"
     },
@@ -127789,8 +127933,12 @@
       "sha256": "53da4da9cb172c5a168d9bb5ac30d6ea7194ca60797edfbdae3173862f5974cf"
     },
     {
+      "path": "_shared/app_artifact_manifest.yaml",
+      "sha256": "5994c108683f0ad45628ea4f57052c1381f6154cc204b1354c141708ab1adc84"
+    },
+    {
       "path": "_shared/app_launch_manifest.yaml",
-      "sha256": "69660bcfd893a6f0031aa1a3125c1908d5f5f4ae784a698346a839eb6819911d"
+      "sha256": "e7b70fd3ae4749355493ef0fef059cdb50d0b6ce466097203b713e3dd059dfcc"
     },
     {
       "path": "_shared/app_pages.yaml",
@@ -127823,6 +127971,10 @@
     {
       "path": "_shared/envelope.schema.json",
       "sha256": "9ef056caa1f73f84549e90e07ab10d6283cd6b291aa31263076877aa7853d7de"
+    },
+    {
+      "path": "_shared/environment_artifact_identity.yaml",
+      "sha256": "57cf7efa52736f2b8376941bd99dad8a572319101ad9cf8b42eff82a5ed280eb"
     },
     {
       "path": "_shared/link_templates.yaml",
@@ -129242,7 +129394,7 @@
     },
     {
       "path": "content/content/post/operations.yaml",
-      "sha256": "1953e30690d174f9dde7d30d551fe8700927fa7a0041c3a4469b9efb7bb65b30"
+      "sha256": "29f31fb67871f68d6ee001477efdcb9bed8b98c1921b49bc31bab8c5362a524e"
     },
     {
       "path": "content/content/post/persisted_queries/content_post_detail.yaml",
@@ -129302,7 +129454,7 @@
     },
     {
       "path": "content/content/post/projections/content_discovery_feed_page_slice.yaml",
-      "sha256": "5bcb93dafa9432d5eae57f502361358bdd5778c141c831e1099fb1429a5d5fa1"
+      "sha256": "7f18503ad3e2969e60e9af72f4733c1fa6705a0693ebc950e1dd6fe483c9b72b"
     },
     {
       "path": "content/content/post/projections/content_footprint_entry.yaml",
@@ -129382,7 +129534,7 @@
     },
     {
       "path": "content/content/post/ui_config.yaml",
-      "sha256": "ae39ed4915383a3c0602eac9e86585948f754a72435227314d86a82db87c9c56"
+      "sha256": "731b74ef77a5900b6d31ffb56cdcf3acf44c68caa099f94f913e0fc78f8a81f4"
     },
     {
       "path": "content/content/profile_interaction_activity_view/errors.yaml",
@@ -129499,6 +129651,10 @@
     {
       "path": "content/media/media_asset/preview_track_manifest.schema.json",
       "sha256": "737789cd291462969c2829b4b943ce8a290425da7b59cd9f07bfdd3507081eac"
+    },
+    {
+      "path": "content/media/media_asset/public_slice_derivation_cases.json",
+      "sha256": "1258a08885b20b6935b0983d3f4db1f710febb4b85e0732bcc928ef1f442f735"
     },
     {
       "path": "content/media/media_asset/storage.yaml",
@@ -130094,7 +130250,7 @@
     },
     {
       "path": "integration/external_integration/external_interaction/errors.yaml",
-      "sha256": "84eb7773c84bccfb7afc8c971a842499ab847292e161e9d8020970cea3e48cf3"
+      "sha256": "6343c21786e253a8b0c13b56b266eb6278306ed9c5af39c75e0ee50f6fc8b430"
     },
     {
       "path": "integration/external_integration/external_interaction/events.yaml",
@@ -130102,7 +130258,7 @@
     },
     {
       "path": "integration/external_integration/external_interaction/fields.yaml",
-      "sha256": "5f9a854ff0ae1828055aa6e9ef7fbdb9199a076fda0925425d45b216b5207e1f"
+      "sha256": "0e930e9400bafe5c59af4bacf4b2318523a7480ac2ad70f0d67c68f90136af6b"
     },
     {
       "path": "integration/external_integration/external_interaction/object.yaml",
@@ -130110,7 +130266,7 @@
     },
     {
       "path": "integration/external_integration/external_interaction/operations.yaml",
-      "sha256": "20d77d53c1d71ba17c0383ad2d4d44ef4d393b74718efd8a756e1d33e26c05ef"
+      "sha256": "6975b7b3b1ed241b7242b61aab1698a137d8c82cd309bd4100b3989c5964203d"
     },
     {
       "path": "integration/external_integration/external_interaction/storage.yaml",
@@ -130202,7 +130358,7 @@
     },
     {
       "path": "integration/openapi.yaml",
-      "sha256": "f3f671ab789dd5ce81632034ba7615e2d8d13e35bc56c57d78c0475261fe808e"
+      "sha256": "9080837a39492e70868756acf5a8c3898a8eff087f2463e3c344cb620523a6f4"
     },
     {
       "path": "log_kv_policy.yaml",
@@ -130402,7 +130558,7 @@
     },
     {
       "path": "ops/product_ops/event_record/event_catalog.yaml",
-      "sha256": "11d7859f6330bbf4e2d7b64c8f1877a8017511fadfeb385e72ca6fd5a24feb49"
+      "sha256": "a591a2d990970436b61440dd2cb99bc4aa79f6ecf5860244f69f07dc9a502d1d"
     },
     {
       "path": "ops/product_ops/event_record/events.yaml",
@@ -130414,7 +130570,7 @@
     },
     {
       "path": "ops/product_ops/event_record/golden_metric_catalog.yaml",
-      "sha256": "0047a0c75a3fc9558f8167f339f9258efa8fdbfff31561df35ca6ce3c271cb31"
+      "sha256": "cefa3f9d05fb4e8f190671ac205c411ce6a1860ff654000b6d9779d14c328fec"
     },
     {
       "path": "ops/product_ops/event_record/object.yaml",
@@ -132976,24 +133132,547 @@
       }
     },
     {
-      "path": "_shared/app_launch_manifest.yaml",
-      "sha256": "69660bcfd893a6f0031aa1a3125c1908d5f5f4ae784a698346a839eb6819911d",
+      "path": "_shared/app_artifact_manifest.yaml",
+      "sha256": "5994c108683f0ad45628ea4f57052c1381f6154cc204b1354c141708ab1adc84",
       "mediaType": "application/yaml",
       "content": {
-        "content_binding_contract": {
-          "digest_fields": [
-            "contentManifestDigest",
-            "contentReadinessReceiptDigest"
-          ],
-          "fields": [
-            "contentReleaseId",
-            "contentManifestDigest",
-            "contentReadinessReceiptDigest"
-          ],
-          "required_launch_policies": [
-            "prod_release"
-          ]
+        "application_identity": {
+          "base_application_ids": {
+            "android": {
+              "registered": true,
+              "value": "com.quwoquan.quwoquan_app"
+            },
+            "ios": {
+              "registered": false,
+              "value": "com.example.quwoquanApp"
+            }
+          },
+          "build_mode_display_marks": {
+            "debug": "·D",
+            "profile": "·P",
+            "release": ""
+          },
+          "build_mode_suffixes": {
+            "debug": ".debug",
+            "profile": ".profile",
+            "release": ""
+          },
+          "display_name_base": "趣我圈",
+          "environment_display_marks": {
+            "alpha": "α",
+            "beta": "β",
+            "gamma": "γ",
+            "prod": ""
+          },
+          "environment_suffixes": {
+            "alpha": ".alpha",
+            "beta": ".beta",
+            "gamma": ".gamma",
+            "prod": ""
+          }
         },
+        "build_modes": [
+          "debug",
+          "profile",
+          "release"
+        ],
+        "description": "App 制品身份、安装回执与分发渠道矩阵的唯一真相源（deliver-deploy-prod-pipeline DEC-004）；打包、签名校验、渠道登记与准出工具全部消费本文件，不得自持字段集合。",
+        "digest_contract": {
+          "algorithm": "sha256",
+          "canonical_json": {
+            "ensure_ascii": false,
+            "separators": [
+              ",",
+              ":"
+            ],
+            "sort_keys": true
+          },
+          "identity_format": "sha256:\u003c64-lowercase-hex\u003e",
+          "input_encoding": "utf-8"
+        },
+        "distribution_channels": {
+          "apple_app_store": {
+            "automation_tier": "A2",
+            "credential_env": "QWQ_APPLE_ASC_API_KEY_PATH",
+            "credential_owner": "apple_developer_account",
+            "distribution_class": "store",
+            "platform": "ios",
+            "readback": "app_store_connect_api",
+            "store_signing_custodian": "apple",
+            "upload_format": "ipa"
+          },
+          "apple_testflight": {
+            "automation_tier": "A2",
+            "credential_env": "QWQ_APPLE_ASC_API_KEY_PATH",
+            "credential_owner": "apple_developer_account",
+            "distribution_class": "store",
+            "platform": "ios",
+            "readback": "app_store_connect_api",
+            "store_signing_custodian": "apple",
+            "upload_format": "ipa"
+          },
+          "huawei_appgallery": {
+            "automation_tier": "A2",
+            "credential_env": "QWQ_HUAWEI_AGC_API_CLIENT_PATH",
+            "credential_owner": "huawei_agc_account",
+            "distribution_class": "store",
+            "platform": "android",
+            "readback": "agc_api",
+            "store_signing_custodian": "huawei",
+            "upload_format": "aab_or_apk"
+          },
+          "official_web": {
+            "automation_tier": "A2",
+            "credential_env": "QWQ_OFFICIAL_WEB_DEPLOY_CREDENTIAL_PATH",
+            "credential_owner": "first_party_release_operator",
+            "distribution_class": "official_web",
+            "platform": "android",
+            "readback": "cdn_receipt",
+            "store_signing_custodian": "first_party",
+            "upload_format": "apk"
+          },
+          "oppo_market": {
+            "automation_tier": "A3",
+            "credential_env": "QWQ_OPPO_DEV_CREDENTIAL_PATH",
+            "credential_owner": "oppo_developer_account",
+            "distribution_class": "store",
+            "platform": "android",
+            "readback": "manual_with_machine_receipt",
+            "store_signing_custodian": "oppo",
+            "upload_format": "apk"
+          },
+          "tencent_myapp": {
+            "automation_tier": "A3",
+            "credential_env": "QWQ_TENCENT_MYAPP_CREDENTIAL_PATH",
+            "credential_owner": "tencent_myapp_developer_account",
+            "distribution_class": "store",
+            "platform": "android",
+            "readback": "manual_with_machine_receipt",
+            "store_signing_custodian": "tencent",
+            "upload_format": "apk"
+          },
+          "vivo_market": {
+            "automation_tier": "A3",
+            "credential_env": "QWQ_VIVO_DEV_CREDENTIAL_PATH",
+            "credential_owner": "vivo_developer_account",
+            "distribution_class": "store",
+            "platform": "android",
+            "readback": "manual_with_machine_receipt",
+            "store_signing_custodian": "vivo",
+            "upload_format": "apk"
+          },
+          "xiaomi_getapps": {
+            "automation_tier": "A3",
+            "credential_env": "QWQ_XIAOMI_DEV_CREDENTIAL_PATH",
+            "credential_owner": "xiaomi_developer_account",
+            "distribution_class": "store",
+            "platform": "android",
+            "readback": "manual_with_machine_receipt",
+            "store_signing_custodian": "xiaomi",
+            "upload_format": "apk"
+          }
+        },
+        "distribution_classes": {
+          "dev_direct": {
+            "build_modes": [
+              "debug",
+              "profile",
+              "release"
+            ],
+            "description": "flutter run、ADB/Xcode 直装与本机可安装 Debug 制品。",
+            "launch_provenances": [
+              "direct_flutter_run",
+              "canonical_launcher",
+              "hot_restart",
+              "icon_cold_launch"
+            ],
+            "platforms": [
+              "android",
+              "ios"
+            ],
+            "promotable": false
+          },
+          "hosted_web": {
+            "build_modes": [
+              "release"
+            ],
+            "description": "四环境 Web official artifact 静态托管交付。",
+            "launch_provenances": [
+              "icon_cold_launch"
+            ],
+            "platforms": [
+              "web"
+            ],
+            "promotable": true
+          },
+          "official_web": {
+            "build_modes": [
+              "release"
+            ],
+            "description": "官网签名 APK 直接下载安装（Android only）。",
+            "launch_provenances": [
+              "release_package",
+              "icon_cold_launch"
+            ],
+            "platforms": [
+              "android"
+            ],
+            "promotable": true
+          },
+          "registered_device": {
+            "build_modes": [
+              "debug",
+              "profile",
+              "release"
+            ],
+            "description": "登记设备 Development/Ad Hoc 分发。",
+            "launch_provenances": [
+              "canonical_launcher",
+              "release_package",
+              "icon_cold_launch"
+            ],
+            "platforms": [
+              "android",
+              "ios"
+            ],
+            "promotable": false
+          },
+          "simulator": {
+            "build_modes": [
+              "debug",
+              "profile",
+              "release"
+            ],
+            "description": "Simulator/Emulator 安装制品（含 prod-sim 双模拟器验证）。",
+            "launch_provenances": [
+              "canonical_launcher",
+              "release_package",
+              "icon_cold_launch"
+            ],
+            "platforms": [
+              "android",
+              "ios"
+            ],
+            "promotable": false
+          },
+          "store": {
+            "build_modes": [
+              "release"
+            ],
+            "description": "Apple App Store/TestFlight 与登记 Android 应用市场。",
+            "launch_provenances": [
+              "release_package",
+              "icon_cold_launch"
+            ],
+            "platforms": [
+              "android",
+              "ios"
+            ],
+            "promotable": true
+          }
+        },
+        "environments": [
+          "alpha",
+          "beta",
+          "gamma",
+          "prod"
+        ],
+        "launch_provenances": [
+          "direct_flutter_run",
+          "canonical_launcher",
+          "release_package",
+          "hot_restart",
+          "icon_cold_launch"
+        ],
+        "owner": "runtime",
+        "platforms": [
+          "android",
+          "ios",
+          "web",
+          "macos"
+        ],
+        "schema_id": "app_artifact_manifest",
+        "schemas": {
+          "app_artifact_manifest": {
+            "additional_fields": false,
+            "constraints": [
+              "distributionClass 与 buildMode 的组合必须满足 distribution_classes 声明；store/official_web/hosted_web 只接受 release。",
+              "promotable 必须等于 distribution_classes 中该 class 的 promotability 且 buildMode 为 release。",
+              "本清单不携带内容 release 身份；内容激活身份只由 Content API 响应在运行时下发。",
+              "alpha/beta/gamma/prod 与 Debug/Release 的 applicationId 必须互不覆盖；Prod 正式 ID 只取已登记外部事实。"
+            ],
+            "fields": {
+              "applicationId": {
+                "min_length": 1,
+                "type": "string"
+              },
+              "artifactDigest": {
+                "format": "sha256_identity",
+                "type": "string"
+              },
+              "buildMode": {
+                "allowed_values": [
+                  "debug",
+                  "profile",
+                  "release"
+                ],
+                "type": "string"
+              },
+              "buildNumber": {
+                "min_length": 1,
+                "type": "string"
+              },
+              "displayVersion": {
+                "min_length": 1,
+                "type": "string"
+              },
+              "distributionClass": {
+                "allowed_values": [
+                  "dev_direct",
+                  "simulator",
+                  "registered_device",
+                  "store",
+                  "official_web",
+                  "hosted_web"
+                ],
+                "type": "string"
+              },
+              "environment": {
+                "allowed_values": [
+                  "alpha",
+                  "beta",
+                  "gamma",
+                  "prod"
+                ],
+                "type": "string"
+              },
+              "launchManifestDigest": {
+                "format": "sha256_identity",
+                "type": "string"
+              },
+              "platform": {
+                "allowed_values": [
+                  "android",
+                  "ios",
+                  "web",
+                  "macos"
+                ],
+                "type": "string"
+              },
+              "promotable": {
+                "type": "boolean"
+              },
+              "schema": {
+                "const": "app-artifact-manifest",
+                "type": "string"
+              },
+              "signingIdentityDigest": {
+                "format": "sha256_identity",
+                "type": "string"
+              },
+              "sourceGitSha": {
+                "format": "git_object_sha",
+                "type": "string"
+              },
+              "sourceTreeDigest": {
+                "format": "git_tree_digest",
+                "type": "string"
+              }
+            },
+            "required_fields": [
+              "schema",
+              "environment",
+              "platform",
+              "buildMode",
+              "distributionClass",
+              "applicationId",
+              "displayVersion",
+              "buildNumber",
+              "signingIdentityDigest",
+              "sourceGitSha",
+              "sourceTreeDigest",
+              "artifactDigest",
+              "launchManifestDigest",
+              "promotable"
+            ],
+            "schema_value": "app-artifact-manifest"
+          },
+          "app_install_receipt": {
+            "additional_fields": false,
+            "append_only": true,
+            "constraints": [
+              "InstallReceipt 是 append-only separate fact；不得修改或删除既有回执，失败回执不得被后续成功覆盖。",
+              "channelId 必须与 distribution_channels 或非市场 distributionClass 对应；一个渠道的回执不得替代另一渠道。",
+              "artifactDigest/sourceGitSha 必须绑定同一 reviewed candidate；市场重签或优化后仍以 source 身份与 store 官方 receipt 验证，不比对二进制逐字节。"
+            ],
+            "fields": {
+              "applicationId": {
+                "min_length": 1,
+                "type": "string"
+              },
+              "artifactDigest": {
+                "format": "sha256_identity",
+                "type": "string"
+              },
+              "buildNumber": {
+                "min_length": 1,
+                "type": "string"
+              },
+              "channelId": {
+                "allowed_values": [
+                  "apple_app_store",
+                  "apple_testflight",
+                  "huawei_appgallery",
+                  "xiaomi_getapps",
+                  "oppo_market",
+                  "vivo_market",
+                  "tencent_myapp",
+                  "official_web",
+                  "dev_direct",
+                  "simulator",
+                  "registered_device"
+                ],
+                "type": "string"
+              },
+              "deviceIdentityDigest": {
+                "format": "sha256_identity",
+                "type": "string"
+              },
+              "displayVersion": {
+                "min_length": 1,
+                "type": "string"
+              },
+              "environment": {
+                "allowed_values": [
+                  "alpha",
+                  "beta",
+                  "gamma",
+                  "prod"
+                ],
+                "type": "string"
+              },
+              "installedAt": {
+                "format": "rfc3339_utc",
+                "type": "string"
+              },
+              "platform": {
+                "allowed_values": [
+                  "android",
+                  "ios"
+                ],
+                "type": "string"
+              },
+              "schema": {
+                "const": "app-install-receipt",
+                "type": "string"
+              },
+              "signatureVerification": {
+                "additional_fields": false,
+                "fields": {
+                  "method": {
+                    "allowed_values": [
+                      "store_receipt",
+                      "platform_signature_digest",
+                      "cdn_sha256_receipt",
+                      "development_provisioning"
+                    ],
+                    "type": "string"
+                  },
+                  "status": {
+                    "allowed_values": [
+                      "verified",
+                      "failed"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required_fields": [
+                  "method",
+                  "status"
+                ],
+                "type": "object"
+              },
+              "sourceGitSha": {
+                "format": "git_object_sha",
+                "type": "string"
+              }
+            },
+            "required_fields": [
+              "schema",
+              "channelId",
+              "environment",
+              "platform",
+              "applicationId",
+              "displayVersion",
+              "buildNumber",
+              "sourceGitSha",
+              "artifactDigest",
+              "installedAt",
+              "deviceIdentityDigest",
+              "signatureVerification"
+            ],
+            "schema_value": "app-install-receipt"
+          },
+          "release_application_package": {
+            "additional_fields": false,
+            "constraints": [
+              "packageDigest 必须是对 canonical payload 目录的不可变 sha256 树摘要。",
+              "sourceGitSha/sourceTreeDigest 必须与检出的 reviewed candidate 完全一致。"
+            ],
+            "fields": {
+              "environment": {
+                "allowed_values": [
+                  "alpha",
+                  "beta",
+                  "gamma",
+                  "prod"
+                ],
+                "type": "string"
+              },
+              "packageDigest": {
+                "format": "sha256_identity",
+                "type": "string"
+              },
+              "schema": {
+                "const": "release-application-package",
+                "type": "string"
+              },
+              "sourceGitSha": {
+                "format": "git_object_sha",
+                "type": "string"
+              },
+              "sourceTreeDigest": {
+                "format": "git_tree_digest",
+                "type": "string"
+              },
+              "surface": {
+                "allowed_values": [
+                  "android",
+                  "ios",
+                  "web",
+                  "macos"
+                ],
+                "type": "string"
+              }
+            },
+            "required_fields": [
+              "schema",
+              "environment",
+              "surface",
+              "sourceGitSha",
+              "sourceTreeDigest",
+              "packageDigest"
+            ],
+            "schema_value": "release-application-package"
+          }
+        }
+      }
+    },
+    {
+      "path": "_shared/app_launch_manifest.yaml",
+      "sha256": "e7b70fd3ae4749355493ef0fef059cdb50d0b6ce466097203b713e3dd059dfcc",
+      "mediaType": "application/yaml",
+      "content": {
         "description": "Android、iOS、App 与 Ops 共同消费的启动清单、launcher handoff 和摘要协议；runtime 拥有组合语义，各平台不得复制字段或摘要规则。",
         "digest_contract": {
           "algorithm": "sha256",
@@ -133010,18 +133689,11 @@
         },
         "launch_policies": {
           "prod_release": {
-            "content_binding_modes": [
-              "immutable_release"
-            ],
             "environments": [
               "prod"
             ]
           },
           "test_live": {
-            "content_binding_modes": [
-              "unbound",
-              "run_bound"
-            ],
             "environments": [
               "alpha",
               "beta",
@@ -133047,27 +133719,12 @@
               "transport.required=false 时端口和本地 transport identity 必须为空；这种 package-only 或未附带设备 transport 的 handoff 不得成为 runtime UAT 证据。",
               "prod-hosted 必须令 local transport 为 false，且全部端口与本地 transport identity 为空。",
               "recoveryBaseUrl 与 publicWebBaseUrl 必须是 HTTPS origin；appDownloadBaseUrl 允许 path，但三个 URL 都不得包含 query、fragment 或凭据。",
-              "内容绑定字段必须全空或全部完整；test_live 只允许 Alpha/Beta/Gamma，默认 unbound，且仅可把显式绑定到当前 running mutable attempt 的完整三元投影为 run_bound；禁止 generic bound、implicit latest、candidate 或 package。prod_release 只允许 Prod 的 immutable_release，且必须绑定非空 releaseId 和两个 sha256 identity。"
+              "launchPolicy 必须与 environment 满足 launch_policies 声明的映射；launchMode 只记录启动来源（launch provenance），任何消费方不得据此改变业务行为。",
+              "本清单不携带内容 release 身份；内容激活身份只由 Content API 响应在运行时下发。"
             ],
             "fields": {
               "appDownloadBaseUrl": {
                 "format": "https_url_no_query_fragment_credentials",
-                "type": "string"
-              },
-              "contentBindingState": {
-                "allowed_values": [
-                  "unbound",
-                  "bound"
-                ],
-                "type": "string"
-              },
-              "contentManifestDigest": {
-                "type": "string"
-              },
-              "contentReadinessReceiptDigest": {
-                "type": "string"
-              },
-              "contentReleaseId": {
                 "type": "string"
               },
               "dartDefinesDigest": {
@@ -133163,12 +133820,8 @@
               "entrypoint",
               "launchMode",
               "launchPolicy",
-              "contentBindingState",
               "dartDefinesDigest",
               "runtimeConfigDigest",
-              "contentReleaseId",
-              "contentManifestDigest",
-              "contentReadinessReceiptDigest",
               "recoveryBaseUrl",
               "publicWebBaseUrl",
               "appDownloadBaseUrl",
@@ -133187,22 +133840,6 @@
             "fields": {
               "appDownloadBaseUrl": {
                 "source": "app_effective_launch_manifest.appDownloadBaseUrl",
-                "type": "string"
-              },
-              "contentBindingState": {
-                "source": "app_effective_launch_manifest.contentBindingState",
-                "type": "string"
-              },
-              "contentManifestDigest": {
-                "source": "app_effective_launch_manifest.contentManifestDigest",
-                "type": "string"
-              },
-              "contentReadinessReceiptDigest": {
-                "source": "app_effective_launch_manifest.contentReadinessReceiptDigest",
-                "type": "string"
-              },
-              "contentReleaseId": {
-                "source": "app_effective_launch_manifest.contentReleaseId",
                 "type": "string"
               },
               "dartDefines": {
@@ -133273,12 +133910,8 @@
               "entrypoint",
               "launchMode",
               "launchPolicy",
-              "contentBindingState",
               "dartDefinesDigest",
               "runtimeConfigDigest",
-              "contentReleaseId",
-              "contentManifestDigest",
-              "contentReadinessReceiptDigest",
               "recoveryBaseUrl",
               "publicWebBaseUrl",
               "appDownloadBaseUrl",
@@ -135316,6 +135949,83 @@
         ],
         "title": "MessageEnvelope",
         "type": "object"
+      }
+    },
+    {
+      "path": "_shared/environment_artifact_identity.yaml",
+      "sha256": "57cf7efa52736f2b8376941bd99dad8a572319101ad9cf8b42eff82a5ed280eb",
+      "mediaType": "application/yaml",
+      "content": {
+        "constraints": [
+          "target 必须映射到 target_environment 中唯一声明的 environment；同一 artifact 不得被其他 environment/target 验证或激活。",
+          "releaseTrainId 是 digest_contract 对 release_train_fields 投影的摘要；sourceCapsule 绑定候选 input capsule 的 baseline、精确字节摘要、Git revision 与 workspace status。",
+          "identityCoreDigest 是 digest_contract 对 identity_core_fields 投影的摘要；imageBuildInputDigest 属于 core，imageSetDigest 不属于 core，禁止镜像内嵌身份摘要包含最终 OCI image digest 而形成自引用。",
+          "environmentArtifactDigest 是 digest_contract 对 activation_seal_fields 投影的摘要；外部 activation seal 以 identityCoreDigest 绑定最终 imageSetDigest。",
+          "configuration 同时绑定 service configuration、App runtime config 与 packaged environment runtime；Provider 同时绑定 canonical binding 与 runtime composition。",
+          "endpointAuthorityDigest 绑定 environment、target 与 packaged publicBases 的 canonical 投影；runtimeTopologyDigest 绑定 package-owned runtime topology manifest 的精确字节。",
+          "任一字段缺失、多余、target/environment 错配、摘要不可复算、跨环境复用或 package-owned 字节漂移均 fail-closed。"
+        ],
+        "description": "四环境部署候选统一制品身份协议；environment artifact 将共同 release train/source capsule 与环境专属 image、config、Provider binding、endpoint authority、runtime topology、ContractGraph 绑定为可复算且不可跨环境交换的摘要。",
+        "digest_contract": {
+          "algorithm": "sha256",
+          "canonical_json": {
+            "ensure_ascii": false,
+            "separators": [
+              ",",
+              ":"
+            ],
+            "sort_keys": true
+          },
+          "identity_format": "sha256:\u003c64-lowercase-hex\u003e",
+          "input_encoding": "utf-8"
+        },
+        "identity": {
+          "activation_seal_fields": [
+            "identityCoreDigest",
+            "imageSetDigest"
+          ],
+          "endpoint_authority_projection_fields": [
+            "environment",
+            "target",
+            "publicBases"
+          ],
+          "identity_core_fields": [
+            "schema",
+            "environment",
+            "target",
+            "releaseTrainId",
+            "sourceCapsule",
+            "packageDigest",
+            "imageBuildInputDigest",
+            "configuration",
+            "provider",
+            "endpointAuthorityDigest",
+            "runtimeTopologyDigest",
+            "contractGraphDigest"
+          ],
+          "release_train_fields": [
+            "sourceCapsule.sourceRevision",
+            "contractGraphDigest"
+          ],
+          "runtime_topology_manifest_ref": "packages/runtime-shared/runtime-topology/manifest.json",
+          "schema_value": "environment-artifact-identity",
+          "source_capsule_fields": [
+            "baselineId",
+            "digest",
+            "sourceRevision",
+            "workspaceStatusDigest"
+          ]
+        },
+        "json_schema_ref": "quwoquan_service/contracts/metadata/_schemas/environment_artifact_identity.schema.json",
+        "owner": "runtime",
+        "schema_id": "environment_artifact_identity",
+        "target_environment": {
+          "alpha-local": "alpha",
+          "beta-local": "beta",
+          "gamma-local": "gamma",
+          "prod-hosted": "prod",
+          "prod-sim": "prod"
+        }
       }
     },
     {
@@ -260197,7 +260907,7 @@
     },
     {
       "path": "content/content/post/operations.yaml",
-      "sha256": "1953e30690d174f9dde7d30d551fe8700927fa7a0041c3a4469b9efb7bb65b30",
+      "sha256": "29f31fb67871f68d6ee001477efdcb9bed8b98c1921b49bc31bab8c5362a524e",
       "mediaType": "application/yaml",
       "content": {
         "api_routes": [
@@ -260392,7 +261102,9 @@
               "paginationExpiresAt",
               "feedRequestId",
               "policyDigest",
-              "objectCards"
+              "objectCards",
+              "releaseId",
+              "manifestDigest"
             ],
             "security": {
               "anonymous_policy": "allow",
@@ -263982,13 +264694,13 @@
     },
     {
       "path": "content/content/post/projections/content_discovery_feed_page_slice.yaml",
-      "sha256": "5bcb93dafa9432d5eae57f502361358bdd5778c141c831e1099fb1429a5d5fa1",
+      "sha256": "7f18503ad3e2969e60e9af72f4733c1fa6705a0693ebc950e1dd6fe483c9b72b",
       "mediaType": "application/yaml",
       "content": {
         "consumers": [
           "app"
         ],
-        "description": "首页发现流唯一响应 envelope。items 与 objectCards 均为已完成展示投影，\noutcome/emptyReason 明确区分内容页与合法空页；分页只使用绑定当前 feed 会话的\nnextCursor/previousCursor，不暴露兼容 cursor。\n",
+        "description": "首页发现流唯一响应 envelope。items 与 objectCards 均为已完成展示投影，\noutcome/emptyReason 明确区分内容页与合法空页；分页只使用绑定当前 feed 会话的\nnextCursor/previousCursor，不暴露兼容 cursor。\nreleaseId/manifestDigest 是运行时内容激活身份（ContentActivationIdentity）：\n有内容、no_eligible_content 与 continuation 页必须携带完整身份；\nemptyReason=no_active_release 时两者必须同时缺席；解码或 Remote 失败只能是\nfailure，不得编码为空态或缺席身份。\n",
         "fields": [
           {
             "name": "items",
@@ -264032,6 +264744,16 @@
           {
             "name": "objectCards",
             "type": "[]FeedObjectCard"
+          },
+          {
+            "name": "releaseId",
+            "nullable": true,
+            "type": "string"
+          },
+          {
+            "name": "manifestDigest",
+            "nullable": true,
+            "type": "string"
           }
         ],
         "read_model": "ContentDiscoveryFeedPageSlice",
@@ -266621,7 +267343,7 @@
     },
     {
       "path": "content/content/post/ui_config.yaml",
-      "sha256": "ae39ed4915383a3c0602eac9e86585948f754a72435227314d86a82db87c9c56",
+      "sha256": "731b74ef77a5900b6d31ffb56cdcf3acf44c68caa099f94f913e0fc78f8a81f4",
       "mediaType": "application/yaml",
       "content": {
         "aggregate": "Post",
@@ -267110,6 +267832,22 @@
             "template": "single_column_multiform"
           },
           {
+            "content_card_policy": "premiumImmersive",
+            "feed_query": {
+              "channel": "premium"
+            },
+            "id": "featured",
+            "intersection_module_policy": "inlineOnly",
+            "label_key": "home_tab_featured",
+            "layout_template": "immersivePremiumStream",
+            "mood_copy_key": "home_mood_recommend",
+            "order": 2,
+            "phone_columns": 1,
+            "runtime_overridable": true,
+            "supports_full_span_modules": true,
+            "template": "premium_immersive"
+          },
+          {
             "content_card_policy": "richMultiForm",
             "feed_query": {
               "channel": "campus"
@@ -267119,7 +267857,7 @@
             "label_key": "home_tab_campus",
             "layout_template": "singleColumnMultiForm",
             "mood_copy_key": "home_mood_campus",
-            "order": 2,
+            "order": 3,
             "phone_columns": 1,
             "runtime_overridable": true,
             "supports_full_span_modules": false,
@@ -267135,7 +267873,7 @@
             "label_key": "home_tab_travel",
             "layout_template": "singleColumnMultiForm",
             "mood_copy_key": "home_mood_travel",
-            "order": 3,
+            "order": 4,
             "phone_columns": 1,
             "runtime_overridable": true,
             "supports_full_span_modules": false,
@@ -267151,7 +267889,7 @@
             "label_key": "home_tab_photography",
             "layout_template": "singleColumnMultiForm",
             "mood_copy_key": "home_mood_photography",
-            "order": 4,
+            "order": 5,
             "phone_columns": 1,
             "runtime_overridable": true,
             "supports_full_span_modules": false,
@@ -267167,7 +267905,7 @@
             "label_key": "home_tab_tech",
             "layout_template": "singleColumnMultiForm",
             "mood_copy_key": "home_mood_tech",
-            "order": 5,
+            "order": 6,
             "phone_columns": 1,
             "runtime_overridable": true,
             "supports_full_span_modules": false,
@@ -267183,7 +267921,7 @@
             "label_key": "home_tab_car",
             "layout_template": "singleColumnMultiForm",
             "mood_copy_key": "home_mood_car",
-            "order": 6,
+            "order": 7,
             "phone_columns": 1,
             "runtime_overridable": true,
             "supports_full_span_modules": false,
@@ -275221,6 +275959,152 @@
         ],
         "title": "PreviewTrackManifest",
         "type": "object"
+      }
+    },
+    {
+      "path": "content/media/media_asset/public_slice_derivation_cases.json",
+      "sha256": "1258a08885b20b6935b0983d3f4db1f710febb4b85e0732bcc928ef1f442f735",
+      "mediaType": "application/json",
+      "content": {
+        "cases": [
+          {
+            "assetId": "mas_image_001",
+            "contentType": "image/jpeg",
+            "mediaType": "image",
+            "name": "canonical_ascii_asset_id_is_kept_verbatim",
+            "publicSliceKey": "media/image/s/asset/mas_image_001/v1/source.jpg",
+            "version": 1
+          },
+          {
+            "assetId": "creator-avatar-qwq_creator_geo_editor_001-3dc30246e996c120",
+            "contentType": "image/png",
+            "mediaType": "avatar",
+            "name": "creator_avatar_asset_id_is_kept_verbatim",
+            "publicSliceKey": "media/avatar/s/asset/creator-avatar-qwq_creator_geo_editor_001-3dc30246e996c120/v1/source.png",
+            "version": 1
+          },
+          {
+            "assetId": "杭州西湖_cover_三潭印月石塔_28_36eb11bd",
+            "contentType": "image/jpeg",
+            "mediaType": "image",
+            "name": "cover_post_asset_id_exposes_role_and_sequence",
+            "publicSliceKey": "media/image/s/asset/cover-28-145ed0eb8ce6aa336cc7395e8c6e6639/v1/source.jpg",
+            "version": 1
+          },
+          {
+            "assetId": "俞源太极星象村_detail_俞氏宗祠_322_031859c9",
+            "contentType": "image/webp",
+            "mediaType": "image",
+            "name": "detail_post_asset_id_exposes_role_and_sequence",
+            "publicSliceKey": "media/image/s/asset/detail-322-bdd2d1776137973d461a1fce6d81ba23/v2/source.webp",
+            "version": 2
+          },
+          {
+            "assetId": "九寨沟_closing_九寨沟景区大门_28_a5cc1287",
+            "contentType": "image/gif",
+            "mediaType": "image",
+            "name": "closing_post_asset_id_exposes_role_and_sequence",
+            "publicSliceKey": "media/image/s/asset/closing-28-a538be83639d790c7f8c52d995f44b52/v1/source.gif",
+            "version": 1
+          },
+          {
+            "assetId": "乌镇_cover_Aerial_panorama_68_4418e034",
+            "contentType": "image/png",
+            "mediaType": "image",
+            "name": "underscored_caption_is_right_anchored_on_sequence_and_digest",
+            "publicSliceKey": "media/image/s/asset/cover-68-83051e37a1001ee95340d2096ea4d5d7/v1/source.png",
+            "version": 1
+          },
+          {
+            "assetId": "都江堰_cover_内江水道全景_7_c78fe93a",
+            "contentType": "video/mp4",
+            "mediaType": "video",
+            "name": "video_post_asset_id_uses_video_root",
+            "publicSliceKey": "media/video/s/asset/cover-7-f1e240a3e78dabf3b9f0071e7e5e071a/v3/source.mp4",
+            "version": 3
+          },
+          {
+            "assetId": "杭州西湖_cover_三潭印月",
+            "contentType": "image/jpeg",
+            "mediaType": "image",
+            "name": "unstructured_unicode_asset_id_has_no_public_identity",
+            "publicSliceKey": "",
+            "version": 1
+          },
+          {
+            "assetId": "杭州西湖_hero_三潭印月石塔_28_36eb11bd",
+            "contentType": "image/jpeg",
+            "mediaType": "image",
+            "name": "unknown_role_token_has_no_public_identity",
+            "publicSliceKey": "",
+            "version": 1
+          },
+          {
+            "assetId": "杭州西湖_cover_三潭印月石塔_028_36eb11bd",
+            "contentType": "image/jpeg",
+            "mediaType": "image",
+            "name": "leading_zero_sequence_has_no_public_identity",
+            "publicSliceKey": "",
+            "version": 1
+          },
+          {
+            "assetId": "杭州西湖 cover_三潭印月石塔_28_36eb11bd",
+            "contentType": "image/jpeg",
+            "mediaType": "image",
+            "name": "whitespace_in_asset_id_has_no_public_identity",
+            "publicSliceKey": "",
+            "version": 1
+          },
+          {
+            "assetId": "杭州西湖/cover_三潭印月石塔_28_36eb11bd",
+            "contentType": "image/jpeg",
+            "mediaType": "image",
+            "name": "path_separator_in_asset_id_has_no_public_identity",
+            "publicSliceKey": "",
+            "version": 1
+          },
+          {
+            "assetId": "",
+            "contentType": "image/jpeg",
+            "mediaType": "image",
+            "name": "empty_asset_id_has_no_public_identity",
+            "publicSliceKey": "",
+            "version": 1
+          },
+          {
+            "assetId": "mas_image_001",
+            "contentType": "image/jpeg",
+            "mediaType": "image",
+            "name": "non_positive_version_has_no_public_identity",
+            "publicSliceKey": "",
+            "version": 0
+          },
+          {
+            "assetId": "mas_image_001",
+            "contentType": "image/jpeg",
+            "mediaType": "attachment",
+            "name": "unsupported_kind_has_no_public_identity",
+            "publicSliceKey": "",
+            "version": 1
+          }
+        ],
+        "domain": {
+          "contentTypes": [
+            "image/gif",
+            "image/jpeg",
+            "image/png",
+            "image/webp",
+            "video/mp4",
+            "video/webm"
+          ],
+          "kinds": [
+            "avatar",
+            "image",
+            "video"
+          ],
+          "note": "Closed release-media domain. The Data packager and the Go runtime must return byte-identical publicSliceKey for every case below; an empty publicSliceKey means neither side may derive a public identity. Attachment kinds and audio content types are live-upload concerns that never enter a release media closure, so they are out of this contract."
+        },
+        "schema": "content_media_public_slice_derivation_cases"
       }
     },
     {
@@ -312529,7 +313413,7 @@
     },
     {
       "path": "integration/external_integration/external_interaction/errors.yaml",
-      "sha256": "84eb7773c84bccfb7afc8c971a842499ab847292e161e9d8020970cea3e48cf3",
+      "sha256": "6343c21786e253a8b0c13b56b266eb6278306ed9c5af39c75e0ee50f6fc8b430",
       "mediaType": "application/yaml",
       "content": {
         "description": "ExternalInteraction HTTP 受理/查询与异步 provider worker 的对象本地稳定错误语义。",
@@ -312634,12 +313518,34 @@
             }
           },
           {
+            "code": "INTEGRATION.USER.external_interaction_readiness_forbidden",
+            "dart_const": "externalInteractionReadinessForbidden",
+            "disruption_level": "inlineCard",
+            "emitted_by": [
+              {
+                "operations": [
+                  "GetSmsOtpDeliveryReadiness"
+                ],
+                "surface": "http"
+              }
+            ],
+            "go_const": "ErrExternalInteractionReadinessForbidden",
+            "http_status": 403,
+            "reason": "forbidden",
+            "recovery_action": "surface",
+            "user_message": {
+              "en": "The calling service cannot read SMS delivery readiness",
+              "zh": "当前服务无权读取短信投递就绪状态"
+            }
+          },
+          {
             "code": "INTEGRATION.SYSTEM.external_interaction_internal_error",
             "dart_const": "externalInteractionInternalError",
             "disruption_level": "snackbar",
             "emitted_by": [
               {
                 "operations": [
+                  "GetSmsOtpDeliveryReadiness",
                   "SubmitExternalInteractionRequest",
                   "GetExternalInteractionRequest",
                   "ListExternalInteractionAttempts",
@@ -312741,10 +313647,16 @@
     },
     {
       "path": "integration/external_integration/external_interaction/fields.yaml",
-      "sha256": "5f9a854ff0ae1828055aa6e9ef7fbdb9199a076fda0925425d45b216b5207e1f",
+      "sha256": "0e930e9400bafe5c59af4bacf4b2318523a7480ac2ad70f0d67c68f90136af6b",
       "mediaType": "application/yaml",
       "content": {
         "description": "跨域外部交互可靠异步请求；业务服务只依赖 request/challenge 生命周期，不依赖 Redis 临时状态。",
+        "enums": {
+          "SmsOtpDeliveryAvailability": [
+            "ready",
+            "temporarily_unavailable"
+          ]
+        },
         "fields": [
           {
             "api_exposure": "read",
@@ -313476,6 +314388,36 @@
                 "type": "timestamp"
               }
             ]
+          },
+          "SmsOtpDeliveryReadiness": {
+            "description": "identity.sms.otp 能力对第一方 service caller 暴露的有界就绪切片；内部检查详情与 Provider 身份不得进入 wire。",
+            "fields": [
+              {
+                "api_exposure": "read",
+                "classification": "INTERNAL",
+                "constraints": [
+                  "NOT_NULL"
+                ],
+                "enum_ref": "SmsOtpDeliveryAvailability",
+                "log_policy": "allow",
+                "name": "availability",
+                "ops_exposure": "read",
+                "source": "availability",
+                "type": "enum"
+              },
+              {
+                "api_exposure": "read",
+                "classification": "INTERNAL",
+                "constraints": [
+                  "NOT_NULL"
+                ],
+                "log_policy": "allow",
+                "name": "retryAfterSeconds",
+                "ops_exposure": "read",
+                "source": "retryAfterSeconds",
+                "type": "int"
+              }
+            ]
           }
         }
       }
@@ -313565,10 +314507,75 @@
     },
     {
       "path": "integration/external_integration/external_interaction/operations.yaml",
-      "sha256": "20d77d53c1d71ba17c0383ad2d4d44ef4d393b74718efd8a756e1d33e26c05ef",
+      "sha256": "6975b7b3b1ed241b7242b61aab1698a137d8c82cd309bd4100b3989c5964203d",
       "mediaType": "application/yaml",
       "content": {
         "api_routes": [
+          {
+            "actor": "none",
+            "application": {
+              "facet": "ExternalInteractionQueryFacade",
+              "kind": "query",
+              "method": "getSmsOtpDeliveryReadiness",
+              "reader": "SmsOtpDeliveryReadinessReader",
+              "slice": "SmsOtpDeliveryReadiness"
+            },
+            "authorization": {
+              "ownership_policy": "trusted_user_service_sms_otp_readiness_only",
+              "principal": "service",
+              "scopes": [
+                "integration.identity.sms.otp.readiness.read"
+              ]
+            },
+            "commercial": {
+              "status": "ready"
+            },
+            "description": "仅供 user-service 以 capability-scoped service principal 查询 identity.sms.otp 的 binding、运行时材料、Provider probe 与结果 relay；不返回 Provider 标识、endpoint、secret 或通用服务健康状态。",
+            "error_codes": [
+              "INTEGRATION.USER.external_interaction_readiness_forbidden",
+              "INTEGRATION.SYSTEM.external_interaction_internal_error"
+            ],
+            "method": "GET",
+            "operation": "GetSmsOtpDeliveryReadiness",
+            "path": "/internal/integrations/external-requests/capabilities/identity.sms.otp/readiness",
+            "privacy": {
+              "log_policy": "metadata_only",
+              "request_classification": "INTERNAL",
+              "response_classification": "INTERNAL"
+            },
+            "reliability": {
+              "cancellation": "supported",
+              "idempotency": "none",
+              "max_attempts": 1,
+              "retry_mode": "none",
+              "timeout_ms": 800
+            },
+            "response_entity": "SmsOtpDeliveryReadiness",
+            "response_fields": [
+              "availability",
+              "retryAfterSeconds"
+            ],
+            "security": {
+              "anonymous_policy": "deny",
+              "auth_mode": "required",
+              "principal": "service",
+              "token_transport": "bearer",
+              "visibility": "internal"
+            },
+            "slo": {
+              "availability_percent": 99.9,
+              "latency_p95_ms": 300
+            },
+            "telemetry": {
+              "attributes": [
+                "outcome",
+                "capability"
+              ],
+              "metric": "integration_sms_otp_delivery_readiness",
+              "trace": true
+            },
+            "transport_role": "readiness"
+          },
           {
             "actor": "none",
             "application": {
@@ -314154,6 +315161,46 @@
           }
         },
         "readiness_cases": [
+          {
+            "case_id": "get-sms-otp-delivery-readiness-local",
+            "executions": [
+              {
+                "device": "runner",
+                "digest_binding": "candidate",
+                "env": "alpha",
+                "platform": "service",
+                "provider": "none"
+              }
+            ],
+            "layer": "local_contract",
+            "producer": "service",
+            "runner_source_path": "quwoquan_service/services/integration-service/tests/local_contract/external_integration/external_interaction/sms_otp_delivery_readiness__local_contract_test.go",
+            "spec_ref": "specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md#gwt-012",
+            "target": {
+              "id": "GetSmsOtpDeliveryReadiness",
+              "kind": "operation"
+            }
+          },
+          {
+            "case_id": "get-sms-otp-delivery-readiness-api",
+            "executions": [
+              {
+                "device": "runner",
+                "digest_binding": "candidate",
+                "env": "beta",
+                "platform": "service",
+                "provider": "https-provider"
+              }
+            ],
+            "layer": "api_integration",
+            "producer": "service",
+            "runner_source_path": "quwoquan_service/services/integration-service/tests/api_integration/external_integration/external_interaction/sms_otp_delivery_readiness__api_integration_test.go",
+            "spec_ref": "specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md#gwt-012",
+            "target": {
+              "id": "GetSmsOtpDeliveryReadiness",
+              "kind": "operation"
+            }
+          },
           {
             "case_id": "submit-external-interaction-local",
             "executions": [
@@ -317538,7 +318585,7 @@
     },
     {
       "path": "integration/openapi.yaml",
-      "sha256": "f3f671ab789dd5ce81632034ba7615e2d8d13e35bc56c57d78c0475261fe808e",
+      "sha256": "9080837a39492e70868756acf5a8c3898a8eff087f2463e3c344cb620523a6f4",
       "mediaType": "application/yaml",
       "content": {
         "components": {
@@ -317721,6 +318768,12 @@
               "description": "字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。",
               "type": "object",
               "x-contract-entity": "RevokeConnectorConnectionRequest",
+              "x-contract-placeholder": true
+            },
+            "SmsOtpDeliveryReadiness": {
+              "description": "字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。",
+              "type": "object",
+              "x-contract-entity": "SmsOtpDeliveryReadiness",
               "x-contract-placeholder": true
             },
             "StartConnectorAuthorizationRequest": {
@@ -319143,6 +320196,48 @@
               },
               "x-contract-operation-id": "integration.connector_definition.PublishConnectorDefinition",
               "x-object-id": "integration.connector_definition"
+            }
+          },
+          "/internal/integrations/external-requests/capabilities/identity.sms.otp/readiness": {
+            "get": {
+              "operationId": "GetSmsOtpDeliveryReadiness",
+              "responses": {
+                "200": {
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/SmsOtpDeliveryReadiness"
+                      }
+                    }
+                  },
+                  "description": "OK"
+                },
+                "default": {
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "../_shared/openapi_common.yaml#/components/schemas/ErrorResponse"
+                      }
+                    }
+                  },
+                  "description": "Runtime failure"
+                }
+              },
+              "security": [
+                {
+                  "bearerAuth": []
+                }
+              ],
+              "x-actor": "none",
+              "x-application": {
+                "facet": "ExternalInteractionQueryFacade",
+                "kind": "query",
+                "method": "getSmsOtpDeliveryReadiness",
+                "reader": "SmsOtpDeliveryReadinessReader",
+                "slice": "SmsOtpDeliveryReadiness"
+              },
+              "x-contract-operation-id": "integration.external_interaction.GetSmsOtpDeliveryReadiness",
+              "x-object-id": "integration.external_interaction"
             }
           },
           "/internal/integrations/invocations": {
@@ -336681,7 +337776,7 @@
     },
     {
       "path": "ops/product_ops/event_record/event_catalog.yaml",
-      "sha256": "11d7859f6330bbf4e2d7b64c8f1877a8017511fadfeb385e72ca6fd5a24feb49",
+      "sha256": "a591a2d990970436b61440dd2cb99bc4aa79f6ecf5860244f69f07dc9a502d1d",
       "mediaType": "application/yaml",
       "content": {
         "common_fields": [
@@ -336821,7 +337916,16 @@
             "internal_priority": "critical",
             "log_type": "event",
             "normal_sample_rate": 1,
-            "optional_extensions": [],
+            "optional_extensions": [
+              "environment",
+              "buildMode",
+              "distributionClass",
+              "launchProvenance",
+              "buildNumber",
+              "launchManifestDigest",
+              "terminalState",
+              "contentIdentityOutcome"
+            ],
             "required_extensions": [
               "tClickToFirstFrameMs",
               "tFirstFrameToShellMs",
@@ -337308,6 +338412,18 @@
             ],
             "type": "string"
           },
+          "buildMode": {
+            "enum": [
+              "debug",
+              "profile",
+              "release"
+            ],
+            "type": "string"
+          },
+          "buildNumber": {
+            "max_length": 32,
+            "type": "string"
+          },
           "cacheAgeBucket": {
             "enum": [
               "not_applicable",
@@ -337404,6 +338520,15 @@
             "max_length": 32,
             "type": "string"
           },
+          "contentIdentityOutcome": {
+            "enum": [
+              "bound",
+              "absent",
+              "protocol_failure",
+              "unavailable"
+            ],
+            "type": "string"
+          },
           "contentType": {
             "enum": [
               "micro",
@@ -337470,6 +338595,17 @@
           },
           "dismissPolicy": {
             "max_length": 64,
+            "type": "string"
+          },
+          "distributionClass": {
+            "enum": [
+              "dev_direct",
+              "simulator",
+              "registered_device",
+              "store",
+              "official_web",
+              "hosted_web"
+            ],
             "type": "string"
           },
           "droppedFrames": {
@@ -337561,6 +338697,14 @@
           },
           "journey": {
             "max_length": 128,
+            "type": "string"
+          },
+          "launchManifestDigest": {
+            "max_length": 80,
+            "type": "string"
+          },
+          "launchProvenance": {
+            "max_length": 64,
             "type": "string"
           },
           "limitValue": {
@@ -338471,7 +339615,7 @@
     },
     {
       "path": "ops/product_ops/event_record/golden_metric_catalog.yaml",
-      "sha256": "0047a0c75a3fc9558f8167f339f9258efa8fdbfff31561df35ca6ce3c271cb31",
+      "sha256": "cefa3f9d05fb4e8f190671ac205c411ce6a1860ff654000b6d9779d14c328fec",
       "mediaType": "application/yaml",
       "content": {
         "alerting_policies": {
@@ -338676,6 +339820,109 @@
             "target": {
               "operator": "less_than",
               "value": 0.02
+            },
+            "tier": "secondary"
+          },
+          {
+            "alerting": {
+              "alert_name": "product-startup-error-rate-high",
+              "policy": "elasticsearch_product_telemetry",
+              "threshold": 0.001
+            },
+            "business": "app_startup_experience",
+            "dimensions": [
+              "pageName",
+              "appVersion",
+              "networkClass",
+              "environment",
+              "buildMode",
+              "launchProvenance"
+            ],
+            "display": {
+              "label": "启动错误率",
+              "portal_level": "L1"
+            },
+            "freshness_seconds": 300,
+            "metric_id": "startup_error_rate",
+            "owner": "runtime-client-foundation",
+            "source": {
+              "aggregation": "event_ratio",
+              "denominator_event_type": "app_startup",
+              "numerator_event_type": "app_startup",
+              "numerator_filters": {
+                "hasError": "true"
+              },
+              "track": "product_telemetry"
+            },
+            "target": {
+              "operator": "less_than",
+              "value": 0.001
+            },
+            "tier": "primary"
+          },
+          {
+            "alerting": {
+              "alert_name": "product-startup-content-p95-high",
+              "policy": "elasticsearch_product_telemetry",
+              "threshold": 3000
+            },
+            "business": "app_startup_experience",
+            "dimensions": [
+              "pageName",
+              "appVersion",
+              "networkClass",
+              "environment",
+              "buildMode",
+              "launchProvenance"
+            ],
+            "display": {
+              "label": "点击到内容 P95",
+              "portal_level": "L1"
+            },
+            "freshness_seconds": 300,
+            "metric_id": "startup_click_to_content_p95_ms",
+            "owner": "runtime-client-foundation",
+            "source": {
+              "aggregation": "percentile_p95",
+              "event_type": "app_startup",
+              "track": "product_telemetry",
+              "value_field": "tClickToContentMs"
+            },
+            "target": {
+              "operator": "less_than_or_equal",
+              "value": 3000
+            },
+            "tier": "primary"
+          },
+          {
+            "business": "app_startup_experience",
+            "dimensions": [
+              "pageName",
+              "appVersion",
+              "networkClass",
+              "environment",
+              "buildMode",
+              "launchProvenance"
+            ],
+            "display": {
+              "label": "内容身份协议失败率",
+              "portal_level": "L2"
+            },
+            "freshness_seconds": 300,
+            "metric_id": "startup_content_identity_protocol_failure_rate",
+            "owner": "runtime-client-foundation",
+            "source": {
+              "aggregation": "event_ratio",
+              "denominator_event_type": "app_startup",
+              "numerator_event_type": "app_startup",
+              "numerator_filters": {
+                "contentIdentityOutcome": "protocol_failure"
+              },
+              "track": "product_telemetry"
+            },
+            "target": {
+              "operator": "less_than",
+              "value": 0.001
             },
             "tier": "secondary"
           },

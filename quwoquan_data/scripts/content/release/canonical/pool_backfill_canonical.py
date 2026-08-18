@@ -21,12 +21,12 @@ from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
     _digest_file,
     _read_json,
-    _safe_rel,
 )
 from content.release.canonical.pool_source_attribution import (
     source_attribution_complete,
 )
 from content.source.professional_video_probe import probe_professional_video
+from core.content_library import MediaHoldingError, resolve_media_holding
 
 _ATTRIBUTION_FIELDS = (
     "isOriginal",
@@ -194,24 +194,16 @@ def _video_research_issue(
     if len(assets) != 1:
         return "DATA.POOL.VIDEO_MEDIA_MISSING"
     asset = assets[0]
-    try:
-        video_path = object_root / _safe_rel(
-            str(asset.get("fileName") or ""), label="video.fileName"
-        )
-        poster_path = object_root / _safe_rel(
-            str(asset.get("posterFileName") or ""), label="video.posterFileName"
-        )
-    except ObjectTransactionError:
-        return "DATA.POOL.VIDEO_MEDIA_MISSING"
-    if (
-        video_path.is_symlink()
-        or poster_path.is_symlink()
-        or not video_path.is_file()
-        or not poster_path.is_file()
-    ):
-        return "DATA.POOL.VIDEO_MEDIA_MISSING"
     digest = str(asset.get("sha256") or "")
     poster_digest = str(asset.get("posterSha256") or "")
+    # The object records its track and poster by digest; the content library owns
+    # the bodies. Resolving them here is what makes "the media is present" a claim
+    # about the bytes rather than about a copy sitting next to the manifest.
+    try:
+        video_path = resolve_media_holding(digest)
+        poster_path = resolve_media_holding(poster_digest)
+    except (MediaHoldingError, ValueError):
+        return "DATA.POOL.VIDEO_MEDIA_MISSING"
     if _digest_file(video_path) != digest:
         return "DATA.POOL.VIDEO_DIGEST_DRIFT"
     if _digest_file(poster_path) != poster_digest:

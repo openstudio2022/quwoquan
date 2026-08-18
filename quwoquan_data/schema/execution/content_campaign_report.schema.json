@@ -5,9 +5,6 @@
   "required": [
     "schema",
     "rootExecutionId",
-    "campaignRunId",
-    "campaignGeneration",
-    "campaignFencingToken",
     "status",
     "phase",
     "planDigest",
@@ -24,12 +21,6 @@
   "properties": {
     "schema": { "const": "quwoquan_data.content_campaign_report" },
     "rootExecutionId": { "type": "string", "minLength": 1 },
-    "campaignRunId": { "type": ["string", "null"], "minLength": 1 },
-    "campaignGeneration": { "type": ["integer", "null"], "minimum": 1 },
-    "campaignFencingToken": {
-      "type": ["string", "null"],
-      "pattern": "^sha256:[a-f0-9]{64}$"
-    },
     "status": {
       "enum": [
         "awaiting_submissions",
@@ -43,7 +34,7 @@
       "enum": [
         "submission",
         "freeze",
-        "capsule",
+        "clone",
         "review",
         "publish",
         "cleanup",
@@ -88,12 +79,10 @@
         "phase",
         "reviewReturnCode",
         "publishReturnCode",
-        "sourceCapsuleRef",
-        "sourceCapsuleDigest",
-        "sourceCapsuleCommitSha",
-        "sourceCapsuleSourceDigest",
-        "sourceCapsuleReadOnly",
-        "executionRootRef",
+        "cloneRef",
+        "cloneCommitSha",
+        "cloneSourceDigest",
+        "cloneDetached",
         "cleanupStatus",
         "approvedQuota",
         "qualifiedCount",
@@ -101,8 +90,6 @@
         "selectedCount",
         "discardedCount",
         "shortfallCount",
-        "deliveryPendingCount",
-        "deliveryIntentRefs",
         "error"
       ],
       "additionalProperties": false,
@@ -111,40 +98,30 @@
         "status": {
           "enum": [
             "pending",
-            "capsule_ready",
+            "clone_ready",
             "reviewed",
             "review_qualified",
             "partial",
-            "delivery_pending",
             "published",
             "finalized",
             "blocked"
           ]
         },
         "phase": {
-          "enum": ["submission", "capsule", "review", "publish"]
+          "enum": ["submission", "clone", "review", "publish"]
         },
         "reviewReturnCode": { "type": ["integer", "null"] },
         "publishReturnCode": { "type": ["integer", "null"] },
-        "sourceCapsuleRef": { "type": ["string", "null"], "minLength": 1 },
-        "sourceCapsuleDigest": {
-          "type": ["string", "null"],
-          "pattern": "^sha256:[a-f0-9]{64}$"
-        },
-        "sourceCapsuleCommitSha": {
+        "cloneRef": { "type": ["string", "null"], "minLength": 1 },
+        "cloneCommitSha": {
           "type": ["string", "null"],
           "pattern": "^[a-f0-9]{40,64}$"
         },
-        "sourceCapsuleSourceDigest": {
+        "cloneSourceDigest": {
           "type": ["string", "null"],
           "pattern": "^sha256:[a-f0-9]{64}$"
         },
-        "sourceCapsuleReadOnly": { "type": ["boolean", "null"] },
-        "executionRootRef": {
-          "type": ["string", "null"],
-          "minLength": 1,
-          "pattern": "^data/tasks/[^/]+$"
-        },
+        "cloneDetached": { "type": ["boolean", "null"] },
         "cleanupStatus": {
           "enum": ["not_created", "pending", "cleaned", "failed"]
         },
@@ -154,16 +131,6 @@
         "selectedCount": { "type": ["integer", "null"], "minimum": 0 },
         "discardedCount": { "type": ["integer", "null"], "minimum": 0 },
         "shortfallCount": { "type": ["integer", "null"], "minimum": 0 },
-        "deliveryPendingCount": { "type": "integer", "minimum": 0 },
-        "deliveryIntentRefs": {
-          "type": "array",
-          "uniqueItems": true,
-          "items": {
-            "type": "string",
-            "minLength": 1,
-            "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
-          }
-        },
         "error": { "type": ["string", "null"] }
       }
     }

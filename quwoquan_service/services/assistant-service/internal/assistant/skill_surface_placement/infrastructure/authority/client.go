@@ -38,7 +38,7 @@ var requiredAuthorityBindings = map[string]string{
 // adapter and its endpoint ownership and never introduces a second resolver.
 func RequireEnvironmentBindings(environment string) error {
 	for capabilityID, endpointKey := range requiredAuthorityBindings {
-		binding, found := bindingdescriptor.ExternalProviderBindingFor(environment, capabilityID)
+		binding, found := bindingdescriptor.CompiledBindingFor(capabilityID)
 		if !found || binding.State != "enabled" {
 			return fmt.Errorf("authority binding %s is not enabled for %s", capabilityID, environment)
 		}

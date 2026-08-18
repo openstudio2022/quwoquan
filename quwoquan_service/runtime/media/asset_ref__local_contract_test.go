@@ -235,15 +235,23 @@ func TestBuildContentMediaPublicSliceKeyUsesAssetIdentityNotCASKey(t *testing.T)
 	); got != "" {
 		t.Fatalf("invalid asset identity must not produce a public slice: %q", got)
 	}
-	unicodeAsset := BuildContentMediaPublicSliceKey(
+	structuredAsset := BuildContentMediaPublicSliceKey(
+		"image",
+		"杭州西湖_cover_三潭印月石塔_28_36eb11bd",
+		1,
+		"image/jpeg",
+	)
+	if !strings.HasPrefix(structuredAsset, "media/image/s/asset/cover-28-") ||
+		!strings.HasSuffix(structuredAsset, "/v1/source.jpg") {
+		t.Fatalf("structured post asset must expose a readable public path: %q", structuredAsset)
+	}
+	if got := BuildContentMediaPublicSliceKey(
 		"image",
 		"杭州西湖_cover_三潭印月",
 		1,
 		"image/jpeg",
-	)
-	if !strings.HasPrefix(unicodeAsset, "media/image/s/asset/unicode-") ||
-		!strings.HasSuffix(unicodeAsset, "/v1/source.jpg") {
-		t.Fatalf("historical unicode asset must receive a stable public path: %q", unicodeAsset)
+	); got != "" {
+		t.Fatalf("unstructured unicode asset must not receive a public slice: %q", got)
 	}
 	if got := BuildContentMediaPublicSliceKey(
 		"avatar",

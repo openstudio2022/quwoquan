@@ -15,6 +15,7 @@ from content.execution.planning.rewrite import (
     resolve_rewrite_from_args,
     rewrite_target_rows,
 )
+from support.capacity_calibration_fixture import synthetic_capacity_source_binding
 
 
 PREDECESSOR = "20260809--travel-article-m1--china-rewrite-source--scale-001"
@@ -128,9 +129,7 @@ def test_rewrite_request_round_trip_uses_existing_request_track() -> None:
         selector=TargetSelector.ALL,
         count=1,
         quota=1,
-        required_workers=1,
-        partition_count=16,
-        capacity_plan_digest=DIGEST,
+        capacity_calibration=synthetic_capacity_source_binding(),
         topic="测试景区攻略",
         source_providers=(),
         target_names=("测试景区",),

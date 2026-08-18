@@ -85,6 +85,8 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
             with self.subTest(env=env_name):
                 env = dict(os.environ)
                 env["QWQ_APP_RUNTIME_ENV"] = env_name
+                env["QWQ_ENVIRONMENT"] = env_name if env_name != "prod" else ""
+                env["CONFIGURATION"] = f"Debug-{env_name}"
                 env["DART_DEFINES"] = flutter_define
                 _apply_handoff_identity(
                     env,
@@ -162,7 +164,7 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
                 "xcode_build",
             )
 
-    def test_canonical_handoff_drives_bound_dart_and_native_manifest(self) -> None:
+    def test_canonical_handoff_drives_dart_and_native_manifest(self) -> None:
         handoff = _bound_test_live_handoff()
         with tempfile.TemporaryDirectory() as temporary_directory:
             env = dict(os.environ)
@@ -189,11 +191,9 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
                 text=True,
             )
             values = _decode_export(result.stdout)
-            self.assertEqual(values["CONTENT_BINDING_STATE"], "bound")
-            self.assertEqual(
-                values["CONTENT_BINDING_STATE"],
-                handoff["dartDefines"]["CONTENT_BINDING_STATE"],
-            )
+            # 内容激活是运行时服务端事实：Dart defines 与 native manifest
+            # 都不得携带内容绑定身份。
+            self.assertNotIn("CONTENT_BINDING_STATE", values)
             self.assertEqual(values["FLUTTER_VERSION"], "test")
             manifest_path = (
                 Path(temporary_directory)
@@ -202,22 +202,17 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
             )
             with manifest_path.open("rb") as stream:
                 manifest = plistlib.load(stream)
-            self.assertEqual(manifest["contentBindingState"], "bound")
-            self.assertEqual(
-                manifest["runtimeDefines"]["CONTENT_BINDING_STATE"],
-                "bound",
+            self.assertNotIn("contentBindingState", manifest)
+            self.assertNotIn("contentReleaseId", manifest)
+            self.assertNotIn("contentManifestDigest", manifest)
+            self.assertNotIn("contentReadinessReceiptDigest", manifest)
+            self.assertNotIn(
+                "CONTENT_BINDING_STATE",
+                manifest["runtimeDefines"],
             )
             self.assertEqual(
-                manifest["contentReleaseId"],
-                handoff["contentReleaseId"],
-            )
-            self.assertEqual(
-                manifest["contentManifestDigest"],
-                handoff["contentManifestDigest"],
-            )
-            self.assertEqual(
-                manifest["contentReadinessReceiptDigest"],
-                handoff["contentReadinessReceiptDigest"],
+                manifest["launchPolicy"],
+                handoff["launchPolicy"],
             )
 
     def test_patrol_handoff_preserves_canonical_test_bundle_entrypoint(self) -> None:
@@ -303,7 +298,9 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
     def test_canonical_handoff_rejects_conflicting_existing_defines(self) -> None:
         handoff = _bound_test_live_handoff()
         poisoned_defines = dict(handoff["dartDefines"])
-        poisoned_defines["CONTENT_BINDING_STATE"] = "unbound"
+        # 任何与 canonical handoff 不同的值都必须被拒；此处刻意使用
+        # 非环境形状的中性值，冲突检测与具体取值无关。
+        poisoned_defines["APP_LAUNCH_POLICY"] = "conflicting_policy"
         env = dict(os.environ)
         env["QWQ_IOS_STACKCTL_PYTHON"] = str(self.runtime_python)
         env["QWQ_LAUNCH_HANDOFF_JSON"] = json.dumps(handoff)
@@ -319,27 +316,6 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertIn(
             "DART_DEFINES conflict with canonical launcher handoff",
-            result.stderr,
-        )
-
-    def test_canonical_handoff_rejects_partial_bound_content(self) -> None:
-        handoff = _bound_test_live_handoff()
-        handoff["contentManifestDigest"] = ""
-        env = dict(os.environ)
-        env["QWQ_IOS_STACKCTL_PYTHON"] = str(self.runtime_python)
-        env["QWQ_LAUNCH_HANDOFF_JSON"] = json.dumps(handoff)
-        env["DART_DEFINES"] = _encode_defines(handoff["dartDefines"])
-        result = subprocess.run(
-            ["bash", str(SCRIPT)],
-            cwd=APP_DIR,
-            env=env,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        self.assertEqual(result.returncode, 2)
-        self.assertIn(
-            "contentManifestDigest disagrees with effectiveLaunchManifest",
             result.stderr,
         )
 

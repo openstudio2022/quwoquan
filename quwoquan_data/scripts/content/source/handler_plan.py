@@ -50,7 +50,6 @@ from content.source.source_inputs import (
 from content.source.fetch_payload import fetch_source_payload
 from content.source.fetch_images import fetch_image_payload
 from content.source.prepare import prepare_source_plan, prepare_source_screen
-from governance.coverage.license import normalize_rights_payload, validate_image_rights
 
 SOURCE_UNIT_MAX_IMAGE_BYTES = MEDIA_PROCESSING_POLICY.source_asset_max_bytes
 

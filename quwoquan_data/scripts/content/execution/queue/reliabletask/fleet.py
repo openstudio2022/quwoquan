@@ -13,10 +13,6 @@ from core.io import read_json, write_json
 from core.paths import OUTPUT_ROOT, PUBLISH_ROOT, REPO_ROOT
 from core.python_environment import resolve_data_agent_python
 from core.schema import assert_valid
-from governance.coverage.distribution import (
-    ProductLifecycleState,
-    load_content_distribution_policy,
-)
 
 from content.execution.queue.backend import load_execution_queue_backend
 from content.execution.queue.core import _load_jobs
@@ -44,6 +40,7 @@ from content.execution.runtime_evidence.reliabletask_process import (
     OBSERVER_BINARY_SHA256_ENV,
     load_frozen_campaign_worker_binary_binding,
     load_frozen_observer_binary_binding,
+    validate_frozen_observer_binary,
 )
 
 _RECOVERY_EXECUTION_STAGES_BY_QUEUE_STAGE = {
@@ -185,6 +182,15 @@ def build_fleet_request(
         host_scope_id=host_scope_id,
         default_workers=int(job_set_envelope["requiredWorkers"]),
     )
+    # ``partitionCount`` is the hash topology of the whole frozen job set, so
+    # every consumer derives it from ``jobs``.  A host slice that dropped frozen
+    # work units would silently make that derivation unverifiable, so refuse the
+    # dispatch instead of shipping a request whose partition input is partial.
+    if len(request_jobs) != len(frozen_tasks):
+        raise ValueError(
+            "ReliableTask fleet request must carry the complete frozen job set: "
+            f"host slice has {len(request_jobs)} of {len(frozen_tasks)} work units"
+        )
     global_required_quota = _remaining_quota(
         execution_id,
         stage,
@@ -238,11 +244,6 @@ def build_fleet_request(
         "partitionCount": job_set_envelope["partitionCount"],
         "partitionAlgorithm": job_set_envelope["partitionAlgorithm"],
         "checkpointPolicy": job_set_envelope["checkpointPolicy"],
-        "requireCommercial": (
-            stage is QueueJobStage.PUBLISH
-            and load_content_distribution_policy().product_lifecycle_state
-            is ProductLifecycleState.COMMERCIAL
-        ),
         "recoverDeadTasks": recover_dead_tasks,
         "objectTimeoutMilliseconds": object_timeout_seconds * 1000,
         "globalRequiredQuota": global_required_quota,
@@ -282,7 +283,6 @@ def _fleet_command(
         )
         from content.execution.runtime_evidence.reliabletask_process import (
             ReliableTaskObserverBinaryBinding,
-            validate_frozen_observer_binary,
         )
 
         receipt, _path = load_current_pool_delivery_preflight_receipt(execution_id)
@@ -499,12 +499,7 @@ def _run_reliabletask_host(
 
     policy = active_runtime_policy()
     startup_failure_limit = policy.queue_max_startup_failures
-    restart_deadline = time.monotonic() + min(
-        batch_timeout_seconds,
-        policy.campaign_lane_timeout_seconds_for_scale(
-            str(request["campaignScale"])
-        ),
-    )
+    restart_deadline = time.monotonic() + batch_timeout_seconds
 
     def wait_for_backend(startup_failures: int) -> None:
         print(

@@ -5,7 +5,6 @@ import 'package:flutter/material.dart' show Material, MaterialType;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
-import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_app_state.dart'
     show visitRecorderServiceProvider;
 import 'package:quwoquan_app/runtime/di/presentation/content_viewer_composition.dart';
@@ -15,11 +14,10 @@ import 'package:quwoquan_app/service/assistant_service/assistant/page_context/ap
 import 'package:quwoquan_app/service/content_service/content/post/presentation/home_primary_tab_strip.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/user_profile_route_extra.dart';
 
-/// 视频书（premium 沉浸流）的主壳 featured tab 宿主页面。
+/// 首页「视频书」频道的 premium 沉浸正文。
 ///
-/// 定位为「交集飞轮的种草引擎」：页面本身不持有业务数据，
-/// 沉浸流内容、交集单句与行动 CTA 均由 `ContentViewerComposition.featuredWorks`
-/// 装配的 `WorksImmersiveViewer` 消费各自读面。
+/// 页面本身不持有业务数据；沉浸流内容、交集单句与行动 CTA 均由
+/// `ContentViewerComposition.featuredWorks` 装配的 viewer 消费各自读面。
 class HomeFeaturedImmersivePage extends ConsumerWidget {
   const HomeFeaturedImmersivePage({super.key, required this.onExitToHome});
 
@@ -27,17 +25,12 @@ class HomeFeaturedImmersivePage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final safeTop = MediaQuery.viewPaddingOf(context).top;
-    final effectiveTopInset = AppSpacing.appChromeTopSafeInset(
-      safeTop,
-      context,
-    );
     return CupertinoPageScaffold(
       backgroundColor: AppColors.black,
       child: Material(
         type: MaterialType.transparency,
         child: ContentViewerComposition.featuredWorks(
-          topChromeSafeInset: effectiveTopInset,
+          topChromeSafeInset: 0,
           onUserTap: (userId, {avatarUrl, displayName, backgroundUrl}) =>
               _openUserProfile(
                 context,

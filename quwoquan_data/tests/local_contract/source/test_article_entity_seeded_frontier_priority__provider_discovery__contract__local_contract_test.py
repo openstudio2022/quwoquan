@@ -12,6 +12,7 @@ from content.source.research import (
 from content.source.research.article_frontier_contract import InMemoryDailyPageBudget
 from content.source.research.article_site_page import PageParser
 from content.source.research.public_search import discover_article_source_frontier
+from core import rate_limit
 
 SPEC_REF = (
     "specs/feature-tree/runtime/runtime-data-engineering/"
@@ -105,7 +106,7 @@ def test_entity_seeded_content_link_precedes_broad_mediawiki_search_seed(
     broad = f"{ORIGIN}/wiki/{urllib.parse.quote('广域搜索条目')}"
     fetched: list[str] = []
 
-    article_frontier_robots._RATE_LIMITERS.clear()
+    rate_limit._RATE_LIMITERS.clear()
     monkeypatch.setattr(
         article_frontier_profile,
         "iter_travel_registry_sites",

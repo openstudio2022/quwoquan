@@ -64,10 +64,7 @@ func ResolveLocationLookup(
 			"location provider binding has no runtime config provider",
 		)
 	}
-	binding, found := integrationgenerated.ExternalProviderBindingFor(
-		appEnv,
-		LocationLookupCapabilityID,
-	)
+	binding, found := integrationgenerated.CompiledBindingFor(LocationLookupCapabilityID)
 	if !found {
 		return ResolvedLocationBinding{}, fmt.Errorf(
 			"location provider binding is missing for environment=%s",
@@ -144,10 +141,7 @@ func ResolvePublicLocationCapability(
 			capabilityID,
 		)
 	}
-	binding, found := integrationgenerated.ExternalProviderBindingFor(
-		appEnv,
-		capabilityID,
-	)
+	binding, found := integrationgenerated.CompiledBindingFor(capabilityID)
 	if !found {
 		return ResolvedLocationBinding{}, fmt.Errorf(
 			"public location binding is missing for environment=%s capability=%s",

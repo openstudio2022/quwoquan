@@ -196,7 +196,7 @@ def _run_download_fetch(ctx: ExecutionContext) -> StageResult:
                 entity_ids=group_ids,
                 entity_type=group_type,
                 lane=download_lane,
-                max_workers=max(1, int(ctx.max_workers or 1)),
+                max_workers=int(ctx.max_workers),
                 defer_gate=group_index < len(grouped_items) - 1,
             )
     except SystemExit as exc:
@@ -438,16 +438,18 @@ def _run_build_validate(ctx: ExecutionContext) -> StageResult:
                 recovery=DataRecoveryAction.STOP,
             ),
         )
-    run_homepage_independent_reviews(
+    review_failures = run_homepage_independent_reviews(
         ctx, homepage_runtime_spec(ctx.execution_id, _active_spec(ctx))
     )
     # 审阅结论逐对象写回 5.review/review.json。审阅未过的对象按丢弃处理；
     # 只要仍有合格对象就 partial 准出，approvedQuota 只保留为规模里程碑。
-    reviewed = homepage_quota_verdict(ctx)
+    # 此处必须要求审阅已绑定结果：仍为 pending 的对象表示审阅没跑成，
+    # 放行会让未审阅对象一路走到 publish 才被 pool delivery 拦下。
+    reviewed = homepage_quota_verdict(ctx, require_independent_review=True)
     if reviewed.qualified_count <= 0:
         issues = reviewed.blocking_issues() or [
-            "homepage independent review produced no qualified objects"
-        ]
+            str(item) for item in review_failures if str(item).strip()
+        ] or ["homepage independent review produced no qualified objects"]
         _write_homepage_independent_review_repairs(ctx)
         return StageResult(
             ExecutionStage.BUILD_VALIDATE,

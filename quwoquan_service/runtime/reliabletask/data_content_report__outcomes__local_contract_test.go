@@ -2,7 +2,6 @@ package reliabletask
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 )
@@ -49,76 +48,6 @@ func TestDataContentFleetReportCarriesOneOutcomePerFrozenJob(t *testing.T) {
 	}
 }
 
-func TestDataContentFleetReportBindsExactAttemptDigests(t *testing.T) {
-	report := BuildDataContentFleetReport(
-		dataQuotaPublishTasks(1, 1, time.Now().UTC()),
-		time.Now().Add(-time.Second),
-		time.Now().Add(-time.Second),
-		time.Now(),
-		0,
-		0,
-		1,
-		1,
-	)
-	envelopeDigest := "sha256:" + strings.Repeat("a", 64)
-	taskDigest := "sha256:" + strings.Repeat("b", 64)
-	bound, err := BindDataContentFleetReport(
-		report,
-		"20260808--travel-image-m1--china--scale-001",
-		"publish",
-		envelopeDigest,
-		taskDigest,
-		taskDigest,
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if bound.JobSetEnvelopeDigest != envelopeDigest ||
-		bound.JobSetDigest != taskDigest ||
-		bound.ActualTaskDigest != taskDigest {
-		t.Fatalf("report attempt binding drift: %#v", bound)
-	}
-	if _, err := BindDataContentFleetReport(
-		report, "execution", "publish", envelopeDigest, taskDigest,
-		"sha256:invalid",
-	); err == nil {
-		t.Fatal("invalid actualTaskDigest was accepted")
-	}
-}
-
-func TestDataContentFleetReportSeparatesSuccessFromAutomaticRecovery(t *testing.T) {
-	completedAt := time.Now().UTC()
-	tasks := []ReliableAsyncTask{
-		{TaskID: "first", Status: TaskStatusSucceeded, Attempts: 1, Payload: map[string]string{"jobId": "first"}},
-		{TaskID: "recovered", Status: TaskStatusSucceeded, Attempts: 2, Payload: map[string]string{"jobId": "recovered"}},
-		{TaskID: "dead", Status: TaskStatusDead, Attempts: 3, Payload: map[string]string{"jobId": "dead"}},
-	}
-	report := BuildDataContentFleetReport(
-		tasks,
-		completedAt.Add(-2*time.Second),
-		completedAt.Add(-time.Second),
-		completedAt,
-		0, 0, 1, 0,
-	)
-	if report.RecoveryEligibleCount != 2 || report.AutomaticRecoveredCount != 1 || report.AutomaticRecoveryRate != 0.5 {
-		t.Fatalf("recovery metrics drift: %#v", report)
-	}
-	if report.AutomaticRecoveryStatus != "MEASURED" || report.FirstAttemptSuccessRate != 1.0/3.0 {
-		t.Fatalf("recovery status drift: %#v", report)
-	}
-
-	notExercised := BuildDataContentFleetReport(
-		tasks[:1],
-		completedAt.Add(-2*time.Second),
-		completedAt.Add(-time.Second),
-		completedAt,
-		0, 0, 1, 0,
-	)
-	if notExercised.AutomaticRecoveryStatus != "NOT_EXERCISED" || notExercised.AutomaticRecoveryRate != 0 {
-		t.Fatalf("unexercised recovery must not be reported as success: %#v", notExercised)
-	}
-}
-
 // dataQuotaPublishTasks 造一批 publish 任务：前 accepted 个是商用可接受终态，
 // 其余是被丢弃的 dead 对象，用来表达"过采 + 配额"的批次形态。
 func dataQuotaPublishTasks(total int, accepted int, completed time.Time) []ReliableAsyncTask {
@@ -143,7 +72,6 @@ func dataQuotaPublishTasks(total int, accepted int, completed time.Time) []Relia
 				CanonicalObjectRef:    job.Ref,
 				CanonicalObjectSHA256: "sha256:" + fmt.Sprintf("%064d", index+1),
 				ObjectTransactionID:   fmt.Sprintf("txn-object-%03d", index),
-				PoolDeliveryIntentID:  "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 				ResultEnvelopeRef:     "result_envelope.json",
 				AcceptanceClass:       DataContentAcceptanceCommercialCanonical,
 				CompletedAt:           completed,
@@ -210,12 +138,12 @@ func TestDataContentFleetReportBlocksPublishBatchBelowQuota(t *testing.T) {
 	}
 }
 
-func TestDataContentFleetReportRejectsUnacceptedFinalizedObjectsTowardQuota(t *testing.T) {
+func TestDataContentFleetReportAcceptsIdempotentFinalizedObjectsTowardQuota(t *testing.T) {
 	started := time.Now().UTC().Add(-time.Hour)
 	completed := time.Now().UTC()
 
-	// Reviewed/finalized work-package files are not a canonical transaction
-	// result and cannot absorb dead publish jobs.
+	// Resume after objects already sit in canonical publish: jobs may be dead
+	// while finalizedObjectCount still meets the commercial quota.
 	report := BuildDataContentFleetReport(
 		dataQuotaPublishTasks(5, 0, completed),
 		started,
@@ -227,12 +155,12 @@ func TestDataContentFleetReportRejectsUnacceptedFinalizedObjectsTowardQuota(t *t
 		5,
 	)
 
-	if report.Passed {
-		t.Fatalf("unaccepted finalized objects must not meet publish quota: %#v", report)
+	if !report.Passed {
+		t.Fatalf("idempotent finalized objects must meet publish quota: %#v", report)
 	}
-	if report.AcceptedContentThroughputStatus != "GATE_BLOCK_INCOMPLETE_COMMERCIAL_BATCH" {
+	if report.AcceptedContentThroughputStatus != "MEASURED" {
 		t.Fatalf(
-			"accepted throughput status=%q want=GATE_BLOCK_INCOMPLETE_COMMERCIAL_BATCH",
+			"accepted throughput status=%q want=MEASURED",
 			report.AcceptedContentThroughputStatus,
 		)
 	}

@@ -180,6 +180,11 @@ def test_package_root_switches_atomically_to_fully_validated_candidate(
     assert pointer == deploy_root / "alpha-local/active-runtime-candidate.json"
     assert output_paths.deployment_package_root("alpha") == candidate / "packages"
     assert output_paths.app_deployment_package_dir("alpha") == candidate / "packages/app"
+    # public Web 包不是 runtime candidate 的成员：它由独立 job 构建、自带 content
+    # digest 与 current 指针，所以候选切换不得移动它的家，否则写读会落到两处。
+    assert output_paths.web_deployment_package_dir("alpha") == (
+        deploy_root / "alpha-local/standalone-packages/web/packages/public-web"
+    )
     assert output_paths.active_deployment_candidate("alpha-local") == {
         "schema": output_paths.ACTIVE_CANDIDATE_SCHEMA,
         "candidateType": "runtime-full",

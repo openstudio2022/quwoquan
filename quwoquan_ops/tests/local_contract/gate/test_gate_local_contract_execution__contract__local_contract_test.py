@@ -172,5 +172,214 @@ class GateLocalContractExecutionContractTest(unittest.TestCase):
         self.assertIn("baseline governance 缺少 expires_when", problems)
 
 
+class ChangedGateNeedsCompanionTest(unittest.TestCase):
+    """判据 B：本次已提交增量里的门禁必须有被执行的 companion。
+
+    判据 A 只在「恰好有同名测试」时才生效——一个门禁完全没有配套测试时，配套集合是
+    空的，循环体一次都不执行，门禁反而放行。这里用真实 git 仓库跑完整 diff 路径，
+    而不是 monkeypatch 掉 `changed_gate_scripts`：被绕过的恰恰是 diff 那一段。
+    """
+
+    def _repository(self) -> Path:
+        import subprocess
+        import tempfile
+
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        root = Path(temp.name)
+
+        def git(*arguments: str) -> None:
+            subprocess.run(
+                ("git", *arguments),
+                cwd=root,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+        git("init", "-q", "-b", "main")
+        git("config", "user.email", "gate@example.com")
+        git("config", "user.name", "gate")
+        (root / "README.md").write_text("base\n", encoding="utf-8")
+        git("add", "README.md")
+        git("commit", "-q", "-m", "base")
+        git("checkout", "-q", "-b", "feature")
+        self._git = git
+        return root
+
+    def _committed_gate(self, name: str) -> tuple[object, Path]:
+        root = self._repository()
+        target = root / "quwoquan_ops/gate" / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+        self._git("add", str(target.relative_to(root)))
+        self._git("commit", "-q", "-m", f"add {name}")
+
+        module = _load_verifier()
+        module.ROOT = root
+        module.BASE_CANDIDATES = ("main",)
+        return module, root
+
+    def test_newly_committed_gate_without_companion_is_reported(self) -> None:
+        module, _ = self._committed_gate("verify_brand_new_thing.py")
+        changed = module.changed_gate_scripts()
+        self.assertEqual(["quwoquan_ops/gate/verify_brand_new_thing.py"], changed)
+        # 没有任何同名测试时配套集合是空的——判据 A 在这里什么都不会说。
+        self.assertEqual([], module._companion_tests(changed[0], []))
+
+    def test_non_gate_python_changes_are_out_of_scope(self) -> None:
+        module, root = self._committed_gate("verify_brand_new_thing.py")
+        for noise in ("quwoquan_ops/gate/helper_lib.py", "docs/notes.md"):
+            path = root / noise
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("x\n", encoding="utf-8")
+            self._git("add", noise)
+        self._git("commit", "-q", "-m", "noise")
+        self.assertEqual(
+            ["quwoquan_ops/gate/verify_brand_new_thing.py"],
+            module.changed_gate_scripts(),
+            "只有 verify_ 前缀的门禁脚本进入判据 B",
+        )
+
+    def test_uncommitted_worktree_changes_are_not_counted(self) -> None:
+        """脏工作树是本仓库常态，把它计入会让判据 B 长期为别人的改动报红。"""
+        module, root = self._committed_gate("verify_brand_new_thing.py")
+        dirty = root / "quwoquan_ops/gate/verify_someone_elses_parallel_work.py"
+        dirty.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+        self.assertEqual(
+            ["quwoquan_ops/gate/verify_brand_new_thing.py"],
+            module.changed_gate_scripts(),
+        )
+
+    def test_app_gate_tree_is_in_scope_for_changed_gates(self) -> None:
+        """判据 B 的范围比判据 A 宽：App 门禁改了同样要证明自己。"""
+        root = self._repository()
+        target = root / "quwoquan_app/scripts/runtime/observability/verify_thing.py"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+        self._git("add", str(target.relative_to(root)))
+        self._git("commit", "-q", "-m", "add app gate")
+
+        module = _load_verifier()
+        module.ROOT = root
+        module.BASE_CANDIDATES = ("main",)
+        self.assertEqual(
+            ["quwoquan_app/scripts/runtime/observability/verify_thing.py"],
+            module.changed_gate_scripts(),
+        )
+
+    def test_non_git_tree_skips_criterion_b(self) -> None:
+        """打包产物里 diff 无从计算，强行报错只会制造另一种假红灯。"""
+        import tempfile
+
+        module = _load_verifier()
+        with tempfile.TemporaryDirectory() as tmp:
+            module.ROOT = Path(tmp)
+            self.assertIsNone(module.changed_gate_scripts())
+
+    def _isolated_chain(self, gate_name: str, companion: str | None):
+        """一条最小 gate 链：只挂 `gate_name`，可选地挂上它的 companion。"""
+        root = self._repository()
+        entry = root / "quwoquan_ops/gate/gate_repo.sh"
+        entry.parent.mkdir(parents=True, exist_ok=True)
+        commands = [f"python3 quwoquan_ops/gate/{gate_name}"]
+        gate = root / "quwoquan_ops/gate" / gate_name
+        gate.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+        if companion is not None:
+            test_path = root / "quwoquan_ops/tests/local_contract/gate" / companion
+            test_path.parent.mkdir(parents=True, exist_ok=True)
+            test_path.write_text("", encoding="utf-8")
+            commands.append(
+                f"python3 quwoquan_ops/tests/local_contract/gate/{companion}"
+            )
+        entry.write_text("\n".join(commands) + "\n", encoding="utf-8")
+        self._git("add", "-A")
+        self._git("commit", "-q", "-m", "wire gate chain")
+
+        module = _load_verifier()
+        module.ROOT = root
+        module.GATE_ENTRY = entry
+        module.BASE_CANDIDATES = ("main",)
+        module.BASELINE_PATH = root / "does-not-exist.yaml"
+        module.MAKEFILE_BY_DIR = {}
+        return module
+
+    def test_main_blocks_when_a_changed_gate_has_no_companion(self) -> None:
+        """端到端：缺 companion 时门禁自身必须失败，而不是打印 OK。"""
+        import contextlib
+        import io
+
+        module = self._isolated_chain("verify_brand_new_thing.py", companion=None)
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr), contextlib.redirect_stdout(
+            io.StringIO()
+        ):
+            exit_code = module.main([])
+        self.assertEqual(1, exit_code)
+        message = stderr.getvalue()
+        self.assertIn("verify_brand_new_thing.py", message)
+        self.assertIn("没有任何同名 companion 测试", message)
+
+    def test_main_passes_when_the_companion_is_on_the_chain(self) -> None:
+        """正例：companion 补齐并挂上链后同一条链必须放行。"""
+        import contextlib
+        import io
+
+        module = self._isolated_chain(
+            "verify_brand_new_thing.py",
+            companion="test_brand_new_thing__gate__local_contract_test.py",
+        )
+        with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(
+            io.StringIO()
+        ):
+            self.assertEqual(0, module.main([]))
+
+    def test_main_blocks_when_the_companion_exists_but_is_never_run(self) -> None:
+        """companion 躺在树里但没有任何 gate 链执行，同样不算证明。"""
+        import contextlib
+        import io
+
+        module = self._isolated_chain("verify_brand_new_thing.py", companion=None)
+        orphan = (
+            module.ROOT
+            / "quwoquan_ops/tests/local_contract/gate"
+            / "test_brand_new_thing__gate__local_contract_test.py"
+        )
+        orphan.parent.mkdir(parents=True, exist_ok=True)
+        orphan.write_text("", encoding="utf-8")
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr), contextlib.redirect_stdout(
+            io.StringIO()
+        ):
+            self.assertEqual(1, module.main([]))
+        self.assertIn("没有任何 gate 链执行", stderr.getvalue())
+
+    def test_this_rounds_three_gates_have_executed_companions(self) -> None:
+        """本轮三道门禁在真实仓库里必须已满足判据 B。"""
+        module = _load_verifier()
+        commands = module._collect_reachable_commands()
+        scripts, pytest_paths, unittest_modules = (
+            module._reachable_scripts_and_test_paths(commands)
+        )
+        tests = module._local_contract_tests()
+        for gate in (
+            "quwoquan_service/scripts/verify/structure/verify_nil_semantics.py",
+            "quwoquan_app/scripts/runtime/observability/verify_null_failure_isolation.py",
+            "quwoquan_ops/gate/verify_ratchet_baseline_governance.py",
+        ):
+            with self.subTest(gate=gate):
+                companions = module._companion_tests(gate, tests)
+                self.assertTrue(companions, f"{gate} 缺 companion 测试")
+                self.assertTrue(
+                    any(
+                        module._test_is_executed(
+                            test, scripts, pytest_paths, unittest_modules
+                        )
+                        for test in companions
+                    ),
+                    f"{gate} 的 companion 没有被 gate 链执行：{companions}",
+                )
+
+
 if __name__ == "__main__":
     unittest.main()

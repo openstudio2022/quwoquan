@@ -17,9 +17,7 @@ _STATIC_ROOTS = (
     "quwoquan_data/schema",
     "quwoquan_data/AGENTS.md",
     "quwoquan_data/README.md",
-    ".cursor/commands/crawl.md",
-    ".cursor/commands/crawl-topic.md",
-    ".cursor/skills/quwoquan-data-content/SKILL.md",
+    ".agents/skills/content-production/SKILL.md",
     "specs/feature-tree/discovery-content/object-homepage-coverage-scaling",
     "specs/feature-tree/runtime/runtime-data-engineering",
 )

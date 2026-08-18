@@ -1,0 +1,7 @@
+---
+description: 缺席、空值与失败的单义表达：禁止用 null/nil 表示失败或空集合
+alwaysApply: true
+---
+
+写任何可失败或可返回空的函数、决定字段可空性、写 `catch` 块时，先读
+`.agents/skills/review/references/roles/developer/references/result-state-semantics.md`。

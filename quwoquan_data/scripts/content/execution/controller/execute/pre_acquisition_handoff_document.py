@@ -17,11 +17,10 @@ from core.source_digest import (
     SourceDefinitionSnapshot,
     content_source_revision,
 )
-from content.execution.campaign.scale import campaign_workload_targets
+from content.execution.campaign.lane import normalize_workloads
 
 HANDOFF_SCHEMA = "quwoquan_data.content_pre_acquisition_handoff"
 HANDOFFS_RELATIVE_ROOT = Path("data/local/workspace/content-pre-acquisition-handoffs")
-_CARRIERS = ("homepage", "article", "image", "video")
 _CARRIER_REQUIREMENTS: dict[str, dict[str, Any]] = {
     "homepage": {
         "externalInputMode": "external_acquisition",
@@ -263,25 +262,11 @@ def build_pre_acquisition_handoff(
         source_digest=source.digest,
         entity_catalog_digest=catalog_digest,
     )
-    if set(workload_targets) != set(_CARRIERS) or any(
-        isinstance(value, bool) or not isinstance(value, int) or value < 1
-        for value in workload_targets.values()
-    ):
-        raise _typed(
-            "WORKLOAD_INVALID",
-            "workloadTargets must contain four positive carrier targets",
-        )
-    targets = {
-        carrier: int(workload_targets[carrier])
-        for carrier in _CARRIERS
-    }
-    canonical_targets = campaign_workload_targets(str(scale))
-    if targets != canonical_targets:
-        raise _typed(
-            "WORKLOAD_INVALID",
-            "workloadTargets must equal the canonical scale targets: "
-            f"expected={canonical_targets}, observed={targets}",
-        )
+    try:
+        targets = normalize_workloads(workload_targets)
+    except ValueError as exc:
+        raise _typed("WORKLOAD_INVALID", str(exc)) from exc
+    active_carriers = list(targets)
     retry_of = str(campaign_retry_of or "").strip() or None
     if campaign_sequence == 1 and retry_of is not None:
         raise _typed(
@@ -315,6 +300,7 @@ def build_pre_acquisition_handoff(
         "sourceDigest": source.to_document(),
         "executionBundle": bundle.to_document(),
         "entityCatalogDigest": catalog_digest,
+        "activeCarriers": active_carriers,
         "workloadTargets": targets,
         "sourceMutationPolicy": {
             "mode": "immutable_after_handoff",
@@ -323,7 +309,7 @@ def build_pre_acquisition_handoff(
         },
         "carrierRequirements": {
             carrier: dict(_CARRIER_REQUIREMENTS[carrier])
-            for carrier in _CARRIERS
+            for carrier in active_carriers
         },
     }
     handoff = {
@@ -360,6 +346,18 @@ def load_pre_acquisition_handoff(path: Path) -> dict[str, Any]:
     }
     if handoff.get("handoffDigest") != _digest(stable):
         raise _typed("DIGEST_DRIFT", f"handoffDigest drift: {path}")
+    try:
+        targets = normalize_workloads(
+            handoff.get("workloadTargets", {}),
+            active_carriers=handoff.get("activeCarriers", ()),
+        )
+    except (TypeError, ValueError) as exc:
+        raise _typed("WORKLOAD_INVALID", str(exc)) from exc
+    if set(handoff.get("carrierRequirements", {})) != set(targets):
+        raise _typed(
+            "WORKLOAD_INVALID",
+            "carrierRequirements must match activeCarriers exactly",
+        )
     _require_canonical_handoff_location(path, handoff)
     return handoff
 

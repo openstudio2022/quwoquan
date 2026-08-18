@@ -66,6 +66,10 @@ class StackctlDevSessionResumeComposeTest(StackctlDevSessionTestBase):
                                 "healthcheck": {"test": ["CMD", "true"]},
                             },
                             "object-storage": {"image": "minio/minio:current"},
+                            "elasticsearch": {
+                                "image": "quwoquan/elasticsearch-cjk:8.13.4",
+                                "healthcheck": {"test": ["CMD", "true"]},
+                            },
                             "platform-ops-service": {
                                 "environment": {"IMAGE_VERSION": "${IMAGE_VERSION}"},
                                 "healthcheck": {"test": ["CMD", "true"]},
@@ -220,6 +224,24 @@ class StackctlDevSessionResumeComposeTest(StackctlDevSessionTestBase):
                             },
                         },
                         "State": {"Status": "running"},
+                    },
+                    {
+                        # This repository-owned, version-pinned infrastructure
+                        # image is not rebuilt from the mutable workspace.
+                        "Created": "2026-08-09T00:00:05Z",
+                        "Config": {
+                            "Image": "quwoquan/elasticsearch-cjk:8.13.4",
+                            "Env": [],
+                            "Labels": {
+                                "com.docker.compose.project": "quwoquan_alpha_test_live",
+                                "com.docker.compose.service": "elasticsearch",
+                                "com.docker.compose.config-hash": "hash-elasticsearch",
+                            },
+                        },
+                        "State": {
+                            "Status": "running",
+                            "Health": {"Status": "healthy"},
+                        },
                     },
                 )
             )
@@ -733,4 +755,3 @@ class StackctlDevSessionResumeComposeTest(StackctlDevSessionTestBase):
             ["prepared", "partial", "running"],
         )
         self.assertEqual(result["startupAttempt"]["status"], "running")
-

@@ -11,8 +11,9 @@ import 'package:quwoquan_app/l10n/copy/gathering_text_constants.dart';
 import 'package:quwoquan_app/runtime/auth/auth_gate.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/runtime/di/recommendation_presentation_slots.dart'
+    show gatheringRecommendationSlots;
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/presentation/my_gatherings_entry_card.dart';
-import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/my_intersection_inbox_card.dart';
 
 /// 线下行动与发现（底栏「行动」tab）。
 ///
@@ -80,7 +81,7 @@ class GatheringActionsDiscoveryPage extends ConsumerWidget {
             ),
             if (isAuthenticated) ...[
               SizedBox(height: AppSpacing.intraGroupSm),
-              MyIntersectionInboxCard(isDark: isDark),
+              gatheringRecommendationSlots.buildMyIntersection(isDark: isDark),
               MyGatheringsEntryCard(isDark: isDark),
             ] else ...[
               SizedBox(height: AppSpacing.intraGroupSm),
@@ -160,7 +161,11 @@ class _ActionsEntryCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(icon, size: AppSpacing.iconMedium, color: AppColors.primaryColor),
+            Icon(
+              icon,
+              size: AppSpacing.iconMedium,
+              color: AppColors.primaryColor,
+            ),
             SizedBox(width: AppSpacing.intraGroupSm),
             Expanded(
               child: Column(

@@ -79,6 +79,9 @@ class _PublicRemote:
     def __init__(self) -> None:
         self._lock = Lock()
         self.relationships: set[tuple[str, str]] = set()
+        self.personas: set[str] = set()
+        self.closed_accounts: set[str] = set()
+        self.fail_reverse_follow = False
         self.comments: dict[str, list[str]] = {}
         self.circles: dict[str, dict[str, object]] = {}
         self.gatherings: dict[str, dict[str, object]] = {}
@@ -104,7 +107,7 @@ class _PublicRemote:
         **_kwargs: object,
     ) -> LocalAcceptanceActor:
         suffix = test_data_instance_id.replace("-", "")[:8]
-        return LocalAcceptanceActor(
+        actor = LocalAcceptanceActor(
             role=actor_role,
             session=LocalAcceptanceSession(
                 owner_id=f"owner-{actor_role}-{actor_index}-{suffix}",
@@ -116,6 +119,8 @@ class _PublicRemote:
             account_state="active",
             identity_origin="phone",
         )
+        self.personas.add(actor.session.persona_id)
+        return actor
 
     def request(
         self,
@@ -138,6 +143,7 @@ class _PublicRemote:
                     "personaId": session.persona_id,
                 }
             if method == "POST" and clean_path == "/owner/account/close":
+                self.closed_accounts.add(session.owner_id)
                 return {"status": "closed"}
 
             subject_follow = re.fullmatch(
@@ -180,6 +186,12 @@ class _PublicRemote:
                 target, action = relationship.groups()
                 edge = (session.persona_id, target)
                 if action == "follow" and method == "POST":
+                    if self.fail_reverse_follow and (
+                        target,
+                        session.persona_id,
+                    ) in self.relationships:
+                        self.fail_reverse_follow = False
+                        raise RuntimeError("reverse follow failed")
                     self.relationships.add(edge)
                     return {"state": "following"}
                 if action == "follow" and method == "DELETE":
@@ -419,6 +431,22 @@ class _PublicRemote:
 
             if clean_path == "/chat/conversations" and method == "POST":
                 body = _kwargs.get("body") or {}
+                if str(body.get("type") or "") == "direct":
+                    member_ids = tuple(body.get("initialMemberIds") or ())
+                    if len(member_ids) != 1:
+                        raise AssertionError("direct conversation requires one member")
+                    target_persona = str(member_ids[0])
+                    if target_persona not in self.personas:
+                        raise AssertionError("direct conversation member is unknown")
+                    forward = (session.persona_id, target_persona)
+                    reverse = (target_persona, session.persona_id)
+                    if (
+                        forward not in self.relationships
+                        or reverse not in self.relationships
+                    ):
+                        raise AssertionError(
+                            "direct conversation requires mutual actor topology"
+                        )
                 conversation_id = f"conversation-{len(self.conversations) + 1}"
                 self.conversations[conversation_id] = []
                 if str(body.get("type") or "") == "group":
@@ -624,6 +652,56 @@ class _PublicRemote:
 
 
 class TestDataDomainProvidersContractTest(unittest.TestCase):
+    def test_partial_mutual_follow_is_unwound_before_actor_accounts_close(self) -> None:
+        candidate = _candidate()
+        case = chat_recall_case()
+        remote = _PublicRemote()
+        remote.fail_reverse_follow = True
+        runtime = DataRuntime()
+        required_provider_capabilities = {
+            provider_key.value
+            for request in collect_request_graph((case.request,)).values()
+            for provider_key in request.capability.required_provider_capabilities
+        }
+        provider_evidence = {
+            capability_id: {
+                "status": "passed",
+                "candidateBindingDigest": candidate.digest,
+            }
+            for capability_id in required_provider_capabilities
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            context = DataContext(
+                candidate=candidate,
+                base_url="https://gamma.local.quwoquan.invalid",
+                output_root=Path(temporary),
+                provider_evidence=provider_evidence,
+                runtime=runtime,
+            )
+            with (
+                mock.patch(
+                    "quwoquan_ops.cli.lib.test_data.providers.user_service."
+                    "open_test_data_acceptance_session",
+                    side_effect=remote.actor,
+                ),
+                mock.patch(
+                    "quwoquan_ops.cli.lib.test_data.operations."
+                    "request_local_environment_json",
+                    side_effect=remote.request,
+                ),
+            ):
+                with self.assertRaisesRegex(
+                    RuntimeError,
+                    "capability provision failed",
+                ):
+                    TestDataSession.for_case(
+                        case.case_id,
+                        context=context,
+                    ).execute(case)
+
+        self.assertEqual(remote.relationships, set())
+        self.assertEqual(len(remote.closed_accounts), 2)
+
     def test_every_domain_provider_executes_its_autonomous_closure(self) -> None:
         candidate = _candidate()
         cases = (

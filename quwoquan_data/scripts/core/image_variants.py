@@ -22,7 +22,11 @@ from typing import Any
 
 from core.image_decode import ImageProbe, probe_image_bytes
 from core.image_decode import pil_available as decode_pil_available
-from core.media_asset_url import IMAGE_VARIANT_POLICY_VERSION, IMAGE_VARIANT_PROFILES
+from core.media_asset_url import (
+    IMAGE_VARIANT_POLICY_VERSION,
+    IMAGE_VARIANT_PROFILES,
+    effective_delivery_width,
+)
 from core.media_processing_policy import MEDIA_PROCESSING_POLICY
 
 try:  # pragma: no cover - 依赖探测
@@ -69,13 +73,14 @@ def build_local_variants(data: bytes, *, base_name: str) -> list[dict[str, Any]]
                     cfg = IMAGE_VARIANT_PROFILES.get(profile)
                     if not cfg:
                         continue
-                    target_w = int(cfg["width"])
-                    # 仅缩小：原图比目标宽则等比缩放，否则用原尺寸（webp 重编码省带宽）。
-                    if src_w > target_w:
+                    # 有效交付宽度是「声明宽度与存储体宽度取较小者」这一个投影，
+                    # 由 media_asset_url 单点派生；本地变体不得自己再算一遍。
+                    target_w = effective_delivery_width(profile, stored_width=src_w)
+                    if target_w < src_w:
                         target_h = max(1, round(src_h * target_w / src_w))
                         resized = im.resize((target_w, target_h), Image.LANCZOS)
                     else:
-                        target_w, target_h = src_w, src_h
+                        target_h = src_h
                         resized = im
                     buf = io.BytesIO()
                     resized.save(

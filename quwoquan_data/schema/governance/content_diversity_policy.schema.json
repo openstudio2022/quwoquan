@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/governance/content_diversity_policy.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "policyId", "entityConcentration", "hotEntities"],
+  "properties": {
+    "schema": {"const": "quwoquan.content_diversity_policy"},
+    "policyId": {"type": "string", "minLength": 1},
+    "entityConcentration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "maxObjectsPerEntity",
+        "topEntityCount",
+        "topEntityShareCeiling",
+        "minimumCumulativeObjects"
+      ],
+      "properties": {
+        "maxObjectsPerEntity": {"$ref": "#/$defs/carrierCaps"},
+        "topEntityCount": {"type": "integer", "minimum": 1},
+        "topEntityShareCeiling": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "minimumCumulativeObjects": {"type": "integer", "minimum": 1}
+      }
+    },
+    "hotEntities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["entityRef", "maxObjectsPerEntity", "evidence"],
+        "properties": {
+          "entityRef": {"type": "string", "minLength": 1},
+          "maxObjectsPerEntity": {"$ref": "#/$defs/partialCarrierCaps"},
+          "evidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["signal", "observedAt", "reviewer", "justification"],
+            "properties": {
+              "signal": {"type": "string", "minLength": 1},
+              "observedAt": {"type": "string", "minLength": 1},
+              "reviewer": {"type": "string", "minLength": 1},
+              "justification": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "carrierCaps": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["homepage", "article", "image", "video"],
+      "properties": {
+        "homepage": {"type": "integer", "minimum": 1},
+        "article": {"type": "integer", "minimum": 1},
+        "image": {"type": "integer", "minimum": 1},
+        "video": {"type": "integer", "minimum": 1}
+      }
+    },
+    "partialCarrierCaps": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "homepage": {"type": "integer", "minimum": 1},
+        "article": {"type": "integer", "minimum": 1},
+        "image": {"type": "integer", "minimum": 1},
+        "video": {"type": "integer", "minimum": 1}
+      }
+    }
+  }
+}

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sys
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -51,8 +52,9 @@ def _rate(numerator: int, denominator: int) -> float:
 def _normalize_model_id(model: object) -> str:
     text = str(model or "").strip().lower().replace("_", "-")
     text = text.removeprefix("cursor-")
-    text = text.replace("grok-4-5", "grok-4.5")
-    return text
+    # `grok-4-6` and `grok-4.6` name the same model; normalize every version
+    # rather than one pinned release.
+    return re.sub(r"^(grok)-(\d+)-(\d+)", r"\1-\2.\3", text)
 
 
 def _read_valid_json(path: Path, schema_group: str, schema_name: str, issues: list[str]) -> dict:

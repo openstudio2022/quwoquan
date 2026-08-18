@@ -1,0 +1,20 @@
+# 全国地点主清单 · 安徽省黄山市（discovery_seed/2）
+# schema: quwoquan_data/schema/governance/master_list.schema.json
+# 门禁: qwq-data verify coverage-static-identity
+schema: quwoquan_data.discovery_seed
+country: 中国
+province: 安徽省
+city: 黄山市
+districts:
+- district: 黄山区
+  leaves:
+  - name: 黄山
+    canonicalName: 黄山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/安徽省/黄山市/黄山区
+    aliases:
+    - Mount Huangshan
+    - Huangshan
+    selectionPriority: 1

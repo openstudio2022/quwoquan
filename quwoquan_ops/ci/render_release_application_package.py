@@ -8,28 +8,65 @@ import hashlib
 import json
 import re
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
+_ROOT = Path(__file__).resolve().parents[2]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 
-SCHEMA = "release-application-package"
-ENVIRONMENTS = ("alpha", "beta", "gamma", "prod")
-SURFACES = ("android", "ios", "web", "macos")
+from quwoquan_ops.cli.lib.common import load_json_yaml  # noqa: E402
+
+_ARTIFACT_METADATA_PATH = (
+    _ROOT / "quwoquan_service/contracts/metadata/_shared/app_artifact_manifest.yaml"
+)
+
+
+def _load_release_package_contract() -> dict[str, Any]:
+    """从 canonical app_artifact_manifest metadata 读取包证据契约。
+
+    schema 名、字段集合、环境与 surface 枚举都以 metadata 为唯一真相源；
+    本脚本不自持第二份字段集合。
+    """
+
+    document = load_json_yaml(_ARTIFACT_METADATA_PATH)
+    if not isinstance(document, dict):
+        raise ValueError(f"invalid artifact metadata: {_ARTIFACT_METADATA_PATH}")
+    contract = (document.get("schemas") or {}).get("release_application_package")
+    if not isinstance(contract, dict):
+        raise ValueError("release_application_package contract is missing")
+    schema_value = contract.get("schema_value")
+    required_fields = contract.get("required_fields")
+    fields = contract.get("fields")
+    if (
+        not isinstance(schema_value, str)
+        or not isinstance(required_fields, list)
+        or not isinstance(fields, dict)
+    ):
+        raise ValueError("release_application_package contract is not canonical")
+    environments = fields.get("environment", {}).get("allowed_values")
+    surfaces = fields.get("surface", {}).get("allowed_values")
+    if not isinstance(environments, list) or not isinstance(surfaces, list):
+        raise ValueError("release_application_package enums are not canonical")
+    return {
+        "schema": schema_value,
+        "fields": frozenset(str(field) for field in required_fields),
+        "environments": tuple(str(value) for value in environments),
+        "surfaces": tuple(str(value) for value in surfaces),
+    }
+
+
+_CONTRACT = _load_release_package_contract()
+SCHEMA = _CONTRACT["schema"]
+ENVIRONMENTS = _CONTRACT["environments"]
+SURFACES = _CONTRACT["surfaces"]
 GENERIC_PACKAGES = tuple(
     (environment, surface)
     for environment in ENVIRONMENTS[:-1]
     for surface in SURFACES
 ) + (("prod", "ios"), ("prod", "macos"))
-GENERIC_FIELDS = frozenset(
-    {
-        "schema",
-        "environment",
-        "surface",
-        "sourceGitSha",
-        "sourceTreeDigest",
-        "packageDigest",
-    }
-)
+GENERIC_FIELDS = _CONTRACT["fields"]
 DIGEST_PATTERN = re.compile(r"sha256:[0-9a-f]{64}")
 GIT_SHA_PATTERN = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 TREE_DIGEST_PATTERN = re.compile(r"(?:sha1:[0-9a-f]{40}|sha256:[0-9a-f]{64})")

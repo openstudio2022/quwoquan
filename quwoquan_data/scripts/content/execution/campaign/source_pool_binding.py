@@ -1,16 +1,24 @@
 """Immutable source-pool binding shared by scale campaign lanes."""
 from __future__ import annotations
 
-import hashlib
-import json
 import shutil
-import stat
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from core.content_library import library_root_for_output
 from core.io import read_json
 from core.schema import assert_valid
+from content.execution.campaign.lane import normalize_active_carriers
+from content.execution.campaign.source_pool_binding_io import (
+    digest as _digest,
+    file_sha256 as _file_sha256,
+    link_evidence_surface_from_library,
+    relative_to_output as _relative,
+    safe_evidence_directory as _safe_evidence_directory,
+    safe_evidence_file as _safe_evidence_file,
+    shortfall as _shortfall,
+)
 
 from content.source.research.homepage_article_source_ready_batch import (
     CAPSULE_SCHEMA as SOURCE_READY_CAPSULE_SCHEMA,
@@ -25,76 +33,6 @@ from content.source.research.scale_source_pool import (
     validate_scale_source_pool,
     validate_scale_source_pool_evidence,
 )
-
-_CARRIERS = ("homepage", "article", "image", "video")
-
-
-def _digest(value: Mapping[str, Any]) -> str:
-    encoded = json.dumps(
-        dict(value), ensure_ascii=False, sort_keys=True, separators=(",", ":")
-    ).encode("utf-8")
-    return "sha256:" + hashlib.sha256(encoded).hexdigest()
-
-
-def _file_sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return "sha256:" + digest.hexdigest()
-
-
-def _relative(path: Path, root: Path, *, label: str) -> str:
-    resolved = path.expanduser().resolve()
-    try:
-        relative = resolved.relative_to(root.expanduser().resolve())
-    except ValueError as exc:
-        raise ValueError(
-            f"{SOURCE_POOL_SHORTFALL}: {label} must be inside output root"
-        ) from exc
-    if not relative.parts:
-        raise ValueError(f"{SOURCE_POOL_SHORTFALL}: {label} cannot equal output root")
-    return relative.as_posix()
-
-
-def _shortfall(exc: BaseException) -> ValueError:
-    return ValueError(f"{SOURCE_POOL_SHORTFALL}: {exc}")
-
-
-def _safe_evidence_file(root: Path, ref: str) -> Path:
-    relative = Path(ref)
-    if not ref or relative.is_absolute() or ".." in relative.parts:
-        raise ValueError(f"unsafe source-pool evidence ref: {ref!r}")
-    current = root
-    for index, part in enumerate(relative.parts):
-        current = current / part
-        mode = current.lstat().st_mode
-        if stat.S_ISLNK(mode):
-            raise ValueError(f"source-pool evidence ref traverses symlink: {ref}")
-        final = index == len(relative.parts) - 1
-        if (final and not stat.S_ISREG(mode)) or (
-            not final and not stat.S_ISDIR(mode)
-        ):
-            raise ValueError(f"source-pool evidence ref is not a file: {ref}")
-    return current
-
-
-def _safe_evidence_directory(root: Path, ref: str) -> Path:
-    relative = Path(ref)
-    if not ref or relative.is_absolute() or (ref != "." and ".." in relative.parts):
-        raise ValueError(f"unsafe source-ready evidence root ref: {ref!r}")
-    current = root
-    if ref == ".":
-        return current
-    for part in relative.parts:
-        current = current / part
-        mode = current.lstat().st_mode
-        if stat.S_ISLNK(mode) or not stat.S_ISDIR(mode):
-            raise ValueError(
-                f"source-ready evidence root traverses symlink or non-directory: {ref}"
-            )
-    return current
-
 
 def _member_root_ref(candidate: Mapping[str, Any]) -> str:
     raw = candidate.get("sourceReadyEvidenceRootRef")
@@ -128,7 +66,8 @@ def _selected_candidates(
     }
     selected: list[dict[str, Any]] = []
     seen: set[str] = set()
-    for carrier in _CARRIERS:
+    active = normalize_active_carriers(selections)
+    for carrier in active:
         selection = validate_lane_source_pool_selection(
             selections[carrier],
             carrier=carrier,
@@ -158,7 +97,8 @@ def _snapshot_document(
         "schema": "quwoquan_data.scale_source_pool_snapshot",
         "planDigest": plan["planDigest"],
         "laneSourcePoolSelections": {
-            carrier: dict(selections[carrier]) for carrier in _CARRIERS
+            carrier: dict(selections[carrier])
+            for carrier in normalize_active_carriers(selections)
         },
         "selectedCandidates": _selected_candidates(plan, selections),
     }
@@ -285,6 +225,8 @@ def bind_scale_source_pool(
     source_revision: str,
     source_digest: str,
     entity_catalog_digest: str,
+    active_carriers: tuple[str, ...] | None = None,
+    workload_targets: Mapping[str, int] | None = None,
 ) -> tuple[dict[str, Any], str, dict[str, Any]]:
     """Validate physical evidence and freeze one deterministic lane selection."""
 
@@ -302,8 +244,20 @@ def bind_scale_source_pool(
         str(plan.get(field) or "")
         for field in ("sourceRevision", "sourceDigest", "entityCatalogDigest")
     )
-    if str(plan.get("targetScale")) != target_scale or actual_identity != expected_identity:
+    observed_scale = str(plan.get("targetScale") or "")
+    if (
+        observed_scale not in {target_scale, "WORKLOAD"}
+        or actual_identity != expected_identity
+    ):
         raise ValueError(f"{SOURCE_POOL_SHORTFALL}: source-pool identity drift")
+    if active_carriers is not None and list(active_carriers) != plan.get(
+        "activeCarriers"
+    ):
+        raise ValueError(f"{SOURCE_POOL_SHORTFALL}: source-pool activeCarriers drift")
+    if workload_targets is not None and dict(workload_targets) != plan.get(
+        "workloadTargets"
+    ):
+        raise ValueError(f"{SOURCE_POOL_SHORTFALL}: source-pool workloadTargets drift")
     ordered = sorted(
         (
             dict(row)
@@ -326,6 +280,9 @@ def bind_scale_source_pool(
     binding = {
         "poolId": str(plan["poolId"]),
         "targetScale": str(plan["targetScale"]),
+        "workloadMode": str(plan["workloadMode"]),
+        "activeCarriers": list(plan["activeCarriers"]),
+        "workloadTargets": dict(plan["workloadTargets"]),
         "sourceRevision": str(plan["sourceRevision"]),
         "sourceDigest": str(plan["sourceDigest"]),
         "entityCatalogDigest": str(plan["entityCatalogDigest"]),
@@ -363,7 +320,8 @@ def validate_bound_scale_source_pool(
         if any(
             plan.get(field) != binding.get(field)
             for field in (
-                "poolId", "targetScale", "sourceRevision", "sourceDigest",
+                "poolId", "targetScale", "workloadMode", "activeCarriers", "workloadTargets",
+                "sourceRevision", "sourceDigest",
                 "entityCatalogDigest", "planDigest",
             )
         ):
@@ -397,13 +355,12 @@ def materialize_bound_scale_source_pool(
     refs = _selected_evidence_refs(
         snapshot["selectedCandidates"], evidence_root=source_evidence
     )
-    for ref, expected in sorted(refs.items()):
-        source = _safe_evidence_file(source_evidence, ref)
-        if _file_sha256(source) != expected:
-            raise ValueError(f"{SOURCE_POOL_SHORTFALL}: evidence drift: {ref}")
-        target = target_evidence / ref
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(source, target)
+    link_evidence_surface_from_library(
+        refs,
+        source_evidence=source_evidence,
+        target_evidence=target_evidence,
+        library_root=library_root_for_output(output_root),
+    )
     source_plan = (output_root / str(binding["planRef"])).resolve()
     shutil.copyfile(source_plan, destination / "plan.json")
     from core.io import write_json
@@ -479,7 +436,8 @@ def validate_capsule_scale_source_pool(
         if any(
             plan.get(field) != binding.get(field)
             for field in (
-                "poolId", "targetScale", "sourceRevision", "sourceDigest",
+                "poolId", "targetScale", "workloadMode", "activeCarriers", "workloadTargets",
+                "sourceRevision", "sourceDigest",
                 "entityCatalogDigest", "planDigest",
             )
         ):
@@ -494,7 +452,10 @@ def validate_capsule_scale_source_pool(
             snapshot.get("snapshotDigest") != _digest(stable)
             or snapshot.get("planDigest") != binding.get("planDigest")
             or snapshot.get("laneSourcePoolSelections")
-            != {carrier: dict(lane_selections[carrier]) for carrier in _CARRIERS}
+            != {
+                carrier: dict(lane_selections[carrier])
+                for carrier in normalize_active_carriers(lane_selections)
+            }
             or snapshot.get("selectedCandidates")
             != _selected_candidates(plan, lane_selections)
             or (
@@ -548,7 +509,7 @@ def load_capsule_source_pool(
     if not isinstance(binding, Mapping) or not isinstance(selections, Mapping):
         raise TypeError("campaign capsule source-pool binding is invalid")
     result: dict[str, dict[str, Any]] = {}
-    for carrier in ("homepage", "article", "image", "video"):
+    for carrier in normalize_active_carriers(selections):
         selection = selections.get(carrier)
         if not isinstance(selection, Mapping):
             raise TypeError(f"campaign capsule lacks {carrier} pool selection")

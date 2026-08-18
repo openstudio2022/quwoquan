@@ -3,12 +3,14 @@ from __future__ import annotations
 import json
 import shutil
 from pathlib import Path
-from types import SimpleNamespace
 
 import cv2
 import numpy as np
 import pytest
+from content.source import professional_video_acquisition
+from content.source import professional_video_receipt
 from content.source.professional_video_acquisition import (
+    ProfessionalVideoAcquisitionBlocked,
     acquire_professional_videos,
     acquired_video_specs_for_entity,
     load_professional_video_acquisition_receipt,
@@ -20,9 +22,15 @@ from content.source.professional_video_popular_catalog import (
 from content.source.professional_video_receipt import (
     assert_publishable_popularity_signals,
 )
+from content.source.professional_video_spec_index import (
+    build_acquired_video_spec_index,
+)
+from content.source.professional_video_store import (
+    ProfessionalVideoCasCollision,
+    put_video_cas,
+)
 from content.source.research.auto_plan_video import write_video_lane
 from core.io import read_json, write_json
-from governance.coverage.distribution import ProductLifecycleState
 
 _DIGEST_A = "sha256:" + "a" * 64
 _DIGEST_B = "sha256:" + "b" * 64
@@ -30,13 +38,7 @@ _DIGEST_C = "sha256:" + "c" * 64
 
 
 @pytest.fixture(autouse=True)
-def _explicit_research_lifecycle(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        "content.source.professional_video_acquisition.load_content_distribution_policy",
-        lambda: SimpleNamespace(
-            product_lifecycle_state=ProductLifecycleState.RESEARCH
-        ),
-    )
+def _acquisition_dependencies(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "content.source.professional_video_acquisition.guard_acquisition_source_identity",
         lambda *_args, **_kwargs: {},
@@ -231,6 +233,7 @@ def _acquire(
 
 
 def test_acquisition_freezes_bytes_and_rejects_duplicate_static_mismatch_and_access(
+    monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     manual_root = tmp_path / "manual"
@@ -318,6 +321,53 @@ def test_acquisition_freezes_bytes_and_rejects_duplicate_static_mismatch_and_acc
     assert [spec["professionalAssetId"] for spec in specs] == ["higher", "lower"]
     assert all(spec["premiumPlayableEligible"] is True for spec in specs)
 
+    digest_calls: list[Path] = []
+    active_digest_calls = 0
+    max_active_digest_calls = 0
+    original_file_digest = professional_video_receipt.file_digest
+
+    def counted_file_digest(path: Path) -> str:
+        nonlocal active_digest_calls, max_active_digest_calls
+        active_digest_calls += 1
+        max_active_digest_calls = max(max_active_digest_calls, active_digest_calls)
+        digest_calls.append(path)
+        try:
+            return original_file_digest(path)
+        finally:
+            active_digest_calls -= 1
+
+    monkeypatch.setattr(
+        professional_video_receipt,
+        "file_digest",
+        counted_file_digest,
+    )
+    index = build_acquired_video_spec_index(
+        [receipt_path.relative_to(output_root).as_posix()],
+        root=output_root,
+    )
+    unique_acquired_digests = {
+        str(row["contentSha256"])
+        for row in receipt["assets"]
+        if row["acquisitionStatus"] == "acquired"
+    }
+    assert len(digest_calls) == len(unique_acquired_digests)
+    assert max_active_digest_calls == 1
+    assert index.accepted_asset_count == 2
+    assert index.entity_names == ("西湖",)
+
+    # One verified immutable index serves every catalog lookup. Repeated entity
+    # and alias probes must not reopen or rehash the capsule CAS.
+    for entity_name in ("西湖", "杭州西湖", "西湖"):
+        projected = index.specs_for_names((entity_name, "西湖"))
+        assert [row["professionalAssetId"] for row in projected] == [
+            "higher",
+            "lower",
+        ]
+    assert len(digest_calls) == len(unique_acquired_digests)
+
+    projected[0]["title"] = "mutated caller copy"
+    assert index.specs_for_entity("西湖")[0]["title"] != "mutated caller copy"
+
 
 def test_reference_only_manual_video_records_rights_without_blocking_research(
     tmp_path: Path,
@@ -357,7 +407,7 @@ def test_reference_only_manual_video_records_rights_without_blocking_research(
     assert row["rightsStatus"] == "unverified"
     assert row["authorizationRequired"] is True
     assert row["distributionDecision"] == "research_allowed"
-    assert row["planVideoSpec"]["publicationAdmission"] == "research_release"
+    assert row["planVideoSpec"]["distributionDecision"] == "research_allowed"
     assert row["planVideoSpec"]["commercialAuthorizationStatus"] == "unverified"
 
 
@@ -385,12 +435,19 @@ def test_reference_only_video_forbids_unapproved_network_acquisition(
     manifest_path = tmp_path / "youtube-public-direct.json"
     write_json(manifest_path, _manifest([item], manifest_id="youtube-public-direct"))
 
-    with pytest.raises(ValueError, match="public_direct is not allowed"):
+    with pytest.raises(ProfessionalVideoAcquisitionBlocked) as captured:
         acquire_professional_videos(
             manifest_path,
             handoff_ref=tmp_path / "handoff.json",
             output_root=tmp_path / "acquisition",
         )
+    assert captured.value.code == "DATA.SOURCE.VIDEO_BATCH_NO_SUCCESS"
+    assert captured.value.receipt["assets"][0]["failureCode"] == (
+        "DATA.SOURCE.ITEM_PREVALIDATION_FAILED"
+    )
+    assert "public_direct is not allowed" in captured.value.receipt["assets"][0][
+        "failure"
+    ]
 
 
 def test_prior_receipt_deduplication_is_scoped_to_exact_source_identity(
@@ -427,7 +484,9 @@ def test_prior_receipt_deduplication_is_scoped_to_exact_source_identity(
         )
 
     original, original_path = acquire("original")
-    duplicate, _duplicate_path = acquire("same-identity")
+    with pytest.raises(ProfessionalVideoAcquisitionBlocked) as captured:
+        acquire("same-identity")
+    duplicate = captured.value.receipt
     original_row = original["assets"][0]
     duplicate_row = duplicate["assets"][0]
     original_ref = original_path.relative_to(output_root).as_posix()
@@ -693,12 +752,14 @@ def test_slideshow_is_not_counted_as_sourced_or_premium_video(tmp_path: Path) ->
             manifest_id="slides",
         ),
     )
-    receipt, _receipt_path = acquire_professional_videos(
-        manifest_path,
-        handoff_ref=tmp_path / "handoff.json",
-        manual_root=manual_root,
-        output_root=tmp_path / "acquisition",
-    )
+    with pytest.raises(ProfessionalVideoAcquisitionBlocked) as captured:
+        acquire_professional_videos(
+            manifest_path,
+            handoff_ref=tmp_path / "handoff.json",
+            manual_root=manual_root,
+            output_root=tmp_path / "acquisition",
+        )
+    receipt = captured.value.receipt
     row = receipt["assets"][0]
     assert row["acquisitionStatus"] == "acquired"
     assert row["distributionDecision"] == "blocked"
@@ -707,19 +768,12 @@ def test_slideshow_is_not_counted_as_sourced_or_premium_video(tmp_path: Path) ->
     assert row["planVideoSpec"] is None
 
 
-def test_commercial_lifecycle_rejects_unverified_acquired_video(
-    monkeypatch: pytest.MonkeyPatch,
+def test_unverified_acquired_video_is_retained_for_research(
     tmp_path: Path,
 ) -> None:
     manual_root = tmp_path / "manual"
     manual_root.mkdir()
     _write_video(manual_root / "research-only.mp4", moving=True, seed=11)
-    monkeypatch.setattr(
-        "content.source.professional_video_acquisition.load_content_distribution_policy",
-        lambda: SimpleNamespace(
-            product_lifecycle_state=ProductLifecycleState.COMMERCIAL
-        ),
-    )
     manifest_path = tmp_path / "manifest.json"
     write_json(
         manifest_path,
@@ -742,24 +796,17 @@ def test_commercial_lifecycle_rejects_unverified_acquired_video(
     )
     row = receipt["assets"][0]
     assert row["acquisitionStatus"] == "acquired"
-    assert row["distributionDecision"] == "blocked"
-    assert row["failureCode"] == "DATA.SOURCE.COMMERCIAL_RIGHTS_REQUIRED"
-    assert receipt["acceptedAssetCount"] == 0
+    assert row["distributionDecision"] == "research_allowed"
+    assert row["failureCode"] == ""
+    assert receipt["acceptedAssetCount"] == 1
 
 
-def test_commercial_lifecycle_emits_commercial_plan_for_verified_video(
-    monkeypatch: pytest.MonkeyPatch,
+def test_verified_video_emits_commercial_eligible_plan(
     tmp_path: Path,
 ) -> None:
     manual_root = tmp_path / "manual"
     manual_root.mkdir()
     _write_video(manual_root / "commercial.mp4", moving=True, seed=17)
-    monkeypatch.setattr(
-        "content.source.professional_video_acquisition.load_content_distribution_policy",
-        lambda: SimpleNamespace(
-            product_lifecycle_state=ProductLifecycleState.COMMERCIAL
-        ),
-    )
     item = _item(
         "commercial",
         "commercial.mp4",
@@ -784,7 +831,7 @@ def test_commercial_lifecycle_emits_commercial_plan_for_verified_video(
 
     row = receipt["assets"][0]
     assert row["distributionDecision"] == "commercial_allowed"
-    assert row["planVideoSpec"]["publicationAdmission"] == "commercial_release"
+    assert row["planVideoSpec"]["distributionDecision"] == "commercial_allowed"
     assert row["planVideoSpec"]["commercialAuthorizationStatus"] == "verified"
 
 
@@ -919,12 +966,15 @@ def test_failed_acquisition_allows_new_attempt_without_rewriting_history(
     )
     output_root = tmp_path / "acquisition"
 
-    first, first_path = acquire_professional_videos(
-        manifest_path,
-        handoff_ref=tmp_path / "handoff.json",
-        manual_root=manual_root,
-        output_root=output_root,
-    )
+    with pytest.raises(ProfessionalVideoAcquisitionBlocked) as captured:
+        acquire_professional_videos(
+            manifest_path,
+            handoff_ref=tmp_path / "handoff.json",
+            manual_root=manual_root,
+            output_root=output_root,
+        )
+    first = captured.value.receipt
+    first_path = captured.value.receipt_path
     assert first["assets"][0]["acquisitionStatus"] == "failed"
     assert first["assets"][0]["failureCode"] == "DATA.SOURCE.ACQUISITION_FAILED"
     first_bytes = first_path.read_bytes()
@@ -954,3 +1004,159 @@ def test_failed_acquisition_allows_new_attempt_without_rewriting_history(
     assert load_professional_video_acquisition_receipt(
         second_path.relative_to(output_root).as_posix(), root=output_root
     ) == second
+
+
+def test_item_prevalidation_safety_frozen_and_popular_failures_are_isolated(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    manual_root = tmp_path / "manual"
+    manual_root.mkdir()
+    _write_video(manual_root / "accepted.mp4", moving=True, seed=51)
+    items = [
+        _item("accepted", "accepted.mp4", counts=(200, 10, 2, 1, 4)),
+        _item("bad-prevalidation", "missing.mp4", counts=(1, 1, 1, 1, 1)),
+        _item("bad-safety", "missing.mp4", counts=(1, 1, 1, 1, 1)),
+        _item("bad-frozen", "missing.mp4", counts=(1, 1, 1, 1, 1)),
+        _item("bad-popular", "missing.mp4", counts=(1, 1, 1, 1, 1)),
+    ]
+    items[1]["platform"] = "wrong platform"
+
+    def safety(item, **_kwargs):
+        if item["assetId"] == "bad-safety":
+            raise ValueError("safety evidence drift")
+        return {}
+
+    def frozen(item, **_kwargs):
+        if item["assetId"] == "bad-frozen":
+            raise ValueError("frozen asset drift")
+        return None
+
+    def popular(item, **_kwargs):
+        if item["assetId"] == "bad-popular":
+            raise ValueError("popular binding drift")
+        return None
+
+    monkeypatch.setattr(professional_video_acquisition, "load_bound_safety_evidence", safety)
+    monkeypatch.setattr(professional_video_acquisition, "resolve_frozen_video_asset", frozen)
+    monkeypatch.setattr(professional_video_acquisition, "resolve_popular_candidate_binding", popular)
+    manifest_path = tmp_path / "isolated-bindings.json"
+    write_json(manifest_path, _manifest(items, manifest_id="isolated-bindings"))
+
+    receipt, _path = acquire_professional_videos(
+        manifest_path,
+        handoff_ref=tmp_path / "handoff.json",
+        manual_root=manual_root,
+        output_root=tmp_path / "acquisition",
+    )
+
+    assert receipt["acceptedAssetCount"] == 1
+    assert receipt["rejectedAssetCount"] == 4
+    by_id = {row["assetId"]: row for row in receipt["assets"]}
+    assert by_id["accepted"]["distributionDecision"] == "research_allowed"
+    assert {
+        asset_id: by_id[asset_id]["failureCode"]
+        for asset_id in (
+            "bad-prevalidation", "bad-safety", "bad-frozen", "bad-popular"
+        )
+    } == {
+        "bad-prevalidation": "DATA.SOURCE.ITEM_PREVALIDATION_FAILED",
+        "bad-safety": "DATA.SOURCE.SAFETY_EVIDENCE_INVALID",
+        "bad-frozen": "DATA.SOURCE.FROZEN_ASSET_INVALID",
+        "bad-popular": "DATA.SOURCE.POPULAR_BINDING_INVALID",
+    }
+
+
+def test_acquisition_and_plan_failures_do_not_cancel_successful_siblings(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    manual_root = tmp_path / "manual"
+    manual_root.mkdir()
+    _write_video(manual_root / "accepted.mp4", moving=True, seed=52)
+    _write_video(manual_root / "bad-plan.mp4", moving=True, seed=53)
+    items = [
+        _item("accepted", "accepted.mp4", counts=(200, 10, 2, 1, 4)),
+        _item("missing", "missing.mp4", counts=(100, 5, 1, 1, 2)),
+        _item("bad-plan", "bad-plan.mp4", counts=(150, 8, 2, 1, 3)),
+    ]
+    original = professional_video_acquisition.build_video_plan_spec
+
+    def plan(row, *, receipt_ref):
+        if row["assetId"] == "bad-plan":
+            raise ValueError("plan projection rejected one candidate")
+        return original(row, receipt_ref=receipt_ref)
+
+    monkeypatch.setattr(professional_video_acquisition, "build_video_plan_spec", plan)
+    manifest_path = tmp_path / "isolated-work.json"
+    write_json(manifest_path, _manifest(items, manifest_id="isolated-work"))
+
+    receipt, _path = acquire_professional_videos(
+        manifest_path,
+        handoff_ref=tmp_path / "handoff.json",
+        manual_root=manual_root,
+        output_root=tmp_path / "acquisition",
+    )
+
+    by_id = {row["assetId"]: row for row in receipt["assets"]}
+    assert receipt["acceptedAssetCount"] == 1
+    assert by_id["accepted"]["planVideoSpec"] is not None
+    assert by_id["missing"]["failureCode"] == "DATA.SOURCE.ACQUISITION_FAILED"
+    assert by_id["bad-plan"]["failureCode"] == "DATA.SOURCE.PLAN_SPEC_INVALID"
+    assert by_id["bad-plan"]["distributionDecision"] == "blocked"
+
+
+def test_zero_success_blocks_with_frozen_typed_receipt(tmp_path: Path) -> None:
+    item = _item("invalid", "missing.mp4", counts=(1, 1, 1, 1, 1))
+    item["platform"] = "wrong platform"
+    manifest_path = tmp_path / "zero-success.json"
+    write_json(manifest_path, _manifest([item], manifest_id="zero-success"))
+
+    with pytest.raises(ProfessionalVideoAcquisitionBlocked) as captured:
+        acquire_professional_videos(
+            manifest_path,
+            handoff_ref=tmp_path / "handoff.json",
+            manual_root=tmp_path / "manual",
+            output_root=tmp_path / "acquisition",
+        )
+
+    assert captured.value.code == "DATA.SOURCE.VIDEO_BATCH_NO_SUCCESS"
+    assert captured.value.receipt["acceptedAssetCount"] == 0
+    assert captured.value.receipt_path.is_file()
+    assert captured.value.receipt["assets"][0]["failureCode"] == (
+        "DATA.SOURCE.ITEM_PREVALIDATION_FAILED"
+    )
+
+
+def test_cas_collision_is_a_global_batch_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    item = _item("collision", "collision.mp4", counts=(1, 1, 1, 1, 1))
+    manifest_path = tmp_path / "cas-collision.json"
+    write_json(manifest_path, _manifest([item], manifest_id="cas-collision"))
+
+    def collide(*_args, **_kwargs):
+        raise ProfessionalVideoCasCollision("professional video CAS collision: exact")
+
+    monkeypatch.setattr(professional_video_acquisition, "acquire_video_item", collide)
+    with pytest.raises(ProfessionalVideoCasCollision):
+        acquire_professional_videos(
+            manifest_path,
+            handoff_ref=tmp_path / "handoff.json",
+            manual_root=tmp_path / "manual",
+            output_root=tmp_path / "acquisition",
+        )
+    assert not list((tmp_path / "acquisition" / "receipts").glob("*.json"))
+
+
+def test_cas_store_collision_is_typed(tmp_path: Path) -> None:
+    source = tmp_path / "source.mp4"
+    source.write_bytes(b"exact-video-content")
+    digest = __import__("hashlib").sha256(source.read_bytes()).hexdigest()
+    destination = tmp_path / "cas" / "sha256" / digest[:2] / f"{digest}.mp4"
+    destination.parent.mkdir(parents=True)
+    destination.write_bytes(b"corrupt-cas-content")
+
+    with pytest.raises(ProfessionalVideoCasCollision):
+        put_video_cas(source, ".mp4", output_root=tmp_path)

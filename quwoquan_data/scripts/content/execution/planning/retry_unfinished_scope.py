@@ -20,6 +20,84 @@ class RetryUnfinishedScope:
     target_names: tuple[str, ...]
     target_rows: tuple[dict[str, Any], ...]
     candidate_ids: tuple[str, ...]
+    review_feedback_source: Any | None = None
+
+
+def _has_review_retry_evidence(
+    root: Path,
+    *,
+    root_execution_id: str,
+    required_object_refs: Sequence[str],
+) -> bool:
+    if (root / "_shared/post_review_closure.json").is_file():
+        return True
+    from content.execution.campaign.review_interruption_reconciliation import (
+        review_interruption_receipt_path,
+    )
+
+    output_root = root.parents[2]
+    return any(
+        review_interruption_receipt_path(
+            root_execution_id,
+            str(ref),
+            output_root=output_root,
+        ).is_file()
+        for ref in required_object_refs
+    )
+
+
+def _review_retry_scope(
+    root: Path,
+    *,
+    predecessor_execution_id: str,
+    successor_execution_id: str,
+    root_execution_id: str,
+    required_object_refs: Sequence[str],
+) -> RetryUnfinishedScope:
+    from content.execution.planning.retry_review_feedback import (
+        load_retry_review_feedback_source,
+    )
+
+    feedback = load_retry_review_feedback_source(
+        root,
+        predecessor_execution_id=predecessor_execution_id,
+        required_object_refs=required_object_refs,
+        root_execution_id=root_execution_id,
+    )
+    target_set = _object(root / "0.plan/target_set.json", label="target set")
+    target_by_identity: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for row in target_set.get("targets") or []:
+        if not isinstance(row, Mapping):
+            continue
+        key = (
+            str(row.get("entityType") or "").strip(),
+            str(row.get("name") or "").strip(),
+        )
+        target_by_identity.setdefault(key, []).append(dict(row))
+    target_rows: list[dict[str, Any]] = []
+    for entity_ref in feedback.entity_refs:
+        parsed = parse_entity_ref(entity_ref)
+        if parsed is None:
+            raise ValueError("review feedback entityRef is malformed")
+        domain, entity_type, name = parsed
+        rows = target_by_identity.get((f"{domain}/{entity_type}", name), [])
+        if len(rows) != 1:
+            raise ValueError(
+                f"review feedback target binding is missing or ambiguous: {entity_ref}"
+            )
+        target_rows.append(rows[0])
+    # A review failure may be caused by the predecessor source itself.  Keep
+    # the exact entity scope, but deliberately do not freeze that failed
+    # source-pool candidate into the successor.
+    feedback.to_document(successor_execution_id)
+    return RetryUnfinishedScope(
+        object_refs=feedback.object_refs,
+        entity_refs=feedback.entity_refs,
+        target_names=feedback.target_names,
+        target_rows=tuple(target_rows),
+        candidate_ids=(),
+        review_feedback_source=feedback,
+    )
 
 
 def _object(path: Path, *, label: str) -> dict[str, Any]:
@@ -43,15 +121,15 @@ def _exhausted_author_refs(
             if not isinstance(outcome, Mapping):
                 continue
             run_id = str(outcome.get("runId") or "").strip()
-            capacity_digest = str(
-                outcome.get("capacityReceiptDigest") or ""
+            attempt_digest = str(
+                outcome.get("invocationAttemptDigest") or ""
             ).strip()
             ref = str(outcome.get("ref") or "").strip()
             if ref:
                 if run_id:
                     attempt_refs[("runId", run_id)] = ref
-                if capacity_digest:
-                    attempt_refs[("capacityReceiptDigest", capacity_digest)] = ref
+                if attempt_digest:
+                    attempt_refs[("invocationAttemptDigest", attempt_digest)] = ref
     exhausted: set[str] = set()
     for request_path in (root / "_shared/semantic_tasks").glob("*/request.json"):
         request = _object(request_path, label="semantic task request")
@@ -73,8 +151,8 @@ def _exhausted_author_refs(
                 ("runId", str(attempt.get("runId") or "").strip())
             ) or attempt_refs.get(
                 (
-                    "capacityReceiptDigest",
-                    str(attempt.get("capacityReceiptDigest") or "").strip(),
+                    "invocationAttemptDigest",
+                    str(attempt.get("attemptDigest") or "").strip(),
                 )
             )
             refs.add(ref or "")
@@ -89,6 +167,8 @@ def load_retry_unfinished_scope(
     *,
     predecessor_execution_id: str,
     required_object_refs: Sequence[str],
+    successor_execution_id: str | None = None,
+    root_execution_id: str | None = None,
 ) -> RetryUnfinishedScope:
     """Verify exact manual-required refs and their frozen source-pool subset."""
 
@@ -99,6 +179,32 @@ def load_retry_unfinished_scope(
     refs = tuple(str(value).strip() for value in required_object_refs)
     if not refs or any(not ref for ref in refs) or len(set(refs)) != len(refs):
         raise ValueError("retry unfinished refs must be non-empty and unique")
+    campaign_root_id = str(root_execution_id or "").strip()
+    if not campaign_root_id:
+        from content.execution.campaign.submission_reconciliation_contract import (
+            campaign_root_for_submission,
+        )
+
+        campaign_root_id = (
+            campaign_root_for_submission(execution_id, output_root=root.parents[2])
+            or execution_id
+        )
+    if _has_review_retry_evidence(
+        root,
+        root_execution_id=campaign_root_id,
+        required_object_refs=refs,
+    ):
+        if not successor_execution_id:
+            raise ValueError(
+                "final-review retry requires an explicit successor executionId"
+            )
+        return _review_retry_scope(
+            root,
+            predecessor_execution_id=execution_id,
+            successor_execution_id=successor_execution_id,
+            root_execution_id=campaign_root_id,
+            required_object_refs=refs,
+        )
     state = _object(root / "_shared/execution_state.json", label="execution state")
     last_run = state.get("lastAgentRun")
     outcomes = last_run.get("outcomes") if isinstance(last_run, Mapping) else None

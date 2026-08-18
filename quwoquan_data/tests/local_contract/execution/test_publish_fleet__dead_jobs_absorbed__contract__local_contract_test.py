@@ -157,6 +157,9 @@ def test_publish_absorbs_dead_jobs_when_fleet_passed_quota(monkeypatch) -> None:
             "requiredQuota": 3,
             "finalizedObjectCount": 0,
             "idempotencyKey": "test",
+            "fleetPeakConcurrentWorkers": 3,
+            "fleetWaveCount": 1,
+            "fleetBatchDeadlineEpochSeconds": 1_784_500_000,
             "taskOutcomes": [
                 {"jobId": f"job-{index}", "status": "succeeded", "attempts": 1}
                 for index in range(3)

@@ -65,9 +65,13 @@ func bootstrapOfficialSkillPackage(
 		// candidate 更迭后的受控升级:以当前指针 revision 做 CAS。
 		expectedRevision = activation.Revision
 	}
+	stageCommandID := publication.CommandID + ":" +
+		publication.Release.ReleaseDigest + ":stage"
+	activationCommandID := publication.CommandID + ":" +
+		publication.Release.ReleaseDigest + ":activate"
 	staged, err := service.Stage(
 		ctx,
-		publication.CommandID+":stage",
+		stageCommandID,
 		publication.Release,
 	)
 	if err != nil {
@@ -75,7 +79,7 @@ func bootstrapOfficialSkillPackage(
 	}
 	if _, err := service.Activate(
 		ctx,
-		publication.CommandID+":activate",
+		activationCommandID,
 		packageapplication.ActivateInput{
 			PackageID:         staged.Release.PackageID,
 			ReleaseDigest:     staged.Release.ReleaseDigest,
@@ -113,12 +117,13 @@ func discoverOfficialPublicationRef(assetRoot string) (string, error) {
 	}
 	references := make([]string, 0, 1)
 	for _, entry := range entries {
-		if !entry.IsDir() {
+		entryInfo, infoErr := entry.Info()
+		if infoErr != nil || !entry.IsDir() || entryInfo.Mode()&os.ModeSymlink != 0 {
 			continue
 		}
 		candidate := filepath.Join(releasesDir, entry.Name(), "publication.json")
-		info, statErr := os.Stat(candidate)
-		if statErr != nil || info.IsDir() {
+		info, statErr := os.Lstat(candidate)
+		if statErr != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
 			continue
 		}
 		references = append(

@@ -3,26 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import replace
 from typing import Any
-
-from governance.coverage.distribution import (
-    ProductLifecycleState,
-    ReleaseClass,
-    load_content_distribution_policy,
-)
-
-
-def pool_distribution_policy(selection: Any | None):
-    policy = load_content_distribution_policy()
-    if selection is None:
-        return policy
-    release_class = ReleaseClass(selection.release_mode)
-    return replace(
-        policy,
-        release_class=release_class,
-        product_lifecycle_state=ProductLifecycleState(selection.release_mode),
-    )
 
 
 def aggregate_release_result(
@@ -73,4 +54,4 @@ def aggregate_release_result(
     return result
 
 
-__all__ = ["aggregate_release_result", "pool_distribution_policy"]
+__all__ = ["aggregate_release_result"]

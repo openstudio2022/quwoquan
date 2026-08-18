@@ -25,7 +25,7 @@
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <application
-        android:label="趣我圈"
+        android:label="${qwqAppLabel}${qwqModeLabel}"
         android:name=".QuwoquanApplication"
         android:icon="@mipmap/ic_launcher">
         <activity
@@ -55,7 +55,6 @@
             android:name=".wxapi.WXEntryActivity"
             android:exported="true"
             android:launchMode="singleTop"
-            android:taskAffinity="com.quwoquan.quwoquan_app"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
         <meta-data
             android:name="flutterEmbedding"

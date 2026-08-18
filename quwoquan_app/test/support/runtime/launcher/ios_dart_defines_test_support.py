@@ -47,7 +47,6 @@ REQUIRED_KEYS = {
     "MEDIA_UPLOAD_BASE_URL",
     "RTC_MEDIA_CONNECTION_URL",
     "APP_LAUNCH_POLICY",
-    "CONTENT_BINDING_STATE",
 }
 
 
@@ -56,24 +55,11 @@ def _build_handoff(
     *,
     launch_mode: str = "xcode_build",
 ) -> dict[str, object]:
-    extra_arguments: list[str] = []
-    if environment == "prod":
-        extra_arguments.extend(
-            [
-                "--content-release-id",
-                f"release-{environment}",
-                "--content-manifest-digest",
-                "sha256:" + "1" * 64,
-                "--content-readiness-receipt-digest",
-                "sha256:" + "2" * 64,
-            ]
-        )
     return build_test_handoff(
         launcher,
         environment,
         RUNTIME_TARGETS[environment],
         launch_mode=launch_mode,
-        extra_arguments=tuple(extra_arguments),
     )
 
 
@@ -101,17 +87,6 @@ def _apply_handoff_identity(
     env["QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST"] = str(
         handoff["effectiveLaunchManifestDigest"]
     )
-    for environment_key, handoff_key in (
-        ("QWQ_CONTENT_RELEASE_ID", "contentReleaseId"),
-        ("QWQ_CONTENT_MANIFEST_DIGEST", "contentManifestDigest"),
-        (
-            "QWQ_CONTENT_READINESS_RECEIPT_DIGEST",
-            "contentReadinessReceiptDigest",
-        ),
-    ):
-        value = str(handoff.get(handoff_key) or "")
-        if value:
-            env[environment_key] = value
     return handoff
 
 
@@ -142,14 +117,6 @@ def _bound_test_live_handoff() -> dict[str, object]:
         "alpha",
         "alpha-local",
         launch_mode="environment_patrol_smoke",
-        extra_arguments=(
-            "--content-release-id",
-            "travel-research-test",
-            "--content-manifest-digest",
-            "sha256:" + "1" * 64,
-            "--content-readiness-receipt-digest",
-            "sha256:" + "2" * 64,
-        ),
     )
 
 

@@ -18,7 +18,11 @@ from core.source_digest import (
     current_source_definition_snapshot,
 )
 
-from content.execution.campaign.lane import CAMPAIGN_CARRIERS
+from content.execution.campaign.lane import (
+    CAMPAIGN_CARRIERS,
+    normalize_active_carriers,
+    normalize_workloads,
+)
 from content.execution.campaign.scale import (
     resolve_campaign_scale,
 )
@@ -198,15 +202,15 @@ def default_family_ref(*, vertical: str, carrier: str) -> str:
 
 def _execution_ids(
     *,
-    scale: str,
+    intent: str,
     vertical: str,
     scope: str,
     day: str,
+    carriers: Iterable[str],
     sequence: int = 1,
 ) -> dict[str, str]:
     if isinstance(sequence, bool) or not isinstance(sequence, int) or sequence < 1:
         raise ValueError("campaign envelope sequence must be a positive integer")
-    intent = scale.lower()
     return {
         carrier: build_execution_id(
             run_date=day,
@@ -217,8 +221,28 @@ def _execution_ids(
             phase="scale",
             sequence=sequence,
         )
-        for carrier in CAMPAIGN_CARRIERS
+        for carrier in normalize_active_carriers(carriers)
     }
+
+
+def workload_intent(
+    *,
+    scale: str,
+    workload_mode: str,
+    workloads: Mapping[str, int],
+) -> str:
+    """Keep explicit workload identities distinct from milestone promotions."""
+
+    active = normalize_workloads(workloads)
+    if workload_mode == "milestone_preset":
+        if tuple(active) != CAMPAIGN_CARRIERS:
+            raise ValueError("milestone preset must expand all campaign carriers")
+        return scale.lower()
+    if workload_mode != "explicit":
+        raise ValueError(f"unsupported campaign workload mode: {workload_mode}")
+    return "workload-" + "-".join(
+        f"{carrier}-{active[carrier]}" for carrier in active
+    )
 
 
 def _research_scale_promotion_ref(
@@ -280,29 +304,27 @@ def write_scale_envelopes(
     target_names: Iterable[str] | None = None,
     source_providers: Iterable[str] | None = None,
     family_ref: str | None = None,
-    carriers: Iterable[str] = CAMPAIGN_CARRIERS,
+    carriers: Iterable[str] | None = None,
+    workloads: Mapping[str, int] | None = None,
     repo_root: Path | None = None,
     output_root: Path | None = None,
     day: str | None = None,
     sequence: int = 1,
     semantic_selection_id: str = DEFAULT_SEMANTIC_SELECTION_ID,
     semantic_preflight_receipt: Path | None = None,
-    capacity_host_set: Path | None = None,
     semantic_preflight_output_root: Path | None = None,
     predecessor_execution_ids_by_carrier: Mapping[str, str] | None = None,
     predecessor_reconciliation_receipt: Path | None = None,
     reconciliation_output_root: Path | None = None,
     promotion_receipt: Path | None = None,
     promotion_output_root: Path | None = None,
-    alpha_m100_readiness_receipt: Path | None = None,
-    alpha_m100_app_uat_receipt: Path | None = None,
-    alpha_m100_acceptance_output_root: Path | None = None,
     pre_acquisition_handoff: Path | None = None,
     pre_acquisition_handoff_output_root: Path | None = None,
     external_input_refs_by_carrier: Mapping[str, Iterable[Mapping[str, Any]]] | None = None,
     acquisition_root: Path | None = None,
     scale_source_pool: Path | None = None,
     source_pool_evidence_root: Path | None = None,
+    retry_evidence_output_root: Path | None = None,
 ) -> dict[str, Path]:
     """Write immutable envelopes for selected carriers at one resolved scale."""
     from content.execution.campaign.request_envelope_writer import (
@@ -319,28 +341,26 @@ def write_scale_envelopes(
         source_providers=source_providers,
         family_ref=family_ref,
         carriers=carriers,
+        workloads=workloads,
         repo_root=repo_root,
         output_root=output_root,
         day=day,
         sequence=sequence,
         semantic_selection_id=semantic_selection_id,
         semantic_preflight_receipt=semantic_preflight_receipt,
-        capacity_host_set=capacity_host_set,
         semantic_preflight_output_root=semantic_preflight_output_root,
         predecessor_execution_ids_by_carrier=predecessor_execution_ids_by_carrier,
         predecessor_reconciliation_receipt=predecessor_reconciliation_receipt,
         reconciliation_output_root=reconciliation_output_root,
         promotion_receipt=promotion_receipt,
         promotion_output_root=promotion_output_root,
-        alpha_m100_readiness_receipt=alpha_m100_readiness_receipt,
-        alpha_m100_app_uat_receipt=alpha_m100_app_uat_receipt,
-        alpha_m100_acceptance_output_root=alpha_m100_acceptance_output_root,
         pre_acquisition_handoff=pre_acquisition_handoff,
         pre_acquisition_handoff_output_root=pre_acquisition_handoff_output_root,
         external_input_refs_by_carrier=external_input_refs_by_carrier,
         acquisition_root=acquisition_root,
         scale_source_pool=scale_source_pool,
         source_pool_evidence_root=source_pool_evidence_root,
+        retry_evidence_output_root=retry_evidence_output_root,
     )
 
 
@@ -354,23 +374,20 @@ def write_campaign_envelopes(
     target_names: Iterable[str] | None = None,
     source_providers: Iterable[str] | None = None,
     family_ref: str | None = None,
-    carriers: Iterable[str] = CAMPAIGN_CARRIERS,
+    carriers: Iterable[str] | None = None,
+    workloads: Mapping[str, int] | None = None,
     repo_root: Path | None = None,
     output_root: Path | None = None,
     day: str | None = None,
     sequence: int = 1,
     semantic_selection_id: str = DEFAULT_SEMANTIC_SELECTION_ID,
     semantic_preflight_receipt: Path | None = None,
-    capacity_host_set: Path | None = None,
     semantic_preflight_output_root: Path | None = None,
     predecessor_execution_ids_by_carrier: Mapping[str, str] | None = None,
     predecessor_reconciliation_receipt: Path | None = None,
     reconciliation_output_root: Path | None = None,
     promotion_receipt: Path | None = None,
     promotion_output_root: Path | None = None,
-    alpha_m100_readiness_receipt: Path | None = None,
-    alpha_m100_app_uat_receipt: Path | None = None,
-    alpha_m100_acceptance_output_root: Path | None = None,
     pre_acquisition_handoff: Path | None = None,
     pre_acquisition_handoff_output_root: Path | None = None,
     external_input_refs_by_carrier: Mapping[str, Iterable[Mapping[str, Any]]] | None = None,
@@ -392,22 +409,19 @@ def write_campaign_envelopes(
         source_providers=source_providers,
         family_ref=family_ref,
         carriers=carriers,
+        workloads=workloads,
         repo_root=repo_root,
         output_root=output_root,
         day=day,
         sequence=sequence,
         semantic_selection_id=semantic_selection_id,
         semantic_preflight_receipt=semantic_preflight_receipt,
-        capacity_host_set=capacity_host_set,
         semantic_preflight_output_root=semantic_preflight_output_root,
         predecessor_execution_ids_by_carrier=predecessor_execution_ids_by_carrier,
         predecessor_reconciliation_receipt=predecessor_reconciliation_receipt,
         reconciliation_output_root=reconciliation_output_root,
         promotion_receipt=promotion_receipt,
         promotion_output_root=promotion_output_root,
-        alpha_m100_readiness_receipt=alpha_m100_readiness_receipt,
-        alpha_m100_app_uat_receipt=alpha_m100_app_uat_receipt,
-        alpha_m100_acceptance_output_root=alpha_m100_acceptance_output_root,
         pre_acquisition_handoff=pre_acquisition_handoff,
         pre_acquisition_handoff_output_root=pre_acquisition_handoff_output_root,
         external_input_refs_by_carrier=external_input_refs_by_carrier,

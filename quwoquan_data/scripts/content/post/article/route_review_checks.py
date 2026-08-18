@@ -23,7 +23,6 @@ from content.post.article.draft_io import (
     repair_creative_meta,
 )
 from governance.coverage.entity_extract import build_entities_sidecar
-from governance.coverage.license import rights_proof_required
 from core.image_safety import assess_asset_sources
 from content.execution.stage_reports import write_gate_report, write_repair_report, write_stage_result
 from core.style_catalog import detect_opening_strategy, family_allowed_openings
@@ -261,7 +260,6 @@ def _check_image_fidelity(compose_payload: Mapping[str, Any]) -> dict[str, Any]:
     if not vertical:
         issues.append("image carrier missing vertical policy owner")
         return {"passed": False, "issues": issues, "suggestions": []}
-    require_rights_proof = rights_proof_required(vertical)
     creators = {
         _image_fact(asset, "creator", "credit", "sourceAuthor")
         for asset in assets
@@ -277,14 +275,7 @@ def _check_image_fidelity(compose_payload: Mapping[str, Any]) -> dict[str, Any]:
             missing.append("sourceCollectionId")
         if not _image_fact(asset, "collectionPageUrl", "sourceUrl", "pinUrl"):
             missing.append("collectionPageUrl/sourceUrl/pinUrl")
-        if require_rights_proof and not _image_fact(asset, "license"):
-            missing.append("license")
-        if require_rights_proof and not (
-            _image_fact(asset, "termsUrl")
-            or _image_fact(asset, "authorizationProof")
-        ):
-            missing.append("termsUrl|authorizationProof")
-        if not require_rights_proof and _image_fact(
+        if _image_fact(
             asset, "rightsAuditStatus"
         ) not in {"verified", "unverified", "restricted", "unknown"}:
             missing.append("rightsAuditStatus")

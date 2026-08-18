@@ -157,6 +157,9 @@ class StackctlAppDebugPreflightRuntimeModeIsolationTest(unittest.TestCase):
         self,
         *,
         runtime_mode: str,
+        purpose: str = "runtime",
+        content_binding: dict[str, object] | None = None,
+        content_preflight: dict[str, object] | None = None,
         content_binding_error: Exception | None = None,
         startup_status: str = "running",
         provider_runtime_error: Exception | None = None,
@@ -168,7 +171,7 @@ class StackctlAppDebugPreflightRuntimeModeIsolationTest(unittest.TestCase):
         )
         content_loader = mock.Mock(
             side_effect=content_binding_error,
-            return_value=None,
+            return_value=content_binding,
         )
         with (
             tempfile.TemporaryDirectory() as temporary,
@@ -252,11 +255,17 @@ class StackctlAppDebugPreflightRuntimeModeIsolationTest(unittest.TestCase):
                 "_execute_otp_login_journey",
                 return_value=_login_receipt(runtime_mode=runtime_mode),
             ),
+            mock.patch.object(
+                stackctl,
+                "command_app_content_preflight",
+                return_value=content_preflight or {},
+            ),
         ):
             result = stackctl.command_app_debug_preflight(
                 argparse.Namespace(
                     target="alpha-local",
                     runtime_mode=runtime_mode,
+                    purpose=purpose,
                     report_dir=str(Path(temporary) / "preflight"),
                 )
             )
@@ -272,6 +281,51 @@ class StackctlAppDebugPreflightRuntimeModeIsolationTest(unittest.TestCase):
             immutable_startup.assert_not_called()
             mutable_startup.assert_called_once_with("alpha-local")
         return result, content_loader
+
+    def test_consumer_content_live_marks_search_not_applicable(self) -> None:
+        binding = {
+            "readinessPhase": "consumer",
+            "releaseId": "release-consumer-a",
+            "manifestDigest": "sha256:" + "5" * 64,
+            "readinessReceiptRef": "env/alpha/release-readiness.json",
+            "readinessReceiptDigest": "sha256:" + "6" * 64,
+        }
+        result, _content_loader = self._invoke(
+            runtime_mode="test_live",
+            purpose="content_live",
+            content_binding=binding,
+            content_preflight={
+                "exitCode": 0,
+                "status": "passed",
+                **binding,
+                "contentReadback": {
+                    "postIds": ["video-001"],
+                    "feedQueries": [
+                        {"name": "typed_video", "matchedPostIds": ["video-001"]},
+                        {
+                            "name": "homepage_recommend",
+                            "matchedPostIds": ["video-001"],
+                        },
+                    ],
+                },
+                "releaseProbe": {
+                    "exitCode": 0,
+                    "readinessPhase": "consumer",
+                    "searchCanariesRequired": False,
+                    "searchCanaries": [],
+                    "mediaChecks": {"automatic": True},
+                },
+            },
+        )
+
+        self.assertEqual(result["exitCode"], 0, result)
+        self.assertEqual(result["contentLive"], "passed")
+        components = result["contentLiveChecks"]["components"]
+        self.assertIsNone(components["search"])
+        self.assertTrue(components["media"])
+        self.assertTrue(components["recommendation"])
+        self.assertTrue(components["readiness"])
+        self.assertEqual(result["contentLiveChecks"]["blockedComponents"], [])
 
     def test_immutable_otp_pass_ignores_stopped_test_live_binding(self) -> None:
         result, content_loader = self._invoke(

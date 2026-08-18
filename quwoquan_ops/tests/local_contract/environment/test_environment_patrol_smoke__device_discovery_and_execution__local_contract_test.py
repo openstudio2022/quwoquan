@@ -166,7 +166,7 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
             target="gamma-local",
             device="emulator-5554",
             consumer=lease[2],
-            package_name="com.quwoquan.quwoquan_app",
+            package_name=smoke.android_release_uat_package("gamma", "debug"),
             ports=[19000, 19100],
             platform="android",
         )
@@ -199,7 +199,7 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
             target="gamma-local",
             device="SIMULATOR-UDID",
             consumer=lease[2],
-            package_name="com.example.quwoquanApp",
+            package_name=smoke.ios_release_uat_bundle_ids("gamma", "debug")[0],
             ports=[],
             platform="ios-simulator",
         )
@@ -464,16 +464,17 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
 
         result = smoke._reset_release_uat_device_state(args, device)
 
+        expected_bundle_ids = smoke.ios_release_uat_bundle_ids("gamma", "debug")
         self.assertEqual(result["status"], "reset")
         self.assertEqual(
             [row["bundleId"] for row in result["applications"]],
-            list(smoke.IOS_RELEASE_UAT_BUNDLE_IDS),
+            list(expected_bundle_ids),
         )
         self.assertEqual(
             [call.args[0] for call in run.call_args_list],
             [
                 ["xcrun", "simctl", "uninstall", "ios-release-uat", bundle_id]
-                for bundle_id in smoke.IOS_RELEASE_UAT_BUNDLE_IDS
+                for bundle_id in expected_bundle_ids
             ],
         )
 
@@ -521,7 +522,7 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
                 "shell",
                 "pm",
                 "path",
-                smoke.ANDROID_RELEASE_UAT_PACKAGE,
+                smoke.android_release_uat_package("gamma", "debug"),
             ],
             text=True,
             capture_output=True,

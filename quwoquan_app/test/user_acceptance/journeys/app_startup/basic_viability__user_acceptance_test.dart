@@ -20,7 +20,7 @@ import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/chat_contact_home_filter.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/chat_contacts_row.dart';
-import 'package:quwoquan_app/service/chat_service/chat/message/presentation/chat_message_bubble.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/chat_message_bubble.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_state_provider.dart';
 
 import '../../../support/runtime/patrol/patrol_core_readback_support.dart';

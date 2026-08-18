@@ -13,6 +13,10 @@ from pymongo import MongoClient
 from redis import Redis
 from redis.cluster import RedisCluster
 
+from artifact_identity import verify_embedded_artifact_identity
+
+verify_embedded_artifact_identity()
+
 from api.capacity import refresh_capacity_metrics
 from api.metrics import refresh_rec_model_loaded_gauges
 from runtime_contract import bootstrap_runtime_contract_or_die

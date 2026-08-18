@@ -88,7 +88,7 @@ def test_pool_delivery_drain__down_then_ready_consumes_same_intent_without_seman
         )
     )
     frozen_spec = SimpleNamespace(
-        execution_policy=SimpleNamespace(required_workers=1)
+        execution_policy=SimpleNamespace(fleet_max_concurrent_workers=1)
     )
 
     monkeypatch.setattr(
@@ -147,7 +147,7 @@ def test_pool_delivery_drain__reconciles_remote_dead_receipt_after_local_success
     job = SimpleNamespace(stage=QueueJobStage.PUBLISH, job_id="publish-001")
     intent_id = "sha256:" + "7" * 64
     frozen_spec = SimpleNamespace(
-        execution_policy=SimpleNamespace(required_workers=1)
+        execution_policy=SimpleNamespace(fleet_max_concurrent_workers=1)
     )
     report = SimpleNamespace(
         passed=True,
@@ -180,10 +180,10 @@ def test_pool_delivery_drain__reconciles_remote_dead_receipt_after_local_success
     monkeypatch.setattr(
         delivery_drain, "dispatch_reliabletask_checkpoint", lambda *_args: None
     )
-    reconcile_calls: list[tuple[str, int]] = []
+    reconcile_calls: list[str] = []
 
-    def reconcile(execution_id: str, *, workers: int, **_kwargs):
-        reconcile_calls.append((execution_id, workers))
+    def reconcile(execution_id: str):
+        reconcile_calls.append(execution_id)
         return report
 
     monkeypatch.setattr(
@@ -199,7 +199,7 @@ def test_pool_delivery_drain__reconciles_remote_dead_receipt_after_local_success
     assert result["qualifiedCount"] == result["completedCount"] == 1
     assert result["attemptedCount"] == 3
     assert result["intentIds"] == [intent_id]
-    assert reconcile_calls == [(EXECUTION_ID, 1)]
+    assert reconcile_calls == [EXECUTION_ID]
 
 
 def test_pool_delivery_drain__pre_capsule_promotes_only_qualified_reviewed_object(

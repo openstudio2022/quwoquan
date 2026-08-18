@@ -15,8 +15,8 @@ print_usage() {
 Usage: ./run.sh [--env alpha|beta|gamma] [--target alpha-local|beta-local|gamma-local]
                 [--mode content-live|ui-only] [--ensure-runtime] -d <device>
 
-content-live is the default and starts Flutter only after the selected Research
-release passes runtime, release, API, media, Search and Recommendation delivery.
+content-live is the default and starts Flutter only after the selected canonical
+content release passes runtime, release, API, media, Search and Recommendation delivery.
 ui-only allows a non-promotable development launch without claiming content readiness.
 EOF
 }
@@ -189,7 +189,6 @@ if run_mode == "content-live":
     if (
         payload.get("status") != "passed"
         or payload.get("contentLive") != "passed"
-        or payload.get("contentBindingState") != "bound"
         or any(not value for value in required.values())
     ):
         print(json.dumps({
@@ -560,6 +559,20 @@ fi
 if [[ "${QWQ_RUN_DEVICE_KIND:-}" == "ios-simulator" \
    || ("${QWQ_RUN_DEVICE_KIND:-}" == android* \
       && -n "$QWQ_ANDROID_LOCAL_PORTS") ]]; then
+  # run.sh 走 flutter run（Debug）；lease 身份必须与实际安装的
+  # 环境 × BuildMode applicationId/bundle id 单轨一致，禁止字面值。
+  QWQ_DEBUG_APP_ID_PLATFORM="android"
+  if [[ "${QWQ_RUN_DEVICE_KIND:-}" == "ios-simulator" ]]; then
+    QWQ_DEBUG_APP_ID_PLATFORM="ios"
+  fi
+  QWQ_DEBUG_APP_ID="$(
+    PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" PYTHONDONTWRITEBYTECODE=1 \
+      python3 -c "from quwoquan_ops.cli.lib.app_identity import application_id_for; import sys; print(application_id_for(sys.argv[1], sys.argv[2], 'debug'))" \
+      "$QWQ_DEBUG_APP_ID_PLATFORM" "$QWQ_APP_RUNTIME_ENV"
+  )" || {
+    echo "[run] GATE_BLOCK: failed to derive the debug application id for $QWQ_APP_RUNTIME_ENV." >&2
+    exit 2
+  }
   LEASE_COMMAND=(
     "$RUNTIME_STACKCTL_PYTHON" "$ROOT_DIR/quwoquan_ops/cli/stackctl.py"
     --output-format json consumer-lease acquire
@@ -570,13 +583,13 @@ if [[ "${QWQ_RUN_DEVICE_KIND:-}" == "ios-simulator" \
   if [[ "${QWQ_RUN_DEVICE_KIND:-}" == "ios-simulator" ]]; then
     LEASE_COMMAND+=(
       --platform ios-simulator
-      --bundle-id com.example.quwoquanApp
+      --bundle-id "$QWQ_DEBUG_APP_ID"
       --ports ""
     )
   else
     LEASE_COMMAND+=(
       --platform android
-      --package-name com.quwoquan.quwoquan_app
+      --package-name "$QWQ_DEBUG_APP_ID"
       --ports "$QWQ_ANDROID_LOCAL_PORTS"
     )
   fi
@@ -612,18 +625,6 @@ HANDOFF_CMD=(
   --app-instance-id "$QWQ_APP_RUNTIME_ENV-run"
   --app-instance-namespace "$QWQ_APP_RUNTIME_ENV-run"
 )
-if [[ -n "${QWQ_CONTENT_RELEASE_ID:-}" ]]; then
-  HANDOFF_CMD+=(--content-release-id "$QWQ_CONTENT_RELEASE_ID")
-fi
-if [[ -n "${QWQ_CONTENT_MANIFEST_DIGEST:-}" ]]; then
-  HANDOFF_CMD+=(--content-manifest-digest "$QWQ_CONTENT_MANIFEST_DIGEST")
-fi
-if [[ -n "${QWQ_CONTENT_READINESS_RECEIPT_DIGEST:-}" ]]; then
-  HANDOFF_CMD+=(
-    --content-readiness-receipt-digest
-    "$QWQ_CONTENT_READINESS_RECEIPT_DIGEST"
-  )
-fi
 if [[ -n "$ANDROID_LOCAL_GATEWAY_BASE_URL" ]]; then
   HANDOFF_CMD+=(--gateway-base-url "$ANDROID_LOCAL_GATEWAY_BASE_URL")
 fi
@@ -757,6 +758,7 @@ PY
 set +e
 flutter run \
   --no-pub \
+  --flavor "$QWQ_APP_RUNTIME_ENV" \
   --target "$ENTRYPOINT" \
   --host-vmservice-port=8888 \
   --dds-port=8889 \
@@ -817,7 +819,7 @@ report = {
     "deviceId": device_id,
     "platform": platform,
     "runMode": run_mode,
-    "nonPromotable": run_mode == "ui-only",
+    "nonPromotable": True,
     "contentLive": preflight.get("contentLive", "not_evaluated"),
     "launchPolicy": "test_live",
     "compileStatus": "passed" if exit_code == 0 else "failed_or_not_completed",

@@ -11,11 +11,19 @@ import (
 
 // Handler 只装配 ExternalInteraction 自身的 HTTP 入口，不再承载 Location。
 type Handler struct {
-	external *externalapplication.ExternalInteractionService
+	external  *externalapplication.ExternalInteractionService
+	readiness *externalapplication.SmsOtpDeliveryReadinessQueryFacade
 }
 
-func NewHandler(external *externalapplication.ExternalInteractionService) *Handler {
-	return &Handler{external: external}
+func NewHandler(
+	external *externalapplication.ExternalInteractionService,
+	readiness ...*externalapplication.SmsOtpDeliveryReadinessQueryFacade,
+) *Handler {
+	var readinessQueries *externalapplication.SmsOtpDeliveryReadinessQueryFacade
+	if len(readiness) > 0 {
+		readinessQueries = readiness[0]
+	}
+	return &Handler{external: external, readiness: readinessQueries}
 }
 
 func (h *Handler) Routes() http.Handler {
@@ -25,6 +33,10 @@ func (h *Handler) Routes() http.Handler {
 }
 
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
+	mux.HandleFunc(
+		externalgenerated.SmsOtpDeliveryReadinessPath,
+		h.handleSmsOtpDeliveryReadiness,
+	)
 	mux.HandleFunc(externalgenerated.ExternalRequestsPath, h.handleSubmitExternalRequest)
 	mux.HandleFunc(externalgenerated.ExternalRequestDeadLettersPath, h.handleExternalDeadLetters)
 	mux.HandleFunc(externalgenerated.ExternalRequestDeadLetterRecoverPath, h.handleRecoverExternalDeadLetter)

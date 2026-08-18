@@ -1,4 +1,5 @@
 """Operator-only recovery for immutable reviewed pool-delivery intents."""
+
 from __future__ import annotations
 
 import argparse
@@ -12,6 +13,7 @@ from core.control_types import (
     QueueJobStage,
     ReliableTaskDispatchStatus,
 )
+from core.schema import assert_valid
 
 from content.execution import store
 from content.execution.agent.reliabletask_dispatch import (
@@ -20,15 +22,12 @@ from content.execution.agent.reliabletask_dispatch import (
 from content.execution.closure.pool_delivery import (
     validate_pool_delivery_intent_for_job,
 )
-from content.execution.context import ExecutionContext
-from content.execution.context import load_execution_state
+from content.execution.context import ExecutionContext, load_execution_state
 from content.execution.coverage import coverage_entity_ids
 from content.execution.identity import validate_execution_id
 from content.execution.queue.core import _load_jobs
 from content.execution.spec_contract import ExecutionSpec
 from content.execution.workspace import load_frozen_execution_manifest
-from core.schema import assert_valid
-
 
 _DELIVERY_ONLY_INVALID = "DATA.POOL.DELIVERY_ONLY_INVALID"
 
@@ -57,7 +56,7 @@ def _drain_reviewed_delivery_only(
     if not isinstance(manifest.get("sourceDigest"), Mapping) or not isinstance(
         manifest.get("executionBundle"), Mapping
     ):
-        raise ValueError(
+        raise ValueError(  # noqa: TRY004 - stable operator error contract
             f"{_DELIVERY_ONLY_INVALID}: execution manifest is not complete v2"
         )
     state = load_execution_state(execution_id)
@@ -76,6 +75,11 @@ def _drain_reviewed_delivery_only(
         indexed_post_targets,
         load_post_review_closure,
     )
+    from content.execution.closure.publish_outcome import (
+        PUBLISH_APPLY_FAILED,
+        is_hard_publish_failure,
+        publish_issue_code,
+    )
     from content.release.canonical.post_promotion import promote_post_object
 
     closure = load_post_review_closure(
@@ -89,45 +93,64 @@ def _drain_reviewed_delivery_only(
         )
     intents: list[str] = []
     canonical_objects: list[dict[str, str]] = []
+    issue_codes: list[str] = []
     for verdict in closure.qualified:
-        intent, _path = write_pool_delivery_intent(
-            execution_id,
-            carrier=closure.carrier,
-            object_ref=verdict.object_ref,
-            content_object_dir=verdict.publish_ref,
-        )
-        intents.append(str(intent["intentId"]))
-        canonical_objects.append(
-            promote_post_object(
+        try:
+            intent, _path = write_pool_delivery_intent(
                 execution_id,
-                verdict.publish_ref,
-                pool_delivery_intent=intent,
+                carrier=closure.carrier,
+                object_ref=verdict.object_ref,
+                content_object_dir=verdict.publish_ref,
             )
-        )
+            intents.append(str(intent["intentId"]))
+            canonical_objects.append(
+                promote_post_object(
+                    execution_id,
+                    verdict.publish_ref,
+                    pool_delivery_intent=intent,
+                )
+            )
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
+            if is_hard_publish_failure(exc):
+                raise
+            issue_codes.append(publish_issue_code(exc) or PUBLISH_APPLY_FAILED)
+    completed = len(canonical_objects)
+    publish_discarded = len(closure.qualified) - completed
     return _result(
         executionId=execution_id,
         recoveryMode="reviewed_delivery_only",
         executionStatePreserved=True,
-        status="completed",
+        status="completed" if completed else "blocked",
         attemptedCount=len(closure.qualified),
-        completedCount=len(canonical_objects),
+        completedCount=completed,
         qualifiedCount=len(closure.qualified),
-        discardedCount=len(closure.discarded),
+        discardedCount=len(closure.discarded) + publish_discarded,
         intentIds=sorted(intents),
         canonicalObjects=canonical_objects,
-        issueCodes=[],
+        issueCodes=sorted(set(issue_codes)),
     )
 
 
-def drain_pool_delivery(execution_id: str) -> dict[str, Any]:
+def drain_pool_delivery(
+    execution_id: str,
+    *,
+    campaign_root_execution_id: str | None = None,
+) -> dict[str, Any]:
     """Drain existing publish jobs without planning or invoking semantic work."""
 
     normalized = validate_execution_id(execution_id)
+    if campaign_root_execution_id is not None:
+        from content.execution.controller.execute.campaign_reviewed_publish_recovery import (
+            recover_campaign_reviewed_publish,
+        )
+
+        return recover_campaign_reviewed_publish(
+            normalized,
+            campaign_root_execution_id,
+        )
     manifest = load_frozen_execution_manifest(normalized)
     jobs = tuple(
-        job
-        for job in _load_jobs(normalized)
-        if job.stage is QueueJobStage.PUBLISH
+        job for job in _load_jobs(normalized) if job.stage is QueueJobStage.PUBLISH
     )
     if not jobs:
         return _drain_reviewed_delivery_only(normalized, manifest=manifest)
@@ -147,6 +170,7 @@ def drain_pool_delivery(execution_id: str) -> dict[str, Any]:
     dispatch = dispatch_reliabletask_checkpoint(ctx, ExecutionStage.PUBLISH)
     if dispatch is None:
         from core.runtime_policy import active_runtime_policy
+
         from content.execution.queue.reliabletask.publish_reconciliation import (
             reconcile_frozen_publish_recovery,
         )
@@ -162,28 +186,46 @@ def drain_pool_delivery(execution_id: str) -> dict[str, Any]:
             raise ValueError(
                 "pool delivery execution has no current ReliableTask receipt"
             )
+        completed = int(report.succeeded)
+        issue_codes = sorted(
+            {
+                str(outcome.failure_code or _DELIVERY_ONLY_INVALID)
+                for outcome in report.outcomes
+                if outcome.status != "succeeded"
+            }
+        )
         return _result(
             executionId=normalized,
             recoveryMode="frozen_publish_jobs",
             executionStatePreserved=True,
-            status=("completed" if report.passed else "blocked"),
+            status=("completed" if completed else "blocked"),
             attemptedCount=sum(outcome.attempts for outcome in report.outcomes),
-            completedCount=report.succeeded,
+            completedCount=completed,
             qualifiedCount=len(intents),
-            discardedCount=0,
+            discardedCount=max(0, len(intents) - completed),
             intentIds=sorted(str(intent["intentId"]) for intent in intents),
             canonicalObjects=[],
-            issueCodes=([] if report.passed else [_DELIVERY_ONLY_INVALID]),
+            issueCodes=issue_codes,
         )
+    dispatch_status = dispatch.status.value
+    if (
+        dispatch.status is not ReliableTaskDispatchStatus.WAITING
+        and dispatch.completed_count > 0
+    ):
+        dispatch_status = ReliableTaskDispatchStatus.COMPLETED.value
     return _result(
         executionId=normalized,
         recoveryMode="frozen_publish_jobs",
         executionStatePreserved=True,
-        status=dispatch.status.value,
+        status=dispatch_status,
         attemptedCount=dispatch.attempted_count,
         completedCount=dispatch.completed_count,
         qualifiedCount=len(intents),
-        discardedCount=0,
+        discardedCount=(
+            0
+            if dispatch.status is ReliableTaskDispatchStatus.WAITING
+            else max(0, len(intents) - dispatch.completed_count)
+        ),
         intentIds=sorted(str(intent["intentId"]) for intent in intents),
         canonicalObjects=[],
         issueCodes=sorted({issue.code.value for issue in dispatch.issues}),
@@ -191,7 +233,14 @@ def drain_pool_delivery(execution_id: str) -> dict[str, Any]:
 
 
 def handle_drain_pool_delivery(args: argparse.Namespace) -> None:
-    report = drain_pool_delivery(str(args.execution_id))
+    report = drain_pool_delivery(
+        str(args.execution_id),
+        campaign_root_execution_id=(
+            str(args.campaign_root_execution_id)
+            if args.campaign_root_execution_id
+            else None
+        ),
+    )
     print(json.dumps(report, ensure_ascii=False, sort_keys=True))
     status = ReliableTaskDispatchStatus(str(report["status"]))
     if status is ReliableTaskDispatchStatus.WAITING:
@@ -208,6 +257,7 @@ def register_drain_pool_delivery_parser(
         help="只重放冻结的 reviewed delivery intents；不运行 semantic author/reviewer",
     )
     parser.add_argument("--execution-id", required=True)
+    parser.add_argument("--campaign-root-execution-id")
     parser.set_defaults(handler=handle_drain_pool_delivery)
 
 

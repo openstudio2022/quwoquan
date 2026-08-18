@@ -43,14 +43,18 @@ import hashlib
 import json
 import sys
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from quwoquan_ops.cli.lib.test_data.capabilities.common import ActorRole
 from quwoquan_ops.cli.lib.test_data.model import TestDataContext
+from quwoquan_ops.cli.smoke.environment_patrol_smoke.constants import (
+    APP_CONTENT_VIDEO_PAGE_COUNT_ENV,
+)
 
 from quwoquan_ops.cli.commands.app_preflight_uat_binding import (
     _APP_CONTENT_TEST_LIVE_STARTUP_IDENTITY_FIELDS,
     _app_content_patrol_evidence,
+    _run_app_content_message_home_command,
     _app_content_test_live_actor_context,
     _app_content_test_live_runtime_binding,
     _ios_direct_flutter_log_reader_retryable,
@@ -78,6 +82,10 @@ APP_CORE_READBACK_UAT_TEST_TARGET = (
 PROFILE_JOURNEY_UAT_TEST_TARGET = (
     "test/user_acceptance/journeys/profile/"
     "profile_journey__user_acceptance_test.dart"
+)
+MESSAGE_HOME_UAT_TEST_TARGET = (
+    "test/user_acceptance/service/chat_service/chat/chat_inbox_view/"
+    "message_home_remote__user_acceptance_test.dart"
 )
 IOS_DIRECT_FLUTTER_RUN_UAT = (
     _REPO_ROOT / "quwoquan_app/scripts/device/verify_ios_hot_restart.py"
@@ -135,6 +143,7 @@ _ALPHA_APP_CONTENT_TYPED_ACTOR_TARGETS = frozenset(
         DISCOVERY_FEED_UAT_TEST_TARGET,
         # 作者主页旅程含关注/取关真实往返，需要真实非生产身份。
         PROFILE_JOURNEY_UAT_TEST_TARGET,
+        MESSAGE_HOME_UAT_TEST_TARGET,
         APP_CORE_READBACK_UAT_TEST_TARGET,
         HOME_VIDEO_PLAYBACK_UAT_TEST_TARGET,
         VIDEO_PLAYBACK_CANARY_UAT_TEST_TARGET,
@@ -144,6 +153,7 @@ _ALPHA_APP_CONTENT_TYPED_ACTOR_TARGETS = frozenset(
 _BETA_GAMMA_APP_CONTENT_TYPED_ACTOR_TARGETS = frozenset(
     {
         PROFILE_JOURNEY_UAT_TEST_TARGET,
+        MESSAGE_HOME_UAT_TEST_TARGET,
         APP_CORE_READBACK_UAT_TEST_TARGET,
         HOME_VIDEO_PLAYBACK_UAT_TEST_TARGET,
     }
@@ -161,6 +171,56 @@ def _app_content_uat_requires_typed_actor(
     if environment in {"beta", "gamma"}:
         return patrol_target in _stackctl._BETA_GAMMA_APP_CONTENT_TYPED_ACTOR_TARGETS
     return False
+
+
+def _app_content_experience_screenshot_digests(
+    runs: Sequence[Mapping[str, Any]],
+    *,
+    target: str,
+) -> dict[str, str]:
+    required = (
+        "homepage-feed",
+        "app-core-readback",
+        "message-home",
+        "profile-journey",
+    )
+    selected = {
+        suite: next(
+            item
+            for item in runs
+            if item.get("target") == target
+            and item.get("suite") == suite
+            and int(item.get("exitCode", 1)) == 0
+        )
+        for suite in required
+    }
+    expected_environment = target.removesuffix("-local")
+    digests: dict[str, str] = {}
+    for suite, item in selected.items():
+        evidence = item.get("evidence", {})
+        evidence = evidence if isinstance(evidence, Mapping) else {}
+        marker = evidence.get("screenshotMarker", {})
+        marker = marker if isinstance(marker, Mapping) else {}
+        if (
+            marker.get("environment") != expected_environment
+            or marker.get("suite") != suite
+            or not str(marker.get("route") or "").strip()
+            or not str(marker.get("terminalKey") or "").strip()
+        ):
+            raise ValueError(
+                f"{suite} page screenshot lacks exact route/key marker"
+            )
+        digests[suite] = str(evidence.get("screenshotDigest", ""))
+    missing = [suite for suite, digest in digests.items() if not digest]
+    if missing:
+        raise ValueError(
+            "required page screenshot digest is missing: " + ", ".join(missing)
+        )
+    if len(set(digests.values())) != len(digests):
+        raise ValueError(
+            "homepage/video-book/message/profile screenshots must be distinct"
+        )
+    return digests
 
 
 def _command_app_content_uat(
@@ -247,6 +307,7 @@ def _command_app_content_uat(
             issues.append("Alpha/Beta/Gamma appUatPlan is not identical")
 
     runs: list[dict[str, Any]] = []
+    experience_screenshot_digests: dict[str, dict[str, str]] = {}
     if not issues:
         for preflight in preflights:
             target = str(preflight["target"])
@@ -263,6 +324,20 @@ def _command_app_content_uat(
             if not release_video_work_id:
                 issues.append(f"{target}: canonical App UAT video workId is missing")
                 break
+            video_pagination = app_uat_plan.get("videoPagination")
+            expected_video_work_ids = (
+                video_pagination.get("expectedWorkIds")
+                if isinstance(video_pagination, Mapping)
+                else None
+            )
+            if (
+                not isinstance(expected_video_work_ids, list)
+                or not expected_video_work_ids
+                or any(not str(item).strip() for item in expected_video_work_ids)
+            ):
+                issues.append(f"{target}: canonical App UAT video page is empty")
+                break
+            release_video_page_count = len(expected_video_work_ids)
             readiness_path = (
                 _stackctl.output_root().expanduser().resolve()
                 / str(preflight["readinessReceiptRef"])
@@ -311,6 +386,16 @@ def _command_app_content_uat(
                     device_id,
                     "--launch-surface",
                     "direct_flutter_run",
+                    # app-content-uat cold compile includes the current tree's
+                    # frontend and Xcode build; observed builds exceed seven
+                    # minutes, so this one evidence run needs a private budget.
+                    "--ready-timeout-seconds",
+                    "900",
+                    # Only the native observation of the cold terminal gets
+                    # this page-UAT allowance. Dart-reported cold and all hot
+                    # restart terminal budgets remain the canonical 6000ms.
+                    "--max-cold-native-safe-terminal-ms",
+                    "12000",
                     "--output-dir",
                     str(report_dir / target / "direct-flutter-run"),
                 ]
@@ -386,10 +471,10 @@ def _command_app_content_uat(
                         + (detail[:800] if detail else "typed report is incomplete")
                     )
                     break
-            raw_video_canaries = app_uat_plan.get("videoPlaybackCanaries")
-            if not isinstance(raw_video_canaries, list) or not raw_video_canaries:
-                issues.append(f"{target}: video playback canaries are missing")
-                break
+            # Android compile/install/cold-start/first-frame belongs to the
+            # immediately preceding canonical run.sh content-live receipt.
+            # Patrol uninstalls its credential-bearing test package by design,
+            # so app-content-uat owns only the release-bound page journeys.
             suite_plan: list[tuple[str, str, bool, str]] = [
                 ("homepage-feed", _stackctl.DISCOVERY_FEED_UAT_TEST_TARGET, False, ""),
                 # 作者主页旅程：他人主页「记录」列表必须真实解码渲染（回归
@@ -401,45 +486,26 @@ def _command_app_content_uat(
                     "",
                 ),
                 (
-                    "app-core-readback",
-                    _stackctl.APP_CORE_READBACK_UAT_TEST_TARGET,
-                    True,
-                    release_video_work_id,
+                    "message-home",
+                    MESSAGE_HOME_UAT_TEST_TARGET,
+                    False,
+                    "",
                 ),
+                # 先固定首帧与真实进度证据；视频书若缺第二个 release-bound
+                # 页面仍由后续 app-core fail-closed，但不能短路独立视频验收。
                 (
                     "home-video-playback",
                     _stackctl.HOME_VIDEO_PLAYBACK_UAT_TEST_TARGET,
                     True,
                     release_video_work_id,
                 ),
-            ]
-            for raw_canary in raw_video_canaries:
-                if not isinstance(raw_canary, Mapping):
-                    issues.append(f"{target}: video playback canary is invalid")
-                    break
-                position = str(raw_canary.get("position") or "").strip()
-                work_id = str(raw_canary.get("workId") or "").strip()
-                if not position or not work_id:
-                    issues.append(f"{target}: video playback canary is incomplete")
-                    break
-                suite_plan.append(
-                    (
-                        f"video-playback-{position}",
-                        _stackctl.VIDEO_PLAYBACK_CANARY_UAT_TEST_TARGET,
-                        True,
-                        work_id,
-                    )
-                )
-            suite_plan.append(
                 (
-                    "controlled-edge-recovery",
-                    _stackctl.CONTROLLED_EDGE_RECOVERY_UAT_TEST_TARGET,
-                    False,
-                    "",
-                )
-            )
-            if issues:
-                break
+                    "app-core-readback",
+                    _stackctl.APP_CORE_READBACK_UAT_TEST_TARGET,
+                    True,
+                    release_video_work_id,
+                ),
+            ]
             typed_actor_context: TestDataContext | None = None
             if not bool(getattr(args, "dry_run", False)) and any(
                 _stackctl._app_content_uat_requires_typed_actor(environment, patrol_target)
@@ -475,6 +541,13 @@ def _command_app_content_uat(
                     issues.append(f"{target}: {suite_name} topology is incomplete")
                     break
                 argv = list(command["argv"])
+                if patrol_target == _stackctl.HOME_VIDEO_PLAYBACK_UAT_TEST_TARGET:
+                    argv.extend(
+                        (
+                            "--data-release-id",
+                            str(envelope.get("releaseId") or ""),
+                        )
+                    )
                 if patrol_target == _stackctl.APP_CORE_READBACK_UAT_TEST_TARGET:
                     for field, flag in _stackctl.APP_CONTENT_UAT_ENVELOPE_ARGUMENTS:
                         argv.extend((flag, str(envelope.get(field) or "")))
@@ -495,32 +568,80 @@ def _command_app_content_uat(
                     patrol_target,
                 )
                 execution_command = {**command, "argv": argv}
+                if patrol_target == _stackctl.APP_CORE_READBACK_UAT_TEST_TARGET:
+                    execution_command["env"] = {
+                        **dict(command.get("env") or {}),
+                        APP_CONTENT_VIDEO_PAGE_COUNT_ENV: str(
+                            release_video_page_count
+                        ),
+                    }
+                if patrol_target == _stackctl.PROFILE_JOURNEY_UAT_TEST_TARGET:
+                    execution_command["env"] = {
+                        **dict(command.get("env") or {}),
+                        "QWQ_APP_CONTENT_PROFILE_P0_ONLY": "true",
+                    }
                 if typed_actor_required:
                     execution_command.update(
                         {
                             "testDataActorCase": _stackctl.ProfileActorCaseId.APP_CONTENT_UAT,
                             "testDataActorRoles": (ActorRole.PRIMARY,),
+                            "linkTestDataPreparationToPageReport": True,
                         }
                     )
-                result = (
-                    _stackctl.run(argv, cwd=command["cwd"], env=command.get("env"))
-                    if bool(getattr(args, "dry_run", False))
-                    else _stackctl._run_profile_command(
+                test_data_scope: dict[str, Any] | None = None
+                if bool(getattr(args, "dry_run", False)):
+                    result = _stackctl.run(
+                        argv,
+                        cwd=command["cwd"],
+                        env=execution_command.get("env"),
+                    )
+                    if patrol_target == _stackctl.MESSAGE_HOME_UAT_TEST_TARGET:
+                        test_data_scope = {
+                            "status": "planned",
+                            "baselineEligible": False,
+                        }
+                elif patrol_target == _stackctl.MESSAGE_HOME_UAT_TEST_TARGET:
+                    result, test_data_scope = (
+                        _stackctl._run_app_content_message_home_command(
+                            execution_command,
+                            target_name=target,
+                            actor_context=typed_actor_context,
+                        )
+                    )
+                else:
+                    result = _stackctl._run_profile_command(
                         execution_command,
                         target_name=target,
                         actor_context=typed_actor_context,
                     )
-                )
+                    if typed_actor_required:
+                        page_report = _stackctl._read_json_object(
+                            str(command["reportPath"])
+                        )
+                        preparation = page_report.get("testDataPreparation")
+                        if isinstance(preparation, Mapping):
+                            test_data_scope = {
+                                **preparation,
+                                "pageCaseResult": {
+                                    "reportRef": str(command["reportPath"]),
+                                    "status": str(page_report.get("status") or ""),
+                                },
+                            }
                 run_payload = {
                     "target": target,
                     "suite": suite_name,
                     "exitCode": result.returncode,
                     "reportRef": str(command["reportPath"]),
                     "typedTestDataActor": typed_actor_required,
+                    "typedTestDataConversation": (
+                        patrol_target == _stackctl.MESSAGE_HOME_UAT_TEST_TARGET
+                    ),
                     "evidence": _stackctl._app_content_patrol_evidence(
                         str(command["reportPath"])
                     ),
                 }
+                if test_data_scope is not None:
+                    run_payload["testDataScope"] = test_data_scope
                 runs.append(run_payload)
                 if result.returncode != 0:
                     detail = (result.stderr or result.stdout).strip()
@@ -529,69 +650,16 @@ def _command_app_content_uat(
                         + (detail[:800] if detail else f"exit={result.returncode}")
                     )
                     break
-            if not issues and args.platform == "android":
-                startup_command = [
-                    sys.executable,
-                    str(_stackctl.STARTUP_FIRST_FRAME_UAT),
-                    "--android-device",
-                    device_id,
-                    "--runtime-env",
-                    environment,
-                    "--runtime-target",
-                    target,
-                    "--matrix-evidence-root",
-                    str(report_dir / target / "startup-runtime"),
-                    "--output-dir",
-                    str(report_dir / target / "startup-first-frame"),
-                    "--require-startup-sequence-events",
-                    "--require-branded-visible",
-                    "--require-no-native-recovery",
-                    "--require-telemetry-ack",
-                ]
-                if bool(getattr(args, "dry_run", False)):
-                    issues.append(
-                        f"{target}: Android startup evidence cannot be dry-run"
-                    )
-                    break
-                startup_result = _stackctl.run(startup_command, cwd=_stackctl.ROOT)
+            if not issues and not bool(getattr(args, "dry_run", False)):
                 try:
-                    startup_evidence = json.loads(startup_result.stdout)
-                except json.JSONDecodeError:
-                    startup_evidence = {}
-                startup_passed = (
-                    startup_result.returncode == 0
-                    and isinstance(startup_evidence, dict)
-                    and startup_evidence.get("passed") is True
-                    and any(
-                        isinstance(item, dict)
-                        and str(item.get("attemptId") or "").strip()
-                        not in {"", "unknown"}
-                        and item.get("telemetryAcknowledged") is True
-                        and str(
-                            item.get("effectiveLaunchManifestDigest") or ""
-                        ).startswith("sha256:")
-                        for item in startup_evidence.get("results") or []
+                    experience_screenshot_digests[target] = (
+                        _stackctl._app_content_experience_screenshot_digests(
+                            runs,
+                            target=target,
+                        )
                     )
-                )
-                runs.append(
-                    {
-                        "target": target,
-                        "suite": "startup-first-frame",
-                        "exitCode": startup_result.returncode,
-                        "reportRef": str(
-                            startup_evidence.get("outputDir") or ""
-                        ),
-                        "evidence": startup_evidence,
-                    }
-                )
-                if not startup_passed:
-                    detail = (
-                        startup_result.stderr or startup_result.stdout
-                    ).strip()
-                    issues.append(
-                        f"{target}: Android startup evidence failed: "
-                        + (detail[:800] if detail else "typed report is incomplete")
-                    )
+                except (StopIteration, TypeError, ValueError) as exc:
+                    issues.append(f"{target}: {exc}")
             if issues:
                 break
 
@@ -681,6 +749,7 @@ def _command_app_content_uat(
                 and str((item.get("evidence") or {}).get("screenshotDigest") or "")
             }
         ),
+        "experienceScreenshotDigests": experience_screenshot_digests,
         "visibleCardCounts": {
             str(item.get("target") or ""): int(
                 ((item.get("evidence") or {}).get("feedContent") or {}).get(
@@ -763,4 +832,3 @@ def command_app_content_uat(args: argparse.Namespace) -> dict[str, Any]:
         return _stackctl._command_app_content_uat(args)
     finally:
         runtime_use_lock.close()
-

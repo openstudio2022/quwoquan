@@ -116,6 +116,23 @@ def _required_markers() -> dict[Path, tuple[str, ...]]:
             "build_release_media_manifest",
             "copy_release_media_objects",
             "quwoquan_data.release_media_manifest",
+            "parse_post_asset_id",
+        ),
+        ROOT
+        / "quwoquan_service"
+        / "runtime"
+        / "media"
+        / "asset_ref.go": (
+            "postAssetIdentity",
+            "canonicalDecimal",
+        ),
+        content_service
+        / "contracts"
+        / "media"
+        / "media_asset"
+        / "public_slice_derivation_cases.json": (
+            '"content_media_public_slice_derivation_cases"',
+            '"publicSliceKey"',
         ),
         data / "core" / "release_media_binding.py": (
             "bind_release_object_media_assets",
@@ -226,6 +243,15 @@ def _contract_violations() -> list[str]:
                         f"{relative}: retired video frame route "
                         f"{retired_video_route!r}"
                     )
+
+    for owner in (
+        ROOT / "quwoquan_data" / "scripts" / "core" / "media_asset_url.py",
+        ROOT / "quwoquan_service" / "runtime" / "media" / "asset_ref.go",
+    ):
+        if "unicode-" in _read(owner):
+            violations.append(
+                f"{owner.relative_to(ROOT)}: retired opaque unicode- public asset segment"
+            )
 
     retired_video_package = (
         ROOT

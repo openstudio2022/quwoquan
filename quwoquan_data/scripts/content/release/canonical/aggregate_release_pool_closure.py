@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import replace
 from pathlib import Path
 
 from content.release.canonical.aggregate_release_closure import (
@@ -31,11 +30,6 @@ from content.release.canonical.release_admission import (
     build_release_asset_admission,
 )
 from core.media_asset_url import build_release_media_manifest
-from governance.coverage.distribution import (
-    ProductLifecycleState,
-    ReleaseClass,
-    load_content_distribution_policy,
-)
 
 
 def selected_pool_entity_refs(
@@ -117,11 +111,16 @@ def _validate_entity_pool_identity(
             document=manifest,
         )
         record = admission.record
-        if not is_pool_record_admitted(record) or (
-            release_mode == "commercial" and record.get("usageScope") != "commercial"
-        ):
+        if not is_pool_record_admitted(record):
             raise ObjectTransactionError(
                 f"DATA.POOL.OBJECT_NOT_ADMITTED: entities/{entity_ref}"
+            )
+        if (
+            release_mode == "commercial"
+            and record.get("usageScope") != "commercial"
+        ):
+            raise ObjectTransactionError(
+                f"DATA.POOL.COMMERCIAL_RIGHTS_REQUIRED: entities/{entity_ref}"
             )
         entity_id = str(record.get("objectId") or "").strip()
         version = record.get("contentVersion")
@@ -134,10 +133,7 @@ def _validate_entity_pool_identity(
             raise ObjectTransactionError(
                 f"DATA.POOL.IDENTITY_INVALID: entities/{entity_ref}"
             )
-        if not effective_source_attribution_ready(
-            admission,
-            release_mode=release_mode,
-        ):
+        if not effective_source_attribution_ready(admission):
             raise ObjectTransactionError(
                 f"DATA.POOL.SOURCE_ATTRIBUTION_INCOMPLETE: entities/{entity_ref}"
             )
@@ -239,22 +235,26 @@ def candidate_closure(
             "DATA.POOL.MEDIA_CLOSURE_INVALID: "
             + "; ".join(str(issue) for issue in media_manifest["issues"][:5])
         )
-    policy = replace(
-        load_content_distribution_policy(),
-        release_class=ReleaseClass(release_mode),
-        product_lifecycle_state=ProductLifecycleState(release_mode),
-    )
-    build_release_asset_admission(
-        release_id="pool-candidate-preflight",
-        objects_root=publish_root,
-        desired={
-            "creators": creator_refs,
-            "entities": sorted(entity_refs),
-            "posts": [post_ref],
-            "tags": tag_refs,
-        },
-        policy=policy,
-    )
+    try:
+        build_release_asset_admission(
+            release_id="pool-candidate-preflight",
+            objects_root=publish_root,
+            desired={
+                "creators": creator_refs,
+                "entities": sorted(entity_refs),
+                "posts": [post_ref],
+                "tags": tag_refs,
+            },
+            release_class=release_mode,
+        )
+    except ObjectTransactionError as exc:
+        if release_mode == "commercial" and str(exc).startswith(
+            "commercial release contains non-commercial assets"
+        ):
+            raise ObjectTransactionError(
+                f"DATA.POOL.COMMERCIAL_RIGHTS_REQUIRED: posts/{post_ref}"
+            ) from exc
+        raise
     return entity_refs, creator_refs, tag_refs, list(media_manifest["assets"])
 
 
@@ -310,22 +310,26 @@ def entity_candidate_closure(
             "DATA.POOL.MEDIA_CLOSURE_INVALID: "
             + "; ".join(str(issue) for issue in media_manifest["issues"][:5])
         )
-    policy = replace(
-        load_content_distribution_policy(),
-        release_class=ReleaseClass(release_mode),
-        product_lifecycle_state=ProductLifecycleState(release_mode),
-    )
-    build_release_asset_admission(
-        release_id="pool-homepage-preflight",
-        objects_root=publish_root,
-        desired={
-            "creators": creator_refs,
-            "entities": [entity_ref],
-            "posts": [],
-            "tags": tag_refs,
-        },
-        policy=policy,
-    )
+    try:
+        build_release_asset_admission(
+            release_id="pool-homepage-preflight",
+            objects_root=publish_root,
+            desired={
+                "creators": creator_refs,
+                "entities": [entity_ref],
+                "posts": [],
+                "tags": tag_refs,
+            },
+            release_class=release_mode,
+        )
+    except ObjectTransactionError as exc:
+        if release_mode == "commercial" and str(exc).startswith(
+            "commercial release contains non-commercial assets"
+        ):
+            raise ObjectTransactionError(
+                f"DATA.POOL.COMMERCIAL_RIGHTS_REQUIRED: entities/{entity_ref}"
+            ) from exc
+        raise
     return creator_refs, tag_refs
 
 

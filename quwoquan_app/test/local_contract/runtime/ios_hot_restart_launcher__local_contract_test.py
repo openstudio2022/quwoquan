@@ -89,7 +89,10 @@ class IosHotRestartLauncherContractTest(unittest.TestCase):
     def test_hot_restart_smoke_covers_both_surfaces_and_three_restarts(self) -> None:
         source = HOT_RESTART.read_text(encoding="utf-8")
         self.assertIn('APP_DIR / "run.sh"', source)
-        self.assertIn('["flutter", "run", "-d", args.device_id]', source)
+        self.assertIn(
+            '["flutter", "run", "--flavor", args.env, "-d", args.device_id]',
+            source,
+        )
         self.assertIn('"direct_flutter_run"', source)
         self.assertIn('environment["QWQ_ENVIRONMENT"] = args.env', source)
         self.assertIn('os.write(master_fd, b"R")', source)

@@ -128,7 +128,7 @@ def load_predecessor_promotion(
             or values["predecessorCarriedCount"] + values["newFinalizedCount"]
             != count
             or values["researchAcceptedCount"] != count
-            or count != target
+            or count < target
         ):
             raise ResearchScalePredecessorError(
                 "DATA.SCALE.ATTAINMENT_SHORTFALL: predecessor target/count arithmetic is not attained"

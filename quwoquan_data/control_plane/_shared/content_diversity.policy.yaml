@@ -1,0 +1,20 @@
+schema: quwoquan.content_diversity_policy
+policyId: research-content-diversity
+# 上限按「跨 execution 累计已产出对象数」计算，不是单批次内计数：同一实体在
+# 若干个 execution 里各产出一次，累计后仍受同一上限约束。
+entityConcentration:
+  # 每个实体在该载体上的累计产出上限。homepage 天然是每实体一份。
+  maxObjectsPerEntity:
+    homepage: 1
+    article: 4
+    image: 6
+    video: 3
+  # 集中度：累计产出最多的前 topEntityCount 个实体，其合计占比不得超过
+  # topEntityShareCeiling。占比在小样本上没有意义，累计总量低于
+  # minimumCumulativeObjects 时不评估该约束。
+  topEntityCount: 5
+  topEntityShareCeiling: 0.5
+  minimumCumulativeObjects: 20
+# 热点实体允许更高上限，但必须逐条携带显式依据；缺任一依据字段该条不生效，
+# 该实体退回默认上限，而不是默认放行。
+hotEntities: []

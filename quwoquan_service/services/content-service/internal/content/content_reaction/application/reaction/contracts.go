@@ -42,7 +42,7 @@ type CommentReactionCommandResult struct {
 	Version      int64                `json:"version"`
 	Reaction     reactiondomain.Value `json:"reaction"`
 	Changed      bool                 `json:"changed"`
-	Replayed     bool                 `json:"replayed,omitempty"`
+	Replayed     bool                 `json:"replayed"`
 	LikeCount    int64                `json:"likeCount"`
 	DislikeCount int64                `json:"dislikeCount"`
 }

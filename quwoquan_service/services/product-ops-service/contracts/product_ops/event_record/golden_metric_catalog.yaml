@@ -196,6 +196,94 @@ metrics:
     portal_level: L1
     label: 视频卡顿占比
   freshness_seconds: 300
+# 启动体验（deliver-deploy-prod-pipeline DEC-004）：安全 Shell 冷启动成功率
+# 以 startup_error_rate 的补集表达（成功率 ≥99.9% ≡ 错误率 <0.001），
+# 不另设第二条同口径指标。
+- metric_id: startup_error_rate
+  business: app_startup_experience
+  tier: primary
+  owner: runtime-client-foundation
+  source:
+    track: product_telemetry
+    numerator_event_type: app_startup
+    numerator_filters:
+      hasError: "true"
+    denominator_event_type: app_startup
+    aggregation: event_ratio
+  dimensions:
+  - pageName
+  - appVersion
+  - networkClass
+  - environment
+  - buildMode
+  - launchProvenance
+  target:
+    operator: less_than
+    value: 0.001
+  alerting:
+    policy: elasticsearch_product_telemetry
+    alert_name: product-startup-error-rate-high
+    threshold: 0.001
+  display:
+    portal_level: L1
+    label: 启动错误率
+  freshness_seconds: 300
+- metric_id: startup_click_to_content_p95_ms
+  business: app_startup_experience
+  tier: primary
+  owner: runtime-client-foundation
+  source:
+    track: product_telemetry
+    event_type: app_startup
+    value_field: tClickToContentMs
+    aggregation: percentile_p95
+  dimensions:
+  - pageName
+  - appVersion
+  - networkClass
+  - environment
+  - buildMode
+  - launchProvenance
+  target:
+    operator: less_than_or_equal
+    value: 3000
+  alerting:
+    policy: elasticsearch_product_telemetry
+    alert_name: product-startup-content-p95-high
+    threshold: 3000
+  display:
+    portal_level: L1
+    label: 点击到内容 P95
+  freshness_seconds: 300
+# release identity 协议失败率：分子来自 app_startup 的 contentIdentityOutcome
+# 维度（protocol_failure 即 wire 上半身份/非 canonical digest）。客户端启动
+# 事件对该维度的发送接线由 runtime-client-foundation 承接（缺席不计入分子，
+# 不得用零值冒充）；未接线前本指标只有分母，不触发告警误报。
+- metric_id: startup_content_identity_protocol_failure_rate
+  business: app_startup_experience
+  tier: secondary
+  owner: runtime-client-foundation
+  source:
+    track: product_telemetry
+    numerator_event_type: app_startup
+    numerator_filters:
+      contentIdentityOutcome: protocol_failure
+    denominator_event_type: app_startup
+    aggregation: event_ratio
+  dimensions:
+  - pageName
+  - appVersion
+  - networkClass
+  - environment
+  - buildMode
+  - launchProvenance
+  target:
+    operator: less_than
+    value: 0.001
+  display:
+    portal_level: L2
+    label: 内容身份协议失败率
+  freshness_seconds: 300
 - metric_id: journey_completion_rate
   business: core_journey
   tier: primary

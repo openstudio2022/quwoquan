@@ -12,7 +12,7 @@ from typing import Any
 
 from core.io import read_json
 from core.schema import assert_valid
-from core.source_digest import SourceDigest, SourceDigestError
+from core.source_digest import SourceDefinitionSnapshot, SourceDigestError
 
 
 class ReviewedClosureAdoptionError(ValueError):
@@ -225,7 +225,7 @@ def _source_digests(value: object, *, label: str) -> tuple[dict[str, object], ..
     documents: list[dict[str, object]] = []
     for index, row in enumerate(value):
         try:
-            SourceDigest.from_document(row)
+            SourceDefinitionSnapshot.from_document(row)
         except SourceDigestError as exc:
             raise _typed("UPSTREAM_INVALID", f"{label}[{index}] is invalid") from exc
         documents.append(dict(row))

@@ -14,8 +14,17 @@ TLS_PROXY_NAME="quwoquan_beta_tls_proxy"
 eval "$(python3 "$ROOT_DIR/quwoquan_ops/cli/print_local_port_profile.py" --profile beta-local --format shell-defaults)"
 GATEWAY_PORT="${GATEWAY_PORT}"
 FLUTTER_DEVICE_ID="${FLUTTER_DEVICE_ID:-}"
-IOS_BUNDLE_ID="${IOS_BUNDLE_ID:-com.example.quwoquanApp}"
-ANDROID_PACKAGE="${ANDROID_PACKAGE:-com.quwoquan.quwoquan_app}"
+# beta 手工链路针对 beta Debug 安装身份；默认按 canonical 映射派生。
+QWQ_BETA_DEBUG_IOS_BUNDLE_ID="$(
+  PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" PYTHONDONTWRITEBYTECODE=1 \
+    python3 -c "from quwoquan_ops.cli.lib.app_identity import application_id_for; print(application_id_for('ios', 'beta', 'debug'))"
+)"
+QWQ_BETA_DEBUG_ANDROID_PACKAGE="$(
+  PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" PYTHONDONTWRITEBYTECODE=1 \
+    python3 -c "from quwoquan_ops.cli.lib.app_identity import application_id_for; print(application_id_for('android', 'beta', 'debug'))"
+)"
+IOS_BUNDLE_ID="${IOS_BUNDLE_ID:-$QWQ_BETA_DEBUG_IOS_BUNDLE_ID}"
+ANDROID_PACKAGE="${ANDROID_PACKAGE:-$QWQ_BETA_DEBUG_ANDROID_PACKAGE}"
 CLEAN_ENV=0
 PURGE_LOGS=0
 ROTATE_CA=0

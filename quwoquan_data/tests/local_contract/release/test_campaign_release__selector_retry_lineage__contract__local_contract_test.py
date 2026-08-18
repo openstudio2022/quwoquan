@@ -61,6 +61,7 @@ def test_campaign_release__derives_four_lanes_and_retry_lineage__local_contract(
     result = build_campaign_release(
         root_execution_id=str(fixture["rootId"]),
         release_id=RELEASE_ID,
+        release_class="research",
         roots=fixture["roots"],
     )
     attestation_path = Path(result["campaignSelectionAttestation"])
@@ -87,10 +88,68 @@ def test_campaign_release__derives_four_lanes_and_retry_lineage__local_contract(
     rerun = build_campaign_release(
         root_execution_id=str(fixture["rootId"]),
         release_id=RELEASE_ID,
+        release_class="research",
         roots=fixture["roots"],
     )
     assert rerun["campaignSelectionDigest"] == result["campaignSelectionDigest"]
     assert attestation_path.read_bytes() == first_bytes
+
+
+@pytest.mark.parametrize(
+    ("active", "workloads", "scale", "intent"),
+    (
+        (("video",), {"video": 1000}, "M1000", "workload-video-1000"),
+        (
+            ("homepage", "video"),
+            {"homepage": 100, "video": 100},
+            "M100",
+            "workload-homepage-100-video-100",
+        ),
+    ),
+)
+def test_campaign_release__builds_exact_active_workload_without_hidden_lanes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    active: tuple[str, ...],
+    workloads: dict[str, int],
+    scale: str,
+    intent: str,
+) -> None:
+    fixture = _fixture(
+        tmp_path,
+        active_carriers=active,
+        workloads=workloads,
+        scale=scale,
+        intent=intent,
+    )
+    captured: list[str] = []
+
+    def aggregate(**kwargs: object) -> dict[str, object]:
+        captured.extend(str(value) for value in kwargs["execution_ids"])
+        release = Path(kwargs["release_root"]) / str(kwargs["release_id"])
+        _write(release / "payload/release.json", {"releaseId": RELEASE_ID})
+        return {
+            "releaseId": RELEASE_ID,
+            "canonicalMerkle": "sha256:" + "e" * 64,
+        }
+
+    monkeypatch.setattr(campaign_release, "build_aggregate_release", aggregate)
+    result = build_campaign_release(
+        root_execution_id=str(fixture["rootId"]),
+        release_id=RELEASE_ID,
+        release_class="research",
+        roots=fixture["roots"],
+    )
+    attestation = json.loads(
+        Path(result["campaignSelectionAttestation"]).read_text(encoding="utf-8")
+    )
+
+    assert fixture["rootId"] == fixture["executionIds"][active[0]]
+    assert captured == [fixture["executionIds"][carrier] for carrier in active]
+    assert attestation["activeCarriers"] == list(active)
+    assert attestation["workloads"] == workloads
+    assert set(attestation["lanes"]) == set(active)
+    assert set(attestation["executionIds"]) == set(active)
 
 
 def test_retry_lineage_consumes_preserved_unadopted_post_publish_boundary(
@@ -141,6 +200,13 @@ def test_retry_lineage_consumes_preserved_unadopted_post_publish_boundary(
             "executionId": predecessor_ids[lane],
             "retryOf": _execution_id(lane, 199),
         }
+        _write(
+            campaign_root.parent
+            / predecessor_ids["homepage"]
+            / "submissions"
+            / f"{predecessor_ids[lane]}.json",
+            predecessor_rows[lane],
+        )
     receipt = {
         "reason": "post_publish_partial_terminal",
         "rootExecutionId": predecessor_ids["homepage"],
@@ -234,6 +300,7 @@ def test_campaign_release__keeps_prior_source_epoch_as_retry_provenance(
     result = build_campaign_release(
         root_execution_id=str(fixture["rootId"]),
         release_id=RELEASE_ID,
+        release_class="research",
         roots=roots,
     )
     attestation = json.loads(
@@ -274,6 +341,7 @@ def test_campaign_release__rejects_retry_target_scope_drift(
         build_campaign_release(
             root_execution_id=str(fixture["rootId"]),
             release_id=RELEASE_ID,
+            release_class="research",
             roots=roots,
         )
 
@@ -407,6 +475,7 @@ def test_campaign_release_accepts_audited_submission_only_predecessor_for_lineag
     result = build_campaign_release(
         root_execution_id=str(fixture["rootId"]),
         release_id=RELEASE_ID,
+        release_class="research",
         roots=roots,
     )
     attestation = json.loads(

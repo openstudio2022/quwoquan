@@ -52,12 +52,16 @@ from .constants import (
 def materialize_provider_runtime_package(
     env_name: str,
     target_name: str,
+    *,
+    source_root: Path,
 ) -> dict[str, Any]:
     """Atomically seal Provider composition and Compose overlays before fingerprinting."""
 
+    source_root = Path(source_root).resolve()
     composition = _pkg.compile_provider_runtime_composition(
         environment=env_name,
         target=target_name,
+        source_root=source_root,
     )
     validate_provider_runtime_composition(
         composition,
@@ -80,8 +84,8 @@ def materialize_provider_runtime_package(
             raise ValueError(
                 f"package-bound Provider workload has no Compose artifact: {role}"
             )
-        source_path = (ROOT / source_ref).resolve()
-        if not source_path.is_relative_to(ROOT) or not source_path.is_file():
+        source_path = (source_root / source_ref).resolve()
+        if not source_path.is_relative_to(source_root) or not source_path.is_file():
             raise ValueError(
                 f"Provider workload Compose source is outside the repository: {role}"
             )

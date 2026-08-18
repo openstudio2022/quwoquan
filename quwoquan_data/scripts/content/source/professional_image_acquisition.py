@@ -13,21 +13,12 @@ import json
 import os
 import tempfile
 from collections.abc import Mapping
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from core.image_decode import probe_image_bytes
-from core.image_rules import pixel_size_issue
 from core.io import read_json
 from core.paths import SOURCE_ACQUISITION_ROOT
 from core.schema import assert_valid
-from governance.coverage.distribution import (
-    AcquisitionStatus,
-    DistributionDecision,
-    RightsStatus,
-    image_distribution_decision,
-)
 
 from content.execution.controller.execute.pre_acquisition_handoff import (
     guard_acquisition_source_identity,
@@ -35,6 +26,10 @@ from content.execution.controller.execute.pre_acquisition_handoff import (
 )
 from content.source.image_payload import sniff_image_ext
 from content.source.professional_image_admission import pre_acquisition_block
+from content.source.professional_image_acquisition_item import (
+    acquire_professional_image_item,
+    validate_professional_image_item,
+)
 from content.source.professional_image_discovery_binding import (
     load_discovery_candidates,
     validate_discovery_binding,
@@ -45,22 +40,32 @@ from content.source.professional_image_receipt_counts import (
 from content.source.professional_image_receipt_validation import (
     validate_image_receipt_inventory,
 )
-from content.source.professional_image_source_attribution import (
-    bound_image_source_attribution,
-    build_image_plan_spec,
-)
 from content.source.professional_image_transport import fetch_public_image
 from content.source.professional_safety_evidence import (
     file_sha256,
     load_bound_safety_evidence,
     validate_image_safety_payload,
 )
-from content.source.research.image_provider_compliance import classify_image_provider
-from content.source.research.text_match import _normalized_title
 
 ACQUISITION_ROOT = SOURCE_ACQUISITION_ROOT
 _MAX_IMAGE_BYTES = 64 * 1024 * 1024
 _MIN_IMAGE_BYTES = 3_000
+
+
+class ProfessionalImageAcquisitionError(ValueError):
+    """A zero-success batch with its immutable typed-exclusion receipt."""
+
+    def __init__(
+        self,
+        code: str,
+        detail: str,
+        *,
+        receipt_ref: str,
+    ) -> None:
+        self.code = code
+        self.detail = detail
+        self.receipt_ref = receipt_ref
+        super().__init__(f"{code}: {detail}; receiptRef={receipt_ref}")
 
 
 def _digest(value: Mapping[str, Any]) -> str:
@@ -135,10 +140,29 @@ def _frozen_supported_api_payload(
         label="professional image supported API evidence",
     )
     asset_relative = Path(str(evidence.get("originalAssetRef") or ""))
-    asset_path = (root / asset_relative).resolve()
+    asset_roots = [root]
+    relative_parts = relative.parts
+    if "candidates" in relative_parts:
+        candidates_index = relative_parts.index("candidates")
+        if candidates_index:
+            asset_roots.append(root.joinpath(*relative_parts[:candidates_index]))
+    asset_path = next(
+        (
+            candidate
+            for asset_root in asset_roots
+            for candidate in ((asset_root / asset_relative).resolve(),)
+            if (
+                not asset_relative.is_absolute()
+                and ".." not in asset_relative.parts
+                and asset_root in candidate.parents
+                and not candidate.is_symlink()
+                and candidate.is_file()
+            )
+        ),
+        root / "__missing_supported_api_asset__",
+    )
     if (
         asset_relative.is_absolute() or ".." in asset_relative.parts
-        or root not in asset_path.parents
         or asset_path.is_symlink() or not asset_path.is_file()
     ):
         raise ValueError("supported_api original asset ref is unsafe or missing")
@@ -211,6 +235,72 @@ def _write_create_once_receipt(path: Path, receipt: Mapping[str, Any]) -> None:
         os.fsync(handle.fileno())
 
 
+def _portable_archived_ref(
+    raw_ref: object,
+    *,
+    source: Mapping[str, Any],
+    source_manifest_path: Path,
+    target_root: Path,
+    label: str,
+) -> str:
+    """Resolve one mixed historical ref into the target acquisition root."""
+    relative = Path(str(raw_ref or "").strip())
+    if not str(relative) or relative.is_absolute() or ".." in relative.parts:
+        raise ValueError(f"professional image {label} is unsafe")
+    source_root = source_manifest_path.expanduser().resolve().parent.parent
+    manifest_id = str(source.get("manifestId") or "").strip()
+    manifest_part = Path(manifest_id)
+    if (
+        not manifest_id
+        or manifest_part.is_absolute()
+        or len(manifest_part.parts) != 1
+        or manifest_part.name in {".", ".."}
+    ):
+        raise ValueError("professional image manifestId is unsafe for archive ref")
+    resolved_target = target_root.expanduser().resolve()
+    candidates = (
+        source_root / relative,
+        source_root.parent / relative,
+        resolved_target / relative,
+        source_root / manifest_part / relative,
+    )
+    resolved = next(
+        (
+            candidate.resolve()
+            for candidate in candidates
+            if candidate.resolve() != resolved_target
+            and resolved_target in candidate.resolve().parents
+            and not candidate.is_symlink()
+            and candidate.is_file()
+        ),
+        None,
+    )
+    if resolved is None:
+        raise ValueError(f"professional image archived {label} is missing")
+    return resolved.relative_to(resolved_target).as_posix()
+
+
+def _portable_discovery_plan_ref(
+    source: Mapping[str, Any],
+    *,
+    source_manifest_path: Path,
+    target_root: Path,
+) -> str:
+    """Resolve one archived plan into the acquisition root's single ref form."""
+    portable = _portable_archived_ref(
+        source.get("discoveryPlanRef"),
+        source=source,
+        source_manifest_path=source_manifest_path,
+        target_root=target_root,
+        label="discoveryPlanRef",
+    )
+    load_discovery_candidates(
+        {**dict(source), "discoveryPlanRef": portable},
+        output_root=target_root,
+    )
+    return portable
+
+
 def rebind_professional_image_acquisition_manifest(
     source_manifest_path: Path,
     *,
@@ -235,13 +325,46 @@ def rebind_professional_image_acquisition_manifest(
             "metadataCatalogDigest": source["discoveryPlanDigest"],
             "externalInputsDigest": _digest(source),
         }
+    target_root = destination.expanduser().resolve().parent.parent
+    discovery_plan_ref = _portable_discovery_plan_ref(
+        source,
+        source_manifest_path=source_manifest_path,
+        target_root=target_root,
+    )
+    items: list[dict[str, Any]] = []
+    for raw_item in source["items"]:
+        item = dict(raw_item)
+        if item.get("acquisitionPath") == "supported_api":
+            item["apiEvidence"] = _portable_archived_ref(
+                item.get("apiEvidence"),
+                source=source,
+                source_manifest_path=source_manifest_path,
+                target_root=target_root,
+                label=f"{item.get('assetId')}.apiEvidence",
+            )
+            safety = dict(item["safetyReview"])
+            safety["evidenceRef"] = _portable_archived_ref(
+                safety.get("evidenceRef"),
+                source=source,
+                source_manifest_path=source_manifest_path,
+                target_root=target_root,
+                label=f"{item.get('assetId')}.safetyReview.evidenceRef",
+            )
+            item["safetyReview"] = safety
+        items.append(item)
     rebound = {
-        **source,
+        **{
+            key: value
+            for key, value in source.items()
+            if key not in {"reviewExecutionBindings", "reviewSourceBindings"}
+        },
         "sourceRevision": handoff["sourceRevision"],
         "sourceDigest": handoff["sourceDigest"]["digest"],
         "entityCatalogDigest": handoff["entityCatalogDigest"],
         "executionBundle": handoff["executionBundle"],
         "frozenPhysicalInput": dict(frozen),
+        "discoveryPlanRef": discovery_plan_ref,
+        "items": items,
     }
     assert_valid(
         rebound, "source", "professional_image_acquisition_manifest",
@@ -262,68 +385,7 @@ def rebind_professional_image_acquisition_manifest(
     return rebound, destination
 
 
-def _require_timestamp(value: object, *, label: str) -> None:
-    text = str(value or "").strip()
-    try:
-        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
-    except ValueError as exc:
-        raise ValueError(f"{label} must be an ISO-8601 timestamp") from exc
-    if parsed.tzinfo is None:
-        raise ValueError(f"{label} must include a timezone")
-
-
-def _validate_item(item: Mapping[str, Any]) -> tuple[RightsStatus, dict[str, Any]]:
-    asset_id = str(item.get("assetId") or "")
-    for field in ("licenseSnapshot", "usageScope", "modelReleaseStatus"):
-        if not str(item.get(field) or "").strip():
-            raise ValueError(f"{asset_id}.{field} must be frozen and non-empty")
-    rights_status = RightsStatus(str(item.get("rightsStatus") or ""))
-    rights_issues = [
-        str(value).strip()
-        for value in (item.get("rightsIssues") or [])
-        if str(value).strip()
-    ]
-    if rights_status is not RightsStatus.VERIFIED and not rights_issues:
-        raise ValueError(f"{asset_id}: non-verified asset must record rightsIssues")
-    alias_keys = [_normalized_title(value) for value in item["entityAliases"]]
-    if not all(alias_keys) or len(alias_keys) != len(set(alias_keys)):
-        raise ValueError(f"{asset_id}: entityAliases must be normalized-unique")
-    _require_timestamp(item["capturedAt"], label=f"{asset_id}.capturedAt")
-    _require_timestamp(
-        item["safetyReview"]["reviewedAt"],
-        label=f"{asset_id}.safetyReview.reviewedAt",
-    )
-    source_id = str(item.get("sourceId") or "").strip()
-    provider = classify_image_provider(source_id=source_id)
-    if not provider["registered"]:
-        raise ValueError(
-            f"{item.get('assetId')}: image provider is not registered: {source_id}"
-        )
-    path = str(item.get("acquisitionPath") or "")
-    asset_url = str(item.get("assetUrl") or "").strip()
-    manual_file = str(item.get("manualFile") or "").strip()
-    api_evidence = str(item.get("apiEvidence") or "").strip()
-    if path == "manual_file":
-        if not manual_file or asset_url:
-            raise ValueError(
-                f"{item.get('assetId')}: manual_file requires manualFile and forbids assetUrl"
-            )
-    else:
-        if not asset_url.startswith("https://") or manual_file:
-            raise ValueError(
-                f"{item.get('assetId')}: {path} requires HTTPS assetUrl and forbids manualFile"
-            )
-    if path == "supported_api" and not api_evidence:
-        raise ValueError(f"{item.get('assetId')}: supported_api requires apiEvidence")
-    if path != "supported_api" and api_evidence:
-        raise ValueError(
-            f"{item.get('assetId')}: apiEvidence is only valid for supported_api"
-        )
-    if not str(item.get("sourceUrl") or "").startswith("https://"):
-        raise ValueError(f"{item.get('assetId')}: sourceUrl must use HTTPS")
-    if path not in set(provider["acquisitionPaths"]):
-        return rights_status, {**provider, "pathAllowed": False}
-    return rights_status, {**provider, "pathAllowed": True}
+_validate_item = validate_professional_image_item
 
 
 def acquire_professional_images(
@@ -361,187 +423,23 @@ def acquire_professional_images(
     seen_content: dict[str, str] = {}
     for raw in manifest["items"]:
         item = dict(raw)
-        validate_discovery_binding(item, candidates=discovery_candidates)
-        rights_status, provider = _validate_item(item)
-        safety_evidence = load_bound_safety_evidence(
-            item,
-            evidence_root=output_root,
-            kind="image",
-        )
-        path_allowed = bool(provider["pathAllowed"])
-        payload: dict[str, Any] | None = None
-        failure_code = ""
-        failure = ""
-        if not path_allowed:
-            acquisition_status = AcquisitionStatus.BLOCKED
-            failure_code = "DATA.SOURCE.ACQUISITION_PATH_BLOCKED"
-            failure = failure_code
-        else:
-            failure_code, failure_detail = pre_acquisition_block(item)
-            if failure_code:
-                acquisition_status = AcquisitionStatus.BLOCKED
-                failure = f"{failure_code}:{failure_detail}"
-            else:
-                if item["acquisitionPath"] == "manual_file":
-                    if manual_root is None:
-                        raise ValueError(
-                            "manual_root is required by manual_file acquisition"
-                        )
-                    payload = _manual_payload(
-                        str(item["manualFile"]),
-                        manual_root=manual_root,
-                    )
-                elif (
-                    item["acquisitionPath"] == "supported_api"
-                    and not str(item.get("apiEvidence") or "").startswith("https://")
-                    and (output_root / str(item.get("apiEvidence") or "")).is_file()
-                ):
-                    payload = _frozen_supported_api_payload(
-                        item, output_root=output_root
-                    )
-                else:
-                    payload = _network_payload(
-                        str(item["assetUrl"]),
-                        supported_api=item["acquisitionPath"] == "supported_api",
-                    )
-                acquisition_status = (
-                    AcquisitionStatus.ACQUIRED
-                    if payload is not None
-                    else AcquisitionStatus.FAILED
-                )
-                if payload is None:
-                    failure_code = "DATA.SOURCE.ACQUISITION_FAILED"
-                    failure = failure_code
-        authorization_proof = str(item.get("authorizationProof") or "").strip()
-        decision = image_distribution_decision(
-            acquisition_status=acquisition_status,
-            rights_status=rights_status,
-            authorization_proof=authorization_proof,
-            usage_scope=str(item["usageScope"]),
-            model_release_status=str(item["modelReleaseStatus"]),
-        )
-        source_attribution = None
-        if isinstance(item.get("sourceAttribution"), Mapping):
-            source_attribution = bound_image_source_attribution(
-                item,
-                platform=str(provider["platform"]),
-                distribution_decision=decision.value,
-            )
-        elif decision in {
-            DistributionDecision.RESEARCH_ALLOWED,
-            DistributionDecision.COMMERCIAL_ALLOWED,
-        }:
-            raise ValueError(
-                f"{item['assetId']}: admitted image requires sourceAttribution"
-            )
-        content_sha256 = ""
-        asset_ref = ""
-        width = 0
-        height = 0
-        plan_spec: dict[str, Any] | None = None
-        if payload is not None:
-            body = bytes(payload["bytes"])
-            probe = probe_image_bytes(body)
-            if not probe.succeeded:
-                acquisition_status = AcquisitionStatus.FAILED
-                decision = DistributionDecision.BLOCKED
-                failure_code = "DATA.SOURCE.IMAGE_DECODE_FAILED"
-                failure = f"{failure_code}:{probe.failure.value}"
-            else:
-                validate_image_safety_payload(
-                    safety_evidence,
-                    item,
-                    body=body,
-                    width=probe.width,
-                    height=probe.height,
-                )
-                content_sha256 = _content_digest(body)
-                duplicate_of = seen_content.get(content_sha256)
-                cas_path = _put_cas(body, str(payload["ext"]), output_root=output_root)
-                asset_ref = _portable_ref(cas_path, output_root)
-                width, height = probe.width, probe.height
-                if duplicate_of:
-                    decision = DistributionDecision.BLOCKED
-                    failure_code = "DATA.SOURCE.DUPLICATE_ASSET"
-                    failure = f"{failure_code}:{duplicate_of}"
-                else:
-                    seen_content[content_sha256] = str(item["assetId"])
-                    quality_issue = pixel_size_issue(
-                        width,
-                        height,
-                        asset_id=str(item["assetId"]),
-                    )
-                    if quality_issue:
-                        decision = DistributionDecision.BLOCKED
-                        failure_code = "DATA.SOURCE.IMAGE_QUALITY_BLOCKED"
-                        failure = f"{failure_code}:{quality_issue}"
-                if decision in {
-                    DistributionDecision.RESEARCH_ALLOWED,
-                    DistributionDecision.COMMERCIAL_ALLOWED,
-                }:
-                    plan_spec = build_image_plan_spec(
-                        item,
-                        platform=str(provider["platform"]),
-                        source_id=str(provider["sourceId"]),
-                        cas_uri=cas_path.resolve().as_uri(),
-                        content_sha256=content_sha256,
-                        acquisition_status=acquisition_status.value,
-                        rights_status=rights_status.value,
-                        authorization_required=(
-                            rights_status is not RightsStatus.VERIFIED
-                            or not authorization_proof
-                        ),
-                        distribution_decision=decision.value,
-                        width=width,
-                        height=height,
-                    )
         rows.append(
-            {
-                "assetId": str(item["assetId"]),
-                "entityId": str(item["entityId"]),
-                "observedEntityId": str(item["observedEntityId"]),
-                "entityAliases": list(item["entityAliases"]),
-                "displayName": str(item["displayName"]),
-                "discoveryCandidateId": str(item["discoveryCandidateId"]),
-                "discoveryUrl": str(item["discoveryUrl"]),
-                "provider": str(provider["sourceId"]),
-                "platform": str(provider["platform"]),
-                "acquisitionPath": str(item["acquisitionPath"]),
-                "assetUrl": str(item.get("assetUrl") or ""),
-                "manualFile": str(item.get("manualFile") or ""),
-                "apiEvidence": str(item.get("apiEvidence") or ""),
-                "accessEvidence": dict(item["accessEvidence"]),
-                "acquisitionStatus": acquisition_status.value,
-                "rightsStatus": rights_status.value,
-                "authorizationRequired": (
-                    rights_status is not RightsStatus.VERIFIED
-                    or not authorization_proof
-                ),
-                "distributionDecision": decision.value,
-                "sourceUrl": str(item["sourceUrl"]),
-                "creator": str(item["creator"]),
-                "capturedAt": str(item["capturedAt"]),
-                "contentSha256": content_sha256,
-                "assetRef": asset_ref,
-                "bytes": len(payload["bytes"]) if payload is not None else 0,
-                "width": width,
-                "height": height,
-                "license": str(item["license"]),
-                "licenseSnapshot": str(item["licenseSnapshot"]),
-                "usageScope": str(item["usageScope"]),
-                "modelReleaseStatus": str(item["modelReleaseStatus"]),
-                "termsUrl": str(item["termsUrl"]),
-                "authorizationProof": authorization_proof,
-                "rightsIssues": list(item["rightsIssues"]),
-                "caption": str(item["caption"]),
-                "relevance": str(item["relevance"]),
-                "safetyReview": dict(item["safetyReview"]),
-                "sourceAttribution": source_attribution,
-                "withdrawalRequired": rights_status is not RightsStatus.VERIFIED,
-                "failureCode": failure_code,
-                "failure": failure,
-                "planImageSpec": plan_spec,
-            }
+            acquire_professional_image_item(
+                item,
+                discovery_candidates=discovery_candidates,
+                manual_root=manual_root,
+                output_root=output_root,
+                seen_content=seen_content,
+                manual_loader=_manual_payload,
+                network_loader=_network_payload,
+                frozen_loader=_frozen_supported_api_payload,
+                cas_writer=_put_cas,
+                content_digest=_content_digest,
+                portable_ref=_portable_ref,
+                discovery_validator=validate_discovery_binding,
+                safety_loader=load_bound_safety_evidence,
+                safety_validator=validate_image_safety_payload,
+            )
         )
     provider_counts = _provider_counts(rows)
     downloaded = sum(row["acquisitionStatus"] == "acquired" for row in rows)
@@ -551,6 +449,11 @@ def acquire_professional_images(
     )
     stable = {
         "schema": "quwoquan_data.professional_image_acquisition_receipt",
+        "status": (
+            "ready"
+            if accepted == len(rows)
+            else ("partial" if accepted else "blocked")
+        ),
         "manifestId": str(manifest["manifestId"]),
         "manifestDigest": manifest_digest,
         "sourceRevision": str(manifest["sourceRevision"]),
@@ -586,6 +489,17 @@ def acquire_professional_images(
         output_root / "receipts" / f"{manifest_digest.removeprefix('sha256:')}.json"
     )
     _write_create_once_receipt(receipt_path, receipt)
+    if accepted == 0:
+        failures = "; ".join(
+            str(row["failure"])
+            for row in rows
+            if str(row.get("failure") or "")
+        )
+        raise ProfessionalImageAcquisitionError(
+            "DATA.SOURCE.ACQUISITION_NO_SUCCESS",
+            failures or "no image asset reached acquisition admission",
+            receipt_ref=receipt_path.relative_to(output_root).as_posix(),
+        )
     return receipt, receipt_path
 
 
@@ -593,8 +507,14 @@ def load_professional_image_acquisition_receipt(
     receipt_ref: str,
     *,
     root: Path | None = None,
+    require_bodies: bool = True,
 ) -> dict[str, Any]:
-    """Read a relative receipt and re-verify its digest plus every acquired CAS file."""
+    """Read a relative receipt and re-verify its digest plus every acquired CAS file.
+
+    ``require_bodies=False`` admits a receipt whose bodies were all reclaimed
+    after their object adopted them; the receipt itself is still verified in
+    full. A partially reclaimed unit is refused either way.
+    """
     relative = Path(str(receipt_ref or "").strip())
     if not str(relative) or relative.is_absolute():
         raise ValueError("professional image acquisition receiptRef must be relative")
@@ -627,6 +547,7 @@ def load_professional_image_acquisition_receipt(
         validate_item=_validate_item,
         pre_acquisition_block=pre_acquisition_block,
         provider_counts=_provider_counts,
+        require_bodies=require_bodies,
     )
     return receipt
 
@@ -686,6 +607,7 @@ def acquired_image_specs_for_entity(
 
 __all__ = [
     "ACQUISITION_ROOT",
+    "ProfessionalImageAcquisitionError",
     "acquire_professional_images",
     "acquired_image_specs_for_entity",
     "load_professional_image_acquisition_receipt",

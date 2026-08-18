@@ -15,7 +15,6 @@ from content.source import professional_commons_video_input as commons_input
 from content.source import professional_video_acquisition
 from content.source.research import auto_plan_video_stock as stock
 from content.source.research.network_io import HttpFetchResult
-from governance.coverage.distribution import ProductLifecycleState
 
 _SHA = lambda value: "sha256:" + hashlib.sha256(value).hexdigest()
 _SOURCE_DIGEST = "sha256:" + "1" * 64
@@ -80,7 +79,6 @@ def _review_journal(root: Path, calls: list[str]):
         journal_root = root / "source-reviews" / "stock-journal"
         request_path = journal_root / "request.json"
         attempt_path = journal_root / "attempts" / "001.json"
-        capacity_path = root / "temporary-capacity-receipt.json"
         request_path.parent.mkdir(parents=True, exist_ok=True)
         attempt_path.parent.mkdir(parents=True, exist_ok=True)
         result = (
@@ -91,11 +89,12 @@ def _review_journal(root: Path, calls: list[str]):
         request_path.write_text("{}", encoding="utf-8")
         attempt = {
             "status": "finished",
+            "provider": "cursor_sdk",
             "runId": "stock-grok-review",
+            "recordedAt": "2026-08-13T08:01:00Z",
             "resultSha256": _SHA(result.encode()),
         }
         attempt_path.write_text(json.dumps(attempt), encoding="utf-8")
-        capacity_path.write_text("capacity", encoding="utf-8")
         outcome = AgentRunOutcome.finished(
             provider=AgentProvider.CURSOR_SDK,
             run_id="stock-grok-review",
@@ -104,9 +103,7 @@ def _review_journal(root: Path, calls: list[str]):
         return {
             "requestPath": request_path,
             "attemptPath": attempt_path,
-            "capacityReceiptPath": capacity_path,
             "attempt": attempt,
-            "capacityReceipt": {"recordedAt": "2026-08-13T08:01:00+00:00"},
             "outcome": outcome,
         }, attempt_path
 
@@ -132,16 +129,6 @@ def _install_stock_fakes(
         "guard_acquisition_source_identity",
         lambda *_args, **_kwargs: _handoff(),
     )
-    monkeypatch.setattr(
-        professional_video_acquisition,
-        "load_content_distribution_policy",
-        lambda: type(
-            "ResearchPolicy",
-            (),
-            {"product_lifecycle_state": ProductLifecycleState.RESEARCH},
-        )(),
-    )
-
     def fetch(_url: str, destination: Path, *, supported_api: bool) -> str:
         supported_api_flags.append(supported_api)
         shutil.copyfile(source, destination)

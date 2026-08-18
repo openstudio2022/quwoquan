@@ -47,7 +47,6 @@ DEFINE_KEYS = {
     "appInstanceNamespace": "APP_INSTANCE_NAMESPACE",
     "launchMode": "QWQ_APP_LAUNCH_MODE",
     "launchPolicy": "APP_LAUNCH_POLICY",
-    "contentBindingState": "CONTENT_BINDING_STATE",
 }
 
 
@@ -124,7 +123,6 @@ def apply_overrides(values: dict[str, str], args: argparse.Namespace) -> dict[st
         "appInstanceNamespace": args.app_instance_namespace,
         "launchMode": args.launch_mode or os.environ.get("QWQ_APP_LAUNCH_MODE", ""),
         "launchPolicy": args.launch_policy,
-        "contentBindingState": "unbound" if args.launch_policy == "test_live" else "bound",
         "appRolloutMode": args.rollout_mode or os.environ.get("APP_ROLLOUT_MODE", ""),
     }
     url_keys = {

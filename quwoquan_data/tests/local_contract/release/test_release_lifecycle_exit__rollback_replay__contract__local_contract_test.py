@@ -16,7 +16,7 @@ from content.release.canonical.lifecycle_exit import (
     ReleaseLifecycleExitError,
     write_lifecycle_exit_receipt,
 )
-from core.source_digest import content_source_revision
+from core.source_digest import SourceDefinitionSnapshot, content_source_revision
 from verify import release_lifecycle_exit as exit_verify
 
 ORIGINAL = "20260728--android-homepage--pilot-002"
@@ -74,13 +74,7 @@ def _attestation(path: Path, release_id: str, digest: str, *, baseline: bool) ->
             "creatorCount": 0,
             "tagCount": 0,
             "canonicalMerkle": "sha256:" + "c" * 64,
-            "sourceDigests": [
-                {
-                    "algorithm": "sha256",
-                    "digest": SOURCE_DIGEST,
-                    "inputs": ["control_plane/test"],
-                }
-            ],
+            "sourceDigests": [SourceDefinitionSnapshot(SOURCE_DIGEST).to_document()],
             "payloadSha256": digest,
             "recordedAt": "2026-07-28T00:00:00Z",
         },

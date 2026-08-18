@@ -7,7 +7,6 @@ from pathlib import Path
 
 from core.control_types import AgentProvider, RuntimeEnvironment
 from core.cursor_model import CursorModelSelection
-from core.runtime_policy import active_runtime_policy
 
 from content.execution.agent.codex_adapter import _run_codex
 
@@ -81,11 +80,7 @@ def codex_startup_probe_suite(
 ) -> dict[str, object]:
     from content.execution.agent.codex_probe_process import run_codex_startup_probe
 
-    resolved_concurrency = (
-        concurrency
-        if concurrency is not None
-        else active_runtime_policy().cursor_bridge_instances
-    )
+    resolved_concurrency = attempts if concurrency is None else concurrency
     if attempts < 1 or resolved_concurrency < 1:
         raise ValueError("Codex startup suite attempts and concurrency must be positive")
     started_at = time.monotonic()

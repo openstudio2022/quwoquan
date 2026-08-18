@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	rtauth "quwoquan_service/runtime/auth"
 	rerrors "quwoquan_service/runtime/errors"
 	"quwoquan_service/runtime/reliabletask"
 	"quwoquan_service/services/integration-service/generated/external_integration/external_interaction"
@@ -27,6 +28,39 @@ type submitExternalRequestWire struct {
 	Sensitivity    string            `json:"sensitivity"`
 	ExpiresAt      string            `json:"expiresAt"`
 	Payload        map[string]string `json:"payload"`
+}
+
+func (h *Handler) handleSmsOtpDeliveryReadiness(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		rerrors.WriteHTTPError(
+			w,
+			rerrors.NewInvalidArgument(rerrors.ModuleIntegration, "方法不支持", "only GET"),
+			rerrors.HTTPWriteOptionsFromRequest(r),
+		)
+		return
+	}
+	principal, ok := rtauth.PrincipalFromContext(r.Context())
+	if !ok || strings.TrimSpace(principal.Subject) != "service:user-service" {
+		rerrors.WriteHTTPError(
+			w,
+			generated.AppErrorFromExternalInteractionReadinessForbidden(
+				"only the verified user-service principal may query SMS OTP readiness",
+			),
+			rerrors.HTTPWriteOptionsFromRequest(r),
+		)
+		return
+	}
+	if h.readiness == nil {
+		rerrors.WriteHTTPError(
+			w,
+			generated.AppErrorFromExternalInteractionInternalError(
+				"SMS OTP readiness query facade unavailable",
+			),
+			rerrors.HTTPWriteOptionsFromRequest(r),
+		)
+		return
+	}
+	writeJSON(w, http.StatusOK, h.readiness.GetSmsOtpDeliveryReadiness(r.Context()))
 }
 
 func (h *Handler) handleSubmitExternalRequest(w http.ResponseWriter, r *http.Request) {

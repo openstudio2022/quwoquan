@@ -2,19 +2,8 @@ import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.
 
 /// 主壳目的地。
 ///
-/// - `actions`（线下行动与发现）占据底栏第 2 位；
-/// - `featured`（视频书）退出底栏，保留为壳内存态目的地，由首页顶部固定
-///   入口激活（IA 单一真相源：视频书是「心动供给」，交集行动是「心动变现」，
-///   两者是漏斗上下游而非并列一级入口）。
-enum MainTabDestination {
-  home,
-  featured,
-  actions,
-  create,
-  chat,
-  interestMatch,
-  profile,
-}
+/// `actions`（线下行动与发现）占据底栏第 2 位；视频书是首页频道，不是壳层目的地。
+enum MainTabDestination { home, actions, create, chat, interestMatch, profile }
 
 extension MainTabDestinationX on MainTabDestination {
   static const List<MainTabDestination> bottomNavOrdered = <MainTabDestination>[
@@ -28,7 +17,6 @@ extension MainTabDestinationX on MainTabDestination {
   static const List<MainTabDestination> mobileShellStackOrdered =
       <MainTabDestination>[
         MainTabDestination.home,
-        MainTabDestination.featured,
         MainTabDestination.actions,
         MainTabDestination.create,
         MainTabDestination.chat,
@@ -37,7 +25,6 @@ extension MainTabDestinationX on MainTabDestination {
 
   int get bottomNavIndex => switch (this) {
     MainTabDestination.home => 0,
-    MainTabDestination.featured => -1,
     MainTabDestination.actions => 1,
     MainTabDestination.create => 2,
     MainTabDestination.chat => 3,
@@ -55,7 +42,6 @@ extension MainTabDestinationX on MainTabDestination {
 
   String get routePath => switch (this) {
     MainTabDestination.home => AppRoutePaths.home,
-    MainTabDestination.featured => AppRoutePaths.home,
     MainTabDestination.actions => AppRoutePaths.home,
     MainTabDestination.create => AppRoutePaths.createEntry,
     MainTabDestination.chat => AppRoutePaths.chat,
@@ -65,7 +51,6 @@ extension MainTabDestinationX on MainTabDestination {
 
   String get routeName => switch (this) {
     MainTabDestination.home => 'home',
-    MainTabDestination.featured => 'featured',
     MainTabDestination.actions => 'actions',
     MainTabDestination.create => 'create',
     MainTabDestination.chat => 'chat',

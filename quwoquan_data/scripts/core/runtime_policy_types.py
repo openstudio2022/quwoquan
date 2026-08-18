@@ -34,7 +34,6 @@ class CoverageDiscoveryPolicy:
     retry_backoff_multiplier: float
     wikidata_sparql_endpoint: str
     wikidata_result_limit: int
-    overpass_concurrency: int
     overpass_result_limit: int
     overpass_endpoints: tuple[str, ...]
 
@@ -85,21 +84,12 @@ class ExplicitSemanticSelection:
 
 
 @dataclass(frozen=True, slots=True)
-class SemanticCapacityPolicy:
-    account_scope_id: str
-    host_scope_id: str
-    requests_per_minute: int
-    burst_limit: int
-    lane_concurrency_limit: int
-    receipt_ttl_seconds: int
-
-
-@dataclass(frozen=True, slots=True)
 class RuntimeEvidencePolicy:
     """Timeouts owned by the governed runtime-evidence execution profile."""
 
     process_inspection_timeout_seconds: float
     queue_fault_event_timeout_seconds: float
+    semantic_preflight_receipt_ttl_seconds: int
 
 
 def mapping(value: object, *, label: str) -> Mapping[str, object]:
@@ -142,42 +132,6 @@ def semantic_binding(value: object, *, label: str) -> SemanticAgentBinding:
     )
 
 
-def campaign_lane_timeout_map(value: object) -> tuple[tuple[str, int], ...]:
-    raw = mapping(value, label="budgets.campaignLaneTimeoutSeconds")
-    required = ("BELOW_M100", "M100", "M1000", "M10000")
-    if set(raw) != set(required):
-        raise ValueError(
-            "runtime policy budgets.campaignLaneTimeoutSeconds must contain "
-            + ", ".join(required)
-        )
-    values: list[tuple[str, int]] = []
-    for scale in required:
-        timeout = raw.get(scale)
-        if isinstance(timeout, bool) or not isinstance(timeout, int) or timeout < 1:
-            raise ValueError(
-                f"runtime policy budgets.campaignLaneTimeoutSeconds.{scale} "
-                "must be a positive integer"
-            )
-        values.append((scale, timeout))
-    return tuple(values)
-
-
-def campaign_lane_timeout_seconds_for_scale(
-    values: tuple[tuple[str, int], ...],
-    scale: str,
-) -> int:
-    label = str(scale or "").strip().upper()
-    if not (label.startswith("M") and label[1:].isdigit()):
-        raise ValueError(f"campaign scale is invalid for lane timeout: {scale}")
-    count = int(label[1:])
-    key = (
-        "M10000" if count >= 10_000 else "M1000" if count >= 1_000
-        else "M100" if count >= 100 else "BELOW_M100"
-    )
-    try:
-        return dict(values)[key]
-    except KeyError as exc:
-        raise ValueError(f"campaign lane timeout is missing for {key}") from exc
 def explicit_semantic_selections(
     value: object,
     *,
@@ -218,9 +172,6 @@ __all__ = [
     "RuntimeEvidencePolicy",
     "SemanticAgentBinding",
     "SemanticCalibrationPolicy",
-    "SemanticCapacityPolicy",
-    "campaign_lane_timeout_map",
-    "campaign_lane_timeout_seconds_for_scale",
     "explicit_semantic_selections",
     "mapping",
     "non_empty_string",

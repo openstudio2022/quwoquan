@@ -1,19 +1,19 @@
 {
   "schema": "quwoquan_data.evidence_index",
   "stage": "5.review",
-  "executionId": "20260810--travel-homepage-m1--china-panda-base-research-b7c02f9f-epoch6-not-m100--scale-001",
+  "executionId": "20260817--travel-homepage-closure--china-sichuan--pilot-001",
   "executionBinding": "frozen",
   "objectRef": "/entity/地点/景区/成都大熊猫繁育研究基地",
   "evidence": [
     {
       "kind": "deterministic_gate",
       "ref": "5.review/deterministic_gate.json",
-      "sha256": "sha256:8d7a036267494c5c441083655926e26f680541072999cae76e6fb8fa59759270"
+      "sha256": "sha256:da522cfcf3098ee2c1428e70ffe139cb398c66924696680c6255252a98d985db"
     },
     {
       "kind": "media_ref_review",
       "ref": "5.review/media_ref_review.json",
-      "sha256": "sha256:934293cdbb428a19a75ffebd66f26920f83d497127e0363312259d60fef56623"
+      "sha256": "sha256:1036fcd6194c33d626c1d86ac328490b93f055b907deac0fd15839773200d838"
     },
     {
       "kind": "review",
@@ -23,17 +23,17 @@
     {
       "kind": "provenance",
       "ref": "5.review/provenance.json",
-      "sha256": "sha256:e650ff6d80eb6134851cd9dd20516da5739330337654ddd42c1612f6d92e477b"
+      "sha256": "sha256:32f7da01b19d9e4d82fe6365c5b04c5759ea27db93ccc500b2be21e2b9bae3df"
     },
     {
       "kind": "finalization",
       "ref": "5.review/finalization_report.json",
-      "sha256": "sha256:601197321d887b39b4c09a416d587d6727fb7f72a03dbfa78f4a5a5273b751a8"
+      "sha256": "sha256:d0cc48ba36cfc998b7f8490a5d73211ee6de3ecb4a5407da01d1d5723cdaf9db"
     },
     {
       "kind": "independent_reviewer_result",
       "ref": "5.review/reviewer_result.json",
-      "sha256": "sha256:fcf5e4e1a7a2ee6ee9dcd30fe8c73bdb23f4c9ab8e981cc281516613c6ef0b30"
+      "sha256": "sha256:1873656f558b7665020c2af3de6cb4ccf9fbe340452cde16b711a2cb8ba6ce16"
     }
   ]
 }

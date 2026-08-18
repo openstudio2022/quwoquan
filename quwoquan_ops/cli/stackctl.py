@@ -52,6 +52,9 @@ from quwoquan_ops.cli.lib.common import (
 from quwoquan_ops.cli.lib.android_official_release import (
     AndroidOfficialReleaseError, package_android_official_release,
 )
+from quwoquan_ops.cli.lib.app_identity import (
+    application_id_for, resolve_app_identity,
+)
 from quwoquan_ops.cli.lib.web_official_release import (
     WebOfficialReleaseError, package_web_official_release,
 )
@@ -110,7 +113,9 @@ from quwoquan_ops.cli.lib.local_target_handoff import (
     LOOPBACK_ADDRESS, LocalTargetHandoffError, materialize_handoff, target_for_hostname,
 )
 from quwoquan_ops.cli.lib.local_device_trust import (
-    LocalDeviceTrustError, install_device_trust, release_device_trust, verify_device_trust,
+    LocalDeviceTrustError, _read_receipt as read_device_trust_receipt,
+    _receipt_path as device_trust_receipt_path, install_device_trust,
+    release_device_trust, verify_device_trust,
 )
 from quwoquan_ops.cli.lib.local_provider_credentials import load_nonprod_provider_environment
 from quwoquan_ops.cli.lib.local_sms_provider_substitute import prepare_local_sms_provider_substitute
@@ -120,7 +125,10 @@ from quwoquan_ops.cli.lib.local_integration_service_mtls import (
 from quwoquan_ops.cli.lib.local_assistant_skill_package_keys import (
     prepare_local_assistant_skill_package_keys,
 )
-from quwoquan_ops.cli.lib.local_assistant_skill_package_publication import publish_alpha_test_live
+from quwoquan_ops.cli.lib.local_assistant_skill_package_publication import (
+    load_packaged_assistant_skill_package_trust,
+    publish_alpha_test_live,
+)
 from quwoquan_ops.cli.lib.local_provider_protocol_substitute import (
     prepare_local_provider_protocol_substitute,
 )
@@ -158,7 +166,7 @@ from quwoquan_ops.cli.lib.local_runtime_reservation import (
 )
 from quwoquan_ops.cli.lib.local_runtime_consumer_lease import (
     DEFAULT_BUILD_GRACE_SECONDS, acquire_consumer_lease, active_consumer_leases,
-    consumer_lease_dir, release_consumer_lease,
+    consumer_lease_dir, inspect_consumer_leases, release_consumer_lease,
 )
 from quwoquan_ops.cli.lib import orphan_compose_teardown
 from quwoquan_ops.cli.lib import output_layout_reconciliation
@@ -166,10 +174,13 @@ from quwoquan_ops.cli.lib import service_core_cutover
 from quwoquan_ops.cli.lib import startup_health_failure_evidence
 from quwoquan_ops.cli.lib.startup_attempt_receipt import (
     image_composition_from_candidate_oci, load_startup_attempt, load_workload_startup_attempt,
-    startup_attempt_path, startup_attempt_path_for_workload, transition_startup_attempt,
+    read_startup_attempt, startup_attempt_path, startup_attempt_path_for_workload,
+    transition_startup_attempt,
 )
 from quwoquan_ops.cli.lib.test_live_startup_attempt_receipt import (
-    load_test_live_startup_attempt, transition_test_live_startup_attempt,
+    load_test_live_startup_attempt, read_stale_test_live_startup_attempt,
+    reclaim_stale_test_live_startup_attempt, test_live_startup_attempt_path,
+    transition_test_live_startup_attempt,
 )
 from quwoquan_ops.cli.lib.test_live_content_binding import (
     create_test_live_content_binding, load_test_live_content_binding,
@@ -212,8 +223,9 @@ from quwoquan_ops.cli.lib.service_core_composition import (
 )
 from quwoquan_ops.cli.lib.deployment_candidate_manifest import (
     RELEASE_INPUT_CLASSIFICATIONS, canonical_contract_graph_digest, load_candidate_manifest,
-    materialize_observability_log_sink_package, materialize_provider_runtime_package,
-    provider_runtime_image_environment_key,
+    load_provider_binding_overlay, materialize_observability_log_sink_package,
+    materialize_provider_binding_overlay, materialize_provider_runtime_package,
+    provider_binding_overlay_build_inputs, provider_runtime_image_environment_key,
     release_input_classification as classify_release_inputs, seal_provider_runtime_package_images,
     validate_observability_log_sink_package, validate_release_attestations,
     write_candidate_manifest,
@@ -299,6 +311,7 @@ from quwoquan_ops.cli.commands import provider_debug as provider_debug_commands
 from quwoquan_ops.cli.commands import research_isolation_probe as research_isolation_probe_commands
 from quwoquan_ops.cli.commands import roll as roll_commands
 from quwoquan_ops.cli.commands import status as status_commands
+from quwoquan_ops.cli.commands import store_channels as store_channels_commands
 from quwoquan_ops.cli.commands import test_data_surface as test_data_surface_commands
 from quwoquan_ops.cli.commands import tls as tls_commands
 from quwoquan_ops.cli.commands import up_domain as up_domain_commands
@@ -323,13 +336,16 @@ from quwoquan_ops.cli.commands.app_preflight_shared import (
 from quwoquan_ops.cli.commands.app_preflight_uat import (
     _ALPHA_APP_CONTENT_TYPED_ACTOR_TARGETS, _APP_CONTENT_TEST_LIVE_STARTUP_IDENTITY_FIELDS,
     _BETA_GAMMA_APP_CONTENT_TYPED_ACTOR_TARGETS, _app_content_patrol_evidence,
+    _app_content_experience_screenshot_digests,
     _app_content_test_live_actor_context, _app_content_test_live_runtime_binding,
     _app_content_uat_requires_typed_actor, _command_app_content_uat,
-    _ios_direct_flutter_log_reader_retryable, command_app_content_uat,
+    _ios_direct_flutter_log_reader_retryable,
+    _run_app_content_message_home_command, command_app_content_uat,
     APP_CONTENT_UAT_ENVELOPE_ARGUMENTS, APP_CORE_READBACK_UAT_TEST_TARGET,
     CONTROLLED_EDGE_RECOVERY_UAT_TEST_TARGET, DISCOVERY_FEED_UAT_TEST_TARGET,
     HOME_VIDEO_PLAYBACK_UAT_TEST_TARGET, IOS_DIRECT_FLUTTER_RUN_UAT,
-    PROFILE_JOURNEY_UAT_TEST_TARGET, STARTUP_FIRST_FRAME_UAT,
+    MESSAGE_HOME_UAT_TEST_TARGET, PROFILE_JOURNEY_UAT_TEST_TARGET,
+    STARTUP_FIRST_FRAME_UAT,
     VIDEO_PLAYBACK_CANARY_UAT_TEST_TARGET,
 )
 from quwoquan_ops.cli.commands.assistant_skill_package import command_assistant_skill_package
@@ -344,8 +360,9 @@ from quwoquan_ops.cli.commands.device_trust import command_device_trust
 from quwoquan_ops.cli.commands.diagnostics_shared import (
     _CONTENT_DATA_PLANE_ROLES, _candidate_workspace_report, _content_commercial_health_checks,
     _content_consumer_health_checks, _content_data_plane_health_checks, _full_scope_health_checks,
-    _health_checks_for_target, _media_edge_health_url, _script_probe_plan_for_target,
-    _service_health_checks_for_target,
+    _health_checks_for_target, _media_edge_health_url, _read_only_user_availability_report,
+    _script_probe_plan_for_target, _service_health_checks_for_target,
+    validate_read_only_user_availability_report,
 )
 from quwoquan_ops.cli.commands.doctor import command_doctor
 from quwoquan_ops.cli.commands.down_domain import (
@@ -411,14 +428,12 @@ from quwoquan_ops.cli.commands.environment_probe import (
     _startup_health_failure_for_report, _verify_child_environment, fetch_url,
 )
 from quwoquan_ops.cli.commands.gamma_release_binding import (
-    _apply_gamma_image_composition, _bind_beta_external_provider_environment,
+    _bind_beta_external_provider_environment,
     _bind_formal_local_release_provider_environment, _bind_gamma_down_parse_environment,
     _bind_gamma_external_provider_environment, _bind_gamma_object_storage_environment,
-    _bind_gamma_packaged_configuration_digest, _bind_gamma_packaged_service_image_refs,
-    _bind_gamma_release_image_refs, _bind_gamma_release_teardown_image_refs,
     _bind_local_external_provider_environment, _bind_package_provider_reference_environment,
-    _gamma_start_command, _inspect_gamma_release_runtime, _load_gamma_runtime_image_composition,
-    _materialize_release_evidence_configuration, _resolve_gamma_release_image_composition,
+    _gamma_start_command, _inspect_gamma_release_runtime,
+    _materialize_release_evidence_configuration,
     _sync_object_storage_binding_aliases,
 )
 from quwoquan_ops.cli.commands.local_topology_manifest import (
@@ -438,9 +453,14 @@ from quwoquan_ops.cli.commands.provider_runtime_binding import (
     _provider_runtime_launch_environment,
 )
 from quwoquan_ops.cli.commands.runtime_image_composition import (
-    _bind_gamma_build_service_image_refs, _build_missing_runtime_images,
-    _build_provider_runtime_images, _load_package_bound_local_image_composition,
-    _packaged_service_source_image_ref, _provider_runtime_build_specs, _runtime_image_build_spec,
+    _apply_gamma_image_composition, _bind_gamma_build_service_image_refs,
+    _bind_gamma_packaged_configuration_digest, _bind_gamma_packaged_service_image_refs,
+    _bind_gamma_release_image_refs, _bind_gamma_release_teardown_image_refs,
+    _build_missing_runtime_images,
+    _build_provider_runtime_images, _load_gamma_runtime_image_composition,
+    _load_package_bound_local_image_composition,
+    _packaged_service_source_image_ref, _provider_runtime_build_specs,
+    _resolve_gamma_release_image_composition, _runtime_image_build_spec,
     _sha256_file, _sha256_tree,
 )
 from quwoquan_ops.cli.commands.runtime_progress_output import (
@@ -465,6 +485,9 @@ from quwoquan_ops.cli.commands.dev_session_runtime import (
     _dev_session_runtime_preflight, _dev_session_source_compose_files,
     _dev_session_target_media_root, _dev_session_workload_conflict, _materialize_local_portal_root,
     _mutable_test_live_operation_identity_environment, _mutable_workspace_snapshot,
+)
+from quwoquan_ops.cli.commands.dev_session_public_web import (
+    _load_dev_session_public_web_package, _resolve_dev_session_public_web_package,
 )
 from quwoquan_ops.cli.commands.matrix_domain import command_matrix
 from quwoquan_ops.cli.commands.provider_conformance_domain import (
@@ -493,15 +516,23 @@ from quwoquan_ops.cli.commands.repair_content_recovery import (
 )
 from quwoquan_ops.cli.commands.repair_domain import command_repair
 from quwoquan_ops.cli.commands.repair_runtime_recovery import (
-    _complete_orphan_compose_audit_convergence, _current_runtime_health_scope,
-    _global_local_build_cache_lock, _global_local_operation_lock,
-    _global_output_layout_reconciliation_lock, _local_stack_operation_lock,
+    _close_orphan_reclaimed_startup_receipt, _complete_orphan_compose_audit_convergence,
+    _current_runtime_health_scope, _global_local_build_cache_lock,
+    _global_local_operation_lock, _global_output_layout_reconciliation_lock,
+    _local_stack_operation_lock, _normal_down_structurally_impossible,
     _orphan_compose_runtime_gate, _prod_release_lock, _repair_orphaned_compose,
     _wait_for_attested_orphan_compose_ports_released, _wait_for_exact_tcp_ports_released,
     _wait_for_network_ports_released, socket_probe,
 )
+from quwoquan_ops.cli.commands.repair_stale_test_live_receipt import (
+    repair_stale_test_live_receipt as _repair_stale_test_live_receipt,
+)
+from quwoquan_ops.cli.commands.repair_undownable_startup_receipt import (
+    repair_undownable_startup_receipt as _repair_undownable_startup_receipt,
+)
 from quwoquan_ops.cli.commands.roll import command_roll
 from quwoquan_ops.cli.commands.status import command_status
+from quwoquan_ops.cli.commands.store_channels import command_store_channels
 from quwoquan_ops.cli.commands.test_data_surface import (
     command_test_data_evidence, command_test_data_request,
 )
@@ -534,7 +565,8 @@ from quwoquan_ops.cli.commands.verify_profiles import (
 )
 from quwoquan_ops.cli.commands.verify_shared import (
     _current_commit_sha, _data_readiness_path_from_verify_args, _is_patrol_profile_command,
-    _profile_step, _release_video_preflight_from_steps, _run_profile_command,
+    _link_profile_preparation_to_page_report, _profile_step,
+    _release_video_preflight_from_steps, _run_profile_command,
     _run_profile_commands_parallel, _run_static_verify_wave, _run_test_data_profile,
     _runtime_media_config_hash, _runtime_media_playback_evidence, _typed_profile_actor_context,
     _validate_test_data_request_for_profile, _video_range_evidence_from_preflight,
@@ -675,6 +707,8 @@ def build_parser() -> argparse.ArgumentParser:
     tls_commands.register_parser(subparsers)
 
     device_trust_commands.register_parser(subparsers)
+
+    store_channels_commands.register_parser(subparsers)
 
     provider_conformance_domain_commands.register_parser(subparsers)
     provider_config_commands.register_parser(subparsers)
@@ -868,6 +902,7 @@ def main() -> int:
         "matrix": command_matrix,
         "tls": command_tls,
         "device-trust": command_device_trust,
+        "store-channels": command_store_channels,
         "provider-conformance": command_provider_conformance,
         "provider-config": command_provider_config,
         "assistant-skill-package": command_assistant_skill_package,

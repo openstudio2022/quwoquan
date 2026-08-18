@@ -7,6 +7,8 @@ from content.execution.campaign.copy_ready import maybe_write_copy_ready_receipt
 from content.execution.campaign.receipt import lane_receipt_path
 from core.io import write_json
 
+CARRIERS = ("homepage", "article", "image", "video")
+
 
 def _receipt(
     *,
@@ -46,6 +48,8 @@ def _receipt(
                 "campaignRunId": "copy-ready-test-run",
                 "campaignGeneration": 1,
                 "campaignFencingToken": "sha256:" + "f" * 64,
+                "reviewQualifiedCount": selected,
+                "publishDiscards": [],
             }
         )
     return receipt
@@ -63,8 +67,10 @@ def test_copy_ready_allows_zero_typed_discards(tmp_path: Path) -> None:
         "gitCommitSha": "b" * 40,
         "sourceDigest": "sha256:" + ("c" * 64),
         "entityCatalogDigest": "sha256:" + ("d" * 64),
+        "activeCarriers": list(CARRIERS),
+        "workloads": {carrier: 3 for carrier in CARRIERS},
     }
-    for carrier in ("homepage", "article", "image", "video"):
+    for carrier in CARRIERS:
         execution_id = (
             root_id
             if carrier == "homepage"
@@ -134,10 +140,17 @@ def test_copy_ready_treats_quota_shortfall_as_statistics(tmp_path: Path) -> None
         "gitCommitSha": "2" * 40,
         "sourceDigest": "sha256:" + ("3" * 64),
         "entityCatalogDigest": "sha256:" + ("4" * 64),
+        "activeCarriers": list(CARRIERS),
+        "workloads": {
+            "homepage": 100,
+            "article": 100,
+            "image": 100,
+            "video": 10,
+        },
     }
     submissions = {}
     lanes = {}
-    for carrier in ("homepage", "article", "image", "video"):
+    for carrier in CARRIERS:
         execution_id = (
             root_id
             if carrier == "homepage"
@@ -176,3 +189,74 @@ def test_copy_ready_treats_quota_shortfall_as_statistics(tmp_path: Path) -> None
     payload = path.read_text(encoding="utf-8")
     assert '"qualifiedCount": 1' in payload
     assert '"shortfallCount": 99' in payload
+
+
+def test_copy_ready_accepts_positive_partial_publish_with_typed_object_discard(
+    tmp_path: Path,
+) -> None:
+    root_id = "20260730--travel-video-partial--china--scale-003"
+    output = tmp_path / "output"
+    campaigns = output / "data/local/workspace/content-campaign-submissions"
+    plan = {
+        "planDigest": "sha256:" + "5" * 64,
+        "gitBranch": "dev1.0",
+        "gitCommitSha": "6" * 40,
+        "sourceDigest": "sha256:" + "7" * 64,
+        "entityCatalogDigest": "sha256:" + "8" * 64,
+        "activeCarriers": ["video"],
+        "workloads": {"video": 3},
+    }
+    review = _receipt(
+        root_id=root_id,
+        execution_id=root_id,
+        carrier="video",
+        phase="review",
+        quota=3,
+        selected=3,
+    )
+    publish = _receipt(
+        root_id=root_id,
+        execution_id=root_id,
+        carrier="video",
+        phase="publish",
+        quota=3,
+        selected=3,
+    )
+    publish.update(
+        {
+            "status": "partial",
+            "finalizedCount": 2,
+            "shortfallCount": 1,
+            "publishDiscards": [
+                {
+                    "objectRef": "video/测试/video-003/001",
+                    "issues": ["DATA.PUBLISH.OBJECT_APPLY_FAILED"],
+                }
+            ],
+        }
+    )
+    write_json(
+        lane_receipt_path(root_id, "video", "review", root=campaigns), review
+    )
+    write_json(
+        lane_receipt_path(root_id, "video", "publish", root=campaigns), publish
+    )
+
+    path = maybe_write_copy_ready_receipt(
+        root_execution_id=root_id,
+        plan=plan,
+        submissions={
+            "video": {"executionId": root_id, "quota": 3, "count": 3}
+        },
+        lanes={
+            "video": {"status": "partial", "cleanupStatus": "cleaned"}
+        },
+        campaigns_root=campaigns,
+        output_root=output,
+        assessed_at="2026-07-30T00:00:00+00:00",
+    )
+
+    assert path is not None
+    payload = path.read_text(encoding="utf-8")
+    assert '"finalizedCount": 2' in payload
+    assert '"totalDiscardedCount": 1' in payload

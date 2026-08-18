@@ -90,6 +90,7 @@ def test_frozen_professional_images_drive_homepage_and_image_plans_exactly(
             source_revision=SOURCE_REVISION,
             source_digest=SOURCE_DIGEST,
             entity_catalog_digest=CATALOG_DIGEST,
+            library_root=acquisition_root.parent / "content_library",
         )
 
     image_context = _external_context(

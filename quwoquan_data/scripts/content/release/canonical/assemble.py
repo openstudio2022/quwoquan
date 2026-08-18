@@ -11,6 +11,7 @@ from content.release.canonical.release_identity_incident import (
     release_output_root,
 )
 from content.review.publish_filter import apply_publish_filter
+from core.content_library import link_tree_from_library
 from core.entity_object import collect_execution_entity_objects
 from core.io import read_json, write_json
 from core.paths import release_root
@@ -126,7 +127,7 @@ def _copy_entity_surface(src_dir: Path, dst_dir: Path) -> None:
             shutil.copy2(src, dst_dir / name)
     src_assets = src_dir / "assets"
     if src_assets.is_dir():
-        shutil.copytree(src_assets, dst_dir / "assets")
+        link_tree_from_library(src_assets, dst_dir / "assets", kind="media")
     _copy_compact_evidence(src_dir / "5.review", dst_dir)
 
 
@@ -172,7 +173,7 @@ def _copy_post_surface(src: Path, dst: Path, *, manifest: dict) -> None:
     write_json(dst / "manifest.json", release_manifest)
     assets = src / "assets"
     if assets.is_dir():
-        shutil.copytree(assets, dst / "assets")
+        link_tree_from_library(assets, dst / "assets", kind="media")
     _copy_compact_evidence(src / "5.review", dst)
 
 

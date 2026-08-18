@@ -26,7 +26,6 @@ from core.paths import (
 )
 from core.quality_gates import WRITING_INTENTS, writing_intent_issues
 from core.qunar_template import qunar_article_base_block_reason
-from core.source_catalog import ARTICLE_BASE_SOURCE_CATEGORIES
 from content.post.content_plan_state import (
     load_content_plan_packet,
     packet_items as _items,
@@ -35,6 +34,20 @@ from content.post.content_plan_state import (
 
 CONTENT_PLAN_SCHEMA = "quwoquan_data.content_plan_packet"
 ARTICLE_BASE_SOURCE_ROLES = {"base"}
+ARTICLE_BASE_SOURCE_CATEGORIES = {
+    "travelogue",
+    "guidebook",
+    "travel_guide",
+    "wikivoyage",
+    "official_article",
+    "vertical_professional",
+    "ugc_longform",
+    "community_post",
+    "media_article",
+    "platform_article",
+    "forum_thread",
+    "review_note",
+}
 ARTICLE_SUPPORTING_ONLY_CATEGORIES = {
     "authoritative_reference",
     "official",
@@ -43,6 +56,7 @@ ARTICLE_SUPPORTING_ONLY_CATEGORIES = {
     "open_license",
     "image_collection",
     "overview_baike",
+    "encyclopedia",
 }
 
 
@@ -133,14 +147,11 @@ def load_writing_intent_overrides(execution_id: str) -> dict[str, dict[str, Any]
         row: dict[str, Any] = {}
         for field in (
             "writingIntent",
-            "articleCategory",
-            "tagRefs",
             "baseSourceRef",
             "baseSourceReusePolicy",
             "carrier",
             "sourceCollectionId",
             "assetRefs",
-            "articleSourceUnitFreeze",
             "authorId",
             "creatorProfileId",
             "creatorArchetype",

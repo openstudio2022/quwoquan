@@ -12,8 +12,9 @@ from content.release.canonical.object_transaction_contract import (
 from content.release.canonical.release_attestation import ReleaseAttestation
 from content.release.canonical.release_header import validate_release_header
 from content.release.model import DataSourceOwner, ReleaseKind
+from governance.coverage.distribution import ProductLifecycleState, ReleaseClass
 from core.schema import assert_valid
-from core.source_digest import FrozenSourceDigest, SourceDigest
+from core.source_digest import SourceDefinitionSnapshot
 
 
 def release_desired_state_document(
@@ -138,7 +139,7 @@ def release_attestation_document(
     source_revision: str | None,
     source_digest: str | None,
     entity_catalog_digest: str | None,
-    source_digests: tuple[SourceDigest | FrozenSourceDigest, ...],
+    source_digests: tuple[SourceDefinitionSnapshot, ...],
     asset_admission: Mapping[str, Any],
     canonical_merkle: str,
     entity_count: int,
@@ -147,7 +148,7 @@ def release_attestation_document(
     tag_count: int,
     payload_sha256: str,
     recorded_at: str,
-    distribution_policy: Any,
+    release_class: str,
     source_identities: tuple[dict[str, object], ...] = (),
     source_identity_set_digest: str | None = None,
 ) -> dict[str, object]:
@@ -155,8 +156,8 @@ def release_attestation_document(
         release_id=release_id,
         source_owner=DataSourceOwner.QWQ_DATA,
         release_kind=ReleaseKind.CONTENT,
-        release_class=distribution_policy.release_class,
-        product_lifecycle_state=distribution_policy.product_lifecycle_state,
+        release_class=ReleaseClass(release_class),
+        product_lifecycle_state=ProductLifecycleState(release_class),
         contains_unverified_assets=bool(
             asset_admission["containsUnverifiedAssets"]
         ),

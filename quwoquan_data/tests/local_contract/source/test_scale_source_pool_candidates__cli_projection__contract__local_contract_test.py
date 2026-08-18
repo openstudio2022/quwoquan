@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 
@@ -214,6 +215,91 @@ def test_four_carrier_projection_is_deterministic_and_plan_consumable(tmp_path):
     assert load_candidates(str(destination)) == first["candidates"]
 
 
+def test_video_1000_explicit_workload_is_not_a_milestone_adapter() -> None:
+    _homepage_article, image_video = _projections()
+    template = next(
+        row for row in image_video["candidates"] if row["carrier"] == "video"
+    )
+    rows = []
+    for index in range(1000):
+        row = copy.deepcopy(template)
+        row["candidateId"] = f"video-{index:04d}"
+        row["objectRef"] = f"posts/video/video-{index:04d}"
+        row["entityRef"] = f"/entity/地点/景区/video-{index:04d}"
+        row["observedEntityRef"] = row["entityRef"]
+        row["contentSha256"] = _digest(["video", "content", index])
+        rows.append(row)
+    image_video["targetScale"] = "WORKLOAD"
+    image_video["candidateCount"] = len(rows)
+    image_video["candidates"] = rows
+    stable_projection = {
+        key: value for key, value in image_video.items() if key != "projectionDigest"
+    }
+    image_video["projectionDigest"] = _digest(stable_projection)
+
+    candidates = build_scale_source_pool_candidates(
+        target_scale=None,
+        source_revision=IDENTITY["sourceRevision"],
+        source_digest=IDENTITY["sourceDigest"],
+        entity_catalog_digest=IDENTITY["entityCatalogDigest"],
+        homepage_article_projection=None,
+        image_video_projection=image_video,
+        active_carriers=("video",),
+        workload_targets={"video": 1000},
+    )
+
+    assert candidates["targetScale"] == "WORKLOAD"
+    assert candidates["workloadMode"] == "explicit"
+    assert candidates["activeCarriers"] == ["video"]
+    assert candidates["workloadTargets"] == {"video": 1000}
+    from content.source.research.scale_source_pool import (
+        build_scale_source_pool_plan,
+        validate_scale_source_pool,
+    )
+
+    plan = build_scale_source_pool_plan(
+        pool_id="video-1000-explicit",
+        target_scale=None,
+        source_revision=IDENTITY["sourceRevision"],
+        source_digest=IDENTITY["sourceDigest"],
+        entity_catalog_digest=IDENTITY["entityCatalogDigest"],
+        created_at="2026-08-14T00:00:00Z",
+        candidates=candidates["candidates"],
+        workload_targets={"video": 1000},
+    )
+    validation = validate_scale_source_pool(plan)
+    assert plan["targetScale"] == "WORKLOAD"
+    assert plan["workloadMode"] == "explicit"
+    assert validation["workloadTargets"] == {"video": 1000}
+
+    from content.release.canonical.pool_semantic_scheduling import (
+        semantic_scheduling_projection,
+    )
+
+    scheduling = semantic_scheduling_projection(
+        milestone="WORKLOAD",
+        supply={"video": {"gap": 1000}},
+        source_ready_backlog={"video": 1000},
+        source_ready_candidates={"video": plan["candidates"]},
+        workload_targets={"video": 1000},
+    )
+    assert scheduling["waveInput"]["activeCarriers"] == ["video"]
+    assert scheduling["waveInput"]["workloadTargets"] == {"video": 1000}
+    assert scheduling["carriers"] == [
+        {
+            "carrier": "video",
+            "gap": 1000,
+            "sourceReadyBacklog": 1000,
+            "p10PerSlotThroughput": None,
+            "remainingSemanticHours": None,
+            "assignedSlots": 84,
+            "sourceReadyHighWater": 1000,
+            "dispatchCandidateCount": 1000,
+        }
+    ]
+    assert len(scheduling["waveInput"]["candidates"]) == 1000
+
+
 def test_projection_rejects_cross_carrier_identity_and_duplicate_content():
     homepage_article, image_video = _projections()
     image_video["sourceDigest"] = "sha256:" + "d" * 64
@@ -302,7 +388,7 @@ def test_current_wave_selects_only_active_carriers_without_video_evidence():
     validation = validate_scale_source_pool(plan)
     assert [
         row["actualCandidateCount"] for row in validation["candidateCounts"]
-    ] == [1, 1, 1, 0]
+    ] == [1, 1, 1]
 
 
 def test_active_carrier_without_physical_candidate_fails_closed():
@@ -334,7 +420,7 @@ def test_create_once_collision_is_typed(tmp_path):
     assert captured.value.code == SOURCE_POOL_CREATE_ONCE_COLLISION
 
 
-def test_project_candidates_cli_dispatches_both_canonical_projectors(
+def test_explicit_project_candidates_cli_needs_no_milestone_and_dispatches_both_projectors(
     monkeypatch,
     tmp_path,
     capsys,
@@ -344,6 +430,7 @@ def test_project_candidates_cli_dispatches_both_canonical_projectors(
     homepage_article, image_video = _projections()
     image_video["candidates"] = [image_video["candidates"][0]]
     image_video["candidateCount"] = 1
+    image_video["targetScale"] = "WORKLOAD"
     stable = {
         key: value for key, value in image_video.items() if key != "projectionDigest"
     }
@@ -364,8 +451,6 @@ def test_project_candidates_cli_dispatches_both_canonical_projectors(
         [
             "source-pool",
             "project-candidates",
-            "--target-scale",
-            "M100",
             "--source-revision",
             IDENTITY["sourceRevision"],
             "--source-digest",
@@ -378,12 +463,12 @@ def test_project_candidates_cli_dispatches_both_canonical_projectors(
             str(tmp_path),
             "--output-root",
             str(tmp_path / "output"),
-            "--active-carrier",
-            "homepage",
-            "--active-carrier",
-            "article",
-            "--active-carrier",
-            "image",
+            "--workload",
+            "homepage=1",
+            "--workload",
+            "article=1",
+            "--workload",
+            "image=1",
             "--homepage-catalog-ref",
             "catalogs/homepage.json",
             "--homepage-catalog-digest",
@@ -414,7 +499,13 @@ def test_project_candidates_cli_dispatches_both_canonical_projectors(
     receipt = json.loads(capsys.readouterr().out)
     candidate_path = tmp_path / "output" / receipt["candidatesRef"]
     assert candidate_path.is_file()
+    assert receipt["targetScale"] == "WORKLOAD"
     assert receipt["activeCarriers"] == ["homepage", "article", "image"]
+    assert receipt["workloadTargets"] == {
+        "homepage": 1,
+        "article": 1,
+        "image": 1,
+    }
     assert receipt["candidateCounts"][-1] == {
         "carrier": "video",
         "candidateCount": 0,

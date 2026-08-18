@@ -188,6 +188,18 @@ def command_repair(args: argparse.Namespace) -> dict[str, Any]:
             environment=env_name,
             report_dir=report_dir,
         )
+    if args.fix == "reclaim-stale-test-live-receipt":
+        return _stackctl._repair_stale_test_live_receipt(
+            args,
+            environment=env_name,
+            report_dir=report_dir,
+        )
+    if args.fix == "reclaim-undownable-startup-receipt":
+        return _stackctl._repair_undownable_startup_receipt(
+            args,
+            environment=env_name,
+            report_dir=report_dir,
+        )
     if args.fix == "reclaim-orphaned-processes":
         if args.target != "alpha-local":
             summary = "reclaim-orphaned-processes is only available for alpha-local"
@@ -538,6 +550,8 @@ def register_parser(subparsers: "argparse._SubParsersAction") -> None:
             "reclaim-build-cache",
             "reclaim-orphaned-processes",
             "reclaim-orphaned-compose",
+            "reclaim-stale-test-live-receipt",
+            "reclaim-undownable-startup-receipt",
             "service-core-cutover",
             "restart-stack",
             "reclaim-ports",
@@ -625,6 +639,26 @@ def register_parser(subparsers: "argparse._SubParsersAction") -> None:
         help=(
             "Confirm exact-ID removal of the containers and networks sealed in a "
             "fresh orphan Compose attestation; named volumes remain preserved."
+        ),
+    )
+    repair_parser.add_argument(
+        "--confirm-stale-test-live-receipt-reclaim",
+        action="store_true",
+        help=(
+            "Confirm removal of one test-live startup receipt the current contract "
+            "cannot admit, after a live probe proves the project owns no container, "
+            "network or canonical port. The receipt is archived first and named "
+            "volumes remain preserved."
+        ),
+    )
+    repair_parser.add_argument(
+        "--confirm-undownable-startup-receipt-reclaim",
+        action="store_true",
+        help=(
+            "Confirm retirement of one non-stopped startup receipt whose own "
+            "candidate topology cannot produce a valid Compose project, after a "
+            "live probe proves the project owns no container, network or canonical "
+            "port. The receipt is archived first and named volumes remain preserved."
         ),
     )
     repair_parser.add_argument(

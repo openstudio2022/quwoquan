@@ -19,6 +19,10 @@ from content.release.canonical.object_transaction import (
 )
 from content.release.canonical.object_transaction_contract import ObjectTransactionError
 from content.release.environment.consistency import scan_release_contract
+from support.media_fixture import (
+    admit_media_body,
+    seed_system_creator_avatar_holding,
+)
 
 
 def _write_json(path: Path, payload: object) -> None:
@@ -79,13 +83,8 @@ def _avatar_rights(
 
 def test_entity_creator_profile_id_closes_creator_object(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        creator_projection,
-        "PUBLISH_ROOT",
-        Path(__file__).resolve().parents[4] / "quwoquan_data" / "publish",
-    )
+    seed_system_creator_avatar_holding("qwq_creator_geo_editor_001")
     refs, objects = _project_entity_creator_closure(
         entity={"creatorProfileId": "qwq_creator_geo_editor_001"},
         staging=tmp_path,
@@ -145,14 +144,11 @@ def test_creator_avatar_projects_only_from_traceable_cas(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     pool = tmp_path / "creator_pool"
-    publish = tmp_path / "publish"
     avatar = b"traceable-avatar"
     digest_hex = hashlib.sha256(avatar).hexdigest()
     digest = f"sha256:{digest_hex}"
     object_key = f"media/objects/sha256/{digest_hex[:2]}/{digest_hex[2:4]}/{digest_hex}.jpg"
-    physical = publish / object_key
-    physical.parent.mkdir(parents=True, exist_ok=True)
-    physical.write_bytes(avatar)
+    admit_media_body(avatar)
     evidence_ref = "evidence/avatar-quality.json"
     _write_json(
         pool / evidence_ref,
@@ -199,7 +195,6 @@ def test_creator_avatar_projects_only_from_traceable_cas(
     profile_path.parent.mkdir(parents=True, exist_ok=True)
     profile_path.write_text(yaml.safe_dump(profile, allow_unicode=True), encoding="utf-8")
     monkeypatch.setattr(creator_projection, "CONTROL_PLANE_CREATOR_POOL_ROOT", pool)
-    monkeypatch.setattr(creator_projection, "PUBLISH_ROOT", publish)
 
     target = tmp_path / "creator"
     creator_projection.project_creator_object("creator_test", target)

@@ -126,12 +126,6 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
                     "gamma-local",
                     "--launch-mode",
                     "canonical_launcher",
-                    "--content-release-id",
-                    "release-gamma",
-                    "--content-manifest-digest",
-                    "sha256:" + ("1" * 64),
-                    "--content-readiness-receipt-digest",
-                    "sha256:" + ("2" * 64),
                 ],
                 cwd=ROOT / "quwoquan_app",
                 env=isolated_env,
@@ -176,13 +170,6 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
                     ],
                     "QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST": handoff[
                         "effectiveLaunchManifestDigest"
-                    ],
-                    "QWQ_CONTENT_RELEASE_ID": handoff["contentReleaseId"],
-                    "QWQ_CONTENT_MANIFEST_DIGEST": handoff[
-                        "contentManifestDigest"
-                    ],
-                    "QWQ_CONTENT_READINESS_RECEIPT_DIGEST": handoff[
-                        "contentReadinessReceiptDigest"
                     ],
                 }
                 result = subprocess.run(

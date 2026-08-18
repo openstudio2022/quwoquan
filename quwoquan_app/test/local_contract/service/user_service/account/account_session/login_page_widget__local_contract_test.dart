@@ -46,7 +46,7 @@ import '../../../../../support/runtime/errors/runtime_failure_fixtures.dart';
 void main() {
   setUpAll(() async {
     final fonts = <(String, String)>[
-      ('Noto Sans SC', 'assets/fonts/noto_sans_sc/NotoSansSC[wght].ttf'),
+      ('Noto Sans SC', 'assets/fonts/noto_sans_sc/NotoSansSC-wght.ttf'),
       (
         'packages/cupertino_icons/CupertinoIcons',
         'packages/cupertino_icons/assets/CupertinoIcons.ttf',
@@ -416,7 +416,8 @@ void main() {
         readinessAvailability:
             OtpDeliveryReadinessAvailability.temporarilyUnavailable,
       );
-      await _pumpHost(tester, auth: auth);
+      final recorder = RecordingAppTelemetryRecorder();
+      await _pumpHost(tester, auth: auth, recorder: recorder);
       await _enterPhone(tester, '18013819016');
       await tester.pump();
 
@@ -430,6 +431,21 @@ void main() {
       expect(auth.readinessCalls, greaterThanOrEqualTo(2));
       expect(auth.sendOtpCalls, 0);
       expect(find.text('输入验证码'), findsNothing);
+      expect(
+        recorder.recorded.where(
+          (event) =>
+              event.eventType == 'login_operation' &&
+              event.extensions['operationId'] ==
+                  'get_otp_delivery_readiness' &&
+              event.extensions['result'] == 'temporarily_unavailable' &&
+              event.extensions['recoveryAction'] == 'retryReadiness',
+        ),
+        isNotEmpty,
+      );
+      for (final event in recorder.recorded) {
+        expect(event.extensions, isNot(contains('adapterId')));
+        expect(event.extensions, isNot(contains('providerEndpoint')));
+      }
     });
 
     testWidgets('手机号登录 22 个明暗与异常状态冻结为开发基线', (tester) async {

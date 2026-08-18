@@ -10,7 +10,15 @@ from core.image_decode import probe_image_bytes
 from core.image_rules import pixel_size_issue, relevance_issue
 from core.image_safety import dedupe_image_payloads
 from core.media_processing_policy import MEDIA_PROCESSING_POLICY
-from governance.coverage.license import normalize_rights_payload, validate_image_rights
+from core.data_issue import (
+    DataIssue,
+    DataIssueCode,
+    DataIssueLane,
+    DataIssueStage,
+    DataRecoveryAction,
+    data_issue,
+)
+from governance.coverage.license import audit_image_rights, normalize_rights_payload
 
 from content.source.contracts import MediaProvenance
 from content.source.fetch_images import fetch_image_payload
@@ -22,6 +30,7 @@ from content.source.handler_images import (
     _write_image_check_temp_file,
 )
 from content.source.handler_plan import _write_download_progress
+from content.source.rights_decision_projection import projected_distribution_decision
 
 
 @dataclass(frozen=True)
@@ -32,6 +41,7 @@ class PreparedEntityImages:
     rejected_by_category: dict[str, int]
     pending_images: list[dict[str, Any]]
     provider_asset_counts: list[dict[str, Any]]
+    professional_exclusions: list[DataIssue]
     required_image_work_images: int
     planned_homepage_source_images: int
     required_homepage_media: int
@@ -42,6 +52,72 @@ def _source_asset_key(item: Mapping[str, Any]) -> tuple[str, str]:
     provider = str(item.get("platform") or "unknown").strip() or "unknown"
     source_id = str(item.get("sourceId") or provider).strip() or provider
     return provider, source_id
+
+
+def _is_frozen_professional_image_work_unit(spec: Mapping[str, Any]) -> bool:
+    return all(
+        str(spec.get(field) or "").strip()
+        for field in (
+            "acquisitionReceiptRef",
+            "professionalAssetId",
+            "professionalContentSha256",
+        )
+    )
+
+
+def _professional_image_work_unit_exclusions(
+    *,
+    entity_id: str,
+    image_specs: list[dict[str, Any]],
+    accepted_images: list[dict[str, Any]],
+) -> list[DataIssue]:
+    """Describe every frozen professional work unit not materialized.
+
+    The rows are evidence-only, non-blocking exclusions when positive siblings
+    remain.  Batch blocking continues to depend on the existing minimum-count
+    gate, so one asset cannot cancel ten accepted siblings.
+    """
+    accepted = {
+        (
+            str(row.get("professionalAssetId") or "").strip(),
+            str(row.get("professionalContentSha256") or "").strip(),
+        )
+        for row in accepted_images
+        if str(row.get("professionalAssetId") or "").strip()
+        and str(row.get("professionalContentSha256") or "").strip()
+    }
+    exclusions: list[DataIssue] = []
+    for spec in image_specs:
+        if (
+            str(spec.get("researchLane") or "").strip() != "image"
+            or not _is_frozen_professional_image_work_unit(spec)
+        ):
+            continue
+        identity = (
+            str(spec.get("professionalAssetId") or "").strip(),
+            str(spec.get("professionalContentSha256") or "").strip(),
+        )
+        if identity in accepted:
+            continue
+        exclusions.append(
+            data_issue(
+                DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL,
+                stage=DataIssueStage.IMAGE_FETCH,
+                ref=entity_id,
+                lane=DataIssueLane.IMAGE,
+                recovery=DataRecoveryAction.RETRY_SOURCE_DISCOVERY,
+                message=(
+                    "frozen professional image work unit was excluded before "
+                    f"content materialization: {identity[0]}"
+                ),
+                attributes={
+                    "assetId": identity[0],
+                    "contentSha256": identity[1],
+                    "disposition": "typed_exclusion",
+                },
+            )
+        )
+    return exclusions
 
 
 def _provider_asset_counts(
@@ -148,6 +224,7 @@ def prepare_entity_images(
     image_work_candidate_index = 0
     for idx_img, spec in enumerate(image_specs, start=1):
         lane = str(spec.get("researchLane") or "").strip()
+        frozen_professional_work_unit = _is_frozen_professional_image_work_unit(spec)
         if lane == "video":
             image_rights_issues.append(
                 f"{idx_img}: video image-frame candidates are retired; "
@@ -157,11 +234,16 @@ def prepare_entity_images(
         is_page_owned_homepage_media = lane == "homepage"
         if lane == "image":
             image_work_candidate_index += 1
-        if lane == "image" and pending_image_work_count >= image_fetch_target:
+        if (
+            lane == "image"
+            and pending_image_work_count >= image_fetch_target
+            and not frozen_professional_work_unit
+        ):
             continue
         if (
             lane == "image"
             and image_work_candidate_index > image_candidate_limit
+            and not frozen_professional_work_unit
         ):
             image_quality_issues.append(
                 f"imageFetch: {entity_id} stopped after {image_candidate_limit} image candidate(s)"
@@ -190,11 +272,10 @@ def prepare_entity_images(
             ),
         )
         asset_label = f"{entity_id}#{idx_img}"
-        issues = validate_image_rights(spec, vertical=vertical)
-        if issues:
-            image_rights_issues.extend([f"{idx_img}: {issue}" for issue in issues])
-            rejected_by_category["rights"] += 1
-            continue
+        image_rights_issues.extend(
+            f"{idx_img}: {issue}"
+            for issue in audit_image_rights(spec, vertical=vertical)
+        )
         payload = _cached_image_lane_payload(object_dir, spec)
         if payload is None:
             payload = fetch_image_payload(spec["url"])
@@ -306,7 +387,7 @@ def prepare_entity_images(
                 "acquisitionStatus": spec.get("acquisitionStatus") or "",
                 "rightsStatus": spec.get("rightsStatus") or spec.get("rightsAuditStatus") or "",
                 "authorizationRequired": spec.get("authorizationRequired"),
-                "distributionDecision": spec.get("distributionDecision") or "",
+                **projected_distribution_decision(spec),
                 "sourceAttribution": dict(spec.get("sourceAttribution") or {}),
                 "rightsIssues": list(spec.get("rightsIssues") or []),
                 "caption": str(spec.get("caption") or relevance),
@@ -335,6 +416,11 @@ def prepare_entity_images(
         downloaded_by_source=downloaded_by_source,
         accepted_images=pending_images,
     )
+    professional_exclusions = _professional_image_work_unit_exclusions(
+        entity_id=entity_id,
+        image_specs=image_specs,
+        accepted_images=pending_images,
+    )
 
     return PreparedEntityImages(
         image_manifest=image_manifest,
@@ -343,6 +429,7 @@ def prepare_entity_images(
         rejected_by_category=rejected_by_category,
         pending_images=pending_images,
         provider_asset_counts=provider_asset_counts,
+        professional_exclusions=professional_exclusions,
         required_image_work_images=required_image_work_images,
         planned_homepage_source_images=planned_homepage_source_images,
         required_homepage_media=required_homepage_media,

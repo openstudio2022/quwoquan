@@ -329,6 +329,14 @@ def ensure_patrol_ios_products_bridge() -> None:
 
 
 def dry_run_devices(args: argparse.Namespace) -> list[dict[str, Any]]:
+    """Synthesize devices for a dry run, resolving real iOS simulator runtimes.
+
+    A dry run exists to validate the exact command that a real run would issue.
+    An iOS simulator entry has no meaning without a runtime identity, so the
+    synthetic sdk string must not stand in for one: the iOS entries go through
+    the same runtime enrichment as discovery, which fails closed when the
+    requested simulator does not exist.
+    """
     raw_ids = args.device_id or ["dry-run-device"]
     devices = []
     for device_id in raw_ids:
@@ -345,4 +353,4 @@ def dry_run_devices(args: argparse.Namespace) -> list[dict[str, Any]]:
                 "screenClass": "phone",
             }
         )
-    return devices
+    return _enrich_ios_simulator_runtime_versions(devices)

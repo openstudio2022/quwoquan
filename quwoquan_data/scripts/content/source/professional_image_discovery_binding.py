@@ -81,7 +81,7 @@ def validate_discovery_binding(
         raise ValueError(f"{item['assetId']}: discovery candidate is not frozen")
     if str(candidate["provider"]) != str(item["sourceId"]):
         raise ValueError(f"{item['assetId']}: discovery provider mismatch")
-    if str(candidate["entity"]) != str(item["entityId"]):
+    if str(candidate["entity"]) != str(item["observedEntityId"]):
         raise ValueError(f"{item['assetId']}: discovery entity mismatch")
     if str(candidate["discoveryUrl"]) != str(item["discoveryUrl"]):
         raise ValueError(f"{item['assetId']}: discovery URL mismatch")

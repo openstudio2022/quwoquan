@@ -25,14 +25,29 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import subprocess
+import uuid
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Mapping
 
+from quwoquan_ops.cli.lib.test_data.capabilities.chat_service import (
+    DIRECT_CONVERSATION_WITH_MESSAGES,
+    DirectConversationResult,
+    DirectConversationWithMessagesParams,
+)
+from quwoquan_ops.cli.lib.test_data.capabilities.common import ActorRole
 from quwoquan_ops.cli.lib.test_data.capabilities.user_service import (
     AUTHENTICATED_ACTORS,
+    AuthenticatedActorsParams,
+    MutualActorRelationship,
 )
 from quwoquan_ops.cli.lib.test_data.model import TestDataContext
 from quwoquan_ops.cli.lib.test_data.operations import TestDataRuntime
+from quwoquan_ops.cli.smoke.environment_patrol_smoke.constants import (
+    TYPED_TEST_DATA_ACTOR_ENV,
+    TYPED_TEST_DATA_CONVERSATION_ENV,
+)
 
 
 def _app_content_patrol_evidence(report_ref: str) -> dict[str, Any]:
@@ -57,13 +72,25 @@ def _app_content_patrol_evidence(report_ref: str) -> dict[str, Any]:
     evidence = evidence if isinstance(evidence, dict) else {}
     screenshot = evidence.get("afterScreenshot")
     screenshot = screenshot if isinstance(screenshot, dict) else {}
+    screenshot_marker = screenshot.get("marker")
+    screenshot_marker = (
+        screenshot_marker if isinstance(screenshot_marker, dict) else {}
+    )
+    screenshot_is_live_page = (
+        screenshot.get("status") == "captured"
+        and screenshot.get("capturedDuringPatrol") is True
+        and all(
+            str(screenshot_marker.get(field) or "").strip()
+            for field in ("environment", "suite", "route", "terminalKey")
+        )
+    )
     screenshot_ref = str(screenshot.get("path") or "").strip()
     screenshot_path = Path(screenshot_ref)
     if screenshot_ref and not screenshot_path.is_absolute():
         screenshot_path = _stackctl.ROOT / screenshot_path
     screenshot_digest = (
         "sha256:" + hashlib.sha256(screenshot_path.read_bytes()).hexdigest()
-        if screenshot_ref and screenshot_path.is_file()
+        if screenshot_is_live_page and screenshot_ref and screenshot_path.is_file()
         else ""
     )
     return {
@@ -80,6 +107,7 @@ def _app_content_patrol_evidence(report_ref: str) -> dict[str, Any]:
         ),
         "screenshotRef": screenshot_ref,
         "screenshotDigest": screenshot_digest,
+        "screenshotMarker": screenshot_marker if screenshot_is_live_page else {},
         "remoteApi": report.get("remoteApiEvidence", {}),
     }
 
@@ -231,6 +259,7 @@ def _app_content_test_live_actor_context(
             },
         },
         readiness=readiness,
+        allow_consumer=True,
     )
     provider = preflight.get("provider")
     login = preflight.get("loginJourney")
@@ -279,6 +308,108 @@ def _app_content_test_live_actor_context(
         provider_evidence=provider_evidence,
         runtime=TestDataRuntime(),
     )
+
+
+def _run_app_content_message_home_command(
+    profile_command: Mapping[str, Any],
+    *,
+    target_name: str,
+    actor_context: TestDataContext | None,
+) -> tuple[subprocess.CompletedProcess[str], dict[str, Any]]:
+    """Run Message Home P0 inside one typed provision/Patrol/cleanup scope."""
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    if actor_context is None:
+        raise RuntimeError("message page UAT typed test-data context is unavailable")
+    runtime = actor_context.runtime
+    if not isinstance(runtime, TestDataRuntime):
+        raise TypeError("message page UAT typed test-data runtime is unavailable")
+
+    test_data_instance_id = str(uuid.uuid4())
+    scoped_context = replace(
+        actor_context,
+        output_root=actor_context.output_root / "message-home",
+        test_data_instance_id=test_data_instance_id,
+    )
+    actors = AUTHENTICATED_ACTORS.bind(
+        AuthenticatedActorsParams(
+            roles=(ActorRole.SENDER, ActorRole.RECEIVER),
+            mutual_relationships=(
+                MutualActorRelationship(
+                    source_role=ActorRole.SENDER,
+                    target_role=ActorRole.RECEIVER,
+                ),
+            ),
+        )
+    )
+    request = DIRECT_CONVERSATION_WITH_MESSAGES.bind(
+        DirectConversationWithMessagesParams(
+            actors=actors.output.whole(),
+            sender_role=ActorRole.SENDER,
+            receiver_role=ActorRole.RECEIVER,
+            message_count=2,
+        )
+    )
+    session = _stackctl.TestDataSession.for_case(
+        _stackctl.ProfileActorCaseId.APP_CONTENT_UAT,
+        context=scoped_context,
+    )
+    command_environment = dict(profile_command.get("env") or {})
+    # `_stackctl.run` merges the parent process environment; explicit blanks
+    # prevent stale ambient credentials/handles from crossing into this child.
+    for key in (
+        "TEST_AUTH_TOKEN",
+        "TEST_REFRESH_TOKEN",
+        "APP_CURRENT_OWNER_ID",
+        "APP_CURRENT_PERSONA_ID",
+        *TYPED_TEST_DATA_ACTOR_ENV.values(),
+        *TYPED_TEST_DATA_CONVERSATION_ENV.values(),
+    ):
+        command_environment[key] = ""
+
+    root_provision_receipt = None
+    with session.provision(request) as provisioned:
+        if not isinstance(provisioned.value, DirectConversationResult):
+            raise TypeError("message page UAT typed conversation result is invalid")
+        receiver_handle = runtime.actor_for(
+            test_data_instance_id=test_data_instance_id,
+            role=ActorRole.RECEIVER,
+        )
+        receiver = runtime.actor(receiver_handle)
+        command_environment.update(
+            {
+                TYPED_TEST_DATA_ACTOR_ENV["access_token"]: receiver.session.access_token,
+                TYPED_TEST_DATA_ACTOR_ENV["refresh_token"]: receiver.session.refresh_token,
+                TYPED_TEST_DATA_ACTOR_ENV["owner_id"]: receiver.session.owner_id,
+                TYPED_TEST_DATA_ACTOR_ENV["persona_id"]: receiver.session.persona_id,
+                TYPED_TEST_DATA_CONVERSATION_ENV["conversation_id"]: provisioned.value.conversation.object_id,
+                TYPED_TEST_DATA_CONVERSATION_ENV["message_ids_json"]: json.dumps(
+                    [
+                        message.message.object_id
+                        for message in provisioned.value.messages
+                    ],
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                ),
+            }
+        )
+        root_provision_receipt = provisioned.receipt
+        result = _stackctl.run(
+            list(profile_command["argv"]),
+            cwd=profile_command.get("cwd"),
+            env=_stackctl._verify_child_environment(
+                target_name,
+                command_environment,
+            ),
+        )
+
+    if root_provision_receipt is None:
+        raise RuntimeError("message page UAT preparation receipt is unavailable")
+    scope_evidence = _stackctl._link_profile_preparation_to_page_report(
+        profile_command,
+        root_provision_receipt,
+    )
+    return result, scope_evidence
 
 
 def _ios_direct_flutter_log_reader_retryable(

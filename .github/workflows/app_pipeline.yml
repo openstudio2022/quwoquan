@@ -106,6 +106,30 @@ jobs:
           test "$(git rev-parse HEAD)" = "$SOURCE_GIT_SHA"
           flutter pub get
           make verify-production-wiring-purity
+          make -C .. verify-app-identity-state-isolation verify-app-identity
+      - name: Install Android API 37 platform
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          test -n "$SDK"
+          SDKMANAGER=""
+          for candidate in \
+            "$SDK/cmdline-tools/latest/bin/sdkmanager" \
+            "$SDK/cmdline-tools/bin/sdkmanager"; do
+            if [ -x "$candidate" ]; then
+              SDKMANAGER="$candidate"
+              break
+            fi
+          done
+          if [ -z "$SDKMANAGER" ] && command -v sdkmanager >/dev/null 2>&1; then
+            SDKMANAGER="$(command -v sdkmanager)"
+          fi
+          test -n "$SDKMANAGER"
+          # sdkmanager 发布的是 android-37.0；AGP compileSdk=37 + compileSdkMinor=0 查找该目录。
+          set +o pipefail
+          yes | "$SDKMANAGER" --sdk_root="$SDK" --install "platforms;android-37.0"
+          set -o pipefail
+          test -d "$SDK/platforms/android-37.0"
       - name: Build four immutable Android packages
         working-directory: quwoquan_app
         env:
@@ -331,6 +355,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$SOURCE_GIT_SHA"
           flutter pub get
           make verify-production-wiring-purity
+          make -C .. verify-app-identity-state-isolation verify-app-identity
           BUNDLE_ROOT="$RUNNER_TEMP/app-candidate-evidence"
           mkdir -p "$BUNDLE_ROOT/application-packages" "$BUNDLE_ROOT/payloads"
           SOURCE_TREE_DIGEST="sha1:$(git rev-parse HEAD^{tree})"

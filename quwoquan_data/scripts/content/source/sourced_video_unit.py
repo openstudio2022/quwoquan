@@ -1,38 +1,29 @@
 """Build one admitted sourced-video unit with frozen rights and scan evidence."""
 from __future__ import annotations
 
-import json
-import shutil
 from datetime import UTC, datetime
+import json
 from pathlib import Path
+import shutil
 from typing import Any
-
-from core.content_source_registry import load_content_source_registry
-from core.paths import (
-    execution_source_unit_dir,
-    relative_execution_ref,
-)
-from core.schema import assert_valid
-from core.video_source_admission import (
-    VIDEO_SOURCE_KINDS,
-    assert_video_distribution_use_allowed,
-)
-from governance.coverage.distribution import (
-    ProductLifecycleState,
-    load_content_distribution_policy,
-)
 
 from content.post.video.package_common import sha256_file
 from content.post.video.source_video import SourcedVideoEvidence
-from content.source.professional_video_receipt import (
-    assert_observed_popularity_signals,
-    assert_publishable_media_probe,
-)
 from content.source.source_unit import resolve_entity_object_dir, write_source_unit
 from content.source.sourced_video_admission import (
     admitted_audio_evidence,
     probe_sourced_video,
     scan_sourced_video_watermark,
+)
+from core.paths import (
+    execution_source_unit_dir,
+    relative_execution_ref,
+)
+from core.schema import assert_valid
+from core.content_source_registry import load_content_source_registry
+from core.video_source_admission import (
+    VIDEO_SOURCE_KINDS,
+    assert_video_source_admitted,
 )
 
 
@@ -43,7 +34,7 @@ def _commercial_source_use_mode(
     rights_basis: str,
     authorization_proof_url: str | None,
 ) -> str:
-    """Derive a commercial use mode only from verified rights."""
+    """Derive a publishable use mode only from verified commercial rights."""
     if publication_admission != "commercial_release":
         raise ValueError(
             "risk-only sourced video is not eligible for canonical commercial publish"
@@ -73,29 +64,6 @@ def _commercial_source_use_mode(
             "commercial sourced video requires HTTPS authorization proof"
         )
     return "licensed_adaptation"
-
-
-def _source_use_mode(
-    *,
-    publication_admission: str,
-    commercial_authorization_status: str,
-    rights_basis: str,
-    authorization_proof_url: str | None,
-) -> str:
-    """Derive an explicit research/commercial mode from governed lifecycle."""
-    policy = load_content_distribution_policy()
-    if policy.product_lifecycle_state is ProductLifecycleState.RESEARCH:
-        if publication_admission != "research_release":
-            raise ValueError(
-                "research lifecycle requires publicationAdmission=research_release"
-            )
-        return "rights_audit_only"
-    return _commercial_source_use_mode(
-        publication_admission=publication_admission,
-        commercial_authorization_status=commercial_authorization_status,
-        rights_basis=rights_basis,
-        authorization_proof_url=authorization_proof_url,
-    )
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -142,19 +110,18 @@ def write_admitted_sourced_video_unit(
     if source_kind not in VIDEO_SOURCE_KINDS:
         raise ValueError(f"unsupported sourced video sourceKind: {source_kind}")
     source_id = str(source_unit.get("sourceId") or "").strip()
-    assert_video_distribution_use_allowed(
+    assert_video_source_admitted(
         load_content_source_registry(),
         source_id=source_id,
         source_kind=source_kind,
         publication_admission=publication_admission,
     )
-    source_use_mode = _source_use_mode(
+    source_use_mode = _commercial_source_use_mode(
         publication_admission=publication_admission,
         commercial_authorization_status=commercial_authorization_status,
         rights_basis=rights_basis,
         authorization_proof_url=authorization_proof_url,
     )
-    research_release = source_use_mode == "rights_audit_only"
     manifest = write_source_unit(
         object_dir,
         ordinal=int(source_unit.get("ordinal") or 1),
@@ -167,11 +134,7 @@ def write_admitted_sourced_video_unit(
         extractor="sourced_video_direct_download",
         policy_revision="sourced-video-attribution",
         source_use_mode=source_use_mode,
-        rights_mode=(
-            "rights_audit_only"
-            if research_release
-            else "attribution_no_watermark"
-        ),
+        rights_mode="attribution_no_watermark",
         publish_media_mode="attributed_external_video",
         source_role="primary_video",
         research_lane="video",
@@ -205,7 +168,6 @@ def write_admitted_sourced_video_unit(
         asset_path,
         declared_status=audio_rights_status,
         authorization_proof_url=audio_authorization_proof_url,
-        allow_unverified_rights=research_release,
     )
     collected_at = datetime.now(UTC).isoformat()
     media_probe_path = unit_dir / "media" / "probe.json"
@@ -220,64 +182,6 @@ def write_admitted_sourced_video_unit(
         raise ValueError("sourced video audio rights admission blocked")
 
     asset_sha256 = sha256_file(asset_path)
-    professional_identity = (
-        str(source_unit.get("professionalAcquisitionReceiptRef") or "").strip(),
-        str(source_unit.get("professionalAssetId") or "").strip(),
-        str(source_unit.get("professionalContentSha256") or "").strip(),
-    )
-    if any(professional_identity) and not all(professional_identity):
-        raise ValueError(
-            "professional sourced video requires receipt, assetId, and contentSha256"
-        )
-    popularity_signals: dict[str, Any] | None = None
-    professional_media_probe: dict[str, Any] | None = None
-    if professional_identity[0]:
-        if professional_identity[2] != asset_sha256:
-            raise ValueError("professional sourced video contentSha256 drift")
-        if source_unit.get("premiumPlayableEligible") is not True:
-            raise ValueError("professional sourced video is not Premium-playable")
-        raw_professional_probe = source_unit.get("mediaProbe")
-        assert_publishable_media_probe(
-            raw_professional_probe,
-            asset_id=professional_identity[1],
-        )
-        assert isinstance(raw_professional_probe, dict)
-        for field in (
-            "width",
-            "height",
-            "frameCount",
-            "framesPerSecond",
-            "durationMs",
-            "codec",
-        ):
-            if raw_professional_probe.get(field) != media_probe.get(field):
-                raise ValueError(
-                    f"professional sourced video media probe drift: {field}"
-                )
-        professional_media_probe = dict(raw_professional_probe)
-        raw_signals = source_unit.get("popularitySignals")
-        assert_observed_popularity_signals(
-            raw_signals,
-            asset_id=professional_identity[1],
-        )
-        assert isinstance(raw_signals, dict)
-        popularity_signals = dict(raw_signals)
-    rights_status = (
-        str(source_unit.get("rightsStatus") or "unverified").strip()
-        if research_release
-        else "verified"
-    )
-    if rights_status not in {"verified", "unverified", "unknown"}:
-        raise ValueError(
-            f"research sourced video rightsStatus is not admissible: {rights_status}"
-        )
-    rights_issues = [
-        str(item).strip()
-        for item in source_unit.get("rightsIssues") or []
-        if str(item).strip()
-    ]
-    if rights_status != "verified" and not rights_issues:
-        rights_issues = ["commercial distribution authorization is unverified"]
     content_type = {
         ".mp4": "video/mp4",
         ".webm": "video/webm",
@@ -307,21 +211,11 @@ def write_admitted_sourced_video_unit(
                     "licenseSnapshot": (
                         f"{rights_basis} recorded by sourced-video admission"
                     ),
-                    "usageScope": (
-                        "internal_reference" if research_release else "app_publish"
-                    ),
+                    "usageScope": "app_publish",
                     "collectionPageUrl": source_post_url,
                     "authorizationProof": authorization_proof_url or "",
-                    "professionalAcquisitionReceiptRef": professional_identity[0],
-                    "professionalAssetId": professional_identity[1],
-                    "professionalContentSha256": professional_identity[2],
-                    "professionalMediaProbe": professional_media_probe,
-                    "popularitySignals": popularity_signals,
-                    "premiumPlayableEligible": (
-                        source_unit.get("premiumPlayableEligible") is True
-                    ),
-                    "rightsAuditStatus": rights_status,
-                    "rightsAuditIssues": rights_issues,
+                    "rightsAuditStatus": "verified",
+                    "rightsAuditIssues": [],
                     "modelReleaseStatus": model_release_status,
                     "propertyReleaseStatus": property_release_status,
                     "fetchedAt": collected_at,
@@ -339,11 +233,6 @@ def write_admitted_sourced_video_unit(
         "rightsBasis": rights_basis,
         "commercialAuthorizationStatus": commercial_authorization_status,
         "publicationAdmission": publication_admission,
-        "productLifecycleState": (
-            "research" if research_release else "commercial"
-        ),
-        "authorizationRequired": rights_status != "verified",
-        "rightsIssues": rights_issues,
         "authorizationProofUrl": authorization_proof_url,
         "termsUrl": terms_url,
         "riskAcceptanceId": risk_acceptance_id,

@@ -161,17 +161,26 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
         self.assertIn("consumer-lease release", script)
         self.assertIn('if [[ -z "$DEVICE_ID" ]]', script)
         self.assertIn("pass -d/--device-id", script)
-        self.assertIn("--package-name com.quwoquan.quwoquan_app", script)
+        self.assertIn('--package-name "$QWQ_DEBUG_APP_ID"', script)
+        self.assertIn("from quwoquan_ops.cli.lib.app_identity import application_id_for", script)
+        self.assertIn('"$RUNTIME_STACKCTL_PYTHON" -c', script)
         self.assertIn("--ports \"$QWQ_ANDROID_LOCAL_PORTS\"", script)
         self.assertIn('export QWQ_ENVIRONMENT="${REQUESTED_ENVIRONMENT:-alpha}"', script)
         self.assertIn('export QWQ_APP_RUNTIME_ENV="$QWQ_ENVIRONMENT"', script)
-        self.assertIn('QWQ_LAUNCH_TARGET="${QWQ_APP_RUNTIME_ENV}-local"', script)
         self.assertIn(
-            'app-debug-preflight --target "$QWQ_LAUNCH_TARGET" --runtime-mode test_live',
+            'QWQ_LAUNCH_TARGET="${REQUESTED_TARGET:-${QWQ_APP_RUNTIME_ENV}-local}"',
+            script,
+        )
+        self.assertIn(
+            'app-debug-preflight --purpose "$PREFLIGHT_PURPOSE"',
+            script,
+        )
+        self.assertIn(
+            '--target "$QWQ_LAUNCH_TARGET" --runtime-mode test_live',
             script,
         )
         self.assertIn("--platform ios-simulator", script)
-        self.assertIn("--bundle-id com.example.quwoquanApp", script)
+        self.assertIn('--bundle-id "$QWQ_DEBUG_APP_ID"', script)
         self.assertIn("QWQ_CONSUMER_LEASE_ID", script)
         self.assertIn("QWQ_ANDROID_REVERSE_RECEIPT_DIGEST", script)
         self.assertIn("QWQ_ANDROID_REVERSE_OWNED_PORTS", script)
@@ -197,11 +206,15 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
         self.assertIn("Flutter device {device_id!r} is not currently connected", script)
         self.assertIn("unsupported platform {platform!r}", script)
         self.assertIn(device_guard, script)
+        # 设备守卫必须先于任何设备绑定动作（trust/lease/flutter run）。
+        # 环境级 content preflight 不依赖设备，允许先行。
         self.assertLess(
             script.index(device_guard),
-            script.index(
-                'app-debug-preflight --target "$QWQ_LAUNCH_TARGET" --runtime-mode test_live'
-            ),
+            script.index("consumer-lease acquire"),
+        )
+        self.assertLess(
+            script.index(device_guard),
+            script.index("flutter run \\\n"),
         )
 
     def test_launcher_blocks_unknown_device_before_runtime_preflight_or_flutter_run(
@@ -230,7 +243,17 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
             )
 
         self.assertEqual(result.returncode, 2)
-        self.assertIn("a connected iOS/Android device is required", result.stderr)
+        # 未知设备的启动必须在 flutter run 之前被阻断。环境级 content
+        # preflight 先于设备解析执行：环境未运行时先撞 preflight
+        # GATE_BLOCK，环境在跑时到达设备守卫；两者都不得进入 flutter run。
+        blocked_by_device_guard = (
+            "a connected iOS/Android device is required" in result.stderr
+        )
+        blocked_by_preflight = '"status": "gate_block"' in result.stderr
+        self.assertTrue(
+            blocked_by_device_guard or blocked_by_preflight,
+            result.stderr,
+        )
         self.assertNotIn("validating full Debug runtime", result.stdout)
         self.assertNotIn("flutter run", result.stdout)
 
@@ -251,7 +274,7 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
         self.assertIn('if (appLaunchPolicy == "prod_release")', launcher_gate)
         self.assertIn('if (leaseAcquired != "1")', launcher_gate)
         self.assertIn("test_live transport lease is unavailable", launcher_gate)
-        self.assertIn("contentReadinessReceiptDigest.matches", launcher_gate)
+        self.assertNotIn("contentReadinessReceiptDigest", launcher_gate)
 
     def test_build_grace_blocks_without_adb_probe(self) -> None:
         with tempfile.TemporaryDirectory() as output_root, patch.dict(

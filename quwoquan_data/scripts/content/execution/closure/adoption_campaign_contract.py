@@ -8,9 +8,14 @@ from pathlib import Path
 from typing import Any
 
 from core.schema import assert_valid
-from core.source_digest import SourceDigest, SourceDigestError, content_source_revision
+from core.source_digest import (
+    SourceDefinitionSnapshot,
+    SourceDigestError,
+    content_source_revision,
+)
 
 from content.execution.identity import parse_execution_id
+from content.execution.campaign.lane import normalize_active_carriers
 from content.execution.closure.adoption_contract import (
     ReviewedClosureAdoptionError,
     canonical_digest,
@@ -116,11 +121,11 @@ def validate_adoption_target_identity(
     target: object,
     *,
     binding: ReviewedClosureCampaignBinding,
-) -> SourceDigest:
+) -> SourceDefinitionSnapshot:
     if not isinstance(target, Mapping):
         raise _typed("TARGET_IDENTITY_INVALID", "target identity must be an object")
     try:
-        source = SourceDigest.from_document(target.get("sourceDigest"))
+        source = SourceDefinitionSnapshot.from_document(target.get("sourceDigest"))
         expected_revision = content_source_revision(
             source_digest=source.digest,
             entity_catalog_digest=str(target.get("entityCatalogDigest") or ""),
@@ -151,8 +156,12 @@ def adopted_object_refs(
         if carrier in result or not isinstance(refs, list) or not refs:
             raise _typed("LANE_CLOSURE_DRIFT", "lane object closure is invalid")
         result[carrier] = list(refs)
-    if tuple(result) != tuple(ADOPTION_OPERATIONS):
-        raise _typed("LANE_CLOSURE_DRIFT", "four canonical lanes are required")
+    try:
+        active = normalize_active_carriers(result)
+    except ValueError as exc:
+        raise _typed("LANE_CLOSURE_DRIFT", str(exc)) from exc
+    if tuple(result) != active:
+        raise _typed("LANE_CLOSURE_DRIFT", "active lanes are not in canonical order")
     return result
 
 
@@ -198,8 +207,11 @@ def validate_adoption_task_binding(
         str(row["carrier"]): str(row["executionId"])
         for row in receipt_document["laneExecutions"]
     }
+    active_carriers = tuple(lane_ids)
+    root_carrier = active_carriers[0]
     if (
-        lane_ids.get(carrier) != identity.execution_id
+        document.get("rootExecutionId") != lane_ids[root_carrier]
+        or lane_ids.get(carrier) != identity.execution_id
         or document.get("adoptedObjectRefs") != lane_refs[carrier]
     ):
         raise _typed("TASK_BINDING_INVALID", "task lane closure drifted")

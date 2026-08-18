@@ -52,8 +52,6 @@ class DistributionDecision(StrEnum):
 @dataclass(frozen=True, slots=True)
 class ContentDistributionPolicy:
     policy_id: str
-    product_lifecycle_state: ProductLifecycleState
-    release_class: ReleaseClass
     image_generation_allowed: bool
     video_generation_allowed: bool
     illustrated_rate_target: float
@@ -74,8 +72,6 @@ class ContentDistributionPolicy:
     video_popularity_non_blocking: bool
 
     def __post_init__(self) -> None:
-        if self.release_class.value != self.product_lifecycle_state.value:
-            raise ValueError("releaseClass must equal productLifecycleState")
         if not self.image_provider_priority or self.image_provider_priority[0] != "pinterest":
             raise ValueError("research image provider priority must start with pinterest")
         if self.image_generation_allowed or self.video_generation_allowed:
@@ -110,16 +106,26 @@ class ContentDistributionPolicy:
             ):
                 raise ValueError(f"scale targets must increase monotonically: {carrier}")
 
+    def milestone_targets(self) -> dict[str, dict[str, int]]:
+        """Per-carrier targets for every governed milestone.
+
+        This is the only place the milestone numbers exist. Callers that need a
+        milestone table read it from here rather than restating the constants,
+        so raising a milestone stays a control-plane edit.
+        """
+        return {
+            "M100": dict(self.m100_targets),
+            "M1000": dict(self.m1000_targets),
+            "M10000": dict(self.m10000_targets),
+        }
+
+    def governed_scales(self) -> tuple[str, ...]:
+        return tuple(self.milestone_targets())
+
     def scale_target(self, scale: str, carrier: str) -> int:
-        if scale == "M100":
-            rows = self.m100_targets
-        elif scale == "M1000":
-            rows = self.m1000_targets
-        elif scale == "M10000":
-            rows = self.m10000_targets
-        else:
+        targets = self.milestone_targets().get(scale)
+        if targets is None:
             raise ValueError(f"unsupported governed scale: {scale}")
-        targets = dict(rows)
         if carrier not in targets:
             raise ValueError(f"unsupported scale carrier: {carrier}")
         return targets[carrier]
@@ -143,8 +149,6 @@ def load_content_distribution_policy(
     acquisition = raw["acquisition"]
     if any(bool(value) for value in acquisition.values()):
         raise ValueError("content acquisition bypass controls must remain disabled")
-    lifecycle = ProductLifecycleState(str(raw["productLifecycleState"]))
-    release_class = ReleaseClass(str(raw["releaseClass"]))
     media_generation = raw["mediaGeneration"]
     research_discovery = raw["researchDiscovery"]
     article_media = raw["articleMedia"]
@@ -153,8 +157,6 @@ def load_content_distribution_policy(
     video_popularity = research_discovery["videoPopularity"]
     return ContentDistributionPolicy(
         policy_id=str(raw["policyId"]),
-        product_lifecycle_state=lifecycle,
-        release_class=release_class,
         image_generation_allowed=bool(media_generation["imageAllowed"]),
         video_generation_allowed=bool(media_generation["videoAllowed"]),
         illustrated_rate_target=float(article_media["illustratedRateTarget"]),

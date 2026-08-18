@@ -237,6 +237,32 @@ def test_exhausted_journal_is_typed_and_never_calls_provider(
     assert "maxAttempts exhausted" in outcome.message
 
 
+def test_provider_exception_is_recorded_for_only_that_task(
+    journal_runtime: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ctx = _context("video")
+    monkeypatch.setattr(journal, "ExecutionContext", SimpleNamespace)
+
+    def raise_provider(_ctx, _prompt):
+        raise RuntimeError("task-local provider diagnostic")
+
+    outcome = journal.run_journaled_semantic_task(
+        ctx,
+        "Review one video object.",
+        raise_provider,
+    )
+
+    assert outcome.status.value == "error"
+    assert outcome.error_code == "semantic_provider_invocation_exception"
+    assert outcome.invocation_attempt_digest.startswith("sha256:")
+    attempt_path = journal_runtime / outcome.invocation_attempt_ref
+    attempt = json.loads(attempt_path.read_text(encoding="utf-8"))
+    assert attempt["status"] == "error"
+    assert attempt["errorCode"] == "semantic_provider_invocation_exception"
+    assert "task-local provider diagnostic" not in attempt_path.read_text(encoding="utf-8")
+
+
 def test_semantic_task_journal_rejects_runtime_profile_digest_drift(
     journal_runtime: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -259,6 +285,7 @@ def test_semantic_task_journal_rejects_runtime_profile_digest_drift(
 
 
 def test_provider_dispatch_records_local_journal_without_queue(
+    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     class FakeContext:
@@ -272,6 +299,12 @@ def test_provider_dispatch_records_local_journal_without_queue(
         run_id="cursor-run",
     )
     observed: list[object] = []
+    attempt_path = tmp_path / "attempt.json"
+    attempt_path.write_text(
+        json.dumps({"attemptDigest": "sha256:" + "a" * 64}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(journal, "OUTPUT_ROOT", tmp_path)
     monkeypatch.setattr(agent_runner, "ExecutionContext", FakeContext)
     monkeypatch.setattr(journal, "ExecutionContext", FakeContext)
     monkeypatch.setattr(
@@ -287,10 +320,13 @@ def test_provider_dispatch_records_local_journal_without_queue(
     monkeypatch.setattr(
         journal,
         "record_semantic_task_outcome",
-        lambda actual_handle, actual_outcome: observed.extend(
-            (actual_handle, actual_outcome)
+        lambda actual_handle, actual_outcome: (
+            observed.extend((actual_handle, actual_outcome)) or attempt_path
         ),
     )
 
-    assert agent_runner._managed_agent_runner_for_provider(ctx, "prompt") is outcome
+    recorded = agent_runner._managed_agent_runner_for_provider(ctx, "prompt")
+    assert recorded.succeeded
+    assert recorded.invocation_attempt_ref == "attempt.json"
+    assert recorded.invocation_attempt_digest == "sha256:" + "a" * 64
     assert observed == [ctx, "prompt", handle, outcome]

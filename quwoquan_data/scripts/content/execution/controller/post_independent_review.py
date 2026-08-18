@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import itertools
 import json
 import re
 from collections.abc import Mapping
@@ -20,9 +21,8 @@ from core.data_issue import (
 )
 from core.io import read_json, write_json
 from core.prompt_render import render as render_prompt
-from core.runtime_policy import active_runtime_policy
 from core.schema import assert_valid
-from governance.coverage.license import RightsEnforcementMode, rights_proof_required
+from governance.coverage.license import RightsEnforcementMode
 
 from content.execution import store
 from content.execution.context import ExecutionContext
@@ -97,11 +97,7 @@ def _media_policy(object_dir: Path, manifest: Mapping[str, Any]) -> str:
     vertical = str(manifest.get("vertical") or "").strip()
     if not vertical:
         raise ValueError("post manifest missing vertical rights policy owner")
-    mode = (
-        RightsEnforcementMode.ENFORCE
-        if rights_proof_required(vertical)
-        else RightsEnforcementMode.AUDIT_ONLY
-    )
+    mode = RightsEnforcementMode.AUDIT_ONLY
     assets: list[dict[str, object]] = []
     for raw in manifest.get("assets") or []:
         if not isinstance(raw, Mapping):
@@ -143,6 +139,14 @@ def _media_policy(object_dir: Path, manifest: Mapping[str, Any]) -> str:
         ensure_ascii=False,
         sort_keys=True,
     )
+
+
+def _read_text(path: Path) -> str:
+    """Keep whatever the reviewer wrote so a rejection stays diagnosable."""
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        return f"<unreadable: {type(exc).__name__}>"
 
 
 def _result_from_text(
@@ -192,7 +196,6 @@ def _run_post_independent_reviews_serial(
     pair = execution_model_pair_for_execution(ctx.execution_id)
     model = pair.reviewer.model_id
     model_family = pair.reviewer.family.value
-    reviewer_workers = active_runtime_policy().reviewer_workers
     issues: list[DataIssue] = []
     for ref in refs:
         object_dir = content_object.content_object_dir(ctx.execution_id, ref)
@@ -247,11 +250,10 @@ def _run_post_independent_reviews_serial(
         )
         review_ctx = ExecutionContext(
             execution_id=ctx.execution_id,
-            entity_ids=list(ctx.entity_ids),
+            entity_ids=[ref],
             spec=ctx.spec.to_dict(),
             managed=True,
             runtime=ctx.runtime,
-            max_workers=reviewer_workers,
             model=model,
             model_parameters=pair.reviewer.parameters,
             agent_provider=ctx.agent_provider,
@@ -260,7 +262,10 @@ def _run_post_independent_reviews_serial(
         )
         outcome = _default_managed_agent_runner_isolated(review_ctx, prompt)
         payload: dict[str, Any] | None = None
+        rejection = ""
+        written_text = ""
         if output_path.is_file():
+            written_text = _read_text(output_path)
             try:
                 candidate = read_json(output_path)
                 assert_valid(
@@ -269,14 +274,19 @@ def _run_post_independent_reviews_serial(
                     "post_reviewer_response",
                     label=f"post_reviewer_response:{ref}",
                 )
-            except (OSError, TypeError, ValueError):
+            except (OSError, TypeError, ValueError) as exc:
                 candidate = None
+                rejection = f"{type(exc).__name__}: {exc}"
             if (
                 isinstance(candidate, dict)
                 and candidate.get("executionId") == ctx.execution_id
                 and candidate.get("objectRef") == ref
             ):
                 payload = candidate
+            elif not rejection:
+                rejection = "written response is not bound to this execution/object"
+        else:
+            rejection = "reviewer wrote no response file"
         if payload is None and outcome.succeeded:
             payload = _result_from_text(
                 outcome.result_text,
@@ -289,8 +299,16 @@ def _run_post_independent_reviews_serial(
                 execution_root(ctx.execution_id) / "evidence/reviewer_failures"
             )
             failure_root.mkdir(parents=True, exist_ok=True)
-            failure_path = failure_root / (
-                hashlib.sha256(ref.encode("utf-8")).hexdigest()[:20] + ".json"
+            # 同一 ref 会被多次 attempt 复用。用固定文件名会让最后一次（通常是
+            # attempts exhausted 的空记录）覆盖掉真正带 agent 输出的那一次，
+            # 事后无法归因，所以按 attempt 分文件留痕。
+            failure_stem = hashlib.sha256(ref.encode("utf-8")).hexdigest()[:20]
+            failure_path = next(
+                candidate
+                for index in itertools.count(1)
+                if not (
+                    candidate := failure_root / f"{failure_stem}.{index:02d}.json"
+                ).exists()
             )
             write_json(
                 failure_path,
@@ -307,6 +325,9 @@ def _run_post_independent_reviews_serial(
                     "durationMs": outcome.duration_ms,
                     "errorCode": outcome.error_code,
                     "error": _redact_managed_secret(outcome.message),
+                    "rejection": rejection,
+                    "writtenResponse": _redact_managed_secret(written_text)[:4000],
+                    "resultText": _redact_managed_secret(outcome.result_text)[:4000],
                     "recordedAt": store.now_iso(),
                 },
             )
@@ -346,13 +367,31 @@ def run_post_independent_reviews(
     refs: list[str],
 ) -> list[DataIssue]:
     """Review posts concurrently, preserving input-order issue reporting."""
-    reviewer_workers = active_runtime_policy().reviewer_workers
-    with ThreadPoolExecutor(max_workers=reviewer_workers) as executor:
+    if not refs:
+        return []
+    with ThreadPoolExecutor(max_workers=len(refs)) as executor:
         futures = [
-            executor.submit(_run_post_independent_reviews_serial, ctx, [ref])
+            (ref, executor.submit(_run_post_independent_reviews_serial, ctx, [ref]))
             for ref in refs
         ]
-        return [issue for future in futures for issue in future.result()]
+        issues: list[DataIssue] = []
+        for ref, future in futures:
+            try:
+                issues.extend(future.result())
+            except Exception as exc:  # noqa: BLE001 - isolate one reviewer task.
+                issues.append(
+                    data_issue(
+                        DataIssueCode.INTERNAL_UNEXPECTED,
+                        stage=DataIssueStage.POST_REVIEW,
+                        ref=ref,
+                        message=(
+                            "independent reviewer task raised unexpectedly: "
+                            f"{type(exc).__name__}"
+                        ),
+                        recovery=DataRecoveryAction.RETRY_AGENT,
+                    )
+                )
+        return issues
 
 
 __all__ = ["run_post_independent_reviews"]

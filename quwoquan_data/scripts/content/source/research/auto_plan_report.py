@@ -10,9 +10,9 @@ from core.paths import execution_root
 _AUTO_DISCOVERY_REPORT = "auto_research_plan.json"
 
 # Every list-valued, per-entity evidence field emitted by the lane writers must
-# survive both the in-wave worker merge and the cross-wave execution merge.
+# survive both per-entity future aggregation and an interrupted-run resume merge.
 # Keeping the inventory here prevents video/article evidence from silently
-# disappearing when research_wave_size is smaller than the target set.
+# disappearing when a partially completed exact workload is resumed.
 AUTO_RESEARCH_MERGE_ROW_KEYS = (
     "updated",
     "issues",

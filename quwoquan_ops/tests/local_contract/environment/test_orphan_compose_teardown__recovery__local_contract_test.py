@@ -852,6 +852,112 @@ def test_repair_blocks_active_lease_or_nonstopped_receipt_before_inspection(
     assert message in result["details"][0]
 
 
+def _sealed_workload_projection(
+    tmp_path: Path,
+    services: dict[str, dict[str, object]],
+) -> Path:
+    path = tmp_path / "projected.compose.yaml"
+    path.write_text(
+        json.dumps({"services": services}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    return path
+
+
+@pytest.mark.parametrize(
+    ("services", "expect_named"),
+    [
+        ({"rtc-service": {"networks": ["edge"]}}, True),
+        (
+            {"rtc-service": {"networks": ["edge"], "profiles": ["edge-media"]}},
+            False,
+        ),
+        ({"rtc-service": {"image": "sha256:" + "f" * 64}}, False),
+    ],
+)
+def test_normal_down_impossibility_is_named_only_for_ungated_imageless_services(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    services: dict[str, dict[str, object]],
+    expect_named: bool,
+) -> None:
+    """只有「无 image、无 build、又无 profile 门控」才让 normal down 不可能。
+
+    带 profile 的条目会被 Compose 在该 profile 未激活时整体排除,自带 image 的
+    条目本就有效;这两种都必须继续走 candidate-bound normal down,不能借这条
+    出口绕过它。
+    """
+
+    projection = _sealed_workload_projection(tmp_path, services)
+    monkeypatch.setattr(
+        stackctl,
+        "deployment_candidate_dir",
+        lambda _target, _digest: tmp_path,
+    )
+    monkeypatch.setattr(
+        "quwoquan_ops.cli.lib.runtime_topology_package.load_runtime_topology_package",
+        lambda *_args, **_kwargs: {"composeFiles": [projection]},
+    )
+
+    reason = stackctl._normal_down_structurally_impossible(
+        "alpha-local",
+        {
+            "status": "partial",
+            "workload": "content-release",
+            "candidateDigest": "sha256:" + "a" * 64,
+        },
+    )
+
+    assert bool(reason) is expect_named
+    if expect_named:
+        assert "rtc-service" in reason
+
+
+def test_reclaimed_receipt_is_retired_so_later_up_is_not_blocked(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    transitions: list[dict[str, object]] = []
+    monkeypatch.setattr(
+        stackctl,
+        "transition_startup_attempt",
+        lambda **kwargs: transitions.append(kwargs),
+    )
+
+    detail = stackctl._close_orphan_reclaimed_startup_receipt(
+        "alpha-local",
+        {
+            "env": "alpha",
+            "status": "partial",
+            "attemptId": "attempt-1",
+        },
+    )
+
+    assert "attempt-1" in detail
+    assert transitions == [
+        {
+            "env": "alpha",
+            "target": "alpha-local",
+            "attempt_id": "attempt-1",
+            "status": "stopped",
+            "failure": (
+                "reclaimed by governed orphan Compose teardown; the receipt's "
+                "own candidate topology could not produce a valid Compose "
+                "project"
+            ),
+        }
+    ]
+
+    transitions.clear()
+    assert (
+        stackctl._close_orphan_reclaimed_startup_receipt(
+            "alpha-local",
+            {"env": "alpha", "status": "stopped", "attemptId": "attempt-1"},
+        )
+        == ""
+    )
+    assert transitions == []
+
+
 def test_repair_parser_requires_explicit_attestation_and_confirmation_surface() -> None:
     args = stackctl.build_parser().parse_args(
         [

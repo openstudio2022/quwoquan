@@ -121,7 +121,6 @@ def run_controlled_execution(request: ControllerRequest) -> None:
         until=request.until,
         managed=managed,
         runtime=semantic_binding.runtime,
-        max_workers=frozen_spec.execution_policy.required_workers,
         model=managed_model,
         model_parameters=author_model.parameters,
         agent_provider=AgentProvider(agent_provider),

@@ -117,9 +117,11 @@ def _release_image_sources(
     except ValueError as error:
         raise SystemExit(f"FAIL: release evidence manifest is invalid: {error}") from error
     release_evidence_digest = str(manifest["artifactDigest"])
-    images = manifest.get("images")
+    artifacts = manifest.get("environmentArtifacts")
+    prod_artifact = artifacts.get("prod") if isinstance(artifacts, dict) else None
+    images = prod_artifact.get("images") if isinstance(prod_artifact, dict) else None
     if not isinstance(images, dict):
-        raise SystemExit("FAIL: release manifest images must be an object")
+        raise SystemExit("FAIL: release manifest Prod artifact images must be an object")
     sources: dict[str, str] = {}
     for service in services:
         image = images.get(service)

@@ -319,6 +319,12 @@ def _derive_resource_soak_stable(
             int(row["temporaryWorkspaceBytes"]) for row in samples
         ),
         "terminalResidualBytes": int(samples[-1]["terminalResidualBytes"]),
+        "hostCpuPeakPercent": max(
+            float(row["hostCpuPercent"]) for row in samples
+        ),
+        "cursorBridgeProcessPeakCount": max(
+            int(row["cursorBridgeProcessCount"]) for row in samples
+        ),
         "openFdCount": max(int(row["openFdCount"]) for row in samples),
         "queueDepth": max(int(row["queueDepth"]) for row in samples),
         "oldestReadyAgeSeconds": max(

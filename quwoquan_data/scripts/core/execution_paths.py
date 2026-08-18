@@ -169,18 +169,15 @@ def execution_assistant_task(execution_id: str, command: str, step: str) -> Path
 def execution_sources_dir(execution_id: str, entity_name: str) -> Path:
     return execution_command_root(execution_id, "source") / "sources" / entity_name
 
-def ensure_object_stages(object_dir: Path, *, through_stage: str | None = None) -> None:
+def ensure_object_stages(object_dir: Path) -> None:
     """确保对象过程阶段目录存在（1.download → 5.review）。
 
-    对象同构契约要求每步产物落在编号阶段子目录；resume/部分失败时常只创建了
-    1.download 而缺 2.quality/3.compose 等，导致目录树不完整。在 download/compose/
-    materialize 入口调用本函数，保证阶段树从第一步起完整可审计。
+    对象同构契约只承认一种阶段骨架：对象一旦存在，五级阶段目录就必须齐备，
+    目录证据链门禁据此判定工作包完整。因此这里不接受「只建到第 N 阶段」——
+    那会让停在中间阶段的对象成为门禁必拒的第二种目录形态。阶段是否有产物由
+    目录内容表达，不由目录是否存在表达。
     """
-    stages = OBJECT_STAGES
-    if through_stage and through_stage in OBJECT_STAGES:
-        end = OBJECT_STAGES.index(through_stage) + 1
-        stages = OBJECT_STAGES[:end]
-    for stage in stages:
+    for stage in OBJECT_STAGES:
         (object_dir / stage).mkdir(parents=True, exist_ok=True)
 
 def execution_shared_dir(execution_id: str) -> Path:

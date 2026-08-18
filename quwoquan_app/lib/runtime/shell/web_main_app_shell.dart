@@ -40,32 +40,38 @@ class WebMainAppShellContextOption {
   final String labelKey;
 }
 
-typedef WebMainAppShellContentFeedBuilder =
-    Widget Function({
-      required BuildContext context,
-      required WidgetRef ref,
-      required bool isDark,
-      required String channelId,
-      required VoidCallback? onInitialContentPainted,
-    });
+typedef WebMainAppShellContentFeedBuilder = Widget Function({
+  required BuildContext context,
+  required WidgetRef ref,
+  required bool isDark,
+  required String channelId,
+  required VoidCallback? onInitialContentPainted,
+});
 
 typedef WebMainAppShellPageBuilder = Widget Function();
+typedef WebMainAppShellFeaturedChannelBuilder = Widget Function({
+  required VoidCallback onExitToRecommend,
+});
 
 enum WebMainAppShellCreateIntent { gallery, video, write }
 
-typedef WebMainAppShellCreateAction =
-    void Function(BuildContext context, WebMainAppShellCreateIntent intent);
+typedef WebMainAppShellCreateAction = void Function(
+  BuildContext context,
+  WebMainAppShellCreateIntent intent,
+);
 
-typedef WebMainAppShellAccountAction =
-    Future<void> Function(BuildContext context, WidgetRef ref);
+typedef WebMainAppShellAccountAction = Future<void> Function(
+  BuildContext context,
+  WidgetRef ref,
+);
 
 /// Web 壳唯一业务组合 seam。这里只保存中性 DTO、builder 与 action；生产对象
 /// presentation、generated config、route extra 和领域 action 均由 runtime/di 注入。
 class WebMainAppShellDependencies {
   const WebMainAppShellDependencies({
     required this.homeContextOptions,
-    required this.featuredContextOptions,
     required this.buildContentFeed,
+    required this.buildFeaturedChannel,
     required this.buildChat,
     required this.buildProfile,
     required this.openCreate,
@@ -74,8 +80,8 @@ class WebMainAppShellDependencies {
   });
 
   final List<WebMainAppShellContextOption> homeContextOptions;
-  final List<WebMainAppShellContextOption> featuredContextOptions;
   final WebMainAppShellContentFeedBuilder buildContentFeed;
+  final WebMainAppShellFeaturedChannelBuilder buildFeaturedChannel;
   final WebMainAppShellPageBuilder buildChat;
   final WebMainAppShellPageBuilder buildProfile;
   final WebMainAppShellCreateAction openCreate;
@@ -558,17 +564,6 @@ class _WebPrimaryActions extends StatelessWidget {
           onTap: onSelected,
         ),
         _WebPrimaryActionButton(
-          destination: MainTabDestination.featured,
-          label: DiscoveryText.webPcPrimaryFeatured,
-          selected: selected == MainTabDestination.featured,
-          customIcon: (color, filled) => AppPremiumMarkIcon(
-            size: AppSpacing.webPcToolbarActionIconSize,
-            color: color,
-            filled: filled,
-          ),
-          onTap: onSelected,
-        ),
-        _WebPrimaryActionButton(
           destination: MainTabDestination.create,
           label: DiscoveryText.webPcPrimaryCreate,
           icon: CupertinoIcons.plus,
@@ -681,30 +676,6 @@ class _WebHomeWorkspace extends StatelessWidget {
             ? AppStartupRuntime.instance.markHomeFeedContentPainted
             : null,
       ),
-    );
-  }
-}
-
-class _WebFeaturedWorkspace extends StatelessWidget {
-  const _WebFeaturedWorkspace({
-    required this.filterId,
-    required this.dependencies,
-  });
-
-  final String filterId;
-  final WebMainAppShellDependencies dependencies;
-
-  @override
-  Widget build(BuildContext context) {
-    // 精品 = 发现内容流（不再有「精品队列」hero）；format 筛选映射到发现频道。
-    final channelId = switch (filterId) {
-      'image' => 'photo',
-      'video' => 'video',
-      'article' => 'article',
-      _ => 'work',
-    };
-    return _WebDesktopFrame(
-      child: _WebContentFeed(channelId: channelId, dependencies: dependencies),
     );
   }
 }

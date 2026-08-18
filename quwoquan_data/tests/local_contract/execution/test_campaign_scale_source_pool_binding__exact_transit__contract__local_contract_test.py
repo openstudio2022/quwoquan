@@ -14,11 +14,20 @@ from content.execution.planning.source_pool_policy import (
 )
 from content.execution.request import RuntimeExecutionRequest
 from core.schema import assert_valid
+from core.source_digest import ExecutionBundleIdentity
 
 DIGEST = "sha256:" + "a" * 64
 BINDING = {
     "poolId": "pool-m100",
-    "targetScale": "M100",
+    "targetScale": "WORKLOAD",
+    "workloadMode": "explicit",
+    "activeCarriers": ["homepage", "article", "image", "video"],
+    "workloadTargets": {
+        "homepage": 2,
+        "article": 2,
+        "image": 2,
+        "video": 2,
+    },
     "sourceRevision": DIGEST,
     "sourceDigest": "sha256:" + "b" * 64,
     "entityCatalogDigest": "sha256:" + "c" * 64,
@@ -26,6 +35,7 @@ BINDING = {
     "planDigest": "sha256:" + "d" * 64,
     "planFileSha256": "sha256:" + "e" * 64,
 }
+EXECUTION_BUNDLE = ExecutionBundleIdentity(DIGEST).to_document()
 
 
 def _selection(carrier: str, count: int = 2) -> dict[str, object]:
@@ -96,7 +106,7 @@ def test_runtime_request_round_trip_preserves_source_pool_exactly() -> None:
     assert request.to_document()["sourcePoolSelection"] == _selection("video")
 
 
-def test_campaign_plan_scale_pool_matches_canonical_execution_id_shape() -> None:
+def test_campaign_plan_scale_pool_matches_frozen_active_workload() -> None:
     execution_ids = {
         carrier: f"20260808--travel-{carrier}-m100--china--scale-001"
         for carrier in ("homepage", "article", "image", "video")
@@ -114,10 +124,14 @@ def test_campaign_plan_scale_pool_matches_canonical_execution_id_shape() -> None
         "rootExecutionId": execution_ids["homepage"],
         "executionMode": "central",
         "scale": "M100",
+        "workloadMode": "explicit",
+        "activeCarriers": list(execution_ids),
+        "workloads": dict(BINDING["workloadTargets"]),
         "gitBranch": "dev1.0",
         "gitCommitSha": "a" * 40,
         "sourceRevision": DIGEST,
         "sourceDigest": BINDING["sourceDigest"],
+        "executionBundle": EXECUTION_BUNDLE,
         "entityCatalogDigest": BINDING["entityCatalogDigest"],
         "semanticSelectionId": "not_applicable",
         "scaleSourcePool": BINDING,
@@ -134,46 +148,33 @@ def test_campaign_plan_scale_pool_matches_canonical_execution_id_shape() -> None
     }
     assert_valid(plan, "execution", "content_campaign_plan", label="canonical M100 plan")
 
-    plan["rootExecutionId"] = plan["rootExecutionId"].replace("-m100--", "-m1--")
-    with pytest.raises(ValueError, match="not"):
-        assert_valid(plan, "execution", "content_campaign_plan", label="M1 pool forbidden")
 
-
-def test_source_pool_requirement_uses_canonical_execution_identity() -> None:
-    m100 = "20260808--travel-homepage-m100--china--scale-001"
-    m1000 = "20260808--travel-video-m1000--china--scale-001"
-    m10000 = "20260808--travel-video-m10000--china--scale-001"
-    m1 = "20260808--travel-article-m1--china--scale-001"
-
-    assert allows_scale_source_pool(m100)
-    assert allows_scale_source_pool(m1000)
-    assert not requires_scale_source_pool(m100)
-    assert not requires_scale_source_pool(m1000)
+def test_source_pool_policy_uses_frozen_workload_instead_of_execution_intent() -> None:
+    assert allows_scale_source_pool(workload_mode="explicit", scale="M1")
+    assert allows_scale_source_pool(workload_mode="explicit", scale="M1000")
+    assert not requires_scale_source_pool(workload_mode="explicit", scale="M10000")
+    assert not requires_scale_source_pool(
+        workload_mode="milestone_preset",
+        scale="M1000",
+    )
+    assert requires_scale_source_pool(
+        workload_mode="milestone_preset",
+        scale="M10000",
+    )
     assert source_pool_policy_fields(
-        m100,
         binding=None,
         evidence_root_ref=None,
         selection=None,
     ) == {}
-    assert requires_scale_source_pool(m10000)
-    assert not allows_scale_source_pool(m1)
-    with pytest.raises(ValueError, match="M10000 execution requires source pool"):
-        source_pool_policy_fields(
-            m10000,
-            binding=None,
-            evidence_root_ref=None,
-            selection=None,
-        )
-    with pytest.raises(ValueError, match="below-M100"):
-        source_pool_policy_fields(
-            m1,
-            binding=BINDING,
-            evidence_root_ref="data/local/workspace/source-pool/evidence",
-            selection=_selection("article"),
-        )
+    fields = source_pool_policy_fields(
+        binding=BINDING,
+        evidence_root_ref="data/local/workspace/source-pool/evidence",
+        selection=_selection("video"),
+    )
+    assert fields["scaleSourcePool"] == BINDING
 
 
-def test_m100_plan_schema_allows_a_target_bound_wave_without_scale_pool() -> None:
+def test_explicit_plan_allows_no_pool_but_m10000_preset_requires_one() -> None:
     execution_ids = {
         carrier: f"20260808--travel-{carrier}-m100--china--scale-002"
         for carrier in ("homepage", "article", "image", "video")
@@ -191,10 +192,14 @@ def test_m100_plan_schema_allows_a_target_bound_wave_without_scale_pool() -> Non
         "rootExecutionId": execution_ids["homepage"],
         "executionMode": "central",
         "scale": "M100",
+        "workloadMode": "explicit",
+        "activeCarriers": list(execution_ids),
+        "workloads": {carrier: 1 for carrier in execution_ids},
         "gitBranch": "dev1.0",
         "gitCommitSha": "a" * 40,
         "sourceRevision": DIGEST,
         "sourceDigest": "sha256:" + "b" * 64,
+        "executionBundle": EXECUTION_BUNDLE,
         "entityCatalogDigest": "sha256:" + "c" * 64,
         "semanticSelectionId": "not_applicable",
         "laneExternalInputs": lane_inputs,
@@ -205,3 +210,7 @@ def test_m100_plan_schema_allows_a_target_bound_wave_without_scale_pool() -> Non
         "planDigest": DIGEST,
     }
     assert_valid(plan, "execution", "content_campaign_plan")
+    plan["workloadMode"] = "milestone_preset"
+    plan["scale"] = "M10000"
+    with pytest.raises(ValueError, match="scaleSourcePool"):
+        assert_valid(plan, "execution", "content_campaign_plan")

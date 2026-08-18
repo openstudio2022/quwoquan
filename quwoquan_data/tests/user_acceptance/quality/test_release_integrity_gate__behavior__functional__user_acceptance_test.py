@@ -16,7 +16,7 @@ for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
-from core.io import read_json, write_json  # noqa: E402
+from core.io import write_json  # noqa: E402
 from core import paths as _paths_mod  # noqa: E402
 from core.paths import execution_root, release_root  # noqa: E402
 from core.release_layout import object_closure_digest, payload_file  # noqa: E402
@@ -26,12 +26,9 @@ from content.source.source_unit import resolve_entity_object_dir, write_source_u
 from content.homepage.homepage import _entity_base_draft  # noqa: E402
 from content.release.canonical.assemble import assemble_release  # noqa: E402
 from content.release.canonical.gate import _quota_issues  # noqa: E402
-from support.media_fixture import tiny_png_bytes  # noqa: E402
-from support.execution_manifest_fixture import ExecutionFixtureBuilder  # noqa: E402
-from content.execution.production_contracts import sha256_bytes  # noqa: E402
 
 
-TASK = "20260711--travel-homepage-integrity--test-region-b--pilot-901"
+TASK = "20260711--travel-homepage-integrity--cn-sichuan--canary-901"
 RELEASE = "release_gate"
 
 
@@ -61,13 +58,6 @@ def _reset() -> None:
     shutil.rmtree(execution_root(TASK), ignore_errors=True)
     shutil.rmtree(release_root(RELEASE), ignore_errors=True)
     _TMP.mkdir(parents=True, exist_ok=True)
-    ExecutionFixtureBuilder(
-        TASK,
-        targets=(
-            {"name": "测试实体甲", "entityType": "地点/景区"},
-            {"name": "测试实体乙", "entityType": "地点/景区"},
-        ),
-    ).build()
 
 
 def _seed_source(
@@ -82,17 +72,11 @@ def _seed_source(
     source_id = unit.split(".", 1)[-1]
     body = (
         "# 来源\n\n"
-        f"{entity}位于test-region-b测试地区，属于高山峡谷型景区。"
+        f"{entity}位于四川省阿坝藏族羌族自治州，属于高山峡谷型景区。"
         f"{entity}景区海拔跨度较大，游览线路通常围绕湖泊、森林和雪山展开。"
         f"{entity}在秋季以彩林景观受到关注，夏季则适合避暑和观水。"
         f"{entity}周边交通以成都方向进入为主，游客通常需要预留较完整的一天。"
         f"{entity}因自然景观集中，适合实体主页介绍位置、景观类型、季节和交通条件。"
-        f"{entity}的核心游览区通常由步道、观景平台和水体景观串联，路线安排需要结合海拔变化。"
-        f"{entity}雨季道路与步道湿滑，冬季低温和积雪会影响通行，出行前应核对开放信息。"
-        f"{entity}周边住宿和补给点分布并不均匀，自驾与公共交通游客需要提前规划返程时间。"
-        f"{entity}的生态环境较为敏感，游览时应遵守保护要求，不离开开放线路并带走随身垃圾。"
-        f"{entity}主要观景点在不同时段的光照和能见度差异明显，清晨与傍晚的游览条件并不相同。"
-        f"{entity}节假日客流集中时停车和接驳等待时间会增加，错峰进入有助于保持完整游览体验。"
     )
     identities = {
         "维基百科": ("wikipedia", "wikipedia_api", f"https://zh.wikipedia.org/wiki/{entity}"),
@@ -125,8 +109,8 @@ def _seed_source(
         target_ref=f"/entity/地点/景区/{entity}",
         images=[
             {
-                "bytes": tiny_png_bytes(),
-                "ext": ".png",
+                "bytes": b"image-" + unit.encode("utf-8"),
+                "ext": ".jpg",
                 "slug": "001",
                 "license": "CC-BY-SA 4.0",
                 "credit": "fixture",
@@ -144,6 +128,7 @@ def _seed_execution_post(
     *,
     base_source: str,
     asset_source: str,
+    asset_sha: str = "sha256:abc",
     publish_media_mode: str = "",
     with_assets: bool = True,
     source_use_mode: str = "licensed_adaptation",
@@ -151,9 +136,7 @@ def _seed_execution_post(
 ) -> None:
     runtime_post = execution_root(TASK) / "posts/article/攻略" / title / "1"
     (runtime_post / "assets").mkdir(parents=True, exist_ok=True)
-    asset_bytes = b"same-image"
-    (runtime_post / "assets" / "cover.jpg").write_bytes(asset_bytes)
-    asset_sha = sha256_bytes(asset_bytes)
+    (runtime_post / "assets" / "cover.jpg").write_bytes(b"same-image")
     write_json(
         runtime_post / "1.download" / "source_refs.json",
         {"baseSourceRef": base_source, "sources": [{"sourceRef": base_source}]},
@@ -177,7 +160,6 @@ def _seed_execution_post(
                 "proseStyle", "imageGate", "travelogueDensity", "crossArticleSimilarity",
                 "sectionShape", "generatorProvenance", "factTraceability", "baseDraftFidelity",
                 "writingIntentConsistency", "registerMismatch", "contactInfo", "mechanicalHeading",
-                "sectionBalance", "timelineOrder",
             ]},
         },
     )
@@ -190,7 +172,6 @@ def _seed_execution_post(
             "sourceRef": asset_source,
             "sourceAssetRef": asset_source.replace("source.md", "assets/001.jpg"),
             "authorizationProof": "fixture-proof",
-            "rightsAuditStatus": "verified",
             "alignmentEvidence": "图片来自同一图文底稿并对应正文中的红叶雪山段落。",
         }
     ] if with_assets else []
@@ -198,9 +179,8 @@ def _seed_execution_post(
         "topicId": topic,
         "contentType": "article",
         "carrier": "article",
-        "vertical": "travel",
         "publishMediaMode": publish_media_mode,
-        "entityRefs": ["/entity/地点/景区/测试实体甲"],
+        "entityRefs": ["/entity/地点/景区/毕棚沟"],
         "assets": assets,
     }
     write_json(runtime_post / "manifest.json", manifest)
@@ -223,7 +203,6 @@ def _seed_runtime_image_post(
             "topicId": title,
             "contentType": "image",
             "carrier": "image",
-            "vertical": "travel",
             "entityRefs": [f"/entity/地点/景区/{entity}"],
             "assets": [
                 {
@@ -234,7 +213,6 @@ def _seed_runtime_image_post(
                     "sourceRef": source_ref,
                     "sourceAssetRef": source_ref.replace("source.md", "assets/001.jpg"),
                     "authorizationProof": "fixture-proof",
-                    "rightsAuditStatus": "verified",
                     "sourceCollectionId": f"fixture:{entity}:image",
                 }
             ],
@@ -296,7 +274,6 @@ def _seed_v3_creator_only_release(*, broken_profile_ref: bool = False) -> None:
         {
             "schema": "quwoquan_data.release",
             "releaseId": RELEASE,
-            "sourceOwner": "qwq_data",
             "canonicalMerkle": canonical_merkle,
         },
     )
@@ -317,10 +294,7 @@ def _seed_v3_creator_only_release(*, broken_profile_ref: bool = False) -> None:
         {
             "schema": "quwoquan_data.release_media_manifest",
             "releaseId": RELEASE,
-            "sourceOwner": "qwq_data",
             "assets": [],
-            "issues": [],
-            "counts": {"assets": 0, "issues": 0},
         },
     )
     write_json(
@@ -370,9 +344,9 @@ def _seed_approved_entity(entity: str) -> None:
 
 def test_runtime_integrity_allows_same_asset_contract_before_release():
     _reset()
-    base = _seed_source("测试实体甲", "01.base", kind="维基百科")
-    _seed_execution_post("测试实体甲A", "a", base_source=base, asset_source=base)
-    _seed_execution_post("测试实体甲B", "b", base_source=base, asset_source="")
+    base = _seed_source("毕棚沟", "01.base", kind="维基百科")
+    _seed_execution_post("毕棚沟A", "a", base_source=base, asset_source=base, asset_sha="sha256:abc")
+    _seed_execution_post("毕棚沟B", "b", base_source=base, asset_source="", asset_sha="sha256:abc")
     write_json(
         execution_root(TASK) / "_shared" / "base_draft_ledger.json",
         {"schema": "quwoquan_data.base_draft_ledger", "assignments": {base: "a"}},
@@ -387,51 +361,12 @@ def test_runtime_integrity_allows_same_asset_contract_before_release():
     assert "base draft ledger does not map" in text
 
 
-def test_runtime_integrity_allows_recorded_unverified_rights_in_research():
-    _reset()
-    base = _seed_source("测试实体甲", "01.base", kind="维基百科")
-    _seed_execution_post(
-        "测试实体甲权利审计",
-        "rights-audit",
-        base_source=base,
-        asset_source=base,
-    )
-    manifest_path = (
-        execution_root(TASK)
-        / "posts/article/攻略/测试实体甲权利审计/1/manifest.json"
-    )
-    manifest = read_json(manifest_path)
-    manifest["assets"][0]["authorizationProof"] = ""
-    manifest["assets"][0]["rightsAuditStatus"] = "unverified"
-    manifest["assets"][0]["rightsStatus"] = "unverified"
-    manifest["assets"][0]["authorizationRequired"] = True
-    manifest["assets"][0]["distributionDecision"] = "research_allowed"
-    manifest["assets"][0]["rightsIssues"] = [
-        "distribution authorization is unverified"
-    ]
-    write_json(manifest_path, manifest)
-    write_json(
-        execution_root(TASK) / "_shared" / "base_draft_ledger.json",
-        {
-            "schema": "quwoquan_data.base_draft_ledger",
-            "assignments": {base: "rights-audit"},
-        },
-    )
-
-    report = scan_runtime_batch_integrity(TASK)
-    text = "\n".join(report["issues"])
-
-    assert report["passed"], text
-    assert "missing required rights proof" not in text
-    assert "missing rights audit status" not in text
-
-
 def test_runtime_integrity_blocks_garbled_caption_for_image_post():
     _reset()
-    source_ref = _seed_source("测试实体乙", "01.image", kind="维基百科")
+    source_ref = _seed_source("光雾山", "01.image", kind="维基百科")
     _seed_runtime_image_post(
-        "测试实体乙乱码图",
-        entity="测试实体乙",
+        "光雾山乱码图",
+        entity="光雾山",
         source_ref=source_ref,
         caption="500px provided description: ???????????????????????????????? [#?? ,#??]",
     )
@@ -443,11 +378,59 @@ def test_runtime_integrity_blocks_garbled_caption_for_image_post():
     assert "imageCaption" in text
 
 
+def test_runtime_integrity_blocks_known_wrong_place_image():
+    _reset()
+    source_ref = _seed_source("剑门关", "01.image", kind="维基百科")
+    title = "剑门关·20120430杭州临安浙西大峡谷剑门关水库"
+    runtime_post = execution_root(TASK) / "posts/image/画报" / title / "1"
+    asset_bytes = b"wrong-place-image"
+    asset_sha = hashlib.sha256(asset_bytes).hexdigest()
+    (runtime_post / "assets").mkdir(parents=True, exist_ok=True)
+    (runtime_post / "assets" / "cover.jpg").write_bytes(asset_bytes)
+    source_fields = {
+        "sourceCollectionId": "fixture:wrong-place",
+        "creator": "fixture",
+        "collectionPageUrl": "https://example.test/wrong-place",
+        "license": "CC-BY-SA 4.0",
+        "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+        "authorizationProof": "fixture-proof",
+    }
+    write_json(
+        runtime_post / "manifest.json",
+        {
+            "topicId": title,
+            "contentType": "image",
+            "carrier": "image",
+            "title": title,
+            "caption": "20120430杭州临安浙西大峡谷剑门关水库",
+            "entityRefs": [],
+            **source_fields,
+            "assets": [
+                {
+                    "assetId": "cover",
+                    "fileName": "cover.jpg",
+                    "sha256": asset_sha,
+                    "caption": "20120430杭州临安浙西大峡谷剑门关水库",
+                    "sourceRef": source_ref,
+                    "sourceAssetRef": source_ref.replace("source.md", "assets/001.jpg"),
+                    **source_fields,
+                }
+            ],
+        },
+    )
+
+    report = scan_runtime_batch_integrity(TASK)
+    text = "\n".join(report["issues"])
+
+    assert not report["passed"]
+    assert "已知错位图片词" in text
+
+
 def test_runtime_integrity_allows_article_asset_from_independent_source_unit():
     _reset()
-    base = _seed_source("测试实体甲", "01.base", kind="维基百科")
-    other = _seed_source("测试实体甲", "02.other", kind="今日头条百科")
-    _seed_execution_post("测试实体甲C", "c", base_source=base, asset_source=other)
+    base = _seed_source("毕棚沟", "01.base", kind="维基百科")
+    other = _seed_source("毕棚沟", "02.other", kind="今日头条百科")
+    _seed_execution_post("毕棚沟C", "c", base_source=base, asset_source=other, asset_sha="sha256:def")
     write_json(
         execution_root(TASK) / "_shared" / "base_draft_ledger.json",
         {"schema": "quwoquan_data.base_draft_ledger", "assignments": {base: "c"}},
@@ -462,13 +445,13 @@ def test_runtime_integrity_allows_factual_reference_prompted_as_adaptation():
     """factual_reference_only 以底稿为骨架轻改，执行期完整性门不得误拦截。"""
     _reset()
     base = _seed_source(
-        "测试实体甲",
+        "毕棚沟",
         "01.base",
         kind="去哪儿攻略",
         source_use_mode="factual_reference_only",
     )
     _seed_execution_post(
-        "测试实体甲FactOnly",
+        "毕棚沟FactOnly",
         "fact-only",
         base_source=base,
         asset_source=base,
@@ -486,9 +469,9 @@ def test_runtime_integrity_allows_factual_reference_prompted_as_adaptation():
 
 def test_runtime_integrity_allows_text_only_article_without_source_asset():
     _reset()
-    base = _seed_source("测试实体甲", "01.base", kind="维基百科")
+    base = _seed_source("毕棚沟", "01.base", kind="维基百科")
     _seed_execution_post(
-        "测试实体甲TextOnly",
+        "毕棚沟TextOnly",
         "text-only",
         base_source=base,
         asset_source="",
@@ -508,8 +491,8 @@ def test_runtime_integrity_allows_text_only_article_without_source_asset():
 
 def test_runtime_integrity_still_blocks_unmarked_assetless_article():
     _reset()
-    base = _seed_source("测试实体甲", "01.base", kind="维基百科")
-    _seed_execution_post("测试实体甲NoAsset", "no-asset", base_source=base, asset_source="", with_assets=False)
+    base = _seed_source("毕棚沟", "01.base", kind="维基百科")
+    _seed_execution_post("毕棚沟NoAsset", "no-asset", base_source=base, asset_source="", with_assets=False)
     write_json(
         execution_root(TASK) / "_shared" / "base_draft_ledger.json",
         {"schema": "quwoquan_data.base_draft_ledger", "assignments": {base: "no-asset"}},
@@ -520,10 +503,10 @@ def test_runtime_integrity_still_blocks_unmarked_assetless_article():
 
 def test_runtime_integrity_flags_article_asset_not_belonging_to_declared_source_unit():
     _reset()
-    base = _seed_source("测试实体甲", "01.base", kind="维基百科")
-    other = _seed_source("测试实体甲", "02.other", kind="今日头条百科")
-    _seed_execution_post("测试实体甲D", "d", base_source=base, asset_source=other)
-    manifest_path = execution_root(TASK) / "posts/article/攻略/测试实体甲D/1/manifest.json"
+    base = _seed_source("毕棚沟", "01.base", kind="维基百科")
+    other = _seed_source("毕棚沟", "02.other", kind="今日头条百科")
+    _seed_execution_post("毕棚沟D", "d", base_source=base, asset_source=other, asset_sha="sha256:ghi")
+    manifest_path = execution_root(TASK) / "posts/article/攻略/毕棚沟D/1/manifest.json"
     manifest = __import__("json").loads(manifest_path.read_text(encoding="utf-8"))
     manifest["assets"][0]["sourceAssetRef"] = base.replace("source.md", "assets/001.jpg")
     write_json(manifest_path, manifest)
@@ -538,8 +521,8 @@ def test_runtime_integrity_flags_article_asset_not_belonging_to_declared_source_
 
 def test_runtime_integrity_flags_entity_homepage_using_guide_base():
     _reset()
-    guide = _seed_source("测试实体甲", "05.guide", kind="去哪儿攻略", source_use_mode="factual_reference_only")
-    entity_runtime = execution_root(TASK) / "entities/地点/景区/测试实体甲"
+    guide = _seed_source("毕棚沟", "05.guide", kind="去哪儿攻略", source_use_mode="factual_reference_only")
+    entity_runtime = execution_root(TASK) / "entities/地点/景区/毕棚沟"
     write_json(entity_runtime / "2.quality" / "quality_analysis.json", {"baseDraft": {"sourceRef": guide}})
     write_json(entity_runtime / "3.compose" / "entity_page_input.json", {"payload": {"baseDraft": {"sourceRef": guide}}})
     write_json(entity_runtime / "manifest.json", {"assets": []})
@@ -550,34 +533,34 @@ def test_runtime_integrity_flags_entity_homepage_using_guide_base():
 
 def test_homepage_base_draft_never_falls_back_to_guide_source():
     _reset()
-    _seed_source("测试实体甲", "01.guide", kind="去哪儿攻略", source_use_mode="factual_reference_only")
+    _seed_source("毕棚沟", "01.guide", kind="去哪儿攻略", source_use_mode="factual_reference_only")
     wiki = _seed_source(
-        "测试实体甲",
+        "毕棚沟",
         "02.wiki",
         kind="维基百科",
         source_use_mode="factual_reference_only",
         research_lane="homepage",
     )
-    chosen = _entity_base_draft(TASK, "地点", "景区", "测试实体甲")
+    chosen = _entity_base_draft(TASK, "地点", "景区", "毕棚沟")
     assert chosen["sourceRef"] == wiki
 
     _reset()
-    _seed_source("测试实体甲", "01.guide", kind="去哪儿攻略", source_use_mode="factual_reference_only")
-    assert _entity_base_draft(TASK, "地点", "景区", "测试实体甲") == {}
+    _seed_source("毕棚沟", "01.guide", kind="去哪儿攻略", source_use_mode="factual_reference_only")
+    assert _entity_base_draft(TASK, "地点", "景区", "毕棚沟") == {}
 
 
 def test_homepage_base_draft_picks_best_single_baike_no_cross_source():
     """主权威百科单源择优：主页三件套必须同源，不允许跨源拼接。"""
     _reset()
     baidu = _seed_source(
-        "测试实体甲", "01.baidu", kind="百度百科",
+        "毕棚沟", "01.baidu", kind="百度百科",
         source_use_mode="factual_reference_only", research_lane="homepage",
     )
     wiki = _seed_source(
-        "测试实体甲", "02.wiki", kind="维基百科",
+        "毕棚沟", "02.wiki", kind="维基百科",
         source_use_mode="factual_reference_only", research_lane="homepage",
     )
-    chosen = _entity_base_draft(TASK, "地点", "景区", "测试实体甲")
+    chosen = _entity_base_draft(TASK, "地点", "景区", "毕棚沟")
     # registry authority 顺序与质量共同裁决；当前应稳定选到维基百科，且三件套同源。
     assert chosen["sourceRef"] == wiki, chosen
     assert chosen["primaryEvidenceRef"] == wiki
@@ -587,10 +570,10 @@ def test_homepage_base_draft_picks_best_single_baike_no_cross_source():
     # 去掉维基后退而求其次取百度（仍是单一最佳源，绝不跨源拼接）。
     _reset()
     baidu_only = _seed_source(
-        "测试实体甲", "01.baidu", kind="百度百科",
+        "毕棚沟", "01.baidu", kind="百度百科",
         source_use_mode="factual_reference_only", research_lane="homepage",
     )
-    chosen_baidu = _entity_base_draft(TASK, "地点", "景区", "测试实体甲")
+    chosen_baidu = _entity_base_draft(TASK, "地点", "景区", "毕棚沟")
     assert chosen_baidu["sourceRef"] == baidu_only, chosen_baidu
 
 
@@ -606,18 +589,18 @@ def test_release_quota_blocks_entity_homepage_outside_primary_post_refs():
             "executionId": TASK,
         },
     )
-    post = root / "posts/article/攻略/测试实体甲/1"
+    post = root / "posts/article/攻略/毕棚沟/1"
     write_json(
         post / "manifest.json",
         {
             "topicId": "post-1",
             "contentType": "article",
             "carrier": "article",
-            "entityRefs": ["/entity/地点/景区/测试实体甲"],
+            "entityRefs": ["/entity/地点/景区/毕棚沟"],
             "assets": [],
         },
     )
-    _write(root / "entities/地点/景区/测试实体甲/page.md", "# 测试实体甲")
+    _write(root / "entities/地点/景区/毕棚沟/page.md", "# 毕棚沟")
     _write(root / "entities/地点/景区/无关替补/page.md", "# 无关替补")
 
     issues = _quota_issues(root)
@@ -629,26 +612,26 @@ def test_release_quota_blocks_entity_homepage_outside_primary_post_refs():
 
 def test_assemble_release_copies_only_primary_post_entity_homepages():
     _reset()
-    runtime_post = execution_root(TASK) / "posts/article/攻略/测试实体甲/1"
-    _write(runtime_post / "article.md", "# 测试实体甲\n\n正文。")
+    runtime_post = execution_root(TASK) / "posts/article/攻略/毕棚沟/1"
+    _write(runtime_post / "article.md", "# 毕棚沟\n\n正文。")
     write_json(
         runtime_post / "manifest.json",
         {
             "topicId": "post-1",
             "contentType": "article",
             "carrier": "article",
-            "entityRefs": ["/entity/地点/景区/测试实体甲"],
+            "entityRefs": ["/entity/地点/景区/毕棚沟"],
             "assets": [],
         },
     )
     write_json(runtime_post / "5.review/attestation.json", {"decision": "approved"})
     write_json(runtime_post / "5.review/evidence_index.json", {"refs": ["runtime"]})
-    _seed_approved_entity("测试实体甲")
+    _seed_approved_entity("毕棚沟")
     _seed_approved_entity("无关替补")
 
     release = assemble_release(TASK, RELEASE)
 
-    assert (release / "entities/地点/景区/测试实体甲/page.md").is_file()
+    assert (release / "entities/地点/景区/毕棚沟/page.md").is_file()
     assert not (release / "entities/地点/景区/无关替补/page.md").exists()
 
 

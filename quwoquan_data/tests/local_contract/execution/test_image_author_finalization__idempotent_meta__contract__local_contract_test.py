@@ -7,6 +7,7 @@ from content.execution.controller import homepage_author_evidence
 from content.post import object_index
 from content.post.article import draft_io
 from core.control_types import AgentProvider
+from content.execution.model_contract import governed_cursor_grok_model
 
 # 对种子 token 计算的真实 sha256，保持 canonical digest 形态。
 _PROMPT_DIGEST = (  # sha256("prompt")
@@ -32,7 +33,7 @@ def _finalized_meta() -> dict[str, object]:
         "generator": "image_evidence_pack",
         "status": "completed",
         "provider": "cursor_sdk",
-        "model": "grok-4.5",
+        "model": governed_cursor_grok_model(),
         "agentRunId": "run-image-one",
         "agentId": "agent-image-one",
         "title": "",
@@ -106,7 +107,7 @@ def test_finalized_image_meta_is_not_rewritten(monkeypatch) -> None:
     _arrange(monkeypatch, _finalized_meta(), writes)
 
     finalized = homepage_author_evidence._finalize_existing_managed_author_outputs(
-        SimpleNamespace(execution_id="image-execution", model="grok-4.5"),
+        SimpleNamespace(execution_id="image-execution", model=governed_cursor_grok_model()),
         SimpleNamespace(),
     )
 
@@ -121,7 +122,7 @@ def test_finalized_image_meta_is_rewritten_when_provenance_drifts(monkeypatch) -
     _arrange(monkeypatch, meta, writes)
 
     finalized = homepage_author_evidence._finalize_existing_managed_author_outputs(
-        SimpleNamespace(execution_id="image-execution", model="grok-4.5"),
+        SimpleNamespace(execution_id="image-execution", model=governed_cursor_grok_model()),
         SimpleNamespace(),
     )
 

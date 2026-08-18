@@ -520,6 +520,21 @@ void main() {
         scene.indexOf('@objc final class AppSceneDelegate'),
       );
       expect(recoveryScene, isNot(contains('FlutterSceneDelegate')));
+      // Flutter 场景不参与 UIKit state restoration：持久化 activity 会让冷启动
+      // 尝试恢复过期 scene 状态，Debug 直装可能卡死在启动屏。
+      final appSceneDelegate = scene.substring(
+        scene.indexOf('@objc final class AppSceneDelegate'),
+      );
+      expect(
+        appSceneDelegate,
+        contains(
+          'override func stateRestorationActivity(for scene: UIScene) '
+          '-> NSUserActivity? {\n    nil\n  }',
+        ),
+      );
+      expect(appSceneDelegate, isNot(contains('NSUserActivity(')));
+      final infoPlist = _readAppFile('ios/Runner/Info.plist');
+      expect(infoPlist, isNot(contains('NSUserActivityTypes')));
       final iosGateProbe = _readAppFile(
         'scripts/tools/device/inspect_ios_native_startup.py',
       );
@@ -1156,15 +1171,19 @@ void main() {
       expect(gradle, contains('direct-debug'));
       expect(gradle, contains('QWQ_RUNTIME_DART_DEFINES_JSON'));
       expect(gradle, contains('app-debug-preflight'));
-      expect(gradle, contains('QWQ_CONTENT_RELEASE_ID'));
-      expect(gradle, contains('QWQ_CONTENT_MANIFEST_DIGEST'));
-      expect(gradle, contains('QWQ_CONTENT_READINESS_RECEIPT_DIGEST'));
-      expect(activity, contains('contentReadinessReceiptDigest'));
+      // 内容激活是服务端运行时事实：构建与原生层不得再携带内容 release 身份。
+      expect(gradle, isNot(contains('QWQ_CONTENT_RELEASE_ID')));
+      expect(gradle, isNot(contains('QWQ_CONTENT_MANIFEST_DIGEST')));
+      expect(gradle, isNot(contains('QWQ_CONTENT_READINESS_RECEIPT_DIGEST')));
+      expect(activity, isNot(contains('contentReadinessReceiptDigest')));
       final runtimeConfig = _readAppFile(
         'lib/runtime/config/cloud_runtime_config.dart',
       );
-      expect(runtimeConfig, contains('_nativeRuntimeDriftKeys'));
-      expect(runtimeConfig, contains(r'NATIVE_RUNTIME_PACKAGE.$key'));
+      final runtimeResolver = _readAppFile(
+        'lib/runtime/config/runtime_package_resolver.dart',
+      );
+      expect(runtimeConfig, contains('RuntimePackageResolver.resolve'));
+      expect(runtimeResolver, contains(r'NATIVE_RUNTIME_PACKAGE.$key'));
       expect(runtimeConfig, contains('if (!shouldLoadNativeRuntimePackage)'));
       expect(gradle, contains('requireCompleteRuntimeDartDefines'));
       expect(gradle, contains('verifyAndroidLocalLauncherContract'));

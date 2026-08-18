@@ -22,6 +22,17 @@ import json
 from pathlib import Path
 from typing import Any
 
+from quwoquan_ops.cli.lib.read_only_user_availability import (
+    read_only_user_availability_report as _read_only_user_availability_report,
+    validate_read_only_user_availability_report,
+)
+
+
+def _diagnostic_aggregation_boundary() -> None:
+    """保留 health/inspect/status 共享聚合符号的显式归属。"""
+
+
+
 
 def _script_probe_plan_for_target(
     topology: dict[str, Any],

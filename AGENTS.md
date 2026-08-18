@@ -17,31 +17,52 @@
 
 已知目标路径时执行 `make feature-context TARGET=<spec-or-code-path>`；代码路径若被多个 L1 同优先级认领或没有 owner，返回 `GATE_BLOCK`，先修规格归属。
 
-阶段语义由对应 `.cursor/commands/*.md` 定义：`/explore`、`/prd`、`/design`、`/baseline`、`/extend`、`/dev`、`/verify`、`/plan-review`、`/plan-next`。自然语言请求与最接近的阶段命令等价，不因用户未输入 slash command 而跳过规格理解和验证。
+工作流语义由 `.agents/skills/<name>/SKILL.md` 定义：`explore`、`prd`、`design`、`dev`、`continue`、`plan-next`、`review`、`commit`，以及自动触发的 `environment-ops`、`content-production`、`incident-inspection`。技能由模型按 `description` 自动匹配，用户是否输入斜杠命令都不改变本契约。评审由 `.agents/skills/review` 在每个工作流的 PRE 与 POST 派发。
 
-## 每次任务三段协议
+## 每次任务五段执行契约
 
-### Spec Entry
+两种入口只在第一步不同：用户直接描述意图时由 RESOLVE 推断，显式调用工作流技能时由调用方给定。两者产出同一结构化对象，之后走完全相同的五段——这是不让「意图驱动」与「显式调用」形成两套标准的关键。
 
-开始实施前明确：
+### RESOLVE 定位
+
+产出 `(workflow, deliverable, scope)` 三元组：
+
+- `workflow`：上述十个工作流之一。定位不到唯一 workflow 时取**更早**的工作流，不要向后猜。
+- `deliverable`：本次要交付的具体物（spec 节点、contract、页面、gate 等）。
+- `scope`：In Scope / Out of Scope、`L1_domain_service / L2_business_capability / L3_story` 父链、AppRoot Journey/Scenario。
+
+已知目标路径时执行 `make feature-context TARGET=<spec-or-code-path>`。
+
+### PRE 准入
+
+进入实现前必须明确，任一项存疑先回 `explore` 或 `prd` 刷新对应 `spec.md`，不要直接写实现：
 
 - 目标与用户价值。
-- In Scope / Out of Scope。
-- AppRoot Journey/Scenario。
-- `L1_domain_service / L2_business_capability / L3_story` 父链。
 - 验收意图：`UAT / DOM / SIT / GWT / contract`。
-- 测试证据：`local_contract / api_integration / user_acceptance`。
+- 测试证据层：`local_contract / api_integration / user_acceptance`。
 - 当前 OPEN 与准出影响。
+- 触发面判断：metadata-first、runtime error 链路、Mock 隔离、页面质量、Data CLI-first、stackctl、跨域 E2E、四环境、观测与回滚是否被触发。触达多个区域时证明 `Data -> Service -> App -> Behavior -> Recommendation -> Observability -> Environment` 无断点。
 
-任一项无法明确时，先执行 `/explore` 或 `/prd` 刷新对应 `spec.md`，不要直接写实现。
+按 `.agents/skills/review` 的 registry 派发本工作流角色做前置评审。**任一 MUST 未满足即返回 `GATE_BLOCK`，停止并补齐，不进入实现。**
 
-### Pre-work Reflection
+### DURING 执行中
 
-实施前逐项判断：metadata-first、runtime error 链路、Mock 隔离、页面质量、Data CLI-first、stackctl、跨域 E2E、四环境、观测与回滚是否被触发。触达多个区域时证明 `Data -> Service -> App -> Behavior -> Recommendation -> Observability -> Environment` 无断点。
+把 PRE 评审选出的角色 checklist 复制进回复逐项勾选（checklist copy-in），MUST / MUST NOT 作为执行中约束持续生效，而不是等做完再检查。
 
-### Exit Review
+### POST 自检
 
-交付时如实说明：规格达成、三层测试、E2E、产品/UX、运营观测、自动化/门禁、OPEN 变化和剩余阻断。失败门禁不得包装为成功。
+先按交付件的送审前自检清单自检，再调 `.agents/skills/review` 做后置评审：由它生成去重后的测试/gate 证据计划、执行并派发角色评审。失败回到 DURING；失败门禁不得包装为成功。
+
+### HANDOFF 交接
+
+固定交出以下四项。下一步的 RESOLVE **必须**消费上一步的 HANDOFF，断链即 `GATE_BLOCK`：
+
+- **产出物**：文件、DEC 编号、受影响 metadata 路径，附 POST 评审结论。
+- **未决项去向**：每一项必须落到「转最低可关闭节点的 `OPEN-###`」「判 Out of Scope」「下一工作流承接」三者之一，不允许悬空。
+- **唯一合法下游**及其 PRE 所需输入；HANDOFF 必须覆盖下游输入段全部必需项。
+- **证据链**：已跑的 gate 与结果，含失败项。
+
+单步任务同样要交 HANDOFF，此时它就是对用户的交付说明：规格达成、三层测试、E2E、产品/UX、运营观测、自动化/门禁、OPEN 变化和剩余阻断。
 
 ## 特性树与文档规则
 
@@ -57,14 +78,12 @@
 
 ## 商用品质默认门
 
-- Review：从产品、架构、代码、质量、测试、用户、运维、运营八角色检查契约漂移、无测试、无观测、体验断点、第二真相源和不合理抽象。
+- Review：由 `.agents/skills/review` 按 `(workflow, deliverable, profiles)` 派发角色并行评审；profile 由 changed_paths 与 deliverable 派生，未匹配 profile 的角色与 gate 不加载，相同 gate 只执行一次。角色定义见 `.agents/skills/review/references/roles/`，**该目录是角色名的唯一真相源，其他文件不再自行列举**。重点盯契约漂移、无测试、无观测、体验断点、第二真相源和不合理抽象。
 - 三层测试：`local_contract`、`api_integration`、`user_acceptance` 必须映射 UAT/DOM/SIT/GWT/contract；Remote 行为必须能回到测试树内对象级 typed double/Provider/Widget/领域规则覆盖，任何测试 double 不得进入环境 App。
-- 四环境：`alpha`、`beta`、`gamma`、`prod` 的 App 均使用同一 Remote composition；内容、Creator、实体与媒体只来自 canonical immutable release activation，用户、评论、圈子、会话与消息只经所属领域公开 command/event 生效。Alpha/Beta/Gamma 可由 `stackctl verify` 使用真实非生产身份创建候选绑定验收数据，Prod 只接受真实用户或正式运营行为；任何环境均禁止 fixture、直接数据库 seed 与派生投影预填。分层证明配置、包纯度、URL/topology、部署与回滚。不存在 `prod-gray`，生产灰度只是 `prod` rollout stage。
+- 四环境：`alpha`、`beta`、`gamma`、`prod` 的 App 使用同一 production Remote composition；环境只决定 runtime package、endpoint、容量与发布阶段，**不决定数据源**。任何环境禁止 fixture、直接数据库 seed 与派生投影预填。不存在 `prod-gray`，生产灰度只是 `prod` rollout stage。数据来源、测试数据分层构造与 capability 约束的细则由 [quwoquan_ops/AGENTS.md](quwoquan_ops/AGENTS.md) 拥有，此处不复制。
 - 错误链路：metadata errors、HTTP 响应、端侧 mapper/UI、恢复动作、埋点、日志、告警和测试必须同源。
 - 可观测与配置：新增页面、API、行为信号、推荐策略和数据发布必须声明 SLI/SLO、指标、采样、保留、告警、配置来源、灰度与回滚。
 - 无法证明时返回 `GATE_BLOCK`，补规格、metadata、测试或运维证据。
-- 测试数据按层构造：`local_contract` 使用对象级 builder/generator 与最小 contract example；`api_integration` 使用真实进程 application command/provider-state；`user_acceptance` 只读引用 immutable release，并以强类型 capability request 经公开 command/event 创建按 CaseResult 隔离的 Actor 与交易事实。Prod 在首条测试 mutation 前拒绝。
-- 环境测试不得书写 capability 字符串、裸字典参数、固定业务对象 ID 或导入 Provider 实现；Provider 只按选中请求的领域依赖闭包加载。禁止 capability registry、测试 inventory、数据库 seed、投影预填与跨 CaseResult 复用可变数据。
 
 ## 编码总约束
 
@@ -72,6 +91,7 @@
 - 错误码使用 `MODULE.KIND.REASON`；动态上下文只进入 string-only `context.attributes`。
 - Mongo/bson 可用 `_id`；客户端 HTTP/WS/DTO JSON 只认 canonical `id`/`postId` 等键。
 - 契约单轨：禁止版本信封、wire 多键双读、dual-read/dual-write、长期 shim、compat/warn-only 逃逸和为错误实现加 fallback。
+- 结果状态单义：任何返回值只能表达「在场有值」「在场为空」「缺席」「失败」之一。失败不得降级为 `null`/`nil`/空字符串/空集合，缺席不得塌陷为零值；字段可空性只由对象契约声明。四态模型、各语言禁令与 `catch` 内 `return null` 的两条合法出路见 `.agents/skills/review/references/roles/developer/references/result-state-semantics.md`。
 - `.qwq_output/` 只存可删除、可重建的运行输出；删除后仍必须能凭受版本控制真相源重建。
 - 源码树不得保留 `__pycache__/`、`*.pyc`、`*.pyo`、`.pytest_cache/`；缓存重定向到 `.qwq_output/env/repo/local/**`。
 - 每个第一方服务以 `environments/<alpha|beta|gamma|prod>/` 作为环境自治入口，共享定义只存在于服务内 `config/schema.yaml`、`resources/` 与 `deploy/base/`；环境之间禁止继承。环境装配、部署、巡检、修复统一使用 `python3 quwoquan_ops/cli/stackctl.py`。
@@ -80,12 +100,8 @@
 
 ## Python 脚本治理
 
-- 稳定脚本角色只允许 `gate / cli / lib / generator / runner / tool / migration / hook`。角色、owner、引用和 orphan 候选从当前物理树、Make/workflow/gate/CLI 与 import 关系实时派生；禁止提交脚本 registry、inventory、债务 baseline 或 orphan allowlist。
-- `quwoquan_app/scripts` 的领域 L1 必须使用与 `quwoquan_app/lib/service/<service_name>_service` 相同的下划线名；只在 scope 唯一属于某 context/object 且生产 owner 真实存在时下钻 L2/L3。runtime/platform/tool 按 concern 归档，不得平铺。
-- `quwoquan_service/scripts` 的领域 L1 必须与 `quwoquan_service/services/<kebab-service>` 同名；跨服务能力只进入 `contracts/codegen/runtime/verify/tools` concern，`contracts` 不放 verifier。
-- Ops 保持 concern-first；跨环境验收脚本只进入 `quwoquan_ops/tests/acceptance/user_acceptance/service_ops/<service>`，`producer: ops` 的 readiness case runner 直接指向该树内实现脚本并携带 `readiness_case`/`spec_ref` 双向标注（canonical 形态由 readiness loader 校验）。Data 保持 CLI-first，并服从 `quwoquan_data/scripts/verify/verify_script_architecture.py`。
-- 稳定可执行路径、schema key 和测试标识禁止 `t1..t4 / m6 / m7 / b10 / phase0 / partN` 等阶段名。rename 必须原子更新 producer、consumer、import、Make、workflow、测试与文档，禁止旧路径 shim。
-- orphan 只报告，不自动删除；人工裁决只能是接入 canonical 角色、移入 `tools`，或连同全部引用删除。治理报告写入 `.qwq_output`，对同一物理树必须可重复生成且字节幂等。
+- 稳定脚本角色只允许 `gate / cli / lib / generator / runner / tool / migration / hook`；角色与 owner 从物理树和引用关系实时派生，禁止提交脚本 registry、inventory、债务 baseline 或 orphan allowlist。
+- 按树归位规则、命名禁令与 orphan 裁决见 `.agents/skills/review/references/roles/developer/references/python-scripts.md`；门禁 `make verify-python-script-governance`。
 
 ## 工作方式
 

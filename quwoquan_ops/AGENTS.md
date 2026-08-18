@@ -4,7 +4,7 @@
 
 1. `specs/feature-tree/README.md`
 2. 目标特性父链，或运行 `make feature-context TARGET=<path>`
-3. `.cursor/skills/environment-ops/SKILL.md`
+3. `.agents/skills/environment-ops/SKILL.md`
 4. `quwoquan_ops/gate/gate_repo.sh`
 
 ## 运维与门禁硬约束

@@ -278,13 +278,21 @@ class PreprodFormalReleaseRuntimeTest(unittest.TestCase):
             "candidateId": DIGEST,
             "artifactDigest": "sha256:" + "b" * 64,
             "contractGraphDigest": DIGEST,
-            "images": {
-                service: {
-                    "repository": f"ghcr.io/owner/repo/{service}",
-                    "digest": DIGEST,
-                    "ref": f"ghcr.io/owner/repo/{service}@{DIGEST}",
+            "environmentArtifacts": {
+                "gamma": {
+                    "environmentArtifactDigest": "sha256:" + "d" * 64,
+                    "images": {
+                        service: {
+                            "repository": f"ghcr.io/owner/repo/{service}-gamma",
+                            "digest": f"sha256:{index:064x}",
+                            "ref": (
+                                f"ghcr.io/owner/repo/{service}-gamma@"
+                                f"sha256:{index:064x}"
+                            ),
+                        }
+                        for index, (service, _) in enumerate(services, start=1)
+                    },
                 }
-                for service, _ in services
             },
         }
         both_started = threading.Event()
@@ -303,7 +311,7 @@ class PreprodFormalReleaseRuntimeTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             manifest_path = Path(temp) / "manifest.json"
             manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
-            environment: dict[str, str] = {}
+            environment: dict[str, str] = {"QWQ_LOCAL_RELEASE_ENV": "gamma"}
             with (
                 mock.patch.object(
                     stackctl,

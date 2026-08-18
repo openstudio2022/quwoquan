@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -135,18 +136,71 @@ func smsOTPTemplateID(platform string) (string, error) {
 	}
 }
 
-func (c *ExternalInteractionClient) CheckSMSOTPReadiness(ctx context.Context) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/healthz", nil)
+func (c *ExternalInteractionClient) GetSMSOTPDeliveryReadiness(
+	ctx context.Context,
+) (application.SMSOTPDeliveryReadiness, error) {
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		c.baseURL+serviceclients.IntegrationSmsOtpDeliveryReadinessPath,
+		nil,
+	)
 	if err != nil {
-		return err
+		return application.SMSOTPDeliveryReadiness{}, err
 	}
+	serviceToken, err := c.signer.Sign(rtauth.TokenSubject{
+		AccountID: "service:user-service",
+		Roles:     []string{"service"},
+		Scopes: []string{
+			serviceclients.IntegrationSmsOtpDeliveryReadinessScope,
+		},
+	})
+	if err != nil {
+		return application.SMSOTPDeliveryReadiness{}, fmt.Errorf(
+			"sign SMS OTP readiness principal: %w",
+			err,
+		)
+	}
+	req.Header.Set("Authorization", "Bearer "+serviceToken)
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return err
+		return application.SMSOTPDeliveryReadiness{}, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("integration readiness unavailable")
+		return application.SMSOTPDeliveryReadiness{}, fmt.Errorf(
+			"integration SMS OTP readiness status %d",
+			resp.StatusCode,
+		)
 	}
-	return nil
+	var readiness struct {
+		Availability      string `json:"availability"`
+		RetryAfterSeconds int    `json:"retryAfterSeconds"`
+	}
+	decoder := json.NewDecoder(io.LimitReader(resp.Body, 4096))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&readiness); err != nil {
+		return application.SMSOTPDeliveryReadiness{}, fmt.Errorf(
+			"decode integration SMS OTP readiness: %w",
+			err,
+		)
+	}
+	if readiness.Availability != "ready" &&
+		readiness.Availability != "temporarily_unavailable" {
+		return application.SMSOTPDeliveryReadiness{}, fmt.Errorf(
+			"integration SMS OTP readiness availability is invalid",
+		)
+	}
+	if readiness.RetryAfterSeconds < 0 ||
+		(readiness.Availability == "ready" && readiness.RetryAfterSeconds != 0) ||
+		(readiness.Availability == "temporarily_unavailable" &&
+			readiness.RetryAfterSeconds == 0) {
+		return application.SMSOTPDeliveryReadiness{}, fmt.Errorf(
+			"integration SMS OTP readiness retry delay is invalid",
+		)
+	}
+	return application.SMSOTPDeliveryReadiness{
+		Availability:      readiness.Availability,
+		RetryAfterSeconds: readiness.RetryAfterSeconds,
+	}, nil
 }

@@ -103,9 +103,11 @@ def _retain_artifact(
 def _build_command(platform: str, handoff: dict[str, Any]) -> list[str]:
     command = ["flutter", "build"]
     if platform == "android":
-        command.extend(["apk", "--debug"])
+        command.extend(["apk", "--debug", "--flavor", str(handoff["environment"])])
     elif platform == "ios":
-        command.extend(["ios", "--simulator", "--debug"])
+        command.extend(
+            ["ios", "--simulator", "--debug", "--flavor", str(handoff["environment"])]
+        )
     else:
         command.extend(["web", "--debug"])
     command.extend(["--target", str(handoff["entrypoint"])])

@@ -83,6 +83,12 @@ List<String> _validateContracts(
       'runtime_failure_codes.g.dart is stale; run runtime error codegen',
     );
   }
+  if (verifyGeneratedArtifacts &&
+      !const GoRuntimeErrorGenerator().isCurrent(Directory.current)) {
+    failures.add(
+      'runtime_failure_codes_generated.go is stale; run runtime error codegen',
+    );
+  }
   return failures;
 }
 

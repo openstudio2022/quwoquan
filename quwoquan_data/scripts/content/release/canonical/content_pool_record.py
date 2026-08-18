@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any
 
 from content.release.canonical.object_source_identity import (
-    source_identity_digest,
     validate_object_source_identity,
 )
 from content.release.canonical.object_transaction_contract import (
@@ -23,19 +22,15 @@ from content.release.canonical.object_transaction_contract import (
 from content.release.canonical.pool_source_attribution import (
     source_attribution_complete,
 )
-
-POOL_RECORD_SCHEMA = "quwoquan_data.pool_object_record"
-POOL_OBJECT_TYPES = {"author", "homepage", "content"}
-POOL_RESULT_VALUES = {"completed", "failed"}
-POOL_QUALITY_VALUES = {"passed", "failed"}
-POOL_ELIGIBILITY_VALUES = {"passed", "pending", "failed"}
-
-
-def pool_source_identity_digest(identity: Mapping[str, Any]) -> str:
-    """Digest the execution-bound source identity tuple."""
-    if not str(identity.get("executionId") or "").strip():
-        raise ObjectTransactionError("DATA.POOL.SOURCE_IDENTITY_INVALID")
-    return source_identity_digest(identity)
+from content.release.canonical.pool_record_history import (
+    POOL_RECORD_SCHEMA,
+    PoolRecordExclusion,
+    PoolRecordHistory,
+    _validated_pool_record,
+    iter_pool_records,
+    pool_source_identity_digest,
+    read_pool_record_history,
+)
 
 
 def stable_content_id(source_manifest: Mapping[str, Any], canonical_ref: str) -> str:
@@ -51,12 +46,20 @@ def stable_content_id(source_manifest: Mapping[str, Any], canonical_ref: str) ->
 
 
 def pool_payload_digest(object_root: Path) -> str:
-    """Digest immutable object bytes while excluding append-only pool records."""
+    """Digest immutable object bytes while excluding append-only pool records.
+
+    Media bytes stay outside the digest because canonical publish records media
+    by content digest and never copies the bytes alongside the object, so an
+    execution package that still holds them and the canonical object that never
+    receives them must agree on one digest.  The closure over media is kept by
+    ``asset.refs.json``, which carries every asset's own sha256 and is itself
+    digested here.
+    """
 
     rows = []
     for path in _files(object_root):
         relative = path.relative_to(object_root)
-        if relative.parts and relative.parts[0] == "_pool":
+        if relative.parts and relative.parts[0] in {"_pool", "assets"}:
             continue
         rows.append(
             {
@@ -70,105 +73,6 @@ def pool_payload_digest(object_root: Path) -> str:
 
 def _pool_record_path(object_root: Path, record_sequence: int) -> Path:
     return object_root / "_pool" / "versions" / f"{record_sequence}.json"
-
-
-def _validated_pool_record(
-    raw: Mapping[str, Any],
-    *,
-    object_type: str | None = None,
-) -> dict[str, Any]:
-    record = dict(raw)
-    if record.get("schema") != POOL_RECORD_SCHEMA:
-        raise ObjectTransactionError("DATA.POOL.RECORD_SCHEMA_INVALID")
-    actual_type = str(record.get("objectType") or "").strip()
-    if actual_type not in POOL_OBJECT_TYPES or (
-        object_type is not None and actual_type != object_type
-    ):
-        raise ObjectTransactionError(
-            f"DATA.POOL.RECORD_OBJECT_TYPE_INVALID: {actual_type!r}"
-        )
-    if "recordSequence" not in record and "contentVersion" not in record:
-        raise ObjectTransactionError("DATA.POOL.RECORD_SEQUENCE_MISSING")
-    record_sequence = record.get("recordSequence")
-    content_version = record.get("contentVersion")
-    if (
-        not isinstance(record_sequence, int)
-        or isinstance(record_sequence, bool)
-        or record_sequence < 1
-        or not isinstance(content_version, int)
-        or isinstance(content_version, bool)
-        or content_version < 1
-    ):
-        raise ObjectTransactionError("DATA.POOL.RECORD_VERSION_INVALID")
-    for key in ("objectId", "objectRef", "evidenceRef"):
-        if not str(record.get(key) or "").strip():
-            raise ObjectTransactionError(f"DATA.POOL.RECORD_FIELD_MISSING: {key}")
-    for key in ("evidenceDigest", "payloadDigest"):
-        digest = str(record.get(key) or "")
-        if len(digest) != 71 or not digest.startswith("sha256:"):
-            raise ObjectTransactionError(f"DATA.POOL.RECORD_DIGEST_INVALID: {key}")
-    if record.get("processResult") not in POOL_RESULT_VALUES:
-        raise ObjectTransactionError("DATA.POOL.RECORD_PROCESS_INVALID")
-    if record.get("qualityResult") not in POOL_QUALITY_VALUES:
-        raise ObjectTransactionError("DATA.POOL.RECORD_QUALITY_INVALID")
-    eligibility = record.get("eligibilityResult")
-    if eligibility not in POOL_ELIGIBILITY_VALUES:
-        raise ObjectTransactionError("DATA.POOL.RECORD_ELIGIBILITY_INVALID")
-    usage_scope = record.get("usageScope")
-    if actual_type == "author":
-        if usage_scope is not None:
-            raise ObjectTransactionError("DATA.POOL.AUTHOR_SCOPE_FORBIDDEN")
-    elif eligibility == "passed":
-        if usage_scope not in {"research", "commercial"}:
-            raise ObjectTransactionError("DATA.POOL.RECORD_USAGE_SCOPE_INVALID")
-    elif usage_scope is not None:
-        raise ObjectTransactionError("DATA.POOL.PENDING_SCOPE_MUST_BE_NULL")
-    if record.get("status") not in {"active", "retired", "deleted"}:
-        raise ObjectTransactionError("DATA.POOL.RECORD_STATUS_INVALID")
-    if actual_type in {"homepage", "content"}:
-        source_identity = record.get("sourceIdentity")
-        source_attribution = record.get("sourceAttribution")
-        canonical_digest = str(record.get("canonicalObjectDigest") or "")
-        expected_identity_fields = {
-            "executionId",
-            "sourceRevision",
-            "sourceDigest",
-            "entityCatalogDigest",
-            "identityDigest",
-        }
-        if (
-            not isinstance(source_identity, Mapping)
-            or set(source_identity) != expected_identity_fields
-            or pool_source_identity_digest(source_identity)
-            != source_identity.get("identityDigest")
-        ):
-            raise ObjectTransactionError("DATA.POOL.SOURCE_IDENTITY_INVALID")
-        if not source_attribution_complete(
-            {"sourceAttribution": source_attribution}
-        ):
-            raise ObjectTransactionError(
-                "DATA.POOL.SOURCE_ATTRIBUTION_INCOMPLETE"
-            )
-        if canonical_digest != record.get("payloadDigest"):
-            raise ObjectTransactionError("DATA.POOL.CANONICAL_DIGEST_DRIFT")
-    return record
-
-
-def iter_pool_records(object_root: Path, *, object_type: str | None = None) -> list[dict[str, Any]]:
-    """Read validated sidecar versions in ascending order."""
-
-    versions_root = object_root / "_pool" / "versions"
-    if not versions_root.is_dir():
-        return []
-    records = [
-        _validated_pool_record(_read_json(path), object_type=object_type)
-        for path in sorted(versions_root.glob("*.json"))
-        if path.is_file()
-    ]
-    sequences = [int(record["recordSequence"]) for record in records]
-    if sequences != sorted(sequences) or len(sequences) != len(set(sequences)):
-        raise ObjectTransactionError("DATA.POOL.RECORD_VERSION_CONFLICT")
-    return sorted(records, key=lambda item: int(item["recordSequence"]))
 
 
 def _inline_author_record(object_root: Path) -> dict[str, Any] | None:
@@ -360,11 +264,79 @@ def build_canonical_pool_record(
     )
 
 
+def _pool_identity_rows(
+    object_root: Path,
+    *,
+    object_ref: str,
+) -> list[tuple[str, int, bool]]:
+    """Read collision identity without promoting a retired record to admission."""
+
+    rows: list[tuple[str, int, bool]] = []
+    versions_root = object_root / "_pool/versions"
+    if not versions_root.is_dir():
+        return rows
+    for record_path in sorted(versions_root.glob("*.json")):
+        if not record_path.is_file() or not record_path.stem.isdigit():
+            raise ObjectTransactionError("DATA.POOL.RECORD_SEQUENCE_CONFLICT")
+        physical_sequence = int(record_path.stem)
+        raw = _read_json(record_path)
+        object_id = str(raw.get("objectId") or "").strip()
+        if (
+            raw.get("schema") != POOL_RECORD_SCHEMA
+            or raw.get("objectType") != "content"
+            or not object_id
+            or raw.get("objectRef") != object_ref
+        ):
+            raise ObjectTransactionError("DATA.POOL.IDENTITY_INVALID")
+        if "recordSequence" in raw or "contentVersion" in raw:
+            record_sequence = raw.get("recordSequence")
+            content_version = raw.get("contentVersion")
+            if (
+                not isinstance(record_sequence, int)
+                or isinstance(record_sequence, bool)
+                or record_sequence != physical_sequence
+                or not isinstance(content_version, int)
+                or isinstance(content_version, bool)
+                or content_version < 1
+            ):
+                raise ObjectTransactionError(
+                    "DATA.POOL.RECORD_VERSION_INVALID"
+                )
+            try:
+                _validated_pool_record(raw, object_type="content")
+                retired = False
+            except ObjectTransactionError as exc:
+                retired = str(exc) in {
+                    "DATA.POOL.SOURCE_IDENTITY_INVALID",
+                    "DATA.POOL.SOURCE_ATTRIBUTION_INCOMPLETE",
+                    "DATA.POOL.CANONICAL_DIGEST_DRIFT",
+                }
+                if not retired:
+                    raise
+        else:
+            content_version = raw.get("version")
+            if (
+                not isinstance(content_version, int)
+                or isinstance(content_version, bool)
+                or content_version != physical_sequence
+            ):
+                raise ObjectTransactionError(
+                    "DATA.POOL.RECORD_SEQUENCE_MISSING"
+                )
+            retired = True
+        rows.append((object_id, int(content_version), retired))
+    return rows
+
+
 def _known_versions(publish_root: Path, content_id: str) -> list[int]:
     versions: list[int] = []
     for path in sorted((publish_root / "posts").rglob("manifest.json")):
         document = _read_json(path)
-        record = latest_pool_record(path.parent, "content")
+        object_ref = path.parent.relative_to(publish_root / "posts").as_posix()
+        identity_rows = _pool_identity_rows(
+            path.parent,
+            object_ref=object_ref,
+        )
         manifest_content_id = str(document.get("contentId") or "").strip()
         manifest_version = document.get("version")
         has_content_id = bool(manifest_content_id)
@@ -374,11 +346,21 @@ def _known_versions(publish_root: Path, content_id: str) -> list[int]:
                 "DATA.POOL.IDENTITY_INVALID: manifest contentId/version must coexist"
             )
         if not has_content_id:
-            if record is None:
+            if identity_rows:
+                if not all(row[2] for row in identity_rows):
+                    raise ObjectTransactionError(
+                        "DATA.POOL.IDENTITY_INVALID: modern pool record lacks manifest identity"
+                    )
+                retired_pairs = {(row[0], row[1]) for row in identity_rows}
+                if len(retired_pairs) != 1:
+                    raise ObjectTransactionError(
+                        "DATA.POOL.IDENTITY_INVALID: pool record identity drift"
+                    )
+                retired_content_id, retired_version = next(iter(retired_pairs))
+                if retired_content_id == content_id:
+                    versions.append(retired_version)
                 continue
-            raise ObjectTransactionError(
-                "DATA.POOL.IDENTITY_INVALID: modern pool record lacks manifest identity"
-            )
+            continue
         if (
             not isinstance(manifest_version, int)
             or isinstance(manifest_version, bool)
@@ -387,9 +369,9 @@ def _known_versions(publish_root: Path, content_id: str) -> list[int]:
             raise ObjectTransactionError(
                 "DATA.POOL.IDENTITY_INVALID: manifest.version must be positive"
             )
-        if record is not None and (
-            str(record.get("objectId") or "") != manifest_content_id
-            or record.get("contentVersion") != manifest_version
+        if identity_rows and any(
+            row[:2] != (manifest_content_id, manifest_version)
+            for row in identity_rows
         ):
             raise ObjectTransactionError(
                 "DATA.POOL.IDENTITY_INVALID: manifest/pool record identity drift"
@@ -417,10 +399,25 @@ def _commercial_proof_closed(
     ):
         return False
     return all(
-        row.get("rightsAuditStatus") == "verified"
+        row.get("distributionDecision") == "commercial_allowed"
+        and row.get("rightsAuditStatus") == "verified"
         and str(row.get("authorizationProof") or "").startswith("https://")
         and str(row.get("licenseUrl") or "").startswith("https://")
+        and bool(str(row.get("author") or "").strip())
+        and bool(str(row.get("licenseName") or "").strip())
         for row in rights_rows
+    )
+
+
+def pool_usage_scope(
+    source_manifest: Mapping[str, Any], rights_rows: list[dict[str, Any]]
+) -> str:
+    """Derive pool eligibility only from per-object attribution and rights facts."""
+
+    return (
+        "commercial"
+        if _commercial_proof_closed(source_manifest, rights_rows)
+        else "research"
     )
 
 
@@ -483,24 +480,7 @@ def build_content_pool_fields(
             "DATA.POOL.VERSION_GAP: "
             f"contentId={content_id} expected={known_versions[-1] + 1} actual={version}"
         )
-    requested_admission = source_manifest.get("admission")
-    requested_scope = (
-        str(requested_admission.get("usageScope") or "").strip()
-        if isinstance(requested_admission, Mapping)
-        else ""
-    )
-    usage_scope = requested_scope or "research"
-    if usage_scope not in {"research", "commercial"}:
-        raise ObjectTransactionError(
-            f"content admission usageScope is invalid: {usage_scope!r}"
-        )
-    if usage_scope == "commercial" and not _commercial_proof_closed(
-        source_manifest, rights_rows
-    ):
-        raise ObjectTransactionError(
-            "DATA.POOL.COMMERCIAL_PROOF_INCOMPLETE: "
-            f"contentId={content_id} lacks auditable commercial publication proof"
-        )
+    usage_scope = pool_usage_scope(source_manifest, rights_rows)
     variant_purpose = str(source_manifest.get("variantPurpose") or "original").strip()
     if variant_purpose not in {"original", "commercial_variant"}:
         raise ObjectTransactionError(
@@ -529,6 +509,8 @@ def build_content_pool_fields(
 
 __all__ = [
     "POOL_RECORD_SCHEMA",
+    "PoolRecordExclusion",
+    "PoolRecordHistory",
     "append_pool_record",
     "build_canonical_pool_record",
     "build_content_pool_fields",
@@ -536,8 +518,10 @@ __all__ = [
     "iter_pool_records",
     "latest_pool_record",
     "plan_content_pool_identity",
+    "pool_usage_scope",
     "pool_payload_digest",
     "pool_source_identity_digest",
     "preflight_pool_record_append",
+    "read_pool_record_history",
     "stable_content_id",
 ]

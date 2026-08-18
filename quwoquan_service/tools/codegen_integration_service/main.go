@@ -151,6 +151,7 @@ func main() {
 		pathByOperation[operation] = path
 	}
 	required := []string{
+		"GetSmsOtpDeliveryReadiness",
 		"SubmitExternalInteractionRequest",
 		"GetExternalInteractionRequest",
 		"ListExternalInteractionAttempts",
@@ -229,6 +230,7 @@ func main() {
 	service.WriteString("package generated\n\n")
 	service.WriteString("// ExternalInteraction transport paths from api_routes.\n")
 	service.WriteString("const (\n")
+	service.WriteString(fmt.Sprintf("\tSmsOtpDeliveryReadinessPath = %q\n", pathByOperation["GetSmsOtpDeliveryReadiness"]))
 	service.WriteString(fmt.Sprintf("\tExternalRequestsPath = %q\n", pathByOperation["SubmitExternalInteractionRequest"]))
 	service.WriteString(fmt.Sprintf("\tExternalRequestByIDPathTemplate = %q\n", pathByOperation["GetExternalInteractionRequest"]))
 	service.WriteString(fmt.Sprintf("\tExternalRequestAttemptsPathTemplate = %q\n", pathByOperation["ListExternalInteractionAttempts"]))
@@ -278,6 +280,8 @@ func main() {
 	client.WriteString("package serviceclients\n\n")
 	client.WriteString("// Integration external interaction transport paths for cross-service callers.\n")
 	client.WriteString("const (\n")
+	client.WriteString(fmt.Sprintf("\tIntegrationSmsOtpDeliveryReadinessPath = %q\n", pathByOperation["GetSmsOtpDeliveryReadiness"]))
+	client.WriteString(fmt.Sprintf("\tIntegrationSmsOtpDeliveryReadinessScope = %q\n", requiredSingleScope(routesSource, requiredRoute(routesSource, routes.APIRoutes, "GetSmsOtpDeliveryReadiness", "GET"))))
 	client.WriteString(fmt.Sprintf("\tIntegrationExternalRequestsPath = %q\n", pathByOperation["SubmitExternalInteractionRequest"]))
 	client.WriteString(")\n\n")
 	client.WriteString("// Connector capability resolution path and scope for trusted service callers.\n")

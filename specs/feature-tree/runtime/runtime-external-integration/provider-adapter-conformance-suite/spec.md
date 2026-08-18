@@ -90,10 +90,10 @@
 <a id="gwt-002"></a>
 ### GWT-002 三环境三层 conformance matrix 与 Prod Remote receipt 均有真实执行结果
 
-- GIVEN Alpha、Beta、Gamma Binding 已选择对应 Adapter，测试数据和 cleanup 合同完整。
+- GIVEN Alpha、Beta、Gamma 环境 artifact 已绑定对应 nonprod Provider Workload，Prod artifact 已绑定正式 Provider Workload，且测试数据与 cleanup 合同完整。
 - WHEN 对同一 Capability 执行 local_contract、api_integration 和 user_acceptance。
 - THEN 聚合报告恰含九个 required cell，且每格 Provider、网络边界、数据和环境语义匹配。
-- AND 每格由该环境 Binding 选中的 Adapter 实际执行，并可从 CaseResult 追溯命令、目标、契约、断言与测试 artifact digest。
+- AND 每格由该环境 artifact 封存的 Provider Workload 实际执行，并可从 CaseResult 追溯命令、目标、契约、断言、Workload image 与测试 artifact digest。
 - AND Alpha/Beta/Gamma Debug-local cell 均绑定各自目标的 Port 对等替代 Adapter；普通本地、dirty tree、未评审 commit 或 local key 生成的 cell 标记 `nonPromotable=true`。
 - AND 当前环境本次 invocation 的 42 格在 active immutable candidate、selected Binding、测试源、CaseResult、cleanup 和 observability 全部同源时，允许以 `local-sha256` 满足该环境 functional readiness，且无需 CI attestation key。
 - AND 三环境共 126 格与双模拟器 UAT 即使全部通过，也只能形成独立的 emulator-only non-promotable claim；正式准出仍等待 Android 真机、CI-attested 140 格与 Prod Remote receipt。
@@ -102,7 +102,7 @@
 - WHEN 对 Alpha/Beta/Gamma 执行商业 Provider readiness。
 - THEN 每个环境另有绑定 managed non-prod selected Adapter、不可变候选和真实 Remote 结果的 receipt，且不接受 Debug-local matrix 作为替代。
 - WHEN 执行生产商用准出。
-- THEN 每个 required Capability 另有一个绑定 Prod selected Adapter 与 hosted topology 的 Remote `user_acceptance` receipt，且不接受 Alpha/Beta/Gamma nonprod matrix 作为替代。
+- THEN 每个 required Capability 另有一个绑定 Prod Provider Workload、Prod environment artifact 与 hosted topology 的 Remote `user_acceptance` receipt，且不接受 Alpha/Beta/Gamma nonprod matrix 作为替代。
 - AND 正式 artifact 恰含 126 个 nonprod cell 与 14 个 Prod cell；`provider-conformance-readiness` 的 `issues/sourceCoverageIssues` 均为空、四环境同一 14 Capability 全部 `required=true/capability_ready=true`，140 个 raw evidence exact bytes 由 manifest/finalizer 收集并由 environment-stability final acceptance 重新推导验证。
 
 <a id="gwt-003"></a>

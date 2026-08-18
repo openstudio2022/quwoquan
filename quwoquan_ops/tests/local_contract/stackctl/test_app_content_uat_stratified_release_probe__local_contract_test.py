@@ -95,6 +95,14 @@ def test_release_probe__receipt_contains_one_hundred_verified_sample_reads(
     )
 
     def fake_probe(*args, **kwargs):
+        assert kwargs["only_checks"] == (
+            "video_book_feed",
+            "premium_feed",
+            "feed_media_slices",
+            "global_search",
+            "media_sample",
+            "release_sample",
+        )
         samples = kwargs["release_samples"]
         assert len(samples) == 100
         checks = []

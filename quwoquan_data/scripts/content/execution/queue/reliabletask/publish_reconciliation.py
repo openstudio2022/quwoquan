@@ -23,16 +23,11 @@ from content.execution.queue.reliabletask.report import ReliableTaskFleetReport
 
 def reconcile_frozen_publish_recovery(
     execution_id: str,
-    *,
-    workers: int,
-    completion_grace_seconds: int,
 ) -> ReliableTaskFleetReport | None:
     """Reconcile remote dead tasks after every local publish job succeeded."""
 
     from content.execution.queue.reliabletask import fleet as runtime
 
-    if workers < 1 or completion_grace_seconds < 1:
-        raise ValueError("ReliableTask reconciliation budgets must be positive")
     stage = QueueJobStage.PUBLISH
     jobs = [
         job
@@ -50,7 +45,6 @@ def reconcile_frozen_publish_recovery(
     job_set_envelope = select_or_freeze_job_set_attempt(
         execution_id,
         stage.value,
-        required_workers=workers,
         active_tasks=active_documents,
     )
     frozen_tasks = job_set_envelope.get("expectedTasks")
@@ -102,15 +96,15 @@ def reconcile_frozen_publish_recovery(
             return report
         raise ValueError("ReliableTask frozen reconciliation remains below quota")
 
-    object_timeout_milliseconds = request.get("objectTimeoutMilliseconds")
-    if not isinstance(object_timeout_milliseconds, int):
-        raise TypeError("ReliableTask reconciliation object timeout is invalid")
-    batch_timeout_seconds = runtime.fleet_batch_timeout_seconds(
-        job_count=len(active_documents),
-        workers=int(request["requiredWorkers"]),
-        object_timeout_seconds=object_timeout_milliseconds // 1000,
-        completion_grace_seconds=completion_grace_seconds,
-    )
+    deadline = request.get("fleetBatchDeadlineEpochSeconds")
+    if isinstance(deadline, bool) or not isinstance(deadline, int):
+        raise TypeError("ReliableTask reconciliation deadline is invalid")
+    import time
+
+    if deadline - int(time.time()) < 1:
+        raise RuntimeError(
+            "ReliableTask reconciliation absolute deadline is exhausted"
+        )
     transport = runtime.resolve_reliabletask_fleet_transport()
     command, cwd = runtime._fleet_command(execution_id, stage=stage)
     environment = {
@@ -123,8 +117,6 @@ def reconcile_frozen_publish_recovery(
         "QWQ_DATA_FLEET_WORK_DIR": str(REPO_ROOT / "quwoquan_data"),
         "QWQ_DATA_FLEET_PUBLISH_ROOT": str(PUBLISH_ROOT),
         "QWQ_DATA_FLEET_EVIDENCE_ROOT": str(OUTPUT_ROOT),
-        "QWQ_DATA_FLEET_WORKERS": str(request["requiredWorkers"]),
-        "QWQ_DATA_FLEET_BATCH_TIMEOUT_MS": str(batch_timeout_seconds * 1000),
     }
     returncode = runtime._run_fleet_process(
         [*command, "--request", str(request_path), "--report", str(report_path)],
@@ -157,6 +149,14 @@ def _read_bound_report(
     document = read_json(path)
     assert_valid(document, "release", "reliabletask_fleet_report", label=label)
     report = ReliableTaskFleetReport.from_document(document)
+    if (
+        report.fleet_peak_concurrent_workers
+        > int(request["fleetMaxConcurrentWorkers"])
+        or report.fleet_wave_count != int(request["fleetWaveCount"])
+        or report.fleet_batch_deadline_epoch_seconds
+        != int(request["fleetBatchDeadlineEpochSeconds"])
+    ):
+        raise ValueError("ReliableTask reconciliation capacity binding drift")
     if (
         report.execution_id != execution_id
         or report.job_set_envelope_digest != request["jobSetEnvelopeDigest"]

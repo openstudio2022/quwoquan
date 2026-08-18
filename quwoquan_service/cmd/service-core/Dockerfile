@@ -2,12 +2,15 @@ ARG GO_BASE_IMAGE
 ARG ALPINE_BASE_IMAGE
 ARG ALPINE_PACKAGE_REPOSITORY=https://mirrors.aliyun.com/alpine
 ARG GO_BUILD_FLAGS=-p=1
+ARG QWQ_ARTIFACT_ENVIRONMENT
+ARG QWQ_ARTIFACT_CONFIG_DIGEST
 ARG IP2REGION_DATA_VERSION=v3.17.0+incompatible
 ARG IP2REGION_V4_SHA256=6307a9696f5711f84bcb8b25f07894de68a64a0ed4a1cc7e990562dd3084f210
 ARG IP2REGION_V6_SHA256=5b93da35ac28bc316dccc54a758381f7a874ae0461dd51ff5df5e34815586f11
 
 FROM --platform=${BUILDPLATFORM} ${GO_BASE_IMAGE} AS builder
 ARG GO_BUILD_FLAGS
+ARG QWQ_PROVIDER_BINDING_MANIFEST_DIGEST
 ARG TARGETOS
 ARG TARGETARCH
 ARG GOPROXY=https://goproxy.cn,direct
@@ -32,13 +35,27 @@ RUN --mount=type=cache,id=quwoquan-go-mod,target=/go/pkg/mod \
 COPY . .
 RUN --mount=type=cache,id=quwoquan-go-build,target=/root/.cache/go-build \
     --mount=type=cache,id=quwoquan-go-mod,target=/go/pkg/mod \
-    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
-    go build ${GO_BUILD_FLAGS} -trimpath -ldflags="-s -w" \
+    --mount=type=bind,from=qwq_provider_bindings,source=.,target=/run/qwq-provider-bindings,ro \
+    test -n "${QWQ_PROVIDER_BINDING_MANIFEST_DIGEST}" \
+    && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
+    go build -overlay=/run/qwq-provider-bindings/go.overlay.json ${GO_BUILD_FLAGS} -trimpath -ldflags="-s -w" \
     -o /out/service-core \
     ./cmd/service-core
 
 FROM ${ALPINE_BASE_IMAGE}
 ARG ALPINE_PACKAGE_REPOSITORY
+ARG QWQ_ARTIFACT_ENVIRONMENT
+ARG QWQ_ARTIFACT_CONFIG_DIGEST
+RUN set -eu; \
+    case "${QWQ_ARTIFACT_ENVIRONMENT}" in alpha|beta|gamma|prod) ;; *) exit 2 ;; esac; \
+    digest_hex="${QWQ_ARTIFACT_CONFIG_DIGEST#sha256:}"; \
+    test "${#digest_hex}" -eq 64; \
+    test -z "$(printf '%s' "${digest_hex}" | tr -d '0-9a-f')"; \
+    install -d /etc/quwoquan; \
+    printf '{"schema":"qwq.environment-artifact-identity","environment":"%s","configDigest":"%s"}\n' \
+      "${QWQ_ARTIFACT_ENVIRONMENT}" "${QWQ_ARTIFACT_CONFIG_DIGEST}" \
+      > /etc/quwoquan/artifact-identity.json; \
+    chmod 0444 /etc/quwoquan/artifact-identity.json
 RUN if command -v apk >/dev/null 2>&1; then \
       test -n "${ALPINE_PACKAGE_REPOSITORY}" \
       && alpine_branch="$(. /etc/os-release && printf '%s' "${VERSION_ID%.*}")" \

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from core.control_types import ContentType, ExecutionStage, PostStage, StageStatus
 
+from content.execution.controller.failure_isolation import run_isolated_batch
 from content.execution.controller.post_review_support import (
     aggregate_review_fallback as _aggregate_review_fallback,
 )
@@ -86,6 +87,15 @@ def _run_post_review(ctx: ExecutionContext) -> StageResult:
 
     refs = content_object.iter_content_refs(ctx.execution_id)
     active_refs = list(refs)
+    from content.execution.agent.checkpoint_exclusion import (
+        current_semantic_checkpoint_exclusions,
+    )
+
+    author_exclusions = current_semantic_checkpoint_exclusions(
+        ctx.execution_id,
+        stage=ExecutionStage.POST_AUTHOR,
+        object_refs=active_refs,
+    )
     object_targets = indexed_post_targets(ctx.execution_id)
     object_issues: dict[str, list[str]] = {ref: [] for ref in active_refs}
 
@@ -137,7 +147,25 @@ def _run_post_review(ctx: ExecutionContext) -> StageResult:
         reason = str(absorbed.get("reason") or "compose-brief gate failed; absorbed")
         add_issues(ref, [reason])
 
-    excluded_refs = set(preflight_short_refs) | set(compose_absorbed_refs)
+    for ref, exclusion in author_exclusions.items():
+        terminal = exclusion.get("terminalOutcome")
+        terminal = terminal if isinstance(terminal, dict) else {}
+        message = str(terminal.get("error") or "semantic author shortfall").strip()
+        disposition = str(exclusion.get("disposition") or "excluded")
+        repair_action = str(exclusion.get("repairAction") or "human_decision")
+        add_issues(
+            ref,
+            [
+                f"semantic author {disposition}: {message}; "
+                f"repairAction={repair_action}"
+            ],
+        )
+
+    excluded_refs = (
+        set(preflight_short_refs)
+        | set(compose_absorbed_refs)
+        | set(author_exclusions)
+    )
     reviewable_refs = [ref for ref in active_refs if ref not in excluded_refs]
     all_green = bool(reviewable_refs)
     stale_review_refs: list[str] = []
@@ -192,9 +220,19 @@ def _run_post_review(ctx: ExecutionContext) -> StageResult:
         run_professional_asset_independent_reviews,
     )
 
-    for ref in reviewable_refs:
-        add_issues(ref, _materialize_reviewed_refs(ctx, [ref]))
-        add_issues(ref, _post_exit_issues(ctx, [ref]))
+    def _review_object(ref: str) -> list[object]:
+        return [
+            *_materialize_reviewed_refs(ctx, [ref]),
+            *_post_exit_issues(ctx, [ref]),
+        ]
+
+    # 逐对象隔离：单个对象的 typed 失败只应让它自己在 closure 里被丢弃，不能连带
+    # 作废整批已完成的评审。治理阻断与未归类失败仍然升级为 stage 失败。
+    isolated = run_isolated_batch(reviewable_refs, _review_object)
+    for ref, messages in isolated.succeeded:
+        add_issues(ref, messages)
+    for row in isolated.failed:
+        add_issues(row.object_ref, row.issues)
     independent_records = run_post_independent_reviews(ctx, reviewable_refs)
     independent_records.extend(
         run_professional_asset_independent_reviews(ctx, reviewable_refs)
@@ -272,10 +310,17 @@ def _run_post_review(ctx: ExecutionContext) -> StageResult:
             StageStatus.DONE,
             f"post_review quota {milestone} "
             f"(qualified={closure.qualified_count}/{closure.approved_quota}, "
-            f"discarded={len(closure.discarded)})",
+            f"discarded={len(closure.discarded)}, "
+            f"isolated={isolated.report()['failedCount']})",
         )
 
     issue_records = list(independent_records)
+    # 已归类的 issue 会以 str(issue) 进入 closure；再包一层 QUALITY_FAILED 会把
+    # reviewer 技术性失败升级成内容质量失败，触发多余的 author 回退并吃掉 author
+    # 自己的 attempt 预算。这里只补充尚未归类的 closure issue。
+    classified = {
+        (issue.ref, str(issue).strip()) for issue in independent_records if issue.ref
+    }
     for row in closure.discarded:
         issue_records.extend(
             data_issue(
@@ -286,6 +331,7 @@ def _run_post_review(ctx: ExecutionContext) -> StageResult:
                 message=message,
             )
             for message in row.issues
+            if (row.object_ref, message) not in classified
         )
     if not issue_records:
         issue_records.append(
@@ -297,11 +343,24 @@ def _run_post_review(ctx: ExecutionContext) -> StageResult:
             )
         )
     discarded_refs = {row.object_ref for row in closure.discarded}
+    # 每条 issue 已经携带 typed recovery。当全部 discarded 都只是 reviewer 侧的
+    # RETRY_AGENT（内容本身通过了 deterministic gate），回到 post_compose 会重写
+    # 一篇合格正文，并让 author 白白耗掉自己的 attempt 预算。这种情况下只该重跑
+    # review 本身。
+    retry_review_only = bool(issue_records) and all(
+        issue.recovery is DataRecoveryAction.RETRY_AGENT
+        for issue in issue_records
+        if issue.ref in discarded_refs or not issue.ref
+    )
     fallback = (
         ExecutionStage.CONTENT_PLAN
         if discarded_refs.intersection(preflight_short_refs)
         else _aggregate_review_fallback(ctx, refs=discarded_refs)
-        or ExecutionStage.POST_COMPOSE
+        or (
+            ExecutionStage.POST_REVIEW
+            if retry_review_only
+            else ExecutionStage.POST_COMPOSE
+        )
     )
     return StageResult(
         ExecutionStage.POST_REVIEW,

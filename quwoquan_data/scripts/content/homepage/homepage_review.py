@@ -324,9 +324,12 @@ def _write_entity_review_sidecars(
         },
         "independentReviewer": {
             "status": reviewer_status,
-            "provider": str(reviewer.get("provider") or "local_cursor_sdk"),
-            "model": str(reviewer.get("model") or "reviewer"),
-            "modelFamily": str(reviewer.get("modelFamily") or "pending"),
+            # 独立审阅尚未绑定结果时这三项必须自述「未绑定」。写死一个真实存在的
+            # provider 名与角色名会让操作者把「审阅没跑成」误读成「某模型已审过」，
+            # 排查时只能靠 resultHash 为 null 才发现，而那要翻到 publish 阶段。
+            "provider": str(reviewer.get("provider") or "unbound"),
+            "model": str(reviewer.get("model") or "unbound"),
+            "modelFamily": str(reviewer.get("modelFamily") or "unbound"),
             "runId": str(
                 reviewer.get("runId")
                 or "review_"

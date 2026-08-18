@@ -36,7 +36,6 @@ from governance.coverage.license import (  # noqa: E402
     audit_image_rights,
     load_travel_license_policy,
     rights_enforcement_mode,
-    validate_image_rights,
 )
 from governance.coverage.quality import verify_vertical_quality  # noqa: E402
 
@@ -79,7 +78,7 @@ def test_photography_image_rights_are_asset_level_not_platform_name_level():
 
 
 def test_photography_image_rights_accepts_authorized_payload():
-    issues = validate_image_rights(
+    issues = audit_image_rights(
         {
             "url": "https://example.com/a.jpg",
             "platform": "Unsplash",
@@ -178,32 +177,15 @@ def test_travel_image_rights_requires_generated_asset_provenance():
     assert allowed == [], allowed
 
 
-def test_travel_rights_audit_records_gaps_without_blocking_research_collection(
-    monkeypatch,
-):
-    from dataclasses import replace
-
-    from governance.coverage import distribution
-
-    research_policy = distribution.load_content_distribution_policy()
-    research_only = replace(
-        research_policy,
-        product_lifecycle_state=distribution.ProductLifecycleState.RESEARCH,
-        release_class=distribution.ReleaseClass.RESEARCH,
-    )
-    monkeypatch.setattr(
-        distribution,
-        "load_content_distribution_policy",
-        lambda: research_only,
-    )
+def test_travel_rights_audit_records_gaps_independent_of_release_class():
     payload = {
         "url": "https://images.example.com/place.jpg",
         "platform": "test-gallery",
         "sourceUrl": "https://images.example.com/place",
         "credit": "test-creator",
     }
-    assert audit_image_rights(payload, vertical="travel")
-    assert validate_image_rights(payload, vertical="travel") == []
+    issues = audit_image_rights(payload, vertical="travel")
+    assert any("missing required field license" in issue for issue in issues)
 
 
 def test_vertical_quality_gate_has_golden_samples():

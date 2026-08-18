@@ -15,6 +15,7 @@ from content.execution.scale.capacity_plan import throughput_basis_digest
 from core.io import write_json
 from core.paths import research_scale_promotions_root
 from core.runtime_policy import active_runtime_policy
+from support.capacity_calibration_fixture import synthetic_capacity_source_binding
 
 
 def _capacity_throughput_row(
@@ -76,6 +77,13 @@ def _patch_envelope_deps(monkeypatch) -> None:
     )
     monkeypatch.setattr(
         request_envelope_build,
+        "bind_capacity_calibration_source",
+        lambda **kwargs: synthetic_capacity_source_binding(
+            provider_tier=str(kwargs["provider_tier"]),
+        ),
+    )
+    monkeypatch.setattr(
+        request_envelope_build,
         "freeze_carrier_pre_acquisition_inputs",
         lambda *_args, **_kwargs: (
             [],
@@ -113,6 +121,18 @@ def _patch_envelope_deps(monkeypatch) -> None:
         return binding, "data/local/workspace/source-pool/evidence", selection
 
     monkeypatch.setattr(request_envelope_build, "bind_scale_source_pool", bind_pool)
+    original_build = request_envelope_build.build_envelope
+
+    def build_with_capacity(**kwargs: object):
+        if not kwargs.get("capacity_calibration_receipt"):
+            kwargs["capacity_calibration_receipt"] = Path(
+                "data/local/tests/capacity/local-contract-capacity.json"
+            )
+        return original_build(**kwargs)
+
+    monkeypatch.setattr(request_envelope_build, "build_envelope", build_with_capacity)
+    monkeypatch.setattr(request_envelope_writer, "build_envelope", build_with_capacity)
+    monkeypatch.setattr(envelopes, "build_envelope", build_with_capacity)
     monkeypatch.setattr(m100_alpha_acceptance, "assert_valid", lambda *_args, **_kwargs: None)
 
 

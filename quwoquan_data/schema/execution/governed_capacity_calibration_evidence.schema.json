@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/governed_capacity_calibration_evidence.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "calibrationId", "workloadScale", "hostClass", "providerTier",
+    "providerEvidenceCalibrationId", "providerCandidates", "resourcePeaks", "fleetObservations",
+    "objectTimingObservations", "decision", "recordedAt", "evidenceDigest"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.governed_capacity_calibration_evidence"},
+    "calibrationId": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+    "workloadScale": {"const": "M100"},
+    "hostClass": {"type": "string", "minLength": 1},
+    "providerTier": {"type": "string", "minLength": 1},
+    "providerEvidenceCalibrationId": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "providerCandidates": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/providerCandidate"}
+    },
+    "resourcePeaks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sampleCount", "rssBytes", "cpuPercent", "cursorBridgeProcessCount"],
+      "properties": {
+        "sampleCount": {"type": "integer", "minimum": 1},
+        "rssBytes": {"type": "integer", "minimum": 1},
+        "cpuPercent": {"type": "number", "minimum": 0},
+        "cursorBridgeProcessCount": {"type": "integer", "minimum": 0}
+      }
+    },
+    "fleetObservations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "executionId", "reportRef", "reportDigest", "total",
+          "fleetPeakConcurrentWorkers", "fleetWallClockMilliseconds"
+        ],
+        "properties": {
+          "executionId": {"type": "string", "minLength": 1},
+          "reportRef": {"$ref": "#/$defs/safeRef"},
+          "reportDigest": {"$ref": "#/$defs/digest"},
+          "total": {"type": "integer", "minimum": 1},
+          "fleetPeakConcurrentWorkers": {"type": "integer", "minimum": 1},
+          "fleetWallClockMilliseconds": {"type": "integer", "minimum": 1}
+        }
+      }
+    },
+    "objectTimingObservations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "executionId", "stateRef", "stateDigest", "sampleCount",
+          "p95Seconds", "maxSeconds"
+        ],
+        "properties": {
+          "executionId": {"type": "string", "minLength": 1},
+          "stateRef": {"$ref": "#/$defs/safeRef"},
+          "stateDigest": {"$ref": "#/$defs/digest"},
+          "sampleCount": {"type": "integer", "minimum": 1},
+          "p95Seconds": {"type": "number", "exclusiveMinimum": 0},
+          "maxSeconds": {"type": "number", "exclusiveMinimum": 0}
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "autoResearchMaxConcurrentWorkers", "fleetMaxConcurrentWorkers",
+        "objectWallClockSeconds", "completionGraceSeconds", "rule"
+      ],
+      "properties": {
+        "autoResearchMaxConcurrentWorkers": {"type": "integer", "minimum": 1},
+        "fleetMaxConcurrentWorkers": {"type": "integer", "minimum": 1},
+        "objectWallClockSeconds": {"type": "integer", "minimum": 60, "multipleOf": 60},
+        "completionGraceSeconds": {"type": "integer", "minimum": 60, "multipleOf": 60},
+        "rule": {"const": "zero-provider-failure-candidate+observed-fleet-peak+minute-ceiling"}
+      }
+    },
+    "recordedAt": {"type": "string", "format": "date-time"},
+    "evidenceDigest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "providerCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reportRef", "reportDigest", "resourceSamplesRef", "resourceSamplesDigest",
+        "attempts", "requestedConcurrency", "effectiveConcurrency", "successCount",
+        "provider429Count", "authFailureCount", "true5xxCount",
+        "startupTimeoutCount", "bridgeDisconnectCount",
+        "startupLatencyP95Seconds", "admitted"
+      ],
+      "properties": {
+        "reportRef": {"$ref": "#/$defs/safeRef"},
+        "reportDigest": {"$ref": "#/$defs/digest"},
+        "resourceSamplesRef": {"$ref": "#/$defs/safeRef"},
+        "resourceSamplesDigest": {"$ref": "#/$defs/digest"},
+        "attempts": {"const": 100},
+        "requestedConcurrency": {"type": "integer", "minimum": 1},
+        "effectiveConcurrency": {"type": "integer", "minimum": 1},
+        "successCount": {"type": "integer", "minimum": 0, "maximum": 100},
+        "provider429Count": {"type": "integer", "minimum": 0},
+        "authFailureCount": {"type": "integer", "minimum": 0},
+        "true5xxCount": {"type": "integer", "minimum": 0},
+        "startupTimeoutCount": {"type": "integer", "minimum": 0},
+        "bridgeDisconnectCount": {"type": "integer", "minimum": 0},
+        "startupLatencyP95Seconds": {"type": "number", "minimum": 0},
+        "admitted": {"type": "boolean"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"admitted": {"const": true}}, "required": ["admitted"]},
+          "then": {
+            "properties": {
+              "successCount": {"const": 100},
+              "provider429Count": {"const": 0},
+              "authFailureCount": {"const": 0},
+              "true5xxCount": {"const": 0},
+              "startupTimeoutCount": {"const": 0},
+              "bridgeDisconnectCount": {"const": 0}
+            }
+          }
+        }
+      ]
+    },
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "safeRef": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+    }
+  }
+}

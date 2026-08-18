@@ -113,6 +113,106 @@ def test_article_capacity_requires_quality_receipts_not_rejects_cache_or_manual_
     }
 
 
+def test_article_capacity_excludes_broad_city_page_and_keeps_direct_entity_source():
+    entity = "杭州宋城"
+    fixture = ExecutionFixtureBuilder(
+        ARTICLE_TASK,
+        targets=(
+            {
+                "entityType": "地点/主题乐园",
+                "name": entity,
+                "aliases": ["宋城", "杭州宋城景区"],
+            },
+        ),
+    )
+    fixture.build()
+    entity_dir = execution_entity_object_dir(
+        ARTICLE_TASK,
+        "地点",
+        "主题乐园",
+        entity,
+    )
+    # 本用例断言的是容量判定（宽泛城市页 vs 直接实体页），来源身份只需可归因即可。
+    # article lane 的 sourceAttribution 必须解析到已登记来源，商用游记站点尚未登记，
+    # 所以这里用与 G1 实际入库文章相同的百科身份，避免 fixture 先撞归因门。
+    article_source_contract = {
+        "articleSiteId": "wikipedia_zh",
+        "sourceDiscoveryProfileDigest": "sha256:" + "a" * 64,
+        "articleCommercialAdmission": "commercial_release",
+    }
+    write_source_unit(
+        entity_dir,
+        ordinal=1,
+        source_id="broad_hangzhou_overview",
+        source_md=("西湖、运河、街区与博物馆构成杭州旅游主体。" * 120)
+        + "杭州宋城是之江片区的一处主题项目。",
+        quality={
+            "sourceId": "broad_hangzhou_overview",
+            "quality": "A-story",
+            "score": 9,
+        },
+        platform="旅行平台",
+        source_category="encyclopedia",
+        source_kind="encyclopedia",
+        extractor="wikipedia_api",
+        policy_revision="article-source-registry-v1",
+        source_use_mode="factual_reference_only",
+        rights_mode="factual_reference_only",
+        publish_media_mode="text_only",
+        source_role="base",
+        research_lane="article",
+        url="https://example.com/hangzhou",
+        title="杭州旅游",
+        target_ref=f"/entity/地点/主题乐园/{entity}",
+        source=article_source_contract,
+    )
+    write_source_unit(
+        entity_dir,
+        ordinal=2,
+        source_id="direct_songcheng",
+        source_md=(
+            "宋城位于杭州之江片区。宋城的主题街区与演艺空间共同组织游览，"
+            "杭州宋城的正文主线始终围绕园区展开。"
+        )
+        * 50,
+        quality={
+            "sourceId": "direct_songcheng",
+            "quality": "B-fact",
+            "score": 4,
+        },
+        platform="旅行平台",
+        source_category="encyclopedia",
+        source_kind="encyclopedia",
+        extractor="wikipedia_api",
+        policy_revision="article-source-registry-v1",
+        source_use_mode="factual_reference_only",
+        rights_mode="factual_reference_only",
+        publish_media_mode="text_only",
+        source_role="base",
+        research_lane="article",
+        url="https://example.com/songcheng",
+        title="宋城",
+        target_ref=f"/entity/地点/主题乐园/{entity}",
+        source=article_source_contract,
+    )
+    context = ExecutionContext(
+        execution_id=ARTICLE_TASK,
+        entity_ids=(entity,),
+        spec=fixture.spec(),
+    )
+
+    passed, issues, diagnostics = _content_capacity_gate_for_entity(
+        context,
+        entity,
+    )
+
+    assert passed, issues
+    assert diagnostics["qualifiedArticleBaseSources"] == 1
+    assert diagnostics["pickedArticleBaseSources"] == 1
+    assert diagnostics["articleRejects"]["entity_anchor_mismatch"] == 1
+    assert diagnostics["articleSourceClosure"][0]["sourceId"] == "direct_songcheng"
+
+
 def _write_article_capacity_source_with_two_images(
     entity_dir: Path,
     entity: str,

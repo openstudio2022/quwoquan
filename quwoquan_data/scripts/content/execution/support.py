@@ -33,7 +33,6 @@ from core.data_issue import (
     issue_messages,
 )
 from core.cursor_credentials import cursor_api_key_file, is_cursor_auth_error, resolve_cursor_api_key
-from core.article_commercial_policy import article_commercial_closure_enabled
 from core.execution_branch import execution_branch_issues, execution_branch_payload
 from governance.coverage.entity_extract import require_domain_etype
 from core.image_asset_strategy import (
@@ -80,8 +79,6 @@ from content.execution.context import (
     _MANAGED_AGENT_SUBPROCESS_LOCK,
     _MANAGED_AGENT_SUBPROCESS_PIDS,
     MANAGED_AGENT_TIMEOUT_SECONDS,
-    MANAGED_LANE_LIMITS,
-    MANAGED_LOCAL_CURSOR_MAX_WORKERS,
     MANAGED_SCHEDULER_STALE_SECONDS,
     MAX_MANAGED_INFRA_RETRIES,
     MAX_REACT_REWINDS,
@@ -91,7 +88,6 @@ from content.execution.context import (
     EXECUTION_STATE_CONTRACT,
     _CURSOR_BRIDGE_LAUNCH_COOLDOWN_SECONDS,
     _CURSOR_BRIDGE_READY_DELAY_SECONDS,
-    _managed_local_cursor_worker_cap as _context_managed_local_cursor_worker_cap,
     _normalize_managed_agent_provider,
     _resolve_managed_model,
     _state_path,

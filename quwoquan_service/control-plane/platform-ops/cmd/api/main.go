@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -26,6 +25,7 @@ import (
 	controlplanepersistence "quwoquan_service/internal/platform/controlplane/persistence"
 	"quwoquan_service/internal/platform/pgoutbox"
 	platformredis "quwoquan_service/internal/platform/redis"
+	"quwoquan_service/runtime/artifactidentity"
 	rtauth "quwoquan_service/runtime/auth"
 	runtimeconfig "quwoquan_service/runtime/config"
 	"quwoquan_service/runtime/controlplane"
@@ -35,8 +35,6 @@ import (
 	robs "quwoquan_service/runtime/observability"
 	rtotel "quwoquan_service/runtime/otel"
 	rtredis "quwoquan_service/runtime/redis"
-
-	"gopkg.in/yaml.v3"
 )
 
 type platformService struct {
@@ -75,13 +73,17 @@ func composeConfigInstanceRuntimeHandler(
 	if service == nil || service.store == nil {
 		return nil, errors.New("config instance runtime composition requires state store")
 	}
+	topologySource, err := configrepository.NewTopologySource(
+		service.repoRoot,
+		strings.TrimSpace(os.Getenv("CONFIG_ROOT")),
+	)
+	if err != nil {
+		return nil, err
+	}
 	topologyReader := configreportapp.RuntimeTopologyReaderFunc(func(
 		ctx context.Context,
 	) (configreportapp.RuntimeTopology, error) {
-		if err := ctx.Err(); err != nil {
-			return configreportapp.RuntimeTopology{}, err
-		}
-		current, err := service.readEnvironmentTopology()
+		current, err := topologySource.ReadRuntimeTopology(ctx)
 		if err != nil {
 			return configreportapp.RuntimeTopology{}, err
 		}
@@ -160,6 +162,12 @@ func platformOperatorOIDCRequired(appEnv string) bool {
 }
 
 func main() {
+	if _, err := artifactidentity.LoadAndValidate(
+		os.Getenv("QWQ_ARTIFACT_IDENTITY_FILE"),
+		os.Getenv("APP_ENV"),
+	); err != nil {
+		log.Fatalf("platform-ops-service artifact identity invalid: %v", err)
+	}
 	otelShutdown := rtotel.MustInit(rtotel.Config{ServiceName: "platform-ops-service", SamplingRatio: 0.1})
 	defer otelShutdown()
 
@@ -368,125 +376,6 @@ func main() {
 	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {
 		log.Fatalf("platform-ops-service: %v", err)
 	}
-}
-
-func (s *platformService) readYAMLInto(path string, target any) error {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	return yaml.Unmarshal(data, target)
-}
-
-type environmentTopology struct {
-	Environments map[string]environmentTopologyEnvironment
-	Targets      map[string]environmentTopologyTarget
-}
-
-type environmentTopologyEnvironment struct {
-	Workloads []environmentTopologyWorkload
-}
-
-type environmentTopologyWorkload struct {
-	ID            string
-	Plane         string
-	DeploymentRef string
-}
-
-type environmentTopologyTarget struct {
-	Environment string `yaml:"env"`
-}
-
-func (s *platformService) readEnvironmentTopology() (environmentTopology, error) {
-	topology := environmentTopology{
-		Environments: make(map[string]environmentTopologyEnvironment, 4),
-		Targets:      make(map[string]environmentTopologyTarget),
-	}
-	servicesRoot := filepath.Join(s.repoRoot, "quwoquan_service", "services")
-	services, err := os.ReadDir(servicesRoot)
-	if err != nil {
-		return topology, err
-	}
-	externalRoot := filepath.Join(s.repoRoot, "quwoquan_ops", "external")
-	externals, err := os.ReadDir(externalRoot)
-	if err != nil {
-		return topology, err
-	}
-	for _, environment := range []string{"alpha", "beta", "gamma", "prod"} {
-		entry := environmentTopologyEnvironment{}
-		for _, service := range services {
-			if !service.IsDir() {
-				continue
-			}
-			deployDir := filepath.Join(servicesRoot, service.Name(), "environments", environment, "deploy")
-			if _, statErr := os.Stat(filepath.Join(deployDir, "kustomization.yaml")); statErr != nil {
-				continue
-			}
-			entry.Workloads = append(entry.Workloads, environmentTopologyWorkload{
-				ID:            service.Name(),
-				Plane:         workloadPlane(service.Name()),
-				DeploymentRef: repositoryRelativePath(s.repoRoot, deployDir),
-			})
-		}
-		for _, external := range externals {
-			if !external.IsDir() {
-				continue
-			}
-			deployDir := filepath.Join(externalRoot, external.Name(), "environments", environment)
-			if _, statErr := os.Stat(filepath.Join(deployDir, "kustomization.yaml")); statErr != nil {
-				continue
-			}
-			entry.Workloads = append(entry.Workloads, environmentTopologyWorkload{
-				ID:            external.Name(),
-				Plane:         workloadPlane(external.Name()),
-				DeploymentRef: repositoryRelativePath(s.repoRoot, deployDir),
-			})
-		}
-		platformDeployDir := filepath.Join(s.repoRoot, "quwoquan_ops", "platform", "deploy", "base")
-		if _, statErr := os.Stat(filepath.Join(platformDeployDir, "kustomization.yaml")); statErr == nil {
-			entry.Workloads = append(entry.Workloads, environmentTopologyWorkload{
-				ID:            "platform-ops-service",
-				Plane:         "service",
-				DeploymentRef: repositoryRelativePath(s.repoRoot, platformDeployDir),
-			})
-		}
-		sort.Slice(entry.Workloads, func(i, j int) bool {
-			return entry.Workloads[i].ID < entry.Workloads[j].ID
-		})
-		topology.Environments[environment] = entry
-
-		var runtime struct {
-			Targets map[string]environmentTopologyTarget `yaml:"targets"`
-		}
-		if err := s.readYAMLInto(
-			filepath.Join(s.repoRoot, "quwoquan_ops", "environments", environment, "runtime.yaml"),
-			&runtime,
-		); err != nil {
-			return topology, err
-		}
-		for targetID, target := range runtime.Targets {
-			topology.Targets[targetID] = target
-		}
-	}
-	return topology, nil
-}
-
-func workloadPlane(workloadID string) string {
-	if workloadID == "realtime-gateway" {
-		return "edge"
-	}
-	if workloadID == "rtc-service" || workloadID == "coturn" || workloadID == "livekit" {
-		return "media"
-	}
-	return "service"
-}
-
-func repositoryRelativePath(repositoryRoot, target string) string {
-	relativePath, err := filepath.Rel(repositoryRoot, target)
-	if err != nil {
-		return filepath.ToSlash(target)
-	}
-	return filepath.ToSlash(relativePath)
 }
 
 func resolveRepoRoot() string {

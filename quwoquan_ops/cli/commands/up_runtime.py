@@ -162,6 +162,9 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
             }
         # Local start scripts must never compile or re-package the workspace.
         args.skip_build = True
+        env["QWQ_FIXED_CANDIDATE_ROOT"] = str(
+            fixed_candidate_snapshot["candidateDir"]
+        )
     bounded_reuse = _stackctl._reuse_running_full_for_bounded_workload(
         args,
         candidate_snapshot=fixed_candidate_snapshot,

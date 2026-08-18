@@ -84,6 +84,7 @@ void main() {
       );
 
       expect(readiness.isReady, isTrue);
+      expect(readiness.retryAfterSeconds, 0);
       expect(otp.deliveryStatus, OtpDeliveryStatus.queued);
       expect(alipay.authorizationPayload, 'signed-authorization');
       expect(oneTap.state, 'ready');
@@ -111,6 +112,38 @@ void main() {
         'platform': 'ios',
       });
       expect(executor.calls[3].payload.body, containsPair('vendor', 'aliyun'));
+    },
+  );
+
+  test(
+    'OTP readiness maps bounded unavailable wire without provider details',
+    () async {
+      final executor = CloudOperationRoutingRecorder(
+        responseFor: (_) => <String, Object?>{
+          'availability': 'temporarily_unavailable',
+          'retryAfterSeconds': 5,
+        },
+      );
+      final writer = RemoteAuthenticationChallengeCommandWriter(
+        client: GeneratedCloudOperationClient(executor),
+        invocationContext: (clientPageId, {String? idempotencyKey}) =>
+            CloudOperationInvocationContext(
+              surfaceId: 'login',
+              clientPageId: clientPageId,
+              actor: const CloudOperationActorContext(),
+            ),
+      );
+
+      final readiness = await writer.getOtpDeliveryReadiness();
+
+      expect(readiness.isReady, isFalse);
+      expect(readiness.retryAfterSeconds, 5);
+      expect(executor.calls, hasLength(1));
+      expect(
+        executor.calls.single.operation.canonicalOperationId,
+        AppCloudOperationIds
+            .userAuthenticationChallengeGetOtpDeliveryReadiness,
+      );
     },
   );
 }

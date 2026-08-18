@@ -10,7 +10,7 @@ void main() {
   setUpAll(() async {
     final loader = FontLoader('Noto Sans SC')
       ..addFont(
-        rootBundle.load('assets/fonts/noto_sans_sc/NotoSansSC[wght].ttf'),
+        rootBundle.load('assets/fonts/noto_sans_sc/NotoSansSC-wght.ttf'),
       );
     await loader.load();
   });

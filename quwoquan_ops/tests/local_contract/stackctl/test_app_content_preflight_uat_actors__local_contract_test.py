@@ -18,6 +18,49 @@ from quwoquan_ops.tests.support.app_content_preflight_test_support import (
 
 
 class AppContentPreflightUatActorsTest(unittest.TestCase):
+    def test_patrol_screenshot_evidence_requires_an_in_run_page_marker(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            screenshot = root / "after.png"
+            screenshot.write_bytes(b"real-page-frame")
+            report = root / "report.json"
+            payload = {
+                "status": "passed",
+                "runs": [
+                    {
+                        "exitCode": 0,
+                        "evidence": {
+                            "afterScreenshot": {
+                                "status": "captured",
+                                "path": str(screenshot),
+                            }
+                        },
+                    }
+                ],
+            }
+            report.write_text(json.dumps(payload), encoding="utf-8")
+
+            old_host_capture = stackctl._app_content_patrol_evidence(str(report))
+            self.assertEqual(old_host_capture["screenshotDigest"], "")
+            self.assertEqual(old_host_capture["screenshotMarker"], {})
+
+            payload["runs"][0]["evidence"]["afterScreenshot"].update(
+                {
+                    "capturedDuringPatrol": True,
+                    "marker": {
+                        "environment": "alpha",
+                        "suite": "homepage-feed",
+                        "route": "/",
+                        "terminalKey": "home-feed-card-0",
+                    },
+                }
+            )
+            report.write_text(json.dumps(payload), encoding="utf-8")
+            live_capture = stackctl._app_content_patrol_evidence(str(report))
+
+        self.assertRegex(live_capture["screenshotDigest"], r"^sha256:[0-9a-f]{64}$")
+        self.assertEqual(live_capture["screenshotMarker"]["suite"], "homepage-feed")
+
     def test_research_preflight_uses_research_readiness_without_lifecycle_exit(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             report_dir = Path(temporary_directory) / "research-report"
@@ -328,12 +371,9 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                 result["appUatEnvelopeDigest"],
                 r"^sha256:[0-9a-f]{64}$",
             )
-            # 套件矩阵：homepage-feed / profile-journey / app-core-readback /
-            # home-video-playback / video-playback-{start,middle,end} /
-            # controlled-edge-recovery = 8 suites + 1 direct-flutter-run，
-            # 共 9 runs × 3 环境。
-            self.assertEqual(len(result["runs"]), 30)
-            self.assertEqual(run.call_count, 27)
+            # 每环境 5 个页面 P0 suite + release probe + direct Flutter run。
+            self.assertEqual(len(result["runs"]), 21)
+            self.assertEqual(run.call_count, 18)
             self.assertEqual(result["appUatPlan"], uat_plan)
             direct_calls = [
                 call
@@ -342,8 +382,21 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
             ]
             self.assertEqual(len(direct_calls), 3)
             for call in direct_calls:
-                self.assertIn("direct_flutter_run", call.args[0])
-                self.assertIn("--preflight-only", call.args[0])
+                direct_argv = call.args[0]
+                self.assertIn("direct_flutter_run", direct_argv)
+                self.assertIn("--preflight-only", direct_argv)
+                timeout_argument = direct_argv.index("--ready-timeout-seconds")
+                self.assertEqual(
+                    direct_argv[timeout_argument + 1],
+                    "900",
+                )
+                cold_native_argument = direct_argv.index(
+                    "--max-cold-native-safe-terminal-ms"
+                )
+                self.assertEqual(
+                    direct_argv[cold_native_argument + 1],
+                    "12000",
+                )
             patrol_calls = [
                 call for call in run.call_args_list if call not in direct_calls
             ]
@@ -351,6 +404,14 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                 self.assertIn("--platform", call.args[0])
                 self.assertIn("ios", call.args[0])
                 self.assertIn("--dry-run", call.args[0])
+                environment = call.kwargs.get("env") or {}
+                is_profile = "app-content-profile-journey" in " ".join(
+                    map(str, call.args[0])
+                )
+                self.assertEqual(
+                    environment.get("QWQ_APP_CONTENT_PROFILE_P0_ONLY"),
+                    "true" if is_profile else None,
+                )
             core_calls = [
                 call
                 for call in patrol_calls
@@ -369,6 +430,12 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                     call.args[0],
                 )
                 self.assertIn("avatar-a", call.args[0])
+                self.assertEqual(
+                    (call.kwargs.get("env") or {}).get(
+                        "QWQ_APP_CONTENT_VIDEO_PAGE_COUNT"
+                    ),
+                    "20",
+                )
             profile_journey_calls = [
                 call
                 for call in smoke_profile.call_args_list
@@ -380,6 +447,30 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                     call.kwargs.get("patrol_target"),
                     stackctl.PROFILE_JOURNEY_UAT_TEST_TARGET,
                 )
+            message_calls = [
+                call
+                for call in smoke_profile.call_args_list
+                if call.kwargs.get("suite_name") == "app-content-message-home"
+            ]
+            self.assertEqual(len(message_calls), 3)
+            for call in message_calls:
+                self.assertEqual(
+                    call.kwargs.get("patrol_target"),
+                    stackctl.MESSAGE_HOME_UAT_TEST_TARGET,
+                )
+            planned_messages = [
+                item for item in result["runs"] if item.get("suite") == "message-home"
+            ]
+            self.assertEqual(len(planned_messages), 3)
+            self.assertTrue(
+                all(item.get("typedTestDataConversation") for item in planned_messages)
+            )
+            self.assertTrue(
+                all(
+                    (item.get("testDataScope") or {}).get("status") == "planned"
+                    for item in planned_messages
+                )
+            )
             home_video_calls = [
                 call
                 for call in smoke_profile.call_args_list
@@ -393,6 +484,42 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                     stackctl.HOME_VIDEO_PLAYBACK_UAT_TEST_TARGET,
                 )
                 self.assertIsNotNone(call.kwargs.get("data_readiness_path"))
+            executed_home_video_calls = [
+                call
+                for call in patrol_calls
+                if "app-content-home-video-playback"
+                in " ".join(map(str, call.args[0]))
+            ]
+            self.assertEqual(len(executed_home_video_calls), 3)
+            for call in executed_home_video_calls:
+                self.assertIn("--data-release-id", call.args[0])
+                self.assertIn("release-a", call.args[0])
+            planned_suite_names = [
+                str(call.kwargs.get("suite_name") or "")
+                for call in smoke_profile.call_args_list
+            ]
+            home_video_positions = [
+                index
+                for index, suite_name in enumerate(planned_suite_names)
+                if suite_name == "app-content-home-video-playback"
+            ]
+            app_core_positions = [
+                index
+                for index, suite_name in enumerate(planned_suite_names)
+                if suite_name == "app-content-app-core-readback"
+            ]
+            self.assertEqual(len(home_video_positions), len(app_core_positions))
+            self.assertTrue(
+                all(
+                    home_video < app_core
+                    for home_video, app_core in zip(
+                        home_video_positions,
+                        app_core_positions,
+                        strict=True,
+                    )
+                ),
+                "video progress evidence must run before a video-book content gap",
+            )
             video_canary_calls = [
                 call
                 for call in smoke_profile.call_args_list
@@ -400,14 +527,7 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                     "app-content-video-playback-"
                 )
             ]
-            self.assertEqual(len(video_canary_calls), 9)
-            self.assertEqual(
-                {
-                    str(call.kwargs.get("release_video_work_id"))
-                    for call in video_canary_calls
-                },
-                {"video-01", "video-11", "video-20"},
-            )
+            self.assertEqual(video_canary_calls, [])
             planned_search = [
                 item
                 for item in result["runs"]
@@ -423,9 +543,144 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                 if "app-content-controlled-edge-recovery"
                 in " ".join(map(str, call.args[0]))
             ]
-            self.assertEqual(len(fault_calls), 3)
-            for call in fault_calls:
-                self.assertIn("--stackctl-controlled-edge-fault", call.args[0])
+            self.assertEqual(fault_calls, [])
+            self.assertEqual(
+                {
+                    str(call.kwargs.get("suite_name") or "")
+                    for call in smoke_profile.call_args_list
+                },
+                {
+                    "app-content-homepage-feed",
+                    "app-content-profile-journey",
+                    "app-content-message-home",
+                    "app-content-home-video-playback",
+                    "app-content-app-core-readback",
+                },
+            )
+
+    def test_android_content_uat_does_not_repeat_content_live_launcher_gate(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            report_dir = Path(temporary_directory) / "android-uat"
+            readiness_path = Path(temporary_directory) / "readiness.json"
+            call_order: list[str] = []
+            preflight = {
+                "exitCode": 0,
+                "target": "beta-local",
+                "environment": "beta",
+                "launchPolicy": "test_live",
+                "contentBindingState": "bound",
+                "packageBaseline": "",
+                "releaseId": "beta-research-pool8",
+                "manifestDigest": "sha256:" + "5" * 64,
+                "readinessReceiptRef": str(readiness_path),
+                "readinessReceiptDigest": "sha256:" + "6" * 64,
+                "appUatEnvelope": {
+                    "releaseId": "beta-research-pool8",
+                    "videoWorkId": "video-01",
+                },
+                "appUatPlan": {
+                    "releaseId": "beta-research-pool8",
+                    "videoPagination": {"expectedWorkIds": ["video-01"]},
+                },
+            }
+
+            def smoke_command(
+                _environment: str,
+                target: str,
+                _report_dir: Path,
+                **kwargs: object,
+            ) -> dict[str, object]:
+                return {
+                    "argv": ["patrol", str(kwargs["suite_name"])],
+                    "cwd": Path(temporary_directory),
+                    "reportPath": f"reports/{target}-{kwargs['suite_name']}.json",
+                }
+
+            def execute(
+                argv: list[str], **_kwargs: object
+            ) -> subprocess.CompletedProcess[str]:
+                raise AssertionError(
+                    "Android page UAT must not repeat the content-live "
+                    f"launcher gate: {argv}"
+                )
+
+            def run_patrol(
+                *_args: object, **_kwargs: object
+            ) -> subprocess.CompletedProcess[str]:
+                call_order.append("patrol")
+                return subprocess.CompletedProcess(["patrol"], 0, "", "")
+
+            with (
+                patch.object(
+                    stackctl,
+                    "command_app_debug_preflight",
+                    return_value=preflight,
+                ),
+                patch.object(
+                    stackctl,
+                    "_app_content_test_live_runtime_binding",
+                    return_value={"target": "beta-local"},
+                ),
+                patch.object(
+                    stackctl,
+                    "_run_app_content_release_probe",
+                    return_value={
+                        "target": "beta-local",
+                        "suite": "release-bound-readback",
+                        "exitCode": 0,
+                    },
+                ),
+                patch.object(
+                    stackctl,
+                    "_app_content_test_live_actor_context",
+                    return_value=None,
+                ),
+                patch.object(
+                    stackctl,
+                    "_environment_page_smoke_profile_command",
+                    side_effect=smoke_command,
+                ),
+                patch.object(
+                    stackctl,
+                    "_run_profile_command",
+                    side_effect=run_patrol,
+                ),
+                patch.object(
+                    stackctl,
+                    "_run_app_content_message_home_command",
+                    side_effect=lambda *_args, **_kwargs: (run_patrol(), {}),
+                ),
+                patch.object(
+                    stackctl,
+                    "_app_content_patrol_evidence",
+                    return_value={},
+                ),
+                patch.object(
+                    stackctl,
+                    "_app_content_experience_screenshot_digests",
+                    return_value={
+                        "homepage-feed": "sha256:" + "1" * 64,
+                        "app-core-readback": "sha256:" + "2" * 64,
+                        "message-home": "sha256:" + "3" * 64,
+                        "profile-journey": "sha256:" + "4" * 64,
+                    },
+                ),
+                patch.object(stackctl, "run", side_effect=execute),
+            ):
+                result = stackctl._command_app_content_uat(
+                    stackctl.argparse.Namespace(
+                        targets="beta-local",
+                        platform="android",
+                        device_id="emulator-5556",
+                        dry_run=False,
+                        report_dir=str(report_dir),
+                    )
+                )
+
+        self.assertEqual(result["exitCode"], 0)
+        self.assertEqual(call_order, ["patrol"] * 5)
 
     def test_app_content_uat_rejects_nonrunning_or_unbound_test_live(self) -> None:
         preflight = {
@@ -463,6 +718,8 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
     def test_app_content_uat_typed_actor_policy_matches_runner_contract(self) -> None:
         alpha_targets = {
             stackctl.DISCOVERY_FEED_UAT_TEST_TARGET,
+            stackctl.PROFILE_JOURNEY_UAT_TEST_TARGET,
+            stackctl.MESSAGE_HOME_UAT_TEST_TARGET,
             stackctl.APP_CORE_READBACK_UAT_TEST_TARGET,
             stackctl.HOME_VIDEO_PLAYBACK_UAT_TEST_TARGET,
             stackctl.VIDEO_PLAYBACK_CANARY_UAT_TEST_TARGET,
@@ -473,18 +730,18 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                 stackctl._app_content_uat_requires_typed_actor("alpha", target)
             )
         for environment in ("beta", "gamma"):
-            self.assertTrue(
-                stackctl._app_content_uat_requires_typed_actor(
-                    environment,
-                    stackctl.APP_CORE_READBACK_UAT_TEST_TARGET,
+            for target in (
+                stackctl.PROFILE_JOURNEY_UAT_TEST_TARGET,
+                stackctl.MESSAGE_HOME_UAT_TEST_TARGET,
+                stackctl.APP_CORE_READBACK_UAT_TEST_TARGET,
+                stackctl.HOME_VIDEO_PLAYBACK_UAT_TEST_TARGET,
+            ):
+                self.assertTrue(
+                    stackctl._app_content_uat_requires_typed_actor(
+                        environment,
+                        target,
+                    )
                 )
-            )
-            self.assertTrue(
-                stackctl._app_content_uat_requires_typed_actor(
-                    environment,
-                    stackctl.HOME_VIDEO_PLAYBACK_UAT_TEST_TARGET,
-                )
-            )
             for target in (
                 stackctl.DISCOVERY_FEED_UAT_TEST_TARGET,
                 stackctl.VIDEO_PLAYBACK_CANARY_UAT_TEST_TARGET,
@@ -497,6 +754,69 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                     )
                 )
 
+    def test_experience_screenshots_are_complete_and_distinct(self) -> None:
+        suites = (
+            "homepage-feed",
+            "app-core-readback",
+            "message-home",
+            "profile-journey",
+        )
+        runs = [
+            {
+                "target": "alpha-local",
+                "suite": suite,
+                "exitCode": 0,
+                "evidence": {
+                    "screenshotDigest": f"sha256:{index:064x}",
+                    "screenshotMarker": {
+                        "environment": "alpha",
+                        "suite": suite,
+                        "route": f"/terminal/{suite}",
+                        "terminalKey": f"terminal-{suite}",
+                    },
+                },
+            }
+            for index, suite in enumerate(suites, start=1)
+        ]
+        self.assertEqual(
+            set(
+                stackctl._app_content_experience_screenshot_digests(
+                    runs,
+                    target="alpha-local",
+                )
+            ),
+            set(suites),
+        )
+        runs[-1]["evidence"]["screenshotDigest"] = runs[0]["evidence"][
+            "screenshotDigest"
+        ]
+        with self.assertRaisesRegex(ValueError, "must be distinct"):
+            stackctl._app_content_experience_screenshot_digests(
+                runs,
+                target="alpha-local",
+            )
+        runs[-1]["evidence"] = {"screenshotDigest": ""}
+        with self.assertRaisesRegex(ValueError, "route/key marker"):
+            stackctl._app_content_experience_screenshot_digests(
+                runs,
+                target="alpha-local",
+            )
+        runs[-1]["evidence"] = {
+            "screenshotDigest": "sha256:" + "4" * 64,
+            "screenshotMarker": {
+                "environment": "alpha",
+                "suite": suites[-1],
+                "route": "/user/example",
+                "terminalKey": "profile-header-avatar",
+            },
+        }
+        runs[-1]["evidence"]["screenshotDigest"] = ""
+        with self.assertRaisesRegex(ValueError, "digest is missing"):
+            stackctl._app_content_experience_screenshot_digests(
+                runs,
+                target="alpha-local",
+            )
+
     def test_app_content_uat_actor_context_binds_runtime_release_and_otp(self) -> None:
         manifest_digest = "sha256:" + "7" * 64
         startup_attempt_id = "alpha-test-live-current"
@@ -507,7 +827,7 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
             "releaseId": "release-a",
             "verifyRunId": "verify-a",
             "manifestDigest": manifest_digest,
-            "readinessPhase": "research",
+            "readinessPhase": "consumer",
             "startupIdentity": {
                 "sourceRevision": "a" * 40,
                 "mutableStateDigest": "sha256:" + "1" * 64,
@@ -542,11 +862,18 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                 "releaseId": "release-a",
                 "verifyRunId": "verify-a",
                 "manifestDigest": manifest_digest,
-                "readinessPhase": "research",
+                "readinessPhase": "consumer",
                 "releaseClass": "research",
                 "productLifecycleState": "research",
                 "importRunId": "import-a",
-                "sourceRevision": "a" * 40,
+                "sourceIdentities": [
+                    {
+                        "sourceRevision": "sha256:" + "5" * 64,
+                        "sourceDigest": "sha256:" + "6" * 64,
+                        "entityCatalogDigest": "sha256:" + "8" * 64,
+                        "executionIds": ["execution-a"],
+                    }
+                ],
                 "postIds": ["post-a"],
                 "creatorIds": ["creator-a"],
                 "entityRefs": ["entity-a"],
@@ -564,6 +891,7 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
 
         self.assertEqual(context.candidate.baseline_id, "sha256:" + "1" * 64)
         self.assertEqual(context.candidate.package_digest, "sha256:" + "2" * 64)
+        self.assertEqual(context.candidate.readiness_phase, "consumer")
         self.assertEqual(
             tuple(item.object_id for item in context.candidate.release_posts),
             ("post-a",),
@@ -576,4 +904,3 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
             ],
             context.candidate.digest,
         )
-

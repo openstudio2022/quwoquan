@@ -1,4 +1,4 @@
-"""Atomic four-lane writer for immutable campaign request envelopes."""
+"""Atomic active-workload writer for immutable campaign request envelopes."""
 
 from __future__ import annotations
 
@@ -11,16 +11,27 @@ from core import paths
 from core.io import read_json, write_json
 from core.schema import assert_valid
 
-from content.execution.campaign.lane import CAMPAIGN_CARRIERS
+from content.execution.campaign.lane import (
+    CAMPAIGN_CARRIERS,
+    normalize_active_carriers,
+    normalize_workloads,
+)
 from content.execution.campaign.request_envelope import (
-    _OPERATIONS,
     _require_stable_source_inputs,
+    _sha256,
     build_envelope,
     envelope_path,
 )
-from content.execution.campaign.scale import CampaignScaleError, resolve_campaign_scale
+from content.execution.campaign.scale import (
+    CampaignScaleError,
+    campaign_workload_targets,
+    resolve_campaign_scale,
+)
 from content.execution.identity import parse_execution_id
 from content.execution.model_contract import DEFAULT_SEMANTIC_SELECTION_ID
+from content.execution.planning.capacity_policy import (
+    derive_workload_capacity_fields,
+)
 
 
 def _reconciliation_inputs(
@@ -42,32 +53,57 @@ def _reconciliation_inputs(
         output_root=output_root,
     )
     submissions = receipt.get("submissions")
-    if not isinstance(submissions, Mapping) or set(submissions) != set(
-        CAMPAIGN_CARRIERS
-    ):
+    if not isinstance(submissions, Mapping) or not submissions:
         raise ValueError("campaign predecessor reconciliation is incomplete")
-    predecessors = {
-        carrier: str(submissions[carrier]["executionId"])
-        for carrier in CAMPAIGN_CARRIERS
+    active = normalize_active_carriers(receipt.get("activeCarriers") or ())
+    if not set(submissions) <= set(active):
+        raise ValueError("campaign predecessor reconciliation carriers are invalid")
+    absence_rows = {
+        str(row.get("carrier") or ""): str(row.get("executionId") or "")
+        for row in (receipt.get("executionEvidence") or {}).get("lanes") or []
+        if isinstance(row, Mapping)
     }
-    targets = tuple(submissions["homepage"]["targetNames"])
+    predecessors = {
+        carrier: (
+            str(submissions[carrier]["executionId"])
+            if carrier in submissions
+            else absence_rows.get(carrier, "")
+        )
+        for carrier in active
+    }
+    if any(not execution_id for execution_id in predecessors.values()):
+        raise ValueError("campaign predecessor reconciliation executionIds are incomplete")
+    first_carrier = active[0]
+    targets = tuple(submissions[first_carrier]["targetNames"])
     if any(
         tuple(submissions[carrier]["targetNames"]) != targets
-        for carrier in CAMPAIGN_CARRIERS
+        for carrier in active
     ):
         raise ValueError("campaign predecessor reconciliation targetNames drift")
     if tuple(sorted(set(targets))) != targets:
         raise ValueError(
             "campaign predecessor reconciliation targetNames are not canonical"
         )
-    if retry_predecessors and dict(retry_predecessors) != predecessors:
-        raise ValueError(
-            "campaign retry predecessors differ from reconciliation receipt"
+    reason = receipt.get("reason")
+    retry_subset_allowed = reason == "terminal_unpublished_retryable_shortfall"
+    if retry_predecessors:
+        supplied = dict(retry_predecessors)
+        valid = (
+            all(predecessors.get(carrier) == execution_id for carrier, execution_id in supplied.items())
+            and (
+                set(supplied) <= set(predecessors)
+                if retry_subset_allowed
+                else supplied == predecessors
+            )
         )
+        if not valid:
+            raise ValueError(
+                "campaign retry predecessors differ from reconciliation receipt"
+            )
     requested = tuple(
         sorted({str(item).strip() for item in target_names if str(item).strip()})
     )
-    if requested and requested != targets:
+    if requested and requested != targets and not retry_subset_allowed:
         raise ValueError(
             "campaign retry targetNames differ from reconciliation receipt"
         )
@@ -77,8 +113,8 @@ def _reconciliation_inputs(
             "campaign predecessor reconciliation original identity is invalid"
         )
     return (
-        predecessors,
-        targets,
+        (dict(retry_predecessors) if retry_subset_allowed else predecessors),
+        (requested if retry_subset_allowed else targets),
         envelope_contract.reconciliation_reference(
             receipt_path,
             output_root=output_root,
@@ -115,6 +151,7 @@ def _assert_one_source_identity(
     if reason in {
         "mixed_finalized_partial_terminal",
         "terminal_unpublished_source_drift",
+        "terminal_unpublished_retryable_shortfall",
     }:
         observed_identity = predecessor_reconciliation_receipt.get(
             "observedSourceIdentity"
@@ -132,7 +169,7 @@ def _assert_one_source_identity(
             )
         if (
             predecessor_reconciliation_receipt.get("retryPolicy")
-            != "new_four_lane_execution_with_retryOf"
+            != "active_workload_execution_with_retryOf"
             or execution_evidence.get("excludedFromRetryRelease") is not True
             or execution_evidence.get("eligibleForRelease") is not False
         ):
@@ -146,14 +183,18 @@ def _assert_one_source_identity(
             "entityCatalogDigest": current["entityCatalogDigest"],
         }
         if (
-            reason == "terminal_unpublished_source_drift"
+            reason
+            in {
+                "terminal_unpublished_source_drift",
+                "terminal_unpublished_retryable_shortfall",
+            }
             and current_identity != observed_identity
         ):
             raise ValueError(
                 "campaign terminal unpublished retry source identity drifted"
             )
         # The receipt binds the old mixed terminal boundary.  A retry is a fresh
-        # four-lane execution and may intentionally use a superseding handoff
+        # active-workload execution and may intentionally use a superseding handoff
         # after a source fix; the old objects remain provenance only and are
         # never carried into the retry release.
         return
@@ -199,64 +240,22 @@ def _assert_one_handoff_identity(
         )
 
 
-def _assert_one_capacity_plan(
+def _assert_workload_plans(
     payloads: Mapping[str, Mapping[str, Any]],
 ) -> None:
-    digests = {str(payload["capacityPlanDigest"]) for payload in payloads.values()}
-    if len(digests) != 1:
-        raise ValueError(
-            "campaign capacity plan changed while freezing carriers"
+    for payload in payloads.values():
+        work_unit_count = int(payload["quota"])
+        expected = derive_workload_capacity_fields(
+            target_scale=str(payload["scale"]),
+            carrier=str(payload["carrier"]),
+            work_unit_count=work_unit_count,
         )
-    if any(
-        isinstance(payload.get("requiredWorkers"), bool)
-        or int(payload.get("requiredWorkers") or 0) < 1
-        or int(payload.get("partitionCount") or 0) not in {16, 32, 64, 128, 256}
-        for payload in payloads.values()
-    ):
-        raise ValueError("campaign capacity plan contains an invalid lane binding")
-    bindings = [payload.get("workerHostSetBinding") for payload in payloads.values()]
-    if not any(binding is not None for binding in bindings):
-        if any(str(payload.get("scale")) == "M10000" for payload in payloads.values()):
-            raise ValueError("M10000 governed capacity requires every lane host binding")
-        return
-    if (
-        any(str(payload.get("scale")) not in {"M1000", "M10000"} for payload in payloads.values())
-        or not all(isinstance(binding, Mapping) for binding in bindings)
-    ):
-        raise ValueError(
-            "explicit governed campaign capacity requires every lane host binding"
-        )
-    identities = {
-        (
-            str(binding["hostSetId"]),
-            int(binding["generation"]),
-            str(binding["fencingToken"]),
-            str(binding["hostSetDigest"]),
-            json.dumps(binding["transportBinding"], sort_keys=True),
-        )
-        for binding in bindings
-        if isinstance(binding, Mapping)
-    }
-    if len(identities) != 1:
-        raise ValueError("campaign worker host-set identity changed across carriers")
-    for payload, binding in zip(payloads.values(), bindings, strict=True):
-        assert isinstance(binding, Mapping)
-        hosts = binding.get("hosts")
-        if not isinstance(hosts, list) or not hosts:
-            raise ValueError("campaign lane host assignments are missing")
-        partitions = [
-            int(partition)
-            for host in hosts
-            if isinstance(host, Mapping)
-            for partition in host.get("partitionKeys") or []
-        ]
-        if (
-            len(partitions) != len(set(partitions))
-            or sorted(partitions) != list(range(int(payload["partitionCount"])))
-            or sum(int(host["workerCount"]) for host in hosts)
-            != int(payload["requiredWorkers"])
-        ):
-            raise ValueError("campaign lane host/partition assignment drift")
+        if any(
+            payload.get(key) != value
+            for key, value in expected.items()
+            if key != "workerHostSetBinding"
+        ) or payload.get("workerHostSetBinding") is not None:
+            raise ValueError("campaign workload plan drift")
 
 
 def _assert_one_scale_source_pool(
@@ -280,10 +279,6 @@ def _assert_one_scale_source_pool(
             raise ValueError(
                 "DATA.SOURCE.POOL_SHORTFALL: incomplete campaign pool binding"
             )
-        if scale == "M10000":
-            raise ValueError(
-                "DATA.SOURCE.POOL_SHORTFALL: M10000 campaign requires source pool"
-            )
         return
     if scale in {"M100", "M1000", "M10000"}:
         if len(bindings) != 1 or len(evidence_refs) != 1 or "" in evidence_refs:
@@ -292,34 +287,24 @@ def _assert_one_scale_source_pool(
             str((payload.get("sourcePoolSelection") or {}).get("carrier") or "")
             for payload in payloads.values()
         }
-        if carriers != set(CAMPAIGN_CARRIERS):
+        if carriers != set(payloads):
             raise ValueError("DATA.SOURCE.POOL_SHORTFALL: lane pool selections incomplete")
+        first = next(iter(payloads.values()))
+        binding = first.get("scaleSourcePool") or {}
+        if (
+            binding.get("workloadMode") == "explicit"
+            and (
+                binding.get("activeCarriers") != list(payloads)
+                or binding.get("workloadTargets") != first.get("workloads")
+            )
+        ):
+            raise ValueError(
+                "DATA.SOURCE.POOL_SHORTFALL: pool workloadTargets drift"
+            )
     elif bindings != {"null"} or evidence_refs != {""}:
         raise ValueError(
             "DATA.SOURCE.POOL_SHORTFALL: below-M100 forbids source pool binding"
         )
-
-
-def _assert_one_m100_alpha_acceptance(
-    payloads: Mapping[str, Mapping[str, Any]], *, scale: str
-) -> None:
-    bindings = {
-        json.dumps(
-            payload.get("m100AlphaAcceptance"),
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        )
-        for payload in payloads.values()
-    }
-    if scale == "M1000":
-        if len(bindings) != 1 or bindings == {"null"}:
-            raise ValueError(
-                "DATA.SCALE.ALPHA_M100_ACCEPTANCE_DRIFT: lanes must share one "
-                "verified M100 Alpha acceptance"
-            )
-    elif bindings != {"null"}:
-        raise ValueError("only M1000 lanes may bind M100 Alpha acceptance")
 
 
 def write_scale_envelopes(
@@ -332,37 +317,60 @@ def write_scale_envelopes(
     target_names: Iterable[str] | None = None,
     source_providers: Iterable[str] | None = None,
     family_ref: str | None = None,
-    carriers: Iterable[str] = CAMPAIGN_CARRIERS,
+    carriers: Iterable[str] | None = None,
+    workloads: Mapping[str, int] | None = None,
     repo_root: Path | None = None,
     output_root: Path | None = None,
     day: str | None = None,
     sequence: int = 1,
     semantic_selection_id: str = DEFAULT_SEMANTIC_SELECTION_ID,
     semantic_preflight_receipt: Path | None = None,
-    capacity_host_set: Path | None = None,
     semantic_preflight_output_root: Path | None = None,
     predecessor_execution_ids_by_carrier: Mapping[str, str] | None = None,
     predecessor_reconciliation_receipt: Path | None = None,
     reconciliation_output_root: Path | None = None,
     promotion_receipt: Path | None = None,
     promotion_output_root: Path | None = None,
-    alpha_m100_readiness_receipt: Path | None = None,
-    alpha_m100_app_uat_receipt: Path | None = None,
-    alpha_m100_acceptance_output_root: Path | None = None,
     pre_acquisition_handoff: Path | None = None,
     pre_acquisition_handoff_output_root: Path | None = None,
     external_input_refs_by_carrier: Mapping[str, Iterable[Mapping[str, Any]]] | None = None,
     acquisition_root: Path | None = None,
     scale_source_pool: Path | None = None,
     source_pool_evidence_root: Path | None = None,
+    retry_evidence_output_root: Path | None = None,
 ) -> dict[str, Path]:
     """Write immutable envelopes for selected carriers at one resolved scale."""
 
-    resolved = resolve_campaign_scale(scale=scale, quota=quota)
-    selected = tuple(carriers) or CAMPAIGN_CARRIERS
-    unknown = [carrier for carrier in selected if carrier not in _OPERATIONS]
-    if unknown:
-        raise ValueError(f"unsupported carriers: {unknown}")
+    requested_workloads = dict(workloads or {})
+    resolved = resolve_campaign_scale(
+        scale=scale,
+        quota=(
+            quota
+            if quota is not None
+            else (max(requested_workloads.values()) if scale is None and requested_workloads else None)
+        ),
+    )
+    if requested_workloads:
+        selected = normalize_active_carriers(
+            carriers if carriers is not None else requested_workloads
+        )
+        exact_workloads = normalize_workloads(
+            requested_workloads,
+            active_carriers=selected,
+        )
+        workload_mode = "explicit"
+    else:
+        selected = normalize_active_carriers(carriers or CAMPAIGN_CARRIERS)
+        is_milestone_preset = (
+            selected == CAMPAIGN_CARRIERS
+            and resolved.scale in {"M100", "M1000", "M10000"}
+        )
+        workload_mode = "milestone_preset" if is_milestone_preset else "explicit"
+        exact_workloads = (
+            campaign_workload_targets(resolved.scale)
+            if is_milestone_preset
+            else {carrier: resolved.quota for carrier in selected}
+        )
     retry_predecessors = dict(predecessor_execution_ids_by_carrier or {})
     target_input = tuple(target_names or ())
     predecessor_reconciliation: dict[str, Any] | None = None
@@ -385,14 +393,10 @@ def write_scale_envelopes(
         )
     if sequence == 1 and retry_predecessors:
         raise ValueError("campaign envelope sequence=1 forbids retry predecessors")
-    required = set(CAMPAIGN_CARRIERS)
-    if retry_predecessors and (
-        len(selected) != len(required)
-        or set(selected) != required
-        or set(retry_predecessors) != required
-    ):
+    required = set(selected)
+    if retry_predecessors and set(retry_predecessors) != required:
         raise ValueError(
-            "campaign retry requires complete four-carrier retry predecessors"
+            "campaign retry predecessors must exactly match active carriers"
         )
     payloads: dict[str, dict[str, Any]] = {}
     for carrier in selected:
@@ -410,20 +414,17 @@ def write_scale_envelopes(
             day=day,
             sequence=sequence,
             predecessor_execution_id=retry_predecessors.get(carrier),
+            allow_retry_intent_change=(
+                reconciliation_receipt is not None
+                and reconciliation_receipt.get("reason")
+                == "terminal_unpublished_retryable_shortfall"
+            ),
             semantic_selection_id=semantic_selection_id,
             semantic_preflight_receipt=semantic_preflight_receipt,
-            capacity_host_set=capacity_host_set,
             semantic_preflight_output_root=semantic_preflight_output_root,
             predecessor_reconciliation=predecessor_reconciliation,
             promotion_receipt=promotion_receipt,
             promotion_output_root=(promotion_output_root or output_root or paths.OUTPUT_ROOT),
-            alpha_m100_readiness_receipt=alpha_m100_readiness_receipt,
-            alpha_m100_app_uat_receipt=alpha_m100_app_uat_receipt,
-            alpha_m100_acceptance_output_root=(
-                alpha_m100_acceptance_output_root
-                or output_root
-                or paths.OUTPUT_ROOT
-            ),
             pre_acquisition_handoff=pre_acquisition_handoff,
             pre_acquisition_handoff_output_root=pre_acquisition_handoff_output_root,
             external_input_refs=(external_input_refs_by_carrier or {}).get(carrier, ()),
@@ -431,22 +432,40 @@ def write_scale_envelopes(
             scale_source_pool=scale_source_pool,
             source_pool_evidence_root=source_pool_evidence_root,
             source_pool_output_root=(output_root or paths.OUTPUT_ROOT),
+            retry_evidence_output_root=retry_evidence_output_root,
+            active_carriers=selected,
+            workloads=exact_workloads,
+            workload_mode=workload_mode,
         )
+        payloads[carrier] = payload
+    actual_workloads = {
+        carrier: int(payloads[carrier]["quota"])
+        for carrier in selected
+    }
+    root_execution_id = str(payloads[selected[0]]["executionId"])
+    for payload in payloads.values():
+        payload["activeCarriers"] = list(selected)
+        payload["workloads"] = dict(actual_workloads)
+        payload["rootExecutionId"] = root_execution_id
+        stable = {
+            key: value
+            for key, value in payload.items()
+            if key not in {"requestDigest", "frozenAt"}
+        }
+        payload["requestDigest"] = _sha256(stable)
         assert_valid(
             payload,
             "execution",
             "content_campaign_request_envelope",
-            label=f"campaign envelope:{resolved.scale}:{carrier}",
+            label=f"campaign envelope:{resolved.scale}:{payload['carrier']}",
         )
-        payloads[carrier] = payload
     _assert_one_source_identity(
         payloads,
         predecessor_reconciliation_receipt=reconciliation_receipt,
     )
     _assert_one_handoff_identity(payloads)
-    _assert_one_capacity_plan(payloads)
+    _assert_workload_plans(payloads)
     _assert_one_scale_source_pool(payloads, scale=resolved.scale)
-    _assert_one_m100_alpha_acceptance(payloads, scale=resolved.scale)
     source_repo = (repo_root or paths.REPO_ROOT).resolve()
     frozen_source = next(iter(payloads.values()))["sourceDigest"]
     frozen_bundle = next(iter(payloads.values()))["executionBundle"]

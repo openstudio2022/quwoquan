@@ -1,7 +1,7 @@
 schema: quwoquan.content_distribution_policy
-policyId: research-content-cold-start
-productLifecycleState: research
-releaseClass: research
+policyId: commercial-rights-closure
+productLifecycleState: commercial
+releaseClass: commercial
 mediaGeneration:
   imageAllowed: false
   videoAllowed: false
@@ -47,7 +47,7 @@ commercialDistribution:
 articleMedia:
   illustratedRateTarget: 0.9
   textOnlyRateTarget: 0.1
-  requireCoverAndBodyImage: false
+  requireCoverAndBodyImage: true
 scaleMilestones:
   m100Targets:
     homepage: 100
@@ -59,15 +59,7 @@ scaleMilestones:
     article: 1000
     image: 1000
     video: 100
-  m10000Targets:
-    homepage: 10000
-    article: 10000
-    image: 10000
-    video: 1000
-  requireM100PromotionBeforeM1000: false
-  requireM1000PromotionBeforeM10000: false
-  milestoneAttainmentRequired: true
-  attainmentCountingMode: cumulative_unique_finalized_objects
+  requireM100PromotionBeforeM1000: true
   automaticRecovery:
     targetRate: 0.95
     statistical: true

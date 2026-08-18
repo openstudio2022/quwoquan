@@ -1,7 +1,10 @@
+# spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-001.t3
 from __future__ import annotations
 
+import shutil
 import tempfile
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from pathlib import Path
 from unittest import mock
@@ -9,6 +12,12 @@ from unittest import mock
 import yaml
 
 from quwoquan_ops.cli.lib import external_provider_governance as governance
+from quwoquan_ops.cli.lib.external_provider_governance_lib import (
+    compile_single_environment_bindings,
+)
+from quwoquan_ops.cli.lib.external_provider_governance_lib.derived_sources import (
+    load_environment_bindings,
+)
 from quwoquan_ops.gate import verify_external_provider_governance as provider_gate
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -495,6 +504,168 @@ class ExternalProviderGovernanceContractTest(unittest.TestCase):
         self.assertIn("EndpointEnvironmentKeys: map[string]string{}", assistant_transport)
         self.assertIn("if !ok {\n\t\treturn ExternalProviderBinding{}, false\n\t}", assistant_transport)
 
+    def test_single_environment_compiler_is_candidate_scoped_and_environment_free_at_runtime(
+        self,
+    ) -> None:
+        artifacts = {}
+        for environment, target in (
+            ("alpha", "alpha-local"),
+            ("beta", "beta-local"),
+            ("gamma", "gamma-local"),
+            ("prod", "prod-hosted"),
+        ):
+            artifact = compile_single_environment_bindings(
+                environment=environment,
+                target=target,
+                source_root=ROOT,
+            )
+            artifacts[environment] = artifact
+            self.assertNotIn("selectedBindings", artifact)
+            self.assertNotIn("selectedRootBindings", artifact)
+            self.assertNotIn("readiness", artifact.get("bindings", {}))
+            for other in {"alpha", "beta", "gamma", "prod"} - {environment}:
+                self.assertNotIn(
+                    other,
+                    {artifact["environment"], artifact["target"]},
+                )
+            for generated in artifact["goSources"]:
+                source = generated["source"]
+                self.assertIn(
+                    "func CompiledBindingFor(capabilityID string)",
+                    source,
+                )
+                self.assertNotIn("environment, capabilityID", source)
+                self.assertNotIn("func ExternalProviderBindingFor(", source)
+                self.assertNotIn("map[string]map[string]ExternalProviderBinding", source)
+        self.assertEqual(
+            len(
+                {
+                    artifact["manifest"]["manifestDigest"]
+                    for artifact in artifacts.values()
+                }
+            ),
+            4,
+        )
+
+    def test_single_environment_compiler_does_not_read_other_environment_configs(
+        self,
+    ) -> None:
+        original_read_text = Path.read_text
+
+        def reject_other_environment(
+            path: Path,
+            *args: object,
+            **kwargs: object,
+        ) -> str:
+            if (
+                path.name == "config.yaml"
+                and "environments" in path.parts
+                and any(other in path.parts for other in ("beta", "gamma", "prod"))
+            ):
+                raise AssertionError(f"single-environment compile crossed scope: {path}")
+            return original_read_text(path, *args, **kwargs)
+
+        governance.load_registry.cache_clear()
+        governance.load_conformance_manifest.cache_clear()
+        load_environment_bindings.cache_clear()
+        with mock.patch.object(Path, "read_text", reject_other_environment):
+            artifact = compile_single_environment_bindings(
+                environment="alpha",
+                target="alpha-local",
+                source_root=ROOT,
+            )
+        self.assertEqual(artifact["environment"], "alpha")
+
+    def test_single_environment_compiler_concurrent_results_do_not_overwrite(self) -> None:
+        requests = (
+            ("alpha", "alpha-local"),
+            ("beta", "beta-local"),
+            ("gamma", "gamma-local"),
+            ("prod", "prod-hosted"),
+        )
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = [
+                executor.submit(
+                    compile_single_environment_bindings,
+                    environment=environment,
+                    target=target,
+                    source_root=ROOT,
+                )
+                for environment, target in requests
+            ]
+            artifacts = [future.result() for future in futures]
+        self.assertEqual(
+            [(item["environment"], item["target"]) for item in artifacts],
+            list(requests),
+        )
+        self.assertEqual(
+            len({item["manifest"]["manifestDigest"] for item in artifacts}),
+            4,
+        )
+
+    def test_prod_targets_have_distinct_binding_artifact_identities(self) -> None:
+        prod_sim = compile_single_environment_bindings(
+            environment="prod",
+            target="prod-sim",
+            source_root=ROOT,
+        )
+        prod_hosted = compile_single_environment_bindings(
+            environment="prod",
+            target="prod-hosted",
+            source_root=ROOT,
+        )
+        self.assertEqual(prod_sim["bindings"], prod_hosted["bindings"])
+        self.assertNotEqual(
+            prod_sim["manifest"]["manifestDigest"],
+            prod_hosted["manifest"]["manifestDigest"],
+        )
+
+    def test_single_environment_compiler_reads_capsule_after_live_workspace_drift(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            capsule_root = Path(temporary) / "capsule"
+            shutil.copytree(
+                ROOT / "quwoquan_service",
+                capsule_root / "quwoquan_service",
+                ignore=shutil.ignore_patterns(
+                    ".git",
+                    ".qwq_output",
+                    "generated",
+                    "tests",
+                ),
+            )
+            shutil.copytree(
+                ROOT / "quwoquan_ops" / "external",
+                capsule_root / "quwoquan_ops" / "external",
+            )
+            baseline = compile_single_environment_bindings(
+                environment="alpha",
+                target="alpha-local",
+                source_root=capsule_root,
+            )
+            governance.load_registry.cache_clear()
+            governance.load_conformance_manifest.cache_clear()
+            load_environment_bindings.cache_clear()
+            live_root = ROOT.resolve()
+            original_read_text = Path.read_text
+
+            def reject_live_workspace_read(
+                path: Path,
+                *args: object,
+                **kwargs: object,
+            ) -> str:
+                if path.resolve().is_relative_to(live_root):
+                    raise AssertionError(f"capsule compile read live workspace: {path}")
+                return original_read_text(path, *args, **kwargs)
+
+            with mock.patch.object(Path, "read_text", reject_live_workspace_read):
+                repeated = compile_single_environment_bindings(
+                    environment="alpha",
+                    target="alpha-local",
+                    source_root=capsule_root,
+                )
+            self.assertEqual(repeated, baseline)
 
 if __name__ == "__main__":
     unittest.main()

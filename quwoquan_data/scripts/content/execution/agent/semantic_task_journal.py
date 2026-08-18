@@ -12,6 +12,7 @@ import os
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -58,6 +59,22 @@ class SemanticTaskAttemptsExhausted(RuntimeError):
             "semantic task maxAttempts exhausted: "
             f"{work_unit_id} ({max_attempts})"
         )
+
+
+class SemanticTaskRecoveryReason(StrEnum):
+    """Why a work unit is granted attempts beyond its frozen budget.
+
+    Every reason names a cause outside the authored content: an interrupted
+    host, an exhausted provider quota, an unwritable transport, or an explicit
+    operator disposition. Content that was authored and judged unfit is never a
+    recovery reason, because retrying it would only re-spend provider quota on
+    the same rejected candidate.
+    """
+
+    INFRASTRUCTURE_INTERRUPTION = "infrastructure_interruption"
+    PROVIDER_QUOTA_EXHAUSTED = "provider_quota_exhausted"
+    TRANSPORT_UNAVAILABLE = "transport_unavailable"
+    OPERATOR_DISPOSITION = "operator_disposition"
 
 
 def _canonical_bytes(value: Mapping[str, Any]) -> bytes:
@@ -136,14 +153,11 @@ def _request_for_context(ctx: ExecutionContext, prompt: str) -> dict[str, Any]:
     frozen_selection_digest = str(preflight.get("selectionDigest") or "")
     if frozen_selection_digest and frozen_selection_digest != selection.selection_digest:
         raise ValueError("semantic task preflight selection digest drift")
-    if selection.provider.value == "cursor_sdk" and not preflight:
-        raise ValueError("cursor semantic task requires a frozen preflight receipt")
     if preflight:
         validate_semantic_preflight_binding(
             preflight,
             semantic_selection_id=selection.selection_id,
             output_root=OUTPUT_ROOT,
-            require_fresh=False,
         )
     workspace = execution_root(ctx.execution_id).resolve()
     try:
@@ -194,6 +208,103 @@ def _request_for_context(ctx: ExecutionContext, prompt: str) -> dict[str, Any]:
     return request
 
 
+def recovery_grants_root(journal_root: Path) -> Path:
+    return journal_root / "recovery_grants"
+
+
+def granted_extra_attempts(journal_root: Path, *, request_digest: str) -> int:
+    """Sum the append-only attempt grants bound to this exact frozen request.
+
+    A grant recorded against a different request digest belongs to a different
+    frozen work unit and must not widen this one's budget.
+    """
+
+    grants_root = recovery_grants_root(journal_root)
+    if not grants_root.is_dir():
+        return 0
+    total = 0
+    for path in sorted(grants_root.glob("*.json")):
+        grant = json.loads(path.read_text(encoding="utf-8"))
+        assert_valid(
+            grant,
+            "execution",
+            "semantic_task_recovery_grant",
+            label=f"semantic task recovery grant:{path.name}",
+        )
+        if str(grant.get("requestDigest") or "") != request_digest:
+            raise ValueError(
+                f"semantic task recovery grant is bound to another request: {path}"
+            )
+        total += int(grant["grant"])
+    return total
+
+
+def grant_semantic_task_attempts(
+    journal_root: Path,
+    *,
+    request: Mapping[str, Any],
+    grant: int,
+    reason: SemanticTaskRecoveryReason,
+    granted_by: str,
+) -> Path:
+    """Append one attempt grant so an unfinished work unit can resume in place.
+
+    This is the only sanctioned way to move a work unit past its frozen attempt
+    budget. It appends; it never edits ``request.json`` and never removes or
+    rewrites an attempt record, so the audit trail after recovery still shows
+    every attempt that was actually made plus who authorized the extra ones.
+    """
+
+    if isinstance(grant, bool) or not isinstance(grant, int) or grant < 1:
+        raise ValueError("semantic task attempt grant must be a positive integer")
+    if not isinstance(reason, SemanticTaskRecoveryReason):
+        raise TypeError("semantic task recovery reason must be typed")
+    owner = str(granted_by or "").strip()
+    if not owner:
+        raise ValueError("semantic task attempt grant requires grantedBy")
+    request_digest = str(request["requestDigest"])
+    attempts_root = journal_root / "attempts"
+    existing_attempts = (
+        sorted(attempts_root.glob("*.json")) if attempts_root.is_dir() else []
+    )
+    for path in existing_attempts:
+        attempt = json.loads(path.read_text(encoding="utf-8"))
+        if str(attempt.get("status") or "") == "succeeded":
+            raise ValueError(
+                "semantic task already has a succeeded attempt; granting more "
+                "attempts would put completed evidence back at risk"
+            )
+    grants_root = recovery_grants_root(journal_root)
+    ordinal = (
+        len(sorted(grants_root.glob("*.json"))) + 1 if grants_root.is_dir() else 1
+    )
+    stable: dict[str, Any] = {
+        "schema": "quwoquan_data.semantic_task_recovery_grant",
+        "workUnitId": str(request["workUnitId"]),
+        "requestDigest": request_digest,
+        "grant": grant,
+        "grantedAttempts": int(request["maxAttempts"])
+        + granted_extra_attempts(journal_root, request_digest=request_digest)
+        + grant,
+        "attemptsBeforeGrant": len(existing_attempts),
+        "reason": reason.value,
+        "grantedBy": owner,
+        "grantedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    }
+    document = {**stable, "grantDigest": _digest(stable)}
+    assert_valid(
+        document,
+        "execution",
+        "semantic_task_recovery_grant",
+        label=f"semantic task recovery grant:{request['workUnitId']}",
+    )
+    return _write_create_once(
+        grants_root / f"{ordinal:04d}.json",
+        document,
+        label="semantic task recovery grant",
+    )
+
+
 def begin_semantic_task(
     ctx: ExecutionContext,
     prompt: str,
@@ -214,10 +325,14 @@ def begin_semantic_task(
     attempts_root = journal_root / "attempts"
     attempts = sorted(attempts_root.glob("*.json")) if attempts_root.is_dir() else []
     next_attempt = len(attempts) + 1
-    if next_attempt > int(request["maxAttempts"]):
+    admitted_attempts = int(request["maxAttempts"]) + granted_extra_attempts(
+        journal_root,
+        request_digest=str(request["requestDigest"]),
+    )
+    if next_attempt > admitted_attempts:
         raise SemanticTaskAttemptsExhausted(
             work_unit_id=str(request["workUnitId"]),
-            max_attempts=int(request["maxAttempts"]),
+            max_attempts=admitted_attempts,
         )
     return SemanticTaskJournalHandle(
         request=request,
@@ -239,6 +354,7 @@ def record_semantic_task_outcome(
         "requestDigest": handle.request["requestDigest"],
         "attempt": handle.next_attempt,
         "recordedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "started": outcome.started,
         "status": outcome.status.value,
         "provider": outcome.provider.value,
         "runId": outcome.run_id,
@@ -247,10 +363,12 @@ def record_semantic_task_outcome(
         "durationMs": outcome.duration_ms,
         "resultSha256": _text_digest(outcome.result_text),
         "failureKind": failure_kind,
+        "messageSha256": _text_digest(outcome.message),
         "errorCode": outcome.error_code,
         "retryable": outcome.retryable,
-        "capacityReceiptRef": outcome.capacity_receipt_ref,
-        "capacityReceiptDigest": outcome.capacity_receipt_digest,
+        "retryAfterSeconds": outcome.retry_after_seconds,
+        "attempts": outcome.attempts,
+        "warmAttempts": outcome.warm_attempts,
     }
     attempt = {**stable, "attemptDigest": _digest(stable)}
     assert_valid(
@@ -301,9 +419,33 @@ def run_journaled_semantic_task(
             retryable=False,
             error_code="semantic_task_journal_admission_failed",
         )
-    outcome = provider_runner(ctx, prompt)
     try:
-        record_semantic_task_outcome(handle, outcome)
+        outcome = provider_runner(ctx, prompt)
+    except Exception as exc:  # noqa: BLE001
+        outcome = AgentRunOutcome.failed(
+            AgentFailureKind.SDK_EXECUTION_FAILED,
+            provider=provider,
+            message=f"semantic provider invocation raised {type(exc).__name__}",
+            retryable=False,
+            error_code="semantic_provider_invocation_exception",
+        )
+    if not isinstance(outcome, AgentRunOutcome):
+        outcome = AgentRunOutcome.failed(
+            AgentFailureKind.SDK_EXECUTION_FAILED,
+            provider=provider,
+            message="semantic provider invocation returned an invalid outcome",
+            retryable=False,
+            error_code="semantic_provider_outcome_invalid",
+        )
+    try:
+        attempt_path = record_semantic_task_outcome(handle, outcome)
+        attempt = json.loads(attempt_path.read_text(encoding="utf-8"))
+        attempt_digest = str(attempt.get("attemptDigest") or "")
+        attempt_ref = attempt_path.resolve().relative_to(OUTPUT_ROOT.resolve()).as_posix()
+        outcome = outcome.with_invocation_attempt(
+            attempt_ref=attempt_ref,
+            attempt_digest=attempt_digest,
+        )
     except (OSError, RuntimeError, TypeError, ValueError) as exc:
         return AgentRunOutcome.failed(
             AgentFailureKind.SDK_EXECUTION_FAILED,
@@ -319,7 +461,11 @@ def run_journaled_semantic_task(
 __all__ = [
     "SemanticTaskJournalHandle",
     "SemanticTaskAttemptsExhausted",
+    "SemanticTaskRecoveryReason",
     "begin_semantic_task",
+    "grant_semantic_task_attempts",
+    "granted_extra_attempts",
     "record_semantic_task_outcome",
+    "recovery_grants_root",
     "run_journaled_semantic_task",
 ]

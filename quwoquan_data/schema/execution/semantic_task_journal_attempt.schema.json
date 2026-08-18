@@ -9,6 +9,7 @@
     "requestDigest",
     "attempt",
     "recordedAt",
+    "started",
     "status",
     "provider",
     "runId",
@@ -17,10 +18,12 @@
     "durationMs",
     "resultSha256",
     "failureKind",
+    "messageSha256",
     "errorCode",
     "retryable",
-    "capacityReceiptRef",
-    "capacityReceiptDigest",
+    "retryAfterSeconds",
+    "attempts",
+    "warmAttempts",
     "attemptDigest"
   ],
   "properties": {
@@ -29,6 +32,7 @@
     "requestDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
     "attempt": {"type": "integer", "minimum": 1},
     "recordedAt": {"type": "string", "format": "date-time"},
+    "started": {"type": "boolean"},
     "status": {"enum": ["finished", "error"]},
     "provider": {"enum": ["cursor_sdk", "codex_sdk"]},
     "runId": {"type": "string"},
@@ -37,10 +41,12 @@
     "durationMs": {"type": "integer", "minimum": 0},
     "resultSha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
     "failureKind": {"type": "string"},
+    "messageSha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
     "errorCode": {"type": "string"},
     "retryable": {"type": "boolean"},
-    "capacityReceiptRef": {"type": "string"},
-    "capacityReceiptDigest": {"type": "string"},
+    "retryAfterSeconds": {"type": "integer", "minimum": 0},
+    "attempts": {"type": "integer", "minimum": 0},
+    "warmAttempts": {"type": "integer", "minimum": 0},
     "attemptDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}
   }
 }

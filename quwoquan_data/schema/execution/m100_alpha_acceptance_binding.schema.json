@@ -25,11 +25,11 @@
       "additionalProperties": false,
       "required": ["homepage", "article", "image", "video", "posts"],
       "properties": {
-        "homepage": {"const": 100},
-        "article": {"const": 100},
-        "image": {"const": 100},
-        "video": {"const": 10},
-        "posts": {"const": 210}
+        "homepage": {"type": "integer", "minimum": 100},
+        "article": {"type": "integer", "minimum": 100},
+        "image": {"type": "integer", "minimum": 100},
+        "video": {"type": "integer", "minimum": 10},
+        "posts": {"type": "integer", "minimum": 210}
       }
     },
     "readinessReceiptRef": {"type": "string", "minLength": 1},

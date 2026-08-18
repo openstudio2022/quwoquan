@@ -31,6 +31,22 @@ from support.campaign_scale_evidence_workspace_fixture import (
 )
 
 
+def _assert_runtime_diagnostic_unavailable(
+    evidence: dict[str, object],
+    *,
+    expected_detail: str,
+) -> None:
+    assert evidence["status"] == "passed"
+    assert "runtimeSessionRef" not in evidence
+    assert "resourceSoakEvidenceRef" not in evidence
+    assert "faultInjectionEvidenceRef" not in evidence
+    assert any(
+        "RUNTIME_EVIDENCE_UNAVAILABLE" in str(issue)
+        and expected_detail in str(issue)
+        for issue in evidence["diagnosticIssues"]
+    )
+
+
 def test_campaign_scale_evidence_blocks_lane_receipt_identity_drift(
     tmp_path: Path,
 ) -> None:
@@ -109,11 +125,11 @@ def test_campaign_scale_evidence_rejects_cross_session_sample_receipt(
     _write(sample_path, sample)
     _resign_receipt(sample_path)
 
-    with pytest.raises(
-        CampaignScaleEvidenceError,
-        match="resource sample/session identity drift",
-    ):
-        _write_evidence(fixture)
+    evidence, _path = _write_evidence(fixture)
+    _assert_runtime_diagnostic_unavailable(
+        evidence,
+        expected_detail="resource sample/session identity drift",
+    )
 
 
 def test_campaign_scale_evidence_rejects_duplicate_sample_timestamp(
@@ -131,11 +147,11 @@ def test_campaign_scale_evidence_rejects_duplicate_sample_timestamp(
     _write(sample_paths[1], second)
     _resign_receipt(sample_paths[1])
 
-    with pytest.raises(
-        CampaignScaleEvidenceError,
-        match="duplicate identity or timestamp",
-    ):
-        _write_evidence(fixture)
+    evidence, _path = _write_evidence(fixture)
+    _assert_runtime_diagnostic_unavailable(
+        evidence,
+        expected_detail="duplicate identity or timestamp",
+    )
 
 
 def test_campaign_scale_evidence_rejects_runtime_session_source_drift(
@@ -148,11 +164,11 @@ def test_campaign_scale_evidence_rejects_runtime_session_source_drift(
     _write(session_path, session)
     _resign_receipt(session_path)
 
-    with pytest.raises(
-        CampaignScaleEvidenceError,
-        match="runtime session campaign identity drift",
-    ):
-        _write_evidence(fixture)
+    evidence, _path = _write_evidence(fixture)
+    _assert_runtime_diagnostic_unavailable(
+        evidence,
+        expected_detail="runtime session campaign identity drift",
+    )
 
 
 def test_campaign_scale_evidence_rejects_cross_session_fault_receipt(
@@ -165,11 +181,11 @@ def test_campaign_scale_evidence_rejects_cross_session_fault_receipt(
     _write(receipt_path, receipt)
     _resign_receipt(receipt_path)
 
-    with pytest.raises(
-        CampaignScaleEvidenceError,
-        match="fault case/session identity drift",
-    ):
-        _write_evidence(fixture)
+    evidence, _path = _write_evidence(fixture)
+    _assert_runtime_diagnostic_unavailable(
+        evidence,
+        expected_detail="fault case/session identity drift",
+    )
 
 
 def test_campaign_scale_evidence_rejects_auto_model_binding_at_manifest_contract(

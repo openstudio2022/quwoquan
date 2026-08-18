@@ -25,6 +25,7 @@ from content.execution.request import RuntimeExecutionRequest
 from content.source import source_inputs
 from core.control_types import TargetSelector
 from core.io import read_json, write_json
+from support.capacity_calibration_fixture import synthetic_capacity_source_binding
 from support.campaign_external_inputs_fixture import (  # noqa: F401
     CATALOG_DIGEST,
     EXECUTION_IDS,
@@ -73,15 +74,14 @@ def _submission(
         else "priority",
         "quota": 100,
         "count": 150,
-        "requiredWorkers": 1,
-        "partitionCount": 16,
-        "capacityPlanDigest": "sha256:" + "6" * 64,
+        "capacityCalibration": synthetic_capacity_source_binding(),
         "workerHostSetBinding": None,
         "topic": None,
         "targetNames": [],
         "sourceProviders": [],
         "semanticSelectionId": "default",
         "semanticPreflightReceipt": semantic_preflight_binding,
+        "retryUnfinishedRefs": [],
         "scaleSourcePool": scale_source_pool,
         "sourcePoolEvidenceRootRef": source_pool_evidence_root_ref,
         "sourcePoolSelection": source_pool_selection,
@@ -197,6 +197,7 @@ def _frozen_documents(
         "entityCatalogDigest": CATALOG_DIGEST,
         "semanticSelectionId": "default",
         "semanticPreflightReceipt": semantic_preflight_binding,
+        "capacityCalibration": synthetic_capacity_source_binding(),
         "scaleSourcePool": pool_binding,
         "sourcePoolEvidenceRootRef": pool_evidence_ref,
         "laneSourcePoolSelections": pool_selections,
@@ -443,6 +444,7 @@ def test_fenced_execution_envelope_uses_only_canonical_capsule_and_rejects_tampe
             runtime_paths=runtime,
         )
 
+    blob_path.chmod(0o600)
     blob_path.write_bytes(blob_path.read_bytes() + b"runtime-replacement")
     with pytest.raises(
         CampaignExternalInputError, match="DIGEST_DRIFT|digest mismatch"
@@ -529,9 +531,7 @@ def test_same_execution_cannot_replace_external_inputs_without_new_retry(
         selector=TargetSelector.PRIORITY,
         count=100,
         quota=100,
-        required_workers=1,
-        partition_count=16,
-        capacity_plan_digest="sha256:" + "6" * 64,
+        capacity_calibration=synthetic_capacity_source_binding(),
         topic=None,
         source_providers=(),
         target_names=(),

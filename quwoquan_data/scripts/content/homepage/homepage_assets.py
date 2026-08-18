@@ -9,15 +9,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from content.execution.asset_registry import allocate_post_asset_id, load_execution_asset_registry
+from content.execution.runtime_state import load_execution_runtime_state
 from core.io import read_json, write_json
 from core.page_media import HomepageMediaDisposition
 from core.paths import execution_entity_object_dir, execution_root
-
-from content.execution.asset_registry import (
-    allocate_post_asset_id,
-    load_execution_asset_registry,
-)
-from content.execution.runtime_state import load_execution_runtime_state
 from content.homepage.homepage_refs import same_source_unit as _same_source_unit
 
 
@@ -100,7 +96,7 @@ class HomepageAssetSelection:
     """Typed publish decision for all page images considered by a homepage."""
 
     publishable: tuple[dict[str, Any], ...]
-    excluded: tuple[HomepageMediaDisposition, ...]
+    excluded: tuple["HomepageMediaDisposition", ...]
 
 
 def select_homepage_assets(
@@ -142,9 +138,8 @@ def select_homepage_assets(
         return {}
     all_images = object_image_candidates(obj, execution_id)
     from core.page_media import HomepageAssetDisposition
-    from governance.coverage.license import rights_proof_required
-
     from content.execution.identity import parse_execution_id
+    from governance.coverage.license import rights_proof_required
 
     vertical = parse_execution_id(execution_id).vertical
     require_rights_proof = rights_proof_required(vertical)
@@ -168,61 +163,6 @@ def select_homepage_assets(
             )
         )
 
-    def _complete_excluded(
-        publishable: list[dict[str, Any]],
-    ) -> tuple[HomepageMediaDisposition, ...]:
-        """Give every observed source asset exactly one terminal decision."""
-        decided_refs = {
-            record.source_asset_ref
-            for record in excluded
-            if record.source_asset_ref
-        }
-        decided_refs.update(
-            str(image.get("sourceAssetRef") or "").strip()
-            for image in publishable
-            if str(image.get("sourceAssetRef") or "").strip()
-        )
-        for image in all_images:
-            source_asset_ref = str(image.get("sourceAssetRef") or "").strip()
-            if not source_asset_ref or source_asset_ref in decided_refs:
-                continue
-            _exclude(
-                image,
-                HomepageAssetDisposition.POLICY_EXCLUDED,
-                "not_selected_source_unit",
-            )
-            decided_refs.add(source_asset_ref)
-        return tuple(excluded)
-
-    def _source_admission_exclusion_reason(image: Mapping[str, Any]) -> str:
-        acquisition_status = str(image.get("acquisitionStatus") or "").strip()
-        distribution_decision = str(
-            image.get("distributionDecision") or ""
-        ).strip()
-        if (
-            acquisition_status
-            and acquisition_status != "acquired"
-        ) or (
-            distribution_decision
-            and distribution_decision
-            not in {"research_allowed", "commercial_allowed"}
-        ):
-            return (
-                "source_distribution_not_admitted:"
-                f"{acquisition_status or 'unknown'}/"
-                f"{distribution_decision or 'unknown'}"
-            )
-        from core.image_safety import watermark_prone_source_reason
-
-        return watermark_prone_source_reason(
-            (
-                str(image.get("sourceUrl") or ""),
-                str(image.get("collectionPageUrl") or ""),
-                str(image.get("authorizationProof") or ""),
-                str(image.get("termsUrl") or ""),
-            )
-        )
-
     candidates: list[dict[str, Any]] = []
     for image in all_images:
         if not _same_source_unit(str(image.get("sourceRef") or ""), unit_ref):
@@ -235,14 +175,6 @@ def select_homepage_assets(
             str(image.get("authorizationProof") or "").strip()
             or str(image.get("termsUrl") or "").strip()
         ):
-            continue
-        admission_exclusion = _source_admission_exclusion_reason(image)
-        if admission_exclusion:
-            _exclude(
-                image,
-                HomepageAssetDisposition.POLICY_EXCLUDED,
-                admission_exclusion,
-            )
             continue
         placement = _placement_for(image)
         # 地图/位置图（locatorMap / coverCandidateRank<0）不可做封面，也不进正文内嵌：
@@ -274,26 +206,17 @@ def select_homepage_assets(
             }
         candidates.append(image)
     if not candidates:
-        for image in all_images:
-            if (
-                str(image.get("researchLane") or "") != "homepage_image"
-                or not str(image.get("sourceRef") or "").endswith("/source.md")
-                or not str(image.get("sourceAssetRef") or "")
-                or (require_rights_proof and not (
-                    str(image.get("authorizationProof") or "").strip()
-                    or str(image.get("termsUrl") or "").strip()
-                ))
-            ):
-                continue
-            admission_exclusion = _source_admission_exclusion_reason(image)
-            if admission_exclusion:
-                _exclude(
-                    image,
-                    HomepageAssetDisposition.POLICY_EXCLUDED,
-                    admission_exclusion,
-                )
-                continue
-            candidates.append(image)
+        candidates = [
+            image
+            for image in all_images
+            if str(image.get("researchLane") or "") == "homepage_image"
+            and str(image.get("sourceRef") or "").endswith("/source.md")
+            and str(image.get("sourceAssetRef") or "")
+            and (not require_rights_proof or (
+                str(image.get("authorizationProof") or "").strip()
+                or str(image.get("termsUrl") or "").strip()
+            ))
+        ]
     publishable_candidates: list[dict[str, Any]] = []
     from governance.content_supply_policy import load_content_supply_policy
 
@@ -336,7 +259,7 @@ def select_homepage_assets(
         seen.add(key)
         picked.append(image)
     if not picked:
-        return HomepageAssetSelection((), _complete_excluded([]))
+        return HomepageAssetSelection((), tuple(excluded))
 
     from core.page_media import (
         normalized_subject_core,
@@ -446,7 +369,7 @@ def select_homepage_assets(
         publishable.append(item)
     return HomepageAssetSelection(
         publishable=tuple(publishable),
-        excluded=_complete_excluded(publishable),
+        excluded=tuple(excluded),
     )
 
 
@@ -515,7 +438,7 @@ def write_homepage_media_dispositions(
     entity_dir: Path,
     execution_id: str,
     object_ref: str,
-    records: list[HomepageMediaDisposition],
+    records: list["HomepageMediaDisposition"],
 ) -> None:
     """Persist one complete, schema-validated disposition per source asset."""
 

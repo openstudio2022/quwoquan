@@ -88,21 +88,22 @@ abstract class _ChatConversationPageMediaActionsState
   }
 
   Future<List<ChatInputAttachment>> _pickChatFiles(int remaining) async {
-    final result = await FilePicker.pickFiles();
-    if (result == null) return const <ChatInputAttachment>[];
+    final files = await FilePicker.pickFiles();
+    if (files.isEmpty) return const <ChatInputAttachment>[];
     final now = DateTime.now().millisecondsSinceEpoch;
-    return result.files
-        .take(remaining)
-        .map<ChatInputAttachment>(
-          (file) => ChatInputAttachment(
-            id: 'file_${now}_${file.name}',
-            type: ChatInputAttachmentType.file,
-            name: file.name,
-            localPath: file.path,
-            subtitle: _formatFileSize(file.size),
-          ),
-        )
-        .toList(growable: false);
+    final attachments = <ChatInputAttachment>[];
+    for (final file in files.take(remaining)) {
+      attachments.add(
+        ChatInputAttachment(
+          id: 'file_${now}_${file.name}',
+          type: ChatInputAttachmentType.file,
+          name: file.name,
+          localPath: file.path,
+          subtitle: _formatFileSize(await file.length()),
+        ),
+      );
+    }
+    return attachments;
   }
 
   String _formatFileSize(int bytes) {

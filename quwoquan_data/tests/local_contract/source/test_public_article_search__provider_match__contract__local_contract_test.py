@@ -21,6 +21,7 @@ from content.source.research.public_search import (
     discover_article_source_frontier,
 )
 from content.source.research.source_registry import _travel_registry_url_fetchable
+from core import rate_limit
 from governance.coverage.source_registry import resolve_travel_source_runtime
 
 SPEC_REF = (
@@ -112,7 +113,7 @@ def _response(
 
 
 def _install_registry(monkeypatch: pytest.MonkeyPatch, site: dict) -> None:
-    article_frontier_robots._RATE_LIMITERS.clear()
+    rate_limit._RATE_LIMITERS.clear()
     monkeypatch.setattr(
         article_frontier_profile,
         "iter_travel_registry_sites",

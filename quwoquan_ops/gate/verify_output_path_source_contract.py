@@ -27,7 +27,7 @@ SOURCE_ROOTS = (
     ROOT / "quwoquan_service" / "services",
     ROOT / ".github" / "workflows",
     ROOT / ".cursor" / "commands",
-    ROOT / ".cursor" / "skills" / "environment-ops",
+    ROOT / ".agents" / "skills" / "environment-ops",
 )
 ROOT_CONFIG_FILES = (
     ROOT / "Makefile",

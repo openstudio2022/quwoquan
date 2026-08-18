@@ -350,6 +350,80 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
         statuses.extend(script_statuses)
         stdout_sections.extend(script_stdout_sections)
         findings.extend(script_findings)
+    try:
+        user_availability = _stackctl._read_only_user_availability_report(args.target)
+    except (
+        AttributeError,
+        OSError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+        json.JSONDecodeError,
+    ) as error:
+        detail = f"read-only availability aggregation failed: {error}"
+        layers = [
+            {
+                "name": name,
+                "status": "blocked",
+                "issues": [detail],
+            }
+            for name in (
+                "build_ready",
+                "runtime_full_ready",
+                "provider_ready",
+                "release_active",
+                "content_exact_queries_ready",
+                "device_bound",
+                "content_live_passed",
+            )
+        ]
+        user_availability = {
+            "schema": "stackctl.read_only_user_availability/v1",
+            "target": args.target,
+            "environment": env_name,
+            "observedAt": _stackctl.utc_now(),
+            "status": "failed",
+            "firstBlockerClass": "startup_identity",
+            "firstBlocker": detail,
+            "userAvailability": layers,
+            "metrics": [
+                {
+                    "name": "stackctl_user_availability",
+                    "labels": {
+                        "target": args.target,
+                        "layer": layer["name"],
+                        "status": layer["status"],
+                    },
+                    "value": 1,
+                }
+                for layer in layers
+            ]
+            + [
+                {
+                    "name": "stackctl_first_blocker",
+                    "labels": {
+                        "target": args.target,
+                        "status": "failed",
+                        "firstBlockerClass": "startup_identity",
+                    },
+                    "value": 1,
+                }
+            ],
+            "evidence": {},
+        }
+        statuses.append(
+            {
+                "name": "user-availability",
+                "scope": "config",
+                "type": "aggregate",
+                "url": f"availability://{args.target}",
+                "ok": False,
+                "statusCode": None,
+                "bodyPreview": detail,
+                "skipped": False,
+            }
+        )
+        findings.append(detail)
     ok_count = sum(1 for item in statuses if item["ok"])
     timing = _stackctl._finish_timing(started_monotonic, started_at)
     payload = {
@@ -365,26 +439,52 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
         "timestamp": _stackctl.utc_now(),
         "scriptProbes": _stackctl._script_probe_plan_for_target(topology, args.target),
         "readOnly": read_only,
+        "userAvailabilityReport": user_availability,
+        "userAvailability": user_availability["userAvailability"],
+        "firstBlockerClass": user_availability["firstBlockerClass"],
+        "observabilityMetrics": user_availability["metrics"],
         **timing,
     }
     _stackctl.write_json(report_dir / "report.json", payload)
     _stackctl.write_json(report_dir / "health.json", {"target": args.target, "scope": args.scope, "checks": statuses})
     _stackctl.write_json(report_dir / "findings.json", {"target": args.target, "scope": args.scope, "issues": findings})
+    availability_failed = user_availability.get("status") != "ready"
     _stackctl._write_summary_bundle(
         report_dir,
         command="health",
         target=args.target,
-        status="ok" if not findings else "failed",
+        status="ok" if not findings and not availability_failed else "failed",
         summary=f"stackctl health {args.target}: {ok_count}/{len(statuses)} healthy",
-        details=findings or [f"scope={args.scope}", f"healthy checks={ok_count}/{len(statuses)}"],
+        details=findings
+        or (
+            [
+                "user availability/"
+                + str(user_availability.get("firstBlockerClass") or "unknown")
+                + " failed: "
+                + str(user_availability.get("firstBlocker") or "required evidence is unavailable")
+            ]
+            if availability_failed
+            else [f"scope={args.scope}", f"healthy checks={ok_count}/{len(statuses)}"]
+        ),
         extra={"scope": args.scope},
         timing=timing,
     )
     _stackctl._write_stdout_markdown(report_dir, stdout_sections)
+    availability_details = (
+        [
+            "user availability/"
+            + str(user_availability.get("firstBlockerClass") or "unknown")
+            + " failed: "
+            + str(user_availability.get("firstBlocker") or "required evidence is unavailable")
+        ]
+        if availability_failed
+        else []
+    )
     return {
-        "exitCode": 0 if not findings else 1,
+        "exitCode": 0 if not findings and not availability_failed else 1,
         "summary": f"stackctl health {args.target}: {ok_count}/{len(statuses)} healthy",
         "details": findings
+        or availability_details
         or [
             "{name} -> {status} {target}".format(
                 name=item["name"],
@@ -394,5 +494,7 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
             for item in statuses
         ],
         "reportDir": _stackctl.relpath(report_dir),
+        "userAvailability": user_availability["userAvailability"],
+        "firstBlockerClass": user_availability["firstBlockerClass"],
         **timing,
     }

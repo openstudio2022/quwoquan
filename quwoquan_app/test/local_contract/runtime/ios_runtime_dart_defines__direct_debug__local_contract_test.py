@@ -64,7 +64,7 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
                     env["QWQ_IOS_STACKCTL_PYTHON"] = str(preflight_python)
                     _install_direct_handoff(env, environment)
                     env["DART_DEFINES"] = flutter_define
-                    env["CONFIGURATION"] = "Debug"
+                    env["CONFIGURATION"] = f"Debug-{environment}"
                     env["PLATFORM_NAME"] = "iphoneos"
                     build_dir = Path(temporary_directory) / environment
                     env["TARGET_BUILD_DIR"] = str(build_dir)
@@ -85,7 +85,7 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
                     )
                     self.assertEqual(values["FLUTTER_VERSION"], "test")
                     self.assertEqual(values["APP_LAUNCH_POLICY"], "test_live")
-                    self.assertEqual(values["CONTENT_BINDING_STATE"], "unbound")
+                    self.assertNotIn("CONTENT_BINDING_STATE", values)
                     self.assertTrue(REQUIRED_KEYS.issubset(values))
                     self.assertIn(
                         f"direct Debug uses canonical {environment}-local handoff",
@@ -100,11 +100,8 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
                     ).open("rb") as stream:
                         native_manifest = plistlib.load(stream)
                     self.assertNotIn("contentReleaseId", native_manifest)
+                    self.assertNotIn("contentBindingState", native_manifest)
                     self.assertEqual(native_manifest["launchPolicy"], "test_live")
-                    self.assertEqual(
-                        native_manifest["contentBindingState"],
-                        "unbound",
-                    )
                     self.assertRegex(
                         native_manifest["effectiveLaunchManifestDigest"],
                         r"^sha256:[0-9a-f]{64}$",
@@ -128,7 +125,7 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
             env["QWQ_IOS_STACKCTL_PYTHON"] = str(
                 _write_hard_blocked_preflight_python(Path(temporary_directory))
             )
-            env["CONFIGURATION"] = "Debug"
+            env["CONFIGURATION"] = "Debug-alpha"
             env["PLATFORM_NAME"] = "iphoneos"
             result = subprocess.run(
                 ["bash", str(SCRIPT)],
@@ -165,7 +162,7 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
                 _write_preflight_python(Path(temporary_directory))
             )
             _install_direct_handoff(env, "beta")
-            env["CONFIGURATION"] = "Debug"
+            env["CONFIGURATION"] = "Debug-alpha"
             env["PLATFORM_NAME"] = "iphoneos"
             result = subprocess.run(
                 ["bash", str(SCRIPT)],
@@ -192,7 +189,7 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
             "QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST",
         ):
             env.pop(key, None)
-        env["CONFIGURATION"] = "Release"
+        env["CONFIGURATION"] = "Release-alpha"
         env["PLATFORM_NAME"] = "iphonesimulator"
         result = subprocess.run(
             ["bash", str(SCRIPT)],
@@ -266,7 +263,7 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
                 "QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST",
             ):
                 env.pop(key, None)
-            env["CONFIGURATION"] = "Debug"
+            env["CONFIGURATION"] = "Debug-alpha"
             env["PLATFORM_NAME"] = "iphoneos"
             env["QWQ_IOS_STACKCTL_PYTHON"] = str(
                 _write_preflight_python(Path(temporary_directory))

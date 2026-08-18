@@ -33,12 +33,9 @@ def handle_distributed_campaign_stage(args: Any, identity: Any) -> bool:
                 recovery_reason=getattr(args, "recovery_reason", None),
             )
         else:
-            if (
-                identity.content_type.value != "homepage"
-                or root_execution_id != identity.execution_id
-            ):
+            if root_execution_id != identity.execution_id:
                 raise ValueError(
-                    f"{stage} requires the homepage --execution-id to equal "
+                    f"{stage} requires --execution-id to equal "
                     "--campaign-root-execution-id"
                 )
             from content.execution.campaign.distributed import (

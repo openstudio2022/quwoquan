@@ -59,7 +59,8 @@
 - 启动前发生已确认的根级致命异常时停止后续初始化，静默保存脱敏异常，并进入不依赖业务框架的恢复页；启动阶段不提供重复重试。
 - 运行中发生根级不可恢复异常时只允许一次受控主容器重建；成功直接替换路由进入首页，失败后不得形成恢复循环。
 - 恢复页在全部状态提供官方网页版。
-- 版本服务确认有新版且存在当前平台可安装通道后，Android 进入趣我圈官网受信 APK 下载通道；公众 iOS 进入趣我圈 PWA 安装指引，已登记测试设备才可使用受控 Ad Hoc 通道。只有版本服务确认后才能显示“需要更新”或“已是最新版本”。
+- 版本服务确认有新版且存在当前平台可安装通道后，Android 进入趣我圈官网受信 APK 下载通道或引导到本机来源的已登记受信应用市场（华为、小米、OPPO、vivo、应用宝）；公众 iOS 进入 App Store 官方更新通道，PWA 与网页版继续作为无原生通道时的恢复兜底，已登记测试设备才可使用受控 Ad Hoc 通道。只有版本服务确认后才能显示“需要更新”或“已是最新版本”。
+- 同一环境与同一服务端状态下，所有受支持的构建、安装与启动路径——裸 `flutter run`、canonical launcher 脚本、打包 Debug 安装后点击图标、应用市场 Release 安装、官网签名 APK 安装以及同包名覆盖升级——必须进入同一业务行为：同一配置完成态、同一首个安全终态、同一路由与登录态、同一内容 outcome 与 release identity、同一恢复动作。BuildMode、启动来源（launch provenance）与安装渠道（install channel）只允许作为观测事实记录，不得改变任何用户可见行为。
 - 页面只表达已确认事实、恢复状态和当前动作，不显示技术原因、诊断编号、日志进度、错误码或缺乏操作价值的不确定描述。
 
 <a id="req-004"></a>
@@ -86,7 +87,7 @@
 
 - 5 类对象都能从统一分享面板分享到微信会话/朋友圈，并生成站外可点击的 HTTPS 落地链接。
 - 已安装用户在微信内（Android/鸿蒙用 wx-open-launch-app、iOS 用 Universal Link）、在浏览器内（Universal Link/App Links/scheme）点击后回流到 App 对应详情页。
-- 未安装用户进入趣我圈官网；Android 可明确点击下载正式签名 APK，iOS 可添加 PWA 到主屏幕，原生安装完成后的首启再通过延迟深链还原原始目标对象。
+- 未安装用户进入趣我圈官网；Android 可明确点击下载正式签名 APK，iOS 展示 App Store 链接与 PWA 添加主屏指引，原生安装完成后的首启再通过延迟深链还原原始目标对象。
 - 公开 Web 内容/主页可被搜索引擎索引（canonical/OG/JSON-LD/robots/sitemap），并提供安装转化入口。
 - 一键海报（含二维码与口令）可投放到不支持外链的 UGC 平台，扫码或口令识别后回流到目标对象。
 - 全链路携带 referralSource/share_id/UTM/口令归因，可在指标大盘按渠道与对象类型统计转化。
@@ -122,7 +123,7 @@
 - 每条 Journey 至少跨两个真实业务对象，并验证权限、错误恢复、幂等、副作用、投影收敛和推荐/运营回流。
 - 所有页面通过 light/dark、多屏、无障碍、语义 token、性能、弱网和 capability 降级检查。
 - alpha/beta/gamma/prod 均使用同一个 production Remote composition。Alpha/Beta/Gamma test-live 允许在无 active content release 时编译启动并只呈现 canonical `no_active_release`/typed unavailable，不注入 Mock、fixture 或 seed。凡宣称内容、Creator、实体或发布媒体可用的验收仍必须来自 canonical immutable release。Prod 只接受 immutable release、真实用户或正式运营行为。
-- 环境名不再隐含内容分发成熟度；`productLifecycleState=research|commercial` 必须由受治理配置、immutable release、activation receipt 与 App readback 同源显式声明。
+- 环境名不再隐含内容分发成熟度；acquisition、semantic、review 与 canonical pool 不读取全局 `productLifecycleState/releaseClass`。两字段只由显式 immutable release selection 冻结，并由 release header、activation receipt 与 App readback 同源声明。
 - `research` 可在内部四环境消费权利尚未验证但可合法取得的素材，前提是身份白名单、匿名访问关闭、私有短签媒体、禁止分享/导出/索引与审计日志全部有证据。
 - `commercial` 只接受逐资产商业分发授权闭合的独立新 release。
 - Alpha/Beta/Gamma required 验收绑定受管非生产租户的非内存 Provider，Prod 完成正式 Provider、实时 SLO、灰度和回滚验证；任何环境 App 均不含 seed/Mock/Memory/Noop 或运行时数据源切换。
@@ -229,7 +230,7 @@
 
 - 用户目标：应用能够安全运行时进入登录页、首页、新用户流程或降级 Shell；无法安全启动或继续使用时，用户获得确定、无技术暴露且始终可执行的更新、网页版或一次性重新进入动作。
 - 起点：用户从应用或外部入口发起旅程。
-- 成功终态：用户进入安全 Shell、一次性重新进入后的首页、iOS PWA、Android 官网下载或官方网页版。
+- 成功终态：用户进入安全 Shell、一次性重新进入后的首页、iOS App Store 更新或 PWA、Android 官网下载或受信市场更新、或官方网页版。
 - 失败恢复：外部通道打开失败仅显示短暂系统提示并恢复按钮；异常日志、版本服务或授权交换失败不得阻塞仍可用的恢复动作。
 - 参与领域：
   - [runtime](./runtime/spec.md)
@@ -647,11 +648,13 @@
 - GIVEN Android 或 iPhone 正常启动、发生明确启动致命异常，或在安全 Shell 后发生根级不可恢复异常。
 - WHEN 应用执行启动交接、版本确认、一次性运行时重建、更新、官网 APK 下载或网页版恢复。
 - THEN 正常或可降级故障进入安全 Shell，单纯等待超时不进入恢复页；启动致命异常进入无重试的版本检查页，运行时重建最多一次且失败后不循环。
-- THEN 版本服务确认有新版且存在可安装通道时，Android 从趣我圈官方 HTTPS 通道下载已签名 APK。
-- THEN 公众 iOS 使用官方 PWA，已登记测试设备才可使用受控 Ad Hoc 通道。
+- THEN 版本服务确认有新版且存在可安装通道时，Android 从趣我圈官方 HTTPS 通道下载已签名 APK 或经本机来源的已登记受信市场更新。
+- THEN 公众 iOS 经 App Store 官方通道更新，无原生通道时使用官方 PWA/网页版，已登记测试设备才可使用受控 Ad Hoc 通道。
 - THEN 确认已最新、地址不可用或检查未完成时仍可进入官方网页版。
 - THEN 页面不存在技术原因、诊断编号或日志状态；脱敏异常先保存后异步上报，上报失败不影响任何恢复动作。
 - THEN Android/iOS 安装包、原生身份、runtime probe 与发布 provenance 绑定同一 effective launch manifest；package-only 编译不得替代真实 launcher/scene、safe terminal、motion、非 `unknown` attempt 与 telemetry readback 证据。
+- THEN <a id="install-launch-equivalence"></a>同一环境与同一服务端状态下，裸 `flutter run`、canonical launcher、打包 Debug 安装后点击图标、应用市场 Release 安装、官网签名 APK 安装与同包名覆盖升级的规范化启动行为指纹一致：配置完成态、首个安全终态、路由/登录态、内容 outcome 与 release identity、恢复动作均相同，且无 fatal recovery 差异；BuildMode、launch provenance 与 install channel 仅出现在观测事实中。
+- THEN 应用市场与官网 APK 安装的验收各自绑定真实下载/安装回执与安装后冷启动 telemetry 回读，package-only、side-load 或另一渠道的回执不得互相替代。
 
 <a id="uat-004"></a>
 ### UAT-004 我的主页转发互动双向历史
@@ -683,7 +686,7 @@
 - WHEN 参与者发起“对外引流与深链回流端到端价值闭环”对应动作。
 - THEN 5 类对象都能从统一分享面板分享到微信会话/朋友圈，并生成站外可点击的 HTTPS 落地链接。
 - THEN 已安装用户在微信内（Android/鸿蒙用 wx-open-launch-app、iOS 用 Universal Link）、在浏览器内（Universal Link/App Links/scheme）点击后回流到 App 对应详情页。
-- THEN 未安装用户进入趣我圈官网；Android 可下载正式签名 APK，iOS 可安装 PWA，原生安装后的首启通过延迟深链还原原始目标对象。
+- THEN 未安装用户进入趣我圈官网；Android 可下载正式签名 APK，iOS 可经 App Store 链接安装或添加 PWA，原生安装后的首启通过延迟深链还原原始目标对象。
 - THEN 公开 Web 内容/主页可被搜索引擎索引（canonical/OG/JSON-LD/robots/sitemap），并提供安装转化入口。
 - THEN 一键海报（含二维码与口令）可投放到不支持外链的 UGC 平台，扫码或口令识别后回流到目标对象。
 - THEN 全链路携带 referralSource/share_id/UTM/口令归因，可在指标大盘按渠道与对象类型统计转化。

@@ -162,9 +162,9 @@ def materialize_posts(
         )
         seq = int(coords.get("seq") or 1)
         post_dir = content_object.content_object_dir(execution_id, ref)
-        from core.paths import STAGE_REVIEW, ensure_object_stages
+        from core.paths import ensure_object_stages
 
-        ensure_object_stages(post_dir, through_stage=STAGE_REVIEW)
+        ensure_object_stages(post_dir)
         post_dir.mkdir(parents=True, exist_ok=True)
         assets_dir = post_dir / "assets"
         # 成品 assets 全量重建（仅清成品，过程阶段证据保留）。

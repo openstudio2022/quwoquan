@@ -1,0 +1,39 @@
+{
+  "schema": "quwoquan_data.evidence_index",
+  "stage": "5.review",
+  "executionId": "20260817--travel-homepage-closure--china-sichuan--pilot-001",
+  "executionBinding": "frozen",
+  "objectRef": "/entity/地点/景区/泸沽湖",
+  "evidence": [
+    {
+      "kind": "deterministic_gate",
+      "ref": "5.review/deterministic_gate.json",
+      "sha256": "sha256:89c0ee467f14dd759ac1a0fc1e69ec7677042e50fb6f407e4cef47a9bb739d67"
+    },
+    {
+      "kind": "media_ref_review",
+      "ref": "5.review/media_ref_review.json",
+      "sha256": "sha256:8ce8e3eb407175b3a8d0da9c76007a10d2dc20434e7267b092a7e5f852dfb834"
+    },
+    {
+      "kind": "review",
+      "ref": "5.review/review.json",
+      "sha256": "sha256:6cb28ad391142ac16581da5bcbd53c1714eed015c6f64b7df8232eb3b68c0804"
+    },
+    {
+      "kind": "provenance",
+      "ref": "5.review/provenance.json",
+      "sha256": "sha256:f3fdebb05c56c80e284a02fb9f5c4f04efbaff01cf99adc988a13ff9d03626ba"
+    },
+    {
+      "kind": "finalization",
+      "ref": "5.review/finalization_report.json",
+      "sha256": "sha256:abdf74dc6a92372159fc8f4b1a309e84c6406819f7f647cc0bb75314351c1ef7"
+    },
+    {
+      "kind": "independent_reviewer_result",
+      "ref": "5.review/reviewer_result.json",
+      "sha256": "sha256:02d604d103618c626606a3250afb1364df545576c7155dfa0b34e2bb4fa2edcc"
+    }
+  ]
+}

@@ -35,11 +35,13 @@ import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_projection_codec.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart'
     show ActivePersonaContextViewData;
+
 import '../../../../../support/service/content_service/content/content_behavior_fact/recording_content_behavior_repository.dart';
 import '../../../../../support/service/content_service/content/post/content_post_test_builder.dart';
 import '../../../../../support/service/content_service/content/post/test_content_app_config.dart';
 import '../../../../../support/service/content_service/content/comment/in_memory_content_comment_facet.dart';
 import '../../../../../support/service/recommendation_service/recommendation/recommendation_feature_profile_view/intersection_fixtures.dart';
+
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/image_book_canvas.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/media_page_flip_book.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/media_caption_widgets.dart';
@@ -79,11 +81,13 @@ import 'package:quwoquan_app/service/content_service/content/post/application/di
 import 'package:quwoquan_app/runtime/di/works_viewer_feed_bridge.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/works_immersive_viewer.dart';
 import 'package:video_player_platform_interface/video_player_platform_interface.dart';
+
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
 import '../../../../../support/runtime/platform/media/fake_video_player_platform.dart';
 import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 import '../../../../../support/runtime/platform/storage/sqflite_ffi_test_support.dart';
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
+
 import 'package:http/testing.dart';
 import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 
@@ -1330,15 +1334,18 @@ class _DeferredPostWorksViewerState extends State<_DeferredPostWorksViewer> {
 WorksViewerFeedSnapshot _worksFeedSnapshot({
   List<ContentPostViewData> items = const <ContentPostViewData>[],
   bool isLoading = false,
+  bool hasMore = false,
   Object? blockingError,
   ContentFeedEmptyReason? emptyReason,
+  Object? appendError,
 }) {
   return WorksViewerFeedSnapshot(
     items: items,
-    hasMore: false,
+    hasMore: hasMore,
     isLoading: isLoading,
     blockingError: blockingError,
     emptyReason: emptyReason,
+    appendError: appendError,
   );
 }
 
@@ -2600,9 +2607,8 @@ void main() {
           mediaDownloadCacheProvider.overrideWithValue(
             _NoopMediaDownloadCache(),
           ),
-          contentFeatureFlagProvider(
-            'enable_shared_video_timeline',
-          ).overrideWith((ref) => false),
+          contentFeatureFlagProvider('enable_shared_video_timeline')
+              .overrideWith((ref) => false),
         ],
       ),
     );
@@ -4007,9 +4013,9 @@ void main() {
       LoginDismissPolicy.safeFallback.name,
     );
 
-    (container.read(authSessionControllerProvider.notifier)
-            as _FlippableViewerSession)
-        .loginNow();
+    (container.read(
+      authSessionControllerProvider.notifier,
+    ) as _FlippableViewerSession).loginNow();
     router.pop();
     await _pumpSettledFrames(tester);
     await tester.pump();
@@ -4225,6 +4231,54 @@ void main() {
     expect(
       find.byKey(const ValueKey<String>('works-internal-feed-error')),
       findsNothing,
+    );
+  });
+
+  testWidgets('internal feed 有内容时分页失败只呈现 append footer', (tester) async {
+    final post = _photoPost();
+    await tester.pumpWidget(
+      _wrap(
+        _internalWorksViewer(),
+        overrides: _worksInternalFeedOverrides(
+          photo: AsyncData<WorksViewerFeedSnapshot>(
+            _worksFeedSnapshot(
+              items: <ContentPostViewData>[post],
+              hasMore: true,
+              appendError: StateError('append unavailable'),
+            ),
+          ),
+          video: AsyncData<WorksViewerFeedSnapshot>(
+            _worksFeedSnapshot(
+              emptyReason: ContentFeedEmptyReason.noEligibleContent,
+            ),
+          ),
+          article: AsyncData<WorksViewerFeedSnapshot>(
+            _worksFeedSnapshot(
+              emptyReason: ContentFeedEmptyReason.noEligibleContent,
+            ),
+          ),
+        ),
+      ),
+    );
+    await _pumpImmersiveViewerFirstFrames(tester);
+
+    expect(
+      find.byKey(ValueKey<String>('works-status-content-canvas-${post.id}')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('works-internal-feed-error')),
+      findsNothing,
+    );
+
+    await tester.drag(
+      find.byKey(TestKeys.worksImmersivePager),
+      const Offset(0, -600),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey<String>('works-load-more-retry')),
+      findsOneWidget,
     );
   });
 

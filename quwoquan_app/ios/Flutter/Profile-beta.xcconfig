@@ -1,0 +1,13 @@
+// Generated from _shared/app_artifact_manifest.yaml; do not edit.
+#include "Profile.xcconfig"
+#include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.profile-beta.xcconfig"
+#include? "Pods/Target Support Files/Pods-RunnerTests/Pods-RunnerTests.profile-beta.xcconfig"
+#include? "Pods/Target Support Files/Pods-Runner-RunnerUITests/Pods-Runner-RunnerUITests.profile-beta.xcconfig"
+#include "Identity/beta.xcconfig"
+QWQ_EXPECTED_BUILD_MODE = profile
+QWQ_EXPECTED_CONFIGURATION = Profile-beta
+QWQ_MODE_BUNDLE_ID_SUFFIX = .profile
+QWQ_MODE_DISPLAY_MARK = ·P
+QWQ_BUNDLE_ID_SUFFIX = $(QWQ_ENV_BUNDLE_ID_SUFFIX)$(QWQ_MODE_BUNDLE_ID_SUFFIX)
+QWQ_APP_DISPLAY_NAME = $(QWQ_APP_DISPLAY_NAME_BASE)$(QWQ_ENV_DISPLAY_MARK)$(QWQ_MODE_DISPLAY_MARK)
+FLUTTER_TARGET = lib/main_prod.dart

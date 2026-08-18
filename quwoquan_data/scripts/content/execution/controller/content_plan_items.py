@@ -222,7 +222,14 @@ def append_image_plan_items(
 ) -> None:
     single_image = len(candidates) == 1
     for index, candidate in enumerate(candidates, start=1):
-        ref = f"{target}_image" if single_image else f"{target}_image_{index}"
+        work_unit_id = str(candidate.get("workUnitId") or "").strip()
+        ref = (
+            f"{target}_image_{work_unit_id.removeprefix('sha256:')[:12]}"
+            if work_unit_id
+            else f"{target}_image"
+            if single_image
+            else f"{target}_image_{index}"
+        )
         raw_title = str(candidate.get("title") or "").strip()
         source_id = str(candidate.get("sourceId") or "").strip()
         title = "" if raw_title.casefold() == source_id.casefold() else raw_title[:80]
@@ -251,26 +258,29 @@ def append_image_plan_items(
             "publishSchedule": publish_schedule,
             **creator_assignment,
         }
+        if work_unit_id:
+            brief["workUnitId"] = work_unit_id
         write_brief_object(ctx.execution_id, ref, brief, content_type="image")
-        items.append(
-            {
-                "ref": ref,
-                "kind": "entity",
-                "carrier": "image",
-                "researchLane": "image",
-                "title": title,
-                "caption": caption,
-                "entityRefs": [entity_ref],
-                "entityTags": [target],
-                "evidenceRefs": [candidate["sourceRef"]],
-                "rationale": (
-                    "底稿中心配额选源：image research lane 下单一 "
-                    "sourceCollectionId 的授权图片集合（一源一作品）"
-                ),
-                "sourceCollectionId": candidate["collectionId"],
-                "baseSourceRef": candidate["sourceRef"],
-                "assetRefs": [candidate["assetRef"]],
-                "publishSchedule": publish_schedule,
-                **creator_assignment,
-            }
-        )
+        item = {
+            "ref": ref,
+            "kind": "entity",
+            "carrier": "image",
+            "researchLane": "image",
+            "title": title,
+            "caption": caption,
+            "entityRefs": [entity_ref],
+            "entityTags": [target],
+            "evidenceRefs": [candidate["sourceRef"]],
+            "rationale": (
+                "底稿中心配额选源：image research lane 下单一 "
+                "sourceCollectionId 的授权图片集合（一源一作品）"
+            ),
+            "sourceCollectionId": candidate["collectionId"],
+            "baseSourceRef": candidate["sourceRef"],
+            "assetRefs": [candidate["assetRef"]],
+            "publishSchedule": publish_schedule,
+            **creator_assignment,
+        }
+        if work_unit_id:
+            item["workUnitId"] = work_unit_id
+        items.append(item)

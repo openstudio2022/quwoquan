@@ -13,7 +13,7 @@ for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
         sys.path.insert(0, str(_path))
 
 
-from content.execution.stage_reports import write_stage_result  # noqa: E402
+from content.execution.stage_reports import read_stage_envelope, write_stage_result  # noqa: E402
 from content.post.materialize_apply import materialize_posts  # noqa: E402
 from content.post.materialize_contract import _image_source_contract  # noqa: E402
 from content.post.object_index import register_content_object  # noqa: E402
@@ -214,8 +214,11 @@ def test_image_materialize_is_structured_only():
     assert finalization["normalizationActions"] == ["asset_only_finalization"]
 
     manifest = read_json(post_dir / "manifest.json")
+    provenance = read_json(post_dir / "5.review" / "provenance.json")
     assert manifest["contentType"] == "image"
     assert manifest["contentIdentity"] == "work"
+    assert manifest["generator"] == "agent"
+    assert provenance["final"]["generator"] == "agent"
     assert manifest["title"] == ""
     assert manifest["caption"] == ""
     assert len(manifest["assets"]) == 2
@@ -228,6 +231,18 @@ def test_image_materialize_is_structured_only():
     assert manifest["sourceAttribution"] == SOURCE_ATTRIBUTION
     assert "licenseProof" not in manifest
     assert provenance_issues(post_dir, manifest) == []
+
+
+def test_image_materialize_keeps_internal_evidence_generator_out_of_delivery_wire():
+    post_dir = _materialize_image()
+    manifest = read_json(post_dir / "manifest.json")
+    provenance = read_json(post_dir / "5.review" / "provenance.json")
+    compose = read_stage_envelope(EXECUTION_ID, "post", "compose", REF)
+
+    assert compose is not None
+    assert compose["payload"]["generator"] == "image_evidence_pack"
+    assert manifest["generator"] == "agent"
+    assert provenance["final"]["generator"] == "agent"
 
 
 def test_image_materialize_does_not_backfill_publish_title_from_object_coords():

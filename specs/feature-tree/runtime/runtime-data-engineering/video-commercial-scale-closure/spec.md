@@ -16,7 +16,7 @@
 
 - source admission、asset rights、attribution、takedown 与审计
 - download、transcode、poster、subtitle、checksum、provenance
-- request 驱动的 release、playback、rollback/replay 与 capacity receipt
+- request 驱动的 release、playback、rollback/replay 与 runtime observation receipt
 
 ### Out of Scope
 
@@ -43,7 +43,8 @@
 - 容量与预算结论只读取真实 receipt，未执行不冒充完成。
 - M100/M1000 的 video workload target 分别为 10/100；quota/count 只表达请求负载与里程碑目标，不是发布门。每个 hard-qualified 视频均须发布，shortfall 和带 typed issues 的 discard 不否决其它合格视频。
 - receipt 必须记录 target/selected/qualified/finalized/discarded/shortfall，以及 object pass、automatic recovery、first-pass、discard 与 quota attainment 的清晰分子、分母和 rate；这些统计不参与对象发布或 `m1000Eligible`。
-- travel/video M1000 按统一池累计唯一 publishable 与 milestone cohort 判断。M100 lineage 保留其自身 immutable source identity，不要求与 M1000 新对象共享单一 source tuple。启动 M1000 semantic wave 前必须已有同一 M100 Research release 的 Alpha activation/readback/App UAT passed receipt。对象级 review/rights/provenance/安全/可播放闭包与 cohort 的 `sourceIdentitySetDigest` 任一漂移 fail closed，partial/shortfall 本身不阻断。
+- active video workloads 按可用容量独立调度，可串行或重叠执行；固定并发、固定 worker、workspace smoke、capacity soak 与 resource samples 不作为 dispatch/promotion 前置。每个实际启动的 task 逐项记录 typed 终态，诊断 sample 不得冒充 task 结果。
+- travel/video M1000 按统一池累计唯一 publishable 与 milestone cohort 判断。M100 lineage 保留其自身 immutable source identity，不要求与 M1000 新对象共享单一 source tuple。M1000 source/semantic/review 可与 M100 Alpha 验收并行；只有最终 M1000 promotion 才要求同一 M100 Research release 的 Alpha activation/readback/App UAT passed receipt。对象级 review/rights/provenance/安全/可播放闭包与 cohort 的 `sourceIdentitySetDigest` 任一漂移 fail closed，partial/shortfall 本身不阻断。
 
 ## 4. 契约引用
 
@@ -81,7 +82,8 @@
 - THEN import、API、播放、rollback/replay、成本与 QoE 证据绑定同一 release digest。
 - THEN 缺 commercial profile 依赖时返回 GATE_BLOCK，不影响 baseline 或 integration 数据面验证。
 - THEN 每个 qualified 视频均 finalize；target shortfall 与 typed discard 只进入 receipt，各 rate 明确分子/分母且不参与 promotion 判定。
-- THEN 请求 M1000 semantic wave 时，缺同一 M100 Research release 的 Alpha activation/readback/App UAT passed receipt返回 GATE_BLOCK；构建 M1000 cohort 时，任一被选对象未达到 review/rights/provenance/安全/可播放与 publish closure 或对象 source identity 漂移均 fail closed，未选坏对象、未命中 workload target 或比率阈值不构成该阻断。
+- THEN soak/workspace/resource samples 的缺失或失败只影响容量结论，不影响 task dispatch；canonical publish 保持对象事务单写者，最终 release 仍对被选对象及引用做 exact closure。
+- THEN 请求 M1000 source/semantic/review wave 时不读取 M100 Alpha receipt；最终 promotion 缺同一 M100 Research release 的 Alpha activation/readback/App UAT passed receipt 才返回 GATE_BLOCK。构建 M1000 cohort 时，任一被选对象未达到 review/rights/provenance/安全/可播放与 publish closure 或对象 source identity 漂移均 fail closed，未选坏对象、未命中 workload target或比率阈值不构成该阻断。
 
 ## 6. 依赖
 

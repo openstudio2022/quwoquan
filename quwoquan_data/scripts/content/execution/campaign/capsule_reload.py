@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from core.io import read_json
+from content.execution.campaign.lane import normalize_active_carriers
 
 from content.execution.campaign.workspace import (
     CampaignRuntimePaths,
@@ -61,6 +62,7 @@ def load_source_capsule(
     }
     if any(stable.get(key) != value for key, value in expected_identity.items()):
         raise ValueError("campaign capsule plan identity drift")
+    active = normalize_active_carriers(lane_external_inputs)
     expected_lanes = {
         carrier: {
             "rootRef": f"external-inputs/{carrier}",
@@ -69,7 +71,7 @@ def load_source_capsule(
                 lane_external_inputs[carrier]["externalInputsDigest"]
             ),
         }
-        for carrier in ("homepage", "article", "image", "video")
+        for carrier in active
     }
     if stable.get("laneExternalInputs") != expected_lanes:
         raise ValueError("campaign capsule external input plan drift")

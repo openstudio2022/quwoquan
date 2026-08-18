@@ -7,6 +7,8 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
+
+from quwoquan_ops.cli.lib.immutable_image_composition import runtime_image_owner_names
 WORKFLOWS = [
     ROOT / ".github" / "workflows" / "deploy-prod-auto.yml",
 ]
@@ -298,11 +300,14 @@ def main() -> int:
             )
 
     access = yaml.safe_load(ACCESS_MANIFEST.read_text(encoding="utf-8")) or {}
-    expected_images = {
+    governed_compose_services = {
         str(service)
         for plane in access.get("planes") or []
         for service in plane.get("rootlessGovernedComposeServices") or []
     }
+    if not governed_compose_services:
+        issues.append("prod access manifest has no governed compose services")
+    expected_images = set(runtime_image_owner_names(ROOT))
     generator_globals = runpy.run_path(str(RELEASE_GENERATOR))
     if generator_globals.get("SCHEMA") != "release-evidence-manifest":
         issues.append(
@@ -311,7 +316,7 @@ def main() -> int:
     declared_images = set(generator_globals.get("DEPLOYED_SERVICES") or ())
     if declared_images != expected_images:
         issues.append(
-            "mainline release image set must equal prod governed compose services: "
+            "mainline release image set must equal canonical runtime image owners: "
             f"missing={sorted(expected_images - declared_images)} "
             f"extra={sorted(declared_images - expected_images)}"
         )
@@ -320,7 +325,7 @@ def main() -> int:
     planned_images = set(planner_globals.get("ALL_SERVICES") or ())
     if planned_images != expected_images:
         issues.append(
-            "service release planner image set must equal prod governed compose services: "
+            "service release planner image set must equal canonical runtime image owners: "
             f"missing={sorted(expected_images - planned_images)} "
             f"extra={sorted(planned_images - expected_images)}"
         )
@@ -330,7 +335,7 @@ def main() -> int:
             item
             for item in build_definitions
             if isinstance(item, dict)
-            and item.get("service") == "recommendation-service"
+            and item.get("runtime_image_owner") == "recommendation-service"
         ),
         None,
     )
@@ -352,7 +357,8 @@ def main() -> int:
         'DOCKER_BUILD_RECORD_UPLOAD: "false"',
         "plan_service_release_images.py",
         "matrix: ${{ fromJSON(needs.prepare-release.outputs.image_matrix) }}",
-        "${{ matrix.service }}",
+        "${{ matrix.environment }}",
+        "${{ matrix.runtime_image_owner }}",
         "${{ matrix.image_name }}",
         "BUILD_IMAGE_COUNT: ${{ needs.prepare-release.outputs.build_count }}",
         "REUSE_IMAGE_COUNT: ${{ needs.prepare-release.outputs.reuse_count }}",

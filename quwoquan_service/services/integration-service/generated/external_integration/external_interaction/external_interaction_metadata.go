@@ -3,6 +3,7 @@ package generated
 
 // ExternalInteraction transport paths from api_routes.
 const (
+	SmsOtpDeliveryReadinessPath          = "/internal/integrations/external-requests/capabilities/identity.sms.otp/readiness"
 	ExternalRequestsPath                 = "/integrations/external-requests"
 	ExternalRequestByIDPathTemplate      = "/integrations/external-requests/{requestId}"
 	ExternalRequestAttemptsPathTemplate  = "/integrations/external-requests/{requestId}/attempts"

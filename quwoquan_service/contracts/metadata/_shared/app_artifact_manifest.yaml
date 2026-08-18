@@ -1,0 +1,314 @@
+schema_id: app_artifact_manifest
+description: App 制品身份、安装回执与分发渠道矩阵的唯一真相源（deliver-deploy-prod-pipeline DEC-004）；打包、签名校验、渠道登记与准出工具全部消费本文件，不得自持字段集合。
+owner: runtime
+
+digest_contract:
+  algorithm: sha256
+  input_encoding: utf-8
+  canonical_json:
+    sort_keys: true
+    ensure_ascii: false
+    separators: [",", ":"]
+  identity_format: "sha256:<64-lowercase-hex>"
+
+environments: [alpha, beta, gamma, prod]
+platforms: [android, ios, web, macos]
+build_modes: [debug, profile, release]
+
+# distributionClass 与 BuildMode 的合法组合。Debug 签名制品仅限开发者本机、
+# Simulator/Emulator 与登记设备；TestFlight、市场与官网只接受 Release。
+# launch_provenances 声明该分发类合法的启动来源；有效安装启动路径矩阵
+# = distribution_class × platforms × build_modes × launch_provenances，
+# 消费方只推导、不得自持第二份组合表。
+distribution_classes:
+  dev_direct:
+    description: flutter run、ADB/Xcode 直装与本机可安装 Debug 制品。
+    build_modes: [debug, profile, release]
+    platforms: [android, ios]
+    launch_provenances:
+      [direct_flutter_run, canonical_launcher, hot_restart, icon_cold_launch]
+    promotable: false
+  simulator:
+    description: Simulator/Emulator 安装制品（含 prod-sim 双模拟器验证）。
+    build_modes: [debug, profile, release]
+    platforms: [android, ios]
+    launch_provenances:
+      [canonical_launcher, release_package, icon_cold_launch]
+    promotable: false
+  registered_device:
+    description: 登记设备 Development/Ad Hoc 分发。
+    build_modes: [debug, profile, release]
+    platforms: [android, ios]
+    launch_provenances:
+      [canonical_launcher, release_package, icon_cold_launch]
+    promotable: false
+  store:
+    description: Apple App Store/TestFlight 与登记 Android 应用市场。
+    build_modes: [release]
+    platforms: [android, ios]
+    launch_provenances: [release_package, icon_cold_launch]
+    promotable: true
+  official_web:
+    description: 官网签名 APK 直接下载安装（Android only）。
+    build_modes: [release]
+    platforms: [android]
+    launch_provenances: [release_package, icon_cold_launch]
+    promotable: true
+  hosted_web:
+    description: 四环境 Web official artifact 静态托管交付。
+    build_modes: [release]
+    platforms: [web]
+    launch_provenances: [icon_cold_launch]
+    promotable: true
+
+# 四环境 × BuildMode 的包身份映射（唯一真相源）。规则：
+#   applicationId = base + environment_suffix + build_mode_suffix
+#   displayName   = display_name_base + environment_mark + build_mode_mark
+# prod × release 使用 base 本身；任何两个 (environment, buildMode) 组合的
+# applicationId 不得相同，保证同一设备上互不覆盖安装。
+# registered=false 表示该平台 Prod 正式 ID 尚未取得已登记外部事实，
+# store 渠道 promotable 必须阻断（GATE_BLOCK/OPEN），不得用占位 ID 上架。
+application_identity:
+  display_name_base: 趣我圈
+  base_application_ids:
+    android:
+      value: com.quwoquan.quwoquan_app
+      registered: true
+    ios:
+      value: com.example.quwoquanApp
+      registered: false
+  environment_suffixes:
+    alpha: .alpha
+    beta: .beta
+    gamma: .gamma
+    prod: ""
+  environment_display_marks:
+    alpha: α
+    beta: β
+    gamma: γ
+    prod: ""
+  build_mode_suffixes:
+    debug: .debug
+    profile: .profile
+    release: ""
+  build_mode_display_marks:
+    debug: ·D
+    profile: ·P
+    release: ""
+
+# launch provenance 枚举：只记录启动来源，任何消费方不得据此改变业务行为。
+launch_provenances:
+  - direct_flutter_run
+  - canonical_launcher
+  - release_package
+  - hot_restart
+  - icon_cold_launch
+
+# 渠道矩阵：每渠道逐项声明，一个渠道的回执不得替代另一渠道。
+# 市场可能重签、拆分或优化，准出不要求下载二进制逐字节相同，而以
+# source digest、version/build、store 官方签名/receipt 与启动 telemetry 绑定。
+# credential_env 指向凭据文件路径的环境变量名；凭据值/文件一律不入仓库，
+# 缺失时对应渠道保持 GATE_BLOCK/OPEN，不得用 side-load 冒充市场安装。
+distribution_channels:
+  apple_app_store:
+    platform: ios
+    upload_format: ipa
+    distribution_class: store
+    store_signing_custodian: apple
+    readback: app_store_connect_api
+    automation_tier: A2
+    credential_owner: apple_developer_account
+    credential_env: QWQ_APPLE_ASC_API_KEY_PATH
+  apple_testflight:
+    platform: ios
+    upload_format: ipa
+    distribution_class: store
+    store_signing_custodian: apple
+    readback: app_store_connect_api
+    automation_tier: A2
+    credential_owner: apple_developer_account
+    credential_env: QWQ_APPLE_ASC_API_KEY_PATH
+  huawei_appgallery:
+    platform: android
+    upload_format: aab_or_apk
+    distribution_class: store
+    store_signing_custodian: huawei
+    readback: agc_api
+    automation_tier: A2
+    credential_owner: huawei_agc_account
+    credential_env: QWQ_HUAWEI_AGC_API_CLIENT_PATH
+  xiaomi_getapps:
+    platform: android
+    upload_format: apk
+    distribution_class: store
+    store_signing_custodian: xiaomi
+    readback: manual_with_machine_receipt
+    automation_tier: A3
+    credential_owner: xiaomi_developer_account
+    credential_env: QWQ_XIAOMI_DEV_CREDENTIAL_PATH
+  oppo_market:
+    platform: android
+    upload_format: apk
+    distribution_class: store
+    store_signing_custodian: oppo
+    readback: manual_with_machine_receipt
+    automation_tier: A3
+    credential_owner: oppo_developer_account
+    credential_env: QWQ_OPPO_DEV_CREDENTIAL_PATH
+  vivo_market:
+    platform: android
+    upload_format: apk
+    distribution_class: store
+    store_signing_custodian: vivo
+    readback: manual_with_machine_receipt
+    automation_tier: A3
+    credential_owner: vivo_developer_account
+    credential_env: QWQ_VIVO_DEV_CREDENTIAL_PATH
+  tencent_myapp:
+    platform: android
+    upload_format: apk
+    distribution_class: store
+    store_signing_custodian: tencent
+    readback: manual_with_machine_receipt
+    automation_tier: A3
+    credential_owner: tencent_myapp_developer_account
+    credential_env: QWQ_TENCENT_MYAPP_CREDENTIAL_PATH
+  official_web:
+    platform: android
+    upload_format: apk
+    distribution_class: official_web
+    store_signing_custodian: first_party
+    readback: cdn_receipt
+    automation_tier: A2
+    credential_owner: first_party_release_operator
+    credential_env: QWQ_OFFICIAL_WEB_DEPLOY_CREDENTIAL_PATH
+
+schemas:
+  app_artifact_manifest:
+    schema_value: app-artifact-manifest
+    additional_fields: false
+    required_fields:
+      - schema
+      - environment
+      - platform
+      - buildMode
+      - distributionClass
+      - applicationId
+      - displayVersion
+      - buildNumber
+      - signingIdentityDigest
+      - sourceGitSha
+      - sourceTreeDigest
+      - artifactDigest
+      - launchManifestDigest
+      - promotable
+    fields:
+      schema: { type: string, const: app-artifact-manifest }
+      environment: { type: string, allowed_values: [alpha, beta, gamma, prod] }
+      platform: { type: string, allowed_values: [android, ios, web, macos] }
+      buildMode: { type: string, allowed_values: [debug, profile, release] }
+      distributionClass:
+        type: string
+        allowed_values:
+          [dev_direct, simulator, registered_device, store, official_web, hosted_web]
+      applicationId: { type: string, min_length: 1 }
+      displayVersion: { type: string, min_length: 1 }
+      buildNumber: { type: string, min_length: 1 }
+      signingIdentityDigest: { type: string, format: sha256_identity }
+      sourceGitSha: { type: string, format: git_object_sha }
+      sourceTreeDigest: { type: string, format: git_tree_digest }
+      artifactDigest: { type: string, format: sha256_identity }
+      launchManifestDigest: { type: string, format: sha256_identity }
+      promotable: { type: boolean }
+    constraints:
+      - distributionClass 与 buildMode 的组合必须满足 distribution_classes 声明；store/official_web/hosted_web 只接受 release。
+      - promotable 必须等于 distribution_classes 中该 class 的 promotability 且 buildMode 为 release。
+      - 本清单不携带内容 release 身份；内容激活身份只由 Content API 响应在运行时下发。
+      - alpha/beta/gamma/prod 与 Debug/Release 的 applicationId 必须互不覆盖；Prod 正式 ID 只取已登记外部事实。
+
+  app_install_receipt:
+    schema_value: app-install-receipt
+    additional_fields: false
+    append_only: true
+    required_fields:
+      - schema
+      - channelId
+      - environment
+      - platform
+      - applicationId
+      - displayVersion
+      - buildNumber
+      - sourceGitSha
+      - artifactDigest
+      - installedAt
+      - deviceIdentityDigest
+      - signatureVerification
+    fields:
+      schema: { type: string, const: app-install-receipt }
+      channelId:
+        type: string
+        allowed_values:
+          [
+            apple_app_store,
+            apple_testflight,
+            huawei_appgallery,
+            xiaomi_getapps,
+            oppo_market,
+            vivo_market,
+            tencent_myapp,
+            official_web,
+            dev_direct,
+            simulator,
+            registered_device,
+          ]
+      environment: { type: string, allowed_values: [alpha, beta, gamma, prod] }
+      platform: { type: string, allowed_values: [android, ios] }
+      applicationId: { type: string, min_length: 1 }
+      displayVersion: { type: string, min_length: 1 }
+      buildNumber: { type: string, min_length: 1 }
+      sourceGitSha: { type: string, format: git_object_sha }
+      artifactDigest: { type: string, format: sha256_identity }
+      installedAt: { type: string, format: rfc3339_utc }
+      deviceIdentityDigest: { type: string, format: sha256_identity }
+      signatureVerification:
+        type: object
+        additional_fields: false
+        required_fields: [method, status]
+        fields:
+          method:
+            type: string
+            allowed_values:
+              [
+                store_receipt,
+                platform_signature_digest,
+                cdn_sha256_receipt,
+                development_provisioning,
+              ]
+          status: { type: string, allowed_values: [verified, failed] }
+    constraints:
+      - InstallReceipt 是 append-only separate fact；不得修改或删除既有回执，失败回执不得被后续成功覆盖。
+      - channelId 必须与 distribution_channels 或非市场 distributionClass 对应；一个渠道的回执不得替代另一渠道。
+      - artifactDigest/sourceGitSha 必须绑定同一 reviewed candidate；市场重签或优化后仍以 source 身份与 store 官方 receipt 验证，不比对二进制逐字节。
+
+  # 既有 ReleaseEvidenceManifest 内的通用 App 包证据；render/validate 工具消费本段，
+  # 不得在脚本内自持字段集合。
+  release_application_package:
+    schema_value: release-application-package
+    additional_fields: false
+    required_fields:
+      - schema
+      - environment
+      - surface
+      - sourceGitSha
+      - sourceTreeDigest
+      - packageDigest
+    fields:
+      schema: { type: string, const: release-application-package }
+      environment: { type: string, allowed_values: [alpha, beta, gamma, prod] }
+      surface: { type: string, allowed_values: [android, ios, web, macos] }
+      sourceGitSha: { type: string, format: git_object_sha }
+      sourceTreeDigest: { type: string, format: git_tree_digest }
+      packageDigest: { type: string, format: sha256_identity }
+    constraints:
+      - packageDigest 必须是对 canonical payload 目录的不可变 sha256 树摘要。
+      - sourceGitSha/sourceTreeDigest 必须与检出的 reviewed candidate 完全一致。

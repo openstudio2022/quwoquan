@@ -35,7 +35,6 @@ from content.release.canonical.aggregate_release_pool import (
 )
 from content.release.canonical.aggregate_release_result import (
     aggregate_release_result,
-    pool_distribution_policy,
 )
 from content.release.canonical.creator_avatar_quality import (
     creator_avatar_quality_issues,
@@ -80,7 +79,7 @@ from core.media_asset_url import (
 from core.paths import CONTROL_PLANE_TAXONOMY_ROOT
 from core.release_layout import (
     attestation_root,
-    object_closure_digest,
+    objects_merkle,
     payload_digest,
     payload_root,
 )
@@ -105,11 +104,14 @@ def _build_aggregate_release(
     adoption_output_root: Path | None = None,
     target_environment: str | None = None,
     milestone: str | None = None,
-    release_class: str | None = None,
+    release_class: str,
     pool_wide: bool = False,
 ) -> dict[str, Any]:
     """Create one immutable release from canonical objects bound to execution IDs."""
     release_id = _safe_id(release_id, label="releaseId")
+    release_mode = str(release_class or "").strip()
+    if release_mode not in {"research", "commercial"}:
+        raise ObjectTransactionError(f"DATA.RELEASE.CLASS_INVALID: {release_mode!r}")
     reviewed_selection: ReviewedClosureSelection | None = None
     environment_selection: EnvironmentReleaseSelection | None = None
     source_identities: tuple[dict[str, object], ...] = ()
@@ -192,6 +194,7 @@ def _build_aggregate_release(
                 publish_root=publish_root,
                 post_refs=sorted(post_refs),
                 environment=target_environment,
+                release_class=release_mode,
             )
             post_refs = set(environment_selection.post_refs)
         creator_refs, tag_refs = reference_closure(
@@ -222,12 +225,11 @@ def _build_aggregate_release(
     if source_identity_set_mode:
         if (
             environment_selection is None
-            or environment_selection.release_mode != "research"
             or not source_identities
             or source_identity_set_digest is None
         ):
             raise ObjectTransactionError(
-                "DATA.POOL.SOURCE_IDENTITY_MISSING: Research pool release"
+                "DATA.POOL.SOURCE_IDENTITY_MISSING: pool release"
             )
         source_digest: str | None = None
     else:
@@ -267,7 +269,6 @@ def _build_aggregate_release(
         if environment_selection is not None
         else None
     )
-    distribution_policy = pool_distribution_policy(environment_selection)
     final_root = release_root / release_id
     if final_root.exists():
         existing = reuse_existing_aggregate_release(
@@ -281,7 +282,7 @@ def _build_aggregate_release(
             source_digest_documents=source_digest_documents,
             source_digests=source_digests,
             desired=desired,
-            distribution_policy=distribution_policy,
+            release_class=release_mode,
             reviewed_closure_adoption=reviewed_closure_adoption,
             adoption_output_root=adoption_output_root,
             reviewed_selection=reviewed_selection,
@@ -364,7 +365,7 @@ def _build_aggregate_release(
             release_id=release_id,
             objects_root=payload / "objects",
             desired=desired,
-            policy=distribution_policy,
+            release_class=release_mode,
         )
         assert_valid(
             asset_admission,
@@ -373,11 +374,11 @@ def _build_aggregate_release(
             label=f"release_asset_admission:{release_id}",
         )
         _write_json(payload / "asset_admission.json", asset_admission)
-        selected_merkle = object_closure_digest(staging, create=True)
+        selected_merkle = objects_merkle(staging, create=True)
         if (
             reviewed_selection is not None
             and selected_merkle
-            != object_closure_digest(reviewed_selection.source_release_root)
+            != objects_merkle(reviewed_selection.source_release_root)
         ):
             raise ObjectTransactionError(
                 "reviewed closure adoption object bytes changed during aggregation"
@@ -391,10 +392,8 @@ def _build_aggregate_release(
             source_digest_documents=source_digest_documents,
             asset_admission=asset_admission,
             canonical_merkle=selected_merkle,
-            release_class=distribution_policy.release_class.value,
-            product_lifecycle_state=(
-                distribution_policy.product_lifecycle_state.value
-            ),
+            release_class=release_mode,
+            product_lifecycle_state=release_mode,
             reviewed_closure_adoption=reviewed_closure_adoption,
             target_environment=(
                 environment_selection.environment
@@ -458,7 +457,6 @@ def _build_aggregate_release(
         else:
             copy_release_media_objects(
                 manifest=media_manifest,
-                source_root=publish_root,
                 release_root=staging,
             )
         _write_json(payload / "media_manifest.json", media_manifest)
@@ -494,7 +492,7 @@ def _build_aggregate_release(
             tag_count=len(tag_refs),
             payload_sha256=payload_digest(staging),
             recorded_at=_now(),
-            distribution_policy=distribution_policy,
+            release_class=release_mode,
             source_identities=(
                 source_identities if source_identity_set_mode else ()
             ),
@@ -543,6 +541,7 @@ def build_aggregate_release(
     execution_ids: list[str],
     source_revision: str,
     entity_catalog_digest: str,
+    release_class: str,
     reviewed_closure_adoption: Mapping[str, Any] | None = None,
     adoption_output_root: Path | None = None,
     target_environment: str | None = None,
@@ -560,6 +559,7 @@ def build_aggregate_release(
             execution_ids=execution_ids,
             source_revision=source_revision,
             entity_catalog_digest=entity_catalog_digest,
+            release_class=release_class,
             reviewed_closure_adoption=reviewed_closure_adoption,
             adoption_output_root=adoption_output_root,
             target_environment=target_environment,
@@ -573,7 +573,7 @@ def build_pool_release(
     release_id: str,
     target_environment: str | None = None,
     milestone: str | None = None,
-    release_class: str | None = None,
+    release_class: str,
 ) -> dict[str, Any]:
     """Build one immutable environment release from the whole admitted pool."""
 

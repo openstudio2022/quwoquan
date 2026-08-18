@@ -39,6 +39,8 @@ def _write_predecessor(
 ) -> None:
     root = output_root / "data/tasks" / PREDECESSOR_ID
     selection = resolve_semantic_preflight_selection("cursor_grok")
+    grok_model = selection.model_selection.model_id
+    grok_parameters = selection.model_selection.parameters_document()
     manifest = {
         "executionId": PREDECESSOR_ID,
         "familyRef": {"ref": "content/travel/article/article", "sha256": "1" * 64},
@@ -47,14 +49,19 @@ def _write_predecessor(
             "digest": "sha256:" + "2" * 64,
             "inputs": ["quwoquan_data/reference"],
         },
+        "executionBundle": {
+            "algorithm": "sha256",
+            "digest": "sha256:" + "b" * 64,
+            "inputs": ["quwoquan_data/scripts"],
+        },
         "modelBinding": {
             "provider": "cursor_sdk",
-            "authorModel": "grok-4.5",
+            "authorModel": grok_model,
             "authorModelFamily": "grok",
-            "authorModelParameters": [],
-            "reviewerModel": "grok-4.5",
+            "authorModelParameters": grok_parameters,
+            "reviewerModel": grok_model,
             "reviewerModelFamily": "grok",
-            "reviewerModelParameters": [],
+            "reviewerModelParameters": grok_parameters,
         },
         "runtimeProfileId": selection.runtime_profile_id,
         "runtimeProfileDigest": selection.runtime_profile_digest,
@@ -88,8 +95,8 @@ def _write_predecessor(
         "semanticPreflightReceipt": manifest["semanticPreflightReceipt"],
         "workspaceRef": f"data/tasks/{PREDECESSOR_ID}",
         "provider": "cursor_sdk",
-        "model": "grok-4.5",
-        "modelParameters": [],
+        "model": grok_model,
+        "modelParameters": grok_parameters,
         "runtimeProfileId": selection.runtime_profile_id,
         "runtimeProfileDigest": runtime_profile_digest(selection.runtime_profile_id),
         "semanticSelectionDigest": selection.selection_digest,
@@ -104,6 +111,7 @@ def _write_predecessor(
         "requestDigest": request["requestDigest"],
         "attempt": 1,
         "recordedAt": "2026-08-12T00:00:00Z",
+        "started": status == "finished",
         "status": status,
         "provider": "cursor_sdk",
         "runId": "run-1",
@@ -112,10 +120,12 @@ def _write_predecessor(
         "durationMs": 1,
         "resultSha256": "sha256:" + "a" * 64,
         "failureKind": failure_kind,
+        "messageSha256": "sha256:" + hashlib.sha256(b"").hexdigest(),
         "errorCode": error_code,
         "retryable": False,
-        "capacityReceiptRef": "",
-        "capacityReceiptDigest": "",
+        "retryAfterSeconds": 0,
+        "attempts": 1,
+        "warmAttempts": 1,
     }
     write_json(
         journal / "attempts/0001.json",

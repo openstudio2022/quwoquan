@@ -18,11 +18,10 @@ from core.paths import execution_root, release_root
 from content.post.article.base_draft import ARTICLE_MIN_BASE_DRAFT_CHARS, base_draft_readiness
 from core.content_source_registry import homepage_source_can_seed_base_draft
 from core.tree_integrity import tree_integrity_stats
-from core.release_layout import object_closure_digest, payload_file
+from core.release_layout import objects_merkle, payload_file, verify_release_holdings
 from content.release.environment.consistency import scan_release_contract
 from governance.coverage.license import (
     rights_audit_status_recorded,
-    rights_proof_required,
 )
 
 
@@ -151,18 +150,6 @@ def _same_source_unit(source_ref: str, source_asset_ref: str) -> bool:
     return str(source_asset_ref).startswith(source_unit + "/assets/")
 
 
-def _has_rights_proof(*payloads: Mapping[str, Any]) -> bool:
-    keys = ("authorizationProof", "licenseSnapshot", "termsUrl")
-    for payload in payloads:
-        for key in keys:
-            value = payload.get(key)
-            if isinstance(value, str) and value.strip():
-                return True
-            if isinstance(value, Mapping) and value:
-                return True
-    return False
-
-
 def _asset_rights_issues(
     asset_label: str,
     asset: Mapping[str, Any],
@@ -172,10 +159,6 @@ def _asset_rights_issues(
 ) -> list[str]:
     if not vertical:
         return [f"{asset_label} missing vertical rights policy owner"]
-    if rights_proof_required(vertical):
-        if not _has_rights_proof(asset, source_meta):
-            return [f"{asset_label} missing required rights proof"]
-        return []
     if not rights_audit_status_recorded(asset, source_meta):
         return [f"{asset_label} missing rights audit status"]
     return []
@@ -437,7 +420,7 @@ def _release_integrity(release_id: str, root: Path) -> dict[str, Any]:
         issues.append(f"{release_id}: release.json canonicalMerkle is empty")
     else:
         try:
-            actual_merkle = object_closure_digest(root)
+            actual_merkle = objects_merkle(root)
         except FileNotFoundError as exc:
             issues.append(f"{release_id}: {exc}")
         else:
@@ -475,6 +458,12 @@ def _release_integrity(release_id: str, root: Path) -> dict[str, Any]:
             issues.append(
                 f"{release_id}: {code}: {issue.get('ref')} {issue.get('message')}"
             )
+
+    # A release references media bodies instead of copying them, so payload bytes
+    # being present is not the same claim as the release being intact: the holding
+    # is only honoured while the library still has that entry at that digest.
+    for holding_issue in verify_release_holdings(root):
+        issues.append(f"{release_id}: {holding_issue}")
 
     return {
         "schema": REPORT_SCHEMA,

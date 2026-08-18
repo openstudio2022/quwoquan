@@ -186,7 +186,6 @@ abstract class _DiscoveryFeedMapLoadingCore
         failure: currentValue.staleDataError,
       );
     }
-    final repo = ref.read(contentDiscoveryFeedQueryProvider);
     final query = _resolveQuery(channelId);
     final feedSession = ref.read(feedSessionProvider.notifier);
     final sessionId = feedSession.sessionId;
@@ -265,6 +264,7 @@ abstract class _DiscoveryFeedMapLoadingCore
       itemCount: currentValue?.items.length,
     );
     try {
+      final repo = ref.read(contentDiscoveryFeedQueryProvider);
       // 首刷不传 feedRequestId：由服务端权威生成并随 envelope 下发。
       final page = await repo.listDiscoveryFeedPage(
         category: query.category,

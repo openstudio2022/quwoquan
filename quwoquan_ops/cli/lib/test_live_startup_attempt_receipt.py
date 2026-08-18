@@ -39,7 +39,6 @@ _FIELDS = frozenset(
         "schema",
         "launchPolicy",
         "nonPromotable",
-        "contentBindingState",
         "attemptId",
         "environment",
         "target",
@@ -54,6 +53,7 @@ _FIELDS = frozenset(
         "publishedPorts",
         "tlsProfile",
         "resolverHandoffDigest",
+        "publicWebPackage",
         "sourceRevision",
         "workspaceStatusDigest",
         "mutableStateDigest",
@@ -76,6 +76,7 @@ _IDENTITY_FIELDS = (
     "publishedPorts",
     "tlsProfile",
     "resolverHandoffDigest",
+    "publicWebPackage",
     "sourceRevision",
     "workspaceStatusDigest",
     "mutableStateDigest",
@@ -130,7 +131,6 @@ def validate_test_live_startup_attempt(
     if (
         value.get("launchPolicy") != "test_live"
         or value.get("nonPromotable") is not True
-        or value.get("contentBindingState") != "unbound"
     ):
         raise ValueError("test-live startup receipt promotion boundary mismatch")
 
@@ -167,6 +167,47 @@ def validate_test_live_startup_attempt(
         raise ValueError("test-live startup receipt sourceRevision is invalid")
     if not str(value.get("tlsProfile") or "").strip():
         raise ValueError("test-live startup receipt tlsProfile is required")
+    # 不可变 public Web 包身份：origin 归一化复用 web_official_release 的
+    # 唯一实现，不在此复制第二份 host 映射。
+    from quwoquan_ops.cli.lib.web_official_release import (
+        WebOfficialReleaseError,
+        _trusted_web_origin,
+    )
+
+    public_web_package = value.get("publicWebPackage")
+    try:
+        expected_public_origin = _trusted_web_origin(
+            environment,
+            str(
+                (public_web_package or {}).get("publicOrigin")
+                if isinstance(public_web_package, dict)
+                else ""
+            ),
+        )
+    except WebOfficialReleaseError as exc:
+        raise ValueError(
+            "test-live startup receipt publicWebPackage is invalid"
+        ) from exc
+    if (
+        not isinstance(public_web_package, dict)
+        or set(public_web_package)
+        != {
+            "environment",
+            "packageVersion",
+            "manifestDigest",
+            "contentDigest",
+            "publicOrigin",
+        }
+        or public_web_package.get("environment") != environment
+        or not str(public_web_package.get("packageVersion") or "").strip()
+        or "/" in str(public_web_package.get("packageVersion") or "")
+        or _DIGEST.fullmatch(str(public_web_package.get("manifestDigest") or ""))
+        is None
+        or _DIGEST.fullmatch(str(public_web_package.get("contentDigest") or ""))
+        is None
+        or public_web_package.get("publicOrigin") != expected_public_origin
+    ):
+        raise ValueError("test-live startup receipt publicWebPackage is invalid")
 
     block = value.get("portBlock")
     ports = value.get("publishedPorts")
@@ -231,6 +272,7 @@ def _identity_from_plan(
         "portBlock": dict(plan.get("portBlock") or {}),
         "publishedPorts": dict(plan.get("publishedPorts") or {}),
         "tlsProfile": plan.get("tlsProfile"),
+        "publicWebPackage": dict(plan.get("publicWebPackage") or {}),
         "resolverHandoffDigest": plan.get("resolverHandoffDigest"),
         "sourceRevision": workspace.get("sourceRevision"),
         "workspaceStatusDigest": workspace.get("workspaceStatusDigest"),
@@ -308,6 +350,66 @@ def load_test_live_startup_attempt(target: str) -> dict[str, Any] | None:
     )
 
 
+def _read_regular_receipt_bytes(path: Path) -> dict[str, Any] | None:
+    """Read the receipt document without judging it against the contract."""
+    try:
+        metadata = path.lstat()
+    except FileNotFoundError:
+        return None
+    if not stat.S_ISREG(metadata.st_mode) or path.is_symlink():
+        raise UnsafeTestLiveStartupReceiptPath(
+            "test-live startup receipt is a symlink or non-regular file"
+        )
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"test-live startup receipt is unreadable: {exc}") from exc
+    if not isinstance(value, dict):
+        raise ValueError("test-live startup receipt is not an object")
+    return value
+
+
+def read_stale_test_live_startup_attempt(target: str) -> dict[str, Any] | None:
+    """Return the raw receipt only when the current contract cannot admit it.
+
+    A receipt the contract still admits owns a normal teardown path and must
+    never be reclaimed here.  The raw document is returned so the caller can
+    attest exactly what it is about to archive without trusting any field
+    inside it to decide whether reclaiming is safe.
+    """
+
+    value = _read_regular_receipt_bytes(test_live_startup_attempt_path(target))
+    if value is None:
+        return None
+    environment = target.removesuffix("-local")
+    try:
+        validate_test_live_startup_attempt(
+            value,
+            expected_environment=environment,
+            expected_target=target,
+        )
+    except ValueError:
+        return value
+    return None
+
+
+def reclaim_stale_test_live_startup_attempt(target: str) -> dict[str, Any]:
+    """Remove one receipt the contract cannot admit and return it verbatim.
+
+    Whether the runtime it describes is truly gone is not decided here: the
+    document is untrusted, so only the caller's live probe can establish that.
+    """
+
+    stale = read_stale_test_live_startup_attempt(target)
+    if stale is None:
+        raise ValueError(
+            "test-live startup receipt is admissible or absent; "
+            "reclaiming requires normal teardown instead"
+        )
+    test_live_startup_attempt_path(target).unlink()
+    return stale
+
+
 def transition_test_live_startup_attempt(
     *,
     environment: str,
@@ -368,7 +470,6 @@ def transition_test_live_startup_attempt(
         "schema": SCHEMA,
         "launchPolicy": "test_live",
         "nonPromotable": True,
-        "contentBindingState": "unbound",
         "attemptId": normalized_attempt,
         **identity,
         "status": status,

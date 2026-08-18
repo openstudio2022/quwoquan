@@ -1,7 +1,7 @@
 {
   "schema": "quwoquan_data.review_attestation",
   "stage": "5.review",
-  "executionId": "20260810--travel-homepage-m1--china-panda-base-research-b7c02f9f-epoch6-not-m100--scale-001",
+  "executionId": "20260817--travel-homepage-closure--china-sichuan--pilot-001",
   "executionBinding": "frozen",
   "objectRef": "/entity/地点/景区/成都大熊猫繁育研究基地",
   "decision": "approved",
@@ -12,10 +12,10 @@
   "independentReviewer": {
     "status": "passed",
     "provider": "cursor_sdk",
-    "model": "auto",
-    "modelFamily": "auto",
-    "runId": "run-1f79f34d-6d22-4a3e-95fa-e12d24769434",
-    "resultHash": "sha256:965ec21dfb740b0539b7710466146a0390db65685e89eee8f2a39767ecf4d18c"
+    "model": "grok-4.6",
+    "modelFamily": "grok",
+    "runId": "run-35e76dba-32fa-48a8-b665-63a55ab33ac7",
+    "resultHash": "sha256:cc89b47ef56d1f9bc734f7135d0a5775737309c508a4dc359be1ec3e5ab743f0"
   },
   "mediaRefReview": {
     "status": "passed",

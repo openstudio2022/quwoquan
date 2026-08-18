@@ -44,6 +44,7 @@
 
 - M100/M1000 的 article workload target 分别为 100/1000；quota/count 只表达请求负载与里程碑目标，不是发布门。
 - receipt 分别记录 target、selected、qualified、finalized、discarded、shortfall，以及 object pass、illustrated、first-pass、discard 与 quota attainment 的分子、分母和 rate；任何目标缺口或比率值都不阻断已闭合对象。
+- active article workloads 按可用容量独立调度；固定并发、固定 worker、workspace smoke、capacity soak 与 resource samples 不作为 dispatch/promotion 前置。每个实际启动的 task 逐项记录 typed 终态，诊断 sample 不得冒充 task 结果。
 - 容量评估可重算且不被当作生产完成；对象级 review、source/rights/provenance、同源图片闭包、去重与 canonical 引用仍是硬门。
 
 <a id="req-004"></a>
@@ -54,6 +55,9 @@
 - 搜索补全供给使用独立 execution，不能和主线共享冻结目标、状态或准出口径。
 - article source discovery 只允许进入 registry 已声明可抓取、允许 crawl、包含 article lane 且具备 commercial release admission 的站点；robots/terms、allowed path、速率/退避、深度/日页数、canonical 去重与实体/别名/主题相关性均须形成不可变审计证据。
 - 登录墙、robots deny、网络不可达与不相关候选必须形成 typed blocked/discard；`factual_reference_only` 只保留事实引用身份，不得保存原文或伪造成功。
+- content plan 只消费 target set 冻结的 canonical target 与 aliases 作为实体锚定；只偶然列举目标的城市总览或 figure caption 不能因行长、推断短别名或标题回填成为目标文章底稿。
+- `factual_reference_only` 只可提取可核验事实、路线顺序、必要数字与专有名词；成稿必须使用独立句式、结构和叙事，不得保留来源连续长句、自然段、小标题或原文结构，也不得以 licensed adaptation 的底稿留存率为其设下限。
+- independent review 已有 finished Grok journal，但 controller 中断后只剩唯一 schema-valid pending response 时，不得改写旧 execution 的 `reviewer_result`/attestation。只有唯一 pending response 与唯一未绑定 finished reviewer work unit 能生成 create-once reconciliation receipt；标准 campaign submission 必须从该 receipt 与其余 final review 自动派生 failed-only refs，plan 冻结该 scope，lane argv 透传该 scope，并在新 sequence 以 `retryOf` 消费 typed issues；已通过对象不得重试。
 
 ## 4. 契约引用
 
@@ -63,6 +67,8 @@
 - canonical：`quwoquan_data/scripts/content/execution`
 - canonical：`quwoquan_data/scripts/content/release`
 - canonical：`quwoquan_data/scripts/governance/coverage/benchmark.py`
+- interrupted review reconciliation：`quwoquan_data/schema/execution/campaign_review_interruption_reconciliation_receipt.schema.json`
+- failed-only retry feedback：`quwoquan_data/schema/execution/retry_review_feedback.schema.json`
 
 ## 5. 验收场景
 
@@ -72,6 +78,8 @@
 - GIVEN 垂类 provider policy、content policy 与 family 已由仓内真相源声明。
 - WHEN 任一文章 execution 以 request 选择 provider 和主题。
 - THEN provider admission、文本事实来源和插图 rights/provenance 使用同一合同。
+- THEN content plan 优先并准入严格锚定 canonical target/alias 的直接来源，排除只偶然列举目标的宽泛页面；`factual_reference_only` author prompt 只允许事实提取与独立表达。
+- THEN review 中断证据不改写旧 execution；create-once receipt 、submission、plan 与 lane 只向新 `retryOf` 透传 exact failed refs 和 typed feedback，通过对象不进入新序列。
 - THEN 静态 policy 不包含实体 URL、区域、数量或运行结论。
 - THEN 真实 source discovery 主线可回读 provider policy、frontier 决策、canonical URL 与 typed blocked/discard evidence。
 
@@ -93,6 +101,7 @@
 - WHEN 运营评估后续规模与预算。
 - THEN 吞吐、成本、object pass、illustrated、first-pass、discard、quota attainment、queue lag 与 source capacity 都来自 receipt，并为每个 rate 标明分子与分母。
 - THEN 未命中 workload target 或统计 rate 只形成 shortfall/趋势结论，不否决至少一个 hard-qualified 对象的发布与结构性 promotion。
+- THEN active workloads 可串行或重叠执行；每个实际 task 分别终态，soak/workspace/resource samples 的缺失或失败只影响容量结论，不影响 dispatch。canonical publish 保持对象事务单写者，最终 release 仍要求 exact closure。
 - THEN 缺失对象级硬门或 receipt 身份证据时结论为 GATE_BLOCK，不能写入静态 policy 或 acceptance 数字。
 
 ## 6. 依赖

@@ -395,6 +395,7 @@ def _release_manifest(
 
     manifest = finalizer.seal_manifest({
         "schema": finalizer.SCHEMA,
+        "releaseTrainId": None,
         "candidateId": None,
         "status": "candidate-ready",
         "generatedAt": "2026-07-28T00:00:00Z",
@@ -406,23 +407,57 @@ def _release_manifest(
             "sourceArchiveDigest": None,
         },
         "artifactDigest": None,
-        "images": {
-            "content-service": {
-                "repository": repository,
-                "transportRef": repository + ":sha-candidate",
-                "digest": image_digest,
-                "ref": image_ref,
-                "attestations": {
-                    "spdxSbom": f"oci://{image_ref}#spdxSbom",
-                    "slsaProvenance": f"oci://{image_ref}#slsaProvenance",
+        "environmentArtifacts": {
+            environment: {
+                "environment": environment,
+                "environmentArtifactDigest": None,
+                "images": {
+                    "content-service": {
+                        "repository": repository + "-" + environment,
+                        "transportRef": (
+                            repository + "-" + environment + ":sha-candidate"
+                        ),
+                        "digest": f"sha256:{index:064x}",
+                        "ref": (
+                            repository
+                            + "-"
+                            + environment
+                            + "@"
+                            + f"sha256:{index:064x}"
+                        ),
+                        "attestations": {
+                            "spdxSbom": (
+                                "oci://"
+                                + repository
+                                + "-"
+                                + environment
+                                + "@"
+                                + f"sha256:{index:064x}"
+                                + "#spdxSbom"
+                            ),
+                            "slsaProvenance": (
+                                "oci://"
+                                + repository
+                                + "-"
+                                + environment
+                                + "@"
+                                + f"sha256:{index:064x}"
+                                + "#slsaProvenance"
+                            ),
+                        },
+                    },
                 },
-            },
+                "configurationPackages": configuration_packages[environment],
+            }
+            for index, environment in enumerate(finalizer.ENVIRONMENTS, start=1)
         },
-        "configurationPackages": configuration_packages,
         "applicationPackages": application_packages,
         "contractGraphDigest": _sha256_prefixed(contract_graph),
         "requiredEvidence": {
-            "images": ["content-service"],
+            "environmentArtifacts": {
+                environment: ["content-service"]
+                for environment in finalizer.ENVIRONMENTS
+            },
             "configurationPackages": {
                 environment: ["content-service"]
                 for environment in finalizer.ENVIRONMENTS

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from core.content_library import MediaHoldingError, resolve_media_holding
 from core.image_variants import build_center_square_cover_derivative
 from core.media_asset_url import is_cas_media_object_key
 from core.paths import CONTROL_PLANE_CREATOR_POOL_ROOT, PUBLISH_ROOT
@@ -135,9 +136,11 @@ def _source_asset(
         or byte_count <= 0
     ):
         raise CreatorAvatarError("source asset does not bind canonical CAS identity")
-    physical = PUBLISH_ROOT / _safe_relative(object_key, label="source objectKey")
-    if physical.is_symlink() or not physical.is_file():
-        raise CreatorAvatarError(f"source CAS bytes missing: {object_key}")
+    _safe_relative(object_key, label="source objectKey")
+    try:
+        physical = resolve_media_holding(digest, expected_bytes=byte_count)
+    except (MediaHoldingError, ValueError) as exc:
+        raise CreatorAvatarError(f"source CAS bytes missing: {object_key}") from exc
     body = physical.read_bytes()
     if len(body) != byte_count or _sha256_bytes(body) != digest:
         raise CreatorAvatarError(f"source CAS bytes drifted: {object_key}")
@@ -307,7 +310,7 @@ def materialize_creator_avatar(
         profile_path=profile_path,
         publish_root=PUBLISH_ROOT,
         creator_pool_root=CONTROL_PLANE_CREATOR_POOL_ROOT,
-        object_key=object_key,
+        avatar_sha256=digest,
         derivative_body=derivative["bytes"],
         evidence_ref=evidence_ref,
         evidence_document=quality_evidence,

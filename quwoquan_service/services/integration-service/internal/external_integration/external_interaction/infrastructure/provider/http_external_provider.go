@@ -124,6 +124,48 @@ func NewHTTPExternalProvider(
 	}, nil
 }
 
+func (p *HTTPExternalProvider) CheckSMSOTPProviderReadiness(ctx context.Context) error {
+	if p == nil || p.client == nil || p.operation != reliabletask.ExternalInteractionOperationSmsOTP {
+		return errors.New("SMS OTP provider is not initialized")
+	}
+	endpoint, err := url.Parse(p.endpoint)
+	if err != nil {
+		return errors.New("SMS OTP provider endpoint is invalid")
+	}
+	endpoint.Path = "/healthz"
+	endpoint.RawQuery = ""
+	endpoint.Fragment = ""
+	probeTimeout := p.timeout
+	if probeTimeout > 500*time.Millisecond {
+		probeTimeout = 500 * time.Millisecond
+	}
+	probeCtx, cancel := context.WithTimeout(ctx, probeTimeout)
+	defer cancel()
+	request, err := http.NewRequestWithContext(probeCtx, http.MethodGet, endpoint.String(), nil)
+	if err != nil {
+		return err
+	}
+	response, err := p.client.Do(request)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("SMS OTP provider readiness status %d", response.StatusCode)
+	}
+	var payload struct {
+		Status string `json:"status"`
+	}
+	decoder := json.NewDecoder(io.LimitReader(response.Body, 4096))
+	if err := decoder.Decode(&payload); err != nil {
+		return errors.New("SMS OTP provider readiness response is invalid")
+	}
+	if strings.TrimSpace(payload.Status) != "ready" {
+		return errors.New("SMS OTP provider probe is not ready")
+	}
+	return nil
+}
+
 func (p *HTTPExternalProvider) Send(
 	ctx context.Context,
 	request reliabletask.ExternalInteractionRequest,

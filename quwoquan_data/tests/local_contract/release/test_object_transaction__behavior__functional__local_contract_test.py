@@ -29,6 +29,7 @@ from governance.creators.assignment import creator_assignment_from_profile
 from PIL import Image
 from support import execution_manifest_fixture
 from support.execution_manifest_fixture import ExecutionFixtureBuilder
+from support.media_fixture import seed_system_creator_avatar_holding
 from support.object_transaction_fixtures import (
     OBJECT_REF,
     TRANSACTION_ID,
@@ -158,16 +159,7 @@ def _build_approved_entity_execution(
     creator = creator_assignment_from_profile(
         TemplateRegistry.load().creators["qwq_creator_travel_blogger_001"]
     )
-    creator_profile = TemplateRegistry.load().creators[
-        "qwq_creator_travel_blogger_001"
-    ]
-    avatar = creator_profile["avatarAsset"]
-    avatar_object_key = str(avatar["objectKey"])
-    isolated_publish = tmp_path / "creator-publish"
-    avatar_target = isolated_publish / avatar_object_key
-    avatar_target.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(DATA_ROOT / "publish" / avatar_object_key, avatar_target)
-    monkeypatch.setattr(creator_projection, "PUBLISH_ROOT", isolated_publish)
+    seed_system_creator_avatar_holding("qwq_creator_travel_blogger_001")
     attribution = _source_attribution()
     _write_json(
         source_asset.parent / "index.json",

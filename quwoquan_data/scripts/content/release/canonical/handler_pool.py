@@ -26,6 +26,20 @@ from content.release.canonical.semantic_wave_dispatch import (
     write_create_once_semantic_wave_dispatch,
 )
 from core.paths import OUTPUT_ROOT, PUBLISH_ROOT
+from content.execution.campaign.lane import normalize_workloads
+
+
+def _workload_targets(values: tuple[str, ...]) -> dict[str, int] | None:
+    if not values:
+        return None
+    result: dict[str, int] = {}
+    for raw in values:
+        carrier, separator, quota = raw.partition("=")
+        carrier = carrier.strip()
+        if not separator or carrier in result:
+            raise ValueError("--workload must be unique CARRIER=QUOTA values")
+        result[carrier] = int(quota.strip())
+    return normalize_workloads(result)
 
 
 def handle_pool_release_build(args: argparse.Namespace) -> None:
@@ -49,11 +63,7 @@ def handle_pool_release_build(args: argparse.Namespace) -> None:
                 if getattr(args, "milestone", None) is not None
                 else None
             ),
-            release_class=(
-                str(args.release_class)
-                if getattr(args, "release_class", None) is not None
-                else None
-            ),
+            release_class=str(args.release_class),
         )
     except (
         FileNotFoundError,
@@ -88,6 +98,7 @@ def handle_pool_inspect(args: argparse.Namespace) -> None:
             "--source-pool-evidence-root-ref must be provided together"
         )
     try:
+        workloads = _workload_targets(tuple(getattr(args, "workload", ()) or ()))
         source_ready_input = None
         source_ready_candidates = None
         source_ready_backlog = None
@@ -106,7 +117,9 @@ def handle_pool_inspect(args: argparse.Namespace) -> None:
             source_ready_input, source_ready_candidates = load_source_ready_input(
                 output_root=output_root,
                 publish_root=publish_root,
-                milestone=str(getattr(args, "milestone", "M100")),
+                milestone=(
+                    str(args.milestone) if args.milestone is not None else None
+                ),
                 source_pool_ref=source_pool_ref,
                 evidence_root_ref=evidence_root_ref,
                 consumed_object_refs=consumed_object_refs,
@@ -130,13 +143,16 @@ def handle_pool_inspect(args: argparse.Namespace) -> None:
             include_issues=bool(getattr(args, "details", False)),
             include_batches=by_task,
             output_root=(output_root if by_task else None),
-            milestone=str(getattr(args, "milestone", "M100")),
+            milestone=(
+                str(args.milestone) if args.milestone is not None else None
+            ),
             execution_ids=execution_ids,
             source_ready_backlog=source_ready_backlog,
             p10_per_slot_throughput=p10_throughput,
             source_ready_candidates=source_ready_candidates,
             source_ready_input=source_ready_input,
             throughput_input=throughput_input,
+            workload_targets=workloads,
         )
     except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
         raise SystemExit(f"[release pool-inspect] GATE_BLOCK {exc}") from exc
@@ -181,8 +197,10 @@ def handle_pool_dispatch(args: argparse.Namespace) -> None:
         document, path = write_create_once_semantic_wave_dispatch(
             dispatch_id=str(args.dispatch_id),
             pool_inspection_ref=str(args.pool_inspection_ref),
-            semantic_preflight_receipt_ref=str(
-                args.semantic_preflight_receipt
+            semantic_preflight_receipt_ref=(
+                str(args.semantic_preflight_receipt)
+                if args.semantic_preflight_receipt
+                else None
             ),
             run_date=str(args.run_date),
             scope=str(args.scope),
@@ -198,9 +216,9 @@ def handle_pool_dispatch(args: argparse.Namespace) -> None:
                 slot_id: tuple(refs)
                 for slot_id, refs in predecessor_unfinished_refs.items()
             } or None,
-            required_workers=int(args.required_workers),
-            partition_count=int(args.partition_count),
-            capacity_plan_digest=str(args.capacity_plan_digest),
+            workload_targets=_workload_targets(
+                tuple(getattr(args, "workload", ()) or ())
+            ),
             output_root=output_root,
             publish_root=publish_root,
         )

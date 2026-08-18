@@ -873,18 +873,20 @@ extension _ImageEditorPageProAdjustments on _ImageEditorPageState {
     }
 
     if (payload != null) {
-      final subType = payload.subType!;
+      final bakedPayload = payload;
+      final subType = bakedPayload.subType!;
       final beforePath = _currentPath;
-      final afterPath = await _bakeProCategoryToCurrentImage(subType);
-      if (afterPath == null) {
-        await _showEditorActionFailure(title: MediaText.imageEditorProTools);
-        return;
-      }
-      _commitBakedStep(
-        payload: payload,
-        beforePath: beforePath,
-        afterPath: afterPath,
+      final applied = await _runBakeAction(
+        title: MediaText.imageEditorProTools,
+        source: 'content.image_editor.bake_pro_$subType',
+        bake: () => _bakeProCategoryToCurrentImage(subType),
+        onBaked: (afterPath) => _commitBakedStep(
+          payload: bakedPayload,
+          beforePath: beforePath,
+          afterPath: afterPath,
+        ),
       );
+      if (!applied) return;
       _resetProSessionValuesAfterBake(subType);
     }
     if (!mounted) return;
@@ -904,12 +906,10 @@ extension _ImageEditorPageProAdjustments on _ImageEditorPageState {
   }
 
   /// 按类别烘焙当前会话到文件；曲线走 LUT 引擎，其余走矩阵引擎。
-  Future<String?> _bakeProCategoryToCurrentImage(String subType) async {
-    if (_currentPath.isEmpty) return null;
+  Future<String> _bakeProCategoryToCurrentImage(String subType) async {
+    final bytes = await _requireCurrentImageBytes();
+    final image = await ImageEditorExportEngine.decodeConstrained(bytes);
     try {
-      final bytes = await _loadImageBytes(_currentPath);
-      if (bytes.isEmpty) return null;
-      final image = await ImageEditorExportEngine.decodeConstrained(bytes);
       ui.Image adjusted;
       if (subType == 'localAdjustments') {
         // 真局部管线：矩阵+细节逐像素，径向权重与预览同一分段渐变。
@@ -956,10 +956,9 @@ extension _ImageEditorPageProAdjustments on _ImageEditorPageState {
           matrix,
         );
       }
+      return await _writeImageToTemp(adjusted, 'pro_$subType');
+    } finally {
       image.dispose();
-      return _writeImageToTemp(adjusted, 'pro_$subType');
-    } catch (_) {
-      return null;
     }
   }
 

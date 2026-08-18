@@ -16,6 +16,8 @@ root = Path.cwd()
 scan_files = [root / "AGENTS.md", root / "specs/feature-tree/README.md"]
 scan_files.extend((root / ".cursor/commands").glob("*.md"))
 scan_files.extend((root / ".cursor/rules").glob("*.mdc"))
+# 阶段语义与角色清单已迁到三家 harness 共享层，退役词汇必须同样在这里阻断
+scan_files.extend((root / ".agents/skills").rglob("*.md"))
 
 forbidden_terms = (
     r"\bL1_capability\b", r"\bL2_feature\b", r"\bL2_journey\b",

@@ -238,7 +238,7 @@ extension _ImageEditorPageFilterLogic on _ImageEditorPageState {
     try {
       final bytes = await _loadImageBytes(path);
       if (bytes.isEmpty) return const ImageEditorFilterImageFeatures();
-      return _filterFeatureExtractor.extractFromBytes(bytes);
+      return await _filterFeatureExtractor.extractFromBytes(bytes);
     } catch (_) {
       return const ImageEditorFilterImageFeatures();
     }
@@ -391,7 +391,24 @@ extension _ImageEditorPageFilterLogic on _ImageEditorPageState {
         continue;
       }
       _setEditorState(() => _filterTemplatePreviewLoading.add(index));
-      final bytes = await _buildFilterPreviewBytes(index);
+      Uint8List? bytes;
+      try {
+        bytes = await _buildFilterPreviewBytes(index);
+      } catch (error, stackTrace) {
+        // 这是跨 await 的后台队列，页面可能已经 dispose；此时 ref 不可用，
+        // 只能放弃上报，不能让上报本身变成新的未捕获异常。
+        if (mounted) {
+          unawaited(
+            ref
+                .read(exceptionTelemetryPortProvider)
+                .recordHandledException(
+                  source: 'content.image_editor.filter_thumbnail_preview',
+                  error: error,
+                  stackTrace: stackTrace,
+                ),
+          );
+        }
+      }
       if (!mounted) break;
       _setEditorState(() {
         _filterTemplatePreviewLoading.remove(index);
@@ -405,6 +422,8 @@ extension _ImageEditorPageFilterLogic on _ImageEditorPageState {
     _processingFilterPreviewQueue = false;
   }
 
+  /// 目录缩略图预览：返回 null 表示这一格没有可渲染的预览（无当前图 / 越界 /
+  /// 原图无字节），是缺席而不是失败；真正的渲染失败向上抛给队列上报后再降级。
   Future<Uint8List?> _buildFilterPreviewBytes(int presetIndex) async {
     if (_currentPath.isEmpty ||
         presetIndex < 0 ||
@@ -412,7 +431,7 @@ extension _ImageEditorPageFilterLogic on _ImageEditorPageState {
       return null;
     }
     final preset = _filterPresets[presetIndex];
-    try {
+    {
       final bytes = await _loadImageBytes(_currentPath);
       if (bytes.isEmpty) return null;
       final codec = await ui.instantiateImageCodec(bytes);
@@ -446,9 +465,13 @@ extension _ImageEditorPageFilterLogic on _ImageEditorPageState {
       canvas.drawImageRect(image, srcRect, dstRect, paint);
       final preview = await recorder.endRecording().toImage(width, height);
       final data = await preview.toByteData(format: ui.ImageByteFormat.png);
-      return data?.buffer.asUint8List();
-    } catch (_) {
-      return null;
+      if (data == null) {
+        throw ImageEditorBakeException(
+          'filter thumbnail encode returned no pixels for preset '
+          '${preset.id}',
+        );
+      }
+      return data.buffer.asUint8List();
     }
   }
 

@@ -22,20 +22,25 @@ func (dispatch *readinessDispatch) SubmitSMSOTP(
 	return accountapp.ExternalInteractionAccepted{}, nil
 }
 
-func (dispatch *readinessDispatch) CheckSMSOTPReadiness(context.Context) error {
-	return dispatch.err
+func (dispatch *readinessDispatch) GetSMSOTPDeliveryReadiness(
+	context.Context,
+) (accountapp.SMSOTPDeliveryReadiness, error) {
+	if dispatch.err != nil {
+		return accountapp.SMSOTPDeliveryReadiness{}, dispatch.err
+	}
+	return accountapp.SMSOTPDeliveryReadiness{Availability: "ready"}, nil
 }
 
 func TestOtpDeliveryReadinessOnlyReturnsBoundedBusinessState(t *testing.T) {
 	ready := accountapp.NewAuthService(nil, nil, nil, nil, nil,
-		accountapp.WithExternalInteractionClient(&readinessDispatch{}),
+		accountapp.WithSMSOTPDeliveryReadinessQuery(&readinessDispatch{}),
 	).GetOtpDeliveryReadiness(context.Background())
 	if ready.Availability != "ready" || ready.RetryAfterSeconds != 0 {
 		t.Fatalf("ready result = %+v", ready)
 	}
 
 	unavailable := accountapp.NewAuthService(nil, nil, nil, nil, nil,
-		accountapp.WithExternalInteractionClient(&readinessDispatch{
+		accountapp.WithSMSOTPDeliveryReadinessQuery(&readinessDispatch{
 			err: errors.New("provider body and topology must not escape"),
 		}),
 	).GetOtpDeliveryReadiness(context.Background())

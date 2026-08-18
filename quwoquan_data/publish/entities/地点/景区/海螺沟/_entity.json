@@ -1,0 +1,85 @@
+{
+  "label": "海螺沟",
+  "domain": "地点",
+  "type": "景区",
+  "executionId": "20260817--travel-homepage-closure--china-sichuan--pilot-001",
+  "entityRef": "/entity/地点/景区/海螺沟",
+  "summary": "海螺沟冰川位于中国四川省甘孜藏族自治州泸定县境内，磨西镇旁，距离成都西南380多公里，是国家5A级景区。",
+  "sourceRefs": [
+    "sources/海螺沟__wikipedia__d848417c/source.md"
+  ],
+  "sourceUrls": [
+    "https://zh.wikipedia.org/wiki/%E6%B5%B7%E8%9E%BA%E6%B2%9F"
+  ],
+  "primarySource": {
+    "entityName": "海螺沟",
+    "sourceKind": "wikipedia",
+    "extractor": "wikipedia_api",
+    "canonicalUrl": "https://zh.wikipedia.org/wiki/%E6%B5%B7%E8%9E%BA%E6%B2%9F",
+    "sourceUrl": "https://zh.wikipedia.org/wiki/%E6%B5%B7%E8%9E%BA%E6%B2%9F",
+    "title": "海螺沟",
+    "fetchedAt": "2026-08-17T11:16:04Z",
+    "snapshotHash": "sha256:b4d414eb4539dbd10be6c587be770a0bf1c85badea0ac64250aab532ad8dbbf8",
+    "policyRevision": "encyclopedia-primary",
+    "sourceUseMode": "licensed_adaptation"
+  },
+  "sourceAttribution": {
+    "isOriginal": false,
+    "originalCreatorId": null,
+    "originalCreatorName": "维基百科贡献者",
+    "originalCreatorProfileUrl": null,
+    "platform": "维基百科",
+    "sourcePostUrl": "https://zh.wikipedia.org/wiki/%E6%B5%B7%E8%9E%BA%E6%B2%9F",
+    "originalAssetUrl": "https://zh.wikipedia.org/wiki/%E6%B5%B7%E8%9E%BA%E6%B2%9F",
+    "attributionText": "正文事实来源：维基百科（维基百科贡献者）",
+    "rightsBasis": "CC BY-SA 4.0",
+    "commercialAuthorizationStatus": "verified",
+    "publicationAdmission": "research_release",
+    "authorizationProofUrl": "https://zh.wikipedia.org/wiki/%E6%B5%B7%E8%9E%BA%E6%B2%9F",
+    "termsUrl": "https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use",
+    "riskAcceptanceId": null,
+    "watermarkStatus": "absent",
+    "audioRightsStatus": "no_audio",
+    "modelReleaseStatus": "not_required",
+    "propertyReleaseStatus": "not_required",
+    "collectedAt": "2026-08-17T11:16:04Z",
+    "takedownPolicy": "remove_on_verified_rights_or_source_dispute"
+  },
+  "textSourceRefs": [
+    "sources/海螺沟__wikipedia__d848417c/source.md"
+  ],
+  "imageSourceRefs": [
+    "sources/海螺沟__wikipedia__d848417c/source.md"
+  ],
+  "heroAssetId": "海螺沟_cover_海螺沟冰川全景_冰舌部分_334_469c1787",
+  "mediaAssetIds": [
+    "海螺沟_cover_海螺沟冰川全景_冰舌部分_334_469c1787",
+    "海螺沟_detail_中国四川甘孜藏族自治州海螺沟冰川_334_b3d6d862",
+    "海螺沟_detail_冰川_334_ad88bda2"
+  ],
+  "tagRefs": [
+    "Entity/地点/景区",
+    "Topic/地理/行政区/中国/四川省/甘孜藏族自治州/泸定县",
+    "Topic/旅行/玩法/观光游览",
+    "Format/内容角度/攻略"
+  ],
+  "geoTagRef": "Topic/地理/行政区/中国/四川省/甘孜藏族自治州/泸定县",
+  "aliases": [
+    "海螺沟冰川森林公园"
+  ],
+  "authorId": "builtin_travel_geo_editor",
+  "creatorProfileId": "qwq_creator_geo_editor_001",
+  "creatorArchetype": "geo_editor",
+  "creatorProfileDigest": "sha256:1ae1b5e97d6aca2bea11652dfb07fcf4746ce904ec07b25dd022631eda751e75",
+  "creatorDisclosure": {
+    "type": "platform_virtual_creator",
+    "displayText": "平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。",
+    "visible": true
+  },
+  "experienceClaimMode": "editorial_synthesis",
+  "authorQualitySignals": {
+    "qualityScore": 0.9,
+    "fatigueScore": 0.2,
+    "riskTier": "low"
+  }
+}

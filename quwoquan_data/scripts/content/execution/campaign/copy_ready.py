@@ -4,7 +4,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Mapping
 
-from content.execution.campaign.lane import CAMPAIGN_CARRIERS
+from content.execution.campaign.lane import (
+    normalize_active_carriers,
+    normalize_workloads,
+)
 from content.execution.campaign.receipt import lane_receipt_path, load_lane_receipt
 from content.execution.campaign.submission import campaign_root
 from core.io import read_json, write_json
@@ -40,7 +43,11 @@ def maybe_write_copy_ready_receipt(
     """
     lane_rows: dict[str, dict[str, Any]] = {}
     total_discards = 0
-    for carrier in CAMPAIGN_CARRIERS:
+    active = normalize_active_carriers(plan["activeCarriers"])
+    workloads = normalize_workloads(plan["workloads"], active_carriers=active)
+    if set(submissions) != set(active) or set(lanes) != set(active):
+        raise ValueError("copy-ready lanes must match active workloads")
+    for carrier in active:
         submission = submissions[carrier]
         lane = lanes[carrier]
         review = load_lane_receipt(
@@ -53,17 +60,20 @@ def maybe_write_copy_ready_receipt(
         requested_count = int(submission["count"])
         selected = int(publish["selectedCount"])
         qualified = int(publish["qualifiedCount"])
+        review_qualified = int(publish["reviewQualifiedCount"])
         discarded = int(publish["discardedCount"])
         finalized = int(publish["finalizedCount"])
         shortfall = int(publish["shortfallCount"])
         discards = list(publish["discards"])
+        publish_discards = list(publish["publishDiscards"])
         if (
-            qualified < COPY_READY_MIN_QUALIFIED
-            or finalized != qualified
+            finalized < COPY_READY_MIN_QUALIFIED
+            or qualified != review_qualified
+            or finalized + len(publish_discards) != review_qualified
             or discarded != len(discards)
             or selected != qualified + discarded
             or review["selectedCount"] != publish["selectedCount"]
-            or review["qualifiedCount"] != publish["qualifiedCount"]
+            or review["qualifiedCount"] != review_qualified
             or review["discardedCount"] != publish["discardedCount"]
             or review["discards"] != publish["discards"]
             or lane.get("status") not in {"finalized", "partial"}
@@ -79,7 +89,7 @@ def maybe_write_copy_ready_receipt(
             for row in discards
         ):
             return None
-        total_discards += discarded
+        total_discards += discarded + len(publish_discards)
         review_path = lane_receipt_path(
             root_execution_id, carrier, "review", root=campaigns_root
         )
@@ -95,7 +105,7 @@ def maybe_write_copy_ready_receipt(
             "discardedCount": discarded,
             "finalizedCount": finalized,
             "shortfallCount": shortfall,
-            "quotaAttainmentRate": qualified / requested_quota,
+            "quotaAttainmentRate": finalized / requested_quota,
             "reviewReceiptRef": _output_ref(review_path, output_root=output_root),
             "publishReceiptRef": _output_ref(publish_path, output_root=output_root),
         }
@@ -105,6 +115,8 @@ def maybe_write_copy_ready_receipt(
         "schema": "quwoquan_data.content_copy_ready_receipt",
         "status": "copy_ready",
         "rootExecutionId": root_execution_id,
+        "activeCarriers": list(active),
+        "workloads": workloads,
         "campaignPlanDigest": str(plan["planDigest"]),
         "gitBranch": str(plan["gitBranch"]),
         "gitCommitSha": str(plan["gitCommitSha"]),

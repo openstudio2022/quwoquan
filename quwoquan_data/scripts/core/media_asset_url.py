@@ -11,6 +11,8 @@ from typing import Any
 
 import yaml
 
+from core.asset_identity import parse_post_asset_id
+from core.content_library import MediaHoldingError, resolve_media_holding
 from core.paths import PUBLISH_ROOT, RELEASE_ROOT, REPO_ROOT
 from core.release_layout import payload_file
 from core.schema import assert_valid
@@ -20,6 +22,7 @@ _CAS_RE = re.compile(
 )
 _SHA256_RE = re.compile(r"^sha256:([0-9a-f]{64})$")
 _PUBLIC_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+_CANONICAL_DECIMAL_RE = re.compile(r"^(?:0|[1-9][0-9]*)$")
 _PUBLIC_SLICE_RE = re.compile(
     r"^media/(avatar|image|video)/s/asset/[A-Za-z0-9][A-Za-z0-9._-]*/"
     r"v([1-9][0-9]*)/source\.[a-z0-9]+$"
@@ -128,10 +131,17 @@ def _public_asset_segment(asset_id: str) -> str:
         return ""
     if _PUBLIC_ID_RE.fullmatch(value):
         return value
-    # Historical Data asset IDs contain Chinese display text. Keep the logical
-    # assetId unchanged in the manifest while deriving an ASCII path segment.
+    # Data post asset IDs carry Chinese display text that cannot enter a URL
+    # path. The role and execution sequence are ASCII already, so the derived
+    # segment keeps them readable and only hashes the parts that are not.
+    try:
+        identity = parse_post_asset_id(value)
+    except ValueError:
+        return ""
+    if not _CANONICAL_DECIMAL_RE.fullmatch(identity.sequence_token):
+        return ""
     digest = hashlib.sha256(value.encode("utf-8")).hexdigest()
-    return f"unicode-{digest[:32]}"
+    return f"{identity.role}-{identity.sequence_token}-{digest[:32]}"
 
 
 def build_public_media_slice_key(
@@ -283,18 +293,17 @@ def build_release_media_manifest(
     creator_refs: list[str] | None = None,
     publish_root: Path | None = None,
     object_root: Path | None = None,
-    media_root: Path | None = None,
     source_owner: str = "qwq_data",
 ) -> dict[str, Any]:
     """Build the public MediaAsset closure for one immutable release.
 
     A release is an object closure, not a snapshot of the whole canonical media
-    library. Private CAS keys are read only while packaging and are deliberately
-    absent from the returned contract.
+    library. Canonical objects name their bodies by digest and the content
+    library owns those bodies, so packaging resolves them there; private CAS keys
+    are read only while packaging and are deliberately absent from the contract.
     """
     canonical = publish_root or PUBLISH_ROOT
     objects = object_root or canonical
-    media = media_root or canonical
     assets: dict[str, dict[str, Any]] = {}
     slice_owners: dict[str, str] = {}
     issues: list[str] = []
@@ -323,8 +332,9 @@ def build_release_media_manifest(
                 if sha_match is None:
                     issues.append(f"sha256 invalid: {kind}/{ref}:{asset_id}")
                     continue
-                physical = media / object_key
-                if not physical.is_file():
+                try:
+                    physical = resolve_media_holding(expected)
+                except (MediaHoldingError, ValueError):
                     issues.append(f"CAS object missing: {object_key}")
                     continue
                 actual = sha256_file(physical)
@@ -421,27 +431,12 @@ def build_release_media_manifest(
     return manifest
 
 
-def _private_cas_path(source_root: Path, sha256: str) -> Path:
-    match = _SHA256_RE.fullmatch(str(sha256))
-    if match is None:
-        raise ValueError(f"invalid release media sha256: {sha256}")
-    digest = match.group(1)
-    parent = source_root / "media/objects/sha256" / digest[:2] / digest[2:4]
-    matches = sorted(path for path in parent.glob(f"{digest}.*") if path.is_file())
-    if len(matches) != 1:
-        raise ValueError(
-            f"release media private CAS identity must resolve exactly once: {sha256}"
-        )
-    return matches[0]
-
-
 def copy_release_media_objects(
     *,
     manifest: Mapping[str, Any],
-    source_root: Path,
     release_root: Path,
 ) -> None:
-    """Materialize private CAS bytes at public slice paths in the release."""
+    """Materialize library-held bodies at public slice paths in the release."""
     assets = manifest.get("assets")
     if not isinstance(assets, list):
         raise TypeError("release media manifest assets must be an array")
@@ -452,8 +447,13 @@ def copy_release_media_objects(
         expected = str(row.get("sha256") or "")
         if not is_public_media_slice_key(public_slice_key):
             raise ValueError(f"invalid release media publicSliceKey: {public_slice_key}")
-        source = _private_cas_path(source_root, expected)
-        if not source.is_file() or sha256_file(source) != expected:
+        try:
+            source = resolve_media_holding(expected)
+        except (MediaHoldingError, ValueError) as exc:
+            raise ValueError(
+                f"release media source is missing or corrupt: {expected}"
+            ) from exc
+        if sha256_file(source) != expected:
             raise ValueError(f"release media source is missing or corrupt: {expected}")
         target = payload_file(release_root, public_slice_key)
         if target.is_file():
@@ -493,11 +493,7 @@ def materialize_release_media(
     )
     if manifest["issues"]:
         return manifest
-    copy_release_media_objects(
-        manifest=manifest,
-        source_root=publish_root or PUBLISH_ROOT,
-        release_root=release,
-    )
+    copy_release_media_objects(manifest=manifest, release_root=release)
     target = payload_file(release, "media_manifest.json")
     payload = _json_bytes(manifest)
     if target.exists():

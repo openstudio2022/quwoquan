@@ -75,6 +75,7 @@ type AuthService struct {
 	otpCodeSealer            OTPCodeSealer
 	otpCodeGenerator         func() (string, error)
 	externalClient           ExternalInteractionClient
+	smsOtpReadiness          SMSOTPDeliveryReadinessQuery
 	accessSigner             *rtauth.Signer
 	accountSecurity          accountports.AccountSecurityReader
 	nicknamePrefix           string
@@ -261,6 +262,14 @@ func WithAuthenticationChallenges(
 func WithExternalInteractionClient(client ExternalInteractionClient) AuthServiceOption {
 	return func(s *AuthService) {
 		s.externalClient = client
+	}
+}
+
+func WithSMSOTPDeliveryReadinessQuery(
+	query SMSOTPDeliveryReadinessQuery,
+) AuthServiceOption {
+	return func(s *AuthService) {
+		s.smsOtpReadiness = query
 	}
 }
 

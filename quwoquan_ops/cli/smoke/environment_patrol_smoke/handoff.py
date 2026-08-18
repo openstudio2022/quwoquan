@@ -15,9 +15,6 @@ from quwoquan_ops.cli.lib.environment_topology import (
     get_target,
     load_environment_topology,
 )
-from quwoquan_ops.cli.lib.test_live_content_binding import (
-    load_test_live_content_binding,
-)
 # 原入口的历史 import，运行时无调用点；保留在此供测试 patch 断言其不被调用。
 from quwoquan_ops.cli.lib.test_live_startup_attempt_receipt import (  # noqa: F401
     load_test_live_startup_attempt,
@@ -128,7 +125,6 @@ def _canonical_handoff_projection(
         "APP_RUNTIME_ENV": str(handoff.get("environment") or ""),
         "QWQ_APP_LAUNCH_MODE": str(handoff.get("launchMode") or ""),
         "APP_LAUNCH_POLICY": str(handoff.get("launchPolicy") or ""),
-        "CONTENT_BINDING_STATE": str(handoff.get("contentBindingState") or ""),
         "CLOUD_GATEWAY_BASE_URL": str(handoff.get("recoveryBaseUrl") or ""),
         "PUBLIC_WEB_BASE_URL": str(handoff.get("publicWebBaseUrl") or ""),
         "APP_DOWNLOAD_BASE_URL": str(handoff.get("appDownloadBaseUrl") or ""),
@@ -156,13 +152,6 @@ def _canonical_handoff_projection(
         "QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST": str(
             handoff["effectiveLaunchManifestDigest"]
         ),
-        "QWQ_CONTENT_RELEASE_ID": str(handoff.get("contentReleaseId") or ""),
-        "QWQ_CONTENT_MANIFEST_DIGEST": str(
-            handoff.get("contentManifestDigest") or ""
-        ),
-        "QWQ_CONTENT_READINESS_RECEIPT_DIGEST": str(
-            handoff.get("contentReadinessReceiptDigest") or ""
-        ),
         "QWQ_APP_RECOVERY_BASE_URL": str(handoff["recoveryBaseUrl"]),
         "QWQ_APP_PUBLIC_WEB_URL": str(handoff["publicWebBaseUrl"]),
         "QWQ_APP_DOWNLOAD_BASE_URL": str(handoff["appDownloadBaseUrl"]),
@@ -180,8 +169,6 @@ def _canonical_test_live_launcher_handoff(
     args: argparse.Namespace,
     device: dict[str, Any],
     command_env: dict[str, str],
-    *,
-    content_binding_mode: str = "current",
 ) -> dict[str, Any]:
     """Render one run-bound canonical handoff for both Patrol and Gradle."""
 
@@ -190,22 +177,6 @@ def _canonical_test_live_launcher_handoff(
         raise ValueError("test_live launcher handoff requires alpha, beta, or gamma")
     target_name = _local_target_for_environment_alias(args.env_name)
     get_target(load_environment_topology(), target_name)
-    if content_binding_mode == "current":
-        content_binding = load_test_live_content_binding(target_name) or {}
-    elif content_binding_mode == "unbound":
-        content_binding = {}
-    else:
-        raise ValueError("canonical test_live content binding mode is invalid")
-    expected_content = {
-        "contentReleaseId": str(content_binding.get("releaseId") or ""),
-        "contentManifestDigest": str(content_binding.get("manifestDigest") or ""),
-        "contentReadinessReceiptDigest": str(
-            content_binding.get("readinessReceiptDigest") or ""
-        ),
-    }
-    populated_content = [value for value in expected_content.values() if value]
-    if populated_content and len(populated_content) != len(expected_content):
-        raise ValueError("current test_live content binding is partial")
     base_urls = _effective_base_urls_for_device(args, device)
     command = [
         sys.executable,
@@ -238,17 +209,6 @@ def _canonical_test_live_launcher_handoff(
     current_user_id = _resolved_owner_id(args)
     if current_user_id:
         command.extend(("--current-user-id", current_user_id))
-    if populated_content:
-        command.extend(
-            (
-                "--content-release-id",
-                expected_content["contentReleaseId"],
-                "--content-manifest-digest",
-                expected_content["contentManifestDigest"],
-                "--content-readiness-receipt-digest",
-                expected_content["contentReadinessReceiptDigest"],
-            )
-        )
     is_android = str(device.get("targetPlatform") or "").lower().startswith(
         "android"
     )
@@ -312,14 +272,11 @@ def _canonical_test_live_launcher_handoff(
     if not isinstance(payload, dict):
         raise ValueError("canonical test_live launcher handoff must be an object")
     _canonical_handoff_projection(payload)
-    expected_state = "bound" if populated_content else "unbound"
     expected_identity = {
         "environment": runtime_env,
         "target": target_name,
         "launchMode": "canonical_launcher",
         "launchPolicy": "test_live",
-        "contentBindingState": expected_state,
-        **expected_content,
     }
     mismatched = sorted(
         field
@@ -478,15 +435,10 @@ def _provider_patrol_launcher_handoff(
 ) -> dict[str, Any]:
     """Build only the canonical launcher rail frozen before side effects."""
 
-    if runtime_identity is None:
-        return _canonical_test_live_launcher_handoff(args, device, command_env)
-    if runtime_identity["runtimeMode"] == "immutable_candidate":
-        return _canonical_test_live_launcher_handoff(
-            args,
-            device,
-            command_env,
-            content_binding_mode="unbound",
-        )
+    if runtime_identity is not None:
+        # runtimeMode 只影响服务端 runtime 身份证据；launcher handoff 不再携带
+        # 内容绑定，因此两种模式共用同一 canonical handoff。
+        _ = runtime_identity["runtimeMode"]
     return _canonical_test_live_launcher_handoff(args, device, command_env)
 
 
@@ -495,4 +447,11 @@ def _apply_launcher_handoff_to_command_env(
     handoff: dict[str, Any],
 ) -> None:
     _, projection = _canonical_handoff_projection(handoff)
+    # 内容激活是运行时服务端事实；清除历史进程环境中遗留的内容绑定注入。
+    for retired_key in (
+        "QWQ_CONTENT_RELEASE_ID",
+        "QWQ_CONTENT_MANIFEST_DIGEST",
+        "QWQ_CONTENT_READINESS_RECEIPT_DIGEST",
+    ):
+        command_env.pop(retired_key, None)
     command_env.update(projection)

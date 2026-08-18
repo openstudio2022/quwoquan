@@ -5,7 +5,7 @@ re-export）；本包按职责切分：
 
 - ``constants``：target 路径、证据前缀、正则与目录常量。
 - ``session``：target 谓词、环境别名解析、typed test-data actor 与会话准备。
-- ``evidence``：运行证据读取、设备矩阵校验与 iOS 证据流。
+- ``evidence``：运行证据读取、设备矩阵校验与移动端证据流。
 - ``handoff``：test-live launcher handoff 构建/投影与 provider runtime 身份校验。
 - ``device_runtime``：设备命令 env、端口反转、consumer lease 与 release UAT 状态复位。
 - ``cli_args``：CLI 参数解析与输出脱敏。
@@ -30,9 +30,11 @@ from .constants import (  # noqa: E402,F401
     ACCOUNT_ENFORCEMENT_EXPECTED_EVIDENCE,
     ACCOUNT_ENFORCEMENT_TARGETS,
     ALPHA_APP_CONTENT_TYPED_SESSION_TARGETS,
+    ANDROID_DEVICE_EVIDENCE_LOG_TAG,
+    ANDROID_DEVICE_EVIDENCE_TOKENS,
     ANDROID_DEVICE_PROXY,
-    ANDROID_RELEASE_UAT_PACKAGE,
     APP_DIR,
+    APP_CONTENT_VIDEO_PAGE_COUNT_ENV,
     APP_LAUNCHER_HANDOFF_BUILDER,
     BASIC_VIABILITY_TARGET,
     CANONICAL_DIGEST_PATTERN,
@@ -49,15 +51,17 @@ from .constants import (  # noqa: E402,F401
     FORBIDDEN_PROD_PLAYBACK_CANARY_TOKENS,
     HOME_VIDEO_PLAYBACK_TARGET,
     IOS_DEVICE_EVIDENCE_TOKENS,
-    IOS_RELEASE_UAT_BUNDLE_IDS,
+    IOS_RUNNER_UITESTS_XCTRUNNER_BUNDLE_ID,
     IOS_RUNTIME_VERSION_PATTERN,
     IOS_SDK_VERSION_PATTERN,
     LOCAL_ENVIRONMENT_ALIAS_TARGETS,
     LOCAL_TARGETS,
+    MESSAGE_HOME_TARGET,
     PATROL_EXECUTION_SUMMARY_PATTERN,
     PATROL_FLUTTER_COMMAND_ENV,
     PATROL_IOS_PRODUCTS_DIR,
     PATROL_TEST_DIRECTORY,
+    PROFILE_JOURNEY_TARGET,
     PROVIDER_CONFORMANCE_RUNTIME_IDENTITY_COMMON_FIELDS,
     PROVIDER_CONFORMANCE_RUNTIME_IDENTITY_ENV,
     PROVIDER_CONFORMANCE_RUNTIME_IDENTITY_IMMUTABLE_FIELDS,
@@ -71,13 +75,18 @@ from .constants import (  # noqa: E402,F401
     RUNTIME_RECOVERY_TARGET,
     TYPED_AUTHENTICATED_SESSION_TARGETS,
     TYPED_TEST_DATA_ACTOR_ENV,
+    TYPED_TEST_DATA_CONVERSATION_ENV,
+    TYPED_TEST_DATA_CONVERSATION_TARGETS,
     XCODE_GLOBAL_PRODUCTS_DIR,
     XCODE_IOS_SIMULATOR_SDK_PATTERN,
     XCTEST_EXECUTION_SUMMARY_PATTERN,
+    android_release_uat_package,
+    ios_release_uat_bundle_ids,
     utc_now,
 )
 from .session import (  # noqa: E402,F401
     TypedTestDataActor,
+    TypedTestDataConversation,
     _account_enforcement_phase,
     _account_enforcement_subject_digest,
     _bind_typed_test_data_actor,
@@ -93,6 +102,7 @@ from .session import (  # noqa: E402,F401
     _public_video_canary_session_mode,
     _requires_account_closure,
     _requires_native_video_playback_signals,
+    _requires_typed_test_data_conversation,
     _requires_typed_authenticated_session,
     _requires_video_playback_canary,
     _resolved_media_base_urls,
@@ -101,6 +111,7 @@ from .session import (  # noqa: E402,F401
     _runtime_anonymous_session_mode,
     _runtime_env_for_alias,
     _typed_test_data_actor_from_environment,
+    _typed_test_data_conversation_from_environment,
     _uses_persisted_device_session,
     _uses_public_video_canary_anonymous_session,
     _uses_runtime_anonymous_session,
@@ -108,8 +119,13 @@ from .session import (  # noqa: E402,F401
     _validate_video_playback_canary_work_id,
 )
 from .evidence import (  # noqa: E402,F401
+    _AndroidDeviceEvidenceStream,
     _IosDeviceEvidenceStream,
+    _android_device_evidence_commands,
+    _apply_feed_content_evidence_gate,
+    _device_evidence_stream,
     _ios_device_evidence_command,
+    _is_android_device,
     _is_ios_device,
     _output_evidence_ref,
     _read_account_enforcement_evidence,
@@ -117,6 +133,7 @@ from .evidence import (  # noqa: E402,F401
     _read_feed_content_evidence,
     _read_runtime_recovery_evidence,
     _read_video_playback_evidence,
+    _structured_evidence_log_path,
     _validate_account_enforcement_device_matrix,
     _validate_runtime_recovery_device_matrix,
     load_remote_api_evidence,

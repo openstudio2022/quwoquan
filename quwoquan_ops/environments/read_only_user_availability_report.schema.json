@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "stackctl read-only user availability report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "target",
+    "environment",
+    "observedAt",
+    "status",
+    "firstBlockerClass",
+    "firstBlocker",
+    "userAvailability",
+    "metrics",
+    "evidence"
+  ],
+  "properties": {
+    "schema": {"const": "stackctl.read_only_user_availability/v1"},
+    "target": {
+      "enum": ["alpha-local", "beta-local", "gamma-local", "prod-sim", "prod-hosted"]
+    },
+    "environment": {"enum": ["alpha", "beta", "gamma", "prod"]},
+    "observedAt": {"type": "string", "format": "date-time"},
+    "status": {"enum": ["ready", "failed"]},
+    "firstBlockerClass": {
+      "enum": [
+        "none",
+        "build",
+        "startup_identity",
+        "provider",
+        "release",
+        "content_exact_queries",
+        "device",
+        "content_live"
+      ]
+    },
+    "firstBlocker": {"type": "string"},
+    "userAvailability": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "status", "issues"],
+        "properties": {
+          "name": {
+            "enum": [
+              "build_ready",
+              "runtime_full_ready",
+              "provider_ready",
+              "release_active",
+              "content_exact_queries_ready",
+              "device_bound",
+              "content_live_passed"
+            ]
+          },
+          "status": {"enum": ["ready", "blocked", "unavailable"]},
+          "issues": {
+            "type": "array",
+            "items": {"type": "string"}
+          }
+        }
+      }
+    },
+    "metrics": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "labels", "value"],
+        "properties": {
+          "name": {"enum": ["stackctl_user_availability", "stackctl_first_blocker"]},
+          "labels": {
+            "type": "object",
+            "minProperties": 3,
+            "maxProperties": 3,
+            "additionalProperties": {"type": "string"}
+          },
+          "value": {"const": 1}
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}

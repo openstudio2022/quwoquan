@@ -166,7 +166,7 @@ def test_mediawiki_homepage_fact_falls_back_to_governed_baike_fact_source(
         captured_at=CAPTURED_AT,
     )
 
-    assert observed_geo == [("四川省", "成都市", "锦江区")]
+    assert observed_geo == [("示例省", "成都市", "锦江区")]
     facts = acquired.candidate["structuredFacts"]
     assert facts["ticketPriceRange"] == {
         "currency": "CNY",

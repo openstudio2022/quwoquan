@@ -179,6 +179,41 @@ def _isolation_breach_evidence(paths_module, isolated_env: dict) -> list[str]:
     return breaches
 
 
+def pytest_sessionfinish(session, exitstatus):
+    """把只读的 capsule / library 目录交还为可删除状态。
+
+    冻结后的 capsule 与 content_library 条目按设计是只读的，这是防篡改语义的一
+    部分，不能在生产路径上放宽。但只读**目录**会让 pytest 下一次会话启动时的
+    basetemp 清理失败（`rm_rf` 报 `Directory not empty`），临时目录因此逐次累积。
+    因此在会话结束时统一恢复写位：只读语义在被测树内已经被断言过，此时它只剩
+    妨碍回收的作用。
+    """
+    factory = getattr(session.config, "_tmp_path_factory", None)
+    basetemp = getattr(factory, "_basetemp", None)
+    if basetemp is None:
+        return
+    # 同时放宽同级的 garbage-* 残留：那是前几次会话留下的、pytest 已放弃回收的
+    # 目录，恢复写位后下一次会话的清理才能真正删掉它们。
+    roots = [Path(basetemp)]
+    roots.extend(sorted(Path(basetemp).parent.glob("garbage-*")))
+    for root in roots:
+        if not root.is_dir():
+            continue
+        for path in sorted(root.rglob("*"), reverse=True):
+            if path.is_symlink() or not path.is_dir():
+                continue
+            try:
+                path.chmod(path.stat().st_mode | 0o700)
+            except OSError:
+                # 回收是尽力而为：无法放宽的目录留给下一次会话，不能让清理动作
+                # 反过来决定测试会话的成败。
+                continue
+        try:
+            root.chmod(root.stat().st_mode | 0o700)
+        except OSError:
+            continue
+
+
 def pytest_unconfigure(config):
     """pytest 落盘隔离门。
 

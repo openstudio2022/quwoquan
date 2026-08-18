@@ -321,10 +321,7 @@ func resolveLogSinkBinding(
 	if configProvider == nil {
 		return config{}, fmt.Errorf("runtime.log.sink binding has no runtime config provider")
 	}
-	descriptor, found := eventrecordgenerated.ExternalProviderBindingFor(
-		appEnv,
-		"runtime.log.sink",
-	)
+	descriptor, found := eventrecordgenerated.CompiledBindingFor("runtime.log.sink")
 	if !found {
 		return config{}, fmt.Errorf(
 			"runtime.log.sink binding is missing for environment=%s",

@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/_common/zero_qualified_reason.schema.json",
+  "title": "Zero-qualified terminal reason",
+  "description": "`qualified == 0` 的唯一 typed 原因与其证据字段。lane 回执、campaign 报告与 fleet 运行回执引用同一定义，三层不各自声明枚举。原因由终结该终态的那一层观测者写一次，其余层只向上引用。外部引用的 $defs 不含内部 $ref，以便被任一消费者内联。",
+  "$defs": {
+    "zeroQualifiedReason": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "observedStage", "determinedAt", "operatorAction"],
+      "properties": {
+        "code": {
+          "enum": [
+            "SOURCE_POOL_EMPTY",
+            "SOURCE_ACCESS_DENIED_OR_UNREACHABLE",
+            "BATCH_DEADLINE_EXHAUSTED",
+            "ALL_OBJECTS_QUALITY_REJECTED",
+            "RESUMABLE_INTERRUPTION"
+          ]
+        },
+        "observedStage": {
+          "enum": ["source_discovery", "review", "delivery"]
+        },
+        "determinedAt": {
+          "type": "string",
+          "minLength": 1,
+          "format": "date-time"
+        },
+        "operatorAction": {
+          "enum": ["resume", "repair_source", "refreeze_time_budget"]
+        },
+        "resumableRefs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+          }
+        },
+        "nonResumableBasis": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["summary", "evidenceRef", "evidenceDigest"],
+          "properties": {
+            "summary": {"type": "string", "minLength": 1, "maxLength": 2048},
+            "evidenceRef": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+            },
+            "evidenceDigest": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["code"],
+            "properties": {"code": {"const": "RESUMABLE_INTERRUPTION"}}
+          },
+          "then": {
+            "required": ["resumableRefs"],
+            "properties": {"operatorAction": {"const": "resume"}},
+            "not": {"required": ["nonResumableBasis"]}
+          },
+          "else": {
+            "required": ["nonResumableBasis"],
+            "properties": {
+              "operatorAction": {
+                "enum": ["repair_source", "refreeze_time_budget"]
+              }
+            },
+            "not": {"required": ["resumableRefs"]}
+          }
+        },
+        {
+          "if": {
+            "required": ["code"],
+            "properties": {
+              "code": {
+                "enum": [
+                  "SOURCE_POOL_EMPTY",
+                  "SOURCE_ACCESS_DENIED_OR_UNREACHABLE"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {"observedStage": {"const": "source_discovery"}}
+          }
+        },
+        {
+          "if": {
+            "required": ["code"],
+            "properties": {
+              "code": {"const": "ALL_OBJECTS_QUALITY_REJECTED"}
+            }
+          },
+          "then": {"properties": {"observedStage": {"const": "review"}}}
+        },
+        {
+          "if": {
+            "required": ["code"],
+            "properties": {"code": {"const": "BATCH_DEADLINE_EXHAUSTED"}}
+          },
+          "then": {"properties": {"observedStage": {"const": "delivery"}}}
+        }
+      ]
+    }
+  }
+}

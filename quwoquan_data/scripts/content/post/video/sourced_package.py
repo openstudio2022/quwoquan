@@ -225,7 +225,7 @@ def render_sourced_video_package(
         "entityRefs": [request.entity_ref],
         "tagRefs": list(request.tag_refs),
         "sourceUrls": [evidence.source_post_url],
-        "sourceAttribution": evidence.attribution_dict(),
+        "sourceAttribution": evidence.post_attribution_dict(),
         "authorId": request.author_id,
         "creatorProfileId": request.creator_profile_id,
         "generator": "agent",

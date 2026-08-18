@@ -22,7 +22,7 @@ from content.release.canonical.aggregate_release_closure import (
 from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
 )
-from core.release_layout import object_closure_digest, payload_file
+from core.release_layout import objects_merkle, payload_file
 
 
 def _write_json(path: Path, payload: dict[str, object]) -> None:
@@ -151,12 +151,12 @@ def test_copy_release_tag_snapshot__fallback_is_exact_and_in_merkle(
         target=target,
         control_plane_taxonomy_root=control_root,
     )
-    first_merkle = object_closure_digest(release_root)
+    first_merkle = objects_merkle(release_root)
     source_definition.write_text('{"changed":true}\n', encoding="utf-8")
 
     assert (target / "_definition.json").is_file()
     assert not (target / "不应复制的子标签").exists()
-    assert object_closure_digest(release_root) == first_merkle
+    assert objects_merkle(release_root) == first_merkle
 
 
 def test_resolve_tag_snapshot__missing_control_plane_definition_is_typed_block(

@@ -127,9 +127,25 @@ def test_uat_plan__derives_release_search_and_twenty_video_page__local_contract(
 def test_uat_plan__deduplicates_first_middle_last_for_one_video__local_contract() -> None:
     plan = build_app_content_uat_plan(_readiness(1))
 
+    assert plan["videoPagination"] == {
+        "pageSize": 20,
+        "expectedWorkIds": ["video-01"],
+    }
     assert plan["videoPlaybackCanaries"] == [
         {"position": "first", "index": 0, "workId": "video-01"},
     ]
+
+
+def test_uat_plan__rejects_empty_video_page__local_contract() -> None:
+    readiness = _readiness(1)
+    readiness["feedQueries"][0]["matchedPostIds"] = []  # type: ignore[index]
+
+    try:
+        build_app_content_uat_plan(readiness)
+    except ValueError as exc:
+        assert "feed query typed_video is empty" in str(exc)
+    else:
+        raise AssertionError("an empty release video page must fail closed")
 
 
 def test_uat_plan__m100_uses_exact_deterministic_stratified_matrix__local_contract() -> None:

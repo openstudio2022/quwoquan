@@ -10,20 +10,14 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from content.source.sourced_video_admission import probe_audio_stream
+from content.source.sourced_video_unit import write_admitted_sourced_video_unit
 from core.content_source_registry import load_content_source_registry
 from core.io import write_json
 from core.paths import execution_shared_dir
 from core.runtime_policy import DEFAULT_RUNTIME_PROFILE_ID, load_runtime_policy
-from core.video_source_admission import (
-    assert_video_acquisition_path_allowed,
-    assert_video_distribution_use_allowed,
-)
+from core.video_source_admission import assert_video_source_admitted
 
-from content.source.professional_video_receipt import (
-    resolve_professional_video_candidate,
-)
-from content.source.sourced_video_admission import probe_audio_stream
-from content.source.sourced_video_unit import write_admitted_sourced_video_unit
 
 _MAX_SOURCE_VIDEO_BYTES = 512 * 1024 * 1024
 _SOURCE_VIDEO_DOWNLOAD_ATTEMPTS = 4
@@ -158,14 +152,12 @@ def fetch_admitted_sourced_videos(
     entity_id: str,
     entity_type: str,
     candidates: list[dict[str, Any]],
-    professional_acquisition_root: Path | None = None,
 ) -> list[Path]:
     """Materialize admitted source units for directly downloadable videos."""
     evidence_paths: list[Path] = []
-    registry = load_content_source_registry()
     for candidate in candidates:
-        assert_video_distribution_use_allowed(
-            registry,
+        assert_video_source_admitted(
+            load_content_source_registry(),
             source_id=str(candidate.get("sourceId") or ""),
             source_kind=str(candidate.get("sourceKind") or ""),
             publication_admission=str(
@@ -173,101 +165,43 @@ def fetch_admitted_sourced_videos(
             ),
         )
         asset_url = str(candidate.get("assetUrl") or "").strip()
-        professional = bool(
-            str(candidate.get("professionalAcquisitionReceiptRef") or "").strip()
+        if not asset_url.startswith("https://"):
+            raise ValueError("sourced video assetUrl must use https")
+        suffix = Path(urllib.parse.urlparse(asset_url).path).suffix or ".video"
+        digest = hashlib.sha256(asset_url.encode("utf-8")).hexdigest()[:16]
+        download_path = (
+            execution_shared_dir(execution_id)
+            / "source_video_downloads"
+            / f"{digest}{suffix}"
         )
-        if not professional:
-            assert_video_acquisition_path_allowed(
-                registry,
-                source_id=str(candidate.get("sourceId") or ""),
-                source_kind=str(candidate.get("sourceKind") or ""),
-                acquisition_path="public_direct",
-            )
-        delete_after_admission = not professional
-        if professional:
-            if professional_acquisition_root is None:
-                raise ValueError(
-                    "professional video candidate requires the frozen capsule "
-                    "professional_acquisition_root"
-                )
-            download_path = resolve_professional_video_candidate(
-                candidate,
-                root=professional_acquisition_root,
-            )
-            suffix = download_path.suffix
-            digest = hashlib.sha256(
-                str(candidate.get("professionalContentSha256") or "").encode("utf-8")
-            ).hexdigest()[:16]
-            download_evidence: dict[str, object] = {
-                "schema": "quwoquan_data.professional_video_acquisition_consumption",
-                "networkRefetchAttempted": False,
-                "credentialAssertion": "receipt_bound_local_cas_no_network_refetch",
-                "requestedUrl": asset_url,
-                "acquisitionReceiptRef": str(
-                    candidate.get("professionalAcquisitionReceiptRef") or ""
-                ),
-                "professionalAssetId": str(candidate.get("professionalAssetId") or ""),
-                "sha256": _file_sha256(download_path),
-            }
-            download_evidence_dir = "professional_video_acquisition_consumption"
-        else:
-            if not asset_url.startswith("https://"):
-                raise ValueError("sourced video assetUrl must use https")
-            suffix = Path(urllib.parse.urlparse(asset_url).path).suffix or ".video"
-            digest = hashlib.sha256(asset_url.encode("utf-8")).hexdigest()[:16]
-            download_path = (
+        try:
+            download_evidence = _download_sourced_video(asset_url, download_path)
+        except (OSError, TimeoutError, ValueError, urllib.error.URLError) as exc:
+            write_json(
                 execution_shared_dir(execution_id)
-                / "source_video_downloads"
-                / f"{digest}{suffix}"
+                / "anonymous_video_downloads"
+                / f"{digest}.json",
+                {
+                    "schema": "quwoquan_data.anonymous_video_download",
+                    "anonymousAccess": True,
+                    "credentialAssertion": "no_cookie_no_api_key_no_account_session",
+                    "executionId": execution_id,
+                    "entityId": entity_id,
+                    "sourceId": str(candidate.get("sourceId") or ""),
+                    "sourcePostUrl": str(candidate.get("sourcePostUrl") or ""),
+                    "requestedUrl": asset_url,
+                    "downloadOutcome": "rejected",
+                    "rightsStatusBeforeAdmission": str(
+                        candidate.get("rightsStatus") or "unverified"
+                    ),
+                    "rejection": f"{type(exc).__name__}: {exc}",
+                },
             )
-            download_evidence_dir = "anonymous_video_downloads"
-            try:
-                download_evidence = _download_sourced_video(asset_url, download_path)
-            except (OSError, TimeoutError, ValueError, urllib.error.URLError) as exc:
-                write_json(
-                    execution_shared_dir(execution_id)
-                    / download_evidence_dir
-                    / f"{digest}.json",
-                    {
-                        "schema": "quwoquan_data.anonymous_video_download",
-                        "anonymousAccess": True,
-                        "credentialAssertion": "no_cookie_no_api_key_no_account_session",
-                        "executionId": execution_id,
-                        "entityId": entity_id,
-                        "sourceId": str(candidate.get("sourceId") or ""),
-                        "sourcePostUrl": str(candidate.get("sourcePostUrl") or ""),
-                        "requestedUrl": asset_url,
-                        "downloadOutcome": "rejected",
-                        "rightsStatusBeforeAdmission": str(
-                            candidate.get("rightsStatus") or "unverified"
-                        ),
-                        "rejection": f"{type(exc).__name__}: {exc}",
-                    },
-                )
-                raise
+            raise
         try:
             audio_probe = probe_audio_stream(download_path)
             has_audio = audio_probe.get("hasAudio") is True
             terms_url = str(candidate.get("termsUrl") or "").strip()
-            publication_admission = str(
-                candidate.get("publicationAdmission") or ""
-            )
-            research_release = publication_admission == "research_release"
-            audio_rights_status = str(
-                candidate.get("audioRightsStatus")
-                or (
-                    "unverified"
-                    if has_audio and research_release
-                    else "licensed"
-                    if has_audio
-                    else "no_audio"
-                )
-            )
-            audio_proof = str(
-                candidate.get("audioAuthorizationProofUrl") or ""
-            ).strip() or (
-                None if audio_rights_status == "unverified" else terms_url or None
-            )
             evidence_paths.append(
                 write_admitted_sourced_video_unit(
                     execution_id=execution_id,
@@ -279,23 +213,23 @@ def fetch_admitted_sourced_videos(
                     ),
                     platform=str(candidate.get("platform") or ""),
                     source_post_url=str(candidate.get("sourcePostUrl") or ""),
-                    original_asset_url=str(
-                        candidate.get("originalAssetUrl") or asset_url
-                    ),
+                    original_asset_url=asset_url,
                     attribution_text=str(candidate.get("attributionText") or ""),
                     rights_basis=str(candidate.get("rightsBasis") or ""),
                     commercial_authorization_status=str(
                         candidate.get("commercialAuthorizationStatus") or ""
                     ),
-                    publication_admission=publication_admission,
+                    publication_admission=str(
+                        candidate.get("publicationAdmission") or ""
+                    ),
                     authorization_proof_url=str(
                         candidate.get("authorizationProofUrl") or ""
                     )
                     or None,
                     terms_url=terms_url or None,
                     risk_acceptance_id=None,
-                    audio_rights_status=audio_rights_status,
-                    audio_authorization_proof_url=audio_proof,
+                    audio_rights_status="licensed" if has_audio else "no_audio",
+                    audio_authorization_proof_url=terms_url if has_audio else None,
                     model_release_status=str(
                         candidate.get("modelReleaseStatus") or "not_required"
                     ),
@@ -311,7 +245,7 @@ def fetch_admitted_sourced_videos(
             )
             write_json(
                 execution_shared_dir(execution_id)
-                / download_evidence_dir
+                / "anonymous_video_downloads"
                 / f"{digest}.json",
                 {
                     **download_evidence,
@@ -323,16 +257,11 @@ def fetch_admitted_sourced_videos(
                     "rightsStatusBeforeAdmission": str(
                         candidate.get("rightsStatus") or "unverified"
                     ),
-                    "rightsStatusAfterAdmission": str(
-                        candidate.get("rightsStatus") or "unverified"
-                    )
-                    if research_release
-                    else "verified",
+                    "rightsStatusAfterAdmission": "verified",
                 },
             )
         finally:
-            if delete_after_admission:
-                download_path.unlink(missing_ok=True)
+            download_path.unlink(missing_ok=True)
     downloads_dir = execution_shared_dir(execution_id) / "source_video_downloads"
     if downloads_dir.is_dir() and not any(downloads_dir.iterdir()):
         shutil.rmtree(downloads_dir)

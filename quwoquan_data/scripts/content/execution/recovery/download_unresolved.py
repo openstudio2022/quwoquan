@@ -463,6 +463,11 @@ def _auto_research_wave_summary(
         "ineligibleTargetCount": int((availability or {}).get("ineligibleTargetCount") or 0),
         "elapsedSeconds": float((throughput or {}).get("elapsedSeconds") or 0),
         "entitiesPerMinute": float((throughput or {}).get("entitiesPerMinute") or 0),
-        "maxWorkers": int((throughput or {}).get("maxWorkers") or 0),
+        "frozenMaxConcurrentWorkers": int(
+            (throughput or {}).get("frozenMaxConcurrentWorkers") or 0
+        ),
+        "peakConcurrentWorkers": int(
+            (throughput or {}).get("peakConcurrentWorkers") or 0
+        ),
         "recordedAt": store.now_iso(),
     }

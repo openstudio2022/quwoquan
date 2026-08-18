@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .behavior_fingerprint import fingerprint_equivalence_issues
 from .context import (
     OBSERVABILITY_EVIDENCE_SCHEMA,
     READBACK_EVIDENCE_SCHEMA,
@@ -122,6 +123,16 @@ def _validate_runtime_evidence(
                 require_source_report=release_bound,
             )
         )
+    # 同一环境与服务端状态下，改变入口（launch provenance / install
+    # channel / BuildMode / 设备形态）不得改变规范化行为指纹。
+    issues.extend(
+        fingerprint_equivalence_issues(
+            [sample for sample in samples if isinstance(sample, dict)],
+            label=str(path),
+            release_id=expected_release_id,
+            release_digest=expected_release_digest,
+        )
+    )
     return issues, payload
 
 

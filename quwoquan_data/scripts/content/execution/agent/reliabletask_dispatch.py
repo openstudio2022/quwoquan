@@ -14,17 +14,13 @@ from core.control_types import (
 from core.data_issue import (
     DataIssue,
     DataIssueCode,
-    DataIssueError,
     DataIssueStage,
     DataRecoveryAction,
 )
 
 from content.execution.context import ExecutionContext
-from content.execution.queue.core import _load_jobs, _read_job
+from content.execution.queue.core import _load_jobs
 from content.execution.queue.model import QueueJob
-from content.execution.queue.reliabletask.job_set import (
-    ReliableTaskJobSetCollisionError,
-)
 from content.execution.queue.reliabletask.jobs import uses_reliabletask
 from content.execution.queue.reliabletask.projection import (
     record_reliabletask_failure,
@@ -83,33 +79,10 @@ def _active_jobs(
     queue_stage: QueueJobStage,
 ) -> tuple[QueueJob, ...]:
     """仍可被下一轮 fleet 继续推进的作业；终态丢弃作业不在其中。"""
-    from content.execution.queue.reliabletask.fleet import (
-        _has_audited_remote_recovery,
-    )
-
-    recover_dead_tasks = _has_audited_remote_recovery(
-        execution_id,
-        queue_stage,
-    )
     return tuple(
         job
         for job in _remaining_jobs(execution_id, queue_stage)
         if job.state not in _TERMINAL_JOB_STATES
-        or (recover_dead_tasks and job.state is QueueJobState.DEAD)
-    )
-
-
-def _audited_dead_recovery_pending(
-    execution_id: str,
-    queue_stage: QueueJobStage,
-) -> bool:
-    from content.execution.queue.reliabletask.fleet import (
-        _has_audited_remote_recovery,
-    )
-
-    return _has_audited_remote_recovery(execution_id, queue_stage) and any(
-        job.state is QueueJobState.DEAD
-        for job in _remaining_jobs(execution_id, queue_stage)
     )
 
 
@@ -198,54 +171,6 @@ def _contract_issue(stage: ExecutionStage, message: str) -> DataIssue:
     )
 
 
-def _pool_delivery_unavailable_issue(message: str) -> DataIssue:
-    return DataIssue(
-        code=DataIssueCode.POOL_DELIVERY_UNAVAILABLE,
-        stage=DataIssueStage.PUBLISH,
-        message=message,
-        recovery=DataRecoveryAction.RETRY_DELIVERY,
-    )
-
-
-def _project_local_success_evidence(job: QueueJob) -> bool:
-    """Recover a remote success only from the exact local completion envelope."""
-    refreshed = _read_job(job.execution_id, job.job_id)
-    if refreshed.state is QueueJobState.SUCCEEDED:
-        return True
-    if refreshed.stage is not QueueJobStage.AUTHOR or not refreshed.content_object_dir:
-        return False
-
-    from core.paths import OUTPUT_ROOT
-
-    from content.execution.queue.reliabletask.projection import (
-        record_reliabletask_completion,
-    )
-    from content.execution.workspace import execution_root
-
-    envelope = (
-        execution_root(refreshed.execution_id)
-        / refreshed.content_object_dir
-        / "4.draft"
-        / "agent_result_envelope.json"
-    )
-    if not envelope.is_file():
-        return False
-    from content.execution.queue.reliabletask.author import (
-        author_envelope_requires_reauthoring,
-    )
-
-    if author_envelope_requires_reauthoring(refreshed, envelope):
-        return False
-    record_reliabletask_completion(
-        refreshed.execution_id,
-        refreshed.job_id,
-        evidence_path=envelope,
-        evidence_root=OUTPUT_ROOT,
-        envelope_workspace_root=envelope.parent,
-    )
-    return True
-
-
 def _project_fleet_outcomes(
     execution_id: str,
     stage: ExecutionStage,
@@ -277,25 +202,7 @@ def _project_fleet_outcomes(
             )
             continue
         if status == "succeeded":
-            # Local SUCCEEDED is written only after the worker validates and
-            # binds the exact result envelope. A later fleet receipt is merely
-            # transport acknowledgement; re-reading mutable draft files here
-            # can falsely invalidate already-admitted completion after the
-            # controller advances into review/repair.
-            if job.state is QueueJobState.SUCCEEDED:
-                continue
-            try:
-                projected = _project_local_success_evidence(job)
-            except (OSError, TypeError, ValueError) as exc:
-                issues.append(
-                    _contract_issue(
-                        stage,
-                        "ReliableTask local completion evidence is invalid: "
-                        f"{type(exc).__name__}: {exc}",
-                    )
-                )
-                continue
-            if not projected:
+            if job.job_id in {item.job_id for item in _remaining_jobs(execution_id, queue_stage)}:
                 issues.append(
                     _contract_issue(
                         stage,
@@ -342,13 +249,10 @@ def _dispatch_fleet(
     # quota check and this function. Re-read durable delivery before asking the
     # fleet for pending jobs, otherwise a successful final job is misreported
     # as infrastructure unavailable because the pending set is now empty.
-    recovery_pending = _audited_dead_recovery_pending(
-        ctx.execution_id,
+    if _quota_reached(ctx, stage, queue_stage) or _terminal_partial_closure_ready(
+        ctx,
+        stage,
         queue_stage,
-    )
-    if _quota_reached(ctx, stage, queue_stage) or (
-        not recovery_pending
-        and _terminal_partial_closure_ready(ctx, stage, queue_stage)
     ):
         return ReliableTaskDispatchResult(
             stage=stage,
@@ -358,7 +262,9 @@ def _dispatch_fleet(
             completed_count=_delivered_count(ctx, stage, queue_stage),
         )
     remaining_jobs = _remaining_jobs(ctx.execution_id, queue_stage)
-    active_jobs = _active_jobs(ctx.execution_id, queue_stage)
+    active_jobs = tuple(
+        job for job in remaining_jobs if job.state not in _TERMINAL_JOB_STATES
+    )
     if not active_jobs:
         if not remaining_jobs:
             return ReliableTaskDispatchResult(
@@ -387,12 +293,12 @@ def _dispatch_fleet(
             if issue.code not in DISCARDED_ISSUE_CODES
         )
         if not blocking:
-            # With zero delivered objects, an object-level discard is also the
-            # lane blocker. Preserve its typed code/recovery/message verbatim;
-            # replacing it with a synthetic "candidate pool exhausted" error
-            # destroys the repair route (for example QUALITY_FAILED ->
-            # rewind_compose for a mismatched article figure).
-            blocking = terminal_issues
+            blocking = (
+                _contract_issue(
+                    stage,
+                    "ReliableTask candidate pool is terminal with no delivered object",
+                ),
+            )
         return ReliableTaskDispatchResult(
             stage=stage,
             queue_stage=queue_stage,
@@ -402,44 +308,6 @@ def _dispatch_fleet(
             issues=blocking,
             discarded=discarded,
         )
-    if queue_stage is QueueJobStage.PUBLISH:
-        from content.execution.preflight.pool_delivery import (
-            record_pool_delivery_preflight,
-        )
-
-        try:
-            delivery_report, _receipt, _path = record_pool_delivery_preflight(
-                ctx.execution_id
-            )
-        except (OSError, RuntimeError, TypeError, ValueError) as exc:
-            return ReliableTaskDispatchResult(
-                stage=stage,
-                queue_stage=queue_stage,
-                status=ReliableTaskDispatchStatus.BLOCKED,
-                attempted_count=0,
-                completed_count=_delivered_count(ctx, stage, queue_stage),
-                issues=(
-                    _contract_issue(
-                        stage,
-                        "pool delivery preflight contract invalid: "
-                        f"{type(exc).__name__}: {exc}",
-                    ),
-                ),
-            )
-        if delivery_report.get("poolDeliveryReady") is not True:
-            return ReliableTaskDispatchResult(
-                stage=stage,
-                queue_stage=queue_stage,
-                status=ReliableTaskDispatchStatus.WAITING,
-                attempted_count=0,
-                completed_count=_delivered_count(ctx, stage, queue_stage),
-                issues=(
-                    _pool_delivery_unavailable_issue(
-                        "canonical pool delivery is pending because the Data-owned "
-                        "Mongo/Redis transport is not host-writable"
-                    ),
-                ),
-            )
     policy = active_runtime_policy()
     expected_job_ids = frozenset(
         job.job_id
@@ -451,24 +319,6 @@ def _dispatch_fleet(
             queue_stage,
             workers=ctx.max_workers,
             completion_grace_seconds=policy.managed_future_grace_seconds,
-        )
-    except DataIssueError as exc:
-        return ReliableTaskDispatchResult(
-            stage=stage,
-            queue_stage=queue_stage,
-            status=ReliableTaskDispatchStatus.BLOCKED,
-            attempted_count=0,
-            completed_count=0,
-            issues=exc.issues,
-        )
-    except ReliableTaskJobSetCollisionError as exc:
-        return ReliableTaskDispatchResult(
-            stage=stage,
-            queue_stage=queue_stage,
-            status=ReliableTaskDispatchStatus.BLOCKED,
-            attempted_count=0,
-            completed_count=0,
-            issues=(_contract_issue(stage, str(exc)),),
         )
     except (OSError, RuntimeError, ValueError) as exc:
         # A fleet invocation may finish the final object and then observe an
@@ -489,29 +339,16 @@ def _dispatch_fleet(
             )
         ):
             return _dispatch_fleet(ctx, stage, queue_stage)
-        issue = (
-            _pool_delivery_unavailable_issue(
-                "canonical pool delivery is pending because ReliableTask is "
-                f"unavailable: {type(exc).__name__}: {exc}"
-            )
-            if queue_stage is QueueJobStage.PUBLISH
-            else DataIssue(
-                code=DataIssueCode.ENVIRONMENT_NOT_READY,
-                stage=DataIssueStage(stage.value),
-                message=(
-                    f"ReliableTask fleet unavailable: {type(exc).__name__}: {exc}"
-                ),
-                recovery=DataRecoveryAction.STOP,
-            )
+        issue = DataIssue(
+            code=DataIssueCode.ENVIRONMENT_NOT_READY,
+            stage=DataIssueStage(stage.value),
+            message=f"ReliableTask fleet unavailable: {type(exc).__name__}: {exc}",
+            recovery=DataRecoveryAction.STOP,
         )
         return ReliableTaskDispatchResult(
             stage=stage,
             queue_stage=queue_stage,
-            status=(
-                ReliableTaskDispatchStatus.WAITING
-                if queue_stage is QueueJobStage.PUBLISH
-                else ReliableTaskDispatchStatus.BLOCKED
-            ),
+            status=ReliableTaskDispatchStatus.BLOCKED,
             attempted_count=0,
             completed_count=0,
             issues=(issue,),
@@ -529,18 +366,12 @@ def _dispatch_fleet(
     discarded = tuple(issue for issue in issues if issue.code in DISCARDED_ISSUE_CODES)
     blocking = tuple(issue for issue in issues if issue.code not in DISCARDED_ISSUE_CODES)
     delivered = _delivered_count(ctx, stage, queue_stage)
-    publish_quota_met = False
     if queue_stage is QueueJobStage.PUBLISH:
-        from content.execution.spec_contract import approved_quota
-
-        canonical_accepted = (
-            report.research_accepted_count + report.commercial_accepted_count
-        )
-        delivered = max(delivered, canonical_accepted)
-        publish_quota_met = bool(
-            report.passed
-            and canonical_accepted >= approved_quota(ctx.execution_id)
-        )
+        # Publish delivery may be proven by canonical objects even when resume
+        # jobs are dead (idempotent re-apply). Prefer the fleet's finalized count
+        # and commercial pass over the local succeeded-job ledger alone.
+        delivered = max(delivered, int(report.finalized_object_count or 0))
+    publish_quota_met = queue_stage is QueueJobStage.PUBLISH and bool(report.passed)
     quota_met = _quota_reached(ctx, stage, queue_stage) or publish_quota_met
     if blocking and not publish_quota_met:
         status = ReliableTaskDispatchStatus.BLOCKED
@@ -559,14 +390,13 @@ def _dispatch_fleet(
     else:
         # Only an empty qualified closure blocks the lane.
         status = ReliableTaskDispatchStatus.BLOCKED
-        blocking = blocking or discarded
-        if not blocking:
-            blocking = (
-                _contract_issue(
-                    stage,
-                    "ReliableTask terminal closure has no typed object outcome",
-                ),
-            )
+        blocking = (
+            _contract_issue(
+                stage,
+                "候选池耗尽且无合格对象；"
+                f"丢弃 {len(discarded)}，需扩充真实来源/媒体供给",
+            ),
+        )
     return ReliableTaskDispatchResult(
         stage=stage,
         queue_stage=queue_stage,
@@ -583,23 +413,20 @@ def dispatch_reliabletask_checkpoint(
     stage: ExecutionStage,
 ) -> ReliableTaskDispatchResult | None:
     """Run the current checkpoint through the sole service-owned executor."""
+    if not uses_reliabletask(ctx):
+        return None
     queue_stage = _queue_stage_for(stage)
     if queue_stage is None:
-        return None
-    if not uses_reliabletask(ctx, stage=queue_stage):
         return None
     declared = _declared_jobs(ctx.execution_id, queue_stage)
     if not declared:
         return None
     # 配额已交付即视为本 checkpoint 完成：剩余作业要么是终态丢弃对象，
     # 要么是过采冗余，再次派发只是重复消耗额度。
-    recovery_pending = _audited_dead_recovery_pending(
-        ctx.execution_id,
+    if _quota_reached(ctx, stage, queue_stage) or _terminal_partial_closure_ready(
+        ctx,
+        stage,
         queue_stage,
-    )
-    if _quota_reached(ctx, stage, queue_stage) or (
-        not recovery_pending
-        and _terminal_partial_closure_ready(ctx, stage, queue_stage)
     ):
         return None
     return _dispatch_fleet(ctx, stage, queue_stage)

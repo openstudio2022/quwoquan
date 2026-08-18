@@ -339,8 +339,25 @@ beta_manual_wait_until_stopped() {
 
 beta_manual_terminate_flutter_app() {
   local device_id="${1:-}"
-  local ios_bundle_id="${2:-com.example.quwoquanApp}"
-  local android_package="${3:-com.quwoquan.quwoquan_app}"
+  local ios_bundle_id="${2:-}"
+  local android_package="${3:-}"
+  # 调用方未显式给出身份时按 beta × Debug 由 canonical 映射派生，禁止字面值。
+  if [[ -z "$ios_bundle_id" || -z "$android_package" ]]; then
+    local lifecycle_root
+    lifecycle_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+    if [[ -z "$ios_bundle_id" ]]; then
+      ios_bundle_id="$(
+        PYTHONPATH="$lifecycle_root${PYTHONPATH:+:$PYTHONPATH}" PYTHONDONTWRITEBYTECODE=1 \
+          python3 -c "from quwoquan_ops.cli.lib.app_identity import application_id_for; print(application_id_for('ios', 'beta', 'debug'))"
+      )"
+    fi
+    if [[ -z "$android_package" ]]; then
+      android_package="$(
+        PYTHONPATH="$lifecycle_root${PYTHONPATH:+:$PYTHONPATH}" PYTHONDONTWRITEBYTECODE=1 \
+          python3 -c "from quwoquan_ops.cli.lib.app_identity import application_id_for; print(application_id_for('android', 'beta', 'debug'))"
+      )"
+    fi
+  fi
 
   if [[ -n "$device_id" ]] && command -v xcrun >/dev/null 2>&1; then
     xcrun simctl terminate "$device_id" "$ios_bundle_id" >/dev/null 2>&1 || true

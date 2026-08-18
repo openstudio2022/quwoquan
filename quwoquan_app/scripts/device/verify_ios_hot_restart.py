@@ -38,10 +38,15 @@ from verify_flutter_run_defines import validate_flutter_run_defines
 
 APP_DIR = Path(__file__).resolve().parents[2]
 ROOT = APP_DIR.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from quwoquan_ops.cli.lib.app_identity import application_id_for  # noqa: E402
+
 LAUNCHER = APP_DIR / "run.sh"
 ENVIRONMENTS = ("alpha", "beta", "gamma")
 LAUNCH_SURFACES = ("canonical_launcher", "direct_flutter_run")
-IOS_BUNDLE = "com.example.quwoquanApp"
+SAFE_TERMINAL_HARD_LIMIT_MS = 6000
 
 
 def _runtime_defines(environment: str, launch_surface: str) -> dict[str, str]:
@@ -417,11 +422,67 @@ def _validate_attempt(attempt: dict[str, Any], raw_segment: str) -> dict[str, An
     }
 
 
+def _attempt_evidence_issues(
+    label: str,
+    item: dict[str, Any],
+    *,
+    expected_launch_surface: str,
+    is_cold: bool,
+    max_cold_native_safe_terminal_ms: int = SAFE_TERMINAL_HARD_LIMIT_MS,
+) -> list[str]:
+    issues: list[str] = []
+    if item["launchMode"] != expected_launch_surface:
+        issues.append(
+            f"{label}: launchMode is {item['launchMode']!r}, "
+            f"expected {expected_launch_surface!r}"
+        )
+    if item["bootstrapFailure"]:
+        issues.append(f"{label}: startup_bootstrap_failure observed")
+    if item["canonicalTerminal"] != "routerShell":
+        issues.append(
+            f"{label}: canonical terminal is {item['canonicalTerminal']!r}, "
+            "expected routerShell"
+        )
+    if item["configurationState"] != "complete":
+        issues.append(f"{label}: runtime configuration was not complete")
+    if item["missingDefineKeys"]:
+        issues.append(f"{label}: missing define keys reported")
+    if item["terminalEventCount"] != 1:
+        issues.append(
+            f"{label}: expected exactly one safe terminal event, "
+            f"got {item['terminalEventCount']}"
+        )
+
+    reported_value = item.get("reportedSafeTerminalMs")
+    if (
+        not isinstance(reported_value, int)
+        or reported_value > SAFE_TERMINAL_HARD_LIMIT_MS
+    ):
+        issues.append(
+            f"{label}: reportedSafeTerminalMs is missing or exceeds "
+            f"{SAFE_TERMINAL_HARD_LIMIT_MS}ms"
+        )
+
+    native_limit_ms = (
+        max_cold_native_safe_terminal_ms
+        if is_cold
+        else SAFE_TERMINAL_HARD_LIMIT_MS
+    )
+    native_value = item.get("nativeReceivedSafeTerminalMs")
+    if not isinstance(native_value, int) or native_value > native_limit_ms:
+        issues.append(
+            f"{label}: nativeReceivedSafeTerminalMs is missing or exceeds "
+            f"{native_limit_ms}ms"
+        )
+    return issues
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--env", choices=ENVIRONMENTS, required=True)
     parser.add_argument("--device-id", required=True)
-    parser.add_argument("--bundle", default=IOS_BUNDLE)
+    # 默认按 环境 × Debug 派生 bundle id（本 smoke 为 flutter run/Debug 面）。
+    parser.add_argument("--bundle", default="")
     parser.add_argument(
         "--launch-surface",
         choices=LAUNCH_SURFACES,
@@ -429,6 +490,15 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--output-dir", default="")
     parser.add_argument("--ready-timeout-seconds", type=float, default=180)
+    parser.add_argument(
+        "--max-cold-native-safe-terminal-ms",
+        type=int,
+        default=SAFE_TERMINAL_HARD_LIMIT_MS,
+        help=(
+            "Maximum native receipt latency for the cold attempt only; "
+            "reported and hot-restart terminals remain capped at 6000ms."
+        ),
+    )
     parser.add_argument("--restart-wait-seconds", type=float, default=20)
     parser.add_argument("--hot-restart-count", type=int, default=3)
     parser.add_argument("--preflight-only", action="store_true")
@@ -440,6 +510,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.hot_restart_count < 1:
         print("--hot-restart-count must be at least 1", file=sys.stderr)
         return 2
+    if args.max_cold_native_safe_terminal_ms < SAFE_TERMINAL_HARD_LIMIT_MS:
+        print(
+            "--max-cold-native-safe-terminal-ms must be at least 6000",
+            file=sys.stderr,
+        )
+        return 2
     output_dir = (
         Path(args.output_dir)
         if args.output_dir
@@ -449,6 +525,9 @@ def main(argv: list[str] | None = None) -> int:
     stamp = time.strftime("%Y%m%dT%H%M%S")
     run_dir = output_dir / f"{args.env}-{stamp}"
     run_dir.mkdir(parents=True, exist_ok=True)
+
+    if not str(args.bundle or "").strip():
+        args.bundle = application_id_for("ios", args.env, "debug")
 
     try:
         defines = _runtime_defines(args.env, args.launch_surface)
@@ -484,7 +563,7 @@ def main(argv: list[str] | None = None) -> int:
     command = (
         ["bash", str(LAUNCHER), "-d", args.device_id]
         if args.launch_surface == "canonical_launcher"
-        else ["flutter", "run", "-d", args.device_id]
+        else ["flutter", "run", "--flavor", args.env, "-d", args.device_id]
     )
     baseline_captured_at = dt.datetime.now()
     baseline_simulator_log = _read_simulator_startup_log(args.device_id)
@@ -655,31 +734,17 @@ def main(argv: list[str] | None = None) -> int:
     for label, item in labeled_attempts:
         if item is None:
             continue
-        if item["launchMode"] != args.launch_surface:
-            issues.append(
-                f"{label}: launchMode is {item['launchMode']!r}, "
-                f"expected {args.launch_surface!r}"
+        issues.extend(
+            _attempt_evidence_issues(
+                label,
+                item,
+                expected_launch_surface=args.launch_surface,
+                is_cold=label == "cold",
+                max_cold_native_safe_terminal_ms=(
+                    args.max_cold_native_safe_terminal_ms
+                ),
             )
-        if item["bootstrapFailure"]:
-            issues.append(f"{label}: startup_bootstrap_failure observed")
-        if item["canonicalTerminal"] != "routerShell":
-            issues.append(
-                f"{label}: canonical terminal is {item['canonicalTerminal']!r}, "
-                "expected routerShell"
-            )
-        if item["configurationState"] != "complete":
-            issues.append(f"{label}: runtime configuration was not complete")
-        if item["missingDefineKeys"]:
-            issues.append(f"{label}: missing define keys reported")
-        if item["terminalEventCount"] != 1:
-            issues.append(
-                f"{label}: expected exactly one safe terminal event, "
-                f"got {item['terminalEventCount']}"
-            )
-        for key in ("reportedSafeTerminalMs", "nativeReceivedSafeTerminalMs"):
-            value = item.get(key)
-            if not isinstance(value, int) or value > 6000:
-                issues.append(f"{label}: {key} is missing or exceeds 6000ms")
+        )
     if native_did_finish_count != 1:
         issues.append(
             "expected exactly one ios_did_finish_launching for the cold "
@@ -699,6 +764,11 @@ def main(argv: list[str] | None = None) -> int:
         "staleRuntimeCleanup": stale_runtime_cleanup,
         "flutterRunExitCode": process.returncode,
         "nativeDidFinishLaunchingCount": native_did_finish_count,
+        "safeTerminalBudgetsMs": {
+            "reported": SAFE_TERMINAL_HARD_LIMIT_MS,
+            "hotNativeReceived": SAFE_TERMINAL_HARD_LIMIT_MS,
+            "coldNativeReceived": args.max_cold_native_safe_terminal_ms,
+        },
         "attempts": attempt_reports,
         "issues": issues,
         "flutterRunLog": str(run_dir / "flutter-run.log"),

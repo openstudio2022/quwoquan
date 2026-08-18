@@ -150,6 +150,12 @@ FORBIDDEN_SYMBOLS = (
     "_resolveBackwardDisplayPosition",
     "resolveBackwardSoftPageGeometry",
     "_backwardVersoAreaPolygon",
+    # Screen-space display offset: BACK visibility must come from the calculation
+    # input point and clip area, never from nudging the sheet after the fact.
+    "_singlePageBackwardFlippingDisplayOffset",
+    # Builder for the full previous-front baseline layer. BASELINE_VALUE_KEY below
+    # only catches the ValueKey; the builder can regress without it.
+    "_buildBackwardPreviousFrontBaselineLayer",
 )
 
 # Forbidden polygon fields on ArticlePageBackwardProjectedFrame.

@@ -5,7 +5,6 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from core.article_commercial_policy import article_commercial_closure_enabled
 from core.data_issue import (
     DataIssueCode,
     DataIssueError,
@@ -97,9 +96,6 @@ def _fetch_download_entity(
         external_input_context=external_input_context,
     )
     object_dir, target_ref, sources = plan.object_dir, plan.target_ref, plan.sources
-    commercial_article_closure = article_commercial_closure_enabled(
-        store.load_spec(execution_id)
-    )
     existing_image_source_dirs = _image_lane_source_unit_dirs(object_dir)
     written_source_dirs: set[Path] = set()
     written_rejected_source_dirs: set[Path] = set()
@@ -159,6 +155,7 @@ def _fetch_download_entity(
     rejected_by_category = dict(image_result.rejected_by_category)
     pending_images = image_result.pending_images
     provider_asset_counts = image_result.provider_asset_counts
+    professional_exclusions = image_result.professional_exclusions
     source_asset_counts = list(provider_asset_counts)
     required_image_work_images = image_result.required_image_work_images
     planned_homepage_source_images = image_result.planned_homepage_source_images
@@ -170,14 +167,7 @@ def _fetch_download_entity(
 
     for ordinal, source in enumerate(sources, start=1):
         try:
-            handler_fetch_contract.require_source_candidate_admission(
-                source,
-                require_commercial_article_binding=(
-                    commercial_article_closure
-                    and str(source.get("researchLane") or "") == "article"
-                    and str(source.get("sourceRole") or "") == "base"
-                ),
-            )
+            handler_fetch_contract.require_source_candidate_admission(source)
         except ValueError as exc:
             raise DataIssueError(
                 (
@@ -310,6 +300,27 @@ def _fetch_download_entity(
                 quality_value = "Reject"
                 quality_score = 0
                 quality_reasons.append(homepage_admission.issue_code.value)
+
+        # 隔离粒度：不可归因的来源单元只丢自己。一条未登记站点曾经让整个实体的
+        # fetch 抛 ValueError 被踢出 readyTargets，实体其余合法百科来源随之作废。
+        source_attribution_issue = None
+        if quality_value != "Reject":
+            source_attribution_issue = (
+                handler_fetch_contract.source_attribution_admission_issue(
+                    source,
+                    entity_id=entity_id,
+                )
+            )
+            if source_attribution_issue is not None:
+                quality_value = "Reject"
+                quality_score = 0
+                quality_reasons.append(source_attribution_issue.code.value)
+                print(
+                    "[download] Source attribution unresolved "
+                    f"{entity_id}/{source.get('source_id')}: "
+                    f"{dict(source_attribution_issue.attributes).get('detail', '')}",
+                    flush=True,
+                )
         compression_note: dict = {}
         if quality_value != "Reject" and handler_fetch_contract.requires_factual_compression(source):
             from core.factual_compression import factual_compress_text
@@ -342,12 +353,19 @@ def _fetch_download_entity(
             quality["factualCompression"] = compression_note
         if source_fetch_issue is not None:
             quality["fetchIssue"] = source_fetch_issue.as_dict()
-        cached_quality = _cached_source_quality_if_better(
-            object_dir,
-            ordinal=ordinal,
-            source_id=source["source_id"],
-            url=source["url"],
-            candidate_quality=quality,
+        if source_attribution_issue is not None:
+            quality["attributionIssue"] = source_attribution_issue.as_dict()
+        # 归因缺口是准入裁决而非质量评分：更高分的历史快照不得把不可交付的来源复活。
+        cached_quality = (
+            _cached_source_quality_if_better(
+                object_dir,
+                ordinal=ordinal,
+                source_id=source["source_id"],
+                url=source["url"],
+                candidate_quality=quality,
+            )
+            if source_attribution_issue is None
+            else None
         )
         if cached_quality is not None:
             unit = _find_source_unit_by_plan_key(
@@ -425,43 +443,83 @@ def _fetch_download_entity(
                 source_for_unit[
                     "finalUrl" if key == "fetchFinalUrl" else key
                 ] = fetch_runtime[key]
-        manifest = write_source_unit(
-            object_dir,
-            ordinal=ordinal,
-            source_id=source["source_id"],
-            source_md=source_md,
-            clean_md=clean_md,
-            html_bytes=html_bytes,
-            quality=quality,
-            platform=source.get("platform") or "web",
-            source_category=source.get("category") or source.get("platform") or "web",
-            source_kind=source.get("sourceKind") or "",
-            extractor=source.get("extractor") or "",
-            policy_revision=source.get("policyRevision") or "",
-            source_use_mode=source.get("sourceUseMode") or "",
-            publish_media_mode=source.get("publishMediaMode") or "",
-            source_role=source.get("sourceRole") or "",
-            image_evidence_mode=source.get("imageEvidenceMode") or "",
-            research_lane=source.get("researchLane") or "",
-            license_value=source.get("license") or "",
-            url=source["url"],
-            title=(
-                fetch_runtime.get("resolvedTitle")
-                or source.get("sourceTitle")
-                or source.get("title")
-                or source["source_id"]
-            ),
-            target_ref=target_ref,
-            relevance=f"覆盖 {entity_id} 的基础事实/交通/季节等",
-            has_video=page_has_video,
-            images=source_images,
-            asset_funnel=source_image_funnel,
-            raw_format=raw_format,
-            layout=source_layout,
-            execution_id=execution_id,
-            build_variants=False,
-            source=source_for_unit,
-        )
+        try:
+            manifest = write_source_unit(
+                object_dir,
+                ordinal=ordinal,
+                source_id=source["source_id"],
+                source_md=source_md,
+                clean_md=clean_md,
+                html_bytes=html_bytes,
+                quality=quality,
+                platform=source.get("platform") or "web",
+                source_category=source.get("category") or source.get("platform") or "web",
+                source_kind=source.get("sourceKind") or "",
+                extractor=source.get("extractor") or "",
+                policy_revision=source.get("policyRevision") or "",
+                source_use_mode=source.get("sourceUseMode") or "",
+                publish_media_mode=source.get("publishMediaMode") or "",
+                source_role=source.get("sourceRole") or "",
+                image_evidence_mode=source.get("imageEvidenceMode") or "",
+                research_lane=source.get("researchLane") or "",
+                license_value=source.get("license") or "",
+                url=source["url"],
+                title=(
+                    fetch_runtime.get("resolvedTitle")
+                    or source.get("sourceTitle")
+                    or source.get("title")
+                    or source["source_id"]
+                ),
+                target_ref=target_ref,
+                relevance=f"覆盖 {entity_id} 的基础事实/交通/季节等",
+                has_video=page_has_video,
+                images=source_images,
+                asset_funnel=source_image_funnel,
+                raw_format=raw_format,
+                layout=source_layout,
+                execution_id=execution_id,
+                build_variants=False,
+                source=source_for_unit,
+            )
+        except (ValueError, TypeError) as exc:
+            # 隔离粒度：一条来源写不出合规单元只丢它自己。此前这里的异常向上冒到实体级
+            # 处理器，峨眉山 12 条合法百科来源因为第 13 条不可归因被整体 exclude。
+            unit_write_issue = handler_fetch_contract.source_unit_write_failure_issue(
+                source,
+                entity_id=entity_id,
+                error=exc,
+            )
+            quality_rows.append(
+                {
+                    "sourceId": source["source_id"],
+                    "quality": "Reject",
+                    "score": 0,
+                    "url": source["url"],
+                    "statusCode": quality.get("statusCode", status_code),
+                    "retainedFromCache": False,
+                    "unitWriteIssue": unit_write_issue.as_dict(),
+                }
+            )
+            print(
+                f"[download] Source unit write failed, source dropped "
+                f"{entity_id}/{source['source_id']}: {exc}",
+                flush=True,
+            )
+            _write_download_progress(
+                execution_id,
+                status="running",
+                entity_id=entity_id,
+                entity_index=entity_index,
+                entity_count=entity_count,
+                sources=len(fetched_sources),
+                images=len(pending_images),
+                message="source unit write failed",
+                lane=str(source.get("researchLane") or ""),
+                sourceId=str(source.get("source_id") or ""),
+                sourceIndex=ordinal,
+                sourceCount=len(sources),
+            )
+            continue
         candidate_count = int(source_image_funnel.get("candidateCount") or 0)
         accepted_count = (
             int(manifest.get("assetCount") or 0)
@@ -568,6 +626,7 @@ def _fetch_download_entity(
         image_specs=tuple(image_specs),
         pending_images=tuple(pending_images),
         provider_asset_counts=tuple(source_asset_counts),
+        professional_exclusions=tuple(professional_exclusions),
         existing_image_source_dirs=frozenset(existing_image_source_dirs),
         written_source_dirs=frozenset(written_source_dirs),
         written_rejected_source_dirs=frozenset(written_rejected_source_dirs),

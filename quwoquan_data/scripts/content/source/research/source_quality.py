@@ -3,30 +3,37 @@ from __future__ import annotations
 
 import math
 import re
-from collections.abc import Mapping
-from typing import Any
+from typing import Any, Mapping
 
-from core.image_rules import image_caption_quality_issue
-from core.media_processing_policy import MEDIA_PROCESSING_POLICY
+from core.source_catalog import known_category_ids, platform_category
 from core.qunar_template import QUNAR_PAGE_SEARCH_RESULT, qunar_page_type
-from core.source_catalog import (
-    ARTICLE_BASE_SOURCE_CATEGORIES,
-    known_category_ids,
-    platform_category,
-)
 from governance.coverage.license import (
     audit_image_rights,
     rights_proof_required,
     validate_image_rights,
 )
 
-from content.source.research.homepage_source_policy import (
-    _homepage_candidate_has_fetch_evidence,
-)
+from core.image_rules import image_caption_quality_issue
+from core.media_processing_policy import MEDIA_PROCESSING_POLICY
 from content.source.research.text_match import _text_mentions_entity
+from content.source.research.homepage_source_policy import _homepage_candidate_has_fetch_evidence
+
+_ARTICLE_BASE_CATEGORIES = {
+    "travelogue",
+    "guidebook",
+    "official_article",
+    "vertical_professional",
+    "ugc_longform",
+    "community_post",
+    "media_article",
+    "platform_article",
+    "forum_thread",
+    "review_note",
+}
 
 _SUPPORTING_ONLY_CATEGORIES = {
     "authoritative_reference",
+    "encyclopedia",
     "official",
     "map_geo",
     "weather",
@@ -65,8 +72,6 @@ def _image_mentions_entity(
         return True
     for field in (
         "caption",
-        "relevance",
-        "visualSubject",
         "title",
         "sourceUrl",
         "collectionPageUrl",
@@ -110,7 +115,7 @@ def _source_category(platform: str, fallback: str = "") -> str:
     # 这样的 homepage authority 被平台别名回写成 travelogue。
     if normalized_fallback in known_category_ids():
         return normalized_fallback
-    if normalized_fallback in ARTICLE_BASE_SOURCE_CATEGORIES:
+    if normalized_fallback in _ARTICLE_BASE_CATEGORIES:
         return normalized_fallback
     return platform_category(platform) or normalized_fallback
 
@@ -146,7 +151,7 @@ def _candidate_gate(
     if str(source.get("entityMatch") or "") == "weak":
         issues.append("weak entity match is not allowed")
     if lane == "article" and role == "base":
-        if category not in ARTICLE_BASE_SOURCE_CATEGORIES:
+        if category not in _ARTICLE_BASE_CATEGORIES:
             issues.append(
                 f"article base source category must be an article-quality source class, got {category or 'unknown'}"
             )
@@ -165,22 +170,18 @@ def _candidate_gate(
                 "article lane must not use same_authorized_collection image evidence "
                 "(article images must be same-source from the article's own base draft)"
             )
-    if (
-        lane == "homepage"
-        and category
-        in {
-            "encyclopedia",
-            "overview_baike",
-            "official",
-            "official_site",
-            "government",
-        }
-        and not _homepage_candidate_has_fetch_evidence(source, url)
-    ):
-        issues.append(
-            "homepage source must be registry-fetchable, verified retained source, "
-            "or carry a text snapshot before entering source plan"
-        )
+    if lane == "homepage" and category in {
+        "encyclopedia",
+        "overview_baike",
+        "official",
+        "official_site",
+        "government",
+    }:
+        if not _homepage_candidate_has_fetch_evidence(source, url):
+            issues.append(
+                "homepage source must be registry-fetchable, verified retained source, "
+                "or carry a text snapshot before entering source plan"
+            )
     image_warnings: list[str] = []
     valid_images: list[dict[str, Any]] = []
     enforce_rights = rights_proof_required(vertical)
@@ -257,21 +258,10 @@ def _collection_image_spec(collection: Mapping[str, Any], image: Mapping[str, An
         "watermarkScan",
         "ocrScan",
         "collectedAt",
-        "capturedAt",
-        "contentSha256",
-        "sourceId",
-        "acquisitionReceiptRef",
-        "professionalAssetId",
-        "professionalContentSha256",
     ):
         value = image.get(field) or collection.get(field)
         if value not in ("", None):
             spec[field] = value
-    rights_issues = image.get("rightsIssues") or collection.get("rightsIssues") or []
-    if isinstance(rights_issues, list):
-        spec["rightsIssues"] = [
-            str(issue).strip() for issue in rights_issues if str(issue).strip()
-        ]
     for field in (
         "url",
         "caption",
@@ -446,10 +436,7 @@ def _article_base_candidate_limit(required_article_bases: int) -> int:
     """
     required = max(1, int(required_article_bases or 1))
     if required <= 2:
-        # Small research runs still face the full canonical-media attrition
-        # surface.  Keep a bounded twelve-source discovery window so a few
-        # already-published or single-image pages cannot starve the lane.
-        return 12
+        reserve = max(2, required)
     else:
         reserve = min(max(12, math.ceil(required * 2.5)), 24)
     return min(required + reserve, 32)

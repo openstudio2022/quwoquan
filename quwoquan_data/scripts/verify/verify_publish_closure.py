@@ -29,7 +29,7 @@ def main() -> int:
         for issue in issues:
             print(f"  - {issue['code']}: {issue['ref']}")
         return 1
-    print(f"[verify_publish_closure] OK casObjects={report['casObjectCount']}")
+    print(f"[verify_publish_closure] OK mediaRefs={report['mediaRefCount']}")
     return 0
 
 

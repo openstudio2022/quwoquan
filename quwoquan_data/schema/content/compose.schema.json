@@ -23,7 +23,7 @@
         "license": { "$ref": "#/$defs/sourceFact" },
         "termsUrl": { "$ref": "#/$defs/sourceFact" },
         "authorizationProof": { "$ref": "#/$defs/sourceFact" },
-        "rightsAuditStatus": { "enum": ["verified", "unverified", "restricted", "unknown"] },
+        "rightsAuditStatus": { "enum": ["verified", "unverified"] },
         "rightsAuditIssues": { "type": "array", "items": { "type": "string" } }
       }
     },
@@ -108,11 +108,10 @@
     "license": { "$ref": "#/$defs/sourceFact" },
     "termsUrl": { "$ref": "#/$defs/sourceFact" },
     "authorizationProof": { "$ref": "#/$defs/sourceFact" },
-    "rightsAuditStatus": { "enum": ["verified", "unverified", "restricted", "unknown"] },
+    "rightsAuditStatus": { "enum": ["verified", "unverified"] },
     "rightsAuditIssues": { "type": "array", "items": { "type": "string" } },
     "publishLayout": { "type": "string", "enum": ["travel", "campus", "image", "gallery", "video"] },
     "publishAngle": { "type": "string" },
-    "articleCategory": {"const": "photography"},
     "publishTitle": { "type": "string" },
     "publishSeq": { "type": "integer" },
     "articleRenderProfile": { "type": "object" },
@@ -130,8 +129,11 @@
     "baseSourceRef": { "type": ["string", "null"], "description": "主底稿来源 ref（风格与事实锚点）" },
     "imageBindings": { "type": "array", "items": { "type": "object" } },
     "videoBindings": { "type": "array", "items": { "type": "object" } },
+    "sourceFrames": { "type": "array", "items": { "type": "object" } },
     "sourceVideo": { "$ref": "sourced_video_evidence.schema.json" },
-    "sourceMode": { "const": "sourced_video" },
+    "sourceMode": {
+      "enum": ["sourced_video", "rights_cleared_image_sequence"]
+    },
     "scriptLines": { "type": "array", "items": { "type": "string" } },
     "agentRunId": { "type": "string" },
     "generator": { "type": "string" },
@@ -189,15 +191,28 @@
         ]
       },
       "then": {
-        "required": ["title", "caption", "sourceMode", "sourceVideo", "scriptLines", "storySpine", "generator"],
+        "required": ["title", "caption", "sourceMode", "scriptLines", "storySpine", "generator"],
         "properties": {
           "title": { "type": "string", "minLength": 1, "maxLength": 80 },
           "caption": { "type": "string", "minLength": 1, "maxLength": 300 },
+          "sourceFrames": { "type": "array", "minItems": 1 },
           "scriptLines": { "type": "array", "minItems": 1 },
           "generator": { "const": "agent" },
           "entityRefs": { "type": "array", "minItems": 1 },
           "tagRefs": { "type": "array", "minItems": 2 }
-        }
+        },
+        "oneOf": [
+          {
+            "properties": { "sourceMode": { "const": "sourced_video" } },
+            "required": ["sourceVideo"]
+          },
+          {
+            "properties": {
+              "sourceMode": { "const": "rights_cleared_image_sequence" }
+            },
+            "required": ["sourceFrames"]
+          }
+        ]
       }
     },
     {

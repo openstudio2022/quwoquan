@@ -182,6 +182,10 @@ func (relay *Relay) Run(ctx context.Context) {
 	}
 }
 
+func (relay *Relay) CheckSMSOTPResultRelayReadiness(ctx context.Context) error {
+	return relay.Healthy(ctx, 10*time.Second)
+}
+
 func (relay *Relay) Healthy(
 	_ context.Context,
 	maxStaleness time.Duration,

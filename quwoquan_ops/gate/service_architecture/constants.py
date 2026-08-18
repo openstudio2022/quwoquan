@@ -66,6 +66,7 @@ ALLOWED_OPS_ENVIRONMENT_ROOT_FILES = {
     "pr_gate_timing_budgets.json",
     "provider_conformance_evidence.schema.json",
     "release_video_delivery_evidence.schema.json",
+    "read_only_user_availability_report.schema.json",
 }
 ALLOWED_OPS_ENVIRONMENT_ROOT_DIRS = {
     "alpha",

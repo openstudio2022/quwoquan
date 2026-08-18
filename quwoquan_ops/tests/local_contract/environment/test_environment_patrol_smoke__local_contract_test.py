@@ -24,6 +24,7 @@ from quwoquan_ops.cli.smoke import run_environment_patrol_smoke as smoke
 # 入口拆为薄壳 + environment_patrol_smoke 子包后，mock.patch.object 必须打在
 # 被测函数实际读取全局名的实现模块上，而不是入口 re-export 的绑定上。
 from quwoquan_ops.cli.smoke.environment_patrol_smoke import (
+    evidence as smoke_evidence,
     wrapper as smoke_wrapper,
 )
 from quwoquan_ops.cli import stackctl
@@ -330,6 +331,353 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
         self.assertIn(smoke.FEED_CONTENT_EVIDENCE_PREFIX, captured)
         self.assertEqual(len(observed), 1)
         self.assertEqual(evidence["visibleCardCount"], 1)
+
+    def test_ios_device_evidence_stream_ignores_predicate_banner_before_page_marker(
+        self,
+    ) -> None:
+        screenshot = mock.Mock(
+            return_value={"status": "captured", "path": "after.png"}
+        )
+        capture = smoke_evidence._AppContentPageScreenshotCapture(
+            args=self._args(target=smoke.FEED_LOAD_TARGET),
+            runtime_env="alpha",
+            capture=screenshot,
+        )
+        marker_line = (
+            smoke_evidence.APP_CONTENT_PAGE_SCREENSHOT_READY_PREFIX
+            + json.dumps(
+                {
+                    "environment": "alpha",
+                    "suite": "homepage-feed",
+                    "route": "/",
+                    "terminalKey": "home-feed-card-0",
+                }
+            )
+        )
+        predicate_banner = (
+            'Filtering the log data using "process == \\"Runner\\" AND '
+            '(eventMessage CONTAINS \\"'
+            + smoke_evidence.APP_CONTENT_PAGE_SCREENSHOT_READY_PREFIX
+            + '\\")"'
+        )
+
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            log_path = Path(temporary_dir) / "device-evidence.log"
+            stream = smoke._IosDeviceEvidenceStream(
+                device_id="SIMULATOR-EXACT-UDID",
+                log_path=log_path,
+                output_line_handler=capture.handle_line,
+                command=[
+                    sys.executable,
+                    "-u",
+                    "-c",
+                    (
+                        "import time; "
+                        f"print({predicate_banner!r}, flush=True); "
+                        f"print({marker_line!r}, flush=True); time.sleep(5)"
+                    ),
+                ],
+            )
+
+            stream.start()
+            for _ in range(20):
+                if screenshot.called:
+                    break
+                time.sleep(0.05)
+            receipt = stream.stop(grace_seconds=0)
+            captured = log_path.read_text(encoding="utf-8")
+
+        self.assertEqual(receipt["status"], "captured")
+        screenshot.assert_called_once_with()
+        self.assertEqual(capture.marker_count, 1)
+        self.assertNotIn("Filtering the log data using", captured)
+        self.assertIn(marker_line, captured)
+
+    def test_ios_device_evidence_stream_keeps_real_invalid_page_marker_fail_closed(
+        self,
+    ) -> None:
+        screenshot = mock.Mock(
+            return_value={"status": "captured", "path": "after.png"}
+        )
+        capture = smoke_evidence._AppContentPageScreenshotCapture(
+            args=self._args(target=smoke.FEED_LOAD_TARGET),
+            runtime_env="alpha",
+            capture=screenshot,
+        )
+        invalid_marker = (
+            smoke_evidence.APP_CONTENT_PAGE_SCREENSHOT_READY_PREFIX
+            + "not-json"
+        )
+
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            log_path = Path(temporary_dir) / "device-evidence.log"
+            stream = smoke._IosDeviceEvidenceStream(
+                device_id="SIMULATOR-EXACT-UDID",
+                log_path=log_path,
+                output_line_handler=capture.handle_line,
+                command=[
+                    sys.executable,
+                    "-u",
+                    "-c",
+                    (
+                        "import time; "
+                        f"print({invalid_marker!r}, flush=True); time.sleep(5)"
+                    ),
+                ],
+            )
+
+            stream.start()
+            for _ in range(20):
+                if stream._handler_error is not None:
+                    break
+                time.sleep(0.05)
+            with self.assertRaisesRegex(RuntimeError, "not valid JSON"):
+                stream.stop(grace_seconds=0)
+
+        screenshot.assert_not_called()
+
+    def test_android_device_evidence_is_exact_device_and_current_run_scoped(
+        self,
+    ) -> None:
+        stream_command, boundary_command = smoke._android_device_evidence_commands(
+            "emulator-5556",
+            "current-run-boundary",
+            adb_path="/sdk/platform-tools/adb",
+        )
+
+        self.assertEqual(
+            stream_command[:4],
+            ["/sdk/platform-tools/adb", "-s", "emulator-5556", "logcat"],
+        )
+        self.assertEqual(
+            stream_command[stream_command.index("-T") + 1],
+            "1",
+        )
+        self.assertIn("flutter:I", stream_command)
+        self.assertIn(
+            f"{smoke.ANDROID_DEVICE_EVIDENCE_LOG_TAG}:I",
+            stream_command,
+        )
+        self.assertEqual(boundary_command[2], "emulator-5556")
+        self.assertEqual(boundary_command[-1], "current-run-boundary")
+
+    def test_android_device_evidence_reemits_boundary_until_stream_observes_it(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            stream = smoke._AndroidDeviceEvidenceStream(
+                device_id="emulator-5556",
+                log_path=Path(temporary_dir) / "device-evidence.log",
+                command=[
+                    sys.executable,
+                    "-u",
+                    "-c",
+                    "import time; time.sleep(5)",
+                ],
+                run_boundary="current-run-boundary",
+                run_boundary_command=["emit-boundary"],
+            )
+            wait_count = 0
+
+            def observe_on_second_emission(*, timeout: float) -> bool:
+                nonlocal wait_count
+                wait_count += 1
+                if wait_count == 2:
+                    stream._run_boundary_observed.set()
+                    return True
+                return False
+
+            stream._run_boundary_observed.wait = mock.Mock(
+                side_effect=observe_on_second_emission
+            )
+            with mock.patch.object(
+                smoke_evidence.subprocess,
+                "run",
+                return_value=mock.Mock(returncode=0, stdout="", stderr=""),
+            ) as boundary_run:
+                stream.start()
+                receipt = stream.stop(grace_seconds=0)
+
+        self.assertEqual(boundary_run.call_count, 2)
+        self.assertTrue(receipt["runBoundaryObserved"])
+
+    def test_app_content_page_screenshot_marker_captures_once_during_patrol(
+        self,
+    ) -> None:
+        cases = (
+            (smoke.FEED_LOAD_TARGET, "homepage-feed", "/", "home-feed-card-0"),
+            (
+                smoke.CORE_READBACK_TARGET,
+                "app-core-readback",
+                "/",
+                "works_immersive_pager",
+            ),
+            (
+                smoke.MESSAGE_HOME_TARGET,
+                "message-home",
+                "/chat/conversation-a",
+                "chat_input_text_field",
+            ),
+            (
+                smoke.PROFILE_JOURNEY_TARGET,
+                "profile-journey",
+                "/user/creator-a",
+                "profile-header-avatar",
+            ),
+        )
+        for target, suite, route, terminal_key in cases:
+            with self.subTest(suite=suite):
+                screenshot = mock.Mock(
+                    return_value={"status": "captured", "path": "after.png"}
+                )
+                capture = smoke_evidence._AppContentPageScreenshotCapture(
+                    args=self._args(target=target),
+                    runtime_env="alpha",
+                    capture=screenshot,
+                )
+                marker = (
+                    smoke_evidence.APP_CONTENT_PAGE_SCREENSHOT_READY_PREFIX
+                    + json.dumps(
+                        {
+                            "environment": "alpha",
+                            "suite": suite,
+                            "route": route,
+                            "terminalKey": terminal_key,
+                        }
+                    )
+                )
+
+                capture.handle_line(marker)
+
+                screenshot.assert_called_once_with()
+                self.assertTrue(capture.evidence["capturedDuringPatrol"])
+                self.assertEqual(capture.evidence["marker"]["route"], route)
+                with self.assertRaisesRegex(RuntimeError, "exactly once"):
+                    capture.handle_line(marker)
+
+    def test_app_content_page_screenshot_marker_identity_and_presence_fail_closed(
+        self,
+    ) -> None:
+        args = self._args(target=smoke.FEED_LOAD_TARGET)
+        screenshot = mock.Mock(
+            return_value={"status": "captured", "path": "after.png"}
+        )
+        capture = smoke_evidence._AppContentPageScreenshotCapture(
+            args=args,
+            runtime_env="alpha",
+            capture=screenshot,
+        )
+        result = {"exitCode": 0, "outputSummary": "passed"}
+        capture.apply_success_gate(result, dry_run=False)
+        self.assertEqual(result["exitCode"], 1)
+        self.assertIn("in-run route/key screenshot", result["outputSummary"])
+
+        canonical = {
+            "environment": "alpha",
+            "suite": "homepage-feed",
+            "route": "/",
+            "terminalKey": "home-feed-card-0",
+        }
+        invalid = (
+            ("environment", "beta", "environment"),
+            ("suite", "profile-journey", "suite"),
+            ("route", "/chat/conversation-a", "route"),
+            ("terminalKey", "profile-header-avatar", "terminalKey"),
+        )
+        for field, value, reason in invalid:
+            with self.subTest(field=field):
+                payload = {**canonical, field: value}
+                isolated = smoke_evidence._AppContentPageScreenshotCapture(
+                    args=args,
+                    runtime_env="alpha",
+                    capture=screenshot,
+                )
+                with self.assertRaisesRegex(RuntimeError, reason):
+                    isolated.handle_line(
+                        smoke_evidence.APP_CONTENT_PAGE_SCREENSHOT_READY_PREFIX
+                        + json.dumps(payload)
+                    )
+
+    def test_android_device_log_marker_passes_and_missing_marker_fails_closed(
+        self,
+    ) -> None:
+        old_marker = smoke.FEED_CONTENT_EVIDENCE_PREFIX + json.dumps(
+            {
+                "environment": "beta",
+                "visibleCardCount": 1,
+                "visibleCardKeys": ["home-feed-card-9"],
+            }
+        )
+        current_marker = smoke.FEED_CONTENT_EVIDENCE_PREFIX + json.dumps(
+            {
+                "environment": "alpha",
+                "visibleCardCount": 2,
+                "visibleCardKeys": ["home-feed-card-0", "home-feed-card-1"],
+            }
+        )
+        boundary = "current-android-patrol-run"
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            run_dir = Path(temporary_dir)
+            patrol_log = run_dir / "patrol.log"
+            patrol_log.write_text(
+                "instrumentation passed; historical stdout has no marker\n",
+                encoding="utf-8",
+            )
+            device_log = run_dir / "device-evidence.log"
+            stream = smoke._AndroidDeviceEvidenceStream(
+                device_id="emulator-5556",
+                log_path=device_log,
+                command=[
+                    sys.executable,
+                    "-u",
+                    "-c",
+                    (
+                        f"import time; print({old_marker!r}, flush=True); "
+                        f"print({boundary!r}, flush=True); "
+                        f"print({current_marker!r}, flush=True); time.sleep(5)"
+                    ),
+                ],
+                run_boundary=boundary,
+            )
+            stream.start()
+            for _ in range(20):
+                if current_marker in device_log.read_text(encoding="utf-8"):
+                    break
+                time.sleep(0.05)
+            receipt = stream.stop(grace_seconds=0)
+            evidence_path = smoke._structured_evidence_log_path(
+                {"id": "emulator-5556", "targetPlatform": "android-arm64"},
+                run_dir,
+            )
+            evidence = smoke._read_feed_content_evidence(evidence_path)
+            passed_result = {
+                "exitCode": 0,
+                "outputSummary": "instrumentation passed",
+            }
+            args = self._args(target=smoke.FEED_LOAD_TARGET)
+            smoke._apply_feed_content_evidence_gate(
+                passed_result,
+                args,
+                evidence,
+            )
+
+            device_log.write_text("current run has no marker\n", encoding="utf-8")
+            failed_result = {
+                "exitCode": 0,
+                "outputSummary": "instrumentation passed",
+            }
+            smoke._apply_feed_content_evidence_gate(
+                failed_result,
+                args,
+                smoke._read_feed_content_evidence(device_log),
+            )
+
+        self.assertTrue(receipt["runBoundaryObserved"])
+        self.assertEqual(evidence["environment"], "alpha")
+        self.assertEqual(evidence["visibleCardCount"], 2)
+        self.assertEqual(passed_result["exitCode"], 0)
+        self.assertEqual(failed_result["exitCode"], 1)
+        self.assertIn("did not emit", failed_result["outputSummary"])
 
     def test_run_command_streams_restore_marker_before_process_exit(self) -> None:
         observed: list[str] = []

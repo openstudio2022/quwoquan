@@ -17,6 +17,8 @@ from content.execution.campaign.external_input_runtime import (
 from content.execution.campaign.lane import (
     CAMPAIGN_CARRIERS,
     LaneRunner,
+    normalize_active_carriers,
+    normalize_workloads,
 )
 from content.execution.campaign.plan import (
     aggregate_status,
@@ -89,7 +91,7 @@ def run_campaign(
     )
     effective_lane_timeout: float | None = None
     started_at = utc_now()
-    lanes = {carrier: empty_lane() for carrier in CAMPAIGN_CARRIERS}
+    lanes: dict[str, dict[str, Any]] = {}
     workspaces: dict[str, CampaignLaneWorkspace] = {}
     capsule: SourceCapsule | None = None
     plan: dict[str, Any] | None = None
@@ -99,7 +101,9 @@ def run_campaign(
     final_phase = "submission"
     failure: str | None = None
     caught: BaseException | None = None
-    review_carriers: list[str] = list(CAMPAIGN_CARRIERS)
+    active_carriers: tuple[str, ...] = ()
+    workloads: dict[str, int] = {}
+    review_carriers: list[str] = []
     recovered_review_carriers: list[str] = []
 
     with campaign_run_session(
@@ -120,14 +124,20 @@ def run_campaign(
                 started_at=started_at,
                 run_session=campaign_run,
             )
-            for carrier in CAMPAIGN_CARRIERS:
+            first_submission = next(iter(submissions.values()))
+            active_carriers = normalize_active_carriers(
+                first_submission["activeCarriers"]
+            )
+            workloads = normalize_workloads(
+                first_submission["workloads"],
+                active_carriers=active_carriers,
+            )
+            review_carriers = list(active_carriers)
+            for carrier in active_carriers:
                 lanes[carrier]["executionId"] = str(submissions[carrier]["executionId"])
             final_phase = "freeze"
             plan, plan_digest = freeze_plan(runtime, root_id, submissions)
-            effective_lane_timeout = (
-                lane_timeout_seconds
-                or policy.campaign_lane_timeout_seconds_for_scale(str(plan["scale"]))
-            )
+            effective_lane_timeout = lane_timeout_seconds
             campaign_run.campaign_checkpoint(
                 phase="freeze",
                 plan_digest=plan_digest,
@@ -151,6 +161,8 @@ def run_campaign(
                     lanes=lanes,
                     started_at=started_at,
                     failure=None,
+                    active_carriers=active_carriers,
+                    workloads=workloads,
                 )
 
             persist_running_report("capsule")
@@ -166,7 +178,7 @@ def run_campaign(
                 lane_external_inputs=dict(plan["laneExternalInputs"]),
                 external_inputs_digest=str(plan["externalInputsDigest"]),
             )
-            for carrier in CAMPAIGN_CARRIERS:
+            for carrier in active_carriers:
                 workspace = prepare_lane_workspace(
                     runtime,
                     capsule=capsule,
@@ -205,7 +217,7 @@ def run_campaign(
                     execution_root=workspace.execution_root,
                 )
                 persist_running_report("capsule")
-            for carrier in CAMPAIGN_CARRIERS:
+            for carrier in active_carriers:
                 expected_execution_id = str(submissions[carrier]["executionId"])
                 expected_quota = int(submissions[carrier]["quota"])
                 publish_receipt = load_publish_for_lane(
@@ -293,7 +305,6 @@ def run_campaign(
                     runtime=runtime,
                     root_execution_id=root_id,
                     timeout_seconds=effective_lane_timeout,
-                    worker_count=1,
                     lane_runner=lane_runner,
                     run_session=campaign_run,
                     carriers=(carrier,),
@@ -399,7 +410,6 @@ def run_campaign(
                 runtime=runtime,
                 root_execution_id=root_id,
                 timeout_seconds=effective_lane_timeout,
-                worker_count=policy.campaign_lane_workers,
                 lane_runner=lane_runner,
                 run_session=campaign_run,
                 carriers=tuple(review_carriers),
@@ -422,7 +432,7 @@ def run_campaign(
             else:
                 lane_failures = [
                     f"{carrier}:{lanes[carrier].get('error') or lanes[carrier]['status']}"
-                    for carrier in CAMPAIGN_CARRIERS
+                    for carrier in active_carriers
                     if str(lanes[carrier].get("status") or "") == "blocked"
                     or int(lanes[carrier].get("finalizedCount") or 0) <= 0
                 ]
@@ -454,7 +464,7 @@ def run_campaign(
             lanes_ready_for_copy = all(
                 str(lanes[carrier].get("status") or "") in {"finalized", "partial"}
                 and str(lanes[carrier].get("cleanupStatus") or "") == "cleaned"
-                for carrier in CAMPAIGN_CARRIERS
+                for carrier in active_carriers
             )
             if plan is not None and submissions is not None and lanes_ready_for_copy:
                 maybe_write_copy_ready_receipt(
@@ -467,24 +477,29 @@ def run_campaign(
                     assessed_at=utc_now(),
                 )
             campaign_run.assert_fence()
-            write_report(
-                runtime,
-                root_id,
-                status=final_status,
-                phase=final_phase,
-                plan_digest=plan_digest,
-                git_branch=(str(plan["gitBranch"]) if plan is not None else None),
-                git_commit_sha=(
-                    str(plan["gitCommitSha"]) if plan is not None else None
-                ),
-                source_digest=(str(plan["sourceDigest"]) if plan is not None else None),
-                entity_catalog_digest=(
-                    str(plan["entityCatalogDigest"]) if plan is not None else None
-                ),
-                lanes=lanes,
-                started_at=started_at,
-                failure=failure,
-            )
+            if active_carriers:
+                write_report(
+                    runtime,
+                    root_id,
+                    status=final_status,
+                    phase=final_phase,
+                    plan_digest=plan_digest,
+                    git_branch=(str(plan["gitBranch"]) if plan is not None else None),
+                    git_commit_sha=(
+                        str(plan["gitCommitSha"]) if plan is not None else None
+                    ),
+                    source_digest=(
+                        str(plan["sourceDigest"]) if plan is not None else None
+                    ),
+                    entity_catalog_digest=(
+                        str(plan["entityCatalogDigest"]) if plan is not None else None
+                    ),
+                    lanes=lanes,
+                    started_at=started_at,
+                    failure=failure,
+                    active_carriers=active_carriers,
+                    workloads=workloads,
+                )
             campaign_run.finish(
                 status=final_status,
                 phase=final_phase,

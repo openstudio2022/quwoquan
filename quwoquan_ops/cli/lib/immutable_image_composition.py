@@ -110,12 +110,34 @@ def packaged_service_source_digest(environment: str, service: str) -> str:
     return source_digest
 
 
-def packaged_service_source_image_ref(environment: str, service: str) -> str:
-    """Return a full-source-digest local tag, never a mutable or truncated tag."""
+def packaged_service_environment_build_digest(environment: str, service: str) -> str:
+    """Bind one local image identity to its packaged environment configuration."""
 
+    path, payload = _load_package_provenance(environment, service)
     source_digest = packaged_service_source_digest(environment, service)
+    config_version = str(payload.get("configVersion") or "").strip()
+    if SHA256_PATTERN.fullmatch(config_version) is None:
+        raise ValueError(f"invalid service config version: {path}")
+    encoded = json.dumps(
+        {
+            "environment": environment,
+            "service": service,
+            "sourceDigest": source_digest,
+            "configVersion": config_version,
+        },
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return "sha256:" + hashlib.sha256(encoded).hexdigest()
+
+
+def packaged_service_source_image_ref(environment: str, service: str) -> str:
+    """Return an environment-bound local build tag, never a cross-env source tag."""
+
+    build_digest = packaged_service_environment_build_digest(environment, service)
     repository = service.replace("-", "_")
-    return f"localhost/quwoquan_service_{repository}:{source_digest[7:]}"
+    return f"localhost/quwoquan_service_{repository}:{build_digest[7:]}"
 
 
 def runtime_image_owner_names(repo_root: Path = ROOT) -> tuple[str, ...]:
@@ -136,7 +158,7 @@ def packaged_runtime_source_image_ref(environment: str, service: str) -> str:
     if service != SERVICE_CORE_WORKLOAD:
         return packaged_service_source_image_ref(environment, service)
     module_digests = {
-        module: packaged_service_source_digest(environment, module)
+        module: packaged_service_environment_build_digest(environment, module)
         for module in SERVICE_CORE_MODULE_SET
     }
     digest = service_core_source_digest(module_digests)

@@ -42,7 +42,7 @@
 - application contract 覆盖 provider 失败、正常排队和错误验证码拒绝。
 - API integration 证明 response/outbox 不泄露验证码，provider 只在请求前于内存中解封。
 - 手机号输入可在 UI 保持大陆 11 位展示，但 `SendOtp`、`LoginWithPhone` 与手机号绑定 command 的 wire 值必须在命令边界一次性规范为 E.164；Provider Adapter 只接收同一 canonical recipient，禁止让替代实现双格式兼容。
-- alpha/beta/gamma 只能由环境 Binding 选择独立 `ext.sms.local_capture` 接收本次随机 OTP，prod 只能选择正式 Provider；禁止运行时 selector、Debug override 或 fallback。OTP 以目标环境密钥加密、按 challenge TTL 暂存并一次性读取，固定万能码、App `debugCode` 和公开 API 回传均禁止。
+- alpha/beta/gamma 的环境专属 Nonprod SMS Provider Workload 只编入 `ext.sms.local_capture`，prod Provider Workload 只编入正式 Provider；第一方 user/integration Service 不包含 Provider Adapter 或运行时 selector。OTP 以目标环境密钥加密、按 challenge TTL 暂存并一次性读取，固定万能码、App `debugCode` 和公开 API 回传均禁止。
 - `POST /v1/debug/sms/otp/latest` 只存在于替代 Provider 内部控制面，要求目标环境 operator/UAT principal，不经 API Edge 暴露；回执、日志、指标与报告不得包含手机号明文或 OTP。
 
 <a id="req-003"></a>
@@ -95,7 +95,7 @@
 ### REQ-009 四环境端到端与商用纯净证据
 
 - alpha/beta/gamma App 使用同一 Remote user-service composition，并分别通过 target-scoped `ext.sms.local_capture` 的正式 OTP challenge 创建 canonical UserAccount；四环境 App package graph 均不可达固定码实现或端侧登录 mock。
-- alpha/beta/gamma 的 SMS Binding 固定为 `ext.sms.local_capture`，prod 固定为正式 Provider；不允许在同一候选运行时切换 Provider 或回退本地认证实现。
+- alpha/beta/gamma 的 SMS Workload Binding 固定为 `ext.sms.local_capture`，prod 固定为正式 Provider Workload；环境在 package/build 阶段绑定，运行时变量只能校验制品身份，不能切换 Provider 或回退本地认证实现。
 - prod 微信、支付宝、QQ 与三网本机号认证均有真实成功证据，且无放通、无验证码回传、无 mock 数据源。
 - 社交首登资料同步真机可见。
 - 配置纯度门禁阻断已退休认证旁路。
@@ -132,7 +132,7 @@
 <a id="req-012"></a>
 ### REQ-012 手机号登录可理解恢复、发码就绪门与安全自动填充
 
-- 手机号页必须通过公开只读 `GetOtpDeliveryReadiness` 在发码前确认认证投递链可用；检查进行时不阻止输入，`temporarily_unavailable`、网络失败或超时均留在手机号页并只显示 `登录服务暂时不可用，请稍后重试`，用户点击 `重试` 只重新检查，不暗中发码。
+- 手机号页必须通过公开只读 `GetOtpDeliveryReadiness` 在发码前确认认证投递链可用；该结果来自 `identity.sms.otp` Provider Workload 的 capability-scoped readiness，不以 integration-service 通用 health 替代。检查进行时不阻止输入，`temporarily_unavailable`、网络失败或超时均留在手机号页并只显示 `登录服务暂时不可用，请稍后重试`，用户点击 `重试` 只重新检查，不暗中发码。
 - 验证码页只能消费一个 `OtpPagePresentation`。账号终态、验证中、验证错误、明确发码失败、发码进度和普通输入引导按固定优先级投影为至多一条提示与一组恢复动作；禁止同时渲染 delivery notice 和 verification feedback。
 - 用户可见文案不得出现“结果确认”“状态保留”“challenge”“Provider”“requestId”等内部概念，并删除黄色未知状态。说明文字不可点击，恢复动作必须是最小 44pt 的明确按钮。脱敏手机号与“更换手机号”同一行，恢复动作不与底部第三方登录混排。
 - 验证码错误清空并聚焦第一格；验证网络失败或超时只在当前页面内存中保留可见的六位输入并提供唯一 `重新验证` 动作，不把 OTP 写入 PendingOtpAttempt。倒计时结束后才并排提供 `重新验证 / 重新获取`。
@@ -178,9 +178,10 @@
 <a id="gwt-009"></a>
 ### GWT-009 四环境端到端与商用纯净证据
 
-- GIVEN alpha、beta、gamma 与 prod 分别构建并执行登录路径。
+- GIVEN alpha、beta、gamma 与 prod 已分别构建环境专属 App、第一方 Service 和 Provider Workload artifact。
 - WHEN 验证 alpha/beta/gamma local-capture 随机 OTP 的受保护一次性读取、prod 正式 Provider、首登资料同步和失败恢复。
-- THEN local-capture workload、凭据、路由与捕获存储不可达 Prod 包、SBOM 和部署图；三测试环境 Green 可由替代边界 E2E 提升，但真实 Provider 集成与 Prod readiness 只由 Prod 正式 Provider 回执和可复验真机证据提升。
+- THEN local-capture workload、凭据、路由、捕获存储与 Adapter package 不进入 Prod App、第一方 Service、Provider Workload、SBOM 和部署图。
+- AND 三测试环境 Green 可由替代边界 E2E 提升，但真实 Provider 集成与 Prod readiness 只由 Prod 正式 Provider Workload 回执和可复验真机证据提升。
 
 <a id="gwt-011"></a>
 ### GWT-011 发码响应丢失、Provider 终态与冷启动恢复
@@ -231,8 +232,8 @@
 ### OPEN-003 四环境端到端与商用纯净证据
 
 - 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`。
-- 目标：alpha App 通过 Remote user-service 与受管非生产 Provider 的正式 OTP challenge 创建 canonical UserAccount；四环境 App package graph 不可达固定码实现或端侧登录 mock。
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：尚缺四环境环境专属 Service/Provider Workload 制品、capability-scoped readiness 与同一候选下的真实登录执行证据；当前静态 Binding 和 harness 存在不能证明端云登录可用或 Prod 物理纯净。
+- 目标：alpha App 通过 Remote user-service 与受管非生产 Provider 的正式 OTP challenge 创建 canonical UserAccount；四环境 App、第一方 Service 与 Provider Workload package graph 不可达固定码、端侧登录 mock 或错误环境 Adapter。
 - 完成判定：`GWT-009` 对应行为满足且真实测试 `spec_ref` 有效。

@@ -65,7 +65,7 @@
 
 ## 典型触发与 E2E
 
-- 用户说“内容生产、抓取、冷启动、实体主页、标签治理、图片安全、ship、导入 gamma/beta/prod”时，默认加载本文件和 `quwoquan-data-content` skill。
+- 用户说“内容生产、抓取、冷启动、实体主页、标签治理、图片安全、ship、导入 gamma/beta/prod”时，默认加载本文件和 `content-production` skill。
 - 数据任务不能停在离线文件层；必须说明如何进入 service importer、App 发现/搜索/消费、行为反馈和推荐/运营分析。
 - 若涉及环境导入或发布，必须同步加载 `quwoquan_ops/AGENTS.md` 并收集 stackctl 证据。
 

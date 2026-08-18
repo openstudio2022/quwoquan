@@ -9,7 +9,6 @@ def build_video_plan_spec(
     row: Mapping[str, Any],
     *,
     receipt_ref: str,
-    publication: str,
 ) -> dict[str, Any]:
     digest = str(row["contentSha256"])
     proof = str(row["authorizationProof"]).strip()
@@ -41,7 +40,7 @@ def build_video_plan_spec(
         ),
         "rightsStatus": str(row["rightsStatus"]),
         "rightsIssues": list(row["rightsIssues"]),
-        "publicationAdmission": publication,
+        "distributionDecision": str(row["distributionDecision"]),
         "modelReleaseStatus": str(row["modelReleaseStatus"]),
         "propertyReleaseStatus": str(row["propertyReleaseStatus"]),
         "takedownPolicy": "quwoquan_standard_notice_and_takedown",

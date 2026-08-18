@@ -17,6 +17,7 @@ import (
 	operationsecurity "quwoquan_service/generated/operationsecurity"
 	rtmongo "quwoquan_service/internal/platform/mongodb"
 	platformredis "quwoquan_service/internal/platform/redis"
+	"quwoquan_service/runtime/artifactidentity"
 	rtauth "quwoquan_service/runtime/auth"
 	rtgov "quwoquan_service/runtime/governance"
 	rthealth "quwoquan_service/runtime/health"
@@ -86,6 +87,12 @@ type config struct {
 }
 
 func main() {
+	if _, err := artifactidentity.LoadAndValidate(
+		os.Getenv("QWQ_ARTIFACT_IDENTITY_FILE"),
+		os.Getenv("APP_ENV"),
+	); err != nil {
+		log.Fatalf("rtc-service artifact identity invalid: %v", err)
+	}
 	serviceName, appEnv, configRoot, configVersion, imageVersion, err := resolveRuntimeIdentity()
 	if err != nil {
 		log.Fatalf("rtc-service runtime identity invalid: %v", err)

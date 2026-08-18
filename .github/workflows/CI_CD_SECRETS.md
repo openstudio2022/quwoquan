@@ -1,6 +1,6 @@
 # GitHub Actions CI/CD — Secrets 与 Workflow 说明
 
-本文档说明所有 Workflow 的触发条件、职责及需配置的 GitHub Secrets，与根 `AGENTS.md` 和 `.cursor/commands/*.md` 阶段对应。
+本文档说明所有 Workflow 的触发条件、职责及需配置的 GitHub Secrets，与根 `AGENTS.md` 的执行契约对应。
 
 **当前部署目标**：CI/CD 的唯一生产执行面是 `prod-hosted` 的 SSH-hosted rootless
 Podman；ACK 仅作为后续演进项。volcengine、huaweicloud 入口保留，暂不接入 CI。
@@ -282,4 +282,4 @@ Workflow 不上传明文私钥；证书包以 age 加密、保留 7 天。DNS ap
 4. 保存后，对应 push/PR/tag 或手动触发时将使用新 Secrets。
 5. 若已在本机生成 prod 平面私钥，可直接自动同步并清理退役项：`bash quwoquan_ops/cli/prod/setup_prod_plane_ssh_access.sh --mode all --include-relay --include-readonly --github-sync --github-prune-obsolete-secrets`
 
-**参考**：`.cursor/commands/deploy.md`、`quwoquan_ops/environments/prod/access-isolation.yaml`、`quwoquan_ops/environments/prod/rollout/stages.yaml`。
+**参考**：`quwoquan_ops/environments/prod/access-isolation.yaml`、`quwoquan_ops/environments/prod/rollout/stages.yaml`。

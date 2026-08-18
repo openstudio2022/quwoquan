@@ -281,12 +281,20 @@ def _validate_provider_evidence(
         if _sha256(source_path) != digest:
             raise ValueError(f"providerEvidence raw file digest mismatch: {relative}")
     material = payload.get("candidateMaterial")
-    expected_images = {
-        service: descriptor["digest"]
-        for service, descriptor in sorted(manifest["images"].items())
+    expected_environment_artifacts = {
+        environment: {
+            "environmentArtifactDigest": artifact["environmentArtifactDigest"],
+            "images": {
+                owner: descriptor["digest"]
+                for owner, descriptor in sorted(artifact["images"].items())
+            },
+        }
+        for environment, artifact in sorted(
+            manifest["environmentArtifacts"].items()
+        )
     }
     if material != {
-        "images": expected_images,
+        "environmentArtifacts": expected_environment_artifacts,
         "contractGraphDigest": contract_graph_digest,
     }:
         raise ValueError("providerEvidence candidate material binding mismatch")
@@ -309,24 +317,32 @@ def _validate_user_acceptance_candidate_material(
     )
     if not isinstance(material, dict):
         raise ValueError("user_acceptance candidate material is missing")
-    images = manifest.get("images")
-    configurations = manifest.get("configurationPackages")
-    if not isinstance(images, dict) or not isinstance(configurations, dict):
-        raise ValueError("component manifest candidate material is incomplete")
-    expected_images = {
-        service: str(descriptor.get("digest") or "")
-        for service, descriptor in sorted(images.items())
-        if isinstance(descriptor, dict)
-    }
-    expected_configurations = {
+    artifacts = manifest.get("environmentArtifacts")
+    if not isinstance(artifacts, dict):
+        raise ValueError("component manifest environment artifact material is incomplete")
+    expected_environment_artifacts = {
         environment: {
-            service: str(descriptor.get("digest") or "")
-            for service, descriptor in sorted(packages.items())
-            if isinstance(descriptor, dict)
+            "environmentArtifactDigest": artifact.get("environmentArtifactDigest"),
+            "images": {
+                owner: str(descriptor.get("digest") or "")
+                for owner, descriptor in sorted(images.items())
+                if isinstance(descriptor, dict)
+            },
+            "configurationPackages": {
+                service: str(descriptor.get("digest") or "")
+                for service, descriptor in sorted(configurations.items())
+                if isinstance(descriptor, dict)
+            },
         }
-        for environment, packages in sorted(configurations.items())
-        if isinstance(packages, dict)
+        for environment, artifact in sorted(artifacts.items())
+        if isinstance(artifact, dict)
+        for images, configurations in [
+            (artifact.get("images"), artifact.get("configurationPackages"))
+        ]
+        if isinstance(images, dict) and isinstance(configurations, dict)
     }
+    if len(expected_environment_artifacts) != len(artifacts):
+        raise ValueError("component manifest environment artifact material is invalid")
     expected_applications: dict[str, dict[str, str]] = {
         environment: {} for environment in ENVIRONMENTS
     }
@@ -350,8 +366,7 @@ def _validate_user_acceptance_candidate_material(
             surface=surface,
         )
     expected = {
-        "images": expected_images,
-        "configurationPackages": expected_configurations,
+        "environmentArtifacts": expected_environment_artifacts,
         "applicationPackages": expected_applications,
         "contractGraphDigest": _sha256(contract_graph_path),
     }

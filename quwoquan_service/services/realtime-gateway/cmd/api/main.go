@@ -16,6 +16,7 @@ import (
 
 	operationsecurity "quwoquan_service/generated/operationsecurity"
 	platformredis "quwoquan_service/internal/platform/redis"
+	"quwoquan_service/runtime/artifactidentity"
 	rtauth "quwoquan_service/runtime/auth"
 	runtimeconfig "quwoquan_service/runtime/config"
 	"quwoquan_service/runtime/controlplane"
@@ -45,8 +46,14 @@ func main() {
 }
 
 func run() error {
+	appEnv := strings.TrimSpace(os.Getenv("APP_ENV"))
+	if _, err := artifactidentity.LoadAndValidate(
+		os.Getenv("QWQ_ARTIFACT_IDENTITY_FILE"),
+		appEnv,
+	); err != nil {
+		return fmt.Errorf("artifact identity invalid: %w", err)
+	}
 	serviceName := getenvOrDefault("SERVICE_NAME", "realtime-gateway")
-	appEnv := getenvOrDefault("APP_ENV", "alpha")
 	runtimeConfig, err := loadRealtimeRuntimeConfig(
 		serviceName,
 		appEnv,

@@ -34,6 +34,10 @@ from .constants import (
     RUNTIME_CANDIDATE_TYPE,
     SPEC_REFS,
 )
+from .environment_artifact import (
+    build_environment_artifact,
+    validate_environment_artifact,
+)
 from .log_sink_package import (
     load_observability_log_sink_package,
     validate_observability_log_sink_package,
@@ -155,6 +159,16 @@ def write_candidate_manifest(
         expected_descriptor=fingerprint.get("graphqlReadRegistry"),
     )
 
+    environment_runtime_digest = _sha256_candidate_file(
+        candidate_root,
+        environment_runtime_ref,
+        label="packaged environment runtime",
+    )
+    provider_runtime = load_provider_runtime_package(
+        env_name,
+        target_name,
+        candidate_root,
+    )
     payload = {
         "schema": CANDIDATE_MANIFEST_SCHEMA,
         "candidateType": candidate_type,
@@ -170,27 +184,38 @@ def write_candidate_manifest(
         "configurationDigest": oci.get("configurationDigest") if oci else None,
         "runtimeSchemaVersion": runtime_schema_version,
         "runtimeConfigDigest": app_report.get("runtimeConfigDigest"),
-        "environmentRuntimeDigest": _sha256_candidate_file(
-            candidate_root,
-            environment_runtime_ref,
-            label="packaged environment runtime",
-        ),
+        "environmentRuntimeDigest": environment_runtime_digest,
         "observabilityLogSink": load_observability_log_sink_package(
             env_name,
             target_name,
             candidate_root,
         ),
-        "providerRuntime": load_provider_runtime_package(
-            env_name,
-            target_name,
-            candidate_root,
-        ),
+        "providerRuntime": provider_runtime,
         "release": release,
         "releaseInputClassification": release_classification,
         "contractGraphDigest": contract_graph_digest,
         "graphqlReadRegistry": graphql_read_registry,
         "specRefs": list(SPEC_REFS),
     }
+    payload["environmentArtifact"] = build_environment_artifact(
+        environment=env_name,
+        target=target_name,
+        baseline_id=payload["baselineId"],
+        source_revision=payload["sourceRevision"],
+        workspace_status_digest=payload["workspaceStatusDigest"],
+        workspace_digest=payload["workspaceDigest"],
+        package_digest=payload["packageDigest"],
+        image_build_input_digest=payload["buildInputDigest"],
+        image_set_digest=payload["imageDigest"],
+        service_configuration_digest=payload["configurationDigest"],
+        app_runtime_digest=payload["runtimeConfigDigest"],
+        environment_runtime_digest=payload["environmentRuntimeDigest"],
+        provider_runtime=provider_runtime,
+        contract_graph_digest=payload["contractGraphDigest"],
+        environment_runtime=environment_runtime,
+        fingerprint=fingerprint,
+        candidate_root=candidate_root,
+    )
     validate_candidate_manifest(
         payload,
         expected_environment=env_name,
@@ -216,7 +241,7 @@ def validate_candidate_manifest(
     expected_target: str,
     require_full: bool,
     candidate_root: Path | None = None,
-    purpose: str = "self_verify",
+    purpose: str = "currentness",
     currentness_timeout_seconds: float = 120.0,
 ) -> dict[str, Any]:
     if candidate_root is None:
@@ -252,6 +277,7 @@ def validate_candidate_manifest(
         "contractGraphDigest",
         "graphqlReadRegistry",
         "specRefs",
+        "environmentArtifact",
     }
     if not isinstance(payload, dict) or set(payload) != required:
         raise ValueError("deployment candidate manifest fields mismatch")
@@ -331,10 +357,6 @@ def validate_candidate_manifest(
             raise ValueError(
                 f"deployment candidate {label} attestationRef is invalid"
             )
-        if purpose == "currentness":
-            current = _release_binding(attestation_ref, label=label)
-            if current != binding:
-                raise ValueError(f"{label} release attestation bytes drifted")
     expected_classification = release_input_classification(release)
     if payload.get("releaseInputClassification") != expected_classification:
         raise ValueError("deployment candidate release input classification drifted")
@@ -343,6 +365,13 @@ def validate_candidate_manifest(
         and payload.get("contractGraphDigest") != canonical_contract_graph_digest()
     ):
         raise ValueError("deployment candidate ContractGraph bytes drifted")
+    validate_environment_artifact(
+        payload.get("environmentArtifact"),
+        candidate=payload,
+        expected_environment=expected_environment,
+        expected_target=expected_target,
+        candidate_root=candidate_root,
+    )
     graphql_read_registry = _pkg.validate_packaged_graphql_read_registry(
         repo_root=ROOT,
         candidate_root=candidate_root,
@@ -364,6 +393,12 @@ def validate_candidate_manifest(
         or fingerprint.get("graphqlReadRegistry") != graphql_read_registry
     ):
         raise ValueError("package fingerprint release identity drifted")
+    if purpose == "currentness":
+        for label in ("candidate", "rollback"):
+            binding = release[label]
+            current = _release_binding(binding["attestationRef"], label=label)
+            if current != binding:
+                raise ValueError(f"{label} release attestation bytes drifted")
     return payload
 
 

@@ -119,7 +119,7 @@ def list_consumer_leases(target: str | None = None) -> list[dict[str, Any]]:
     return leases
 
 
-def active_consumer_leases(
+def inspect_consumer_leases(
     target: str,
     *,
     runner: CommandRunner | None = None,
@@ -127,9 +127,11 @@ def active_consumer_leases(
     adb_path: str | None = None,
     xcrun_path: str | None = None,
 ) -> list[dict[str, Any]]:
+    """只读返回全部 lease，包括不会提升可用性的 stale 回执。"""
+
     current = now or datetime.now(timezone.utc)
     command_runner = runner or _run_command
-    active: list[dict[str, Any]] = []
+    inspected: list[dict[str, Any]] = []
     for lease in list_consumer_leases(target):
         state, detail = _inspect_lease(
             lease,
@@ -138,10 +140,29 @@ def active_consumer_leases(
             adb_path=adb_path,
             xcrun_path=xcrun_path,
         )
-        if state == "stale":
-            continue
-        active.append({**lease, "state": state, "detail": detail})
-    return active
+        inspected.append({**lease, "state": state, "detail": detail})
+    return inspected
+
+
+def active_consumer_leases(
+    target: str,
+    *,
+    runner: CommandRunner | None = None,
+    now: datetime | None = None,
+    adb_path: str | None = None,
+    xcrun_path: str | None = None,
+) -> list[dict[str, Any]]:
+    return [
+        lease
+        for lease in inspect_consumer_leases(
+            target,
+            runner=runner,
+            now=now,
+            adb_path=adb_path,
+            xcrun_path=xcrun_path,
+        )
+        if lease["state"] != "stale"
+    ]
 
 
 def _inspect_lease(

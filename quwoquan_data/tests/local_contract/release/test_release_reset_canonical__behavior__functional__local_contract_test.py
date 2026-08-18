@@ -57,8 +57,8 @@ def test_release_reset_canonical__clears_only_canonical_output_after_baseline_re
     _baseline(release_root)
     _receipt(output_root, "alpha")
     _receipt(output_root, "beta")
+    (publish_root / "creators/example").mkdir(parents=True)
     (publish_root / "entities/example").mkdir(parents=True)
-    (publish_root / "media/objects").mkdir(parents=True)
     (publish_root / "tags/Topic").mkdir(parents=True)
     monkeypatch.setattr(reset, "active_runtime_processes", lambda: [])
 
@@ -70,7 +70,7 @@ def test_release_reset_canonical__clears_only_canonical_output_after_baseline_re
         output_root=output_root,
     )
 
-    assert removed == ("entities", "media", "tags")
+    assert removed == ("creators", "entities", "tags")
     assert list(publish_root.iterdir()) == []
 
 

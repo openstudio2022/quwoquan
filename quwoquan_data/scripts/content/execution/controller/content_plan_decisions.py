@@ -10,6 +10,27 @@ from content.execution.support import DataIssue, DataIssueCode, ExecutionContext
 from content.execution.support import execution_root, read_json, write_json
 
 
+def planned_item_owning_target(item: Mapping[str, Any]) -> str:
+    """Return the coverage target one planned item belongs to.
+
+    ``entityRefs`` names the owning coverage target, while ``entityTags`` is the
+    multi-label set of entities one object covers. Those two are not
+    interchangeable: an article planned for 峨眉山 off a source that also describes
+    乐山大佛 carries ``entityTags=['乐山大佛','峨眉山']``, so reading the first tag
+    attributes the object to the wrong entity and silently drops the real owner
+    out of the ready set. Carriers that plan one object per entity (video, image)
+    emit tags without refs, and there the single tag *is* the owner, so it stays
+    the fallback rather than the primary reading.
+    """
+    refs = item.get("entityRefs")
+    if isinstance(refs, list) and refs:
+        return str(refs[0] or "").strip().rstrip("/").rsplit("/", 1)[-1]
+    tags = item.get("entityTags")
+    if isinstance(tags, list) and tags:
+        return str(tags[0] or "").strip()
+    return ""
+
+
 def persist_content_plan_shortfall_absorb(
     execution_id: str,
     *,
@@ -17,6 +38,7 @@ def persist_content_plan_shortfall_absorb(
     issues: list[DataIssue],
     object_refs: Mapping[str, str],
     carrier: str,
+    ready_work_unit_ids: list[str] | None = None,
 ) -> None:
     """Persist object-typed content-plan decisions for one partial closure."""
 
@@ -75,9 +97,7 @@ def persist_content_plan_shortfall_absorb(
         }
         for issue in issues
     ]
-    write_json(
-        availability_path,
-        {
+    payload: dict[str, Any] = {
             "schema": existing.get("schema")
             or "quwoquan_data.source_unavailable_targets",
             "executionId": execution_id,
@@ -88,8 +108,59 @@ def persist_content_plan_shortfall_absorb(
             "ineligibleTargets": ineligible,
             "ineligibleTargetCount": len(ineligible),
             "contentPlanDecisions": typed_decisions,
-        },
-    )
+        }
+    if ready_work_unit_ids is not None:
+        payload["readyWorkUnitIds"] = list(ready_work_unit_ids)
+        payload["readyWorkUnitCount"] = len(ready_work_unit_ids)
+    _require_absorbed_partition(existing, payload)
+    write_json(availability_path, payload)
+
+
+def _require_absorbed_partition(
+    existing: Mapping[str, Any],
+    payload: Mapping[str, Any],
+) -> None:
+    """Fail where the partition breaks instead of at the next consumer.
+
+    Downstream stages narrow the frozen scope by this file and require it to
+    partition the frozen target set. When an absorbed closure classifies a
+    target as neither ready nor ineligible the loss is silent here and only
+    surfaces much later as an opaque ``must partition the frozen target set``,
+    so the unclassified targets are named at the point they go missing.
+    """
+    prior_ready = {
+        str(name or "").strip()
+        for name in (existing.get("readyTargets") or [])
+        if str(name or "").strip()
+    }
+    prior_ineligible = {
+        str(row.get("entityId") or "").strip()
+        for row in (existing.get("ineligibleTargets") or [])
+        if isinstance(row, Mapping) and str(row.get("entityId") or "").strip()
+    }
+    absorbed_scope = prior_ready | prior_ineligible
+    if not absorbed_scope:
+        # 首次写入（download 阶段没有留下可用分区）时没有可比对的冻结集合。
+        return
+    ready = {str(name or "").strip() for name in payload.get("readyTargets") or []}
+    ineligible = {
+        str(row.get("entityId") or "").strip()
+        for row in payload.get("ineligibleTargets") or []
+        if isinstance(row, Mapping)
+    }
+    overlap = sorted(ready & ineligible)
+    if overlap:
+        raise ValueError(
+            "content_plan absorption marked targets both ready and ineligible: "
+            f"{overlap}"
+        )
+    unclassified = sorted(absorbed_scope - ready - ineligible)
+    if unclassified:
+        raise ValueError(
+            "content_plan absorption left targets unclassified "
+            "(neither planned nor blocked): "
+            f"{unclassified}"
+        )
 
 
 @dataclass
@@ -221,14 +292,61 @@ def absorb_content_plan_shortfalls(
     }
     if not items or any(issue.code not in absorbable_codes for issue in issues):
         return False
+    content = (
+        active_spec.get("content")
+        if isinstance(active_spec.get("content"), Mapping)
+        else {}
+    )
+    work_unit_mode = "workUnits" in content
+    ready_work_unit_ids: list[str] | None = None
     successful_names: list[str] = []
     seen: set[str] = set()
-    for item in items:
-        tags = item.get("entityTags") or []
-        name = str(tags[0] if tags else "").strip()
-        if name and name not in seen:
-            seen.add(name)
-            successful_names.append(name)
+    if work_unit_mode:
+        raw_work_units = content.get("workUnits")
+        if not isinstance(raw_work_units, list):
+            return False
+        expected_by_id = {
+            str(row.get("workUnitId") or "").strip(): row
+            for row in raw_work_units
+            if isinstance(row, Mapping)
+            and str(row.get("workUnitId") or "").strip()
+        }
+        ready_work_unit_ids = []
+        for item in items:
+            work_unit_id = str(item.get("workUnitId") or "").strip()
+            if not work_unit_id or work_unit_id not in expected_by_id:
+                return False
+            if work_unit_id not in ready_work_unit_ids:
+                ready_work_unit_ids.append(work_unit_id)
+        ready_work_units = [
+            dict(expected_by_id[work_unit_id])
+            for work_unit_id in ready_work_unit_ids
+        ]
+        if not ready_work_units:
+            return False
+        for row in ready_work_units:
+            target = row.get("coverageTarget")
+            name = (
+                str(target.get("name") or "").strip()
+                if isinstance(target, Mapping)
+                else ""
+            )
+            if name and name not in seen:
+                seen.add(name)
+                successful_names.append(name)
+        content["workUnits"] = ready_work_units
+        policy = active_spec.setdefault("executionPolicy", {})
+        policy["targetObjectCount"] = len(ready_work_units)
+        policy["targetEntityCount"] = len(successful_names)
+        acceptance = active_spec.setdefault("acceptance", {})
+        acceptance["minEntities"] = len(successful_names)
+        acceptance["minPostsPerEntity"] = 0
+    else:
+        for item in items:
+            name = planned_item_owning_target(item)
+            if name and name not in seen:
+                seen.add(name)
+                successful_names.append(name)
     if not successful_names:
         return False
     scope = active_spec.setdefault("scope", {})
@@ -252,6 +370,7 @@ def absorb_content_plan_shortfalls(
         issues=issues,
         object_refs=object_refs,
         carrier=carrier,
+        ready_work_unit_ids=ready_work_unit_ids,
     )
     print(
         "[content_plan] absorbed object-level shortfall "

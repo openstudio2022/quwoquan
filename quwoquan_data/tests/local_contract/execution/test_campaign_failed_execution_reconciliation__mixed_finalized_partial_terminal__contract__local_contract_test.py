@@ -31,8 +31,13 @@ def _write_mixed_boundary(
     monkeypatch: pytest.MonkeyPatch,
     *,
     failed_carrier: str = "article",
+    active_carriers: tuple[str, ...] = CARRIERS,
 ) -> tuple[Path, Path, Path, dict[str, str]]:
-    output_root, campaign, execution_ids = _write_boundary(tmp_path, monkeypatch)
+    output_root, campaign, execution_ids = _write_boundary(
+        tmp_path,
+        monkeypatch,
+        active_carriers=active_carriers,
+    )
     report_path = campaign / "campaign_report.json"
     report = read_json(report_path)
     assert isinstance(report, dict)
@@ -43,7 +48,7 @@ def _write_mixed_boundary(
             "failure": f"{failed_carrier}:DATA.SOURCE.RETAINED_SHORTFALL",
         }
     )
-    for carrier in CARRIERS:
+    for carrier in active_carriers:
         claim_path = campaign / "claims" / f"{carrier}.json"
         claim = read_json(claim_path)
         assert isinstance(claim, dict)
@@ -94,9 +99,9 @@ def _write_mixed_boundary(
     monkeypatch.setattr(mixed_contract, "_process_group_alive", lambda _pgid: False)
     submissions = {
         carrier: read_json(campaign / "submissions" / f"{execution_ids[carrier]}.json")
-        for carrier in CARRIERS
+        for carrier in active_carriers
     }
-    for carrier in CARRIERS:
+    for carrier in active_carriers:
         if carrier == failed_carrier:
             continue
         execution_id = execution_ids[carrier]
@@ -117,8 +122,9 @@ def _write_mixed_boundary(
             {
                 "schema": "quwoquan_data.execution_publish_ref",
                 "executionId": execution_id,
-                "canonicalPublishRoot": "quwoquan_data/publish",
+                "canonicalPublishRoot": "canonical-publish",
                 "publishedRefs": refs,
+                "publishDiscards": [],
             },
         )
         manifest = {
@@ -145,11 +151,13 @@ def _write_mixed_boundary(
                 "status": "finalized",
                 "approvedQuota": 1,
                 "qualifiedCount": 1,
+                "reviewQualifiedCount": 1,
                 "finalizedCount": 1,
                 "selectedCount": 1,
                 "discardedCount": 0,
                 "shortfallCount": 0,
                 "discards": [],
+                "publishDiscards": [],
                 "executionPublishRef": publish_path.relative_to(output_root).as_posix(),
                 "executionPublishSha256": reconciliation.file_digest(publish_path),
                 "campaignRunId": RUN_ID,
@@ -181,6 +189,34 @@ def test_mixed_terminal_accepts_video_as_the_single_failed_lane(
     assert lanes["video"]["observedFinalizedCount"] == 0
     assert lanes["article"]["evidenceDisposition"] == "preserved_unadopted"
     assert lanes["article"]["observedFinalizedCount"] == 1
+
+
+def test_mixed_homepage_video_recovery_preserves_success_without_inactive_lanes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    active = ("homepage", "video")
+    output_root, campaign, _publish_root, _execution_ids = _write_mixed_boundary(
+        tmp_path,
+        monkeypatch,
+        failed_carrier="video",
+        active_carriers=active,
+    )
+
+    receipt, _path = reconciliation.reconcile_failed_campaign(
+        ROOT_ID,
+        reason="mixed_finalized_partial_terminal",
+        blocker_evidence=campaign / "claims/video.json",
+        repo_root=tmp_path,
+        output_root=output_root,
+    )
+
+    lanes = receipt["executionEvidence"]["lanes"]
+    assert receipt["activeCarriers"] == list(active)
+    assert [row["carrier"] for row in lanes] == list(active)
+    assert receipt["executionEvidence"]["observedFinalizedCount"] == 1
+    assert lanes[0]["terminalStatus"] == "finalized"
+    assert lanes[1]["terminalStatus"] == "failed"
 
 
 def test_mixed_terminal_preserves_three_finalized_without_release_or_adoption(
@@ -301,7 +337,7 @@ def test_mixed_terminal_retry_envelope_allows_superseding_source_identity() -> N
     receipt = {
         "reason": "mixed_finalized_partial_terminal",
         "observedSourceIdentity": observed,
-        "retryPolicy": "new_four_lane_execution_with_retryOf",
+        "retryPolicy": "active_workload_execution_with_retryOf",
         "executionEvidence": {
             "excludedFromRetryRelease": True,
             "eligibleForRelease": False,

@@ -81,6 +81,14 @@ class ChatAcceptanceDataProvider:
             raise TypeError("actors dependency was not resolved")
         sender = params.actors.require(params.sender_role)
         receiver = params.actors.require(params.receiver_role)
+        runtime = context.runtime
+        if not isinstance(runtime, TestDataRuntime):
+            raise TypeError("TestData runtime is unavailable")
+        runtime.require_verified_mutual_relationship(
+            sender,
+            receiver,
+            test_data_instance_id=context.test_data_instance_id,
+        )
         executor = _executor(context, DIRECT_CONVERSATION_WITH_MESSAGES.key.value)
         created = executor.call(
             "chat.conversation.CreateConversation",
@@ -90,7 +98,7 @@ class ChatAcceptanceDataProvider:
                 "type": "direct",
                 "title": "验收会话",
                 "maxGroupSize": 2,
-                "initialMemberIds": [receiver.account.object_id],
+                "initialMemberIds": [receiver.persona.object_id],
             },
         )
         conversation = BusinessObjectRef(

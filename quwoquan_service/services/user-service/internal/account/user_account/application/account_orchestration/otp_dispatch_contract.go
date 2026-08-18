@@ -14,12 +14,13 @@ type ExternalInteractionClient interface {
 	) (ExternalInteractionAccepted, error)
 }
 
-// SMSOTPReadinessChecker is deliberately separate from the delivery command
-// port. Existing command doubles cannot accidentally claim delivery readiness;
-// only the production integration client (or an explicit readiness double)
-// may satisfy this read-only capability.
-type SMSOTPReadinessChecker interface {
-	CheckSMSOTPReadiness(ctx context.Context) error
+type SMSOTPDeliveryReadinessQuery interface {
+	GetSMSOTPDeliveryReadiness(ctx context.Context) (SMSOTPDeliveryReadiness, error)
+}
+
+type SMSOTPDeliveryReadiness struct {
+	Availability      string
+	RetryAfterSeconds int
 }
 
 type SMSOTPDispatchRequest struct {

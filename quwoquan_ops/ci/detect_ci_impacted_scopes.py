@@ -16,9 +16,7 @@ ALL_SCOPE_PREFIXES = (
 )
 DATA_PREFIXES = (
     "quwoquan_data/",
-    ".cursor/skills/quwoquan-data-content/",
-    ".cursor/commands/crawl",
-    ".cursor/commands/data-",
+    ".agents/skills/content-production/",
 )
 DATA_DOCUMENT_PREFIXES = ("specs/feature-tree/discovery-content/",)
 SERVICE_PREFIXES = (

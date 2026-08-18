@@ -104,10 +104,12 @@ def _dev_session_launcher_handoff(
     target: str,
     content_binding: Mapping[str, Any],
 ) -> dict[str, Any]:
-    """Render the App handoff from the exact run-bound content selection."""
+    """Render the App handoff; content activation stays a server-side fact."""
     import quwoquan_ops.cli.stackctl as _stackctl
 
 
+    # content_binding 只属于服务端 attempt 证据；launch handoff 不再携带内容身份。
+    del content_binding
     command = [
         sys.executable,
         str(_stackctl.ROOT / "quwoquan_app/scripts/device/build_launcher_handoff.py"),
@@ -122,17 +124,6 @@ def _dev_session_launcher_handoff(
         "--app-instance-namespace",
         f"{environment}-test-live",
     ]
-    if content_binding:
-        command.extend(
-            (
-                "--content-release-id",
-                str(content_binding.get("releaseId") or ""),
-                "--content-manifest-digest",
-                str(content_binding.get("manifestDigest") or ""),
-                "--content-readiness-receipt-digest",
-                str(content_binding.get("readinessReceiptDigest") or ""),
-            )
-        )
     try:
         result = subprocess.run(
             command,
@@ -154,27 +145,11 @@ def _dev_session_launcher_handoff(
         payload = json.loads(result.stdout)
     except json.JSONDecodeError as exc:
         raise ValueError(f"test_live launcher handoff is not JSON: {exc}") from exc
-    expected_state = "bound" if content_binding else "unbound"
-    expected_content = {
-        "contentReleaseId": str(content_binding.get("releaseId") or ""),
-        "contentManifestDigest": str(content_binding.get("manifestDigest") or ""),
-        "contentReadinessReceiptDigest": str(
-            content_binding.get("readinessReceiptDigest") or ""
-        ),
-    }
     if (
         not isinstance(payload, dict)
         or payload.get("launchPolicy") != "test_live"
-        or payload.get("contentBindingState") != expected_state
-        or (
-            bool(content_binding)
-            and any(
-                payload.get(field) != value
-                for field, value in expected_content.items()
-            )
-        )
     ):
-        raise ValueError("test_live launcher handoff policy/content binding mismatch")
+        raise ValueError("test_live launcher handoff policy mismatch")
     return dict(payload)
 
 
@@ -537,7 +512,34 @@ def _command_dev_session_bind_content(args: argparse.Namespace) -> dict[str, Any
 
 
     started_monotonic, started_at = _stackctl._start_timing()
+    requested_env = str(getattr(args, "env", "") or "").strip()
     target = str(getattr(args, "target", "") or "").strip()
+    # 与 start 同一套 env/target 互推：两个子命令作用于同一个 attempt，选择语义
+    # 分叉会让「start 能用的参数 bind-content 不能用」。且选择无效时必须在这里
+    # 就返回 typed 阻断——报告目录本身要按 target 落盘，拿无效 target 去算路径
+    # 会先抛 ValueError，把选择错误伪装成内部故障。
+    if bool(requested_env) == bool(target):
+        timing = _stackctl._finish_timing(started_monotonic, started_at)
+        return {
+            "exitCode": 2,
+            "summary": "stackctl dev-session bind-content is GATE_BLOCK",
+            "details": ["provide exactly one of --env or --target"],
+            "blockerKind": "environment_missing",
+            **timing,
+        }
+    if requested_env:
+        target = _stackctl.DEV_UP_STACK_TARGETS[requested_env]
+    elif target not in {"alpha-local", "beta-local", "gamma-local"}:
+        timing = _stackctl._finish_timing(started_monotonic, started_at)
+        return {
+            "exitCode": 2,
+            "summary": "stackctl dev-session bind-content is GATE_BLOCK",
+            "details": [
+                "--target must select alpha-local, beta-local, or gamma-local"
+            ],
+            "blockerKind": "invalid_content_binding_selection",
+            **timing,
+        }
     attempt_id = str(getattr(args, "startup_attempt_id", "") or "").strip()
     release_id = str(getattr(args, "release_id", "") or "").strip()
     verify_run_id = str(getattr(args, "verify_run_id", "") or "").strip()
@@ -547,8 +549,6 @@ def _command_dev_session_bind_content(args: argparse.Namespace) -> dict[str, Any
         getattr(args, "lifecycle_exit_ref", "") or ""
     ).strip()
     invalid: list[str] = []
-    if target not in {"alpha-local", "beta-local", "gamma-local"}:
-        invalid.append("--target must select alpha-local, beta-local, or gamma-local")
     for option, value in (
         ("--startup-attempt-id", attempt_id),
         ("--release-id", release_id),

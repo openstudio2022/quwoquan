@@ -14,8 +14,15 @@ from core.io import read_json
 from core.schema import assert_valid
 from core.source_digest import content_source_revision
 
-from content.execution.campaign.lane import CAMPAIGN_CARRIERS
 from content.execution.campaign.submission import campaign_root
+from content.execution.campaign.submission_reconciliation_workload import (
+    CampaignSubmissionReconciliationError,
+    campaign_root_for_submission,
+    campaigns_root,
+    frozen_plan_workload,
+    frozen_submission_workload,
+    typed,
+)
 from content.execution.identity import build_execution_id, parse_execution_id
 
 RECEIPT_SCHEMA = "quwoquan_data.campaign_submission_reconciliation_receipt"
@@ -31,6 +38,9 @@ ERROR_CODES = {
     "source_drift": "DATA.CAMPAIGN.SUBMISSION_ONLY_SOURCE_DRIFT",
 }
 SCOPE_FIELDS = (
+    "workloadMode",
+    "activeCarriers",
+    "workloads",
     "familyRef",
     "regionRef",
     "selector",
@@ -40,21 +50,8 @@ SCOPE_FIELDS = (
     "targetNames",
     "sourceProviders",
     "retryOf",
+    "retryUnfinishedRefs",
 )
-
-
-class CampaignSubmissionReconciliationError(ValueError):
-    """Submission-only evidence is missing, mutable, or not actually abandoned."""
-
-    def __init__(self, code: str, detail: str) -> None:
-        super().__init__(f"GATE_BLOCK {code}: {detail}")
-        self.code = code
-
-
-def typed(code: str, detail: str) -> CampaignSubmissionReconciliationError:
-    return CampaignSubmissionReconciliationError(
-        f"DATA.CAMPAIGN.SUBMISSION_RECONCILIATION_{code}", detail
-    )
 
 
 def canonical_digest(value: object) -> str:
@@ -93,10 +90,6 @@ def resolve_ref(ref: object, *, output_root: Path, label: str) -> Path:
     return path
 
 
-def campaigns_root(output_root: Path) -> Path:
-    return output_root / "data/local/workspace/content-campaign-submissions"
-
-
 def load_terminal_submission_documents(
     root_execution_id: str,
     *,
@@ -109,12 +102,10 @@ def load_terminal_submission_documents(
     must never be normalized or returned to the active campaign loader, but the
     controller still needs a cryptographically verified lineage receipt before a
     new ``retryOf`` sequence can be created.  This reader therefore validates the
-    original request digest and the closed four-carrier identity only; its result
+    original request digest and the frozen active-workload identity; its result
     is consumed exclusively by the abandonment receipt path.
     """
-    normalized_root = predecessor_campaign_root_execution_id(root_execution_id)
-    if normalized_root != root_execution_id:
-        raise typed("IDENTITY_DRIFT", "rootExecutionId must be the homepage lane")
+    normalized_root = parse_execution_id(root_execution_id).execution_id
     submissions_dir = campaigns_root(output_root) / normalized_root / "submissions"
     documents: dict[str, dict[str, Any]] = {}
     for path in (
@@ -151,26 +142,20 @@ def load_terminal_submission_documents(
         documents[carrier] = payload
     if not documents:
         raise typed("SUBMISSIONS_INCOMPLETE", "at least one submission is required")
-    if require_all and set(documents) != set(CAMPAIGN_CARRIERS):
-        raise typed("SUBMISSIONS_INCOMPLETE", "exactly four submissions are required")
+    active, _workloads, _root = frozen_submission_workload(
+        documents,
+        root_execution_id=normalized_root,
+    )
+    if require_all and set(documents) != set(active):
+        raise typed(
+            "SUBMISSIONS_INCOMPLETE",
+            "all active workload submissions are required",
+        )
     return documents
 
 
 def execution_roots(output_root: Path) -> Path:
     return output_root / "data/tasks"
-
-
-def predecessor_campaign_root_execution_id(execution_id: str) -> str:
-    identity = parse_execution_id(execution_id)
-    return build_execution_id(
-        run_date=identity.run_date,
-        vertical=identity.vertical,
-        content_type="homepage",
-        intent=identity.intent,
-        scope=identity.scope,
-        phase=identity.phase.value,
-        sequence=identity.sequence,
-    )
 
 
 def reconciliation_receipt_path(
@@ -208,15 +193,12 @@ def submission_evidence(
     output_root: Path,
     root_execution_id: str | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    if not submissions or not set(submissions) <= set(CAMPAIGN_CARRIERS):
-        raise typed("SUBMISSIONS_INCOMPLETE", "one to four submissions are required")
-    representative = submissions.get("homepage") or next(iter(submissions.values()))
-    root_id = str(representative.get("rootExecutionId") or "")
-    if root_execution_id is not None and root_id != root_execution_id:
-        raise typed("IDENTITY_DRIFT", "submission campaign root drift")
+    active, _workloads, root_id = frozen_submission_workload(
+        submissions,
+        root_execution_id=root_execution_id,
+    )
+    representative = submissions.get(active[0]) or next(iter(submissions.values()))
     root_identity = parse_execution_id(root_id)
-    if root_identity.content_type.value != "homepage":
-        raise typed("IDENTITY_DRIFT", "campaign root must be the homepage submission")
     source_documents = {
         json.dumps(row.get("sourceDigest"), sort_keys=True)
         for row in submissions.values()
@@ -237,7 +219,7 @@ def submission_evidence(
     ):
         raise typed(
             "IDENTITY_DRIFT",
-            "four submissions must share source identity and exact targetNames",
+            "active submissions must share source identity and exact targetNames",
         )
     original_source = representative.get("sourceDigest")
     if not isinstance(original_source, Mapping):
@@ -250,7 +232,7 @@ def submission_evidence(
         raise typed("IDENTITY_DRIFT", "submission sourceRevision is not derived")
 
     evidence: dict[str, Any] = {}
-    for carrier in CAMPAIGN_CARRIERS:
+    for carrier in active:
         if carrier not in submissions:
             continue
         row = submissions[carrier]
@@ -282,7 +264,7 @@ def submission_evidence(
             ),
             "submissionSha256": file_digest(path),
             "requestDigest": str(row["requestDigest"]),
-            **{field: row.get(field) for field in SCOPE_FIELDS},
+            **{field: row.get(field) for field in SCOPE_FIELDS if field in row},
         }
     return evidence, original_identity
 
@@ -308,8 +290,12 @@ def execution_absence(
             + ", ".join(present),
         )
     lane_rows: list[dict[str, Any]] = []
+    active, _workloads, _root = frozen_submission_workload(
+        submissions,
+        root_execution_id=root_execution_id,
+    )
     root_identity = parse_execution_id(root_execution_id)
-    for carrier in CAMPAIGN_CARRIERS:
+    for carrier in active:
         row = submissions.get(carrier)
         execution_id = (
             str(row["executionId"])
@@ -482,13 +468,15 @@ __all__ = [
     "RECEIPT_SCHEMA",
     "CampaignSubmissionReconciliationError",
     "blocker_evidence",
+    "campaign_root_for_submission",
     "campaigns_root",
     "canonical_digest",
     "execution_absence",
+    "frozen_plan_workload",
+    "frozen_submission_workload",
     "load_reconciliation_reference",
     "load_submission_reconciliation_receipt",
     "load_terminal_submission_documents",
-    "predecessor_campaign_root_execution_id",
     "reconciliation_receipt_path",
     "reconciliation_reference",
     "source_identity",

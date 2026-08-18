@@ -108,7 +108,16 @@ def test_promote_post_object_skips_apply_when_canonical_matches_package(
     monkeypatch.setattr(subject, "build_post_object_transaction_package", fake_build)
     monkeypatch.setattr(subject, "audit_object_transaction", lambda **_k: {})
     monkeypatch.setattr(subject, "apply_object_transaction", fake_apply)
-    result = subject.promote_post_object(execution_id, post_ref)
+    monkeypatch.setattr(
+        subject,
+        "_repair_applied_pool_record_drift",
+        lambda **_kwargs: False,
+    )
+    result = subject.promote_post_object(
+        execution_id,
+        post_ref,
+        pool_delivery_intent={"schema": "test.pool_delivery_intent"},
+    )
     assert result["canonicalObjectRef"] == f"posts/{post_ref}"
     assert apply_calls == []
     assert package_object  # silence unused in lint-free path
@@ -180,7 +189,11 @@ def test_promote_post_object_rejects_existing_canonical_identity_or_merkle_drift
         ObjectTransactionError,
         match="completed post transaction canonical object drift",
     ):
-        subject.promote_post_object(execution_id, post_ref)
+        subject.promote_post_object(
+            execution_id,
+            post_ref,
+            pool_delivery_intent={"schema": "test.pool_delivery_intent"},
+        )
 
 
 def test_promote_execution_posts_does_not_count_existing_canonical_on_failure(
@@ -195,29 +208,83 @@ def test_promote_execution_posts_does_not_count_existing_canonical_on_failure(
         {"executionId": "a-different-execution"},
     )
     publish_ref_writes: list[tuple[str, tuple[str, ...]]] = []
+    root = tmp_path / "execution"
+    write_json(
+        root / "_shared/pool_delivery_intents/one.json",
+        {
+            "schema": "test.pool_delivery_intent",
+            "contentObjectDir": f"posts/{post_ref}",
+        },
+    )
 
     monkeypatch.setattr(subject, "PUBLISH_ROOT", publish)
+    monkeypatch.setattr(subject, "execution_root", lambda _eid: root)
     monkeypatch.setattr(subject, "_qualified_post_refs", lambda _eid: (post_ref,))
     monkeypatch.setattr(
         subject,
         "promote_post_object",
-        lambda _eid, _ref: (_ for _ in ()).throw(
+        lambda _eid, _ref, *, pool_delivery_intent: (_ for _ in ()).throw(
             ObjectTransactionError("canonical identity drift")
         ),
     )
     monkeypatch.setattr(
-        "content.execution.spec_contract.approved_quota",
-        lambda _eid: 1,
-    )
-    monkeypatch.setattr(
         subject,
         "write_publish_ref",
-        lambda eid, *, post_refs: publish_ref_writes.append(
+        lambda eid, *, post_refs, publish_discards: publish_ref_writes.append(
             (eid, tuple(post_refs))
         ),
     )
 
-    with pytest.raises(ObjectTransactionError, match="promoted=0 required=1"):
+    with pytest.raises(ObjectTransactionError, match="finalized zero objects"):
         subject.promote_execution_posts(execution_id)
 
     assert publish_ref_writes == []
+
+
+def test_promote_execution_posts_writes_only_succeeded_refs_and_typed_discard(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    execution_id = "20260731--travel-image-partial--test-region-a--pilot-904"
+    refs = tuple(f"image/摄影/对象-{index}/1" for index in range(3))
+    root = tmp_path / "execution"
+    for index, ref in enumerate(refs):
+        write_json(
+            root / f"_shared/pool_delivery_intents/{index}.json",
+            {
+                "schema": "test.pool_delivery_intent",
+                "contentObjectDir": f"posts/{ref}",
+            },
+        )
+    writes: list[dict[str, object]] = []
+    monkeypatch.setattr(subject, "execution_root", lambda _eid: root)
+    monkeypatch.setattr(subject, "_qualified_post_refs", lambda _eid: refs)
+
+    def promote(_eid, ref, *, pool_delivery_intent):
+        assert pool_delivery_intent["contentObjectDir"] == f"posts/{ref}"
+        if ref == refs[1]:
+            raise ObjectTransactionError("object admission rejected")
+        return {"canonicalObjectRef": f"posts/{ref}"}
+
+    monkeypatch.setattr(subject, "promote_post_object", promote)
+    monkeypatch.setattr(
+        subject,
+        "write_publish_ref",
+        lambda eid, **values: writes.append({"executionId": eid, **values}),
+    )
+
+    promoted = subject.promote_execution_posts(execution_id)
+
+    assert promoted == (refs[0], refs[2])
+    assert writes == [
+        {
+            "executionId": execution_id,
+            "post_refs": [refs[0], refs[2]],
+            "publish_discards": [
+                {
+                    "objectRef": refs[1],
+                    "issues": ["DATA.PUBLISH.OBJECT_ADMISSION_FAILED"],
+                }
+            ],
+        }
+    ]

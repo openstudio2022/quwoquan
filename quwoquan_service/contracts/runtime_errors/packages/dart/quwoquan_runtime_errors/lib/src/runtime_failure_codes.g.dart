@@ -7,6 +7,52 @@ abstract final class RuntimeFailureCodes {
       'ASSISTANT.SYSTEM.contract_parse_failed';
   static const String assistantSystemInternalError =
       'ASSISTANT.SYSTEM.internal_error';
+  static const String authDelegatedgrantInvalid = 'AUTH.DELEGATEDGRANT.invalid';
+  static const String authDelegatedgrantAudienceMismatch =
+      'AUTH.DELEGATEDGRANT.audience_mismatch';
+  static const String authDelegatedgrantActorMismatch =
+      'AUTH.DELEGATEDGRANT.actor_mismatch';
+  static const String authDelegatedgrantScopeMismatch =
+      'AUTH.DELEGATEDGRANT.scope_mismatch';
+  static const String authDelegatedgrantDigestMismatch =
+      'AUTH.DELEGATEDGRANT.digest_mismatch';
+  static const String authDelegatedgrantTargetMismatch =
+      'AUTH.DELEGATEDGRANT.target_mismatch';
+  static const String authDelegatedgrantAuthEpochMismatch =
+      'AUTH.DELEGATEDGRANT.auth_epoch_mismatch';
+  static const String authDelegatedgrantReplay = 'AUTH.DELEGATEDGRANT.replay';
+  static const String authDelegatedgrantStoreUnavailable =
+      'AUTH.DELEGATEDGRANT.store_unavailable';
+  static const String authOidcInvalid = 'AUTH.OIDC.invalid';
+  static const String authOidcKeyNotFound = 'AUTH.OIDC.key_not_found';
+  static const String authOidcMfaRequired = 'AUTH.OIDC.mfa_required';
+  static const String authTokenExpired = 'AUTH.TOKEN.expired';
+  static const String authTokenInvalid = 'AUTH.TOKEN.invalid';
+  static const String authTokenNotYetValid = 'AUTH.TOKEN.not_yet_valid';
+  static const String authTokenVersionMismatch = 'AUTH.TOKEN.version_mismatch';
+  static const String chatGroupavatarRecomputeFailed =
+      'CHAT.GROUPAVATAR.recompute_failed';
+  static const String chatGroupavatarPatchFanoutFailed =
+      'CHAT.GROUPAVATAR.patch_fanout_failed';
+  static const String chatGroupavatarNotificationFailed =
+      'CHAT.GROUPAVATAR.notification_failed';
+  static const String clientPlatformCapabilityUnavailable =
+      'CLIENT.PLATFORM.capability_unavailable';
+  static const String reliabletaskNotificationFanoutFailed =
+      'RELIABLETASK.NOTIFICATION.fanout_failed';
+  static const String reliabletaskNotificationRetry =
+      'RELIABLETASK.NOTIFICATION.retry';
+  static const String reliabletaskWorkerHandlerFailed =
+      'RELIABLETASK.WORKER.handler_failed';
+  static const String reliabletaskWorkerInvalidRetryPolicy =
+      'RELIABLETASK.WORKER.invalid_retry_policy';
+  static const String searchBackendRecallFailed =
+      'SEARCH.BACKEND.recall_failed';
+  static const String searchPlannerUnknownTarget =
+      'SEARCH.PLANNER.unknown_target';
+  static const String searchUserSensitiveQuery = 'SEARCH.USER.sensitive_query';
+  static const String serviceRuntimeLogEncodingFailed =
+      'SERVICE.RUNTIME.log_encoding_failed';
   static const String appNetworkOffline = 'APP.NETWORK.offline';
   static const String appNetworkConnectionRefused =
       'APP.NETWORK.connection_refused';

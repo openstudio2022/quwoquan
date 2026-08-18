@@ -8,12 +8,6 @@
     "schema",
     "evidenceId",
     "rootExecutionId",
-    "runtimeSessionId",
-    "runtimeSessionRef",
-    "runtimeSessionDigest",
-    "runId",
-    "generation",
-    "fencingToken",
     "status",
     "targetScale",
     "releaseId",
@@ -35,18 +29,6 @@
     "duplicateAssetCount",
     "crossLaneWriteCount",
     "articleIllustratedRate",
-    "fourLaneOverlapDurationSeconds",
-    "fourLaneLongestContinuousOverlapSeconds",
-    "allSemanticJobsTerminalAt",
-    "terminalResidualSampleAt",
-    "scaleStartedAt",
-    "scaleCompletedAt",
-    "wallClockBudgetSeconds",
-    "wallClockSeconds",
-    "resourceSoakEvidenceRef",
-    "resourceSoakEvidenceDigest",
-    "faultInjectionEvidenceRef",
-    "faultInjectionEvidenceDigest",
     "recordedAt",
     "evidenceDigest"
   ],
@@ -126,8 +108,38 @@
     "resourceSoakEvidenceDigest": {"$ref": "#/$defs/digest"},
     "faultInjectionEvidenceRef": {"$ref": "#/$defs/safeRef"},
     "faultInjectionEvidenceDigest": {"$ref": "#/$defs/digest"},
+    "diagnosticIssues": {
+      "description": "Non-blocking runtime, resource, fault, timing or capacity observations that were unavailable or invalid.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
     "recordedAt": {"type": "string", "format": "date-time"},
     "evidenceDigest": {"$ref": "#/$defs/digest"}
+  },
+  "dependentRequired": {
+    "runtimeSessionId": ["runtimeSessionRef", "runtimeSessionDigest", "runId", "generation", "fencingToken"],
+    "runtimeSessionRef": ["runtimeSessionId", "runtimeSessionDigest", "runId", "generation", "fencingToken"],
+    "runtimeSessionDigest": ["runtimeSessionId", "runtimeSessionRef", "runId", "generation", "fencingToken"],
+    "runId": ["runtimeSessionId", "runtimeSessionRef", "runtimeSessionDigest", "generation", "fencingToken"],
+    "generation": ["runtimeSessionId", "runtimeSessionRef", "runtimeSessionDigest", "runId", "fencingToken"],
+    "fencingToken": ["runtimeSessionId", "runtimeSessionRef", "runtimeSessionDigest", "runId", "generation"],
+    "scaleStartedAt": ["scaleCompletedAt", "wallClockBudgetSeconds", "wallClockSeconds"],
+    "scaleCompletedAt": ["scaleStartedAt", "wallClockBudgetSeconds", "wallClockSeconds"],
+    "wallClockBudgetSeconds": ["scaleStartedAt", "scaleCompletedAt", "wallClockSeconds"],
+    "wallClockSeconds": ["scaleStartedAt", "scaleCompletedAt", "wallClockBudgetSeconds"],
+    "resourceSoakEvidenceRef": [
+      "resourceSoakEvidenceDigest", "runtimeSessionId", "runtimeSessionRef",
+      "runtimeSessionDigest", "runId", "generation", "fencingToken",
+      "fourLaneOverlapDurationSeconds", "fourLaneLongestContinuousOverlapSeconds",
+      "allSemanticJobsTerminalAt", "terminalResidualSampleAt"
+    ],
+    "resourceSoakEvidenceDigest": ["resourceSoakEvidenceRef"],
+    "faultInjectionEvidenceRef": [
+      "faultInjectionEvidenceDigest", "runtimeSessionId", "runtimeSessionRef",
+      "runtimeSessionDigest", "runId", "generation", "fencingToken"
+    ],
+    "faultInjectionEvidenceDigest": ["faultInjectionEvidenceRef"]
   },
   "allOf": [
     {
@@ -171,9 +183,7 @@
         "properties": {
           "predecessorPromotion": {"properties": {"targetScale": {"const": "M1000"}}},
           "predecessorCarriedExecutionIds": {"minItems": 4},
-          "predecessorSourcePoolDigests": {"minItems": 2},
-          "wallClockBudgetSeconds": {"const": 604800},
-          "wallClockSeconds": {"maximum": 604800}
+          "predecessorSourcePoolDigests": {"minItems": 2}
         }
       }
     }
@@ -286,11 +296,11 @@
       ],
       "properties": {
         "carrier": {"enum": ["homepage", "article", "image", "video"]},
-        "provider": {"const": "codex_sdk"},
-        "authorModel": {"const": "gpt-5.6-terra"},
-        "authorModelFamily": {"const": "gpt"},
-        "reviewerModel": {"const": "gpt-5.6-terra"},
-        "reviewerModelFamily": {"const": "gpt"},
+        "provider": {"enum": ["cursor_sdk", "codex_sdk"]},
+        "authorModel": {"type": "string", "minLength": 1},
+        "authorModelFamily": {"type": "string", "minLength": 1},
+        "reviewerModel": {"type": "string", "minLength": 1},
+        "reviewerModelFamily": {"type": "string", "minLength": 1},
         "calibrationProvider": {"const": "codex_sdk"},
         "calibrationModel": {"const": "gpt-5.6-sol"},
         "calibrationModelFamily": {"const": "gpt"},

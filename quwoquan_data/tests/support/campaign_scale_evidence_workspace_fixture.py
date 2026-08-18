@@ -22,6 +22,7 @@ from content.release.canonical.object_source_identity import (
 from support.campaign_scale_evidence_fixture import (
     CARRIERS,
     CATALOG_DIGEST,
+    EXECUTION_BUNDLE_DOCUMENT,
     FENCING_TOKEN,
     GENERATION,
     RUN_ID,
@@ -375,15 +376,21 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
         pool_selections,
         source_pool_snapshot_digest,
     ) = _scale_pool_fixture(output, source_revision=source_revision)
+    active_carriers = list(pool_plan["activeCarriers"])
+    workloads = dict(pool_plan["workloadTargets"])
     plan_stable: dict[str, object] = {
         "schema": "quwoquan_data.content_campaign_plan",
         "rootExecutionId": root_id,
         "executionMode": "central",
         "scale": "M100",
+        "workloadMode": pool_plan["workloadMode"],
+        "activeCarriers": active_carriers,
+        "workloads": workloads,
         "gitBranch": "dev1.0",
         "gitCommitSha": "d" * 40,
         "sourceRevision": source_revision,
         "sourceDigest": SOURCE_DIGEST,
+        "executionBundle": dict(EXECUTION_BUNDLE_DOCUMENT),
         "entityCatalogDigest": CATALOG_DIGEST,
         "semanticSelectionId": "default",
         "semanticPreflightReceipt": terra_preflight_binding,
@@ -414,10 +421,12 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
     _write(plan_path, plan)
     capsule_stable = {
         "schema": "quwoquan_data.content_campaign_source_capsule",
-        "format": "source-snapshot-v1",
+        "format": "source-capsule-v2",
+        "gitBranch": plan["gitBranch"],
         "gitCommitSha": plan["gitCommitSha"],
         "sourceRevision": source_revision,
         "sourceDigest": SOURCE_DIGEST,
+        "executionBundle": dict(EXECUTION_BUNDLE_DOCUMENT),
         "entityCatalogDigest": CATALOG_DIGEST,
         "roots": ["quwoquan_data"],
         "laneExternalInputs": {
@@ -477,6 +486,8 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
         {
             "schema": "quwoquan_data.content_campaign_report",
             "rootExecutionId": root_id,
+            "activeCarriers": active_carriers,
+            "workloads": workloads,
             "campaignRunId": f"{root_id}-run",
             "campaignGeneration": 1,
             "campaignFencingToken": FENCING_TOKEN,
@@ -554,8 +565,9 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
             {
                 "schema": "quwoquan_data.execution_publish_ref",
                 "executionId": execution_id,
-                "canonicalPublishRoot": "quwoquan_data/publish",
+                "canonicalPublishRoot": "canonical-publish",
                 "publishedRefs": refs,
+                "publishDiscards": [],
             },
         )
         _write(
@@ -569,6 +581,7 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
                 "status": "finalized",
                 "approvedQuota": 10 if carrier == "video" else 100,
                 "qualifiedCount": 100,
+                "reviewQualifiedCount": 100,
                 "finalizedCount": 100,
                 "selectedCount": 100,
                 "discardedCount": 0,
@@ -579,6 +592,7 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
                 "campaignGeneration": 1,
                 "campaignFencingToken": "sha256:" + "f" * 64,
                 "discards": [],
+                "publishDiscards": [],
             },
         )
         for index in range(10):

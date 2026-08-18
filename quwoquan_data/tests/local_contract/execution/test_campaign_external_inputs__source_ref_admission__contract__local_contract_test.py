@@ -16,6 +16,8 @@ from content.execution.campaign.external_inputs import (
     verify_external_input_refs,
 )
 from core.io import write_json
+from core.source_digest import ExecutionBundleIdentity, SourceDefinitionSnapshot
+from support.capacity_calibration_fixture import synthetic_capacity_source_binding
 from support.campaign_external_inputs_fixture import (  # noqa: F401
     CATALOG_DIGEST,
     SOURCE_DIGEST,
@@ -23,6 +25,9 @@ from support.campaign_external_inputs_fixture import (  # noqa: F401
     _acquisition,
     _governed_acquisition_handoff,
 )
+
+
+BUNDLE_DIGEST = "sha256:" + "b" * 64
 
 
 class _FrozenSourceDigest:
@@ -33,43 +38,75 @@ class _FrozenSourceDigest:
         return self._document
 
 
+def _bind_observed_identities(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    source: dict[str, object],
+    bundle: dict[str, object],
+) -> None:
+    """Pin what the repository currently observes for both frozen identities."""
+
+    monkeypatch.setattr(
+        campaign_submission,
+        "current_source_definition_snapshot",
+        lambda **_kwargs: _FrozenSourceDigest(source),
+    )
+    monkeypatch.setattr(
+        campaign_submission,
+        "current_execution_bundle_identity",
+        lambda **_kwargs: _FrozenSourceDigest(bundle),
+    )
+
 
 def test_campaign_submission_accepts_stable_dirty_source_inputs(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    document: dict[str, object] = {
-        "algorithm": "sha256",
-        "digest": SOURCE_DIGEST,
-        "inputs": ["quwoquan_data/scripts"],
-    }
-    monkeypatch.setattr(
-        campaign_submission,
-        "current_source_digest",
-        lambda **_kwargs: _FrozenSourceDigest(document),
-    )
+    source = SourceDefinitionSnapshot(SOURCE_DIGEST).to_document()
+    bundle = ExecutionBundleIdentity(BUNDLE_DIGEST).to_document()
+    _bind_observed_identities(monkeypatch, source=source, bundle=bundle)
 
-    campaign_submission._require_stable_source_inputs(document, repo_root=tmp_path)
+    campaign_submission._require_stable_source_inputs(
+        source,
+        execution_bundle=bundle,
+        repo_root=tmp_path,
+    )
 
 
 def test_campaign_submission_rejects_source_digest_drift(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    frozen: dict[str, object] = {
-        "algorithm": "sha256",
-        "digest": SOURCE_DIGEST,
-        "inputs": ["quwoquan_data/scripts"],
-    }
+    frozen = SourceDefinitionSnapshot(SOURCE_DIGEST).to_document()
+    bundle = ExecutionBundleIdentity(BUNDLE_DIGEST).to_document()
     observed = {**frozen, "digest": "sha256:" + ("f" * 64)}
-    monkeypatch.setattr(
-        campaign_submission,
-        "current_source_digest",
-        lambda **_kwargs: _FrozenSourceDigest(observed),
-    )
+    _bind_observed_identities(monkeypatch, source=observed, bundle=bundle)
 
     with pytest.raises(ValueError, match="changed during freeze"):
-        campaign_submission._require_stable_source_inputs(frozen, repo_root=tmp_path)
+        campaign_submission._require_stable_source_inputs(
+            frozen,
+            execution_bundle=bundle,
+            repo_root=tmp_path,
+        )
+
+
+def test_campaign_submission_rejects_execution_bundle_drift(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """An executor change must invalidate the freeze on its own."""
+
+    frozen = SourceDefinitionSnapshot(SOURCE_DIGEST).to_document()
+    bundle = ExecutionBundleIdentity(BUNDLE_DIGEST).to_document()
+    observed_bundle = {**bundle, "digest": "sha256:" + ("c" * 64)}
+    _bind_observed_identities(monkeypatch, source=frozen, bundle=observed_bundle)
+
+    with pytest.raises(ValueError, match="changed during freeze"):
+        campaign_submission._require_stable_source_inputs(
+            frozen,
+            execution_bundle=bundle,
+            repo_root=tmp_path,
+        )
 
 
 
@@ -149,19 +186,17 @@ def test_request_envelope_freezes_content_addressed_external_refs(
     repo = tmp_path / "repo"
     (repo / "quwoquan_data/reference/travel/entities/china").mkdir(parents=True)
 
-    class FrozenSource:
-        def to_document(self) -> dict[str, object]:
-            return {
-                "algorithm": "sha256",
-                "digest": SOURCE_DIGEST,
-                "inputs": ["quwoquan_data/schema"],
-            }
-
-    monkeypatch.setattr(
-        campaign_request_envelope,
-        "current_source_digest",
-        lambda **_kwargs: FrozenSource(),
-    )
+    for module in (campaign_request_envelope, campaign_request_envelope_build):
+        monkeypatch.setattr(
+            module,
+            "current_source_definition_snapshot",
+            lambda **_kwargs: SourceDefinitionSnapshot(SOURCE_DIGEST),
+        )
+        monkeypatch.setattr(
+            module,
+            "current_execution_bundle_identity",
+            lambda **_kwargs: ExecutionBundleIdentity(BUNDLE_DIGEST),
+        )
     monkeypatch.setattr(
         campaign_request_envelope_build,
         "entity_catalog_digest",
@@ -182,12 +217,24 @@ def test_request_envelope_freezes_content_addressed_external_refs(
         "_git_commit",
         lambda _repo: "c" * 40,
     )
+    capacity_ref = Path("data/local/tests/capacity/local-contract-capacity.json")
+    monkeypatch.setattr(
+        campaign_request_envelope_build,
+        "resolve_capacity_calibration_ref",
+        lambda ref: Path(ref),
+    )
+    monkeypatch.setattr(
+        campaign_request_envelope_build,
+        "bind_capacity_calibration_source",
+        lambda **_kwargs: synthetic_capacity_source_binding(),
+    )
     envelope = campaign_request_envelope.build_envelope(
         quota=1,
         carrier="image",
         region_ref="china",
         repo_root=repo,
         day="20260805",
+        capacity_calibration_receipt=capacity_ref,
         external_input_refs=[
             {
                 "kind": refs[0]["kind"],

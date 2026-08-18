@@ -22,14 +22,17 @@ for path in (DATA_ROOT, SCRIPTS_ROOT):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-from content.execution.planning.recipe import model as recipe, checkpoint as recipe_checkpoint
-from content.execution.planning.recipe import request as recipe_request
+from content.execution.campaign import request_envelope_io
+from content.execution.campaign import submission as campaign_submission
 from content.execution.identity import (
     build_execution_id,
     parse_execution_id,
     validate_execution_id,
 )
 from content.execution.model_contract import execution_model_pair
+from content.execution.planning.recipe import checkpoint as recipe_checkpoint
+from content.execution.planning.recipe import model as recipe
+from content.execution.planning.recipe import request as recipe_request
 from core.control_types import ExecutionStateStatus
 from core.paths import FAMILIES_ROOT, iter_family_files
 from core.runtime_policy import load_runtime_policy
@@ -180,7 +183,6 @@ def test_review_only_keeps_lane_alive_across_managed_agent_yield(
         recipe_checkpoint,
         "active_runtime_policy",
         lambda: SimpleNamespace(
-            campaign_lane_timeout_seconds_for_scale=lambda _scale: 30,
             agent_future_poll_timeout_seconds=0.2,
         ),
     )
@@ -389,6 +391,232 @@ def test_retry_inherits_the_previous_frozen_target_set(monkeypatch, tmp_path: Pa
     assert received["target_names"] == ("测试实体乙", "测试实体甲")
 
 
+def _frozen_image_external_refs(asset_count: int) -> list[dict[str, object]]:
+    blobs = [
+        {
+            "blobRef": f"objects/image-{index:02d}.jpg",
+            "contentSha256": "sha256:" + f"{index:064x}",
+            "sizeBytes": index,
+        }
+        for index in range(1, asset_count + 1)
+    ]
+    return [
+        {
+            "kind": "professional_image_acquisition",
+            "carrier": "image",
+            "blobRefs": blobs[:8],
+        },
+        {
+            "kind": "professional_image_acquisition",
+            "carrier": "image",
+            "blobRefs": blobs[8:],
+        },
+    ]
+
+
+def test_external_image_retry_keeps_empty_envelope_targets_for_eleven_assets_across_six_entities(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    reference_root = tmp_path / "quwoquan_data/reference/travel/entities/china"
+    reference_root.mkdir(parents=True)
+    envelope_path = tmp_path / "image-envelope.json"
+    envelope_path.write_text("{}", encoding="utf-8")
+    retry_of = "20260814--travel-image-workload-image-12--china--scale-001"
+    execution_id = "20260814--travel-image-workload-image-12--china--scale-007"
+    refs = _frozen_image_external_refs(11)
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(recipe, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(recipe.store, "spec_exists", lambda _execution_id: False)
+    monkeypatch.setattr(
+        request_envelope_io,
+        "load_campaign_envelope",
+        lambda _path: {
+            "executionId": execution_id,
+            "rootExecutionId": execution_id,
+            "carrier": "image",
+            "retryOf": retry_of,
+            "targetNames": [],
+            "externalInputRefs": refs,
+        },
+    )
+    monkeypatch.setattr(
+        recipe,
+        "_retry_target_names",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("external media retry must not inherit predecessor targets")
+        ),
+    )
+    monkeypatch.setattr(
+        recipe,
+        "load_frozen_target_set",
+        lambda _execution_id: (_ for _ in ()).throw(
+            AssertionError("external media retry must not load predecessor target rows")
+        ),
+    )
+    monkeypatch.setattr(
+        recipe,
+        "_run_execution",
+        lambda args, **_kwargs: captured.update(vars(args)),
+    )
+
+    recipe.handle_execute(
+        argparse.Namespace(
+            execution_id=execution_id,
+            campaign_root_execution_id=execution_id,
+            campaign_envelope=str(envelope_path),
+            retry_of=retry_of,
+            family="content/travel/image/image",
+            region_ref="china",
+            selector="all",
+            count=6,
+            quota=12,
+            target_names=[],
+            topic="image-12",
+            source_providers=[],
+            stage="submit-only",
+            recover_stage=None,
+            recovery_reason=None,
+        )
+    )
+
+    assert sum(len(row["blobRefs"]) for row in refs) == 11
+    assert captured["count"] == 6
+    assert captured["quota"] == 12
+    assert captured["target_names"] == ()
+    assert captured["inherited_targets"] == ()
+    assert captured["retry_external_media_scope"] is True
+
+
+def test_external_image_retry_lane_reloads_exact_submission_targets(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    reference_root = tmp_path / "quwoquan_data/reference/travel/entities/china"
+    reference_root.mkdir(parents=True)
+    retry_of = "20260814--travel-image-workload-image-12--china--scale-001"
+    execution_id = "20260814--travel-image-workload-image-12--china--scale-007"
+    refs = _frozen_image_external_refs(11)
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(recipe, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(recipe.store, "spec_exists", lambda _execution_id: False)
+    monkeypatch.setattr(
+        campaign_submission,
+        "load_submissions",
+        lambda _root_execution_id: {
+            "image": {
+                "executionId": execution_id,
+                "rootExecutionId": execution_id,
+                "carrier": "image",
+                "retryOf": retry_of,
+                "targetNames": [],
+                "externalInputRefs": refs,
+            }
+        },
+    )
+    monkeypatch.setattr(
+        recipe,
+        "_retry_target_names",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("external media lane must not inherit predecessor targets")
+        ),
+    )
+    monkeypatch.setattr(
+        recipe,
+        "_run_execution",
+        lambda args, **_kwargs: captured.update(vars(args)),
+    )
+
+    recipe.handle_execute(
+        argparse.Namespace(
+            execution_id=execution_id,
+            campaign_root_execution_id=execution_id,
+            campaign_envelope=None,
+            retry_of=retry_of,
+            family="content/travel/image/image",
+            region_ref="china",
+            selector="all",
+            count=6,
+            quota=12,
+            target_names=[],
+            topic="image-12",
+            source_providers=[],
+            stage="review-only",
+            recover_stage=None,
+            recovery_reason=None,
+        )
+    )
+
+    assert captured["target_names"] == ()
+    assert captured["inherited_targets"] == ()
+    assert captured["retry_external_media_scope"] is True
+
+
+def test_external_media_retry_rejects_envelope_digest_tamper(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    envelope_path = tmp_path / "image-envelope.json"
+    envelope_path.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(
+        request_envelope_io,
+        "load_campaign_envelope",
+        lambda _path: (_ for _ in ()).throw(
+            ValueError("campaign envelope requestDigest drift")
+        ),
+    )
+
+    with pytest.raises(
+        SystemExit,
+        match="EXTERNAL_MEDIA_RETRY_SCOPE_INVALID.*requestDigest drift",
+    ):
+        recipe_request.external_media_retry_target_names(
+            "20260814--travel-image-workload-image-12--china--scale-001",
+            execution_id="20260814--travel-image-workload-image-12--china--scale-007",
+            carrier="image",
+            requested_target_names=(),
+            campaign_envelope=str(envelope_path),
+            campaign_root_execution_id=None,
+        )
+
+
+def test_reconciled_campaign_retry_uses_exact_envelope_subset(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    envelope_path = tmp_path / "article-envelope.json"
+    envelope_path.write_text("{}", encoding="utf-8")
+    retry_of = "20260815--travel-article-workload-article-6--china--scale-001"
+    monkeypatch.setattr(
+        request_envelope_io,
+        "load_campaign_envelope",
+        lambda _path: {
+            "executionId": "20260815--travel-article-workload-article-1--china--scale-008",
+            "carrier": "article",
+            "retryOf": retry_of,
+            "count": 2,
+            "quota": 1,
+            "targetNames": ["青城山"],
+            "predecessorReconciliation": {
+                "predecessorRootExecutionId": "20260815--travel-homepage-root--china--scale-001",
+                "receiptDigest": "sha256:" + "a" * 64,
+            },
+        },
+    )
+
+    assert recipe_request.reconciled_campaign_retry_target_names(
+        retry_of,
+        execution_id="20260815--travel-article-workload-article-1--china--scale-008",
+        carrier="article",
+        count=2,
+        quota=1,
+        requested_target_names=("青城山",),
+        campaign_envelope=str(envelope_path),
+    ) == ("青城山",)
+
+
 def test_retry_rejects_target_or_count_drift(monkeypatch, tmp_path: Path) -> None:
     reference_root = tmp_path / "quwoquan_data/reference/travel/entities/test-region-a"
     reference_root.mkdir(parents=True)
@@ -431,7 +659,7 @@ def test_retry_rejects_target_or_count_drift(monkeypatch, tmp_path: Path) -> Non
     base["count"] = 1
     base["quota"] = 1
     base["target_names"] = []
-    with pytest.raises(SystemExit, match=r"inherited candidate pool 2 must stay inside"):
+    with pytest.raises(SystemExit, match=r"inherited entity pool 2 exceeds --count 1"):
         recipe.handle_execute(argparse.Namespace(**base))
 
 
@@ -582,8 +810,8 @@ def test_plan_only_checks_workspace_before_creating_a_work_package(monkeypatch) 
         recover_stage=None,
         recovery_reason=None,
     )
-    from content.execution.planning import semantic_selection
     from content.execution.agent import agent_conflicts
+    from content.execution.planning import semantic_selection
 
     def _blocked(*_args, **_kwargs) -> None:
         raise agent_conflicts.ManagedWorkspaceConflictError("execution_output_cleanup pid=42")
@@ -678,6 +906,81 @@ def test_execute_rejects_an_unpaired_recovery_request() -> None:
         raise AssertionError("unpaired recovery request must fail")
 
 
+def test_omitted_capacity_inputs_derive_the_campaign_workload_topology() -> None:
+    from content.execution.planning.capacity_policy import (
+        derive_workload_capacity_fields,
+        workload_plan_digest,
+        workload_plan_document,
+    )
+    from content.execution.request import derive_capacity_from_execution
+
+    execution_id = "20260722--travel-article-supply--test-region-b--pilot-001"
+    derived = derive_capacity_from_execution(
+        execution_id=execution_id,
+        work_unit_count=7,
+    )
+
+    assert derived == derive_workload_capacity_fields(
+        target_scale="pilot",
+        carrier="article",
+        work_unit_count=7,
+    )
+    assert derived["capacityPlanDigest"] == workload_plan_digest(
+        workload_plan_document(
+            target_scale="pilot",
+            carrier="article",
+            work_unit_count=7,
+        )
+    )
+    assert derived["requiredWorkers"] == 7
+    assert derived["partitionCount"] == 16
+    assert re.fullmatch(r"sha256:[a-f0-9]{64}", derived["capacityPlanDigest"])
+    assert derived["workerHostSetBinding"] is None
+
+    args = argparse.Namespace(
+        execution_id=execution_id,
+        family="content/travel/article/article",
+        region_ref="test-region-b",
+        selector="priority",
+        count=7,
+        quota=7,
+        required_workers=None,
+        partition_count=None,
+        capacity_plan_digest=None,
+        topic=None,
+        source_providers=(),
+        target_names=(),
+    )
+    request = recipe.RuntimeExecutionRequest.from_args(args)
+
+    assert request.required_workers == derived["requiredWorkers"]
+    assert request.partition_count == derived["partitionCount"]
+    assert request.capacity_plan_digest == derived["capacityPlanDigest"]
+
+
+def test_partially_supplied_capacity_inputs_stay_fail_closed() -> None:
+    args = argparse.Namespace(
+        execution_id="20260722--travel-article-supply--test-region-b--pilot-001",
+        family="content/travel/article/article",
+        region_ref="test-region-b",
+        selector="priority",
+        count=1,
+        quota=1,
+        required_workers=1,
+        partition_count=None,
+        capacity_plan_digest=None,
+        topic=None,
+        source_providers=(),
+        target_names=(),
+    )
+    try:
+        recipe.RuntimeExecutionRequest.from_args(args)
+    except SystemExit as exc:
+        assert "provided together or omitted" in str(exc)
+    else:
+        raise AssertionError("a partial capacity triple must not be derived")
+
+
 def test_frozen_runtime_request_rejects_unknown_or_unordered_fields() -> None:
     request = {
         "familyRef": "content/travel/homepage/homepage",
@@ -688,6 +991,7 @@ def test_frozen_runtime_request_rejects_unknown_or_unordered_fields() -> None:
         "requiredWorkers": 1,
         "partitionCount": 16,
         "capacityPlanDigest": "sha256:" + "1" * 64,
+        "workerHostSetBinding": None,
         "topic": None,
         "sourceProviders": ["provider-b", "provider-a"],
         "targetNames": [],

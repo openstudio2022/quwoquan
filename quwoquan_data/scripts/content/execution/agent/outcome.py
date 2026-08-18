@@ -1,6 +1,6 @@
-"""Typed boundary for managed semantic-agent terminal outcomes.
+"""Typed boundary for managed Cursor-agent terminal outcomes.
 
-Provider adapters and the isolated subprocess both expose untrusted, JSON-like
+The Cursor SDK and the isolated subprocess both expose untrusted, JSON-like
 values.  They are admitted here exactly once; execution control flow receives
 an immutable :class:`AgentRunOutcome`, never a status-bearing dictionary.
 """
@@ -39,6 +39,12 @@ def _non_negative_int(value: object, *, field_name: str) -> int:
     return value
 
 
+def _non_negative_float(value: object, *, field_name: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
+        raise ValueError(f"agent outcome {field_name} must be a non-negative number")
+    return float(value)
+
+
 def _value_or_default(value: object, default: object) -> object:
     return default if value is None else value
 
@@ -54,8 +60,7 @@ def _boolean_or_default(value: object, *, field_name: str, default: bool = False
 def _failure_code(kind: AgentFailureKind) -> DataIssueCode:
     return {
         AgentFailureKind.CREDENTIAL_INVALID: DataIssueCode.AGENT_CREDENTIAL_INVALID,
-        AgentFailureKind.AUTHENTICATION_REJECTED: DataIssueCode.AGENT_CREDENTIAL_INVALID,
-        AgentFailureKind.PROVIDER_REJECTED: DataIssueCode.AGENT_PROVIDER_REJECTED,
+        AgentFailureKind.BUDGET_EXCEEDED: DataIssueCode.QUEUE_BUDGET_EXCEEDED,
         AgentFailureKind.SUBPROCESS_TIMEOUT: DataIssueCode.AGENT_TIMEOUT,
         AgentFailureKind.FUTURE_TIMEOUT: DataIssueCode.AGENT_TIMEOUT,
         AgentFailureKind.SUBPROCESS_OUTPUT_INVALID: DataIssueCode.AGENT_RESULT_INVALID,
@@ -65,7 +70,6 @@ def _failure_code(kind: AgentFailureKind) -> DataIssueCode:
         AgentFailureKind.SDK_EXECUTION_FAILED: DataIssueCode.AGENT_EXECUTION_FAILED,
         AgentFailureKind.SUBPROCESS_EXITED: DataIssueCode.AGENT_EXECUTION_FAILED,
         AgentFailureKind.CHECKPOINT_GATE: DataIssueCode.AGENT_EXECUTION_FAILED,
-        AgentFailureKind.CAPACITY_UNPROVEN: DataIssueCode.AGENT_EXECUTION_FAILED,
     }[kind]
 
 
@@ -75,22 +79,32 @@ class AgentRunOutcome:
 
     started: bool
     status: AgentRunStatus
-    provider: AgentProvider
+    provider: AgentProvider = AgentProvider.CURSOR_SDK
     failure_kind: AgentFailureKind | None = None
     message: str = ""
     retryable: bool = False
     auth_failure: bool = False
     error_code: str = ""
-    retry_after_seconds: int = 0
     request_id: str = ""
     attempts: int = 0
     warm_attempts: int = 0
     result_text: str = ""
     agent_id: str = ""
     run_id: str = ""
-    capacity_receipt_ref: str = ""
-    capacity_receipt_digest: str = ""
     duration_ms: int = 0
+    used_tokens: int = 0
+    cost_usd: float = 0.0
+    retry_cost_usd: float = 0.0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_read_tokens: int = 0
+    cache_write_tokens: int = 0
+    cost_known: bool = False
+    cost_source: str = ""
+    cost_issue: str = ""
+    resolved_model_id: str = ""
+    pricing_revision: str = ""
+    usage_measurement_mode: str = ""
     completion_mode: str = ""
     stdout_tail: str = ""
     stderr_tail: str = ""
@@ -112,11 +126,7 @@ class AgentRunOutcome:
                 raise ValueError("a finished agent outcome must not have a failure kind")
         elif self.failure_kind is None:
             raise ValueError("an error agent outcome requires a failure kind")
-        auth_kinds = {
-            AgentFailureKind.CREDENTIAL_INVALID,
-            AgentFailureKind.AUTHENTICATION_REJECTED,
-        }
-        if self.auth_failure != (self.failure_kind in auth_kinds):
+        if self.auth_failure != (self.failure_kind is AgentFailureKind.CREDENTIAL_INVALID):
             raise ValueError("agent outcome auth_failure must match credential failure kind")
         for field_name in (
             "message",
@@ -125,8 +135,11 @@ class AgentRunOutcome:
             "result_text",
             "agent_id",
             "run_id",
-            "capacity_receipt_ref",
-            "capacity_receipt_digest",
+            "cost_source",
+            "cost_issue",
+            "resolved_model_id",
+            "pricing_revision",
+            "usage_measurement_mode",
             "completion_mode",
             "stdout_tail",
             "stderr_tail",
@@ -137,9 +150,17 @@ class AgentRunOutcome:
             "attempts",
             "warm_attempts",
             "duration_ms",
-            "retry_after_seconds",
+            "used_tokens",
+            "input_tokens",
+            "output_tokens",
+            "cache_read_tokens",
+            "cache_write_tokens",
         ):
             _non_negative_int(getattr(self, field_name), field_name=field_name)
+        _non_negative_float(self.cost_usd, field_name="cost_usd")
+        _non_negative_float(self.retry_cost_usd, field_name="retry_cost_usd")
+        if not isinstance(self.cost_known, bool):
+            raise TypeError("agent outcome cost_known must be a boolean")
         if self.status is AgentRunStatus.ERROR and not self.message:
             raise ValueError("an error agent outcome requires a message")
 
@@ -151,20 +172,30 @@ class AgentRunOutcome:
     def finished(
         cls,
         *,
-        provider: AgentProvider,
+        provider: AgentProvider = AgentProvider.CURSOR_SDK,
         result_text: str = "",
         agent_id: str = "",
         run_id: str = "",
         duration_ms: int = 0,
+        used_tokens: int = 0,
+        cost_usd: float = 0.0,
+        retry_cost_usd: float = 0.0,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+        cache_read_tokens: int = 0,
+        cache_write_tokens: int = 0,
+        cost_known: bool = False,
+        cost_source: str = "",
+        cost_issue: str = "",
+        resolved_model_id: str = "",
+        pricing_revision: str = "",
+        usage_measurement_mode: str = "",
         completion_mode: str = "",
         stdout_tail: str = "",
         stderr_tail: str = "",
         attempts: int = 0,
         warm_attempts: int = 0,
         request_id: str = "",
-        retry_after_seconds: int = 0,
-        capacity_receipt_ref: str = "",
-        capacity_receipt_digest: str = "",
     ) -> "AgentRunOutcome":
         return cls(
             started=True,
@@ -174,15 +205,25 @@ class AgentRunOutcome:
             agent_id=agent_id,
             run_id=run_id,
             duration_ms=duration_ms,
+            used_tokens=used_tokens,
+            cost_usd=cost_usd,
+            retry_cost_usd=retry_cost_usd,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cache_read_tokens=cache_read_tokens,
+            cache_write_tokens=cache_write_tokens,
+            cost_known=cost_known,
+            cost_source=cost_source,
+            cost_issue=cost_issue,
+            resolved_model_id=resolved_model_id,
+            pricing_revision=pricing_revision,
+            usage_measurement_mode=usage_measurement_mode,
             completion_mode=completion_mode,
             stdout_tail=stdout_tail,
             stderr_tail=stderr_tail,
             attempts=attempts,
             warm_attempts=warm_attempts,
             request_id=request_id,
-            retry_after_seconds=retry_after_seconds,
-            capacity_receipt_ref=capacity_receipt_ref,
-            capacity_receipt_digest=capacity_receipt_digest,
         )
 
     @classmethod
@@ -191,19 +232,29 @@ class AgentRunOutcome:
         kind: AgentFailureKind,
         *,
         message: str,
-        provider: AgentProvider,
+        provider: AgentProvider = AgentProvider.CURSOR_SDK,
         started: bool = False,
         retryable: bool = False,
         error_code: str = "",
-        retry_after_seconds: int = 0,
         request_id: str = "",
         attempts: int = 0,
         warm_attempts: int = 0,
         duration_ms: int = 0,
+        used_tokens: int = 0,
+        cost_usd: float = 0.0,
+        retry_cost_usd: float = 0.0,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+        cache_read_tokens: int = 0,
+        cache_write_tokens: int = 0,
+        cost_known: bool = False,
+        cost_source: str = "",
+        cost_issue: str = "",
+        resolved_model_id: str = "",
+        pricing_revision: str = "",
+        usage_measurement_mode: str = "",
         stdout_tail: str = "",
         stderr_tail: str = "",
-        capacity_receipt_ref: str = "",
-        capacity_receipt_digest: str = "",
     ) -> "AgentRunOutcome":
         return cls(
             started=started,
@@ -212,34 +263,27 @@ class AgentRunOutcome:
             failure_kind=kind,
             message=message.strip(),
             retryable=retryable,
-            auth_failure=kind in {
-                AgentFailureKind.CREDENTIAL_INVALID,
-                AgentFailureKind.AUTHENTICATION_REJECTED,
-            },
+            auth_failure=kind is AgentFailureKind.CREDENTIAL_INVALID,
             error_code=error_code.strip(),
-            retry_after_seconds=retry_after_seconds,
             request_id=request_id.strip(),
             attempts=attempts,
             warm_attempts=warm_attempts,
             duration_ms=duration_ms,
+            used_tokens=used_tokens,
+            cost_usd=cost_usd,
+            retry_cost_usd=retry_cost_usd,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cache_read_tokens=cache_read_tokens,
+            cache_write_tokens=cache_write_tokens,
+            cost_known=cost_known,
+            cost_source=cost_source,
+            cost_issue=cost_issue,
+            resolved_model_id=resolved_model_id,
+            pricing_revision=pricing_revision,
+            usage_measurement_mode=usage_measurement_mode,
             stdout_tail=stdout_tail,
             stderr_tail=stderr_tail,
-            capacity_receipt_ref=capacity_receipt_ref,
-            capacity_receipt_digest=capacity_receipt_digest,
-        )
-
-    def with_capacity_receipt(
-        self,
-        *,
-        receipt_ref: str,
-        receipt_digest: str,
-    ) -> "AgentRunOutcome":
-        if not str(receipt_ref or "").strip() or not str(receipt_digest or "").strip():
-            raise ValueError("capacity receipt ref and digest are required")
-        return replace(
-            self,
-            capacity_receipt_ref=str(receipt_ref).strip(),
-            capacity_receipt_digest=str(receipt_digest).strip(),
         )
 
     def with_checkpoint_gate_failure(self, *, message: str) -> "AgentRunOutcome":
@@ -252,15 +296,25 @@ class AgentRunOutcome:
             started=True,
             retryable=True,
             error_code=self.error_code,
-            retry_after_seconds=self.retry_after_seconds,
             request_id=self.request_id,
             attempts=self.attempts,
             warm_attempts=self.warm_attempts,
             duration_ms=self.duration_ms,
+            used_tokens=self.used_tokens,
+            cost_usd=self.cost_usd,
+            retry_cost_usd=self.retry_cost_usd,
+            input_tokens=self.input_tokens,
+            output_tokens=self.output_tokens,
+            cache_read_tokens=self.cache_read_tokens,
+            cache_write_tokens=self.cache_write_tokens,
+            cost_known=self.cost_known,
+            cost_source=self.cost_source,
+            cost_issue=self.cost_issue,
+            resolved_model_id=self.resolved_model_id,
+            pricing_revision=self.pricing_revision,
+            usage_measurement_mode=self.usage_measurement_mode,
             stdout_tail=self.stdout_tail,
             stderr_tail=self.stderr_tail,
-            capacity_receipt_ref=self.capacity_receipt_ref,
-            capacity_receipt_digest=self.capacity_receipt_digest,
         )
 
     def issue(self, *, ref: str = "", lane: DataIssueLane = DataIssueLane.ALL) -> DataIssue | None:
@@ -280,7 +334,6 @@ class AgentRunOutcome:
             attributes={
                 "failureKind": self.failure_kind.value,
                 "errorCode": self.error_code,
-                "retryAfterSeconds": str(self.retry_after_seconds),
                 "requestId": self.request_id,
             },
         )
@@ -295,16 +348,26 @@ class AgentRunOutcome:
             "retryable": self.retryable,
             "authFailure": self.auth_failure,
             "errorCode": self.error_code or None,
-            "retryAfterSeconds": self.retry_after_seconds,
             "requestId": self.request_id or None,
             "attempts": self.attempts,
             "warmAttempts": self.warm_attempts,
             "result": self.result_text,
             "agentId": self.agent_id or None,
             "runId": self.run_id or None,
-            "capacityReceiptRef": self.capacity_receipt_ref or None,
-            "capacityReceiptDigest": self.capacity_receipt_digest or None,
             "durationMs": self.duration_ms,
+            "usedTokens": self.used_tokens,
+            "inputTokens": self.input_tokens,
+            "outputTokens": self.output_tokens,
+            "cacheReadTokens": self.cache_read_tokens,
+            "cacheWriteTokens": self.cache_write_tokens,
+            "costUsd": self.cost_usd if self.cost_known else None,
+            "retryCostUsd": self.retry_cost_usd if self.cost_known else None,
+            "costKnown": self.cost_known,
+            "costSource": self.cost_source or None,
+            "costIssue": self.cost_issue or None,
+            "resolvedModelId": self.resolved_model_id or None,
+            "pricingRevision": self.pricing_revision or None,
+            "usageMeasurementMode": self.usage_measurement_mode or None,
             "completionMode": self.completion_mode or None,
             "stdoutTail": self.stdout_tail or None,
             "stderrTail": self.stderr_tail or None,
@@ -315,9 +378,7 @@ class AgentRunOutcome:
         try:
             doc = JsonObject.from_value(value, label=label)
             status = AgentRunStatus(doc.string("status"))
-            provider = AgentProvider(
-                _text(doc.value("agentProvider"), field_name="agentProvider")
-            )
+            provider = AgentProvider(_optional_text(doc.value("agentProvider"), field_name="agentProvider") or AgentProvider.CURSOR_SDK.value)
             started = doc.boolean("started")
             failure_raw = _optional_text(doc.value("failureKind"), field_name="failureKind")
             failure_kind = AgentFailureKind(failure_raw) if failure_raw else None
@@ -333,9 +394,33 @@ class AgentRunOutcome:
                 _value_or_default(doc.value("durationMs"), 0),
                 field_name="durationMs",
             )
-            retry_after_seconds = _non_negative_int(
-                _value_or_default(doc.value("retryAfterSeconds"), 0),
-                field_name="retryAfterSeconds",
+            used_tokens = _non_negative_int(
+                _value_or_default(doc.value("usedTokens"), 0),
+                field_name="usedTokens",
+            )
+            input_tokens = _non_negative_int(
+                _value_or_default(doc.value("inputTokens"), 0),
+                field_name="inputTokens",
+            )
+            output_tokens = _non_negative_int(
+                _value_or_default(doc.value("outputTokens"), 0),
+                field_name="outputTokens",
+            )
+            cache_read_tokens = _non_negative_int(
+                _value_or_default(doc.value("cacheReadTokens"), 0),
+                field_name="cacheReadTokens",
+            )
+            cache_write_tokens = _non_negative_int(
+                _value_or_default(doc.value("cacheWriteTokens"), 0),
+                field_name="cacheWriteTokens",
+            )
+            cost_usd = _non_negative_float(
+                _value_or_default(doc.value("costUsd"), 0.0),
+                field_name="costUsd",
+            )
+            retry_cost_usd = _non_negative_float(
+                _value_or_default(doc.value("retryCostUsd"), 0.0),
+                field_name="retryCostUsd",
             )
         except (JsonObjectDecodeError, ValueError) as exc:
             raise ValueError(f"{label} is invalid: {exc}") from exc
@@ -351,22 +436,41 @@ class AgentRunOutcome:
             retryable=_boolean_or_default(doc.value("retryable"), field_name="retryable"),
             auth_failure=_boolean_or_default(doc.value("authFailure"), field_name="authFailure"),
             error_code=_optional_text(doc.value("errorCode"), field_name="errorCode"),
-            retry_after_seconds=retry_after_seconds,
             request_id=_optional_text(doc.value("requestId"), field_name="requestId"),
             attempts=attempts,
             warm_attempts=warm_attempts,
             result_text=_optional_text(doc.value("result"), field_name="result"),
             agent_id=_optional_text(doc.value("agentId"), field_name="agentId"),
             run_id=_optional_text(doc.value("runId"), field_name="runId"),
-            capacity_receipt_ref=_optional_text(
-                doc.value("capacityReceiptRef"),
-                field_name="capacityReceiptRef",
-            ),
-            capacity_receipt_digest=_optional_text(
-                doc.value("capacityReceiptDigest"),
-                field_name="capacityReceiptDigest",
-            ),
             duration_ms=duration_ms,
+            used_tokens=used_tokens,
+            cost_usd=cost_usd,
+            retry_cost_usd=retry_cost_usd,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cache_read_tokens=cache_read_tokens,
+            cache_write_tokens=cache_write_tokens,
+            cost_known=_boolean_or_default(
+                doc.value("costKnown"),
+                field_name="costKnown",
+            ),
+            cost_source=_optional_text(
+                doc.value("costSource"),
+                field_name="costSource",
+            ),
+            cost_issue=_optional_text(
+                doc.value("costIssue"),
+                field_name="costIssue",
+            ),
+            resolved_model_id=_optional_text(
+                doc.value("resolvedModelId"),
+                field_name="resolvedModelId",
+            ),
+            pricing_revision=_optional_text(
+                doc.value("pricingRevision"),
+                field_name="pricingRevision",
+            ),
+            usage_measurement_mode=_optional_text(doc.value("usageMeasurementMode"), field_name="usageMeasurementMode"),
             completion_mode=_optional_text(doc.value("completionMode"), field_name="completionMode"),
             stdout_tail=_optional_text(doc.value("stdoutTail"), field_name="stdoutTail"),
             stderr_tail=_optional_text(doc.value("stderrTail"), field_name="stderrTail"),

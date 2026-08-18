@@ -1,9 +1,17 @@
 #!/usr/bin/env python3
-"""Verify data runtime evidence is bound to repository-owned source inputs."""
+"""Verify selected current evidence or audit all historical source identities.
+
+``current`` never guesses a candidate from ``data/tasks``.  A caller that wants
+to validate a resumable execution selects it with ``--execution-id``; without
+that selection there is no current execution candidate.  The current release
+view contains only paired header/attestation documents that use the current
+source-definition identity.  ``all`` remains the explicit historical audit.
+"""
 from __future__ import annotations
 
 import argparse
 import json
+from collections.abc import Mapping
 from pathlib import Path
 
 from content.execution.execution_terminal import load_terminal_execution_evidence
@@ -12,12 +20,17 @@ from core.paths import DATA_EXECUTIONS_ROOT, RELEASE_ROOT
 from core.release_layout import attestation_root, payload_file
 from core.source_digest import (
     ExecutionBundleIdentity,
-    SourceDigest,
     SourceDigestError,
     SourceDefinitionSnapshot,
     current_execution_bundle_identity,
     current_source_definition_snapshot,
-    parse_source_digest_document,
+    parse_immutable_source_digest_document,
+)
+
+_SOURCE_DIGEST_SCOPES = ("current", "all")
+_EXAMPLE_DIGEST = "sha256:" + "0" * 64
+_CURRENT_SOURCE_DEFINITION_INPUTS = tuple(
+    SourceDefinitionSnapshot(_EXAMPLE_DIGEST).to_document()["inputs"]
 )
 
 
@@ -34,8 +47,12 @@ def _read_object(path: Path, *, issues: list[str]) -> dict[str, object] | None:
 
 
 def _document_digests(
-    document: dict[str, object], *, path: Path, issues: list[str]
-) -> tuple[SourceDigest, ...] | None:
+    document: dict[str, object],
+    *,
+    path: Path,
+    issues: list[str],
+    scope: str,
+) -> tuple[str, ...] | None:
     raw_value = document.get("sourceDigests")
     if not isinstance(raw_value, list):
         issues.append(f"{path}: sourceDigests must be an array")
@@ -45,9 +62,14 @@ def _document_digests(
         issues.append(f"{path}: sourceIdentities must be an array")
         return None
     try:
-        source_digests = tuple(
-            parse_source_digest_document(item) for item in raw_value
-        )
+        if scope == "current":
+            source_digests = tuple(
+                SourceDefinitionSnapshot.from_document(item) for item in raw_value
+            )
+        else:
+            source_digests = tuple(
+                parse_immutable_source_digest_document(item) for item in raw_value
+            )
     except SourceDigestError as exc:
         issues.append(f"{path}: {exc}")
         return None
@@ -55,7 +77,21 @@ def _document_digests(
     if not values or values != tuple(sorted(set(values))):
         issues.append(f"{path}: sourceDigests must be sorted and contain no duplicates")
         return None
-    return source_digests
+    return values
+
+
+def _has_current_source_definition(document: dict[str, object] | None) -> bool:
+    if document is None:
+        return False
+    raw_digests = document.get("sourceDigests")
+    if not isinstance(raw_digests, list):
+        return False
+    return bool(raw_digests) and all(
+        isinstance(item, Mapping)
+        and isinstance(item.get("inputs"), list)
+        and tuple(item["inputs"]) == _CURRENT_SOURCE_DEFINITION_INPUTS
+        for item in raw_digests
+    )
 
 
 def source_digest_issues(
@@ -63,8 +99,11 @@ def source_digest_issues(
     executions_root: Path = DATA_EXECUTIONS_ROOT,
     release_root: Path = RELEASE_ROOT,
     candidate_execution_id: str | None = None,
+    scope: str = "current",
 ) -> list[str]:
-    """Return drift/errors without treating output as a persistent source."""
+    """Return scoped drift/errors without treating output as a source of truth."""
+    if scope not in _SOURCE_DIGEST_SCOPES:
+        raise ValueError(f"source digest scope must be one of {_SOURCE_DIGEST_SCOPES}")
     issues: list[str] = []
     manifest_paths: tuple[Path, ...] = ()
     if candidate_execution_id is not None:
@@ -81,13 +120,13 @@ def source_digest_issues(
                 f"execution manifest does not exist: {manifest_path}"
             ]
         manifest_paths = (manifest_path,)
-    elif executions_root.is_dir():
+    elif scope == "all" and executions_root.is_dir():
         manifest_paths = tuple(
             sorted(executions_root.glob("*/execution_manifest.json"))
         )
-    current_snapshot = current_source_definition_snapshot()
-    current_bundle = current_execution_bundle_identity()
-    if executions_root.is_dir():
+    if manifest_paths:
+        current_snapshot = current_source_definition_snapshot()
+        current_bundle = current_execution_bundle_identity()
         for manifest_path in manifest_paths:
             try:
                 terminal = load_terminal_execution_evidence(manifest_path.parent)
@@ -129,15 +168,32 @@ def source_digest_issues(
             aggregate_path = attestation_root(release_dir) / "release.json"
             if not header_path.is_file() and not aggregate_path.is_file():
                 continue
-            header = _read_object(header_path, issues=issues)
-            aggregate = _read_object(aggregate_path, issues=issues)
+            if scope == "current" and not (
+                header_path.is_file() and aggregate_path.is_file()
+            ):
+                continue
+            read_issues: list[str] = []
+            header = _read_object(header_path, issues=read_issues)
+            aggregate = _read_object(aggregate_path, issues=read_issues)
+            if scope == "current" and not (
+                _has_current_source_definition(header)
+                or _has_current_source_definition(aggregate)
+            ):
+                continue
+            issues.extend(read_issues)
             if header is None or aggregate is None:
                 continue
-            digests = _document_digests(header, path=header_path, issues=issues)
+            digests = _document_digests(
+                header,
+                path=header_path,
+                issues=issues,
+                scope=scope,
+            )
             aggregate_digests = _document_digests(
                 aggregate,
                 path=aggregate_path,
                 issues=issues,
+                scope=scope,
             )
             if (
                 digests is not None
@@ -151,14 +207,32 @@ def source_digest_issues(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="验证 data execution/release source digest")
     parser.add_argument("--execution-id")
+    parser.add_argument(
+        "--scope",
+        choices=_SOURCE_DIGEST_SCOPES,
+        default="current",
+        help=(
+            "current=只校验显式 execution candidate 与现行成对 release 视图；"
+            "未指定 execution 时不从历史推断候选。all=全量历史审计"
+        ),
+    )
     args = parser.parse_args(argv)
-    issues = source_digest_issues(candidate_execution_id=args.execution_id)
+    issues = source_digest_issues(
+        candidate_execution_id=args.execution_id,
+        scope=args.scope,
+    )
     if issues:
-        print("[verify_source_digest] FAIL")
+        print(
+            "[verify_source_digest] FAIL "
+            f"scope={args.scope} candidate={args.execution_id or 'none'}"
+        )
         for issue in issues:
             print(f"  - {issue}")
         return 1
-    print("[verify_source_digest] OK")
+    print(
+        "[verify_source_digest] OK "
+        f"scope={args.scope} candidate={args.execution_id or 'none'}"
+    )
     return 0
 
 

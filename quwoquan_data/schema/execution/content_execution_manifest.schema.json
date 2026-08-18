@@ -78,14 +78,13 @@
         "required": ["semanticSelectionId"]
       },
       "then": {
-        "required": ["semanticPreflightReceipt"],
         "properties": {
           "modelBinding": {
             "properties": {
               "provider": {"const": "cursor_sdk"},
-              "authorModel": {"const": "grok-4.5"},
+              "authorModel": {"type": "string", "pattern": "^grok-"},
               "authorModelFamily": {"const": "grok"},
-              "reviewerModel": {"const": "grok-4.5"},
+              "reviewerModel": {"type": "string", "pattern": "^grok-"},
               "reviewerModelFamily": {"const": "grok"}
             }
           }
@@ -98,7 +97,6 @@
         "required": ["semanticSelectionId"]
       },
       "then": {
-        "required": ["semanticPreflightReceipt"],
         "properties": {
           "modelBinding": {
             "properties": {

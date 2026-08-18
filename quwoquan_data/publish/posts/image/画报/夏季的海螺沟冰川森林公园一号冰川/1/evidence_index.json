@@ -1,0 +1,34 @@
+{
+  "schema": "quwoquan_data.evidence_index",
+  "stage": "5.review",
+  "executionId": "20260817--travel-image-workload-image-1--china--scale-001",
+  "executionBinding": "frozen",
+  "objectRef": "海螺沟_image_7e08faa47c42",
+  "evidence": [
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/deterministic_gate.json",
+      "sha256": "sha256:d4d9c4da8da263b848465cb15a1a869242510583e3bfb35038e6ae4273528f90"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/media_ref_review.json",
+      "sha256": "sha256:7ef95dcc2ffa977f299a8698bd170cb78134e9c86dbd619a61a0588531aace86"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/provenance.json",
+      "sha256": "sha256:3b60ae5480da7313371c06c199e8ba9a19454d0a634c7a7662d04dd773ccba2d"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/finalization_report.json",
+      "sha256": "sha256:65bc286412ad88d109b5d4d40953dbd3f944967c63fb8ef16c4cbafb944a0c1e"
+    },
+    {
+      "kind": "independent_reviewer_result",
+      "ref": "5.review/reviewer_result.json",
+      "sha256": "sha256:db47ce0920381be6fd9bc088c219587f04404c936e510605b6cbdbc2f2d97dc1"
+    }
+  ]
+}

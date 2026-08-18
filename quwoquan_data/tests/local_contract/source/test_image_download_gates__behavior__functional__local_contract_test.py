@@ -75,6 +75,28 @@ def test_relevance_generic_and_template_blocked():
     ) is not None
 
 
+def test_relevance_reads_negated_clauses_as_exclusions_not_admissions():
+    """『而非周边景点』是排除声明，不得被读成把邻近素材冒充目标实体。"""
+
+    assert relevance_issue(
+        "文件页标题和说明明确指向 Leshan Giant Buddha；"
+        "图像主体为乐山大佛本体，而非周边城市或邻近景点。",
+        entity_id="乐山大佛",
+        asset_id="001",
+    ) is None
+    assert relevance_issue(
+        "画面主体是峨眉山金顶，并非邻近景区的替代取景",
+        entity_id="峨眉山",
+        asset_id="002",
+    ) is None
+    # 否定只豁免它自己那一句；同一段里真把邻近素材当目标图仍须拦截。
+    assert relevance_issue(
+        "该图不是航拍；实际拍的是墨石公园邻近景点惠远寺的外景",
+        entity_id="墨石公园",
+        asset_id="003",
+    ) is not None
+
+
 def test_low_quality_image_caption_blocks_garbled_platform_template():
     assert image_caption_quality_issue(
         "500px provided description: ???????????????????????? [#?? ,#??]",

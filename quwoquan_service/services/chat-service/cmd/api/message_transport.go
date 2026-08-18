@@ -15,10 +15,7 @@ func requireChatMessageTransport(
 	router *rtredis.Router,
 	sceneModes map[string]string,
 ) (*runtimemessaging.RedisMessageTransport, *runtimemessaging.RedisMessageTransport, error) {
-	binding, found := bindingdescriptor.ExternalProviderBindingFor(
-		environment,
-		runtimemessaging.RuntimeMessageTransportCapability,
-	)
+	binding, found := bindingdescriptor.CompiledBindingFor(runtimemessaging.RuntimeMessageTransportCapability)
 	messageBinding := runtimemessaging.MessageTransportBinding{
 		State: binding.State, AdapterID: binding.AdapterID,
 		TimeoutMilliseconds: binding.TimeoutMilliseconds,

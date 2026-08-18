@@ -3,11 +3,24 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+import re
 from typing import Any, Mapping
 
+from content.execution import store
+from content.execution.agent.agent_runner import _redact_managed_secret
+from content.execution.agent.agent_worker import _default_managed_agent_runner_isolated
+from content.execution.agent.outcome import AgentRunOutcome
+from content.execution.context import ExecutionContext
+from content.execution.controller.homepage_authoring import _homepage_independent_review_issues
+from content.execution.model_contract import execution_model_pair_for_execution
+from content.homepage.homepage_review import (
+    apply_independent_homepage_review,
+    homepage_asset_file_evidence,
+    homepage_media_review_dispositions,
+)
+from content.source.source_unit import resolve_entity_object_dir
 from core.data_issue import (
     DataIssueCode,
     DataIssueLane,
@@ -21,23 +34,7 @@ from core.prompt_render import render as render_prompt
 from core.runtime_policy import active_runtime_policy
 from core.schema import assert_valid
 from governance.coverage.entity_extract import entity_ref, require_domain_etype
-from governance.coverage.license import RightsEnforcementMode, rights_proof_required
-
-from content.execution import store
-from content.execution.agent.agent_runner import _redact_managed_secret
-from content.execution.agent.agent_worker import _default_managed_agent_runner_isolated
-from content.execution.agent.outcome import AgentRunOutcome
-from content.execution.context import ExecutionContext
-from content.execution.controller.homepage_authoring import (
-    _homepage_independent_review_issues,
-)
-from content.execution.model_contract import execution_model_pair_for_execution
-from content.homepage.homepage_review import (
-    apply_independent_homepage_review,
-    homepage_asset_file_evidence,
-    homepage_media_review_dispositions,
-)
-from content.source.source_unit import resolve_entity_object_dir
+from governance.coverage.license import rights_enforcement_mode
 
 
 def _valid_payload(payload: Any, *, execution_id: str, object_ref: str) -> bool:
@@ -95,11 +92,7 @@ def _review_homepage_target(
     if not name:
         return []
     domain, etype = require_domain_etype(target.get("entityType"), context=name)
-    obj = resolve_entity_object_dir(
-        ctx.execution_id,
-        name,
-        etype_hint=f"{domain}/{etype}",
-    )
+    obj = resolve_entity_object_dir(ctx.execution_id, name, etype_hint=etype)
     review_dir = obj / "5.review"
     attestation_path = review_dir / "attestation.json"
     if not attestation_path.is_file():
@@ -118,11 +111,7 @@ def _review_homepage_target(
     object_ref = entity_ref(domain, etype, name)
     manifest = read_json(obj / "manifest.json")
     vertical = str(manifest.get("vertical") or ctx.spec.vertical).strip()
-    rights_mode = (
-        RightsEnforcementMode.ENFORCE
-        if rights_proof_required(vertical)
-        else RightsEnforcementMode.AUDIT_ONLY
-    )
+    rights_mode = rights_enforcement_mode(vertical)
     media_policy = json.dumps(
         {
             "vertical": vertical,
@@ -157,7 +146,6 @@ def _review_homepage_target(
         model=review_model,
         model_parameters=review_parameters,
         agent_provider=ctx.agent_provider,
-        semantic_role="reviewer",
         release_only=ctx.release_only,
     )
 
@@ -239,7 +227,7 @@ def _review_homepage_target(
     output_path.unlink(missing_ok=True)
     bound = apply_independent_homepage_review(
         review_dir=review_dir,
-        provider=outcome.provider.value,
+        provider="cursor_sdk",
         model=review_model,
         model_family=review_model_family,
         run_id=outcome.run_id,
@@ -249,8 +237,13 @@ def _review_homepage_target(
 
 
 def independent_reviewer_precondition_issues(execution_id: str) -> list[str]:
-    """Validate the frozen pair; per-object run IDs prove review independence."""
-    execution_model_pair_for_execution(execution_id)
+    """审阅装配前置条件：属批次级配置事实，不可被过采候选池吸收。"""
+    model_pair = execution_model_pair_for_execution(execution_id)
+    if (
+        model_pair.reviewer.model_id == model_pair.author.model_id
+        or model_pair.reviewer.family is model_pair.author.family
+    ):
+        return ["independent reviewer model family must differ from author model family"]
     return []
 
 

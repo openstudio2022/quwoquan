@@ -3,10 +3,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from content.execution.campaign.capsule_reload import load_source_capsule
 from content.execution.campaign.external_input_runtime import (
     freeze_execution_external_input_envelope,
 )
-from content.execution.campaign.capsule_reload import load_source_capsule
+from content.execution.campaign.lane import normalize_active_carriers
 from content.execution.campaign.workspace import (
     CampaignLaneWorkspace,
     CampaignRuntimePaths,
@@ -14,7 +15,6 @@ from content.execution.campaign.workspace import (
     prepare_lane_workspace,
     prepare_source_capsule,
 )
-
 
 CAPSULE_INTEGRITY_FAILURE_CODE = "DATA.CONTRACT.INVALID"
 
@@ -59,13 +59,26 @@ def load_distributed_capsule(
     plan: dict[str, Any],
     report: dict[str, Any],
 ) -> SourceCapsule:
+    active = normalize_active_carriers(plan["activeCarriers"])
+    distributed = plan["distributedRun"]
+    if (
+        report.get("rootExecutionId") != plan.get("rootExecutionId")
+        or report.get("planDigest") != plan.get("planDigest")
+        or normalize_active_carriers(report.get("activeCarriers") or ()) != active
+        or report.get("workloads") != plan.get("workloads")
+        or report.get("gitBranch") != plan.get("gitBranch")
+        or report.get("gitCommitSha") != plan.get("gitCommitSha")
+        or report.get("sourceDigest") != plan.get("sourceDigest")
+        or report.get("entityCatalogDigest") != plan.get("entityCatalogDigest")
+        or report.get("campaignRunId") != distributed.get("campaignRunId")
+        or report.get("campaignGeneration")
+        != distributed.get("campaignGeneration")
+        or report.get("campaignFencingToken")
+        != distributed.get("campaignFencingToken")
+    ):
+        raise ValueError("frozen campaign report plan identity drift")
     lanes = report.get("lanes")
-    if not isinstance(lanes, dict) or set(lanes) != {
-        "homepage",
-        "article",
-        "image",
-        "video",
-    }:
+    if not isinstance(lanes, dict) or set(lanes) != set(active):
         raise ValueError("frozen campaign report lanes are incomplete")
     refs = {str(lane.get("sourceCapsuleRef") or "") for lane in lanes.values()}
     digests = {
@@ -124,7 +137,10 @@ def capsule_integrity_failure_lanes(
     )
     frozen_lanes = report["lanes"]
     lanes: dict[str, dict[str, Any]] = {}
-    for carrier in ("homepage", "article", "image", "video"):
+    active = normalize_active_carriers(report["activeCarriers"])
+    if set(submissions) != set(active) or set(frozen_lanes) != set(active):
+        raise ValueError("frozen campaign lanes do not match active workloads")
+    for carrier in active:
         lane = dict(frozen_lanes[carrier])
         lane.update(
             {

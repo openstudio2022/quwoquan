@@ -14,7 +14,9 @@
     "executionManifestDigest",
     "sourceDigest",
     "targetSetDigest",
-    "requiredWorkers",
+    "targetObjectCount",
+    "capacityPlanDigest",
+    "capacityCalibration",
     "partitionCount",
     "partitionAlgorithm",
     "checkpointPolicy",
@@ -54,7 +56,11 @@
       }
     },
     "targetSetDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-    "requiredWorkers": {"type": "integer", "minimum": 1},
+    "targetObjectCount": {"type": "integer", "minimum": 1},
+    "capacityPlanDigest": {"$ref": "#/$defs/digest"},
+    "capacityCalibration": {
+      "$ref": "governed_capacity_calibration_receipt.schema.json#/$defs/executionPolicyBinding"
+    },
     "partitionCount": {"enum": [16, 32, 64, 128, 256]},
     "partitionAlgorithm": {"const": "sha256_carrier_object_ref_mod_v1"},
     "checkpointPolicy": {"$ref": "#/$defs/checkpointPolicy"},

@@ -60,7 +60,7 @@ fi
 bash quwoquan_ops/gate/scaffold/verify_global_increment_constraints.sh
 python3 quwoquan_ops/gate/verify_git_branch_policy.py
 python3 quwoquan_ops/gate/verify_github_supply_chain.py
-python3 quwoquan_ops/gate/verify_agent_context_contract.py
+python3 quwoquan_ops/gate/verify_agent_context_budget.py
 python3 quwoquan_ops/gate/verify_retired_runtime_architecture.py
 python3 quwoquan_ops/gate/verify_single_track_contracts.py
 # 单轨契约合约测试：Python 1000 行硬顶治理后按场景拆分，随门禁一起执行。
@@ -109,6 +109,9 @@ python3 quwoquan_ops/gate/verify_output_layout.py
 python3 quwoquan_ops/gate/verify_output_path_source_contract.py
 python3 quwoquan_ops/tests/local_contract/gate/test_output_path_source_contract__generated_artifact__local_contract_test.py
 python3 quwoquan_ops/gate/verify_external_provider_governance.py
+# 云侧环境在构建期绑定；六类镜像和入口必须校验内嵌 identity，Prod 不携带跨环境 facts。
+PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}" python3 quwoquan_ops/gate/verify_cloud_environment_artifact_binding.py
+PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}" python3 quwoquan_ops/tests/local_contract/gate/test_cloud_environment_artifact_binding__gate__local_contract_test.py
 # Prod 选中绑定与服务 prod config 不得触达非生产 substitute 适配器。
 python3 quwoquan_ops/gate/verify_provider_substitute_prod_purity.py
 python3 quwoquan_ops/gate/verify_provider_conformance_evidence.py
@@ -188,6 +191,8 @@ python3 quwoquan_ops/tests/local_contract/gate/test_emitted_error_code_declarati
   python3 quwoquan_service/scripts/verify/consistency/verify_error_recovery_alignment.py
   # 阶段名标识零容忍：稳定可执行路径、schema key 与测试标识禁止 m2/b10/phase0/partN。
   python3 quwoquan_service/scripts/verify/structure/verify_stage_name_identifiers.py
+  # nil 语义：wire 边界禁止值类型 bool+omitempty（false 会消失）；端口层空返回棘轮。
+  python3 quwoquan_service/scripts/verify/structure/verify_nil_semantics.py
   python3 quwoquan_ops/tests/local_contract/observability/test_object_alert_coverage__contract_graph_mapping__observability__local_contract_test.py
   python3 quwoquan_service/scripts/verify/observability/verify_object_alert_coverage.py
   # 告警表达式求值回归（promtool test rules）：云侧交付面必须证明关键告警
@@ -273,6 +278,7 @@ run_app() {
     python3 quwoquan_app/scripts/tag_service/tag/verify_cloud_tag_strict_typing.py || exit 1
     python3 quwoquan_app/scripts/runtime/observability/verify_dart_semantic.py || exit 1
     python3 quwoquan_app/scripts/runtime/observability/verify_catch_swallow_budget.py || exit 1
+    python3 quwoquan_app/scripts/runtime/observability/verify_null_failure_isolation.py || exit 1
     python3 quwoquan_app/scripts/runtime/observability/verify_theme_binding_ratchet.py || exit 1
     python3 quwoquan_app/scripts/runtime/observability/verify_journey_action_declaration_ratchet.py || exit 1
     python3 quwoquan_app/scripts/runtime/page/verify_component_reuse_ratchet.py || exit 1
@@ -355,6 +361,8 @@ run_app() {
     # RTC 通话商用契约：铃声单轨、信令通道恢复补偿、动效 token、关键测试证据链。
     python3 quwoquan_app/scripts/rtc_service/rtc/call_session/verify_rtc_call_contract.py || exit 1
     python3 quwoquan_app/scripts/device/verify_startup_ttid_baseline.py || exit 1
+    make verify-app-identity-state-isolation || exit 1
+    make verify-app-identity || exit 1
     python3 quwoquan_app/scripts/runtime/platform/verify_startup_environment_matrix.py >/dev/null || exit 1
     python3 quwoquan_app/scripts/runtime/platform/verify_dual_platform_usability_baseline.py || exit 1
     python3 quwoquan_app/scripts/runtime/platform/verify_plugin_registration_policy.py || exit 1

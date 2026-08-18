@@ -17,6 +17,12 @@ def test_mainline_image_build_uses_governed_context_and_base_images() -> None:
     )
 
     assert '"${{ matrix.context }}"' in workflow
+    assert "matrix.environment" in workflow
+    assert "matrix.runtime_image_owner" in workflow
+    assert "matrix.image_name" in workflow
+    assert "QWQ_ARTIFACT_ENVIRONMENT=${{ matrix.environment }}" in workflow
+    assert "QWQ_ARTIFACT_CONFIG_DIGEST=$ARTIFACT_CONFIG_DIGEST" in workflow
+    assert "release-image-sbom/${{ matrix.environment }}--${{ matrix.runtime_image_owner }}.spdx.json" in workflow
     assert "id: base_images" in workflow
     assert "GO_BASE_IMAGE: ${{ steps.base_images.outputs.go_base_image }}" in workflow
     assert "ALPINE_BASE_IMAGE: ${{ steps.base_images.outputs.alpine_base_image }}" in workflow
@@ -24,6 +30,9 @@ def test_mainline_image_build_uses_governed_context_and_base_images() -> None:
     assert '--build-arg "GO_BASE_IMAGE=$GO_BASE_IMAGE"' in workflow
     assert '--build-arg "ALPINE_BASE_IMAGE=$ALPINE_BASE_IMAGE"' in workflow
     assert '--build-arg "PYTHON_BASE_IMAGE=$PYTHON_BASE_IMAGE"' in workflow
+    assert "--single-environment \"${{ matrix.environment }}\"" in workflow
+    assert "--build-context \"qwq_provider_bindings=$PROVIDER_BINDING_CONTEXT\"" in workflow
+    assert 'QWQ_PROVIDER_BINDING_MANIFEST_DIGEST=$PROVIDER_BINDING_MANIFEST_DIGEST' in workflow
     assert '--cache-from "type=registry,ref=' in workflow
     assert '--cache-to "type=registry,ref=' in workflow
 
@@ -68,6 +77,29 @@ def test_prod_hosted_build_images_match_their_governed_repositories() -> None:
                 "CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH}" in text
             ), dockerfile
         assert "--allow-untrusted" not in text, dockerfile
+
+
+def test_runtime_image_owners_embed_environment_artifact_identity() -> None:
+    dockerfiles = [
+        ROOT / "quwoquan_service/cmd/service-core/Dockerfile",
+        ROOT / "quwoquan_service/services/recommendation-service/build/Dockerfile",
+        ROOT / "quwoquan_service/services/realtime-gateway/build/Dockerfile",
+        ROOT / "quwoquan_service/services/rtc-service/build/Dockerfile",
+        ROOT / "quwoquan_service/services/product-ops-service/build/Dockerfile",
+        ROOT / "quwoquan_service/control-plane/platform-ops/build/Dockerfile",
+    ]
+    for dockerfile in dockerfiles:
+        text = dockerfile.read_text(encoding="utf-8")
+        assert "ARG QWQ_ARTIFACT_ENVIRONMENT" in text, dockerfile
+        assert "ARG QWQ_ARTIFACT_CONFIG_DIGEST" in text, dockerfile
+        assert "qwq.environment-artifact-identity" in text, dockerfile
+        assert "artifact-identity.json" in text, dockerfile
+
+    platform = dockerfiles[-1].read_text(encoding="utf-8")
+    assert "COPY quwoquan_ops/external/" not in platform
+    assert "cp -R /build/quwoquan_ops/environments /build/quwoquan_ops/external" not in platform
+    assert "${QWQ_ARTIFACT_ENVIRONMENT}" in platform
+    assert 'cp -R "$service_root/config" "$service_root/environments"' not in platform
 
 
 def test_mainline_image_build_does_not_create_unbounded_actions_storage() -> None:

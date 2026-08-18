@@ -97,6 +97,7 @@ def _fixture(root: Path) -> Path:
         {
             "schema": "quwoquan_data.environment_release_readiness",
             "passed": True,
+            "readinessPhase": "research",
             "environment": environment,
             "releaseId": release_id,
             "manifestDigest": _DIGEST,
@@ -133,6 +134,37 @@ def test_content_delivery_verifies_only_the_runtime_content_closure(
         "homepages": 1,
         "personas": 2,
     }
+
+
+def test_content_delivery_accepts_consumer_receipt_before_live_search_probe(
+    tmp_path: Path,
+) -> None:
+    readiness = _fixture(tmp_path)
+    readiness_payload = json.loads(readiness.read_text(encoding="utf-8"))
+    readiness_payload["readinessPhase"] = "consumer"
+    _write(readiness, readiness_payload)
+
+    import_path = readiness.with_name("import.json")
+    import_payload = json.loads(import_path.read_text(encoding="utf-8"))
+    import_payload["status"] = "imported"
+    _write(import_path, import_payload)
+
+    post_path = readiness.with_name("post-api-verification.json")
+    post_payload = json.loads(post_path.read_text(encoding="utf-8"))
+    post_payload.pop("searchQueries")
+    _write(post_path, post_payload)
+
+    report = verify_content_delivery(
+        output_root=tmp_path,
+        readiness_path=readiness,
+        environment="alpha",
+        release_id="research-m100-first",
+        manifest_digest=_DIGEST,
+    )
+
+    assert report["result"] == "ready"
+    assert report["counts"]["searchablePosts"] == 0
+    assert report["counts"]["recommendablePosts"] == 3
 
 
 def test_content_delivery_blocks_count_drift_without_unrelated_gates(

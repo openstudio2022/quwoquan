@@ -4,12 +4,14 @@ from __future__ import annotations
 import json
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from content.execution.campaign import controller as campaign_controller
 from content.execution.campaign import distributed as campaign_distributed
 from content.execution.campaign import orchestrator as campaign_orchestrator
 from content.execution.campaign import plan as campaign_plan
+from content.execution.campaign import process as campaign_process
 from content.execution.campaign.lane_claim import read_lane_claim
 from content.execution.campaign.runtime import (
     read_lane_checkpoint,
@@ -46,6 +48,36 @@ def test_default_runtime_paths_use_governed_workspace_and_cache() -> None:
     assert runtime.campaigns_root.parent == governed_workspace
     assert runtime.workspaces_root.parent == governed_cache
     assert runtime.acquisition_root.parent == governed_workspace
+
+
+def test_run_phase_propagates_no_implicit_lane_timeout(monkeypatch) -> None:
+    observed: list[float | None] = []
+
+    def run_lane(_workspace, _submission, **kwargs):
+        observed.append(kwargs["timeout_seconds"])
+        return 0, None
+
+    monkeypatch.setattr(campaign_process, "run_lane", run_lane)
+    workspaces = {
+        carrier: SimpleNamespace(carrier=carrier) for carrier in CARRIERS
+    }
+    submissions = {
+        carrier: {"executionId": f"execution-{carrier}"} for carrier in CARRIERS
+    }
+
+    result = campaign_process.run_phase(
+        workspaces,
+        submissions,
+        stage="review-only",
+        runtime=SimpleNamespace(),
+        root_execution_id=ROOT_ID,
+        timeout_seconds=None,
+        lane_runner=None,
+        run_session=SimpleNamespace(),
+    )
+
+    assert observed == [None] * len(CARRIERS)
+    assert set(result) == set(CARRIERS)
 
 
 def test_detached_branch_fallback_requires_campaign_context(

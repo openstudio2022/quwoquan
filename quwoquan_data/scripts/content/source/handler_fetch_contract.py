@@ -6,7 +6,6 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from core.control_types import ContentType
 from core.data_issue import (
     DataIssue,
     DataIssueCode,
@@ -69,6 +68,106 @@ def homepage_base_draft_admission(
         accepted=False,
         fact_count=fact_count,
         issue_code=DataIssueCode.SOURCE_CONTENT_INCOMPLETE,
+    )
+
+
+def source_attribution_admission_issue(
+    source: Mapping[str, Any],
+    *,
+    entity_id: str,
+) -> DataIssue | None:
+    """Return why one planned source cannot carry attribution, or ``None``.
+
+    article/homepage post manifests inherit ``sourceAttribution`` from their
+    source unit, so a site the attribution registry does not know cannot become
+    a base draft. That is a per-source verdict: the entity keeps every other
+    planned source instead of being excluded because one candidate is
+    unattributable.
+    """
+    from content.source.source_unit_attribution import (
+        attribution_required,
+        registered_attribution_kind,
+        resolve_source_unit_kind,
+        unresolvable_attribution_detail,
+    )
+
+    raw_lane = str(source.get("researchLane") or "").strip()
+    if not attribution_required(raw_lane):
+        return None
+    if "sourceAttribution" in source:
+        return None
+    resolved_source_kind = resolve_source_unit_kind(
+        source_kind=str(source.get("sourceKind") or ""),
+        source_payload=source,
+        source_category=str(source.get("category") or source.get("platform") or "web"),
+        platform=str(source.get("platform") or "web"),
+    )
+    if (
+        registered_attribution_kind(
+            source,
+            resolved_source_kind=resolved_source_kind,
+        )
+        is not None
+    ):
+        return None
+    try:
+        lane = DataIssueLane(raw_lane)
+    except ValueError:
+        lane = DataIssueLane.ALL
+    return data_issue(
+        DataIssueCode.SOURCE_PLAN_INVALID,
+        stage=DataIssueStage.DOWNLOAD_FETCH,
+        ref=entity_id,
+        lane=lane,
+        recovery=DataRecoveryAction.REPLACE_SOURCE,
+        message="planned source cannot carry the attribution its carrier requires",
+        attributes={
+            "sourceId": str(source.get("source_id") or ""),
+            "articleSiteId": str(source.get("articleSiteId") or ""),
+            "sourceKind": resolved_source_kind,
+            "detail": unresolvable_attribution_detail(
+                source,
+                research_lane=raw_lane,
+                resolved_source_kind=resolved_source_kind,
+            ),
+            "disposition": "source_rejected",
+        },
+    )
+
+
+def source_unit_write_failure_issue(
+    source: Mapping[str, Any],
+    *,
+    entity_id: str,
+    error: Exception,
+) -> DataIssue:
+    """Typed evidence for one source whose unit could not be written.
+
+    Every contract the source unit must satisfy — attribution, manifest schema,
+    registry identity — is enforced when the unit is written, and any of them can
+    reject a single planned source. The verdict is source-scoped, so the entity
+    keeps its remaining sources; the source is not silently swallowed either,
+    because the reason travels on the source's quality row.
+    """
+    raw_lane = str(source.get("researchLane") or "").strip()
+    try:
+        lane = DataIssueLane(raw_lane)
+    except ValueError:
+        lane = DataIssueLane.ALL
+    return data_issue(
+        DataIssueCode.SOURCE_PLAN_INVALID,
+        stage=DataIssueStage.DOWNLOAD_FETCH,
+        ref=entity_id,
+        lane=lane,
+        recovery=DataRecoveryAction.REPLACE_SOURCE,
+        message="planned source could not be written as a compliant source unit",
+        attributes={
+            "sourceId": str(source.get("source_id") or ""),
+            "articleSiteId": str(source.get("articleSiteId") or ""),
+            "errorType": type(error).__name__,
+            "detail": str(error),
+            "disposition": "source_rejected",
+        },
     )
 
 
@@ -150,27 +249,11 @@ def source_content_fidelity_issue(
 
 def require_source_candidate_admission(
     source: Mapping[str, Any],
-    *,
-    require_commercial_article_binding: bool = False,
 ) -> SourceCandidate:
     """Decode a planned candidate and refuse a rejected match before fetch."""
 
     candidate = SourceCandidate.from_mapping(source)
     candidate.require_accepted()
-    if require_commercial_article_binding and candidate.lane is ContentType.ARTICLE:
-        from content.source.research.article_frontier_profile import (
-            resolve_article_source_binding,
-        )
-
-        if str(source.get("articleCommercialAdmission") or "") != "commercial_release":
-            raise ValueError(
-                "commercial article source is not registry-admitted for release"
-            )
-        resolve_article_source_binding(
-            candidate.url,
-            site_id=str(source.get("articleSiteId") or ""),
-            profile_digest=str(source.get("sourceDiscoveryProfileDigest") or ""),
-        )
     return candidate
 
 

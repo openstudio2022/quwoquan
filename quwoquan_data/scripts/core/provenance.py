@@ -93,7 +93,7 @@ def build_provenance(
         "contentType": "image" if is_image else (content_type or "article"),
         "publishTitle": manifest.get("publishTitle"),
         "publishSeq": manifest.get("publishSeq"),
-        "generator": meta.get("generator") or cp.get("generator"),
+        "generator": manifest.get("generator"),
         "model": meta.get("model") or cp.get("generatorModel"),
         "agentRunId": meta.get("agentRunId"),
         "agentId": meta.get("agentId"),
@@ -185,7 +185,7 @@ def provenance_issues(post_dir: Path, manifest: Mapping[str, Any]) -> list[str]:
                 expected_digest = compute_document_sha256(article_path.read_text(encoding="utf-8"))
         if final.get("articleDigest") != expected_digest:
             issues.append(f"{post_dir}: provenance.final.articleDigest != article.md digest")
-    expected_generator = "image_evidence_pack" if is_image else "agent"
+    expected_generator = "agent"
     if final.get("generator") != expected_generator:
         issues.append(
             f"{post_dir}: provenance.final.generator must be {expected_generator!r}"

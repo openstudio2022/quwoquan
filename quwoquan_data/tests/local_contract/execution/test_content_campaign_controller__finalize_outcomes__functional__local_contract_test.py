@@ -30,7 +30,10 @@ from support.campaign_lanes_fixture import (  # noqa: F401
     _semantic_preflight_kwargs,
     _submit_all,
 )
-from support.semantic_preflight_fixture import ready_semantic_preflight
+from support.semantic_preflight_fixture import (
+    ready_semantic_preflight,
+    write_typed_cursor_grok_failure,
+)
 
 
 def test_completed_campaign_restart_reuses_capsule_and_lane_receipts(
@@ -352,7 +355,7 @@ def test_submission_collision_and_cross_lane_mismatch_fail_closed(
     assert report["phase"] == "freeze"
 
 
-def test_cursor_auto_first_submission_and_retry_reach_lane_argv(
+def test_cursor_grok_first_submission_and_cursor_auto_retry_reach_lane_argv(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -362,8 +365,12 @@ def test_cursor_auto_first_submission_and_retry_reach_lane_argv(
     article_id = _execution_id("article", sequence="002")
     predecessor = _execution_id("article", sequence="001")
     monkeypatch.setattr(campaign_submission.paths, "REPO_ROOT", repo)
-    preflight_path, preflight_binding = ready_semantic_preflight(
+    auto_preflight_path, auto_preflight_binding = ready_semantic_preflight(
         "cursor_auto",
+        output_root=runtime.output_root,
+    )
+    grok_preflight_path, grok_preflight_binding = ready_semantic_preflight(
+        "cursor_grok",
         output_root=runtime.output_root,
     )
 
@@ -384,32 +391,39 @@ def test_cursor_auto_first_submission_and_retry_reach_lane_argv(
         execution_id=_execution_id("article", sequence="001"),
         request=_request("article"),
         retry_of=None,
-        semantic_selection_id="cursor_auto",
-        semantic_preflight_receipt=preflight_path,
+        semantic_selection_id="cursor_grok",
+        semantic_preflight_receipt=grok_preflight_path,
         semantic_preflight_output_root=runtime.output_root,
         repo_root=repo,
         root=runtime.campaigns_root,
     )
-    assert read_json(first_path)["retryOf"] is None
+    first_submission = read_json(first_path)
+    assert first_submission["retryOf"] is None
+    assert first_submission["semanticSelectionId"] == "cursor_grok"
+    assert first_submission["semanticPreflightReceipt"] == grok_preflight_binding
+    write_typed_cursor_grok_failure(
+        predecessor,
+        output_root=runtime.output_root,
+    )
     path = campaign_submission.write_submission(
         root_execution_id=root_id,
         execution_id=article_id,
         request=_request("article"),
         retry_of=predecessor,
         semantic_selection_id="cursor_auto",
-        semantic_preflight_receipt=preflight_path,
+        semantic_preflight_receipt=auto_preflight_path,
         semantic_preflight_output_root=runtime.output_root,
         repo_root=repo,
         root=runtime.campaigns_root,
     )
     submission = read_json(path)
     assert submission["semanticSelectionId"] == "cursor_auto"
-    assert submission["semanticPreflightReceipt"] == preflight_binding
+    assert submission["semanticPreflightReceipt"] == auto_preflight_binding
     argv = campaign_lane_execution._lane_argv(submission, stage="plan-only")
     selection_index = argv.index("--semantic-selection-id")
     assert argv[selection_index + 1] == "cursor_auto"
     receipt_index = argv.index("--semantic-preflight-receipt")
-    assert argv[receipt_index + 1] == preflight_binding["receiptRef"]
+    assert argv[receipt_index + 1] == auto_preflight_binding["receiptRef"]
 
 
 def test_main_tree_drift_during_review_still_blocks_and_cleans(

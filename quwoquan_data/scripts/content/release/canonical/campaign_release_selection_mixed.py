@@ -6,15 +6,17 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
-from content.execution.campaign.lane import CAMPAIGN_CARRIERS
 from content.execution.campaign.submission_reconciliation import (
     load_reconciliation_reference,
-    predecessor_campaign_root_execution_id,
+)
+from content.execution.campaign.submission_reconciliation_workload import (
+    campaign_root_for_submission,
 )
 from content.release.canonical.campaign_release_contract import (
     CampaignReleaseRoots,
     typed_error,
 )
+from content.release.canonical.campaign_release_scope import active_campaign_scope
 
 _SCOPE_FIELDS = (
     "familyRef",
@@ -34,7 +36,12 @@ def validate_reconciliation_retry_set(
     *,
     roots: CampaignReleaseRoots,
 ) -> None:
-    """Require one exact four-lane retry set for terminal-unpublished lineage."""
+    """Require one exact active-workload retry set for terminal lineage."""
+
+    try:
+        active, _workloads, _execution_ids = active_campaign_scope(plan)
+    except (TypeError, ValueError) as exc:
+        raise typed_error("PLAN_LANES_INVALID", str(exc)) from exc
 
     references = [row.get("predecessorReconciliation") for row in submissions.values()]
     present = [row for row in references if row is not None]
@@ -44,7 +51,7 @@ def validate_reconciliation_retry_set(
         json.dumps(row, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         for row in present
     }
-    if len(present) != len(CAMPAIGN_CARRIERS) or len(unique) != 1:
+    if len(present) != len(active) or len(unique) != 1:
         for reference in present:
             if not isinstance(reference, Mapping):
                 continue
@@ -58,7 +65,7 @@ def validate_reconciliation_retry_set(
             if receipt.get("reason") == "terminal_unpublished_source_drift":
                 raise typed_error(
                     "RETRY_IDENTITY_DRIFT",
-                    "terminal unpublished reconciliation must bind all four lanes",
+                    "terminal unpublished reconciliation must bind all active lanes",
                     evidence=receipt_path,
                 )
         return
@@ -77,11 +84,11 @@ def validate_reconciliation_retry_set(
     predecessor_rows = receipt.get("submissions")
     if (
         not isinstance(predecessor_rows, Mapping)
-        or set(predecessor_rows) != set(CAMPAIGN_CARRIERS)
+        or set(predecessor_rows) != set(active)
         or any(
             submissions[carrier].get("retryOf")
             != (predecessor_rows.get(carrier) or {}).get("executionId")
-            for carrier in CAMPAIGN_CARRIERS
+            for carrier in active
         )
         or reference.get("predecessorRootExecutionId")
         != receipt.get("rootExecutionId")
@@ -89,7 +96,7 @@ def validate_reconciliation_retry_set(
     ):
         raise typed_error(
             "RETRY_IDENTITY_DRIFT",
-            "terminal unpublished reconciliation requires exact four-lane retryOf",
+            "terminal unpublished reconciliation requires exact active retryOf",
             evidence=receipt_path,
         )
 
@@ -101,6 +108,8 @@ def _consume_terminal_unpublished_boundary(
     plan: Mapping[str, Any],
     receipt: Mapping[str, Any],
     receipt_path: Any,
+    *,
+    roots: CampaignReleaseRoots,
 ) -> bool:
     if receipt.get("reason") != "terminal_unpublished_source_drift":
         return False
@@ -120,6 +129,10 @@ def _consume_terminal_unpublished_boundary(
         "sourceDigest": submission["sourceDigest"],
         "entityCatalogDigest": plan["entityCatalogDigest"],
     }
+    try:
+        active, _workloads, _execution_ids = active_campaign_scope(plan)
+    except (TypeError, ValueError) as exc:
+        raise typed_error("PLAN_LANES_INVALID", str(exc)) from exc
     qualified_lanes = sum(
         isinstance(item, Mapping) and int(item.get("reviewQualifiedCount") or 0) > 0
         for item in lanes or []
@@ -128,24 +141,27 @@ def _consume_terminal_unpublished_boundary(
         not isinstance(row, Mapping)
         or not isinstance(evidence, Mapping)
         or not isinstance(lanes, list)
-        or len(lanes) != len(CAMPAIGN_CARRIERS)
+        or len(lanes) != len(active)
         or {
             item.get("carrier")
             for item in lanes
             if isinstance(item, Mapping)
         }
-        != set(CAMPAIGN_CARRIERS)
+        != set(active)
         or not isinstance(lane, Mapping)
         or row.get("executionId") != execution_id
         or lane.get("executionId") != execution_id
         or receipt.get("rootExecutionId")
-        != predecessor_campaign_root_execution_id(execution_id)
+        != campaign_root_for_submission(
+            execution_id,
+            output_root=roots.output_root,
+        )
         or receipt.get("originalSourceIdentity") == expected_identity
         or receipt.get("observedSourceIdentity") != expected_identity
         or any(row.get(key) != submission.get(key) for key in _SCOPE_FIELDS)
         or evidence.get("observedFinalizedCount") != 0
         or evidence.get("reviewQualifiedLaneCount") != qualified_lanes
-        or not 1 <= qualified_lanes < len(CAMPAIGN_CARRIERS)
+        or not 1 <= qualified_lanes <= len(active)
         or evidence.get("campaignPublishReceiptsPresent") is not False
         or evidence.get("campaignPublishRefsPresent") is not False
         or evidence.get("objectTransactionEvidencePresent") is not False
@@ -211,6 +227,7 @@ def consume_mixed_finalized_boundary(
         plan,
         receipt,
         receipt_path,
+        roots=roots,
     ):
         return True
     if receipt.get("reason") != "mixed_finalized_partial_terminal":
@@ -235,19 +252,33 @@ def consume_mixed_finalized_boundary(
         "sourceDigest": submission["sourceDigest"],
         "entityCatalogDigest": plan["entityCatalogDigest"],
     }
+    try:
+        active, _workloads, _execution_ids = active_campaign_scope(plan)
+    except (TypeError, ValueError) as exc:
+        raise typed_error("PLAN_LANES_INVALID", str(exc)) from exc
     common_invalid = (
         not isinstance(row, Mapping)
         or not isinstance(execution_evidence, Mapping)
         or not isinstance(lanes, list)
-        or len(lanes) != len(CAMPAIGN_CARRIERS)
+        or len(active) < 2
+        or len(lanes) != len(active)
+        or {
+            item.get("carrier")
+            for item in lanes
+            if isinstance(item, Mapping)
+        }
+        != set(active)
         or not isinstance(lane, Mapping)
         or row.get("executionId") != execution_id
         or lane.get("executionId") != execution_id
         or receipt.get("rootExecutionId")
-        != predecessor_campaign_root_execution_id(execution_id)
+        != campaign_root_for_submission(
+            execution_id,
+            output_root=roots.output_root,
+        )
         or receipt.get("observedSourceIdentity") != expected_observed
         or any(row.get(key) != submission.get(key) for key in _SCOPE_FIELDS)
-        or execution_evidence.get("observedFinalizedCount") != 3
+        or execution_evidence.get("observedFinalizedCount") != len(active) - 1
         or execution_evidence.get("immutableReleaseEvidencePresent") is not False
         or execution_evidence.get("reviewedClosureAdoptionPresent") is not False
         or execution_evidence.get("evidenceDisposition") != "preserved_unadopted"

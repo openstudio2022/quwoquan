@@ -157,7 +157,7 @@ def test_content_plan_separated_research_enforces_per_target_quota_count():
     assert not any("entityArticlesPerTarget quota" in issue for issue in issues), issues
 
 
-def test_content_plan_commercial_closure_treats_per_target_quota_as_ceiling():
+def test_content_plan_shared_article_workflow_keeps_full_per_target_quota():
     entity = "黄龙"
     root = execution_root(EXECUTION_ID)
     source_dir = root / "entities/地点/景区/黄龙/1.download/sources/01.article"
@@ -211,7 +211,6 @@ def test_content_plan_commercial_closure_treats_per_target_quota_as_ceiling():
     )
     spec = {
         "executionPolicy": {
-            "articleCommercialClosure": True,
             "targetObjectCount": 100,
         },
         "scope": {"coverageTargets": [{"entityType": "地点/景区", "name": entity}]},
@@ -228,7 +227,7 @@ def test_content_plan_commercial_closure_treats_per_target_quota_as_ceiling():
 
     issues = cp.validate_content_plan(EXECUTION_ID, spec)
 
-    assert issues == [], issues
+    assert any("entityArticlesPerTarget quota" in issue for issue in issues), issues
 
 def test_content_plan_separated_research_keeps_image_lane_without_angle_coverage():
     entity = "九寨沟"

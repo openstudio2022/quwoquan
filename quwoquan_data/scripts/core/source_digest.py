@@ -280,6 +280,26 @@ def parse_source_digest_document(value: object) -> SourceDigest:
     return SourceDigest.from_document(value)
 
 
+def parse_immutable_source_digest_document(
+    value: object,
+) -> SourceDigest | SourceDefinitionSnapshot:
+    """Parse either immutable identity generation from frozen release evidence.
+
+    Frozen evidence cannot be migrated, so both generations must stay readable:
+    current producers bind the source-definition identity on its own, while
+    terminal historical evidence still carries the retired combined closure.
+    The generation is decided by the named inputs, never by a version field.
+    """
+
+    raw_inputs = value.get("inputs") if isinstance(value, Mapping) else None
+    if (
+        isinstance(raw_inputs, list)
+        and tuple(raw_inputs) == _SOURCE_DEFINITION_INPUT_ROOTS
+    ):
+        return SourceDefinitionSnapshot.from_document(value)
+    return SourceDigest.from_document(value)
+
+
 def current_source_digest(*, repo_root: Path = REPO_ROOT) -> SourceDigest:
     """Return the only source digest used by execution and release evidence."""
     return SourceDigest.build(repo_root=repo_root)
@@ -445,5 +465,6 @@ __all__ = [
     "current_execution_bundle_identity",
     "current_source_definition_snapshot",
     "current_source_digest",
+    "parse_immutable_source_digest_document",
     "parse_source_digest_document",
 ]

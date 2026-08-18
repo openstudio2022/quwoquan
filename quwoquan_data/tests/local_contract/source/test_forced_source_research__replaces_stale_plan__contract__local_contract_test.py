@@ -10,7 +10,7 @@ for _path in (DATA_ROOT, SCRIPTS_ROOT):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
-from content.source.research import auto_plan_public  # noqa: E402
+from content.source.research import auto_plan_recovery  # noqa: E402
 
 
 def test_forced_source_research_invalidates_only_selected_lane(monkeypatch, tmp_path):
@@ -22,17 +22,17 @@ def test_forced_source_research_invalidates_only_selected_lane(monkeypatch, tmp_
     homepage_plan.write_text('{"payload":{"sources":[{"stale":true}]}}', encoding="utf-8")
     article_plan.write_text('{"payload":{"sources":[{"keep":true}]}}', encoding="utf-8")
     monkeypatch.setattr(
-        auto_plan_public,
+        auto_plan_recovery,
         "resolve_research_entity_types",
         lambda *_args, **_kwargs: {"测试景区": "地点/景区"},
     )
     monkeypatch.setattr(
-        auto_plan_public,
+        auto_plan_recovery,
         "resolve_entity_object_dir",
         lambda *_args, **_kwargs: object_dir,
     )
     monkeypatch.setattr(
-        auto_plan_public,
+        auto_plan_recovery,
         "research_plan_files",
         lambda: {
             "homepage": "homepage_source_plan.json",
@@ -41,7 +41,7 @@ def test_forced_source_research_invalidates_only_selected_lane(monkeypatch, tmp_
         },
     )
 
-    auto_plan_public._invalidate_forced_lane_plans(
+    auto_plan_recovery._invalidate_forced_lane_plans(
         "execution",
         ["测试景区"],
         entity_type="地点/景区",

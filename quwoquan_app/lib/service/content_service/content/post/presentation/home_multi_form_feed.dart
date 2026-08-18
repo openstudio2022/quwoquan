@@ -284,12 +284,10 @@ class HomeMultiFormFeed extends ConsumerWidget {
       if (emptyReason == ContentFeedEmptyReason.noActiveRelease) {
         return _HomeFeedNoActiveReleaseState(
           isDark: isDark,
-          onRetry: () {
-            unawaited(
-              ref
-                  .read(discoveryFeedMapProvider.notifier)
-                  .load(channelId, force: true),
-            );
+          onRefresh: () async {
+            await ref
+                .read(discoveryFeedMapProvider.notifier)
+                .load(channelId, force: true);
           },
         );
       }

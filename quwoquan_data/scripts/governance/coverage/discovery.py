@@ -10,6 +10,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
+from content.source.research.network_io import NetworkFetchError
 from governance.coverage.coverage_corroboration import (
     candidate_corroboration_key,
     discover_baike_corroborations,
@@ -64,11 +65,16 @@ def _overpass_query(
     delay = backoff_seconds
     for attempt in range(max(1, retries)):
         endpoint = endpoints[attempt % len(endpoints)]
-        response = bridge.post_form_json(
-            endpoint,
-            fields={"data": query},
-            timeout=_OVERPASS_HTTP_TIMEOUT_SECONDS,
-        )
+        try:
+            response = bridge.post_form_json(
+                endpoint,
+                fields={"data": query},
+                timeout=_OVERPASS_HTTP_TIMEOUT_SECONDS,
+            )
+        except NetworkFetchError:
+            # 这里的 ok=False 已经是失败态的载体，所以退避耗尽后把失败交给它而不是
+            # 上抛：一个区县查不动是覆盖缺口，调用方按缺口记录并继续走其它区县。
+            response = {}
         elements = response.get("elements") if isinstance(response, Mapping) else None
         if isinstance(elements, list):
             return [item for item in elements if isinstance(item, Mapping)], True

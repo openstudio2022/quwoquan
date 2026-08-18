@@ -726,7 +726,7 @@ func NewModule() (_ *Module, resultErr error) {
 		return nil, fmt.Errorf("otp code reference sealer invalid: %v", err)
 	}
 	otpCodeGenerator := application.GenerateSecureOTPCode
-	var externalInteractionClient application.ExternalInteractionClient
+	var externalInteractionClient *userintegration.ExternalInteractionClient
 	if !contentSliceExternalAuthDisabled() {
 		externalInteractionBaseURL := getenvOrDefault("INTEGRATION_EXTERNAL_INTERACTION_BASE_URL", cfg.Integration.ExternalInteractionBaseURL)
 		externalInteractionClient, err = newRemoteOTPExternalInteractionClient(
@@ -764,6 +764,7 @@ func NewModule() (_ *Module, resultErr error) {
 		application.WithOTPCodeSealer(otpCodeSealer),
 		application.WithOTPCodeGenerator(otpCodeGenerator),
 		application.WithExternalInteractionClient(externalInteractionClient),
+		application.WithSMSOTPDeliveryReadinessQuery(externalInteractionClient),
 		application.WithCarrierPhoneResolver(carrierPhoneResolver),
 		application.WithAccessTokenSigner(accessSigner),
 		application.WithAccountSecurityReader(accountEnforcementStore),

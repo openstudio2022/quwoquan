@@ -49,6 +49,7 @@ class StackctlCandidateSingleTrackTest(unittest.TestCase):
                     "schema": "qwq.service_package",
                     "service": service,
                     "environment": environment,
+                    "configVersion": f"sha256:{'e' * 64}",
                     "digests": {"sourceTree": f"sha256:{'d' * 64}"},
                 }
             )

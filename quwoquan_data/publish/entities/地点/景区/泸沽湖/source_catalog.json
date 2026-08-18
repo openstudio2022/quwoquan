@@ -1,0 +1,37 @@
+{
+  "schema": "quwoquan_data.object_source_catalog",
+  "policyRevision": "encyclopedia-primary",
+  "primaryEvidenceRef": "evidence/sources/泸沽湖__wikipedia__baa9fc88/meta.json",
+  "primarySource": {
+    "schema": "quwoquan_data.object_source_evidence",
+    "sourceUnitId": "泸沽湖__wikipedia__baa9fc88",
+    "entityName": "泸沽湖",
+    "sourceKind": "wikipedia",
+    "extractor": "wikipedia_api",
+    "canonicalUrl": "https://zh.wikipedia.org/wiki/%E6%B3%B8%E6%B2%BD%E6%B9%96",
+    "sourceUrl": "https://zh.wikipedia.org/wiki/%E6%B3%B8%E6%B2%BD%E6%B9%96",
+    "title": "泸沽湖",
+    "fetchedAt": "2026-08-17T11:16:21Z",
+    "snapshotHash": "sha256:dddc3df5879ae35cd10627e1aba588316318f4d919b46745217de1ad6d849fcd",
+    "policyRevision": "encyclopedia-primary",
+    "sourceUseMode": "licensed_adaptation",
+    "evidenceRef": "evidence/sources/泸沽湖__wikipedia__baa9fc88/meta.json"
+  },
+  "sources": [
+    {
+      "schema": "quwoquan_data.object_source_evidence",
+      "sourceUnitId": "泸沽湖__wikipedia__baa9fc88",
+      "entityName": "泸沽湖",
+      "sourceKind": "wikipedia",
+      "extractor": "wikipedia_api",
+      "canonicalUrl": "https://zh.wikipedia.org/wiki/%E6%B3%B8%E6%B2%BD%E6%B9%96",
+      "sourceUrl": "https://zh.wikipedia.org/wiki/%E6%B3%B8%E6%B2%BD%E6%B9%96",
+      "title": "泸沽湖",
+      "fetchedAt": "2026-08-17T11:16:21Z",
+      "snapshotHash": "sha256:dddc3df5879ae35cd10627e1aba588316318f4d919b46745217de1ad6d849fcd",
+      "policyRevision": "encyclopedia-primary",
+      "sourceUseMode": "licensed_adaptation",
+      "evidenceRef": "evidence/sources/泸沽湖__wikipedia__baa9fc88/meta.json"
+    }
+  ]
+}

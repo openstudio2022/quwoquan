@@ -15,7 +15,7 @@
 - [`gray-release-to-prod`](./gray-release-to-prod/spec.md)：**统一入口**：workflow 与人工命令最终都收敛到 `stackctl deploy --target prod-hosted ...`。
 - [`local-gamma-mirror`](./local-gamma-mirror/spec.md)：gamma-local 是开发与提交前的主验证链，统一本机模拟器/浏览器接入同一组域级入口。
 - [`multi-environment-instance-isolation`](./multi-environment-instance-isolation/spec.md)：beta 云侧本地集成栈始终只允许**一套**，启动新实例前必须先停止旧实例再重启。
-- [`multi-environment-wave-deployment`](./multi-environment-wave-deployment/spec.md)：按 alpha、beta、gamma、prod 的准入顺序发布同一制品，任一波次失败即停止晋级。
+- [`multi-environment-wave-deployment`](./multi-environment-wave-deployment/spec.md)：同一 source release train 预先封存四份环境专属 artifact，按 alpha、beta、gamma、prod 的准入顺序验证，任一波次失败即停止晋级。
 - [`service-core-composition`](./service-core-composition/spec.md)：以同一 Go host 组合 11 个核心服务而不改变领域契约、数据归属或独立实时/模型故障域。
 - [`workflow-naming-consolidation`](./workflow-naming-consolidation/spec.md)：**约束**：不得保留重复名称（如 05/05b、08b/08b）或依赖旧的 `workflow_run` 定时合流链。
 
@@ -36,8 +36,8 @@
 - 被否决方案：由调用方、页面或脚本复制本层状态并绕过公开契约。
 - 约束与影响：实现只能细化对应规格与 canonical contract；冲突时先修正规格或契约。
 - main push 自动启动同一 DAG，完成不可变 OCI `ReleaseEvidenceManifest` 的 `component-ready -> candidate-ready` 总装与 Alpha/Beta/Gamma 阻断验证；正式 Prod apply 不由 workflow_run 或 push 静默执行，必须由人工 dispatch 绑定可达 main 的精确 Git SHA、显式设置非 dry-run，并通过 production environment approval。
-- `candidate-ready` 必须绑定四环境配置包、四环境 App 真实 payload、ContractGraph、真实 Provider readiness 与三层测试；按序接受 Alpha/Beta/Gamma 回执并绑定 rollback readiness 后才成为 `deployable`，Prod 全量验证后才成为 `released`。
-- 同一候选制品就绪后，Alpha、Beta、Gamma-local 在隔离运行面并行执行；聚合器仍按 `alpha -> beta -> gamma` 验证回执，任一失败均不得申请 Prod approval。
+- `candidate-ready` 必须绑定同一 source capsule 派生的四份环境 artifact、四环境 App 真实 payload、ContractGraph、真实 Provider readiness 与三层测试；每份环境 artifact 已封存本环境镜像/config/binding/authority，按序接受 Alpha/Beta/Gamma 回执并绑定 rollback readiness 后才成为 `deployable`，Prod 全量验证后才成为 `released`。
+- 同一 release train 就绪后，Alpha、Beta、Gamma-local 在隔离运行面并行执行；聚合器仍按 `alpha -> beta -> gamma` 验证回执，任一失败均不得申请 Prod approval。环境阶段不得重新构建或跨环境重用最终镜像。
 - Prod 只保留一个 production environment approval 与一个事务 job；checkout、OIDC/registry login、ReleaseEvidenceManifest 验签、治理校验和配置包物化只执行一次，随后由 `stackctl` 依次推进 `canary、5、20、50、100`。
 - push 与默认 dispatch 均保持 dry-run；dry-run 不提交 hosted ledger，因此只执行 `canary` 只读校验并明确标记边界，禁止伪造 `5/20/50/100` 回执。
 - 发布身份只使用 `fromCandidateDigest -> toCandidateDigest`；镜像 transport tag 和逐服务配置包仅是装配坐标，不得重新成为晋级或恢复身份。
@@ -70,6 +70,38 @@
 - 关联要求：`REQ-002`
 - 影响 Story：[`service-core-composition`](./service-core-composition/spec.md)
 - 关联验收：[`service-core-composition GWT-001/GWT-002`](./service-core-composition/spec.md#gwt-001)
+
+<a id="dec-004"></a>
+### DEC-004 App 制品身份、签名隔离与多渠道分发回执
+- 决策：App 分发以三个分离对象承载事实——`AppArtifactManifest`（`ReleaseEvidenceManifest` 候选内的 immutable owned entity，拥有 platform、BuildMode、distributionClass、package/bundle ID、version/build、signing identity、source/artifact/launch-manifest digest 与 promotability）、`InstallReceipt`（按 store/device/build 追加且集合无界的 separate append-only fact，独立生命周期与查询）、渠道矩阵（从 canonical metadata 生成，覆盖 Apple App Store/TestFlight、华为、小米、OPPO、vivo、应用宝与官网 `official_web` APK）。打包、签名校验、安装与渠道登记统一走 `stackctl package` 的 canonical App 入口（显式 `env/platform/build-mode/distribution-class/device`），`run.sh` 与 IDE 只做薄包装。
+- 跨边界 port：构建写入走 `AppArtifactPackageWriter` 生成不可变制品、`AppArtifactManifestReader` 提供验证查询；安装证据走 `AppInstallReceiptAppender` 只追加真实安装/商店回执、`AppInstallReceiptQuery` 供准出读取。禁止脚本或 Provider 直连绕过 port。
+- 包身份隔离：alpha/beta/gamma/prod 与 Debug/Release 使用不覆盖的 application/bundle ID、显示名与签名映射。
+- 包身份隔离：Prod 正式 ID 只取已登记外部事实，非 Prod/Debug 使用隔离后缀并同步 Universal/App Links、OAuth、推送与 Keychain/App Group。
+- 分发约束：Debug 签名制品仅限开发者本机、Simulator/Emulator 与登记设备。TestFlight、市场与官网只接受 Release。
+- 渠道逐项声明：每渠道登记 `channelId`、`uploadFormat(ipa/aab/apk)`、package/bundle ID、store product ID、track、version/build、developer signing identity、store signing custodian、可能的 split/optimize/re-sign transformation、source candidate/artifact/launch-manifest digest、upload/review/release receipt 与安装后 signature/receipt 校验方式。市场可能重签或优化，准出不要求下载二进制逐字节相同，而以 source digest、version/build、store 官方签名/receipt、嵌入 launch manifest 与启动 telemetry 绑定；一个渠道的回执不得替代另一渠道。
+- 官网分发：Android 官网 APK 复用 official distribution 部署到不可变 CDN 对象并出带 SHA-256 的 receipt，发布前通过包名/签名证书摘要/Build/SHA-256 预验证门禁；`app_release` 契约字段是恢复页、更新提示与网页安装组件共用的唯一下载真相源。iOS 网页版不提供二进制下载。
+- 灰度与回滚：先内测或分阶段验证，再进入公开发布。
+- 灰度与回滚：内容 active pointer、Web current pointer 与远端配置的止损在 300 秒内完成，且不要求重新打包或再次审核。
+- 灰度与回滚：已安装商店 App 不可强制回滚，服务保留商店客户端 N/N-1 兼容面，禁止把“重新发版”当唯一恢复动作。
+- 被否决方案：单一 applicationId/bundle ID 覆盖安装、Debug 包进入市场、要求市场下载物逐字节等同上传物、把内容 release 绑进商店二进制、side-load 冒充市场安装回执。
+- 关联要求：`REQ-001`
+- 影响 Story：[`gray-release-to-prod`](./gray-release-to-prod/spec.md)、[`multi-environment-wave-deployment`](./multi-environment-wave-deployment/spec.md)
+- 关联验收：[`environment-topology-and-packaging GWT-003`](../runtime-config/environment-topology-and-packaging/spec.md#gwt-003)、[`app-release-recovery-routing GWT-004`](../../product-ops-growth/product-control-plane-foundation/app-release-recovery-routing/spec.md#gwt-004)、[`cold-start-performance GWT-005`](../runtime-client-foundation/cold-start-performance/spec.md#gwt-005)
+
+<a id="dec-005"></a>
+### DEC-005 同一 Release Train 预构建四份环境专属云制品
+
+- 决策：mainline candidate 以 `releaseTrainId` 绑定共同 source capsule、ContractGraph 与 toolchain，并在 `candidate-ready` 前生成 Alpha/Beta/Gamma/Prod 四份 `EnvironmentArtifactManifest`。每份 manifest 绑定本环境的 `service-core` 与五个独立服务镜像、config、Provider binding、endpoint authority、runtime topology、SBOM/provenance 和 purity attestation。
+- 决策：本地 `stackctl package` 与 Service Pipeline 共用 `environment × runtime_image_owner` 构建矩阵。允许共享 BuildKit/module/base-image cache，禁止跨环境复用最终 image digest；同环境完全相同输入才可 CAS 复用。
+- 决策：镜像内只嵌入不含自身 OCI digest 的 artifact identity core，外部 activation seal 绑定真实 image digest 与 rollout authority。`prod-sim` 与 `prod-hosted` 同属 Prod，但 target seal 不可交换；prevalidate 与 rollout 复用同一 `prod-hosted` payload，只追加 authority receipt。
+- 理由：一套跨环境镜像加四份运行时配置仍允许环境变量重解释二进制，且本地 service-core 与正式 split-services 构建集合不一致。环境专属 artifact 使 package、启动、回滚和供应链证据拥有同一物理边界。
+- 被否决方案：flat images + 四环境 config、按 source tag 跨环境复用最终镜像、运行时 `APP_ENV` 选表、平台运维镜像复制全环境 facts、以及以 RTC 单能力摘要代表全环境闭包。
+- 回滚：只接受上一份同环境 `environmentArtifactDigest` 的完整镜像/config/binding/topology；service-core 与环境镜像集整体回滚，不从当前工作树重建旧候选。
+- 可测试观察面：构建矩阵恰为四环境乘 runtime image owner，同一 source 产生四份不同环境 artifact。
+- 可测试观察面：把 Alpha 镜像装到 Beta 或改 `APP_ENV` 时，在 listener 前失败。
+- 可测试观察面：回滚后 image/config/binding/topology 摘要全部恢复。
+- 关联要求：`REQ-001`、`REQ-002`
+- 影响 Story：[`multi-environment-wave-deployment`](./multi-environment-wave-deployment/spec.md)、[`service-core-composition`](./service-core-composition/spec.md)
 
 ## 5. 失败与恢复
 

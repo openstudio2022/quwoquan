@@ -8,6 +8,7 @@ from typing import Any
 
 from content.release.canonical.aggregate_release_closure import existing_refs
 from content.release.canonical.aggregate_release_documents import (
+    assert_holdings_reachable,
     release_attestation_document,
     release_header_document,
 )
@@ -228,6 +229,9 @@ def reuse_existing_aggregate_release(
                 "existing release consistency closure drifted"
             )
         assert_environment_neutral(final_root)
+        # Reusing a sealed release still has to prove its holdings are reachable:
+        # the library may have reclaimed entries since the release was cut.
+        assert_holdings_reachable(final_root, release_id)
 
         aggregate = _read_json(attestation_root(final_root) / "release.json")
         assert_valid(

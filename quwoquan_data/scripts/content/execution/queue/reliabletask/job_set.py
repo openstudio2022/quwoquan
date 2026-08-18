@@ -227,7 +227,7 @@ def _load(
             workers = payload.get("requiredWorkers")
             if isinstance(workers, bool) or not isinstance(workers, int):
                 raise TypeError("ReliableTask requiredWorkers is invalid")
-            partitions = partition_count(workers)
+            partitions = partition_count(len(expected_tasks))
             if _normalize_tasks(
                 execution_id, stage, expected_tasks,
                 governed_partition_count=partitions,
@@ -290,7 +290,7 @@ def freeze_job_set(
             raise ValueError(
                 f"ReliableTask {stage} job-set requires a reliabletask backend"
             )
-        partitions = partition_count(required_workers)
+        partitions = partition_count(len(expected_tasks))
         tasks = _normalize_tasks(
             normalized, stage, expected_tasks,
             governed_partition_count=partitions,

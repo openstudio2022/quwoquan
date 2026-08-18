@@ -18,7 +18,11 @@ from ..capabilities.rtc_service import (
     CompletedCallParams,
     CompletedCallResult,
 )
-from ..capabilities.user_service import AUTHENTICATED_ACTORS, AuthenticatedActorsParams
+from ..capabilities.user_service import (
+    AUTHENTICATED_ACTORS,
+    AuthenticatedActorsParams,
+    MutualActorRelationship,
+)
 from .ids import AcceptanceCaseId
 
 
@@ -78,6 +82,12 @@ def rtc_completed_call_case() -> CaseRef[CompletedCallResult]:
     actors = AUTHENTICATED_ACTORS.bind(
         AuthenticatedActorsParams(
             roles=(ActorRole.SENDER, ActorRole.RECEIVER),
+            mutual_relationships=(
+                MutualActorRelationship(
+                    source_role=ActorRole.SENDER,
+                    target_role=ActorRole.RECEIVER,
+                ),
+            ),
         )
     )
     conversation = DIRECT_CONVERSATION_WITH_MESSAGES.bind(

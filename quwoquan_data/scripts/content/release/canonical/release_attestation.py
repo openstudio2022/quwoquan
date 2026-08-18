@@ -8,8 +8,7 @@ from content.release.canonical.object_transaction_contract import ObjectTransact
 from content.release.model import DataSourceOwner, ReleaseKind
 from core.codec import JsonObject, JsonObjectDecodeError
 from core.source_digest import (
-    FrozenSourceDigest,
-    SourceDigest,
+    SourceDefinitionSnapshot,
     SourceDigestError,
     content_source_revision,
 )
@@ -76,7 +75,7 @@ class ReleaseAttestation:
     source_revision: str | None
     source_digest: str | None
     entity_catalog_digest: str | None
-    source_digests: tuple[SourceDigest | FrozenSourceDigest, ...]
+    source_digests: tuple[SourceDefinitionSnapshot, ...]
     payload_sha256: str
     recorded_at: str
     source_identities: tuple[dict[str, object], ...] = ()
@@ -149,10 +148,6 @@ class ReleaseAttestation:
                     "content release requires executions and canonical entities or posts"
                 )
             if self.source_identities:
-                if self.release_class is not ReleaseClass.RESEARCH:
-                    raise ReleaseAttestationError(
-                        "source identity set is reserved for Research pool releases"
-                    )
                 if any(
                     value is not None
                     for value in (
@@ -300,13 +295,8 @@ class ReleaseAttestation:
                 not isinstance(item, dict) for item in raw_source_identities
             ):
                 raise ReleaseAttestationError("sourceIdentities must be an array")
-            source_digest_parser = (
-                FrozenSourceDigest.from_document
-                if raw_source_identities
-                else SourceDigest.from_document
-            )
             source_digests = [
-                source_digest_parser(item.to_document())
+                SourceDefinitionSnapshot.from_document(item.to_document())
                 for item in document.object_sequence("sourceDigests")
             ]
             return cls(

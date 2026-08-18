@@ -176,10 +176,15 @@ def _verify_binary_media(
 def _verify_source_attribution(
     payload: Mapping[str, Any],
     case: PostApiCase,
-) -> None:
+) -> bool:
     expected = case.source_attribution
     if expected is None:
-        return
+        if "sourceAttribution" not in payload or payload.get("sourceAttribution") is None:
+            return True
+        raise PostApiVerificationError(
+            "post detail sourceAttribution drift for "
+            f"{case.post_ref}: expected absent/null"
+        )
     actual = _object(
         payload.get("sourceAttribution"),
         label=f"post detail sourceAttribution {case.post_ref}",
@@ -205,3 +210,4 @@ def _verify_source_attribution(
         raise PostApiVerificationError(
             f"post detail sourceAttribution drift for {case.post_ref}: {drifted}"
         )
+    return True

@@ -11,15 +11,16 @@ import (
 //
 //nolint:gochecknoglobals
 var (
-	ErrInvalidExternalRequest           = errors.New("INTEGRATION.USER.invalid_external_request")
-	ErrUnsupportedOperation             = errors.New("INTEGRATION.USER.unsupported_operation")
-	ErrDeadLetterRecoveryConflict       = errors.New("INTEGRATION.USER.dead_letter_recovery_conflict")
-	ErrProviderTimeout                  = errors.New("INTEGRATION.MIDDLEWARE.provider_timeout")
-	ErrProviderRejected                 = errors.New("INTEGRATION.MIDDLEWARE.provider_rejected")
-	ErrExternalInteractionInternalError = errors.New("INTEGRATION.SYSTEM.external_interaction_internal_error")
-	ErrSmsProviderTimeout               = errors.New("INTEGRATION.MIDDLEWARE.sms_provider_timeout")
-	ErrSmsProviderRejected              = errors.New("INTEGRATION.MIDDLEWARE.sms_provider_rejected")
-	ErrSmsOtpCodeRefInvalid             = errors.New("INTEGRATION.SYSTEM.sms_otp_code_ref_invalid")
+	ErrInvalidExternalRequest                = errors.New("INTEGRATION.USER.invalid_external_request")
+	ErrUnsupportedOperation                  = errors.New("INTEGRATION.USER.unsupported_operation")
+	ErrDeadLetterRecoveryConflict            = errors.New("INTEGRATION.USER.dead_letter_recovery_conflict")
+	ErrProviderTimeout                       = errors.New("INTEGRATION.MIDDLEWARE.provider_timeout")
+	ErrProviderRejected                      = errors.New("INTEGRATION.MIDDLEWARE.provider_rejected")
+	ErrExternalInteractionReadinessForbidden = errors.New("INTEGRATION.USER.external_interaction_readiness_forbidden")
+	ErrExternalInteractionInternalError      = errors.New("INTEGRATION.SYSTEM.external_interaction_internal_error")
+	ErrSmsProviderTimeout                    = errors.New("INTEGRATION.MIDDLEWARE.sms_provider_timeout")
+	ErrSmsProviderRejected                   = errors.New("INTEGRATION.MIDDLEWARE.sms_provider_rejected")
+	ErrSmsOtpCodeRefInvalid                  = errors.New("INTEGRATION.SYSTEM.sms_otp_code_ref_invalid")
 )
 
 // AppErrorFromInvalidExternalRequest returns *AppError for INTEGRATION.USER.invalid_external_request (user_message from errors.yaml).
@@ -50,6 +51,12 @@ func AppErrorFromProviderTimeout(debugMessage string) *rerrors.AppError {
 func AppErrorFromProviderRejected(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrProviderRejected.Error()))
 	return rerrors.NewAppError(code, "外部供应商暂时拒绝请求，请稍后重试", debugMessage).WithMetadata("upstream_rejected", 0).WithRecoveryDirective("retry", "snackbar", 5)
+}
+
+// AppErrorFromExternalInteractionReadinessForbidden returns *AppError for INTEGRATION.USER.external_interaction_readiness_forbidden (user_message from errors.yaml).
+func AppErrorFromExternalInteractionReadinessForbidden(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrExternalInteractionReadinessForbidden.Error()))
+	return rerrors.NewAppError(code, "当前服务无权读取短信投递就绪状态", debugMessage).WithMetadata("forbidden", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromExternalInteractionInternalError returns *AppError for INTEGRATION.SYSTEM.external_interaction_internal_error (user_message from errors.yaml).

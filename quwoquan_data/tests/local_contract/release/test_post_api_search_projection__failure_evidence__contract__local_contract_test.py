@@ -28,14 +28,11 @@ def _operation(*, status: int) -> client_subject.PublicApiOperationEvidence:
 
 
 @pytest.mark.parametrize(
-    ("content_type", "search_type"),
-    [("article", "article"), ("image", "photo"), ("video", "video")],
+    "content_type",
+    ["article", "image", "video"],
 )
-def test_search_object_type_is_single_track(
-    content_type: str,
-    search_type: str,
-) -> None:
-    assert subject._search_object_type(content_type) == search_type
+def test_search_content_type_is_single_track(content_type: str) -> None:
+    assert subject._search_content_type(content_type) == content_type
 
 
 def test_search_request_uses_canonical_session_header_contract() -> None:
@@ -54,7 +51,8 @@ def test_search_request_uses_canonical_session_header_contract() -> None:
     subject._search_hits(
         _Client(),  # type: ignore[arg-type]
         query="公开标题",
-        object_types=["photo"],
+        object_types=["content.post"],
+        content_types=["image"],
         object_id="post-image-a",
     )
 
@@ -62,7 +60,8 @@ def test_search_request_uses_canonical_session_header_contract() -> None:
     assert calls[0]["body"] == {
         "query": "公开标题",
         "mode": "result",
-        "objectTypes": ["photo"],
+        "objectTypes": ["content.post"],
+        "contentTypes": ["image"],
         "ids": ["post-image-a"],
         "limit": 20,
     }
@@ -106,7 +105,8 @@ def test_search_failure_is_bounded_structured_and_redacted(
         subject._search_hits(
             client,
             query=secret_query,
-            object_types=["photo"],
+            object_types=["content.post"],
+            content_types=["image"],
             object_id=secret_object_id,
         )
 
@@ -116,7 +116,7 @@ def test_search_failure_is_bounded_structured_and_redacted(
     assert f"canonicalErrorCode={expected_code}" in message
     assert "requestId=DATA.search.global.request-a" in message
     assert "traceId=DATA.session.search.global.trace-a" in message
-    assert "objectTypes=photo" in message
+    assert "objectTypes=content.post" in message
     assert "idsCount=1" in message
     assert secret_query not in message
     assert secret_object_id not in message

@@ -43,12 +43,10 @@ def lane_argv(
         str(submission["quota"]),
         "--count",
         str(submission["count"]),
-        "--required-workers",
-        str(submission["requiredWorkers"]),
-        "--partition-count",
-        str(submission["partitionCount"]),
-        "--capacity-plan-digest",
-        str(submission["capacityPlanDigest"]),
+        "--capacity-calibration-receipt",
+        str(
+            submission["capacityCalibration"]["calibrationReceiptRef"]
+        ),
         "--stage",
         stage,
         "--semantic-selection-id",

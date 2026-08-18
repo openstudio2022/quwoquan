@@ -4,11 +4,6 @@
   "type": "object",
   "required": [
     "schema",
-    "executionId",
-    "stage",
-    "jobSetEnvelopeDigest",
-    "jobSetDigest",
-    "actualTaskDigest",
     "passed",
     "backend",
     "total",
@@ -21,12 +16,7 @@
     "fleetAcceptedThroughputPerHour",
     "endToEndAcceptedThroughputPerHour",
     "acceptedContentThroughputStatus",
-    "recoveryEligibleCount",
-    "automaticRecoveredCount",
-    "manualRecoveredCount",
-    "automaticRecoveryStatus",
     "automaticRecoveryRate",
-    "firstAttemptSuccessRate",
     "finalizedWithinStageBudgetRate",
     "duplicatePublishCount",
     "missingObjectCount",
@@ -43,20 +33,6 @@
   ],
   "additionalProperties": false,
   "properties": {
-    "executionId": {"type": "string", "minLength": 1},
-    "stage": {"enum": ["author", "publish"]},
-    "jobSetEnvelopeDigest": {
-      "type": "string",
-      "pattern": "^sha256:[0-9a-f]{64}$"
-    },
-    "jobSetDigest": {
-      "type": "string",
-      "pattern": "^sha256:[0-9a-f]{64}$"
-    },
-    "actualTaskDigest": {
-      "type": "string",
-      "pattern": "^sha256:[0-9a-f]{64}$"
-    },
     "passed": {
       "type": "boolean"
     },
@@ -80,10 +56,6 @@
       "minimum": 0
     },
     "objectTransactionResultCount": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "researchAcceptedCount": {
       "type": "integer",
       "minimum": 0
     },
@@ -115,11 +87,6 @@
       "minimum": 0,
       "maximum": 1
     },
-    "recoveryEligibleCount": {"type": "integer", "minimum": 0},
-    "automaticRecoveredCount": {"type": "integer", "minimum": 0},
-    "manualRecoveredCount": {"type": "integer", "minimum": 0},
-    "automaticRecoveryStatus": {"enum": ["MEASURED", "NOT_EXERCISED"]},
-    "firstAttemptSuccessRate": {"type": "number", "minimum": 0, "maximum": 1},
     "finalizedWithinStageBudgetRate": {
       "type": "number",
       "minimum": 0,
@@ -211,26 +178,5 @@
     "schema": {
       "const": "quwoquan.reliabletask_fleet_report"
     }
-  },
-  "allOf": [
-    {
-      "if": {
-        "properties": {"recoveryEligibleCount": {"const": 0}},
-        "required": ["recoveryEligibleCount"]
-      },
-      "then": {
-        "properties": {
-          "automaticRecoveredCount": {"const": 0},
-          "manualRecoveredCount": {"const": 0},
-          "automaticRecoveryStatus": {"const": "NOT_EXERCISED"},
-          "automaticRecoveryRate": {"const": 0}
-        }
-      },
-      "else": {
-        "properties": {
-          "automaticRecoveryStatus": {"const": "MEASURED"}
-        }
-      }
-    }
-  ]
+  }
 }

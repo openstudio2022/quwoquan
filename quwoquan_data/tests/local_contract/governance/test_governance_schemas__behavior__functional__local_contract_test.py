@@ -21,6 +21,7 @@ def test_governance_schemas_are_valid_json_and_freeze_status_vocabulary() -> Non
         "canonical_gc_reference_graph.schema.json",
         "cleanup_report.schema.json",
             "content_distribution_policy.schema.json",
+            "content_diversity_policy.schema.json",
             "content_supply_policy.schema.json",
             "coverage_source_ready_catalog_projection.schema.json",
             "data_output_layout_migration.schema.json",

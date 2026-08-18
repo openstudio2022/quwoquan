@@ -117,6 +117,39 @@ def handle_acquire_videos(args: argparse.Namespace) -> None:
     )
 
 
+def handle_rebind_video_acquisition_manifest(args: argparse.Namespace) -> None:
+    output_root = Path(args.output_root or ACQUISITION_ROOT).expanduser().resolve()
+    try:
+        from content.source.professional_video_rebind import (
+            ProfessionalVideoRebindError,
+            rebind_professional_video_acquisition_manifest,
+        )
+
+        result, _path = rebind_professional_video_acquisition_manifest(
+            Path(args.source_manifest).expanduser().resolve(),
+            source_receipt_ref=str(args.source_receipt_ref),
+            handoff_ref=Path(args.handoff_ref).expanduser().resolve(),
+            destination=Path(args.destination).expanduser().resolve(),
+            output_root=output_root,
+            asset_ids=tuple(args.asset_id or ()),
+        )
+    except ModuleNotFoundError as exc:
+        raise SystemExit(
+            "[task rebind-video-acquisition-manifest] GATE_BLOCK "
+            "DATA.SOURCE.VIDEO_PROBE_DEPENDENCY_MISSING "
+            f"dependency={exc.name or 'unknown'}"
+        ) from exc
+    except ProfessionalVideoRebindError as exc:
+        raise SystemExit(
+            f"[task rebind-video-acquisition-manifest] GATE_BLOCK {exc}"
+        ) from exc
+    except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
+        raise SystemExit(
+            f"[task rebind-video-acquisition-manifest] GATE_BLOCK {exc}"
+        ) from exc
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
 def register_acquire_videos_parser(sub: argparse._SubParsersAction) -> None:
     parser = sub.add_parser(
         "acquire-videos",
@@ -141,5 +174,21 @@ def register_acquire_videos_parser(sub: argparse._SubParsersAction) -> None:
     parser.add_argument("--commons-candidate-limit", type=int, default=1)
     parser.set_defaults(handler=handle_acquire_videos)
 
+    rebind = sub.add_parser(
+        "rebind-video-acquisition-manifest",
+        help="逐SHA复用历史video CAS并在fresh handoff下重新probe和Grok审核",
+    )
+    rebind.add_argument("--source-manifest", required=True)
+    rebind.add_argument("--source-receipt-ref", required=True)
+    rebind.add_argument("--handoff-ref", required=True)
+    rebind.add_argument("--destination", required=True)
+    rebind.add_argument("--output-root")
+    rebind.add_argument("--asset-id", action="append", default=[])
+    rebind.set_defaults(handler=handle_rebind_video_acquisition_manifest)
 
-__all__ = ["handle_acquire_videos", "register_acquire_videos_parser"]
+
+__all__ = [
+    "handle_acquire_videos",
+    "handle_rebind_video_acquisition_manifest",
+    "register_acquire_videos_parser",
+]

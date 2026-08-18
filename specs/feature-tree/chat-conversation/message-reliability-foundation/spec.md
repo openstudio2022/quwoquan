@@ -124,10 +124,10 @@
 <a id="open-002"></a>
 ### OPEN-002 冷启动与离线可读剩真机飞行模式 UAT
 
-- 类型：`test_gap`
+- 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：`SIT-001` 的两段证据已在真实持久库闭合：独立 `flutter test` OS 子进程写真实
+- 影响或价值：仍缺 `SIT-001` 的真机飞行模式 user_acceptance；两段真实持久库证据包括独立 `flutter test` OS 子进程写真实
   SQLite 后主进程冷启动水合有序读回（`sit-001.t1`），恢复网络增量收敛在同库重叠重放下无重复
   且不回退已有序列（`sit-001.t2`），见
   `message_timeline_cross_process_cold_start__api_integration_test.dart`；

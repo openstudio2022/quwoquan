@@ -184,10 +184,5 @@ def test_attribution_gate_requires_complete_attribution() -> None:
         source="explicit",
     )
 
-    assert effective_source_attribution_ready(complete, release_mode="research")
-    assert effective_source_attribution_ready(complete, release_mode="commercial")
-    assert not effective_source_attribution_ready(incomplete, release_mode="research")
-    assert not effective_source_attribution_ready(
-        incomplete,
-        release_mode="commercial",
-    )
+    assert effective_source_attribution_ready(complete)
+    assert not effective_source_attribution_ready(incomplete)

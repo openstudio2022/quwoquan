@@ -40,6 +40,32 @@ def test_video_lane_writes_only_direct_video_candidates(tmp_path) -> None:
     ]
 
 
+def test_video_lane_writes_each_desired_asset_for_one_entity(tmp_path) -> None:
+    videos = [
+        {
+            **_video(),
+            "assetUrl": f"https://upload.wikimedia.org/video-{index}.webm",
+        }
+        for index in range(3)
+    ]
+    report: dict[str, object] = {"sourceUnavailable": []}
+
+    write_video_lane(
+        entity_id="测试实体甲",
+        plan_dir=tmp_path,
+        force=True,
+        report=report,
+        updated=[],
+        sourced_video_pool=videos,
+        desired_video_works=3,
+    )
+
+    payload = read_json(tmp_path / "video_source_plan.json")["payload"]
+    assert payload["videos"] == videos
+    assert len(payload["videos"]) == 3
+    assert payload["sourceUnavailable"] == []
+
+
 def test_video_lane_matches_frozen_receipt_by_entity_alias(
     tmp_path, monkeypatch
 ) -> None:

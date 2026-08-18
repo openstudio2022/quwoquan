@@ -2,6 +2,8 @@
 """
 from __future__ import annotations
 
+import yaml
+
 from quwoquan_ops.tests.support.local_gamma_content_service_config_test_support import (
     CADDYFILE,
     COMPOSE_FILE,
@@ -246,7 +248,14 @@ class LocalGammaStartupReleaseLifecycleTest(unittest.TestCase):
         self.assertNotIn("ENABLE_FIXTURE_SEEDS", start_script)
 
     def test_host_probe_services_attach_edge_publish_network(self) -> None:
-        """default is internal:true; host/Colima probes need the edge bridge."""
+        """default is internal:true; host/Colima probes need the edge bridge.
+
+        The assertion reads the parsed service map rather than a literal text
+        shape, because a registry entry may also carry the `profiles` gate that
+        keeps a projected-away fragment from degrading into an image-less
+        service. Gating changes which workloads start the service; it never
+        changes that a started service must reach the host through `edge`.
+        """
         gamma_compose = COMPOSE_FILE.read_text(encoding="utf-8")
         self.assertIn("internal: true", gamma_compose)
         self.assertIn("\n  edge:\n", gamma_compose)
@@ -254,7 +263,7 @@ class LocalGammaStartupReleaseLifecycleTest(unittest.TestCase):
             "# Host/Colima readiness probes hit these published ports through the edge"
         )
         self.assertIn(marker, gamma_compose)
-        block = gamma_compose[gamma_compose.index(marker) : gamma_compose.index("\nnetworks:")]
+        services = yaml.safe_load(gamma_compose)["services"]
         for service in (
             "user-service",
             "product-ops-service",
@@ -263,7 +272,7 @@ class LocalGammaStartupReleaseLifecycleTest(unittest.TestCase):
             "notification-service",
             "tag-service",
         ):
-            self.assertIn(f"  {service}:\n    networks:\n      - default\n      - edge", block)
+            self.assertEqual(services[service]["networks"], ["default", "edge"])
 
     def test_product_ops_receives_local_elasticsearch_endpoint(self) -> None:
         service_block = service_compose("product-ops-service")

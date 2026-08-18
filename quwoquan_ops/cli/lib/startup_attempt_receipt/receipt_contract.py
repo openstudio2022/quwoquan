@@ -188,6 +188,12 @@ def validate_startup_attempt(
     return value
 
 
+def read_startup_attempt(target: str) -> dict[str, Any] | None:
+    """只读加载启动回执，不恢复未完成的 fan-out 事务。"""
+
+    return _read(_pkg.startup_attempt_path(target))
+
+
 def load_startup_attempt(target: str) -> dict[str, Any] | None:
     path = _pkg.startup_attempt_path(target)
     _pkg._recover_fanout_transaction(

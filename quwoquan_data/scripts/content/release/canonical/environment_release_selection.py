@@ -31,6 +31,7 @@ from content.release.canonical.object_transaction_contract import (
 from content.release.canonical.pool_source_attribution import (
     source_attribution_complete,
 )
+from governance.coverage.distribution import load_content_distribution_policy
 
 DATA_POST_CAPS: dict[str, int | None] = {
     "alpha": 2_100,
@@ -39,21 +40,12 @@ DATA_POST_CAPS: dict[str, int | None] = {
     "prod": None,
 }
 _CONTENT_TYPES = ("article", "image", "video")
-MILESTONE_TARGETS: dict[str, dict[str, int]] = {
-    "M100": {"homepage": 100, "article": 100, "image": 100, "video": 10},
-    "M1000": {
-        "homepage": 1_000,
-        "article": 1_000,
-        "image": 1_000,
-        "video": 100,
-    },
-    "M10000": {
-        "homepage": 10_000,
-        "article": 10_000,
-        "image": 10_000,
-        "video": 1_000,
-    },
-}
+# The milestone numbers live only in the content distribution policy, so
+# promoting ten to hundred to thousand scale is a control-plane edit and the
+# campaign workload, the pool report and this selector cannot drift apart.
+MILESTONE_TARGETS: dict[str, dict[str, int]] = (
+    load_content_distribution_policy().milestone_targets()
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -222,7 +214,7 @@ def _delivery_issue(
         return pool_error_code(exc)
     if not is_pool_record_admitted(pool_record):
         return "DATA.POOL.OBJECT_NOT_ADMITTED"
-    if not effective_source_attribution_ready(admission, release_mode="research"):
+    if not effective_source_attribution_ready(admission):
         return "DATA.POOL.SOURCE_ATTRIBUTION_INCOMPLETE"
     creator_refs_path = root / "creator.refs.json"
     raw_creator_refs = (
@@ -260,9 +252,9 @@ def _delivery_issue(
             entity_record = entity_admission.record
         except (OSError, ObjectTransactionError, TypeError, ValueError):
             return "DATA.POOL.REFERENCE_MISSING"
-        if not is_pool_record_admitted(entity_record) or not effective_source_attribution_ready(
-            entity_admission, release_mode="research"
-        ):
+        if not is_pool_record_admitted(
+            entity_record
+        ) or not effective_source_attribution_ready(entity_admission):
             return "DATA.POOL.REFERENCE_MISSING"
     return None
 
@@ -280,6 +272,74 @@ def pool_delivery_issue(
         post_ref=post_ref,
         candidate=candidate,
     )
+
+
+def discover_pool_candidates(
+    *,
+    publish_root: Path,
+    post_refs: Sequence[str],
+    strict_admission: bool,
+    allowed_entity_refs: set[str] | None = None,
+) -> tuple[list[PoolCandidate], list[PoolExclusion]]:
+    """Discover the shared canonical candidates without selecting a release class."""
+
+    candidates: list[PoolCandidate] = []
+    excluded: list[PoolExclusion] = []
+    for ref in sorted(post_refs):
+        post_ref = str(ref)
+        try:
+            candidate = _candidate(
+                publish_root,
+                post_ref,
+                strict_admission=strict_admission,
+            )
+            if candidate is None:
+                continue
+            if strict_admission:
+                issue_code = _delivery_issue(
+                    publish_root,
+                    post_ref=post_ref,
+                    candidate=candidate,
+                )
+                if issue_code is not None:
+                    excluded.append(
+                        PoolExclusion(
+                            post_ref=post_ref,
+                            gate="delivery",
+                            code=issue_code,
+                        )
+                    )
+                    continue
+            if allowed_entity_refs is not None:
+                manifest = _read_json(
+                    publish_root / "posts" / post_ref / "manifest.json"
+                )
+                raw_refs = manifest.get("entityRefs")
+                entity_refs = (
+                    {str(value).removeprefix("/entity/") for value in raw_refs}
+                    if isinstance(raw_refs, list)
+                    else set()
+                )
+                if not entity_refs or not entity_refs.issubset(allowed_entity_refs):
+                    excluded.append(
+                        PoolExclusion(
+                            post_ref=post_ref,
+                            gate="delivery",
+                            code="DATA.POOL.REFERENCE_MISSING",
+                        )
+                    )
+                    continue
+            candidates.append(candidate)
+        except (OSError, ObjectTransactionError, TypeError, ValueError) as exc:
+            code = pool_error_code(exc)
+            excluded.append(
+                PoolExclusion(
+                    post_ref=post_ref,
+                    gate=pool_gate_for_code(code),
+                    code=code,
+                )
+            )
+    return candidates, excluded
 
 
 def _latest_versions(
@@ -311,6 +371,16 @@ def _latest_versions(
             continue
         if release_mode == "commercial":
             eligible = [row for row in versions if row.usage_scope == "commercial"]
+            if not eligible:
+                excluded.extend(
+                    PoolExclusion(
+                        post_ref=row.post_ref,
+                        gate="eligibility",
+                        code="DATA.POOL.COMMERCIAL_RIGHTS_REQUIRED",
+                    )
+                    for row in versions
+                )
+                continue
         else:
             originals = [row for row in versions if row.variant_purpose == "original"]
             eligible = originals or versions
@@ -375,60 +445,37 @@ def _pool_digest(candidates: Sequence[PoolCandidate]) -> str:
     return "sha256:" + hashlib.sha256(encoded).hexdigest()
 
 
+def pool_candidate_digest(candidates: Sequence[PoolCandidate]) -> str:
+    """Digest one release-class-neutral canonical candidate snapshot."""
+
+    return _pool_digest(candidates)
+
+
 def select_environment_release_posts(
     *,
     publish_root: Path,
     post_refs: Sequence[str],
     environment: str,
+    release_class: str,
     strict_admission: bool = False,
 ) -> EnvironmentReleaseSelection:
-    """Return a stable prefix; therefore Alpha is a subset of Beta and Gamma."""
+    """Select one stable prefix from the shared pool for an explicit release class."""
 
     env = str(environment).strip()
     if env not in DATA_POST_CAPS:
         raise ObjectTransactionError(
             f"DATA.RELEASE.ENVIRONMENT_POLICY_INVALID: {env!r}"
         )
-    # Environment names never grant commercial authorization. All direct pool
-    # selections remain Research; commercial transition is a separate release.
-    release_mode = "research"
-    candidates: list[PoolCandidate] = []
-    excluded: list[PoolExclusion] = []
-    for ref in sorted(post_refs):
-        post_ref = str(ref)
-        try:
-            candidate = _candidate(
-                publish_root,
-                post_ref,
-                strict_admission=strict_admission,
-            )
-            if candidate is None:
-                continue
-            if strict_admission:
-                issue_code = _delivery_issue(
-                    publish_root,
-                    post_ref=post_ref,
-                    candidate=candidate,
-                )
-                if issue_code is not None:
-                    excluded.append(
-                        PoolExclusion(
-                            post_ref=post_ref,
-                            gate="delivery",
-                            code=issue_code,
-                        )
-                    )
-                    continue
-            candidates.append(candidate)
-        except (OSError, ObjectTransactionError, TypeError, ValueError) as exc:
-            code = pool_error_code(exc)
-            excluded.append(
-                PoolExclusion(
-                    post_ref=post_ref,
-                    gate=pool_gate_for_code(code),
-                    code=code,
-                )
-            )
+    release_mode = str(release_class or "").strip()
+    if release_mode not in {"research", "commercial"}:
+        raise ObjectTransactionError(
+            f"DATA.RELEASE.CLASS_INVALID: {release_mode!r}"
+        )
+    candidates, excluded = discover_pool_candidates(
+        publish_root=publish_root,
+        post_refs=post_refs,
+        strict_admission=strict_admission,
+    )
     latest, version_exclusions = _latest_versions(
         candidates,
         release_mode=release_mode,
@@ -447,7 +494,11 @@ def select_environment_release_posts(
         release_mode=release_mode,
         post_refs=tuple(row.post_ref for row in selected),
         candidates=tuple(selected),
-        pool_digest=_pool_digest(latest),
+        # The digest identifies the shared, release-class-neutral candidate
+        # snapshot. Research and Commercial filters over unchanged pool bytes
+        # therefore bind the same poolDigest even though their selected sets
+        # differ.
+        pool_digest=_pool_digest(candidates),
         eligible_count=len(latest),
         counts=counts,
         excluded=tuple(
@@ -470,62 +521,12 @@ def select_milestone_release_posts(
     targets = MILESTONE_TARGETS.get(milestone_name)
     if targets is None:
         raise ObjectTransactionError(f"DATA.POOL.MILESTONE_INVALID: {milestone_name!r}")
-    candidates: list[PoolCandidate] = []
-    excluded: list[PoolExclusion] = []
-    for ref in sorted(post_refs):
-        post_ref = str(ref)
-        try:
-            candidate = _candidate(
-                publish_root,
-                post_ref,
-                strict_admission=strict_admission,
-            )
-            if candidate is None:
-                continue
-            if strict_admission:
-                issue_code = _delivery_issue(
-                    publish_root,
-                    post_ref=post_ref,
-                    candidate=candidate,
-                )
-                if issue_code is not None:
-                    excluded.append(
-                        PoolExclusion(
-                            post_ref=post_ref,
-                            gate="delivery",
-                            code=issue_code,
-                        )
-                    )
-                    continue
-            if allowed_entity_refs is not None:
-                manifest = _read_json(
-                    publish_root / "posts" / post_ref / "manifest.json"
-                )
-                raw_refs = manifest.get("entityRefs")
-                entity_refs = (
-                    {str(value).removeprefix("/entity/") for value in raw_refs}
-                    if isinstance(raw_refs, list)
-                    else set()
-                )
-                if not entity_refs or not entity_refs.issubset(allowed_entity_refs):
-                    excluded.append(
-                        PoolExclusion(
-                            post_ref=post_ref,
-                            gate="delivery",
-                            code="DATA.POOL.REFERENCE_MISSING",
-                        )
-                    )
-                    continue
-            candidates.append(candidate)
-        except (OSError, ObjectTransactionError, TypeError, ValueError) as exc:
-            code = pool_error_code(exc)
-            excluded.append(
-                PoolExclusion(
-                    post_ref=post_ref,
-                    gate=pool_gate_for_code(code),
-                    code=code,
-                )
-            )
+    candidates, excluded = discover_pool_candidates(
+        publish_root=publish_root,
+        post_refs=post_refs,
+        strict_admission=strict_admission,
+        allowed_entity_refs=allowed_entity_refs,
+    )
     latest, version_exclusions = _latest_versions(
         candidates,
         release_mode="research",
@@ -582,7 +583,7 @@ def select_milestone_release_posts(
         release_mode="research",
         post_refs=tuple(row.post_ref for row in selected),
         candidates=tuple(selected),
-        pool_digest=_pool_digest(latest),
+        pool_digest=_pool_digest(candidates),
         eligible_count=len(latest),
         counts=counts,
         excluded=tuple(
@@ -598,6 +599,8 @@ __all__ = [
     "MILESTONE_TARGETS",
     "EnvironmentReleaseSelection",
     "PoolExclusion",
+    "discover_pool_candidates",
+    "pool_candidate_digest",
     "pool_delivery_issue",
     "select_environment_release_posts",
     "select_milestone_release_posts",

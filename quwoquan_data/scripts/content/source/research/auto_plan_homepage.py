@@ -3,29 +3,27 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Mapping
 
 from core.data_issue import DataIssueCode, DataRecoveryAction
-
-from content.source.contracts import (
-    HomepageAuthorityProvider,
-    QualifiedHomepageSource,
-)
-from content.source.research.auto_plan_lanes import (
-    _independent_homepage_media_collections,
-)
+from content.source.research.auto_plan_lanes import _independent_homepage_media_collections
+from content.source.research.baidu_baike import BaiduBaikeResolution
+from content.source.research.baike_com import BaikePageResolution
 from content.source.research.homepage_source_policy import (
     _homepage_can_seed_base_draft,
     _homepage_core_sources,
 )
+from core.content_source_registry import homepage_core_source_limit
 from content.source.research.plan_state import (
     _accept_source_with_reject_memory,
     _hydrate_mediawiki_same_source_images,
+    _image_window,
     _record_unavailable,
     _source,
     _write_lane,
 )
 from content.source.research.source_quality import _evidence_reason
+from content.source.research.wiki_core import _wiki_url
 
 
 @dataclass(frozen=True)
@@ -37,8 +35,13 @@ class HomepageResearchInput:
     plan_dir: Path
     report: dict[str, Any]
     updated: list[dict[str, Any]]
-    qualified_homepage_source: QualifiedHomepageSource
+    prior_homepage_sources: tuple[Mapping[str, Any], ...]
+    wiki_url: str
+    wiki_title: str
     wiki_page_images: tuple[dict[str, Any], ...]
+    related_wiki_titles: tuple[str, ...]
+    baidu_baike: BaiduBaikeResolution | None
+    toutiao_baike: BaikePageResolution | None
     prior_image_pool: tuple[dict[str, Any], ...]
     voyage_page_images: tuple[dict[str, Any], ...]
     commons: tuple[dict[str, Any], ...]
@@ -47,12 +50,12 @@ class HomepageResearchInput:
     openverse: tuple[dict[str, Any], ...]
     rejected_source_urls: frozenset[str]
     force: bool
-    professional_image_specs: tuple[dict[str, Any], ...] = ()
-    acquisition_receipt_refs: tuple[str, ...] = ()
+    related_page_images: Callable[..., list[dict[str, Any]]]
 
 
 def _candidate_sources(spec: HomepageResearchInput) -> list[dict[str, Any]]:
-    qualified_source = spec.qualified_homepage_source
+    sources: list[dict[str, Any]] = []
+    source_limit = homepage_core_source_limit()
 
     def accept(source: dict[str, Any]) -> dict[str, Any] | None:
         return _accept_source_with_reject_memory(
@@ -60,39 +63,110 @@ def _candidate_sources(spec: HomepageResearchInput) -> list[dict[str, Any]]:
             _hydrate_mediawiki_same_source_images(source, entity_id=spec.entity_id),
             entity_id=spec.entity_id,
             lane="homepage",
-            vertical=spec.vertical,
             entity_aliases=list(spec.entity_aliases),
             rejected_source_urls=set(spec.rejected_source_urls),
         )
 
-    same_source_images = (
-        list(spec.wiki_page_images)
-        if qualified_source.provider is HomepageAuthorityProvider.WIKIPEDIA
-        else []
-    )
-    accepted = accept(
-        _source(
-            source_id=qualified_source.source_id,
-            platform=qualified_source.platform,
-            url=qualified_source.url,
-            source_kind=qualified_source.source_kind,
-            source_title=qualified_source.title,
-            qualified_authority_title=qualified_source.title,
+    for prior_source in spec.prior_homepage_sources:
+        if len(sources) >= source_limit:
+            break
+        accepted = accept(dict(prior_source))
+        if accepted:
+            sources.append(accepted)
+    if spec.wiki_url:
+        accepted = accept(_source(
+            source_id="home_wikipedia",
+            platform="维基百科",
+            url=spec.wiki_url,
+            source_kind="wikipedia",
+            source_title=spec.wiki_title or spec.entity_id,
             category="encyclopedia",
-            discovery_provider=qualified_source.discovery_provider,
-            match_confidence=1.0,
+            discovery_provider="mediawiki_exact_title",
+            match_confidence=0.99,
+            evidence_reason=_evidence_reason(
+                spec.entity_id, "homepage", "Chinese Wikipedia", "encyclopedia"
+            ),
+            source_role="supporting",
+            images=list(spec.wiki_page_images),
+            image_evidence_mode="same_source" if spec.wiki_page_images else "",
+        ))
+        if accepted:
+            sources.append(accepted)
+    if spec.baidu_baike is not None:
+        resolved = spec.baidu_baike
+        accepted = accept(_source(
+            source_id="home_baidu_baike",
+            platform="百度百科",
+            url=resolved.url,
+            source_kind="baidu_baike",
+            source_title=resolved.title,
+            category="encyclopedia",
+            discovery_provider="baidu_baike_html_resolution",
+            match_confidence=resolved.match_confidence,
             evidence_reason=_evidence_reason(
                 spec.entity_id,
                 "homepage",
-                f"frozen qualified {qualified_source.platform} authority",
+                f"verified Baidu Baike card API via {resolved.matched_term}",
                 "encyclopedia",
             ),
-            source_role="primary",
-            images=same_source_images,
-            image_evidence_mode="same_source" if same_source_images else "",
+            source_role="supporting",
+            images=[],
+            image_evidence_mode="",
+        ))
+        if accepted:
+            sources.append(accepted)
+    for related_index, related_title in enumerate(spec.related_wiki_titles[:2], start=1):
+        if len(sources) >= source_limit:
+            break
+        related_url = _wiki_url("zh.wikipedia.org", related_title)
+        if not related_url:
+            continue
+        related_images = spec.related_page_images(
+            "zh.wikipedia.org", related_title, entity_id=spec.entity_id, limit=3
         )
-    )
-    return [accepted] if accepted else []
+        accepted = accept(_source(
+            source_id=f"home_related_encyclopedia_support_{related_index}",
+            platform="维基百科",
+            url=related_url,
+            source_kind="wikipedia",
+            source_title=related_title,
+            category="encyclopedia",
+            discovery_provider="mediawiki_related_title",
+            match_confidence=0.82,
+            evidence_reason=(
+                f"Chinese Wikipedia related page {related_title} provides "
+                f"entity context and rights-compatible media for {spec.entity_id}"
+            ),
+            source_role="supporting",
+            images=_image_window(related_images, 0, count=3),
+            image_evidence_mode="same_source" if related_images else "",
+        ))
+        if accepted:
+            sources.append(accepted)
+    if len(sources) < source_limit and spec.toutiao_baike is not None:
+        resolved = spec.toutiao_baike
+        accepted = accept(_source(
+            source_id="home_toutiao_baike",
+            platform="快懂百科",
+            url=resolved.url,
+            source_kind="toutiao_baike",
+            source_title=resolved.title,
+            category="encyclopedia",
+            discovery_provider="toutiao_baike_canonical_resolution",
+            match_confidence=resolved.match_confidence,
+            evidence_reason=_evidence_reason(
+                spec.entity_id,
+                "homepage",
+                f"verified baike.com wikiid via {resolved.matched_term}",
+                "encyclopedia",
+            ),
+            source_role="supporting",
+            images=[],
+            image_evidence_mode="",
+        ))
+        if accepted:
+            sources.append(accepted)
+    return sources
 
 
 def write_homepage_lane(spec: HomepageResearchInput) -> list[dict[str, Any]]:
@@ -115,17 +189,7 @@ def write_homepage_lane(spec: HomepageResearchInput) -> list[dict[str, Any]]:
         )
     ]
     media_collections: list[dict[str, Any]] = []
-    professional_bound = bool(spec.acquisition_receipt_refs)
-    if seed_sources and professional_bound:
-        media_collections = _independent_homepage_media_collections(
-            list(spec.professional_image_specs),
-            entity_id=spec.entity_id,
-            entity_aliases=list(spec.entity_aliases),
-            vertical=spec.vertical,
-            report=spec.report,
-            limit=1,
-        )
-    elif seed_sources and not same_source_seeds:
+    if seed_sources and not same_source_seeds:
         media_collections = _independent_homepage_media_collections(
             [
                 *spec.prior_image_pool,
@@ -152,9 +216,6 @@ def write_homepage_lane(spec: HomepageResearchInput) -> list[dict[str, Any]]:
             "homepageMediaCollections": media_collections,
         },
         force=spec.force,
-        top_level_update={
-            "acquisitionReceiptRefs": list(spec.acquisition_receipt_refs),
-        },
     ):
         spec.updated.append({
             "entityId": spec.entity_id,
@@ -173,24 +234,16 @@ def write_homepage_lane(spec: HomepageResearchInput) -> list[dict[str, Any]]:
             code=DataIssueCode.SOURCE_PRIMARY_AUTHORITY_MISSING,
             recovery=DataRecoveryAction.STOP,
         )
-    elif professional_bound and not media_collections:
+    elif not same_source_seeds and not media_collections:
         _record_unavailable(
             spec.report,
             entity_id=spec.entity_id,
             lane="homepage",
-            reason="frozen professional image assets accepted for entity=0 need>=1",
-            code=DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL,
+            reason=(
+                "homepage has neither same-source imagery nor an independent "
+                "rights-cleared entity-matched media collection"
+            ),
+            code=DataIssueCode.MEDIA_RIGHTS_UNAVAILABLE,
             recovery=DataRecoveryAction.STOP,
-        )
-    elif not same_source_seeds and not media_collections:
-        # Cold-start policy audits media availability without making it a
-        # publication prerequisite. Every downloaded asset still undergoes
-        # source, match, and rights auditing in the media closure.
-        spec.report.setdefault("homepageMediaAdvisories", []).append(
-            {
-                "entityId": spec.entity_id,
-                "sameSourceImageCount": 0,
-                "independentCollectionCount": 0,
-            }
         )
     return core_sources

@@ -9,6 +9,7 @@ import pytest
 from content.execution.campaign import prepare as prepare_campaign
 from content.execution.campaign.lane import CAMPAIGN_CARRIERS
 from core.io import write_json
+from support.capacity_calibration_fixture import synthetic_capacity_source_binding
 
 
 def _args(tmp_path: Path) -> Namespace:
@@ -23,6 +24,7 @@ def _args(tmp_path: Path) -> Namespace:
         source_providers=["pinterest", "manual_file"],
         semantic_selection_id="default",
         semantic_preflight_receipt=str(tmp_path / "semantic-preflight.json"),
+        capacity_calibration_receipt=str(tmp_path / "capacity-calibration.json"),
         handoff_id=None,
         handoff_revision=None,
         supersedes_handoff_ref=None,
@@ -58,9 +60,7 @@ def _fake_envelopes(tmp_path: Path) -> dict[str, Path]:
                 "selector": "all",
                 "quota": 3,
                 "count": 6,
-                "requiredWorkers": 1,
-                "partitionCount": 16,
-                "capacityPlanDigest": "sha256:" + "9" * 64,
+                "capacityCalibration": synthetic_capacity_source_binding(),
                 "topic": "川西",
                 "targetNames": ["九寨沟", "四姑娘山"],
                 "sourceProviders": ["manual_file", "pinterest"],
@@ -104,6 +104,9 @@ def test_prepare_campaign_maps_only_governed_external_input_kinds(
     assert captured["semantic_preflight_receipt"] == (
         tmp_path / "semantic-preflight.json"
     ).resolve()
+    assert captured["capacity_calibration_receipt"] == (
+        tmp_path / "capacity-calibration.json"
+    )
     assert captured["pre_acquisition_handoff"] == (
         tmp_path / "handoff.json"
     ).resolve()
@@ -173,6 +176,7 @@ def test_prepare_campaign_handoff_revision_never_writes_envelopes(
     args.campaign_retry_of = None
     args.handoff_ref = None
     args.semantic_preflight_receipt = None
+    args.capacity_calibration_receipt = None
     args.homepage_image_input = None
     args.image_input = None
     args.video_input = None

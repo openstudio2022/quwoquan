@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from core.paths import SOURCE_ACQUISITION_ROOT
+from content.execution.campaign.lane import normalize_workloads
 
 from content.source.professional_image_discovery_governed import (
     build_professional_image_governed_candidate_catalog,
@@ -54,8 +55,31 @@ from content.source.research.scale_source_pool_image_video import (
 )
 
 
+def _workload_targets(args: argparse.Namespace) -> dict[str, int] | None:
+    rows = tuple(getattr(args, "workload", ()) or ())
+    if not rows:
+        return None
+    values: dict[str, int] = {}
+    for raw in rows:
+        carrier, separator, quota = str(raw).partition("=")
+        carrier = carrier.strip()
+        quota = quota.strip()
+        if not separator or carrier in values:
+            raise ValueError("--workload must be unique CARRIER=QUOTA values")
+        try:
+            values[carrier] = int(quota)
+        except ValueError as exc:
+            raise ValueError("--workload quota must be a positive integer") from exc
+    return normalize_workloads(values)
+
+
 def handle_plan(args: argparse.Namespace) -> None:
     try:
+        workloads = _workload_targets(args)
+        if workloads is not None and args.target_scale is not None:
+            raise ValueError("explicit --workload forbids --target-scale")
+        if workloads is None and args.target_scale is None:
+            raise ValueError("plan requires --workload or --target-scale preset")
         plan = build_scale_source_pool_plan(
             pool_id=args.pool_id,
             target_scale=args.target_scale,
@@ -64,6 +88,7 @@ def handle_plan(args: argparse.Namespace) -> None:
             entity_catalog_digest=args.entity_catalog_digest,
             created_at=args.created_at,
             candidates=load_candidates(args.candidates),
+            workload_targets=workloads,
         )
     except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
         raise SystemExit(f"[source-pool plan] GATE_BLOCK {typed_error(exc)}") from exc
@@ -111,7 +136,19 @@ def handle_write(args: argparse.Namespace) -> None:
 def handle_project_candidates(args: argparse.Namespace) -> None:
     try:
         evidence_root = Path(args.evidence_root).expanduser().absolute()
-        active_carriers = tuple(args.active_carrier)
+        workloads = _workload_targets(args)
+        if workloads is not None and args.target_scale is not None:
+            raise ValueError("explicit --workload forbids --target-scale")
+        if workloads is None and args.target_scale is None:
+            raise ValueError(
+                "project-candidates requires --workload or --target-scale preset"
+            )
+        requested_active = tuple(args.active_carrier or ())
+        active_carriers = tuple(workloads or requested_active)
+        if not active_carriers:
+            raise ValueError("project-candidates requires at least one --workload")
+        if requested_active and requested_active != active_carriers:
+            raise ValueError("--active-carrier must exactly match --workload keys")
         homepage_article = None
         if set(active_carriers) & {"homepage", "article"}:
             homepage_article = project_scale_source_pool_homepage_article(
@@ -139,7 +176,7 @@ def handle_project_candidates(args: argparse.Namespace) -> None:
                 )
             image_video = project_scale_source_pool_image_video(
                 evidence_root=evidence_root,
-                target_scale=args.target_scale,
+                target_scale=(args.target_scale or "WORKLOAD"),
                 source_revision=args.source_revision,
                 source_digest=args.source_digest,
                 entity_catalog_digest=args.entity_catalog_digest,
@@ -159,6 +196,7 @@ def handle_project_candidates(args: argparse.Namespace) -> None:
             homepage_article_projection=homepage_article,
             image_video_projection=image_video,
             active_carriers=active_carriers,
+            workload_targets=workloads,
         )
         output_root = Path(
             args.output_root or SOURCE_ACQUISITION_ROOT
@@ -182,6 +220,7 @@ def handle_project_candidates(args: argparse.Namespace) -> None:
             "candidatesRef": destination.relative_to(output_root).as_posix(),
             "candidatesDigest": frozen["candidatesDigest"],
             "activeCarriers": frozen["activeCarriers"],
+            "workloadTargets": frozen["workloadTargets"],
             "candidateCounts": frozen["candidateCounts"],
             "projectionBindings": frozen["projectionBindings"],
         }
@@ -244,7 +283,6 @@ def handle_acquire_homepage_article(args: argparse.Namespace) -> None:
             homepage_count=args.homepage_count,
             article_count=args.article_count,
             seed_selection=Path(args.seed_selection),
-            acquisition_concurrency=args.acquisition_concurrency,
         )
     except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
         checkpoint = getattr(exc, "checkpoint", None)
@@ -366,12 +404,6 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
         required=True,
         help="identity-free historical hints intersected with fresh coverage evidence",
     )
-    acquire_content.add_argument(
-        "--acquisition-concurrency",
-        type=int,
-        default=1,
-        help="单一 create-once batch 内的有界网络取得并发度（1-32）",
-    )
     acquire_content.add_argument("--output-root")
     acquire_content.set_defaults(handler=handle_acquire_homepage_article)
 
@@ -437,7 +469,11 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
         "project-candidates",
         help="从当前 wave 的 catalog/evidence 确定性 create-once 投影候选文件",
     )
-    project.add_argument("--target-scale", choices=("M100", "M1000", "M10000"), required=True)
+    project.add_argument(
+        "--target-scale",
+        choices=("M100", "M1000", "M10000"),
+        help="仅 milestone preset 使用；显式 --workload 时省略",
+    )
     project.add_argument("--source-revision", required=True)
     project.add_argument("--source-digest", required=True)
     project.add_argument("--entity-catalog-digest", required=True)
@@ -451,7 +487,13 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
         "--active-carrier",
         action="append",
         choices=("homepage", "article", "image", "video"),
-        required=True,
+        required=False,
+    )
+    project.add_argument(
+        "--workload",
+        action="append",
+        metavar="CARRIER=QUOTA",
+        help="显式活动载体及其精确目标；可重复传入",
     )
     project.add_argument("--homepage-catalog-ref")
     project.add_argument("--homepage-catalog-digest")
@@ -472,12 +514,22 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
 
     plan = commands.add_parser("plan", help="从已审核候选构建 digest-bound pool")
     plan.add_argument("--pool-id", required=True)
-    plan.add_argument("--target-scale", choices=("M100", "M1000", "M10000"), required=True)
+    plan.add_argument(
+        "--target-scale",
+        choices=("M100", "M1000", "M10000"),
+        help="仅 milestone preset 使用；显式 --workload 时省略",
+    )
     plan.add_argument("--source-revision", required=True)
     plan.add_argument("--source-digest", required=True)
     plan.add_argument("--entity-catalog-digest", required=True)
     plan.add_argument("--created-at", required=True)
     plan.add_argument("--candidates", required=True)
+    plan.add_argument(
+        "--workload",
+        action="append",
+        metavar="CARRIER=QUOTA",
+        help="显式活动载体及其精确目标；可重复传入",
+    )
     plan.set_defaults(handler=handle_plan)
 
     validate = commands.add_parser("validate", help="严格验证 immutable pool")

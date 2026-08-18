@@ -46,7 +46,7 @@ def load_source_ready_input(
     *,
     output_root: Path,
     publish_root: Path,
-    milestone: str,
+    milestone: str | None,
     source_pool_ref: str,
     evidence_root_ref: str,
     consumed_object_refs: frozenset[str] = frozenset(),
@@ -64,7 +64,7 @@ def load_source_ready_input(
         label="sourcePoolEvidenceRootRef",
     )
     plan = _read_json(pool_path)
-    if plan.get("targetScale") != milestone:
+    if milestone is not None and plan.get("targetScale") != milestone:
         raise ValueError(
             "source-ready pool milestone drift: "
             f"expected={milestone} actual={plan.get('targetScale')}"
@@ -102,6 +102,10 @@ def load_source_ready_input(
     return (
         {
             "status": "validated",
+            "targetScale": str(plan["targetScale"]),
+            "workloadMode": str(plan["workloadMode"]),
+            "activeCarriers": list(plan["activeCarriers"]),
+            "workloadTargets": dict(plan["workloadTargets"]),
             "sourcePoolRef": normalized_pool_ref,
             "sourcePoolFileSha256": _file_sha256(pool_path),
             "sourcePoolDigest": str(plan["planDigest"]),

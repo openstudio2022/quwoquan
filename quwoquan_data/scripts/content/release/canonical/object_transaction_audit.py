@@ -32,6 +32,7 @@ from content.release.canonical.object_transaction_contract import (
     _verify_package,
     _write_json,
     collect_canonical_tag_refs,
+    is_canonical_document,
 )
 from content.release.canonical.object_transaction_delta import (
     build_transaction_delta,
@@ -40,24 +41,24 @@ from content.release.canonical.object_transaction_delta import (
 from content.release.canonical.object_transaction_lock import (
     canonical_publish_serialized,
 )
+from core.content_library import MediaHoldingError, resolve_media_holding
 from core.paths import CONTROL_PLANE_CREATOR_POOL_ROOT
 from core.schema import assert_valid
 
 
-def _system_creator_seed_closure() -> tuple[set[str], set[str]]:
-    """Return system-builtin creator ids and avatar CAS keys allowed as publish seed.
+def _system_creator_seed_closure() -> set[str]:
+    """Return the system-builtin creator ids allowed to sit unreferenced in publish.
 
-    Avatar CAS must exist in publish before the first post transaction projects the
-    creator. Until consumer objects reference them, closure must not treat those
-    seed creators / avatar bytes as orphans.
+    A system creator is projected before the first post that cites it, so closure
+    must not read that window as an orphan. Its avatar body is not part of the
+    question: bodies live in the content library and are reached by digest.
     """
     profiles = (
         CONTROL_PLANE_CREATOR_POOL_ROOT / "profiles" / "system_builtin"
     )
     creator_ids: set[str] = set()
-    avatar_keys: set[str] = set()
     if not profiles.is_dir():
-        return creator_ids, avatar_keys
+        return creator_ids
     for path in sorted(profiles.glob("*.creator.yaml")):
         try:
             payload = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -66,15 +67,24 @@ def _system_creator_seed_closure() -> tuple[set[str], set[str]]:
         if not isinstance(payload, dict) or payload.get("isSystemBuiltin") is not True:
             continue
         creator_id = str(payload.get("creatorProfileId") or "").strip()
-        avatar = payload.get("avatarAsset")
-        if not creator_id or not isinstance(avatar, dict):
-            continue
-        object_key = str(avatar.get("objectKey") or "").strip()
-        if not object_key.startswith("media/objects/sha256/"):
-            continue
-        creator_ids.add(creator_id)
-        avatar_keys.add(object_key)
-    return creator_ids, avatar_keys
+        if creator_id:
+            creator_ids.add(creator_id)
+    return creator_ids
+
+def _media_holding_resolved(object_key: str) -> bool:
+    """Whether one canonical media reference is honoured by the content library.
+
+    Canonical publish carries the reference, never the body, so closure of an
+    asset ref is a question about the library and not about the tree. The key is
+    content-addressed, so its digest is what the library is asked for.
+    """
+
+    try:
+        resolve_media_holding(Path(object_key).stem)
+    except (MediaHoldingError, ValueError):
+        return False
+    return True
+
 
 def _transaction_root(output_root: Path, transaction_id: str) -> Path:
     return output_root / "data/local/workspace/object-transactions" / transaction_id
@@ -190,6 +200,12 @@ def validate_publish_delta(
         if relative.parts[0] not in ALLOWED_CANONICAL_ROOTS:
             issues.append({"code": "noncanonical_root", "ref": relative.parts[0]})
             continue
+        # A body nested inside an object — `posts/<ref>/assets/cover.jpg` — has a
+        # canonical root, so the root check alone would let it through. Judging
+        # the whole path is what closes that gap.
+        if not is_canonical_document(relative):
+            issues.append({"code": "media_body_in_publish", "ref": relative.as_posix()})
+            continue
         if raw.get("operation") == "delete":
             deleted.add(relative.as_posix())
             continue
@@ -205,12 +221,7 @@ def validate_publish_delta(
         candidates[relative.as_posix()] = blob
 
     def cas_resolved(object_key: str) -> bool:
-        if object_key in candidates:
-            return True
-        try:
-            return (publish_root / _safe_rel(object_key, label="objectKey")).is_file()
-        except ObjectTransactionError:
-            return False
+        return _media_holding_resolved(object_key)
 
     def creator_refs_of(rel: str) -> Any:
         sibling = (Path(rel).parent / "creator.refs.json").as_posix()
@@ -286,9 +297,17 @@ def validate_publish_invariants(root: Path) -> dict[str, Any]:
         for child in root.iterdir():
             if child.name not in ALLOWED_CANONICAL_ROOTS:
                 issues.append({"code": "noncanonical_root", "ref": child.name})
+    for path in _files(root):
+        relative = path.relative_to(root)
+        if relative.parts[0] in ALLOWED_CANONICAL_ROOTS and not is_canonical_document(
+            relative
+        ):
+            issues.append(
+                {"code": "media_body_in_publish", "ref": relative.as_posix()}
+            )
 
     def cas_resolved(object_key: str) -> bool:
-        return (root / _safe_rel(object_key, label="objectKey")).is_file()
+        return _media_holding_resolved(object_key)
 
     def creator_refs_of(rel: str) -> Any:
         path = root / rel
@@ -342,17 +361,7 @@ def validate_publish_invariants(root: Path) -> dict[str, Any]:
         if rel not in expected_tag_files:
             issues.append({"code": "orphan_tag_snapshot", "ref": rel})
 
-    seed_creators, seed_avatar_keys = _system_creator_seed_closure()
-    referenced_media.update(seed_avatar_keys)
-
-    media_root = root / "media" / "objects"
-    for asset in _files(media_root):
-        # Ignore directory placeholders (e.g. .gitkeep); they are not CAS objects.
-        if asset.name.startswith("."):
-            continue
-        object_key = asset.relative_to(root).as_posix()
-        if object_key not in referenced_media:
-            issues.append({"code": "orphan_media", "ref": object_key})
+    seed_creators = _system_creator_seed_closure()
 
     creators_root = root / "creators"
     for creator_id in sorted(referenced_creators):
@@ -369,7 +378,7 @@ def validate_publish_invariants(root: Path) -> dict[str, Any]:
     return {
         "status": "passed" if not issues else "failed",
         "issues": issues,
-        "casObjectCount": len(list(_files(root / "media/objects"))),
+        "mediaRefCount": len(referenced_media),
         "tagSnapshotCount": len(expected_tag_files),
     }
 

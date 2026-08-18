@@ -64,7 +64,9 @@ from .devices import (
     ensure_patrol_ios_products_bridge,
 )
 from .evidence import (
-    _IosDeviceEvidenceStream,
+    _AppContentPageScreenshotCapture,
+    _apply_feed_content_evidence_gate,
+    _device_evidence_stream,
     _is_ios_device,
     _output_evidence_ref,
     _read_account_enforcement_evidence,
@@ -72,6 +74,7 @@ from .evidence import (
     _read_feed_content_evidence,
     _read_runtime_recovery_evidence,
     _read_video_playback_evidence,
+    _structured_evidence_log_path,
     _validate_account_enforcement_device_matrix,
     _validate_runtime_recovery_device_matrix,
     load_remote_api_evidence,
@@ -88,6 +91,7 @@ from .handoff import (
 )
 from .session import (
     TypedTestDataActor,
+    TypedTestDataConversation,
     _account_enforcement_phase,
     _account_enforcement_subject_digest,
     _evidence_class_for_runtime,
@@ -100,11 +104,13 @@ from .session import (
     _missing_required_args,
     _prepare_execution_session,
     _requires_account_closure,
+    _requires_typed_test_data_conversation,
     _requires_video_playback_canary,
     _resolved_media_base_urls,
     _resolved_owner_id,
     _resolved_persona_id,
     _runtime_env_for_alias,
+    _typed_test_data_conversation_from_environment,
     _uses_persisted_device_session,
     _uses_runtime_anonymous_session,
     _validate_video_playback_canary_work_id,
@@ -255,9 +261,21 @@ def main() -> int:
         report["endedAt"] = utc_now()
         write_report(report_path, report)
         return 2
+    typed_conversation: TypedTestDataConversation | None = None
     if not args.dry_run:
         try:
             report["sessionSource"] = _prepare_execution_session(args)
+            typed_conversation = _typed_test_data_conversation_from_environment()
+            conversation_required = _requires_typed_test_data_conversation(args)
+            if conversation_required and typed_conversation is None:
+                raise ValueError(
+                    "typed message UAT requires a stackctl TestDataSession "
+                    "conversation handoff"
+                )
+            if not conversation_required and typed_conversation is not None:
+                raise ValueError(
+                    "typed test-data conversation handoff is not valid for this target"
+                )
         except Exception as exc:  # noqa: BLE001
             report["status"] = "gate_block"
             report["failureReason"] = str(exc)
@@ -492,6 +510,7 @@ def main() -> int:
                     _create_patrol_target_wrapper(
                         args.target,
                         typed_actor=typed_actor,
+                        typed_conversation=typed_conversation,
                     )
                 )
             command = patrol_command(
@@ -562,8 +581,16 @@ def main() -> int:
             device_evidence_capture: dict[str, Any] = {
                 "status": "not-required",
             }
-            device_evidence_stream: _IosDeviceEvidenceStream | None = None
+            device_evidence_stream = None
             credential_cleanup_error = ""
+            page_screenshot_capture = _AppContentPageScreenshotCapture(
+                args=args,
+                runtime_env=runtime_env,
+                capture=lambda: capture_device_screenshot(
+                    device,
+                    run_dir / "after.png",
+                ),
+            )
 
             def handle_controlled_edge_output(line: str) -> None:
                 nonlocal restore_request_count
@@ -597,6 +624,11 @@ def main() -> int:
                     controlled_fault.restore()
                 )
 
+            def handle_device_evidence_output(line: str) -> None:
+                page_screenshot_capture.handle_line(line)
+                if controlled_fault is not None:
+                    handle_controlled_edge_output(line)
+
             try:
                 if bool(getattr(args, "stackctl_controlled_edge_fault", False)):
                     controlled_fault = begin_controlled_edge_fault(
@@ -606,16 +638,12 @@ def main() -> int:
                         controlled_fault.receipt()
                     )
                 try:
-                    if _is_ios_device(device):
-                        device_evidence_stream = _IosDeviceEvidenceStream(
-                            device_id=str(device.get("id") or ""),
-                            log_path=run_dir / "device-evidence.log",
-                            output_line_handler=(
-                                handle_controlled_edge_output
-                                if controlled_fault is not None
-                                else None
-                            ),
-                        )
+                    device_evidence_stream = _device_evidence_stream(
+                        device,
+                        log_path=run_dir / "device-evidence.log",
+                        output_line_handler=handle_device_evidence_output,
+                    )
+                    if device_evidence_stream is not None:
                         device_evidence_stream.start()
                     result = run_command(
                         command,
@@ -628,12 +656,16 @@ def main() -> int:
                             args.test_refresh_token.strip(),
                             _resolved_owner_id(args),
                             _resolved_persona_id(args),
+                            *(
+                                typed_conversation.artifact_values()
+                                if typed_conversation is not None
+                                else ()
+                            ),
                             *_provider_uat_secret_values(),
                         ),
                         output_line_handler=(
-                            handle_controlled_edge_output
-                            if controlled_fault is not None
-                            and device_evidence_stream is None
+                            handle_device_evidence_output
+                            if device_evidence_stream is None
                             else None
                         ),
                     )
@@ -687,23 +719,27 @@ def main() -> int:
                 if secret_define_path is not None:
                     secret_define_path.unlink(missing_ok=True)
                 _cleanup_patrol_target_wrapper(patrol_wrapper_cleanup)
+                typed_handoff_values = (
+                    *(
+                        typed_actor.secret_values()
+                        if typed_actor is not None
+                        else ()
+                    ),
+                    *(
+                        typed_conversation.artifact_values()
+                        if typed_conversation is not None
+                        else ()
+                    ),
+                )
                 generated_secret_values = tuple(
                     dict.fromkeys(
                         (
-                            *(
-                                typed_actor.secret_values()
-                                if typed_actor is not None
-                                else ()
-                            ),
+                            *typed_handoff_values,
                             *(
                                 base64.b64encode(value.encode("utf-8")).decode(
                                     "ascii"
                                 )
-                                for value in (
-                                    typed_actor.secret_values()
-                                    if typed_actor is not None
-                                    else ()
-                                )
+                                for value in typed_handoff_values
                             ),
                             *_provider_uat_secret_values(),
                         )
@@ -736,7 +772,7 @@ def main() -> int:
                 result["exitCode"] = 2
                 result["outputSummary"] = (
                     str(result.get("outputSummary") or "")
-                    + "\nexact-device iOS evidence stream failed: "
+                    + "\nexact-device evidence stream failed: "
                     + device_evidence_error
                 ).strip()
             if controlled_fault is not None and restore_request_count != 1:
@@ -753,11 +789,9 @@ def main() -> int:
                     + credential_cleanup_error
                 ).strip()
         raw_log_path = run_dir / "patrol.log"
-        device_evidence_log_path = run_dir / "device-evidence.log"
-        structured_evidence_log_path = (
-            device_evidence_log_path
-            if _is_ios_device(device) and device_evidence_log_path.is_file()
-            else raw_log_path
+        structured_evidence_log_path = _structured_evidence_log_path(
+            device,
+            run_dir,
         )
         raw_log = (
             raw_log_path.read_text(encoding="utf-8")
@@ -774,11 +808,18 @@ def main() -> int:
             if result["exitCode"] != 0 and not args.dry_run
             else {}
         )
-        after_screenshot = (
-            capture_device_screenshot(device, run_dir / "after.png")
-            if result["exitCode"] == 0 and not args.dry_run
-            else {"status": "skipped", "reason": "command failed"}
-        )
+        if args.dry_run:
+            after_screenshot = {"status": "skipped", "reason": "dry-run"}
+        else:
+            page_screenshot_capture.apply_success_gate(result, dry_run=False)
+            if page_screenshot_capture.required:
+                after_screenshot = page_screenshot_capture.evidence
+            else:
+                after_screenshot = (
+                    capture_device_screenshot(device, run_dir / "after.png")
+                    if result["exitCode"] == 0
+                    else {"status": "skipped", "reason": "command failed"}
+                )
         failure_screenshot = (
             capture_device_screenshot(device, run_dir / "failure.png")
             if result["exitCode"] != 0 and not args.dry_run
@@ -822,16 +863,11 @@ def main() -> int:
                 str(result.get("outputSummary") or "")
                 + "\nruntime recovery UAT did not emit a complete passed evidence marker"
             ).strip()
-        if (
-            _is_feed_load_target(args)
-            and not args.dry_run
-            and not feed_content_evidence
-        ):
-            result["exitCode"] = 1
-            result["outputSummary"] = (
-                str(result.get("outputSummary") or "")
-                + "\nfeed UAT did not emit a release-bound visible-card evidence marker"
-            ).strip()
+        _apply_feed_content_evidence_gate(
+            result,
+            args,
+            feed_content_evidence,
+        )
         if _is_account_enforcement_target(args) and not account_enforcement_evidence:
             result["exitCode"] = 1
             result["outputSummary"] = (

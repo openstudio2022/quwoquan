@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -78,7 +79,6 @@ func TestDataFleetReadRequestAcceptsBoundAuthorAndPublishJobs(t *testing.T) {
 		"partitionCount":            16,
 		"partitionAlgorithm":        "sha256_carrier_object_ref_mod_v1",
 		"checkpointPolicy":          testCheckpointPolicy(),
-		"requireCommercial":         true,
 		"recoverDeadTasks":          false,
 		"objectTimeoutMilliseconds": 120000,
 		"globalRequiredQuota":       1,
@@ -112,8 +112,7 @@ func TestDataFleetReadRequestAcceptsBoundAuthorAndPublishJobs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !decoded.RequireCommercial ||
-		decoded.RecoverDeadTasks == nil ||
+	if decoded.RecoverDeadTasks == nil ||
 		*decoded.RecoverDeadTasks ||
 		decoded.ObjectTimeout().Milliseconds() != 120000 ||
 		decoded.RequiredQuota != 1 ||
@@ -145,7 +144,7 @@ func TestDataFleetReadRequestAcceptsOnlyExactHostPartitionSlice(t *testing.T) {
 		"jobSetDigest":            "sha256:" + strings.Repeat("c", 64),
 		"requiredWorkers":         1, "partitionCount": 16,
 		"partitionAlgorithm": "sha256_carrier_object_ref_mod_v1",
-		"checkpointPolicy":   testCheckpointPolicy(), "requireCommercial": false,
+		"checkpointPolicy": testCheckpointPolicy(),
 		"recoverDeadTasks": false, "objectTimeoutMilliseconds": 120000,
 		"globalRequiredQuota": 1, "requiredQuota": 1,
 		"campaignBinding": map[string]any{
@@ -253,7 +252,6 @@ func TestDataFleetReadRequestCopiesCampaignBindingAndAcceptsStandaloneDispatch(t
 		"partitionCount":            16,
 		"partitionAlgorithm":        "sha256_carrier_object_ref_mod_v1",
 		"checkpointPolicy":          testCheckpointPolicy(),
-		"requireCommercial":         true,
 		"recoverDeadTasks":          false,
 		"objectTimeoutMilliseconds": 120000,
 		"globalRequiredQuota":       1,
@@ -292,38 +290,26 @@ func TestDataFleetReadRequestCopiesCampaignBindingAndAcceptsStandaloneDispatch(t
 
 func TestDataFleetReadRequestAcceptsM10000AndRejectsPartitionDrift(t *testing.T) {
 	executionID := "20260720--travel-video-m10000--china--scale-903"
-	entityRef := "/entity/地点/景区/西湖"
-	objectRef := "west-lake-video-001"
-	sourceRevision := "sha256:" + strings.Repeat("a", 64)
-	job := map[string]any{
-		"entityRef":      entityRef,
-		"carrier":        "video",
-		"sourceRevision": sourceRevision,
-		"idempotencyKey": executionID + "|" + entityRef + "|video|" + sourceRevision + "|author",
-		"jobId":          "job-author-001",
-		"executionId":    executionID,
-		"ref":            objectRef,
-		"stage":          "author",
-		"partitionKey":   testPartitionKey("video", objectRef, 256),
-		"maxAttempts":    3,
-	}
+	jobs := fleetWorkUnits(executionID, "video", "author", 129, 256)
+	job := jobs[0]
 	request := map[string]any{
-		"schema":                    importer.FleetRequestSchema,
-		"executionId":               executionID,
-		"campaignScale":             "M10000",
-		"scaleClass":                "M10000_PLUS",
-		"executionEnvelopeDigest":   "sha256:" + strings.Repeat("e", 64),
-		"jobSetEnvelopeDigest":      "sha256:" + strings.Repeat("d", 64),
-		"jobSetDigest":              "sha256:" + strings.Repeat("c", 64),
-		"requiredWorkers":           65,
+		"schema":                  importer.FleetRequestSchema,
+		"executionId":             executionID,
+		"campaignScale":           "M10000",
+		"scaleClass":              "M10000_PLUS",
+		"executionEnvelopeDigest": "sha256:" + strings.Repeat("e", 64),
+		"jobSetEnvelopeDigest":    "sha256:" + strings.Repeat("d", 64),
+		"jobSetDigest":            "sha256:" + strings.Repeat("c", 64),
+		// requiredWorkers is deliberately unrelated to the partition topology:
+		// partitions isolate queue state, they are not worker capacity.
+		"requiredWorkers":           1000,
 		"partitionCount":            256,
 		"partitionAlgorithm":        "sha256_carrier_object_ref_mod_v1",
 		"checkpointPolicy":          testCheckpointPolicy(),
-		"requireCommercial":         false,
 		"recoverDeadTasks":          false,
 		"objectTimeoutMilliseconds": 120000,
-		"globalRequiredQuota":       1,
-		"requiredQuota":             1,
+		"globalRequiredQuota":       129,
+		"requiredQuota":             129,
 		"campaignBinding": map[string]any{
 			"rootExecutionId":             "20260720--travel-homepage-m10000--china--scale-903",
 			"campaignRunId":               "campaign-run-903",
@@ -334,7 +320,7 @@ func TestDataFleetReadRequestAcceptsM10000AndRejectsPartitionDrift(t *testing.T)
 			"campaignSourceDigest":        "sha256:" + strings.Repeat("4", 64),
 			"campaignEntityCatalogDigest": "sha256:" + strings.Repeat("5", 64),
 		},
-		"jobs": []map[string]any{job},
+		"jobs": jobs,
 	}
 	write := func() string {
 		t.Helper()
@@ -355,21 +341,272 @@ func TestDataFleetReadRequestAcceptsM10000AndRejectsPartitionDrift(t *testing.T)
 		t.Fatal(err)
 	}
 	if decoded.ScaleClass != "M10000_PLUS" || decoded.PartitionCount != 256 ||
-		decoded.RequiredWorkers != 65 {
+		decoded.RequiredWorkers != 1000 || len(decoded.Jobs) != 129 {
 		t.Fatalf("M10000 partition contract drift: %#v", decoded)
 	}
 
 	request["partitionCount"] = 128
 	if _, err := importer.ReadFleetRequest(write()); err == nil ||
-		!strings.Contains(err.Error(), "partition contract") {
+		!strings.Contains(err.Error(), "partitionCount") {
 		t.Fatalf("partitionCount drift was not rejected: %v", err)
 	}
 	request["partitionCount"] = 256
-	expectedKey, _ := strconv.Atoi(testPartitionKey("video", objectRef, 256))
+	expectedKey, _ := strconv.Atoi(job["partitionKey"].(string))
 	job["partitionKey"] = strconv.Itoa((expectedKey + 1) % 256)
 	if _, err := importer.ReadFleetRequest(write()); err == nil ||
 		!strings.Contains(err.Error(), "partitionKey") {
 		t.Fatalf("partitionKey drift was not rejected: %v", err)
+	}
+}
+
+// fleetWorkUnits builds jobCount frozen work units ordered by jobId, which is
+// the order DataContentTaskDigest hashes them in.
+func fleetWorkUnits(
+	executionID string,
+	carrier string,
+	stage string,
+	jobCount int,
+	partitionCount int,
+) []map[string]any {
+	sourceRevision := "sha256:" + strings.Repeat("a", 64)
+	jobs := make([]map[string]any, 0, jobCount)
+	for index := 0; index < jobCount; index++ {
+		suffix := fmt.Sprintf("%04d", index)
+		entityRef := "/entity/地点/景区/西湖-" + suffix
+		objectRef := "west-lake-" + suffix
+		jobs = append(jobs, map[string]any{
+			"entityRef":      entityRef,
+			"carrier":        carrier,
+			"sourceRevision": sourceRevision,
+			"idempotencyKey": executionID + "|" + entityRef + "|" + carrier +
+				"|" + sourceRevision + "|" + stage,
+			"jobId":        "job-" + stage + "-" + suffix,
+			"executionId":  executionID,
+			"ref":          objectRef,
+			"stage":        stage,
+			"partitionKey": testPartitionKey(carrier, objectRef, partitionCount),
+			"maxAttempts":  3,
+		})
+	}
+	return jobs
+}
+
+// declaredPartitionBand is one governed band of the partition topology declared
+// by quwoquan_data/schema/execution/data_content_fleet_request.schema.json.
+// maxItems == 0 means the band is unbounded above.
+type declaredPartitionBand struct {
+	minItems       int
+	maxItems       int
+	partitionCount int
+}
+
+func fleetContractRepoRoot(t *testing.T) string {
+	t.Helper()
+	directory, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for {
+		if _, err := os.Stat(fleetRequestSchemaPath(directory)); err == nil {
+			return directory
+		}
+		parent := filepath.Dir(directory)
+		if parent == directory {
+			t.Fatal("data content fleet request schema not found above test directory")
+		}
+		directory = parent
+	}
+}
+
+func fleetRequestSchemaPath(repoRoot string) string {
+	return filepath.Join(
+		repoRoot, "quwoquan_data", "schema", "execution",
+		"data_content_fleet_request.schema.json",
+	)
+}
+
+// declaredPartitionBands reads the governed topology straight from the declared
+// contract so this side cannot drift away from it silently.
+func declaredPartitionBands(t *testing.T) []declaredPartitionBand {
+	t.Helper()
+	raw, err := os.ReadFile(fleetRequestSchemaPath(fleetContractRepoRoot(t)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var contract struct {
+		AllOf []struct {
+			If struct {
+				Properties struct {
+					Jobs struct {
+						MinItems int `json:"minItems"`
+						MaxItems int `json:"maxItems"`
+					} `json:"jobs"`
+				} `json:"properties"`
+			} `json:"if"`
+			Then struct {
+				Properties struct {
+					PartitionCount struct {
+						Const int `json:"const"`
+					} `json:"partitionCount"`
+				} `json:"properties"`
+			} `json:"then"`
+		} `json:"allOf"`
+	}
+	if err := json.Unmarshal(raw, &contract); err != nil {
+		t.Fatal(err)
+	}
+	bands := make([]declaredPartitionBand, 0, len(contract.AllOf))
+	for _, row := range contract.AllOf {
+		band := declaredPartitionBand{
+			minItems:       row.If.Properties.Jobs.MinItems,
+			maxItems:       row.If.Properties.Jobs.MaxItems,
+			partitionCount: row.Then.Properties.PartitionCount.Const,
+		}
+		if band.minItems < 1 || band.partitionCount < 1 {
+			t.Fatalf("declared partition band is incomplete: %#v", row)
+		}
+		bands = append(bands, band)
+	}
+	if len(bands) == 0 {
+		t.Fatal("declared partition topology bands are missing from the contract")
+	}
+	return bands
+}
+
+// writeFleetPartitionRequest freezes one dispatch whose approved quota, worker
+// count and work-unit count all coincide, which is the production shape of a
+// content execution: requiredWorkers carries the quota and must never reach the
+// partition topology.
+func writeFleetPartitionRequest(t *testing.T, jobCount int, partitionCount int) string {
+	t.Helper()
+	executionID := "20260720--travel-image-m1000--cn-zhejiang--scale-990"
+	request := map[string]any{
+		"schema":                    importer.FleetRequestSchema,
+		"executionId":               executionID,
+		"campaignScale":             "M1000",
+		"scaleClass":                "M100_PLUS",
+		"executionEnvelopeDigest":   "sha256:" + strings.Repeat("e", 64),
+		"jobSetEnvelopeDigest":      "sha256:" + strings.Repeat("d", 64),
+		"jobSetDigest":              "sha256:" + strings.Repeat("c", 64),
+		"requiredWorkers":           jobCount,
+		"partitionCount":            partitionCount,
+		"partitionAlgorithm":        "sha256_carrier_object_ref_mod_v1",
+		"checkpointPolicy":          testCheckpointPolicy(),
+		"recoverDeadTasks":          false,
+		"objectTimeoutMilliseconds": 120000,
+		"globalRequiredQuota":       jobCount,
+		"requiredQuota":             jobCount,
+		"jobs": fleetWorkUnits(
+			executionID, "image", "author", jobCount, partitionCount,
+		),
+	}
+	bindFleetRequestTaskDigests(t, request)
+	payload, err := json.Marshal(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "request.json")
+	if err := os.WriteFile(path, payload, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+// declaredPartitionCount resolves one work-unit count through the declared
+// bands so tests never restate the derivation themselves.
+func declaredPartitionCount(t *testing.T, workUnitCount int) int {
+	t.Helper()
+	for _, band := range declaredPartitionBands(t) {
+		if workUnitCount < band.minItems {
+			continue
+		}
+		if band.maxItems == 0 || workUnitCount <= band.maxItems {
+			return band.partitionCount
+		}
+	}
+	t.Fatalf("no declared partition band covers %d work units", workUnitCount)
+	return 0
+}
+
+// TestDataFleetPartitionCountFollowsDeclaredTopologyBands pins this side to the
+// declared contract: partitionCount is derived from the frozen work-unit count
+// carried by jobs, never from requiredWorkers.
+func TestDataFleetPartitionCountFollowsDeclaredTopologyBands(t *testing.T) {
+	governed := []int{16, 32, 64, 128, 256}
+	for _, band := range declaredPartitionBands(t) {
+		jobCounts := []int{band.minItems}
+		if band.maxItems > band.minItems {
+			jobCounts = append(jobCounts, band.maxItems)
+		}
+		for _, jobCount := range jobCounts {
+			t.Run(fmt.Sprintf("jobs=%d", jobCount), func(t *testing.T) {
+				decoded, err := importer.ReadFleetRequest(
+					writeFleetPartitionRequest(t, jobCount, band.partitionCount),
+				)
+				if err != nil {
+					t.Fatalf(
+						"declared partitionCount=%d for %d work units was rejected: %v",
+						band.partitionCount, jobCount, err,
+					)
+				}
+				if decoded.PartitionCount != band.partitionCount ||
+					len(decoded.Jobs) != jobCount {
+					t.Fatalf("declared partition band drift: %#v", decoded)
+				}
+				for _, other := range governed {
+					if other == band.partitionCount {
+						continue
+					}
+					_, err := importer.ReadFleetRequest(
+						writeFleetPartitionRequest(t, jobCount, other),
+					)
+					if err == nil || !strings.Contains(err.Error(), "partitionCount") {
+						t.Fatalf(
+							"partitionCount=%d for %d work units was not rejected: %v",
+							other, jobCount, err,
+						)
+					}
+				}
+			})
+		}
+	}
+}
+
+// TestDataFleetAcceptsPlannedQuotaTiers covers the exact work-unit counts the
+// G1/G2/G3 rollout dispatches, including the oversampled first round and the
+// smaller quota-pursuit replenishment rounds that refreeze a job set from only
+// the newly added work units.
+func TestDataFleetAcceptsPlannedQuotaTiers(t *testing.T) {
+	for _, tier := range []struct {
+		name     string
+		jobCount int
+	}{
+		{name: "G1_quota10", jobCount: 10},
+		{name: "G1_quota10_oversampled", jobCount: 18},
+		{name: "G2_video_lane", jobCount: 10},
+		{name: "G2_quota100", jobCount: 100},
+		{name: "G2_quota100_oversampled", jobCount: 180},
+		{name: "G3_quota1000", jobCount: 1000},
+		{name: "replenishment_round", jobCount: 3},
+		{name: "replenishment_round_tail", jobCount: 7},
+	} {
+		t.Run(tier.name, func(t *testing.T) {
+			expected := declaredPartitionCount(t, tier.jobCount)
+			decoded, err := importer.ReadFleetRequest(
+				writeFleetPartitionRequest(t, tier.jobCount, expected),
+			)
+			if err != nil {
+				t.Fatalf(
+					"quota tier with %d work units was rejected: %v",
+					tier.jobCount, err,
+				)
+			}
+			if decoded.PartitionCount != expected ||
+				decoded.RequiredWorkers != tier.jobCount ||
+				len(decoded.Jobs) != tier.jobCount {
+				t.Fatalf("quota tier partition contract drift: %#v", decoded)
+			}
+		})
 	}
 }
 
@@ -405,7 +642,6 @@ func TestDataFleetReadRequestBoundsRequiredQuotaToFrozenJobs(t *testing.T) {
 			"partitionCount":            16,
 			"partitionAlgorithm":        "sha256_carrier_object_ref_mod_v1",
 			"checkpointPolicy":          testCheckpointPolicy(),
-			"requireCommercial":         true,
 			"recoverDeadTasks":          false,
 			"objectTimeoutMilliseconds": 120000,
 			"globalRequiredQuota":       2,
@@ -457,7 +693,6 @@ func TestDataFleetReadRequestRejectsUnknownFields(t *testing.T) {
 		"executionId":"20260720--travel-image-publish--cn-zhejiang--canary-902",
 		"scaleClass":"BELOW_M100",
 		"executionEnvelopeDigest":"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-		"requireCommercial":true,
 		"recoverDeadTasks":false,
 		"objectTimeoutMilliseconds":120000,
 		"jobs":[],

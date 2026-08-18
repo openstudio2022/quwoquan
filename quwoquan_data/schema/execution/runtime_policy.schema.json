@@ -40,8 +40,6 @@
                     "properties": {
                       "selectionId": { "const": "cursor_grok" },
                       "provider": { "const": "cursor_sdk" },
-                      "model": { "const": "grok-4.5" },
-                      "modelParameters": { "const": [] },
                       "runtime": { "const": "local" },
                       "requiresNewRetryOf": { "const": false }
                     },
@@ -69,50 +67,30 @@
                   }
                 }
               ]
-            },
-            "capacity": {
-              "type": "object",
-              "properties": {
-                "accountScopeId": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"},
-                "hostScopeId": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"},
-                "requestsPerMinute": {"type": "integer", "minimum": 1},
-                "burstLimit": {"type": "integer", "minimum": 1},
-                "laneConcurrencyLimit": {"type": "integer", "minimum": 1},
-                "receiptTtlSeconds": {"type": "integer", "minimum": 1}
-              },
-              "required": [
-                "accountScopeId", "hostScopeId", "requestsPerMinute",
-                "burstLimit", "laneConcurrencyLimit", "receiptTtlSeconds"
-              ],
-              "additionalProperties": false
             }
           },
           "required": [
             "runtime", "fallbackPolicy", "author", "reviewer",
-            "calibration", "explicitSelections", "capacity"
+            "calibration", "explicitSelections"
           ],
-          "additionalProperties": false
-        },
-        "workers": {
-          "type": "object",
-          "properties": {
-            "author": { "type": "integer", "minimum": 1 },
-            "reviewer": { "type": "integer", "minimum": 1 },
-            "research": { "type": "integer", "minimum": 1 },
-            "download": { "type": "integer", "minimum": 1 },
-            "campaignLaneWorkers": { "type": "integer", "minimum": 1 },
-            "partitionsPerWorker": { "type": "integer", "minimum": 1 },
-            "cursorBridgeInstances": { "type": "integer", "minimum": 1 }
-          },
-          "required": ["author", "reviewer", "research", "download", "campaignLaneWorkers", "partitionsPerWorker", "cursorBridgeInstances"],
           "additionalProperties": false
         },
         "selection": {
           "type": "object",
           "properties": {
-            "oversampleFactor": { "type": "number", "minimum": 1 }
+            "oversampleFactor": { "type": "number", "minimum": 1 },
+            "quotaPursuit": {
+              "type": "object",
+              "properties": {
+                "replenishFactor": { "type": "number", "minimum": 1 },
+                "maxRounds": { "type": "integer", "minimum": 1 },
+                "stallRounds": { "type": "integer", "minimum": 1 }
+              },
+              "required": ["replenishFactor", "maxRounds", "stallRounds"],
+              "additionalProperties": false
+            }
           },
-          "required": ["oversampleFactor"],
+          "required": ["oversampleFactor", "quotaPursuit"],
           "additionalProperties": false
         },
         "runtimeEvidence": {
@@ -125,11 +103,16 @@
             "queueFaultEventTimeoutSeconds": {
               "type": "number",
               "exclusiveMinimum": 0
+            },
+            "semanticPreflightReceiptTtlSeconds": {
+              "type": "integer",
+              "minimum": 1
             }
           },
           "required": [
             "processInspectionTimeoutSeconds",
-            "queueFaultEventTimeoutSeconds"
+            "queueFaultEventTimeoutSeconds",
+            "semanticPreflightReceiptTtlSeconds"
           ],
           "additionalProperties": false
         },
@@ -138,28 +121,12 @@
           "properties": {
             "startupTimeoutSeconds": { "type": "integer", "minimum": 1 },
             "campaignSubmissionTimeoutSeconds": { "type": "integer", "minimum": 1 },
-            "campaignLaneTimeoutSeconds": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["BELOW_M100", "M100", "M1000", "M10000"],
-              "properties": {
-                "BELOW_M100": {"type": "integer", "minimum": 1},
-                "M100": {"type": "integer", "minimum": 1},
-                "M1000": {"type": "integer", "minimum": 1},
-                "M10000": {"type": "integer", "minimum": 1}
-              }
-            },
             "preflightNetworkTimeoutSeconds": { "type": "integer", "minimum": 1 },
             "agentTimeoutSeconds": { "type": "integer", "minimum": 1 },
             "authRetryLimit": { "type": "integer", "minimum": 1 },
             "authRetryDelaySeconds": { "type": "integer", "minimum": 1 },
             "noProgressRoundLimit": { "type": "integer", "minimum": 1 },
-            "researchWaveSize": { "type": "integer", "minimum": 1 },
-            "researchMaxWavesPerRun": { "type": "integer", "minimum": 0 },
             "sourcePlanRecoveryPasses": { "type": "integer", "minimum": 0 },
-            "sourcePlanRecoveryWorkers": { "type": "integer", "minimum": 1 },
-            "coldStartMaxWorkers": { "type": "integer", "minimum": 1 },
-            "workerStaggerSeconds": { "type": "number", "exclusiveMinimum": 0 },
             "managedFutureGraceSeconds": { "type": "integer", "minimum": 1 },
             "schedulerStaleSeconds": { "type": "integer", "minimum": 1 },
             "controllerLeaseStaleSeconds": { "type": "integer", "minimum": 1 },
@@ -180,7 +147,6 @@
             "downloadTextTimeoutSeconds": { "type": "integer", "minimum": 1 },
             "downloadBytesTimeoutSeconds": { "type": "integer", "minimum": 1 },
             "stageNoProgressTimeoutSeconds": { "type": "integer", "minimum": 1 },
-            "researchWaveBudgetSeconds": { "type": "integer", "minimum": 1 },
             "networkBreakerThreshold": { "type": "integer", "minimum": 1 },
             "localProcessProbeTimeoutSeconds": { "type": "integer", "minimum": 1 },
             "processTerminationTimeoutSeconds": { "type": "integer", "minimum": 1 },
@@ -217,11 +183,10 @@
           },
           "required": [
             "startupTimeoutSeconds", "campaignSubmissionTimeoutSeconds",
-            "campaignLaneTimeoutSeconds", "preflightNetworkTimeoutSeconds",
+            "preflightNetworkTimeoutSeconds",
             "agentTimeoutSeconds", "authRetryLimit",
             "authRetryDelaySeconds", "noProgressRoundLimit",
-            "researchWaveSize", "researchMaxWavesPerRun", "sourcePlanRecoveryPasses", "sourcePlanRecoveryWorkers",
-            "coldStartMaxWorkers", "workerStaggerSeconds",
+            "sourcePlanRecoveryPasses",
             "managedFutureGraceSeconds", "schedulerStaleSeconds",
             "controllerLeaseStaleSeconds", "assignmentDeadlineSeconds",
             "downloadFetchRetryLimit", "bridgeLaunchCooldownSeconds",
@@ -232,7 +197,7 @@
             "pageImageFetchMaxAttempts", "pageImageFetchRetryBackoffSeconds",
             "pageImageDownloadTimeoutSeconds", "downloadTextTimeoutSeconds",
             "downloadBytesTimeoutSeconds", "stageNoProgressTimeoutSeconds",
-            "researchWaveBudgetSeconds", "networkBreakerThreshold",
+            "networkBreakerThreshold",
             "localProcessProbeTimeoutSeconds", "processTerminationTimeoutSeconds",
             "agentFuturePollTimeoutSeconds", "apiRequestTimeoutSeconds",
             "directFetchTimeoutSeconds",
@@ -272,7 +237,6 @@
               "pattern": "^https://"
             },
             "wikidataResultLimit": { "type": "integer", "minimum": 1 },
-            "overpassConcurrency": { "type": "integer", "minimum": 1 },
             "overpassResultLimit": { "type": "integer", "minimum": 1 },
             "overpassEndpoints": {
               "type": "array",
@@ -287,7 +251,7 @@
             "maxTotalCandidates", "requiredEmptyPages", "requestTimeoutSeconds",
             "rateLimitPerSecond", "wikiCategoryDepth", "retryBackoffMultiplier",
             "wikidataSparqlEndpoint", "wikidataResultLimit",
-            "overpassConcurrency", "overpassResultLimit", "overpassEndpoints"
+            "overpassResultLimit", "overpassEndpoints"
           ],
           "additionalProperties": false
         },
@@ -313,7 +277,7 @@
           "additionalProperties": false
         }
       },
-      "required": ["semanticAgent", "workers", "selection", "runtimeEvidence", "budgets", "coverageDiscovery", "network"],
+      "required": ["semanticAgent", "selection", "runtimeEvidence", "budgets", "coverageDiscovery", "network"],
       "additionalProperties": false
     }
   },

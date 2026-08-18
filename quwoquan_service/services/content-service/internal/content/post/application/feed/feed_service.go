@@ -243,6 +243,13 @@ type ListFeedResponse struct {
 	FeedRequestID string `json:"feedRequestId"`
 	// PolicyDigest 本次推荐结果唯一策略内容摘要；具名浏览查询为空。
 	PolicyDigest string `json:"policyDigest,omitempty"`
+	// ReleaseID/ManifestDigest 运行时内容激活身份（ContentActivationIdentity）。
+	// release-bound 页面（有内容、no_eligible_content 与 continuation）必须携带
+	// 完整身份；emptyReason=no_active_release 与不绑定 release 的 following
+	// 社交流两者同时缺席。失败继续走 canonical runtime-error envelope，
+	// 不得编码为空态或缺席身份。
+	ReleaseID      string `json:"releaseId,omitempty"`
+	ManifestDigest string `json:"manifestDigest,omitempty"`
 }
 
 // feedTimeOrEmpty 把零值时间渲染为空串（配合 json omitempty 省略），
@@ -417,6 +424,8 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 			return emptyListFeedResponse(
 				feedRequestID,
 				FeedEmptyReasonNoActiveRelease,
+				"",
+				"",
 			), nil
 		}
 		if !activeSupply.ReleaseBoundReadbackReady() {
@@ -440,6 +449,8 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 			return emptyListFeedResponse(
 				feedRequestID,
 				FeedEmptyReasonNoEligibleContent,
+				activeSupply.ActiveReleaseID,
+				activeSupply.ManifestDigest,
 			), nil
 		}
 	}
@@ -580,6 +591,8 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 			PaginationExpiresAt: paginationExpiryWire(replay.paginationExpiresAt),
 			FeedRequestID:       replay.feedRequestID,
 			PolicyDigest:        replay.policyDigest,
+			ReleaseID:           replay.releaseID,
+			ManifestDigest:      replay.manifestDigest,
 		}, nil
 	}
 	hydrationRequested := 0
@@ -881,5 +894,13 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 		PaginationExpiresAt: paginationExpiryWire(paginationExpiresAt),
 		FeedRequestID:       feedRequestID,
 		PolicyDigest:        policyDigest,
+		ReleaseID: releaseBoundCursorValue(
+			releaseBoundRecommend || releaseBoundVideoBook,
+			activeSupply.ActiveReleaseID,
+		),
+		ManifestDigest: releaseBoundCursorValue(
+			releaseBoundRecommend || releaseBoundVideoBook,
+			activeSupply.ManifestDigest,
+		),
 	}, nil
 }

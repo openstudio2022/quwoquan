@@ -26,11 +26,12 @@ from pathlib import Path
 from typing import Any
 
 from core import ops_governance as og
+from content.source.source_unit_asset_entry import build_source_asset_entry
+from core.content_library import link_bytes_from_library, link_from_library
 from core.image_decode import probe_image_bytes
 from core.image_variants import build_local_variants
 from core.io import write_json
 from core.paths import (
-    STAGE_DOWNLOAD,
     execution_source_unit_dir,
     object_source_unit_dir,
     relative_execution_ref,
@@ -39,6 +40,10 @@ from core.source_attribution import source_attribution_fragment
 
 from content.execution.runtime_contract import stage_execution_context
 from content.source.source_snapshot_redaction import redact_raw_source_snapshot
+from content.source.source_unit_attribution import (
+    resolve_source_unit_attribution,
+    resolve_source_unit_kind,
+)
 from content.source.source_unit_manifest_media import (
     apply_image_collection_manifest_defaults,
 )
@@ -134,12 +139,12 @@ def write_source_unit(
 
     snapshot_hash = "sha256:" + hashlib.sha256(source_md.encode("utf-8")).hexdigest()
     source_payload = source or {}
-    resolved_source_kind = (
-        str(source_kind or "").strip()
-        or str(source_payload.get("sourceKind") or "").strip()
-        or source_category
-        or platform
-        or "web"
+    rejected_unit = str((quality or {}).get("quality") or "").strip() == "Reject"
+    resolved_source_kind = resolve_source_unit_kind(
+        source_kind=source_kind,
+        source_payload=source_payload,
+        source_category=source_category,
+        platform=platform,
     )
     resolved_extractor = str(
         extractor or source_payload.get("extractor") or ""
@@ -192,7 +197,7 @@ def write_source_unit(
             else object_source_unit_dir(object_dir, ordinal, source_id)
         )
     )
-    ensure_object_stages(object_dir, through_stage=STAGE_DOWNLOAD)
+    ensure_object_stages(object_dir)
     unit.mkdir(parents=True, exist_ok=True)
     (unit / "source.md").write_text(source_md, encoding="utf-8")
     if clean_md:
@@ -204,8 +209,10 @@ def write_source_unit(
     )
     if persisted_snapshot_bytes is not None:
         # 原始快照按真实格式命名：MediaWiki API 返回 JSON，不能再误命名为 page.html。
-        (unit / source_unit_raw_snapshot_name(raw_format)).write_bytes(
-            persisted_snapshot_bytes
+        link_bytes_from_library(
+            persisted_snapshot_bytes,
+            unit / source_unit_raw_snapshot_name(raw_format),
+            kind="source",
         )
     if quality is not None:
         write_json(unit / "source.quality.json", dict(quality))
@@ -233,13 +240,13 @@ def write_source_unit(
         body = img.get("bytes")
         if body is not None:
             assets_dir.mkdir(parents=True, exist_ok=True)
-            dest.write_bytes(body)
+            link_bytes_from_library(body, dest, kind="media")
         elif img.get("sourcePath"):
             src = Path(str(img["sourcePath"]))
             if not src.is_file():
                 raise FileNotFoundError(f"source asset missing: {src}")
             assets_dir.mkdir(parents=True, exist_ok=True)
-            dest.write_bytes(src.read_bytes())
+            link_from_library(src, dest, kind="media")
             body = dest.read_bytes()
         else:
             continue
@@ -261,7 +268,7 @@ def write_source_unit(
                 var_bytes = var.pop("bytes")
                 var_path = assets_dir / var["fileName"]
                 var_path.parent.mkdir(parents=True, exist_ok=True)
-                var_path.write_bytes(var_bytes)
+                link_bytes_from_library(var_bytes, var_path, kind="media")
                 variants_meta.append(var)
         professional_identity = (
             str(img.get("acquisitionReceiptRef") or "").strip(),
@@ -274,90 +281,23 @@ def write_source_unit(
             )
         if professional_identity[0] and professional_identity[2] != sha:
             raise ValueError("professional source image contentSha256 drift")
-        entry = {
-            "sourceAssetId": f"{ordinal:03d}_{k:03d}",
-            "fileName": file_name,
-            "url": str(img.get("url") or ""),
-            "requestedUrl": str(img.get("requestedUrl") or img.get("url") or ""),
-            "normalizedFromUrl": str(img.get("normalizedFromUrl") or ""),
-            "sourceUrl": str(img.get("sourceUrl") or img.get("url") or ""),
-            "contentType": str(img.get("contentType") or ""),
-            "width": int(width) if width else 0,
-            "height": int(height) if height else 0,
-            "bytes": dest.stat().st_size,
-            "sha256": sha,
-            "license": str(img.get("license") or ""),
-            "credit": str(img.get("credit") or ""),
-            "termsUrl": str(img.get("termsUrl") or ""),
-            "licenseSnapshot": str(img.get("licenseSnapshot") or ""),
-            "usageScope": str(img.get("usageScope") or ""),
-            "generationModel": str(img.get("generationModel") or ""),
-            "generationPromptHash": str(img.get("generationPromptHash") or ""),
-            "generatedAt": str(img.get("generatedAt") or ""),
-            "syntheticDisclosure": str(img.get("syntheticDisclosure") or ""),
-            "sourceCollectionId": str(img.get("sourceCollectionId") or ""),
-            "creator": str(img.get("creator") or img.get("credit") or ""),
-            "collectionPageUrl": str(img.get("collectionPageUrl") or img.get("sourceUrl") or ""),
-            "authorizationProof": str(img.get("authorizationProof") or ""),
-            "acquisitionReceiptRef": str(img.get("acquisitionReceiptRef") or ""),
-            "professionalAssetId": str(img.get("professionalAssetId") or ""),
-            "professionalContentSha256": str(
-                img.get("professionalContentSha256") or ""
-            ),
-            "acquisitionStatus": str(img.get("acquisitionStatus") or ""),
-            "rightsStatus": str(
-                img.get("rightsStatus") or img.get("rightsAuditStatus") or ""
-            ),
-            "authorizationRequired": img.get("authorizationRequired"),
-            "distributionDecision": str(img.get("distributionDecision") or ""),
-            "platform": str(img.get("platform") or ""),
-            "capturedAt": str(img.get("capturedAt") or ""),
-            "contentSha256": sha,
-            "rightsIssues": list(
-                img.get("rightsIssues") or img.get("rightsAuditIssues") or []
-            ),
-            **provenance.audit_fields(),
-            "caption": str(img.get("caption") or ""),
-            "relevance": str(img.get("relevance") or relevance or ""),
-            "variants": variants_meta,
-            "variantGeneration": "inline" if build_variants else "deferred",
-            "inlinePlaceholderId": str(img.get("placeholderId") or ""),
-            # 布局/封面候选语义（来自 source.layout.json figure；非结构源为空/默认）：
-            # placementType=infoboxLead|locatorMap|inline|groupMember；rank=-1 禁封面。
-            "placementType": str(
-                img.get("placementType")
-                or (
-                    "infoboxLead"
-                    if resolved_source_kind == "image_collection" and k == 1
-                    else "groupMember" if resolved_source_kind == "image_collection" else ""
-                )
-            ),
-            "groupId": str(img.get("groupId") or ""),
-            "sectionSlug": str(img.get("sectionSlug") or ""),
-            "sourceOrder": int(img.get("sourceOrder") or 0),
-            "coverCandidateRank": int(img.get("coverCandidateRank") or 0),
-            "subjectKey": str(img.get("subjectKey") or ""),
-            "isMapLike": bool(img.get("isMapLike")),
-            "pageResolvedTitle": str(img.get("pageResolvedTitle") or ""),
-            "pageId": int(img.get("pageId") or 0),
-            "pageRevisionId": int(img.get("pageRevisionId") or 0),
-            "pageContentSha256": str(img.get("pageContentSha256") or ""),
-            "renderedImageCount": int(img.get("renderedImageCount") or 0),
-            # 代表性实景图同时受地图和垂类媒体主体规则约束。
-            "isRepresentativeVisual": _is_representative_visual(
-                execution_id,
-                img,
-            ),
-            # provider 原图主体优先；图位 caption 仅在无独立证据时回退。
-            "visualSubject": str(img.get("visualSubject") or img.get("caption") or ""),
-            # Commons category -> Wikidata 多语言标签，是视觉主体别名的唯一
-            # provider 证据；下游只能消费这些冻结行，不能自行翻译文件名。
-            "visualSubjectEvidence": [
-                dict(item)
-                for item in img.get("visualSubjectEvidence") or []
-                if isinstance(item, Mapping)
-            ],
-        }
+        entry = build_source_asset_entry(
+            img,
+            execution_id=execution_id,
+            ordinal=ordinal,
+            k=k,
+            file_name=file_name,
+            sha=sha,
+            width=width,
+            height=height,
+            dest_bytes=dest.stat().st_size,
+            provenance=provenance,
+            variants_meta=variants_meta,
+            build_variants=build_variants,
+            relevance=relevance or "",
+            resolved_source_kind=resolved_source_kind,
+            is_representative_visual=_is_representative_visual(execution_id, img),
+        )
         asset_index.append(entry)
         placeholder_id = str(img.get("placeholderId") or "").strip()
         if placeholder_id:
@@ -446,6 +386,18 @@ def write_source_unit(
         "assetCount": len(asset_index),
     }
     manifest.update(source_attribution_fragment(source_payload))
+    if "sourceAttribution" not in manifest and not rejected_unit:
+        # 只有可交付的来源单元才受 attribution fail-closed 约束；被判 Reject 的单元
+        # 是隔离后的审计证据，永远不会进入 post manifest 或 pool delivery。
+        attribution = resolve_source_unit_attribution(
+            source_payload,
+            research_lane=research_lane,
+            resolved_source_kind=resolved_source_kind,
+            source_url=canonical_url or url,
+            captured_at=str(manifest["fetchedAt"]),
+        )
+        if attribution is not None:
+            manifest["sourceAttribution"] = attribution
     article_site_id = str(source_payload.get("articleSiteId") or "").strip()
     article_profile_digest = str(
         source_payload.get("sourceDiscoveryProfileDigest") or ""

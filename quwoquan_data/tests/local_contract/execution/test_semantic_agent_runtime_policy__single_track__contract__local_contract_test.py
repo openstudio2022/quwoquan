@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import yaml
+
 from content.execution.model_contract import execution_model_pair
 from content.execution.preflight import handler as preflight_handler
 from content.execution.planning.recipe.model import load_recipe
 from content.execution.scale.semantic_promotion import scale_calibration_sample_count
 from core.control_types import AgentProvider
 from core.paths import CONTROL_PLANE_SHARED_ROOT
-from core.runtime_policy import active_runtime_policy
+from core.runtime_policy import active_runtime_policy, runtime_profile_path
 
 
 def test_semantic_agent_runtime_policy_binds_terra_roles_and_sol_calibration() -> None:
@@ -26,19 +28,67 @@ def test_semantic_agent_runtime_policy_binds_terra_roles_and_sol_calibration() -
     assert policy.semantic_calibration.sample_count(101) == 11
     assert policy.semantic_calibration.sample_count(1000) == 100
     assert policy.semantic_fallback_policy == "forbidden"
-    assert policy.semantic_capacity.account_scope_id == "primary-semantic-account"
-    assert policy.semantic_capacity.host_scope_id == "local-data-host"
-    assert policy.semantic_capacity.requests_per_minute == 60
-    assert policy.semantic_capacity.burst_limit == 4
-    assert policy.semantic_capacity.lane_concurrency_limit == 2
-    assert policy.semantic_capacity.receipt_ttl_seconds == 600
     assert policy.runtime_evidence.process_inspection_timeout_seconds == 5.0
     assert policy.runtime_evidence.queue_fault_event_timeout_seconds == 120.0
+    assert policy.runtime_evidence.semantic_preflight_receipt_ttl_seconds == 600
     assert policy.semantic_agent_runtime.value == "local"
-    assert policy.process_environment()["QWQ_SEMANTIC_AGENT_PROVIDER"] == "codex_sdk"
-    assert policy.process_environment()["QWQ_SEMANTIC_AGENT_MODEL"] == "gpt-5.6-terra"
+    environment = policy.process_environment()
+    assert environment["QWQ_SEMANTIC_AGENT_PROVIDER"] == "codex_sdk"
+    assert environment["QWQ_SEMANTIC_AGENT_MODEL"] == "gpt-5.6-terra"
+    assert "QWQ_MANAGED_LOCAL_SEMANTIC_AGENT_MAX_WORKERS" not in environment
+    assert "QWQ_CURSOR_BRIDGE_INSTANCES" not in environment
+    assert not hasattr(policy, "semantic_capacity")
+    assert not hasattr(policy, "author_workers")
+    assert not hasattr(policy, "reviewer_workers")
+    assert not hasattr(policy, "research_workers")
+    assert not hasattr(policy, "download_concurrency")
+    assert not hasattr(policy, "partitions_per_worker")
+    assert not hasattr(policy, "research_wave_size")
+    assert not hasattr(policy, "research_max_waves_per_run")
+    assert not hasattr(policy, "source_plan_recovery_workers")
+    assert not hasattr(policy, "cold_start_max_workers")
+    assert not hasattr(policy, "worker_stagger_seconds")
+    assert not hasattr(policy, "research_wave_budget_seconds")
+    assert not hasattr(policy, "campaign_lane_workers")
+    assert not hasattr(policy, "cursor_bridge_instances")
     assert not hasattr(policy, "cursor_provider")
     assert not hasattr(policy, "cursor_model_selection")
+
+
+def test_runtime_profile_has_no_static_semantic_capacity_or_worker_limits() -> None:
+    document = yaml.safe_load(
+        runtime_profile_path("semantic_agent_local_calibrated").read_text(
+            encoding="utf-8"
+        )
+    )
+    semantic_agent = document["policy"]["semanticAgent"]
+    runtime_policy = document["policy"]
+
+    assert "capacity" not in semantic_agent
+    assert "coordination" not in semantic_agent
+    assert "workers" not in runtime_policy
+    assert not {
+        "requestsPerMinute",
+        "burstLimit",
+        "laneConcurrencyLimit",
+        "receiptTtlSeconds",
+    }.intersection(semantic_agent)
+    assert not {
+        "researchWaveSize",
+        "researchMaxWavesPerRun",
+        "sourcePlanRecoveryWorkers",
+        "coldStartMaxWorkers",
+        "workerStaggerSeconds",
+        "researchWaveBudgetSeconds",
+        "campaignLaneTimeoutSeconds",
+    }.intersection(runtime_policy["budgets"])
+    assert "overpassConcurrency" not in runtime_policy["coverageDiscovery"]
+    assert (
+        document["policy"]["runtimeEvidence"][
+            "semanticPreflightReceiptTtlSeconds"
+        ]
+        == 600
+    )
 
 
 def test_scale_calibration_sample_count_matches_runtime_policy() -> None:
@@ -54,8 +104,13 @@ def test_cursor_grok_is_primary_and_cursor_auto_requires_a_new_retry() -> None:
     retry = active_runtime_policy().explicit_semantic_selection("cursor_auto")
 
     assert primary.binding.provider is AgentProvider.CURSOR_SDK
-    assert primary.binding.model == "grok-4.5"
-    assert primary.binding.model_parameters == ()
+    # The grok family is governed; the version and reasoning tier are profile
+    # values proven against the account catalog by preflight, not constants.
+    assert primary.binding.model.startswith("grok-")
+    assert all(
+        parameter.id and parameter.value
+        for parameter in primary.binding.model_parameters
+    )
     assert primary.runtime.value == "local"
     assert primary.requires_new_retry_of is False
     assert retry.binding.provider is AgentProvider.CURSOR_SDK
@@ -83,7 +138,7 @@ def test_four_recipes_bind_terra_for_independent_author_and_reviewer() -> None:
         assert pair.reviewer.family.value == "gpt"
 
 
-def test_capacity_soak_dispatches_codex_terra_without_silent_fallback(
+def test_capacity_probe_dispatches_codex_terra_without_silent_fallback(
     monkeypatch,
 ) -> None:
     policy = active_runtime_policy()
@@ -94,7 +149,7 @@ def test_capacity_soak_dispatches_codex_terra_without_silent_fallback(
         return {
             "attempts": policy.startup_probe_suite_attempts,
             "successCount": policy.startup_probe_suite_attempts,
-            "effectiveConcurrency": policy.campaign_lane_workers,
+            "effectiveConcurrency": policy.startup_probe_suite_attempts,
             "bridgeDisconnectCount": 0,
             "issues": [],
             "ready": True,
@@ -110,8 +165,5 @@ def test_capacity_soak_dispatches_codex_terra_without_silent_fallback(
     }
     assert "include_catalog" not in observed
     assert report["ready"] is True
-    assert report["capacityContract"]["provider"] == "codex_sdk"
-    assert (
-        report["capacityContract"]["requiredConcurrency"]
-        == policy.campaign_lane_workers
-    )
+    assert report["probeIntent"]["provider"] == "codex_sdk"
+    assert "requiredConcurrency" not in report["probeIntent"]

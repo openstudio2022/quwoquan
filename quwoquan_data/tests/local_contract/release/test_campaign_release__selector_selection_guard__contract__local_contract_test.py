@@ -49,6 +49,7 @@ def test_campaign_release__missing_publish_binding_fails_schema_before_aggregate
         build_campaign_release(
             root_execution_id=str(fixture["rootId"]),
             release_id=RELEASE_ID,
+            release_class="research",
             roots=fixture["roots"],
         )
 
@@ -81,6 +82,7 @@ def test_campaign_release__conflicting_self_consistent_selection_blocks_before_a
     initial = build_campaign_release(
         root_execution_id=str(fixture["rootId"]),
         release_id=RELEASE_ID,
+        release_class="research",
         roots=roots,
     )
     selection_path = Path(initial["campaignSelectionAttestation"])
@@ -109,6 +111,7 @@ def test_campaign_release__conflicting_self_consistent_selection_blocks_before_a
         build_campaign_release(
             root_execution_id=str(fixture["rootId"]),
             release_id=RELEASE_ID,
+            release_class="research",
             roots=roots,
         )
 
@@ -141,6 +144,7 @@ def test_campaign_release__selection_extra_field_blocks_before_aggregate(
     initial = build_campaign_release(
         root_execution_id=str(fixture["rootId"]),
         release_id=RELEASE_ID,
+        release_class="research",
         roots=roots,
     )
     selection_path = Path(initial["campaignSelectionAttestation"])
@@ -169,6 +173,7 @@ def test_campaign_release__selection_extra_field_blocks_before_aggregate(
         build_campaign_release(
             root_execution_id=str(fixture["rootId"]),
             release_id=RELEASE_ID,
+            release_class="research",
             roots=roots,
         )
 
@@ -211,6 +216,7 @@ def test_campaign_release__existing_release_without_selection_backfills_attestat
     result = build_campaign_release(
         root_execution_id=str(fixture["rootId"]),
         release_id=RELEASE_ID,
+        release_class="research",
         roots=roots,
     )
     selection_path = Path(result["campaignSelectionAttestation"])
@@ -245,6 +251,7 @@ def test_campaign_release__publish_ref_digest_tamper_blocks_aggregate(
         build_campaign_release(
             root_execution_id=str(fixture["rootId"]),
             release_id=RELEASE_ID,
+            release_class="research",
             roots=roots,
         )
     assert caught.value.code == "DATA.CAMPAIGN.RELEASE_PUBLISH_BINDING_DRIFT"
@@ -271,6 +278,7 @@ def test_campaign_release__stale_runtime_checkpoint_blocks_selection(
         build_campaign_release(
             root_execution_id=str(fixture["rootId"]),
             release_id=RELEASE_ID,
+            release_class="research",
             roots=fixture["roots"],
         )
     assert caught.value.code == "DATA.CAMPAIGN.RELEASE_FENCE_DRIFT"

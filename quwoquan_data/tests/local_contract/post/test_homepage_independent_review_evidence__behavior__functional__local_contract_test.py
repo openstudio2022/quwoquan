@@ -12,6 +12,7 @@ if str(SCRIPTS) not in sys.path:
 
 from core.schema import assert_valid
 from core.prompt_render import render
+from content.execution.model_contract import governed_cursor_grok_model
 from content.homepage.homepage_review import (
     apply_independent_homepage_review,
     homepage_asset_file_evidence,
@@ -85,7 +86,7 @@ def test_homepage_independent_review__binds_typed_response_to_canonical_evidence
     assert apply_independent_homepage_review(
         review_dir=review_dir,
         provider="cursor_sdk",
-        model="grok-4.5",
+        model=governed_cursor_grok_model(),
         model_family="grok",
         run_id="review-run-001",
         result_payload=response,

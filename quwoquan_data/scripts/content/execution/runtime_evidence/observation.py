@@ -91,6 +91,7 @@ class SystemProcessInspector:
         try:
             pgid = int(self._ps(pid, "pgid"))
             rss_bytes = int(self._ps(pid, "rss")) * 1024
+            cpu_percent = float(self._ps(pid, "%cpu"))
         except ValueError as exc:
             raise RuntimeEvidenceError(f"process metrics are invalid: {pid}") from exc
         command = self._ps(pid, "command")
@@ -103,6 +104,7 @@ class SystemProcessInspector:
             command=command,
             start_token=start_token,
             rss_bytes=rss_bytes,
+            cpu_percent=cpu_percent,
             open_fd_count=self._fd_count(pid),
         )
 
@@ -184,6 +186,8 @@ def process_measurements(
                     "pgid": observation.pgid,
                     "processIdentityDigest": observation.identity_digest,
                     "rssBytes": observation.rss_bytes,
+                    "cpuPercent": observation.cpu_percent,
+                    "isCursorSdkBridge": "cursor-sdk-bridge" in observation.command,
                     "openFdCount": observation.open_fd_count,
                 }
             )

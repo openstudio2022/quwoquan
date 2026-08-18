@@ -76,30 +76,15 @@ def load_launch_manifest_contract(
         raise LaunchManifestContractError(
             "local_transport_targets must only contain declared targets"
         )
-    content_binding = decoded.get("content_binding_contract")
-    if not isinstance(content_binding, dict):
+    if "content_binding_contract" in decoded:
         raise LaunchManifestContractError(
-            "content_binding_contract must be an object"
+            "launch manifest metadata must not declare content binding; "
+            "content activation identity is a runtime server-side fact"
         )
-    binding_fields = content_binding.get("fields")
-    digest_fields = content_binding.get("digest_fields")
-    required_launch_policies = content_binding.get("required_launch_policies")
     launch_policies = decoded.get("launch_policies")
-    supported_binding_modes = {"unbound", "run_bound", "immutable_release"}
     if (
-        not isinstance(binding_fields, list)
-        or not binding_fields
-        or any(not isinstance(field, str) or not field for field in binding_fields)
-        or len(set(binding_fields)) != len(binding_fields)
-        or not isinstance(digest_fields, list)
-        or any(field not in binding_fields for field in digest_fields)
-        or not isinstance(required_launch_policies, list)
-        or any(
-            not isinstance(policy, str) or not policy
-            for policy in required_launch_policies
-        )
-        or not isinstance(launch_policies, dict)
-        or set(required_launch_policies) - set(launch_policies)
+        not isinstance(launch_policies, dict)
+        or not launch_policies
         or any(
             not isinstance(policy, str)
             or not policy
@@ -110,20 +95,10 @@ def load_launch_manifest_contract(
                 not isinstance(environment, str) or not environment
                 for environment in policy_contract["environments"]
             )
-            or not isinstance(policy_contract.get("content_binding_modes"), list)
-            or not policy_contract["content_binding_modes"]
-            or any(
-                not isinstance(mode, str) or mode not in supported_binding_modes
-                for mode in policy_contract["content_binding_modes"]
-            )
-            or len(set(policy_contract["content_binding_modes"]))
-            != len(policy_contract["content_binding_modes"])
             for policy, policy_contract in launch_policies.items()
         )
     ):
-        raise LaunchManifestContractError(
-            "content_binding_contract definition is invalid"
-        )
+        raise LaunchManifestContractError("launch_policies definition is invalid")
 
     digest_contract = decoded.get("digest_contract")
     if not isinstance(digest_contract, dict):
@@ -194,9 +169,15 @@ def load_launch_manifest_contract(
             )
 
     effective_fields = schemas["app_effective_launch_manifest"]["fields"]
-    if not set(binding_fields).issubset(effective_fields):
+    forbidden_content_fields = {
+        "contentBindingState",
+        "contentReleaseId",
+        "contentManifestDigest",
+        "contentReadinessReceiptDigest",
+    }
+    if forbidden_content_fields & set(effective_fields):
         raise LaunchManifestContractError(
-            "content binding fields must belong to app_effective_launch_manifest"
+            "app_effective_launch_manifest must not carry content release identity"
         )
     environment_values = effective_fields.get("environment", {}).get(
         "allowed_values"
@@ -468,59 +449,14 @@ def validate_handoff_against_metadata(
     if handoff.get("effectiveLaunchManifestDigest") != expected_effective_digest:
         issues.append("effectiveLaunchManifestDigest does not match canonical metadata")
 
-    binding_contract = selected_contract["content_binding_contract"]
-    binding_fields = binding_contract["fields"]
-    binding_values = {
-        field: effective_manifest.get(field) for field in binding_fields
-    }
-    populated_fields = [
-        field
-        for field, value in binding_values.items()
-        if isinstance(value, str) and bool(value)
-    ]
-    if populated_fields and len(populated_fields) != len(binding_fields):
-        issues.append("effective launch content binding must be all empty or complete")
-    if len(populated_fields) == len(binding_fields):
-        for field in binding_contract["digest_fields"]:
-            if not is_digest_identity(binding_values[field], selected_contract):
-                issues.append(
-                    f"effective launch content binding {field} must be a canonical digest identity"
-                )
     launch_policy = effective_manifest.get("launchPolicy")
     policy_contract = selected_contract["launch_policies"].get(launch_policy)
     environment = effective_manifest.get("environment")
     if not isinstance(policy_contract, dict):
         issues.append(f"effective launch policy is unsupported: {launch_policy}")
-    else:
-        if environment not in policy_contract.get("environments", []):
-            issues.append(
-                f"effective launch policy {launch_policy} is invalid for {environment}"
-            )
-        if len(populated_fields) == len(binding_fields):
-            binding_mode = (
-                "run_bound"
-                if launch_policy == "test_live"
-                else "immutable_release"
-            )
-            expected_binding_state = "bound"
-        else:
-            binding_mode = "unbound"
-            expected_binding_state = "unbound"
-        if binding_mode not in policy_contract.get("content_binding_modes", []):
-            issues.append(
-                f"effective launch content binding mode {binding_mode} "
-                f"is invalid for launch policy {launch_policy}"
-            )
-        if effective_manifest.get("contentBindingState") != expected_binding_state:
-            issues.append(
-                "effective launch contentBindingState disagrees with content binding mode"
-            )
-    if (
-        launch_policy in binding_contract["required_launch_policies"]
-        and len(populated_fields) != len(binding_fields)
-    ):
+    elif environment not in policy_contract.get("environments", []):
         issues.append(
-            f"effective launch content binding is required for launch policy {launch_policy}"
+            f"effective launch policy {launch_policy} is invalid for {environment}"
         )
     defines = handoff.get("dartDefines")
     if isinstance(defines, dict):

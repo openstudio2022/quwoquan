@@ -88,14 +88,39 @@ def _material_is_ready(
         payload = json.loads(public_keys_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return False
-    if not isinstance(payload, dict) or KEY_ID not in payload:
+    if not isinstance(payload, dict) or set(payload) != {KEY_ID}:
+        return False
+    try:
+        public_key = base64.b64decode(payload[KEY_ID], validate=True)
+    except (TypeError, ValueError, base64.binascii.Error):
+        return False
+    if len(public_key) != 32:
         return False
     check = subprocess.run(
         [openssl, "pkey", "-in", str(private_pem), "-noout"],
         capture_output=True,
         check=False,
     )
-    return check.returncode == 0
+    if check.returncode != 0:
+        return False
+    public_check = subprocess.run(
+        [
+            openssl,
+            "pkey",
+            "-in",
+            str(private_pem),
+            "-pubout",
+            "-outform",
+            "DER",
+        ],
+        capture_output=True,
+        check=False,
+    )
+    return (
+        public_check.returncode == 0
+        and len(public_check.stdout) >= 32
+        and public_check.stdout[-32:] == public_key
+    )
 
 
 def _issue_keypair(

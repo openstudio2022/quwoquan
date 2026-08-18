@@ -53,10 +53,8 @@ bash quwoquan_ops/gate/gate_repo.sh
 
 ## 分支治理
 
-- 本地长期工作分支只允许 `dev1.0`。
-- 远端只保留 `dev1.0` 与 `main`；`main` 只接受从 `dev1.0` 合入的主干发布更新，不保留本地长期工作分支。
-- 未经明确批准，不允许创建、提交或推送其他分支。
+- 允许的分支与 PR 前缀由 [`quwoquan_ops/policies/branch_policy.yaml`](quwoquan_ops/policies/branch_policy.yaml) 唯一声明，此处不复制清单。当前策略是 `main` 为唯一长期分支，短期 PR 分支按该文件声明的前缀创建、合并后删除。
 - 本地执行 `bash quwoquan_ops/gate/scaffold/install-hooks.sh` 后，`pre-commit` 和 `pre-push` 会阻断非白名单分支；repo gate 也会对本地/远端分支做同样校验。
 - `pre-commit` 跑 L0 `make commit-gate`（目标 ≤10 分钟，硬顶 15 分钟：并行静态 + 影响面测试）；全量 local_contract 由 CI Delivery Gate 分片承接。
 
-规格入口见 `specs/feature-tree/README.md`，Codex/Cursor 执行约束见 `AGENTS.md` 与 `.cursor/commands/*.md`。
+规格入口见 `specs/feature-tree/README.md`。Agent 执行约束见 `AGENTS.md`（分派协议与五段执行契约）与 `.agents/skills/`（工作流技能与 review 派发，三家 harness 共享）。

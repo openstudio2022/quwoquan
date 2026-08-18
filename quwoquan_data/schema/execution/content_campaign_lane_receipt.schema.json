@@ -63,36 +63,6 @@
       "type": "integer",
       "minimum": 0
     },
-    "executionPublishRef": {
-      "type": "string",
-      "minLength": 1,
-      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
-    },
-    "executionPublishSha256": {
-      "type": "string",
-      "pattern": "^sha256:[a-f0-9]{64}$"
-    },
-    "campaignRunId": {
-      "type": "string",
-      "minLength": 1
-    },
-    "campaignGeneration": {
-      "type": "integer",
-      "minimum": 1
-    },
-    "campaignFencingToken": {
-      "type": "string",
-      "pattern": "^sha256:[a-f0-9]{64}$"
-    },
-    "reviewedClosureAdoption": {
-      "$ref": "reviewed_closure_adoption_campaign_binding.schema.json"
-    },
-    "adoptedObjectRefs": {
-      "type": "array",
-      "minItems": 1,
-      "uniqueItems": true,
-      "items": {"type": "string", "minLength": 1}
-    },
     "discards": {
       "type": "array",
       "items": {
@@ -117,35 +87,6 @@
         "required": ["phase"]
       },
       "then": {
-        "not": {
-          "anyOf": [
-            {
-              "required": [
-                "executionPublishRef"
-              ]
-            },
-            {
-              "required": [
-                "executionPublishSha256"
-              ]
-            },
-            {
-              "required": [
-                "campaignRunId"
-              ]
-            },
-            {
-              "required": [
-                "campaignGeneration"
-              ]
-            },
-            {
-              "required": [
-                "campaignFencingToken"
-              ]
-            }
-          ]
-        },
         "properties": {
           "status": { "enum": ["qualified", "partial", "blocked"] },
           "finalizedCount": { "const": 0 }
@@ -158,19 +99,6 @@
         "required": ["phase"]
       },
       "then": {
-        "required": [
-          "campaignRunId",
-          "campaignGeneration",
-          "campaignFencingToken"
-        ],
-        "oneOf": [
-          {
-            "required": ["executionPublishRef", "executionPublishSha256"]
-          },
-          {
-            "required": ["reviewedClosureAdoption", "adoptedObjectRefs"]
-          }
-        ],
         "properties": {
           "status": { "enum": ["finalized", "partial", "blocked"] }
         }

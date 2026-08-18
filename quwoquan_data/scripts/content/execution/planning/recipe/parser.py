@@ -59,6 +59,13 @@ def register_recipe_parser(
         ),
     )
     parser.add_argument(
+        "--capacity-calibration-receipt",
+        help=(
+            "受治理 M100 wave soak 产出的 create-once capacity calibration receipt；"
+            "两个并行上限与时间预算只从该文件冻结"
+        ),
+    )
+    parser.add_argument(
         "--video-scale-promotion",
         help=(
             "travel/video M1000 的已批准 M100 promotion receipt；"
@@ -121,21 +128,6 @@ def register_recipe_parser(
         "--count",
         type=int,
         help="候选池上限；省略时由 runtime policy oversampleFactor 推导",
-    )
-    parser.add_argument(
-        "--required-workers",
-        type=int,
-        help="capacityPlan 为本 lane 冻结的 worker 数",
-    )
-    parser.add_argument(
-        "--partition-count",
-        type=int,
-        choices=(16, 32, 64, 128, 256),
-        help="capacityPlan 为本 lane 冻结的 ReliableTask 分区数",
-    )
-    parser.add_argument(
-        "--capacity-plan-digest",
-        help="四 lane 共用的 governed capacityPlan digest",
     )
     parser.add_argument("--worker-host-set-binding-json")
     parser.add_argument("--scale-source-pool-id")

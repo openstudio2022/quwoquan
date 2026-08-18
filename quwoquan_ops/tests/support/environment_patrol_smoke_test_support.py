@@ -98,7 +98,6 @@ class EnvironmentPatrolSmokeCaseBase(unittest.TestCase):
         self,
         args: argparse.Namespace,
         *,
-        bound: bool = True,
         android_transport: bool = True,
     ) -> dict[str, object]:
         environment = args.runtime_env
@@ -107,20 +106,10 @@ class EnvironmentPatrolSmokeCaseBase(unittest.TestCase):
             smoke.load_environment_topology(),
             target,
         )["publicBases"]
-        content = {
-            "contentReleaseId": "release-current" if bound else "",
-            "contentManifestDigest": (
-                "sha256:" + "4" * 64 if bound else ""
-            ),
-            "contentReadinessReceiptDigest": (
-                "sha256:" + "5" * 64 if bound else ""
-            ),
-        }
         defines = {
             "APP_RUNTIME_ENV": environment,
             "QWQ_APP_LAUNCH_MODE": "canonical_launcher",
             "APP_LAUNCH_POLICY": "test_live",
-            "CONTENT_BINDING_STATE": "bound" if bound else "unbound",
             "CLOUD_GATEWAY_BASE_URL": args.gateway_base_url,
             "APP_LEGAL_BASE_URL": public_bases["legal"],
             "PUBLIC_WEB_BASE_URL": public_bases["publicWeb"],
@@ -155,10 +144,8 @@ class EnvironmentPatrolSmokeCaseBase(unittest.TestCase):
             "entrypoint": "lib/main_prod.dart",
             "launchMode": "canonical_launcher",
             "launchPolicy": "test_live",
-            "contentBindingState": "bound" if bound else "unbound",
             "dartDefinesDigest": "sha256:" + "1" * 64,
             "runtimeConfigDigest": "sha256:" + "1" * 64,
-            **content,
             "recoveryBaseUrl": args.gateway_base_url,
             "publicWebBaseUrl": public_bases["publicWeb"],
             "appDownloadBaseUrl": public_bases["appDownload"],

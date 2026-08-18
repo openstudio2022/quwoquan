@@ -29,10 +29,11 @@
     "assessmentRef": { "type": "string", "minLength": 1 },
     "minimums": {
       "type": "object",
-      "required": ["qualifiedPerLane"],
+      "required": ["quotaPerLane", "candidateCountPerLane"],
       "additionalProperties": false,
       "properties": {
-        "qualifiedPerLane": { "const": 1 }
+        "quotaPerLane": { "type": "integer", "minimum": 1 },
+        "candidateCountPerLane": { "type": "integer", "minimum": 1 }
       }
     },
     "totalDiscardedCount": { "type": "integer", "minimum": 0 },
@@ -60,8 +61,6 @@
         "qualifiedCount",
         "discardedCount",
         "finalizedCount",
-        "shortfallCount",
-        "quotaAttainmentRate",
         "reviewReceiptRef",
         "publishReceiptRef"
       ],
@@ -74,8 +73,6 @@
         "qualifiedCount": { "type": "integer", "minimum": 0 },
         "discardedCount": { "type": "integer", "minimum": 0 },
         "finalizedCount": { "type": "integer", "minimum": 0 },
-        "shortfallCount": { "type": "integer", "minimum": 0 },
-        "quotaAttainmentRate": { "type": "number", "minimum": 0 },
         "reviewReceiptRef": { "type": "string", "minLength": 1 },
         "publishReceiptRef": { "type": "string", "minLength": 1 }
       }

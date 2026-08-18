@@ -892,6 +892,33 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /internal/integrations/external-requests/capabilities/identity.sms.otp/readiness:
+        get:
+            operationId: GetSmsOtpDeliveryReadiness
+            x-contract-operation-id: integration.external_interaction.GetSmsOtpDeliveryReadiness
+            x-object-id: integration.external_interaction
+            x-actor: none
+            x-application:
+                kind: query
+                facet: ExternalInteractionQueryFacade
+                method: getSmsOtpDeliveryReadiness
+                reader: SmsOtpDeliveryReadinessReader
+                slice: SmsOtpDeliveryReadiness
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SmsOtpDeliveryReadiness'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /internal/integrations/invocations:
         post:
             operationId: InvokeConnectorCapability
@@ -1129,6 +1156,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: RevokeConnectorConnectionRequest
+            x-contract-placeholder: true
+        SmsOtpDeliveryReadiness:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: SmsOtpDeliveryReadiness
             x-contract-placeholder: true
         StartConnectorAuthorizationRequest:
             type: object

@@ -24,9 +24,9 @@
     "originalAssetUrl": { "type": "string", "format": "uri" },
     "attributionText": { "type": "string", "minLength": 1 },
     "rightsBasis": { "type": "string", "minLength": 1 },
-    "commercialAuthorizationStatus": { "enum": ["verified", "unverified"] },
+    "commercialAuthorizationStatus": { "type": "string", "minLength": 1 },
     "publicationAdmission": {
-      "enum": ["research_release", "commercial_release", "risk_accepted_attribution_only"]
+      "enum": ["commercial_release", "risk_accepted_attribution_only"]
     },
     "authorizationProofUrl": {
       "type": ["string", "null"],
@@ -45,8 +45,7 @@
         "licensed",
         "original_authorized",
         "replaced_with_licensed_track",
-        "no_audio",
-        "unverified"
+        "no_audio"
       ]
     },
     "audioAuthorizationProofUrl": {
@@ -57,25 +56,5 @@
     "propertyReleaseStatus": { "type": "string", "minLength": 1 },
     "takedownPolicy": { "type": "string", "minLength": 1 }
   },
-  "additionalProperties": false,
-  "allOf": [
-    {
-      "if": {"properties": {"audioRightsStatus": {"const": "unverified"}}},
-      "then": {"properties": {"publicationAdmission": {"const": "research_release"}}}
-    },
-    {
-      "if": {
-        "required": ["publicationAdmission"],
-        "properties": {"publicationAdmission": {"const": "commercial_release"}}
-      },
-      "then": {
-        "required": ["authorizationProofUrl", "termsUrl"],
-        "properties": {
-          "commercialAuthorizationStatus": {"const": "verified"},
-          "authorizationProofUrl": {"type": "string", "pattern": "^https://"},
-          "termsUrl": {"type": "string", "pattern": "^https://"}
-        }
-      }
-    }
-  ]
+  "additionalProperties": false
 }

@@ -175,9 +175,6 @@ def _kwargs(
         "scope": "china",
         "region_ref": "china",
         "sequence_start": 101,
-        "required_workers": 1,
-        "partition_count": 16,
-        "capacity_plan_digest": "sha256:" + "d" * 64,
         "output_root": output,
         "publish_root": publish,
     }
@@ -220,6 +217,10 @@ def test_three_active_carriers_dispatch_without_video_or_campaign(
     ]
     assert len(candidate_ids) == 48 == len(set(candidate_ids))
     assert all(slot["candidateIds"] for slot in manifest["slots"])
+    assert all(
+        slot["taskRequest"]["requiredWorkers"] == len(slot["candidateIds"])
+        for slot in manifest["slots"]
+    )
 
     # The standalone request is itself sufficient runtime authority.  It does
     # not need a campaign capsule or ReliableTask transport to materialize the
@@ -239,6 +240,81 @@ def test_three_active_carriers_dispatch_without_video_or_campaign(
     assert {row["name"] for row in targets} == {
         f"image-{index:03d}" for index in range(12)
     }
+
+
+def test_explicit_workload_inspection_and_dispatch_preserve_independent_quotas(
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "output"
+    publish = tmp_path / "publish"
+    evidence = output / "data/source-pools/evidence"
+    for ref, body in EVIDENCE.values():
+        path = evidence / ref
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(body)
+    workloads = {"homepage": 7, "image": 11}
+    candidates = [
+        *(_candidate("homepage", index) for index in range(7)),
+        *(_candidate("image", index) for index in range(11)),
+    ]
+    plan = build_scale_source_pool_plan(
+        pool_id="homepage-image-explicit-workload",
+        target_scale=None,
+        created_at="2026-08-14T00:00:00Z",
+        candidates=candidates,
+        workload_targets=workloads,
+        source_revision=IDENTITY["sourceRevision"],
+        source_digest=IDENTITY["sourceDigest"],
+        entity_catalog_digest=IDENTITY["entityCatalogDigest"],
+    )
+    plan_ref = "data/source-pools/homepage-image-workload.json"
+    write_json(output / plan_ref, plan)
+    source_input, source_candidates = load_source_ready_input(
+        output_root=output,
+        publish_root=publish,
+        milestone=None,
+        source_pool_ref=plan_ref,
+        evidence_root_ref=evidence.relative_to(output).as_posix(),
+    )
+    inspection = inspect_pool(
+        publish_root=publish,
+        milestone=None,
+        workload_targets=workloads,
+        source_ready_backlog={
+            carrier: len(rows) for carrier, rows in source_candidates.items()
+        },
+        source_ready_candidates=source_candidates,
+        source_ready_input=source_input,
+    )
+    assert inspection["milestone"] == "WORKLOAD"
+    assert inspection["workloadMode"] == "explicit"
+    assert inspection["activeCarriers"] == ["homepage", "image"]
+    assert inspection["workloadTargets"] == workloads
+    inspection_path = output / "data/local/pool-inspections/workload.json"
+    write_json(inspection_path, inspection)
+    manifest = build_semantic_wave_dispatch(
+        dispatch_id="homepage-image-workload-001",
+        pool_inspection_ref=inspection_path.relative_to(output).as_posix(),
+        semantic_preflight_receipt_ref=None,
+        run_date="20260814",
+        scope="china",
+        region_ref="china",
+        sequence_start=1,
+        workload_targets=workloads,
+        output_root=output,
+        publish_root=publish,
+    )
+    assert manifest["milestone"] == "WORKLOAD"
+    assert manifest["workloadTargets"] == workloads
+    assert manifest["activeCarriers"] == ["homepage", "image"]
+    assert {
+        carrier: sum(
+            slot["taskRequest"]["quota"]
+            for slot in manifest["slots"]
+            if slot["carrier"] == carrier
+        )
+        for carrier in manifest["activeCarriers"]
+    } == workloads
 
 
 def test_dispatch_fails_when_physical_candidate_evidence_disappears(
@@ -297,7 +373,7 @@ def test_dispatch_is_create_once_replay_and_collision_safe(tmp_path: Path) -> No
     assert replay == first
     assert replay_path == path
     changed = copy.deepcopy(kwargs)
-    changed["capacity_plan_digest"] = "sha256:" + "e" * 64
+    changed["semantic_preflight_receipt_ref"] = None
     with pytest.raises(SemanticWaveDispatchError) as captured:
         write_create_once_semantic_wave_dispatch(**changed)
     assert captured.value.code == DISPATCH_COLLISION
@@ -329,10 +405,10 @@ def test_retry_dispatch_binds_exact_predecessor_slots_and_selection(
         "manifestDigest": predecessor["manifestDigest"],
     }
     assert [slot["executionId"] for slot in retry["slots"]] == [
-        "20260811--travel-homepage-m100--china--scale-201",
-        "20260811--travel-homepage-m100--china--scale-202",
-        "20260811--travel-article-m100--china--scale-203",
-        "20260811--travel-image-m100--china--scale-204",
+        "20260811--travel-homepage-workload-homepage-24-article-12-image-12--china--scale-201",
+        "20260811--travel-homepage-workload-homepage-24-article-12-image-12--china--scale-202",
+        "20260811--travel-article-workload-homepage-24-article-12-image-12--china--scale-203",
+        "20260811--travel-image-workload-homepage-24-article-12-image-12--china--scale-204",
     ]
     predecessor_by_slot = {
         slot["slotId"]: slot for slot in predecessor["slots"]

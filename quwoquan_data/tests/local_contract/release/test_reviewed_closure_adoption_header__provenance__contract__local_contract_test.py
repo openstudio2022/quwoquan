@@ -12,7 +12,7 @@ from content.release.canonical.release_header import (
     ReleaseHeaderError,
     validate_release_header,
 )
-from core.source_digest import SourceDigest, content_source_revision
+from core.source_digest import SourceDefinitionSnapshot, content_source_revision
 
 _TARGET_DIGEST = "sha256:" + "a" * 64
 _CATALOG_DIGEST = "sha256:" + "b" * 64
@@ -60,7 +60,7 @@ def _header(*, release_id: str, release_kind: str = "content") -> dict[str, obje
         "commercialAcceptedCount": 0,
         "canonicalMerkle": "sha256:" + "4" * 64,
         "executionIds": ["20260805--travel-homepage-adoption--china--pilot-031"],
-        "sourceDigests": [SourceDigest(_TARGET_DIGEST).to_document()],
+        "sourceDigests": [SourceDefinitionSnapshot(_TARGET_DIGEST).to_document()],
         "sourceRevision": content_source_revision(
             source_digest=_TARGET_DIGEST,
             entity_catalog_digest=_CATALOG_DIGEST,

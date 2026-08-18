@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.article_commercial_policy import article_commercial_closure_enabled
 from core.data_issue import (
     DataIssueCode,
     DataIssueError,
@@ -20,7 +19,6 @@ from core.image_asset_strategy import (
 )
 from core.paths import STAGE_DOWNLOAD
 from core.source_catalog import vertical_from_task_id
-from governance.coverage.license import rights_proof_required
 
 from content.execution.workspace import frozen_target_by_name
 from content.source.contracts import (
@@ -29,8 +27,6 @@ from content.source.contracts import (
 )
 from content.source.external_acquisition_inputs import (
     professional_image_context_binding,
-    professional_image_context_enabled,
-    professional_video_context_binding,
 )
 from content.source.prepare import prepare_source_plan
 from content.source.research.auto_plan_article import write_article_lane
@@ -125,47 +121,48 @@ def _write_auto_research_plans_impl(
     selected_lanes = lanes or declared_lanes
     if not selected_lanes:
         raise ValueError("execution must declare at least one research lane")
-    if len(selected_lanes) == 1:
-        from content.source.research.scale_source_pool_runtime import (
-            write_frozen_scale_source_pool_plans,
-        )
-
-        frozen_report = write_frozen_scale_source_pool_plans(
-            execution_id, entity_ids, carrier=next(iter(selected_lanes))
-        )
-        if frozen_report is not None:
-            frozen_report["vertical"] = vertical
-            if write_shared_report:
-                _write_auto_report_artifacts(execution_id, frozen_report)
-            return frozen_report
-    professional_image_bound = professional_image_context_enabled(
-        external_input_context,
-        selected_lanes,
+    from content.source.research.auto_plan_context import (
+        article_topic_terms,
+        build_external_media_plan_context,
+        coverage_targets_by_name,
+        frozen_scale_source_pool_report,
+        initialize_auto_plan_report,
     )
-    report: dict[str, Any] = {
-        "schema": "quwoquan.content.source.auto_research_plan",
-        "executionId": execution_id,
-        "vertical": vertical,
-        "selectedLanes": sorted(selected_lanes),
-        "updated": updated,
-        "issues": issues,
-        "candidates": [],
-        "imageCollections": [],
-        "homepageMediaCollections": [],
-        "sourceUnavailable": [],
-        "rescueEvents": [],
-    }
+
+    frozen_report = frozen_scale_source_pool_report(
+        execution_id,
+        entity_ids,
+        selected_lanes=selected_lanes,
+        vertical=vertical,
+        write_shared_report=write_shared_report,
+    )
+    if frozen_report is not None:
+        return frozen_report
+    media_context = build_external_media_plan_context(
+        strategy_spec=strategy_spec,
+        selected_lanes=selected_lanes,
+        external_input_context=external_input_context,
+    )
+    professional_image_bound = media_context.professional_image_bound
+    image_work_units = media_context.image_work_units
+    video_work_units = media_context.video_work_units
+    exact_media_work_units = media_context.exact_media_work_units
+    professional_image_index = media_context.professional_image_index
+    video_receipt_refs = media_context.video_receipt_refs
+    video_acquisition_root = media_context.video_acquisition_root
+    professional_video_index = media_context.professional_video_index
+    report = initialize_auto_plan_report(
+        execution_id=execution_id,
+        vertical=vertical,
+        selected_lanes=selected_lanes,
+    )
+    report["updated"] = updated
+    report["issues"] = issues
     quotas = _task_content_quotas(execution_id)
-    target_by_name = {
-        str(row.get("name") or "").strip(): row
-        for row in ((strategy_spec.get("scope") or {}).get("coverageTargets") or [])
-        if isinstance(row, dict) and str(row.get("name") or "").strip()
-    }
-    article_commercial_mode = article_commercial_closure_enabled(strategy_spec)
+    target_by_name = coverage_targets_by_name(strategy_spec)
     image_strategy = image_asset_strategy(strategy_spec)
     image_policy = image_count_policy(strategy_spec)
     requires_publishable_images = image_strategy_requires_publishable_images(strategy_spec)
-    report["articleCommercialClosure"] = article_commercial_mode
     report["imageAssetStrategy"] = image_strategy
     report["imageCountPolicy"] = image_policy
     report["imagePublishableAssetsRequired"] = requires_publishable_images
@@ -195,21 +192,7 @@ def _write_auto_research_plans_impl(
         obj = resolve_entity_object_dir(execution_id, entity_id, etype_hint=entity_type)
         dl = obj / STAGE_DOWNLOAD
         target_source = target_by_name.get(entity_id) or {}
-        declared_topics = (
-            target_source.get("topics")
-            if isinstance(target_source.get("topics"), list)
-            else []
-        )
-        article_topic_terms = [
-            str(value).strip()
-            for value in (
-                strategy_spec.get("intentLabel"),
-                target_source.get("topic"),
-                target_source.get("theme"),
-                *declared_topics,
-            )
-            if str(value or "").strip()
-        ]
+        entity_article_topic_terms = article_topic_terms(strategy_spec, target_source)
         needs_homepage_media = "homepage" in selected_lanes
         qualified_homepage_source: QualifiedHomepageSource | None = None
         if needs_homepage_media:
@@ -291,6 +274,8 @@ def _write_auto_research_plans_impl(
                 entity_id=entity_id,
                 carrier=str(external_input_context.envelope["carrier"]),
                 external_input_context=external_input_context,
+                entity_aliases=tuple(entity_aliases),
+                verified_index=professional_image_index,
             )
             if professional_image_bound
             else ([], [])
@@ -360,7 +345,7 @@ def _write_auto_research_plans_impl(
                 rejected_source_urls=rejected_source_urls,
                 limit=_article_base_candidate_limit(required_article_bases),
             )
-            if "article" in selected_lanes and not article_commercial_mode
+            if "article" in selected_lanes
             else []
         )
         image_pools = (
@@ -461,7 +446,6 @@ def _write_auto_research_plans_impl(
         if (
             "image" in selected_lanes
             and requires_publishable_images
-            and rights_proof_required(vertical)
             and not professional_image_bound
             and not open_license_image_pool
         ):
@@ -515,7 +499,7 @@ def _write_auto_research_plans_impl(
             updated=updated,
             plan_dir=dl,
             entity_aliases=entity_aliases,
-            topic_terms=article_topic_terms,
+            topic_terms=entity_article_topic_terms,
             related_wiki_titles=related_wiki_titles,
             voyage_url=voyage_url,
             voyage_page_images=voyage_page_images,
@@ -524,11 +508,25 @@ def _write_auto_research_plans_impl(
             prior_article_sources=prior_article_sources,
             homepage_sources=homepage_sources,
             required_article_bases=required_article_bases,
-            article_commercial_mode=article_commercial_mode,
             force=force,
         )
 
         if "image" in selected_lanes:
+            entity_desired_image_works = (
+                len(image_work_units.get(entity_id, ()))
+                if exact_media_work_units
+                else desired_image_works
+            )
+            entity_hard_image_works = (
+                entity_desired_image_works
+                if exact_media_work_units
+                else hard_image_works
+            )
+            entity_required_publishable_images = (
+                entity_desired_image_works
+                if exact_media_work_units
+                else required_publishable_images
+            )
             write_image_lane(
                 entity_id=entity_id,
                 entity_aliases=entity_aliases,
@@ -547,11 +545,11 @@ def _write_auto_research_plans_impl(
                 voyage_page_images=voyage_page_images,
                 open_license_image_pool=open_license_image_pool,
                 homepage_image_urls=homepage_image_urls,
-                required_publishable_images=required_publishable_images,
+                required_publishable_images=entity_required_publishable_images,
                 required_article_bases=required_article_bases,
-                desired_image_works=desired_image_works,
-                hard_image_works=hard_image_works,
-                image_bonus_saturation_count=image_bonus_saturation_count,
+                desired_image_works=entity_desired_image_works,
+                hard_image_works=entity_hard_image_works,
+                image_bonus_saturation_count=max(1, entity_desired_image_works),
                 image_policy=image_policy,
                 image_strategy=image_strategy,
                 requires_publishable_images=requires_publishable_images,
@@ -563,12 +561,9 @@ def _write_auto_research_plans_impl(
             )
         if "video" in selected_lanes:
             video_provider_funnel: list[dict[str, Any]] = []
-            acquisition_receipt_refs, acquisition_root = (
-                professional_video_context_binding(external_input_context)
-            )
             sourced_video_pool = (
                 []
-                if acquisition_receipt_refs
+                if video_receipt_refs
                 else discover_commons_sourced_videos(
                     entity_id,
                     entity_aliases=entity_aliases,
@@ -583,9 +578,15 @@ def _write_auto_research_plans_impl(
                 report=report,
                 updated=updated,
                 sourced_video_pool=sourced_video_pool,
-                acquisition_receipt_refs=acquisition_receipt_refs,
-                acquisition_root=acquisition_root,
+                acquisition_receipt_refs=video_receipt_refs,
+                acquisition_root=video_acquisition_root,
                 entity_aliases=tuple(entity_aliases),
+                desired_video_works=(
+                    len(video_work_units.get(entity_id, ()))
+                    if exact_media_work_units
+                    else max(1, int(quotas.get("videoWorksPerTarget") or 1))
+                ),
+                verified_index=professional_video_index,
             )
     report["sourceAvailability"] = _source_availability_summary(report, entity_ids)
     if write_shared_report:

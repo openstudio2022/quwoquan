@@ -13,6 +13,7 @@ INSTALL_HINT = (
     "`PATROL_CLI=/absolute/path/to/patrol`"
 )
 REQUIRED_PATROL_CLI_VERSION = "4.4.0"
+PATROL_CLI_VERSION_ATTEMPTS = 3
 
 
 @dataclass(frozen=True)
@@ -48,31 +49,66 @@ def _home_pub_cache_candidate(env: Mapping[str, str]) -> Path:
     return (Path(home).expanduser() if home else Path.home()) / ".pub-cache" / "bin" / "patrol"
 
 
-def _version_for_executable(path: Path) -> str | None:
-    try:
-        result = subprocess.run(
-            [str(path), "--version"],
-            text=True,
-            capture_output=True,
-            check=False,
-            timeout=5,
-        )
-    except OSError:
-        return None
-    output = "\n".join((result.stdout, result.stderr))
+def _version_probe_failure(path: Path) -> str | None:
+    """探测版本，返回 None 表示确认为所需版本，否则返回失败原因。
+
+    「探测不成」与「版本不符」是两种不同的失败，必须报成两句话：前者的处置是修
+    工具链或环境（`patrol` 是 dart snapshot，子进程 PATH 里没有 dart 时它根本起
+    不来），后者的处置才是重装指定版本。把两者塌陷成同一句「必须是 v4.4.0」会把
+    人一路引向重装，而重装对前者无效。
+    """
     expected = f"patrol_cli v{REQUIRED_PATROL_CLI_VERSION}"
-    return REQUIRED_PATROL_CLI_VERSION if result.returncode == 0 and expected in output else None
+    last_failure = "Patrol CLI version probe never ran"
+    for _ in range(PATROL_CLI_VERSION_ATTEMPTS):
+        try:
+            result = subprocess.run(
+                [str(path), "--version"],
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=30,
+            )
+        except subprocess.TimeoutExpired:
+            last_failure = (
+                f"`{path} --version` did not answer within 30s; "
+                "it checks pub.dev for updates, so a blocked network can stall it"
+            )
+            continue
+        except OSError as exc:
+            last_failure = f"`{path} --version` could not be executed: {exc}"
+            continue
+        output = "\n".join((result.stdout, result.stderr))
+        if expected in output:
+            return None
+        if result.returncode != 0:
+            detail = " ".join(output.split()) or "no output"
+            last_failure = (
+                f"`{path} --version` exited {result.returncode}: {detail}"
+            )
+            continue
+        detail = " ".join(output.split()) or "no output"
+        last_failure = (
+            f"Patrol CLI must be v{REQUIRED_PATROL_CLI_VERSION}, but "
+            f"`{path} --version` reported: {detail}"
+        )
+    return last_failure
 
 
 def _resolved_cli(path: Path, source: str, searched: list[str]) -> PatrolCliResolution:
-    version = _version_for_executable(path)
-    if version is not None:
-        return PatrolCliResolution(str(path), source, tuple(searched), "", version)
+    failure = _version_probe_failure(path)
+    if failure is None:
+        return PatrolCliResolution(
+            str(path),
+            source,
+            tuple(searched),
+            "",
+            REQUIRED_PATROL_CLI_VERSION,
+        )
     return PatrolCliResolution(
         None,
         source,
         tuple(searched),
-        f"Patrol CLI must be v{REQUIRED_PATROL_CLI_VERSION}; {INSTALL_HINT}",
+        f"{failure}; {INSTALL_HINT}",
     )
 
 

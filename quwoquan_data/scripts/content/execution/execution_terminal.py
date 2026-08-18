@@ -130,6 +130,21 @@ def _load_stale_receipt(
     return receipt, path
 
 
+def _load_succeeded_state(
+    execution_root: Path,
+) -> tuple[dict[str, Any], Path] | None:
+    state_path = execution_root / "_shared" / "execution_state.json"
+    if not state_path.is_file():
+        return None
+    state = read_json(state_path)
+    if not isinstance(state, dict) or state.get("status") != "succeeded":
+        return None
+    if state.get("executionId") != execution_root.name:
+        raise ValueError("succeeded execution state identity drift")
+    verify_terminal_state_integrity(state_path)
+    return state, state_path
+
+
 def load_terminal_execution_evidence(
     execution_root: Path,
 ) -> TerminalExecutionEvidence | None:
@@ -149,6 +164,9 @@ def load_terminal_execution_evidence(
             allow_missing=True,
         )
         return TerminalExecutionEvidence("superseded", supersession[0], supersession[1])
+    succeeded = _load_succeeded_state(execution_root)
+    if succeeded is not None:
+        return TerminalExecutionEvidence("succeeded", succeeded[0], succeeded[1])
     verify_execution_state_journal(execution_root / "_shared" / "execution_state.json")
     return None
 

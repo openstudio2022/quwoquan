@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import hashlib
+import json
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from content.release.canonical.aggregate_release_closure import (
@@ -26,8 +28,13 @@ from content.release.canonical.environment_release_selection import (
     MILESTONE_TARGETS,
     EnvironmentReleaseSelection,
     PoolExclusion,
+    discover_pool_candidates,
+    pool_candidate_digest,
     select_environment_release_posts,
     select_milestone_release_posts,
+)
+from content.release.canonical.environment_release_support import (
+    pool_gate_for_code,
 )
 from content.release.canonical.object_source_identity import source_identity_set
 from content.release.canonical.object_transaction_contract import (
@@ -35,14 +42,14 @@ from content.release.canonical.object_transaction_contract import (
     _read_json,
 )
 from core.paths import CONTROL_PLANE_TAXONOMY_ROOT
-from core.source_digest import FrozenSourceDigest, SourceDigest, SourceDigestError
+from core.source_digest import SourceDefinitionSnapshot, SourceDigestError
 
 
 @dataclass(frozen=True)
 class PoolReleasePreparation:
     environment_selection: EnvironmentReleaseSelection
     execution_ids: list[str]
-    source_digests: tuple[SourceDigest | FrozenSourceDigest, ...]
+    source_digests: tuple[SourceDefinitionSnapshot, ...]
     entity_catalog_digest: str | None
     source_revision: str | None
     source_identities: tuple[dict[str, object], ...]
@@ -51,16 +58,13 @@ class PoolReleasePreparation:
     excluded: tuple[dict[str, str], ...]
 
 
-def _frozen_source_digest(document: object) -> SourceDigest | FrozenSourceDigest:
+def _source_definition_snapshot(document: object) -> SourceDefinitionSnapshot:
     try:
-        return SourceDigest.from_document(document)
-    except SourceDigestError:
-        try:
-            return FrozenSourceDigest.from_document(document)
-        except SourceDigestError as exc:
-            raise ObjectTransactionError(
-                "DATA.POOL.SOURCE_IDENTITY_INVALID"
-            ) from exc
+        return SourceDefinitionSnapshot.from_document(document)
+    except SourceDigestError as exc:
+        raise ObjectTransactionError(
+            "DATA.POOL.SOURCE_IDENTITY_INVALID"
+        ) from exc
 
 
 def pool_post_refs(publish_root: Path) -> list[str]:
@@ -89,12 +93,12 @@ def _pool_source_identity_closure(
     entity_refs: set[str],
     post_refs: set[str],
 ) -> tuple[
-    tuple[SourceDigest | FrozenSourceDigest, ...],
+    tuple[SourceDefinitionSnapshot, ...],
     tuple[dict[str, object], ...],
     str,
 ]:
     identities: list[dict[str, str]] = []
-    source_digests: dict[str, SourceDigest | FrozenSourceDigest] = {}
+    source_digests: dict[str, SourceDefinitionSnapshot] = {}
     for kind, refs in (("entities", entity_refs), ("posts", post_refs)):
         for ref in sorted(refs):
             root = object_root(publish_root, kind, ref)
@@ -115,7 +119,9 @@ def _pool_source_identity_closure(
                 raise ObjectTransactionError(
                     f"DATA.POOL.SOURCE_IDENTITY_INVALID: {kind}/{ref}"
                 )
-            source_digest = _frozen_source_digest(manifest.get("sourceDigest"))
+            source_digest = _source_definition_snapshot(
+                manifest.get("sourceDigest")
+            )
             source_digests[source_digest.digest] = source_digest
             identities.append(identity)
     rows, set_digest = source_identity_set(identities)
@@ -170,7 +176,7 @@ def _exclusion(post_ref: str, exc: Exception) -> dict[str, str]:
     code = prefix if separator and prefix.startswith("DATA.") else "DATA.POOL.OBJECT_INVALID"
     return {
         "postRef": post_ref,
-        "category": "delivery",
+        "category": pool_gate_for_code(code),
         "code": code,
         "message": message,
     }
@@ -185,51 +191,66 @@ def _selection_exclusion(exclusion: PoolExclusion) -> dict[str, str]:
     }
 
 
+def _pool_snapshot_digest(
+    *,
+    post_pool_digest: str,
+    entity_rows: list[dict[str, object]],
+) -> str:
+    encoded = json.dumps(
+        {
+            "postPoolDigest": post_pool_digest,
+            "entities": sorted(
+                entity_rows,
+                key=lambda row: str(row["objectRef"]),
+            ),
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return "sha256:" + hashlib.sha256(encoded).hexdigest()
+
+
 def prepare_pool_release(
     *,
     publish_root: Path,
     target_environment: str | None = None,
     milestone: str | None = None,
-    release_class: str | None = None,
+    release_class: str,
 ) -> PoolReleasePreparation:
     if (target_environment is None) == (milestone is None):
         raise ObjectTransactionError(
             "DATA.RELEASE.SELECTION_INVALID: choose targetEnvironment or milestone"
+        )
+    normalized_release_class = str(release_class or "").strip()
+    if normalized_release_class not in {"research", "commercial"}:
+        raise ObjectTransactionError(
+            "DATA.RELEASE.CLASS_INVALID: pool-build requires explicit "
+            "research or commercial"
         )
     if milestone is not None:
         if milestone not in MILESTONE_TARGETS:
             raise ObjectTransactionError(
                 f"DATA.POOL.MILESTONE_INVALID: {milestone!r}"
             )
-        if release_class != "research":
+        if normalized_release_class != "research":
             raise ObjectTransactionError(
                 "DATA.RELEASE.CLASS_INVALID: milestone pool-build requires research"
             )
-    elif release_class is not None:
-        raise ObjectTransactionError(
-            "DATA.RELEASE.CLASS_INVALID: releaseClass is only valid with milestone"
-        )
     selection_environment = target_environment or "gamma"
+    discovered_candidates, discovery_exclusions = discover_pool_candidates(
+        publish_root=publish_root,
+        post_refs=pool_post_refs(publish_root),
+        strict_admission=True,
+    )
     candidate_refs: list[str] = []
-    excluded: list[dict[str, str]] = []
+    neutral_candidates = []
+    excluded: list[dict[str, str]] = [
+        _selection_exclusion(item) for item in discovery_exclusions
+    ]
     content_versions: dict[tuple[str, int], str] = {}
-    for post_ref in pool_post_refs(publish_root):
-        try:
-            individual = select_environment_release_posts(
-                publish_root=publish_root,
-                post_refs=[post_ref],
-                environment=selection_environment,
-                strict_admission=True,
-            )
-        except (OSError, TypeError, ValueError, ObjectTransactionError) as exc:
-            excluded.append(_exclusion(post_ref, exc))
-            continue
-        if not individual.candidates:
-            excluded.extend(
-                _selection_exclusion(item) for item in individual.excluded
-            )
-            continue
-        candidate = individual.candidates[0]
+    for candidate in discovered_candidates:
+        post_ref = candidate.post_ref
         identity = (candidate.content_id, candidate.version)
         existing_ref = content_versions.get(identity)
         if existing_ref is not None:
@@ -248,6 +269,9 @@ def prepare_pool_release(
             continue
         content_versions[identity] = post_ref
         candidate_refs.append(post_ref)
+        neutral_candidates.append(candidate)
+
+    neutral_post_pool_digest = pool_candidate_digest(neutral_candidates)
 
     closure_cache: dict[
         str,
@@ -260,6 +284,7 @@ def prepare_pool_release(
                 publish_root=publish_root,
                 post_refs=candidate_refs,
                 environment=target_environment,
+                release_class=normalized_release_class,
                 strict_admission=True,
             )
         else:
@@ -308,9 +333,14 @@ def prepare_pool_release(
             break
         candidate_refs = [ref for ref in candidate_refs if ref not in rejected]
 
+    excluded.extend(
+        _selection_exclusion(item) for item in environment_selection.excluded
+    )
+
     post_refs = set(environment_selection.post_refs)
     entity_closure_cache: dict[str, tuple[list[str], list[str]]] = {}
     standalone_entity_refs: set[str] = set()
+    pool_entity_snapshot_rows: list[dict[str, object]] = []
     for entity_ref in pool_entity_refs(publish_root):
         root = object_root(publish_root, "entities", entity_ref)
         try:
@@ -322,10 +352,38 @@ def prepare_pool_release(
             )
             if not is_pool_record_admitted(record):
                 continue
+            source_identity = record.get("sourceIdentity")
+            pool_entity_snapshot_rows.append(
+                {
+                    "objectRef": entity_ref,
+                    "objectId": str(record.get("objectId") or ""),
+                    "contentVersion": record.get("contentVersion"),
+                    "usageScope": record.get("usageScope"),
+                    "canonicalObjectDigest": record.get(
+                        "canonicalObjectDigest"
+                    ),
+                    "sourceIdentityDigest": (
+                        source_identity.get("identityDigest")
+                        if isinstance(source_identity, dict)
+                        else None
+                    ),
+                }
+            )
             if (
                 environment_selection.release_mode == "commercial"
                 and record.get("usageScope") != "commercial"
             ):
+                excluded.append(
+                    {
+                        "postRef": f"entities/{entity_ref}",
+                        "category": "eligibility",
+                        "code": "DATA.POOL.COMMERCIAL_RIGHTS_REQUIRED",
+                        "message": (
+                            "DATA.POOL.COMMERCIAL_RIGHTS_REQUIRED: "
+                            f"entities/{entity_ref}"
+                        ),
+                    }
+                )
                 continue
             closure = entity_candidate_closure(
                 publish_root,
@@ -336,6 +394,13 @@ def prepare_pool_release(
             standalone_entity_refs.add(entity_ref)
         except (OSError, TypeError, ValueError, ObjectTransactionError) as exc:
             excluded.append(_exclusion(f"entities/{entity_ref}", exc))
+    environment_selection = replace(
+        environment_selection,
+        pool_digest=_pool_snapshot_digest(
+            post_pool_digest=neutral_post_pool_digest,
+            entity_rows=pool_entity_snapshot_rows,
+        ),
+    )
     if not post_refs and not standalone_entity_refs:
         raise ObjectTransactionError(
             "DATA.RELEASE.NO_ELIGIBLE_CONTENT: "
@@ -391,7 +456,7 @@ def prepare_pool_release(
     # releases and must never be synthesized from a heterogeneous pool.
     source_revision = None
     entity_catalog_digest = None
-    creator_refs = sorted(
+    referenced_creator_refs = (
         {
             ref
             for post_ref in post_refs
@@ -402,7 +467,17 @@ def prepare_pool_release(
             for entity_ref in standalone_entity_refs
             for ref in entity_closure_cache[entity_ref][0]
         }
-        | set(admitted_pool_author_refs(publish_root))
+    )
+    # Research may surface every admitted author in the shared pool. A
+    # Commercial release carries only creators referenced by its eligible
+    # entity/post subset, so unrelated profiles and avatars are not bundled.
+    creator_refs = sorted(
+        referenced_creator_refs
+        | (
+            set(admitted_pool_author_refs(publish_root))
+            if environment_selection.release_mode == "research"
+            else set()
+        )
     )
     tag_refs = sorted(
         {

@@ -2,7 +2,6 @@ part of 'web_main_app_shell.dart';
 
 class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
   static const String _defaultHomeChannelId = 'recommend';
-  static const String _defaultFeaturedFilterId = 'all';
   static const String _defaultCreateTabId = 'gallery';
   static const String _defaultMessageTabId = 'messages';
   static const String _interestMatchContextId = 'interest_match';
@@ -11,7 +10,6 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
 
   final ScrollController _scrollController = ScrollController();
   String _homeChannelId = _defaultHomeChannelId;
-  String _featuredFilterId = _defaultFeaturedFilterId;
   String _createTabId = _defaultCreateTabId;
   String _messageTabId = _defaultMessageTabId;
   double _toolbarProgress = 0;
@@ -144,16 +142,9 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
             .map(
               (option) => _WebContextTabSpec(
                 id: option.id,
-                label: UITextConstants.homeChannelLabel(option.labelKey),
-              ),
-            )
-            .toList(growable: false);
-      case MainTabDestination.featured:
-        return widget.dependencies.featuredContextOptions
-            .map(
-              (option) => _WebContextTabSpec(
-                id: option.id,
-                label: UITextConstants.contentLabelForKey(option.labelKey),
+                label: option.id == 'featured'
+                    ? DiscoveryText.homeTabFeatured
+                    : UITextConstants.homeChannelLabel(option.labelKey),
               ),
             )
             .toList(growable: false);
@@ -219,8 +210,6 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
     switch (destination) {
       case MainTabDestination.home:
         return _homeChannelId;
-      case MainTabDestination.featured:
-        return _featuredFilterId;
       case MainTabDestination.actions:
         return _actionsContextId;
       case MainTabDestination.create:
@@ -238,8 +227,6 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
     switch (destination) {
       case MainTabDestination.home:
         return DiscoveryText.webPcSearchHintHome;
-      case MainTabDestination.featured:
-        return DiscoveryText.webPcSearchHintFeatured;
       case MainTabDestination.actions:
         return DiscoveryText.webPcSearchHintHome;
       case MainTabDestination.create:
@@ -258,9 +245,6 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
       switch (destination) {
         case MainTabDestination.home:
           _homeChannelId = id;
-          break;
-        case MainTabDestination.featured:
-          _featuredFilterId = id;
           break;
         case MainTabDestination.actions:
           break;
@@ -281,13 +265,20 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
   Widget _buildContent(MainTabDestination destination) {
     switch (destination) {
       case MainTabDestination.home:
+        if (_homeChannelId == 'featured') {
+          return widget.dependencies.buildFeaturedChannel(
+            onExitToRecommend: () {
+              if (!mounted) {
+                return;
+              }
+              setState(() {
+                _homeChannelId = _defaultHomeChannelId;
+              });
+            },
+          );
+        }
         return _WebHomeWorkspace(
           channelId: _homeChannelId,
-          dependencies: widget.dependencies,
-        );
-      case MainTabDestination.featured:
-        return _WebFeaturedWorkspace(
-          filterId: _featuredFilterId,
           dependencies: widget.dependencies,
         );
       case MainTabDestination.actions:

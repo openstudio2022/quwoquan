@@ -533,20 +533,14 @@ class StackctlTestLiveContentBindingWiringContract(unittest.TestCase):
             any("cannot be reused" in warning for warning in result["warnings"])
         )
 
-    def test_launcher_handoff_receives_only_bound_digest_identity(self) -> None:
+    def test_launcher_handoff_never_carries_content_identity(self) -> None:
+        # 内容激活是服务端运行时事实：即使 dev-session 提供 content binding，
+        # launcher handoff 也不得把 content identity 传给 builder 或返回体。
         binding = _binding()
         completed = subprocess.CompletedProcess(
             ["build_launcher_handoff.py"],
             0,
-            json.dumps(
-                {
-                    "launchPolicy": "test_live",
-                    "contentBindingState": "bound",
-                    "contentReleaseId": "release-panda-001",
-                    "contentManifestDigest": _DIGEST_A,
-                    "contentReadinessReceiptDigest": _DIGEST_C,
-                }
-            ),
+            json.dumps({"launchPolicy": "test_live"}),
             "",
         )
         with mock.patch.object(stackctl.subprocess, "run", return_value=completed) as execute:
@@ -556,19 +550,11 @@ class StackctlTestLiveContentBindingWiringContract(unittest.TestCase):
                 content_binding=binding,
             )
         command = execute.call_args.args[0]
-        self.assertEqual(result["contentBindingState"], "bound")
-        self.assertEqual(
-            command[command.index("--content-release-id") + 1],
-            "release-panda-001",
-        )
-        self.assertEqual(
-            command[command.index("--content-manifest-digest") + 1],
-            _DIGEST_A,
-        )
-        self.assertEqual(
-            command[command.index("--content-readiness-receipt-digest") + 1],
-            _DIGEST_C,
-        )
+        self.assertEqual(result["launchPolicy"], "test_live")
+        self.assertNotIn("contentBindingState", result)
+        self.assertNotIn("--content-release-id", command)
+        self.assertNotIn("--content-manifest-digest", command)
+        self.assertNotIn("--content-readiness-receipt-digest", command)
         self.assertNotIn("latest", command)
         self.assertNotIn("candidate", " ".join(command))
 

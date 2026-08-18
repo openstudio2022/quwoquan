@@ -19,7 +19,10 @@ from content.execution.scale.semantic_promotion import (
 )
 from content.source.research.scale_source_pool import build_scale_source_pool_plan
 from core.runtime_policy import runtime_profile_digest
-from core.source_digest import SourceDigest
+from core.source_digest import (
+    SourceDefinitionSnapshot,
+    current_execution_bundle_identity,
+)
 
 from quwoquan_data.tests.local_contract.source.test_scale_source_pool__milestone_readiness__contract__local_contract_test import (
     EVIDENCE_PAYLOADS,
@@ -31,13 +34,14 @@ from quwoquan_data.tests.local_contract.source.test_scale_source_pool__milestone
 
 CARRIERS = ("homepage", "article", "image", "video")
 SOURCE_DIGEST = "sha256:" + "a" * 64
-SOURCE_DIGEST_DOCUMENT = SourceDigest(SOURCE_DIGEST).to_document()
+SOURCE_DIGEST_DOCUMENT = SourceDefinitionSnapshot(SOURCE_DIGEST).to_document()
 CATALOG_DIGEST = "sha256:" + "b" * 64
 START = datetime(2026, 8, 5, tzinfo=timezone.utc)
 RUN_ID = "scale-runtime-run-001"
 GENERATION = 1
 FENCING_TOKEN = "sha256:" + "f" * 64
 SESSION_ID = "scale-runtime-session-001"
+EXECUTION_BUNDLE_DOCUMENT = current_execution_bundle_identity().to_document()
 
 
 def _write(path: Path, payload: object) -> None:
@@ -204,6 +208,7 @@ def _manifest(execution_id: str, *, retry_of: str | None) -> dict[str, object]:
         "executionId": execution_id,
         "familyRef": {"ref": "content/travel/test", "sha256": "c" * 64},
         "sourceDigest": SOURCE_DIGEST_DOCUMENT,
+        "executionBundle": dict(EXECUTION_BUNDLE_DOCUMENT),
         "modelBinding": {
             "provider": "codex_sdk",
             "authorModel": "gpt-5.6-terra",
@@ -476,6 +481,8 @@ def _scale_pool_fixture(
                 "entityCatalogDigest": CATALOG_DIGEST,
             }
         )
+        if row["carrier"] == "article":
+            row["publishMediaMode"] = "text_only"
         readiness = row.get("videoReadiness")
         if isinstance(readiness, dict):
             index = int(str(row["candidateId"]).rsplit("-", 1)[-1])
@@ -500,6 +507,9 @@ def _scale_pool_fixture(
     binding: dict[str, object] = {
         "poolId": pool_plan["poolId"],
         "targetScale": pool_plan["targetScale"],
+        "workloadMode": pool_plan["workloadMode"],
+        "activeCarriers": pool_plan["activeCarriers"],
+        "workloadTargets": pool_plan["workloadTargets"],
         "sourceRevision": source_revision,
         "sourceDigest": SOURCE_DIGEST,
         "entityCatalogDigest": CATALOG_DIGEST,

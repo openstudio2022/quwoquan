@@ -36,7 +36,7 @@ class LocalAcceptanceActor:
     identity_origin: str
 
 
-@dataclass(frozen=True)
+@dataclass
 class LocalEnvironmentHTTPError(RuntimeError):
     """Redacted local-environment HTTP failure with a machine-readable status."""
 

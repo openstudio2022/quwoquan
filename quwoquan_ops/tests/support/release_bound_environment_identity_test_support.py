@@ -18,7 +18,9 @@ from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
     ENVIRONMENTS,
     RELEASE_CLOSURE_PATHS,
     canonical_candidate_digest,
+    canonical_environment_artifact_digest,
     canonical_manifest_digest,
+    canonical_release_train_digest,
 )
 
 DIGEST_A = "sha256:" + "a" * 64
@@ -189,6 +191,7 @@ class Fixture:
                 }
         manifest: dict[str, Any] = {
             "schema": "release-evidence-manifest",
+            "releaseTrainId": None,
             "candidateId": None,
             "status": "candidate-ready",
             "generatedAt": "2026-07-28T21:00:00Z",
@@ -200,34 +203,63 @@ class Fixture:
                 "sourceArchiveDigest": DIGEST_A,
             },
             "artifactDigest": None,
-            "images": {
-                "content-service": {
-                    "repository": "ghcr.io/owner/content-service",
-                    "transportRef": "ghcr.io/owner/content-service:candidate-100",
-                    "digest": DIGEST_A,
-                    "ref": f"ghcr.io/owner/content-service@{DIGEST_A}",
-                    "attestations": {
-                        "spdxSbom": f"oci://ghcr.io/owner/content-service@{DIGEST_A}#spdxSbom",
-                        "slsaProvenance": f"oci://ghcr.io/owner/content-service@{DIGEST_A}#slsaProvenance",
+            "environmentArtifacts": {
+                environment: {
+                    "environment": environment,
+                    "environmentArtifactDigest": None,
+                    "images": {
+                        "content-service": {
+                            "repository": (
+                                "ghcr.io/owner/content-service-" + environment
+                            ),
+                            "transportRef": (
+                                "ghcr.io/owner/content-service-"
+                                + environment
+                                + ":candidate-100"
+                            ),
+                            "digest": f"sha256:{index:064x}",
+                            "ref": (
+                                "ghcr.io/owner/content-service-"
+                                + environment
+                                + "@"
+                                + f"sha256:{index:064x}"
+                            ),
+                            "attestations": {
+                                "spdxSbom": (
+                                    "oci://ghcr.io/owner/content-service-"
+                                    + environment
+                                    + "@"
+                                    + f"sha256:{index:064x}"
+                                    + "#spdxSbom"
+                                ),
+                                "slsaProvenance": (
+                                    "oci://ghcr.io/owner/content-service-"
+                                    + environment
+                                    + "@"
+                                    + f"sha256:{index:064x}"
+                                    + "#slsaProvenance"
+                                ),
+                            },
+                        }
+                    },
+                    "configurationPackages": {
+                        "content-service": {
+                            "path": (
+                                f"packages/environments/{environment}/"
+                                "services/content-service/config/config.yaml"
+                            ),
+                            "digest": DIGEST_A,
+                        }
                     },
                 }
-            },
-            "configurationPackages": {
-                environment: {
-                    "content-service": {
-                        "path": (
-                            f"packages/environments/{environment}/"
-                            "services/content-service/config/config.yaml"
-                        ),
-                        "digest": DIGEST_A,
-                    }
-                }
-                for environment in ENVIRONMENTS
+                for index, environment in enumerate(ENVIRONMENTS, start=1)
             },
             "applicationPackages": application_packages,
             "contractGraphDigest": DIGEST_A,
             "requiredEvidence": {
-                "images": ["content-service"],
+                "environmentArtifacts": {
+                    environment: ["content-service"] for environment in ENVIRONMENTS
+                },
                 "configurationPackages": {
                     environment: ["content-service"] for environment in ENVIRONMENTS
                 },
@@ -282,6 +314,11 @@ class Fixture:
                 "rollbackReceipt.outcome",
             ],
         }
+        for environment in ENVIRONMENTS:
+            manifest["environmentArtifacts"][environment][
+                "environmentArtifactDigest"
+            ] = canonical_environment_artifact_digest(manifest, environment)
+        manifest["releaseTrainId"] = canonical_release_train_digest(manifest)
         manifest["candidateId"] = canonical_candidate_digest(manifest)
         if self.environment == "prod":
 

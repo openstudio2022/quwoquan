@@ -1,5 +1,4 @@
 """Closed vocabularies shared by data execution and release control flow."""
-
 from __future__ import annotations
 
 from enum import StrEnum
@@ -10,22 +9,6 @@ class ContentType(StrEnum):
     ARTICLE = "article"
     IMAGE = "image"
     VIDEO = "video"
-
-
-class ContentGenerator(StrEnum):
-    """Canonical provenance state at the content generation boundary."""
-
-    AGENT = "agent"
-    IMAGE_EVIDENCE_PACK = "image_evidence_pack"
-    PENDING = "pending"
-
-
-def expected_content_generator(content_type: ContentType) -> ContentGenerator:
-    """Return the only valid publication generator for one carrier."""
-
-    if content_type is ContentType.IMAGE:
-        return ContentGenerator.IMAGE_EVIDENCE_PACK
-    return ContentGenerator.AGENT
 
 
 class ExecutionSpecStatus(StrEnum):
@@ -41,7 +24,6 @@ class ImageAssetStrategy(StrEnum):
     OPEN_LICENSE_PUBLISH = "open_license_publish"
     LICENSED_PROVIDER_PUBLISH = "licensed_provider_publish"
     AI_GENERATED_ORIGINAL = "ai_generated_original"
-    ATTRIBUTION_AUDITED_PUBLISH = "attribution_audited_publish"
     REFERENCE_ONLY_NO_IMAGE_RELEASE = "reference_only_no_image_release"
 
 
@@ -50,12 +32,14 @@ class ImageCountPolicy(StrEnum):
     HARD_QUOTA = "hard_quota"
 
 
-class ExecutionPhase(StrEnum):
-    """Generic runtime scale marker; product campaigns are never static types."""
-
-    PILOT = "pilot"
-    SCALE = "scale"
-    FULL = "full"
+class RolloutMilestone(StrEnum):
+    BASELINE = "baseline"
+    CANARY = "canary"
+    M1 = "m1"
+    M2 = "m2"
+    M3 = "m3"
+    H10K = "h10k"
+    LAUNCH = "launch"
 
 
 class DeploymentEnvironment(StrEnum):
@@ -74,8 +58,6 @@ class ReleaseRunKind(StrEnum):
 class ReleaseRunStatus(StrEnum):
     COMPLETED = "completed"
     DRY_RUN = "dry_run"
-    PREPARED = "prepared"
-    FAILED = "failed"
 
 
 class ContentImportStatus(StrEnum):
@@ -127,14 +109,6 @@ class QueueJobStage(StrEnum):
     PUBLISH = "publish"
 
 
-class ReliableTaskDispatchStatus(StrEnum):
-    """Terminal result of one controller dispatch to the service-owned fleet."""
-
-    COMPLETED = "completed"
-    WAITING = "waiting"
-    BLOCKED = "blocked"
-
-
 class QueueFailureKind(StrEnum):
     """Machine-readable reason class for a queue transition to failure."""
 
@@ -142,6 +116,7 @@ class QueueFailureKind(StrEnum):
     GOVERNANCE = "governance"
     STARTUP = "startup"
     RESULT_ENVELOPE = "result_envelope"
+    BUDGET = "budget"
     TIMEOUT = "timeout"
 
 
@@ -193,14 +168,6 @@ class SelectionPolicy(StrEnum):
     FROZEN = "frozen"
 
 
-class TargetSelector(StrEnum):
-    """Explicit ordering policy for one frozen execution target set."""
-
-    ALL = "all"
-    PRIORITY = "priority"
-    SOURCE_READY_PRIORITY = "source-ready-priority"
-
-
 class ReplacementPolicy(StrEnum):
     FORBIDDEN = "forbidden"
 
@@ -218,7 +185,6 @@ class RuntimeEnvironment(StrEnum):
 
 class AgentProvider(StrEnum):
     CURSOR_SDK = "cursor_sdk"
-    CODEX_SDK = "codex_sdk"
 
 
 class AgentRunStatus(StrEnum):
@@ -236,11 +202,11 @@ class ManagedAgentCheckpointStatus(StrEnum):
 
 
 class AgentFailureKind(StrEnum):
-    """Closed failure classes for managed semantic-agent adapters."""
+    """Closed failure classes for Cursor SDK and its isolated subprocess."""
 
     SDK_UNAVAILABLE = "sdk_unavailable"
     CREDENTIAL_INVALID = "credential_invalid"
-    PROVIDER_REJECTED = "provider_rejected"
+    BUDGET_EXCEEDED = "budget_exceeded"
     BRIDGE_UNAVAILABLE = "bridge_unavailable"
     SDK_EXECUTION_FAILED = "sdk_execution_failed"
     NO_RESULT = "no_result"
@@ -249,8 +215,6 @@ class AgentFailureKind(StrEnum):
     SUBPROCESS_EXITED = "subprocess_exited"
     FUTURE_TIMEOUT = "future_timeout"
     CHECKPOINT_GATE = "checkpoint_gate"
-    AUTHENTICATION_REJECTED = "authentication_rejected"
-    CAPACITY_UNPROVEN = "capacity_unproven"
 
 
 class ReadinessMode(StrEnum):
@@ -292,7 +256,6 @@ class ExecutionStateStatus(StrEnum):
     WAITING_AGENT = "waiting_agent"
     REPAIRING = "repairing"
     MANUAL_REQUIRED = "manual_required"
-    INTERRUPTED = "interrupted"
     SUCCEEDED = "succeeded"
 
 
@@ -302,22 +265,36 @@ class PostStage(StrEnum):
     REVIEW = "review"
 
 
-EXECUTION_PHASES = tuple(ExecutionPhase)
+EXECUTION_MILESTONES = (
+    RolloutMilestone.CANARY,
+    RolloutMilestone.M1,
+    RolloutMilestone.M2,
+    RolloutMilestone.M3,
+    RolloutMilestone.H10K,
+)
+MILESTONE_ORDER = EXECUTION_MILESTONES
+MILESTONE_PREDECESSOR = {
+    RolloutMilestone.CANARY: None,
+    RolloutMilestone.M1: RolloutMilestone.CANARY,
+    RolloutMilestone.M2: RolloutMilestone.M1,
+    RolloutMilestone.M3: RolloutMilestone.M2,
+    RolloutMilestone.H10K: RolloutMilestone.M3,
+}
 
 
 __all__ = [
-    "EXECUTION_PHASES",
+    "EXECUTION_MILESTONES",
+    "MILESTONE_ORDER",
+    "MILESTONE_PREDECESSOR",
     "AgentFailureKind",
     "AgentProvider",
     "AgentRunStatus",
     "ManagedAgentCheckpointStatus",
     "AppUatDataSource",
     "AppUatStatus",
-    "ContentGenerator",
     "ContentImportStatus",
     "ContentType",
     "DeploymentEnvironment",
-    "ExecutionPhase",
     "ExecutionStage",
     "ExecutionStateStatus",
     "ImageSafetyReviewStatus",
@@ -327,7 +304,6 @@ __all__ = [
     "QueueFailureKind",
     "QueueJobStage",
     "QueueJobState",
-    "ReliableTaskDispatchStatus",
     "QueueTimelineEvent",
     "ReleaseDeletePolicy",
     "ReleaseRunKind",
@@ -339,10 +315,10 @@ __all__ = [
     "ReviewOverride",
     "ReviewPublishState",
     "ReplacementPolicy",
+    "RolloutMilestone",
     "RuntimeEnvironment",
     "SelectionPolicy",
     "SourcePolicyRevision",
     "StageKind",
     "StageStatus",
-    "expected_content_generator",
 ]

@@ -16,6 +16,7 @@ from content.execution.planning.source_selection import (
 )
 from content.source.contracts import HomepageAuthorityProvider, QualifiedHomepageSource
 from core.control_types import TargetSelector
+from support.capacity_calibration_fixture import synthetic_capacity_source_binding
 from support.target_selection_fixture import _coverage_file
 
 
@@ -58,9 +59,7 @@ def test_scale_selection_uses_local_semantic_backend_and_independent_delivery(
         target_entity_count=quota,
         approved_quota=quota,
         oversample_factor=1.0,
-        required_workers=1,
-        partition_count=16,
-        capacity_plan_digest="sha256:" + "1" * 64,
+        capacity_calibration=synthetic_capacity_source_binding(),
     )
 
     assert spec["queuePolicy"]["backend"] == "local_file"

@@ -15,7 +15,7 @@ from content.release.canonical.object_transaction_contract import (
 )
 from core.control_types import ContentType
 from core.release_layout import payload_file
-from core.source_digest import SourceDigest, SourceDigestError
+from core.source_digest import SourceDefinitionSnapshot, SourceDigestError
 
 OBJECT_KINDS = ("creators", "entities", "posts", "tags")
 
@@ -25,7 +25,7 @@ class ExecutionPublishClosure:
     execution_id: str
     entity_refs: tuple[str, ...]
     post_refs: tuple[str, ...]
-    source_digest: SourceDigest
+    source_digest: SourceDefinitionSnapshot
 
 
 def normalized_refs(value: object, *, label: str) -> tuple[str, ...]:
@@ -51,7 +51,7 @@ def execution_publish_closure(
     execution_id = _execution_id(execution_id)
     identity = parse_execution_id(execution_id)
     matched_refs: dict[str, list[str]] = {"entities": [], "posts": []}
-    matched_digests: list[SourceDigest] = []
+    matched_digests: list[SourceDefinitionSnapshot] = []
     for kind in ("entities", "posts"):
         objects_root = publish_root / kind
         if not objects_root.is_dir():
@@ -65,7 +65,9 @@ def execution_publish_closure(
                 label=f"{kind}Ref",
             ).as_posix()
             try:
-                source_digest = SourceDigest.from_document(manifest.get("sourceDigest"))
+                source_digest = SourceDefinitionSnapshot.from_document(
+                    manifest.get("sourceDigest")
+                )
             except SourceDigestError as exc:
                 raise ObjectTransactionError(
                     f"{execution_id}: canonical {kind}/{ref} lacks a valid frozen sourceDigest"

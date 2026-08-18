@@ -108,6 +108,7 @@ func TestAuthenticationChallengeOperationsUseProductionHTTPAndPostgres(t *testin
 			accountapp.WithOTPCodeGenerator(func() (string, error) { return "135790", nil }),
 			accountapp.WithOTPCodeSealer(apiAuthenticationChallengeSealer{}),
 			accountapp.WithExternalInteractionClient(dispatch),
+			accountapp.WithSMSOTPDeliveryReadinessQuery(dispatch),
 			accountapp.WithCarrierPhoneResolver(carrierResolver),
 		)
 
@@ -142,6 +143,22 @@ func TestAuthenticationChallengeOperationsUseProductionHTTPAndPostgres(t *testin
 			t.Fatalf("User HTTP handler: %v", err)
 		}
 		routes := handler.WithFederatedLogins(nil, alipay, nil).Routes()
+
+		readinessResponse := apiAuthenticationRequest(
+			t,
+			routes,
+			http.MethodGet,
+			"/auth/otp/readiness",
+			"",
+		)
+		if readinessResponse.Code != http.StatusOK ||
+			readinessResponse.Body.String() != "{\"availability\":\"ready\",\"retryAfterSeconds\":0}\n" {
+			t.Fatalf(
+				"GetOtpDeliveryReadiness status=%d body=%s",
+				readinessResponse.Code,
+				readinessResponse.Body.String(),
+			)
+		}
 
 		otpResponse := apiAuthenticationRequest(
 			t,
@@ -282,6 +299,12 @@ func (dispatch *apiAuthenticationChallengeDispatch) SubmitSMSOTP(
 ) (accountapp.ExternalInteractionAccepted, error) {
 	dispatch.requests = append(dispatch.requests, request)
 	return accountapp.ExternalInteractionAccepted{RequestID: request.RequestID, Status: "queued"}, nil
+}
+
+func (*apiAuthenticationChallengeDispatch) GetSMSOTPDeliveryReadiness(
+	context.Context,
+) (accountapp.SMSOTPDeliveryReadiness, error) {
+	return accountapp.SMSOTPDeliveryReadiness{Availability: "ready"}, nil
 }
 
 func apiAuthenticationPrivateKeyPEM(t *testing.T, key *rsa.PrivateKey) string {

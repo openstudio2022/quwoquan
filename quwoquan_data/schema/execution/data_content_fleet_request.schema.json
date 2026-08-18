@@ -15,7 +15,6 @@
     "partitionCount",
     "partitionAlgorithm",
     "checkpointPolicy",
-    "requireCommercial",
     "recoverDeadTasks",
     "objectTimeoutMilliseconds",
     "globalRequiredQuota",
@@ -23,6 +22,29 @@
     "jobs"
   ],
   "additionalProperties": false,
+  "$comment": "The allOf bands below are the single declared source of truth for the ReliableTask partition topology. partitionCount is the smallest governed power of two covering the frozen work-unit count, floored at 16 and capped at 256. jobs carries that exact frozen work-unit set, so its length is the only admitted input. Implementations: quwoquan_data/scripts/content/execution/queue/partition.py#partition_count and quwoquan_service/services/content-service/internal/content/post/application/importer/data_fleet.go#dataContentPartitionCount; both are pinned to these bands by local_contract tests.",
+  "allOf": [
+    {
+      "if": {"required": ["jobs"], "properties": {"jobs": {"minItems": 1, "maxItems": 16}}},
+      "then": {"properties": {"partitionCount": {"const": 16}}}
+    },
+    {
+      "if": {"required": ["jobs"], "properties": {"jobs": {"minItems": 17, "maxItems": 32}}},
+      "then": {"properties": {"partitionCount": {"const": 32}}}
+    },
+    {
+      "if": {"required": ["jobs"], "properties": {"jobs": {"minItems": 33, "maxItems": 64}}},
+      "then": {"properties": {"partitionCount": {"const": 64}}}
+    },
+    {
+      "if": {"required": ["jobs"], "properties": {"jobs": {"minItems": 65, "maxItems": 128}}},
+      "then": {"properties": {"partitionCount": {"const": 128}}}
+    },
+    {
+      "if": {"required": ["jobs"], "properties": {"jobs": {"minItems": 129}}},
+      "then": {"properties": {"partitionCount": {"const": 256}}}
+    }
+  ],
   "properties": {
     "schema": {
       "const": "quwoquan.data_content_fleet_request"
@@ -59,6 +81,7 @@
       "minimum": 1
     },
     "partitionCount": {
+      "description": "Hash topology of the frozen job set, derived by the governed bands in this schema's allOf. Partitions isolate queue and checkpoint state; they are not worker capacity, so requiredWorkers and any per-worker resource ratio must never appear in this derivation.",
       "enum": [16, 32, 64, 128, 256]
     },
     "partitionAlgorithm": {
@@ -66,9 +89,6 @@
     },
     "checkpointPolicy": {
       "$ref": "#/$defs/checkpointPolicy"
-    },
-    "requireCommercial": {
-      "type": "boolean"
     },
     "recoverDeadTasks": {
       "type": "boolean"

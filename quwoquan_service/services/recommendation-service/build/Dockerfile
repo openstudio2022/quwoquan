@@ -3,12 +3,26 @@ ARG PYTHON_BASE_IMAGE=python:3.11
 ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
 ARG PIP_TRUSTED_HOST=pypi.tuna.tsinghua.edu.cn
 ARG PIP_FALLBACK_INDEX_URL=https://pypi.org/simple
+ARG QWQ_ARTIFACT_ENVIRONMENT
+ARG QWQ_ARTIFACT_CONFIG_DIGEST
 FROM ${PYTHON_BASE_IMAGE}
 ARG PIP_INDEX_URL
 ARG PIP_TRUSTED_HOST
 ARG PIP_FALLBACK_INDEX_URL
+ARG QWQ_ARTIFACT_ENVIRONMENT
+ARG QWQ_ARTIFACT_CONFIG_DIGEST
 
 WORKDIR /app
+RUN set -eu; \
+    case "${QWQ_ARTIFACT_ENVIRONMENT}" in alpha|beta|gamma|prod) ;; *) exit 2 ;; esac; \
+    digest_hex="${QWQ_ARTIFACT_CONFIG_DIGEST#sha256:}"; \
+    test "${#digest_hex}" -eq 64; \
+    test -z "$(printf '%s' "${digest_hex}" | tr -d '0-9a-f')"; \
+    install -d /etc/quwoquan; \
+    printf '{"schema":"qwq.environment-artifact-identity","environment":"%s","configDigest":"%s"}\n' \
+      "${QWQ_ARTIFACT_ENVIRONMENT}" "${QWQ_ARTIFACT_CONFIG_DIGEST}" \
+      > /etc/quwoquan/artifact-identity.json; \
+    chmod 0444 /etc/quwoquan/artifact-identity.json
 
 # lightgbm loads libgomp at runtime; python slim images do not ship it by default.
 RUN if [ -f /etc/apt/sources.list.d/debian.sources ]; then \
@@ -62,6 +76,7 @@ COPY services/recommendation-service/internal/recommendation/recommendation_mode
 COPY services/recommendation-service/contracts/recommendation/recommendation_model_release/intersection_kind_registry.yaml ./contracts/recommendation/recommendation_model_release/intersection_kind_registry.yaml
 COPY services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/runtime_contract.py ./
 COPY services/recommendation-service/cmd/api/main.py ./
+COPY services/recommendation-service/cmd/api/artifact_identity.py ./
 COPY services/recommendation-service/cmd/api/stream_redis.py ./
 
 COPY services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/scripts/artifact_store.py ./scripts/artifact_store.py

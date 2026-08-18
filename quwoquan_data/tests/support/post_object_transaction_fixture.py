@@ -15,7 +15,6 @@ from pathlib import Path
 
 import pytest
 import yaml
-from content.release.canonical import creator_projection
 from content.release.canonical.content_pool_record import stable_content_id
 from content.release.canonical.post_transaction import (
     build_post_object_transaction_package as _build_post_object_transaction_package,
@@ -29,6 +28,7 @@ from governance.coverage import distribution
 from governance.creators.assignment import creator_assignment_from_profile
 from content.templates.registry import TemplateRegistry
 from PIL import Image
+from support.media_fixture import seed_system_creator_avatar_holding
 
 
 EXECUTION_ID = "20260718--travel-image-cold-start--test-region-a--scale-901"
@@ -50,28 +50,44 @@ CREATOR_PROFILE_PATH = (
 )
 
 
-def _copy_creator_avatar_cas(publish_root: Path) -> None:
-    profile = yaml.safe_load(CREATOR_PROFILE_PATH.read_text(encoding="utf-8"))
-    avatar = profile.get("avatarAsset") if isinstance(profile, dict) else None
-    assert isinstance(avatar, dict)
-    object_key = str(avatar.get("objectKey") or "")
-    assert object_key
-    source = REAL_PUBLISH_ROOT / object_key
-    assert source.is_file()
-    target = publish_root / object_key
-    target.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(source, target)
+def _seed_creator_avatar_holding() -> None:
+    seed_system_creator_avatar_holding(CREATOR_REF)
 
 
 @pytest.fixture(autouse=True)
-def _isolate_creator_avatar_cas(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Mirror the referenced creator avatar into this test's isolated CAS root."""
-    isolated_publish = tmp_path / "creator-avatar-publish"
-    _copy_creator_avatar_cas(isolated_publish)
-    monkeypatch.setattr(creator_projection, "PUBLISH_ROOT", isolated_publish)
+def _isolate_creator_avatar_cas() -> None:
+    """Stand up the referenced creator avatar in the isolated content library.
+
+    Projecting a creator resolves its avatar by digest against the library, so
+    the holding has to exist before the projection runs; canonical publish never
+    carries the body and cannot supply it.
+    """
+    _seed_creator_avatar_holding()
+
+
+def make_text_only_article(execution_root: Path) -> None:
+    """Turn the fixture post into a text-only article that publishes a document.
+
+    A text-only post carries no media, so its prose is the only surface canonical
+    publish can name as final content. Writing ``article.md`` here is what makes
+    these fixtures describe a post that is actually publishable without bytes,
+    rather than one that leans on a stray asset file to have something to point at.
+    """
+
+    post = execution_root / "posts" / POST_REF
+    manifest_path = post / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest.update(
+        contentType="article",
+        carrier="article",
+        publishMediaMode="text_only",
+        assets=[],
+    )
+    _write_json(manifest_path, manifest)
+    (post / "article.md").write_text(
+        "# 西湖光影\n\n文本 post 的正文，不依赖任何媒体字节。\n",
+        encoding="utf-8",
+    )
 
 
 def _write_json(path: Path, payload: object) -> None:
@@ -234,6 +250,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str]:
                     "fetchedAt": "2026-07-18T04:00:00Z",
                     "usageScope": "app_publish",
                     "modelReleaseStatus": "not_required",
+                    "distributionDecision": "research_allowed",
                 }
             ]
         },
@@ -278,6 +295,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str]:
                     "modelReleaseStatus": "not_required",
                     "rightsAuditStatus": "verified",
                     "rightsAuditIssues": [],
+                    "distributionDecision": "research_allowed",
                     "sha256": digest,
                 }
             ],
@@ -305,8 +323,8 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str]:
     )
     _write_json(post / "5.review/evidence_index.json", {"evidence": []})
     publish = tmp_path / "publish"
-    for relative in ("creators", "entities", "posts", "tags", "media/objects"):
+    for relative in ("creators", "entities", "posts", "tags"):
         (publish / relative).mkdir(parents=True, exist_ok=True)
-    _copy_creator_avatar_cas(publish)
+    _seed_creator_avatar_holding()
     package = execution / "evidence/object-transactions" / transaction_id
     return execution, package, publish, transaction_id

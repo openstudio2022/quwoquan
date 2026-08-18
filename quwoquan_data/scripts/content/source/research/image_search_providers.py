@@ -1,33 +1,33 @@
 """Image and travelogue source discovery providers."""
 from __future__ import annotations
 
+import hashlib
+import math
 import re
 import urllib.parse
 from typing import Any
 
 from core.runtime_policy import active_runtime_policy
-
 from content.source.research import network_io
+from content.source.research.plan_state import (
+    _image_at,
+    _image_window,
+)
+from content.source.research.reject_memory import _filter_rejected_images
 from content.source.research.source_quality import (
+    _ARTICLE_BASE_CATEGORIES,
+    _evidence_reason,
     _image_pixel_issue,
     _license_allows_app_publish,
 )
+from content.source.research.source_registry import _known_image_search_hints
 from content.source.research.text_match import (
     _dedupe_terms,
     _entity_name_variants,
+    _expanded_entity_aliases,
     _normalized_title,
     _text_mentions_entity,
 )
-from content.source.research.wiki_common import _OPENVERSE_API, _strip_html
-from content.source.research.wiki_core import (
-    _claim_string_values,
-    _wikidata_claims,
-    _wikidata_item_for_zhwiki,
-)
-from content.source.research.wiki_media_subjects import (
-    wikimedia_subject_evidence_by_file,
-)
-
 
 def _image_search_terms(
     entity_id: str,
@@ -36,7 +36,17 @@ def _image_search_terms(
     limit: int = 4,
 ) -> list[str]:
     return _dedupe_terms([*_entity_name_variants(entity_id), *entity_aliases], limit=limit)
-
+from content.source.research.wiki_common import (
+    _BASE_DRAFT_IMAGE_CANDIDATES,
+    _OPENVERSE_API,
+    _strip_html,
+)
+from content.source.research.wiki_core import (
+    _claim_string_values,
+    _wikidata_claims,
+    _wiki_url,
+)
+from core.wiki_wikitext import parse_wikitext_placements
 
 _OPENVERSE_HTTP_TIMEOUT_SECONDS = active_runtime_policy().provider_timeouts.openverse_seconds
 
@@ -82,11 +92,11 @@ def _commons_images(
             url = str(info.get("url") or "")
             if not url or url in seen:
                 continue
-            if not re.search(r"\.(?:jpe?g|png|webp)(?:$|\?)", url, re.IGNORECASE):
+            if not re.search(r"\.(?:jpe?g|png|webp)(?:$|\?)", url, re.I):
                 continue
             meta = info.get("extmetadata") or {}
-            license_name = _strip_html((meta.get("LicenseShortName") or {}).get("value") or "")
-            license_url = _strip_html((meta.get("LicenseUrl") or {}).get("value") or "")
+            license_name = _strip_html(((meta.get("LicenseShortName") or {}).get("value") or ""))
+            license_url = _strip_html(((meta.get("LicenseUrl") or {}).get("value") or ""))
             if not license_url or not _license_allows_app_publish(license_name, license_url):
                 continue
             width = int(info.get("width") or 0)
@@ -136,29 +146,13 @@ def _commons_images(
                 return images
     return images
 
-
-def commons_images_for_entity(
-    entity_id: str,
-    *,
-    entity_aliases: list[str] | tuple[str, ...] = (),
-    limit: int = 8,
-) -> list[dict[str, Any]]:
-    """Return entity-matched open-license Commons originals for source units."""
-
-    return _commons_images(
-        entity_id,
-        entity_aliases=entity_aliases,
-        limit=limit,
-    )
-
-def commons_images_for_titles(
+def _commons_images_for_titles(
     titles: list[str],
     *,
     entity_id: str,
     entity_aliases: list[str] | tuple[str, ...] = (),
-    limit: int | None = 8,
+    limit: int = 8,
     collection_page_url: str = "",
-    require_metadata_entity_match: bool = True,
 ) -> list[dict[str, Any]]:
     normalized: list[str] = []
     seen_titles: set[str] = set()
@@ -187,13 +181,6 @@ def commons_images_for_titles(
         },
     )
     pages = (data.get("query") or {}).get("pages") or {}
-    subject_evidence_by_title = wikimedia_subject_evidence_by_file(
-        {
-            str(page.get("title") or ""): page
-            for page in pages.values()
-            if isinstance(page, dict) and str(page.get("title") or "").strip()
-        }
-    )
     images: list[dict[str, Any]] = []
     seen_urls: set[str] = set()
     for page in pages.values():
@@ -203,11 +190,11 @@ def commons_images_for_titles(
         url = str(info.get("url") or "")
         if not url or url in seen_urls:
             continue
-        if not re.search(r"\.(?:jpe?g|png|webp)(?:$|\?)", url, re.IGNORECASE):
+        if not re.search(r"\.(?:jpe?g|png|webp)(?:$|\?)", url, re.I):
             continue
         meta = info.get("extmetadata") or {}
-        license_name = _strip_html((meta.get("LicenseShortName") or {}).get("value") or "")
-        license_url = _strip_html((meta.get("LicenseUrl") or {}).get("value") or "")
+        license_name = _strip_html(((meta.get("LicenseShortName") or {}).get("value") or ""))
+        license_url = _strip_html(((meta.get("LicenseUrl") or {}).get("value") or ""))
         if not _license_allows_app_publish(license_name, license_url):
             continue
         width = int(info.get("width") or 0)
@@ -220,7 +207,7 @@ def commons_images_for_titles(
             ((meta.get("ImageDescription") or {}).get("value") or "")
             or str(page.get("title") or "")
         )
-        if require_metadata_entity_match and entity_id and not _text_mentions_entity(
+        if entity_id and not _text_mentions_entity(
             description,
             entity_id,
             entity_aliases=entity_aliases,
@@ -235,7 +222,6 @@ def commons_images_for_titles(
             or "Wikimedia Commons contributor"
         )
         source_url = str(info.get("descriptionurl") or info.get("descriptionshorturl") or url)
-        page_title = str(page.get("title") or "")
         images.append(
             {
                 "url": url,
@@ -254,12 +240,9 @@ def commons_images_for_titles(
                 "relevance": description[:120] or source_url,
                 "creator": credit,
                 "collectionPageUrl": collection_page_url or source_url,
-                "visualSubjectEvidence": list(
-                    subject_evidence_by_title.get(page_title, ())
-                ),
             }
         )
-        if limit is not None and len(images) >= limit:
+        if len(images) >= limit:
             break
     return images
 
@@ -289,7 +272,7 @@ def _commons_category_images(
     rows = ((data.get("query") or {}).get("categorymembers") or [])
     titles = [str(row.get("title") or "") for row in rows if isinstance(row, dict)]
     page_url = f"https://commons.wikimedia.org/wiki/{urllib.parse.quote(title.replace(' ', '_'))}"
-    return commons_images_for_titles(
+    return _commons_images_for_titles(
         titles,
         entity_id=entity_id,
         entity_aliases=entity_aliases,
@@ -306,7 +289,7 @@ def _wikidata_commons_images(
 ) -> list[dict[str, Any]]:
     claims = _wikidata_claims(qid)
     titles = _claim_string_values(claims, "P18")
-    images = commons_images_for_titles(
+    images = _commons_images_for_titles(
         titles,
         entity_id=entity_id,
         entity_aliases=entity_aliases,
@@ -326,26 +309,6 @@ def _wikidata_commons_images(
             if len(images) >= limit:
                 return images[:limit]
     return images[:limit]
-
-
-def wikidata_commons_images_for_entity(
-    wiki_title: str,
-    *,
-    entity_id: str,
-    entity_aliases: list[str] | tuple[str, ...] = (),
-    limit: int = 8,
-) -> list[dict[str, Any]]:
-    """Return exact P18/P373 Commons originals for one bound zh-wiki entity."""
-
-    qid = _wikidata_item_for_zhwiki(wiki_title)
-    if not qid:
-        return []
-    return _wikidata_commons_images(
-        qid,
-        entity_id=entity_id,
-        entity_aliases=entity_aliases,
-        limit=limit,
-    )
 
 def _openverse_images(
     entity_id: str,
@@ -429,18 +392,3 @@ def _openverse_images(
             if len(images) >= limit:
                 return images
     return images
-
-
-def openverse_images_for_entity(
-    entity_id: str,
-    *,
-    entity_aliases: list[str] | tuple[str, ...] = (),
-    limit: int = 12,
-) -> list[dict[str, Any]]:
-    """Return entity-matched open-license originals from the Openverse index."""
-
-    return _openverse_images(
-        entity_id,
-        entity_aliases=entity_aliases,
-        limit=limit,
-    )

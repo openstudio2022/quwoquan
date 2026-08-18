@@ -4,12 +4,12 @@ from __future__ import annotations
 import time
 from typing import Any
 
+from content.source.research.network_io import NetworkFetchError
 from governance.coverage.discovery_shared import (
     _RETRY_BACKOFF_MULTIPLIER,
     _WIKI_CATEGORY_DEPTH,
     _WIKI_CATEGORY_PAGE_LIMIT,
     _WIKI_HOST,
-    _WIKI_INTER_REQUEST_DELAY_SECONDS,
     _WIKI_RETRY_BACKOFF_SECONDS,
     _WIKI_RETRY_LIMIT,
     wiki_category_seeds,
@@ -27,21 +27,26 @@ def _wiki_api_with_retry(
     retries: int = _WIKI_RETRY_LIMIT,
     backoff_seconds: float = _WIKI_RETRY_BACKOFF_SECONDS,
 ) -> dict[str, Any]:
-    """wiki API 带限流退避：空响应（curl 失败/429 HTML 体）按指数退避重试。
+    """wiki API 带限流退避：请求未完成时按指数退避重试，耗尽仍失败则上抛。
 
-    2026-07-09 实测：连续分类请求会触发 zh.wikipedia 限流返回非 JSON 体，
-    `_curl_json` 静默返回 {} 导致整棵分类树静默空产。重试仍空才放弃（由
-    调用方把该分类记入缺口，不得静默凑数）。
+    2026-07-09 实测：连续分类请求会触发 zh.wikipedia 限流返回非 JSON 体。
+    退避耗尽后失败必须留在失败态，由调用方把该分类记入缺口，不得静默凑数。
     """
     delay = backoff_seconds
     for attempt in range(max(1, retries)):
-        data = bridge.wiki_api(host, params)
-        if data:
-            return data
-        if attempt + 1 < retries:
+        try:
+            return bridge.wiki_api(host, params)
+        except NetworkFetchError:
+            if attempt + 1 >= retries:
+                raise
             time.sleep(delay)
             delay *= _RETRY_BACKOFF_MULTIPLIER
-    return {}
+    raise NetworkFetchError(
+        f"https://{host}/w/api.php",
+        status_code=0,
+        returncode=-1,
+        reason="retry budget is not positive",
+    )
 
 
 def _wiki_category_members(
@@ -62,8 +67,9 @@ def _wiki_category_members(
         }
         if cont:
             params["cmcontinue"] = cont
-        data = _wiki_api_with_retry(bridge, _WIKI_HOST, params)
-        if not data:
+        try:
+            data = _wiki_api_with_retry(bridge, _WIKI_HOST, params)
+        except NetworkFetchError:
             return pages, subcats, False
         members = ((data.get("query") or {}).get("categorymembers")) or []
         for member in members:
@@ -91,22 +97,23 @@ def _wiki_page_details(
     details: dict[str, dict[str, Any]] = {}
     for index in range(0, len(titles), 50):
         chunk = titles[index : index + 50]
-        data = _wiki_api_with_retry(
-            bridge,
-            _WIKI_HOST,
-            {
-                "action": "query",
-                "prop": "extracts|categories|pageprops",
-                "titles": "|".join(chunk),
-                "exintro": 1,
-                "explaintext": 1,
-                "exlimit": "max",
-                "cllimit": "max",
-                "redirects": "1",
-                "format": "json",
-            },
-        )
-        if not data:
+        try:
+            data = _wiki_api_with_retry(
+                bridge,
+                _WIKI_HOST,
+                {
+                    "action": "query",
+                    "prop": "extracts|categories|pageprops",
+                    "titles": "|".join(chunk),
+                    "exintro": 1,
+                    "explaintext": 1,
+                    "exlimit": "max",
+                    "cllimit": "max",
+                    "redirects": "1",
+                    "format": "json",
+                },
+            )
+        except NetworkFetchError:
             if failed_batches is not None:
                 failed_batches.append("|".join(chunk))
             continue
@@ -133,11 +140,14 @@ def discover_wiki_candidates(
     *,
     max_depth: int = _WIKI_CATEGORY_DEPTH,
     limit: int | None = None,
-    sleep_seconds: float = _WIKI_INTER_REQUEST_DELAY_SECONDS,
     bridge: Any | None = None,
     failed_units: list[str] | None = None,
 ) -> list[dict[str, Any]]:
-    """省级 wiki 分类树递归发现（含政府名录镜像分类）。"""
+    """省级 wiki 分类树递归发现（含政府名录镜像分类）。
+
+    对 MediaWiki 主机的请求间隔由 `network_io.wiki_api` 按主机统一节流，
+    这里不再另行 sleep，避免同一约束出现两个执行点。
+    """
     bridge = bridge or _research_network()
     seeds = wiki_category_seeds(province)
     seen_cats: set[str] = set()
@@ -154,7 +164,6 @@ def discover_wiki_candidates(
             if failed_units is not None:
                 failed_units.append(category)
             continue
-        time.sleep(max(0.0, sleep_seconds))
         for title in pages:
             if _title_blocked(title):
                 continue

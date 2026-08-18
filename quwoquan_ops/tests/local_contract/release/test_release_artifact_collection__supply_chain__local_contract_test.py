@@ -53,6 +53,7 @@ class ReleaseArtifactCollectionContractTest(unittest.TestCase):
         manifest = finalizer.seal_manifest(
             {
                 "schema": finalizer.SCHEMA,
+                "releaseTrainId": None,
                 "candidateId": None,
                 "status": "component-ready",
                 "generatedAt": "2026-07-28T00:00:00Z",
@@ -64,25 +65,61 @@ class ReleaseArtifactCollectionContractTest(unittest.TestCase):
                     "sourceArchiveDigest": None,
                 },
                 "artifactDigest": None,
-                "images": {
-                    "content-service": {
-                        "repository": repository,
-                        "transportRef": repository + ":sha-candidate",
-                        "digest": DIGEST,
-                        "ref": ref,
-                        "attestations": {
-                            "spdxSbom": f"oci://{ref}#spdxSbom",
-                            "slsaProvenance": f"oci://{ref}#slsaProvenance",
+                "environmentArtifacts": {
+                    environment: {
+                        "environment": environment,
+                        "environmentArtifactDigest": None,
+                        "images": {
+                            "content-service": {
+                                "repository": repository + "-" + environment,
+                                "transportRef": (
+                                    repository + "-" + environment + ":sha-candidate"
+                                ),
+                                "digest": f"sha256:{index:064x}",
+                                "ref": (
+                                    repository
+                                    + "-"
+                                    + environment
+                                    + "@"
+                                    + f"sha256:{index:064x}"
+                                ),
+                                "attestations": {
+                                    "spdxSbom": (
+                                        "oci://"
+                                        + repository
+                                        + "-"
+                                        + environment
+                                        + "@"
+                                        + f"sha256:{index:064x}"
+                                        + "#spdxSbom"
+                                    ),
+                                    "slsaProvenance": (
+                                        "oci://"
+                                        + repository
+                                        + "-"
+                                        + environment
+                                        + "@"
+                                        + f"sha256:{index:064x}"
+                                        + "#slsaProvenance"
+                                    ),
+                                },
+                            }
                         },
+                        "configurationPackages": configuration_packages[environment],
                     }
+                    for index, environment in enumerate(
+                        finalizer.ENVIRONMENTS, start=1
+                    )
                 },
-                "configurationPackages": configuration_packages,
                 "applicationPackages": {
                     environment: {} for environment in finalizer.ENVIRONMENTS
                 },
                 "contractGraphDigest": None,
                 "requiredEvidence": {
-                    "images": ["content-service"],
+                    "environmentArtifacts": {
+                        environment: ["content-service"]
+                        for environment in finalizer.ENVIRONMENTS
+                    },
                     "configurationPackages": {
                         environment: ["content-service"]
                         for environment in finalizer.ENVIRONMENTS
@@ -257,9 +294,19 @@ class ReleaseArtifactCollectionContractTest(unittest.TestCase):
                         )
                     },
                     "candidateMaterial": {
-                        "images": {
-                            service: descriptor["digest"]
-                            for service, descriptor in manifest["images"].items()
+                        "environmentArtifacts": {
+                            environment: {
+                                "environmentArtifactDigest": artifact[
+                                    "environmentArtifactDigest"
+                                ],
+                                "images": {
+                                    owner: descriptor["digest"]
+                                    for owner, descriptor in artifact["images"].items()
+                                },
+                            }
+                            for environment, artifact in manifest[
+                                "environmentArtifacts"
+                            ].items()
                         },
                         "contractGraphDigest": finalizer.sha256_file(contract_graph),
                     },
@@ -317,17 +364,24 @@ class ReleaseArtifactCollectionContractTest(unittest.TestCase):
                 )
         test_payload = json.loads(sources["testEvidence"].read_text(encoding="utf-8"))
         test_payload["layers"]["user_acceptance"]["candidateMaterial"] = {
-            "images": {
-                service: descriptor["digest"]
-                for service, descriptor in manifest["images"].items()
-            },
-            "configurationPackages": {
+            "environmentArtifacts": {
                 environment: {
-                    service: descriptor["digest"]
-                    for service, descriptor in packages.items()
+                    "environmentArtifactDigest": artifact[
+                        "environmentArtifactDigest"
+                    ],
+                    "images": {
+                        owner: descriptor["digest"]
+                        for owner, descriptor in artifact["images"].items()
+                    },
+                    "configurationPackages": {
+                        service: descriptor["digest"]
+                        for service, descriptor in artifact[
+                            "configurationPackages"
+                        ].items()
+                    },
                 }
-                for environment, packages in manifest[
-                    "configurationPackages"
+                for environment, artifact in manifest[
+                    "environmentArtifacts"
                 ].items()
             },
             "applicationPackages": application_material,

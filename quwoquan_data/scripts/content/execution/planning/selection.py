@@ -19,20 +19,12 @@ from content.execution import store, validate_execution_id
 from content.execution.contracts import ExecutionStateTransition
 from content.execution.identity import SelectionPolicy
 from content.execution.planning.capacity_policy import execution_capacity_policy_fields
-from content.execution.planning.selection_discovery import (
-    coverage_target_from_selection,
-    leaf_selection_name,
-    load_partitions,
-    ordered_partition_leaves,
-    partition_targets,
-    resolve_target_names,
-)
+from content.execution.planning.selection_discovery import coverage_target_from_selection
 from content.execution.planning.selection_materialization import write_selected_task
+from content.execution.planning.selection_targets import select_targets
+from content.execution.planning.media_work_units import project_media_work_units
 from content.execution.planning.source_pool_policy import source_pool_policy_fields
-from content.execution.planning.source_selection import (
-    TargetSourceQualifier,
-    qualify_source_ready_targets,
-)
+from content.execution.planning.source_selection import TargetSourceQualifier
 
 DEFAULT_ARTICLE_ANGLES = ["planning_consultation", "decision_experience", "route_transport", "seasonal_timing"]
 @dataclass(frozen=True)
@@ -68,9 +60,26 @@ class SelectionRequest:
     source_qualifier: TargetSourceQualifier | None = None
     qualification_source_key: str = "qualifiedHomepageSource"
     persist_qualified_source: bool = True
+    qualification_candidate_names: tuple[str, ...] | None = None
+    qualification_supply_count: int | None = None
+    media_work_unit_candidates: tuple[dict[str, Any], ...] = ()
     target_names: tuple[str, ...] = ()
     inherit_frozen_targets: bool = False
     inherited_targets: tuple[dict[str, Any], ...] = ()
+
+
+def _diversity_carriers(request: SelectionRequest) -> tuple[str, ...]:
+    """本次执行真正会产出的载体；多样性上限只对这些载体计数。"""
+    return tuple(
+        carrier
+        for carrier, per_target in (
+            ("homepage", request.entity_homepages_per_target),
+            ("article", request.entity_articles_per_target),
+            ("image", request.image_works_per_target),
+            ("video", request.video_works_per_target),
+        )
+        if int(per_target) > 0
+    )
 
 
 def execution_failure_items(state: ExecutionStateTransition) -> list[dict[str, Any]]:
@@ -110,213 +119,6 @@ def execution_failure_items(state: ExecutionStateTransition) -> list[dict[str, A
         )
     return items
 
-def _candidate_pool_exhausted(
-    *,
-    selected_count: int,
-    quota: int,
-    limit: int,
-    discovery_path: Path,
-) -> ValueError:
-    return ValueError(
-        f"候选池耗尽，区域实体供给不足：selected={selected_count} quota={quota} "
-        f"candidatePool={limit} discovery={discovery_path}"
-    )
-
-
-def _matches_category(
-    row: Mapping[str, Any],
-    category: str | None,
-) -> bool:
-    """Match a declared selection category against a structured entity type."""
-    requested = str(category or "").strip()
-    if not requested:
-        return True
-    entity_type = str(row.get("entityType") or "").strip()
-    if not entity_type:
-        return False
-    if entity_type == requested:
-        return True
-    return requested in {
-        segment.strip()
-        for segment in entity_type.split("/")
-        if segment.strip()
-    }
-
-
-def select_targets(
-    *,
-    discovery_path: Path,
-    limit: int,
-    quota: int,
-    target_selector: TargetSelector,
-    source_qualifier: TargetSourceQualifier | None = None,
-    qualification_source_key: str = "qualifiedHomepageSource",
-    persist_qualified_source: bool = True,
-    target_names: tuple[str, ...] = (),
-    category: str | None = None,
-    inherit_frozen_targets: bool = False,
-    inherited_targets: tuple[dict[str, Any], ...] = (),
-) -> tuple[list[dict[str, str]], dict[str, Any]]:
-    """Select up to ``limit`` candidates and require at least ``quota`` of them.
-
-    ``limit`` is the oversampled candidate pool, not a delivery promise: objects
-    that later fail a quality gate are discarded rather than retried, so the pool
-    is intentionally larger than the approved quota.  Only falling below the
-    quota is a selection failure.
-    """
-    if not isinstance(target_selector, TargetSelector):
-        raise TypeError("target_selector must be TargetSelector")
-    if isinstance(quota, bool) or not isinstance(quota, int) or quota < 1:
-        raise ValueError("quota must be a positive integer")
-    if quota > limit:
-        raise ValueError(
-            f"approved quota {quota} exceeds the candidate pool {limit}"
-        )
-    partitions = load_partitions(discovery_path)
-    all_by_name = partition_targets(partitions, target_selector=target_selector)
-    by_name = {
-        name: row
-        for name, row in all_by_name.items()
-        if _matches_category(row, category)
-    }
-    selected: list[dict[str, str]] = []
-    seen: set[str] = set()
-
-    if target_selector is TargetSelector.SOURCE_READY_PRIORITY and source_qualifier is None:
-        raise ValueError("source-ready-priority requires source_qualifier")
-    if target_names:
-        target_catalog = all_by_name if inherit_frozen_targets else by_name
-        resolved_target_names = resolve_target_names(target_catalog, target_names)
-        if (
-            target_selector is not TargetSelector.SOURCE_READY_PRIORITY
-            or inherit_frozen_targets
-        ):
-            if inherit_frozen_targets and target_selector is TargetSelector.SOURCE_READY_PRIORITY:
-                # retryOf must keep the predecessor's exact candidate pool.
-                # Re-probing Commons/Wikipedia here is unbounded and can reshape
-                # the immutable retry set; download admission re-verifies rights.
-                if source_qualifier is None:
-                    raise ValueError("source-ready-priority requires source_qualifier")
-            if inherited_targets:
-                inherited_names = tuple(
-                    str(row.get("name") or "").strip()
-                    for row in inherited_targets
-                )
-                if inherited_names != resolved_target_names:
-                    raise ValueError(
-                        "inherited target rows must match the resolved canonical "
-                        "target order exactly"
-                    )
-                selected = [dict(row) for row in inherited_targets]
-            else:
-                selected = [target_catalog[name] for name in resolved_target_names]
-            report = {
-                "schema": "quwoquan_data.target_selection",
-                "strategy": (
-                    "inherited frozen target order"
-                    if inherit_frozen_targets
-                    else "explicit frozen target order"
-                ),
-                "targetSelector": target_selector.value,
-                "discoveryPath": str(discovery_path),
-                "limit": limit,
-                "approvedQuota": quota,
-                "selectedCount": len(selected),
-                "selectionShortfall": max(0, quota - len(selected)),
-                "targets": selected,
-                "requestedTargetNames": list(target_names),
-                "inheritedFrozenTargets": bool(inherit_frozen_targets),
-            }
-            if category:
-                report["category"] = str(category).strip()
-            if len(selected) < quota:
-                raise _candidate_pool_exhausted(
-                    selected_count=len(selected),
-                    quota=quota,
-                    limit=limit,
-                    discovery_path=discovery_path,
-                )
-            return selected, report
-
-    def add(name: str) -> None:
-        if name in seen or len(selected) >= limit:
-            return
-        row = by_name.get(name)
-        if not row:
-            return
-        selected.append(row)
-        seen.add(name)
-
-    candidate_rows: list[dict[str, Any]] = []
-    candidate_names: set[str] = set()
-    depth = 0
-    while True:
-        scanned_any = False
-        for part in partitions:
-            leaves = ordered_partition_leaves(part, target_selector=target_selector)
-            if depth >= len(leaves):
-                continue
-            scanned_any = True
-            name = leaf_selection_name(leaves[depth])
-            row = by_name.get(name)
-            if row is not None and name not in candidate_names:
-                candidate_rows.append(row)
-                candidate_names.add(name)
-        if not scanned_any:
-            break
-        depth += 1
-
-    if target_selector is TargetSelector.SOURCE_READY_PRIORITY:
-        assert source_qualifier is not None
-        selected, source_qualification, requested_target_names = qualify_source_ready_targets(
-            candidate_rows,
-            discovery_ref=str(discovery_path),
-            limit=limit,
-            quota=quota,
-            source_qualifier=source_qualifier,
-            target_names=target_names,
-            qualification_source_key=qualification_source_key,
-            persist_qualified_source=persist_qualified_source,
-        )
-    else:
-        for row in candidate_rows:
-            add(str(row["name"]))
-            if len(selected) >= limit:
-                break
-    # 与 qualify_source_ready_targets 的非 persist 语义保持同一真相源：
-    # persist lane（homepage）把 quota 当交付承诺的准入门；非 persist lane
-    # （video 等）的真实供给由冻结外部输入 receipt 决定，qualification 只是
-    # precheck，approvedQuota 是 scale milestone 而非 lane 级 veto。内层已对
-    # persist 或零供给 fail-closed，这里不得对非 persist 的部分供给二次 veto。
-    non_persist_source_ready = (
-        target_selector is TargetSelector.SOURCE_READY_PRIORITY
-        and not persist_qualified_source
-    )
-    if len(selected) < quota and (not non_persist_source_ready or not selected):
-        raise _candidate_pool_exhausted(
-            selected_count=len(selected),
-            quota=quota,
-            limit=limit,
-            discovery_path=discovery_path,
-        )
-    report = {
-        "schema": "quwoquan_data.target_selection",
-        "strategy": "deterministic round-robin regional coverage",
-        "targetSelector": target_selector.value,
-        "discoveryPath": str(discovery_path),
-        "limit": limit,
-        "approvedQuota": quota,
-        "selectedCount": len(selected),
-        "selectionShortfall": max(0, quota - len(selected)),
-        "targets": selected,
-    }
-    if category:
-        report["category"] = str(category).strip()
-    if target_selector is TargetSelector.SOURCE_READY_PRIORITY:
-        report["sourceQualification"] = source_qualification
-        if requested_target_names:
-            report["requestedTargetNames"] = list(requested_target_names)
-    return selected, report
 def _validated_quota(value: int, *, field: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
         raise ValueError(f"{field} must be a non-negative integer")
@@ -349,6 +151,8 @@ def build_execution_spec(
     preset_ref: str | None = None,
     target_entity_count: int | None = None,
     selection_policy: SelectionPolicy = SelectionPolicy.FROZEN,
+    media_work_units: tuple[dict[str, Any], ...] = (),
+    media_work_unit_exclusions: tuple[dict[str, Any], ...] = (),
 ) -> dict[str, Any]:
     validated_execution_id = validate_execution_id(execution_id)
     if not isinstance(selection_policy, SelectionPolicy):
@@ -372,7 +176,9 @@ def build_execution_spec(
         resolved_target_count, field="targetEntityCount"
     )
     approved_quota = _validated_quota(approved_quota, field="approvedQuota")
-    if approved_quota < 1 or approved_quota > target_entity_count:
+    if approved_quota < 1 or (
+        not media_work_units and approved_quota > target_entity_count
+    ):
         raise ValueError(
             f"approvedQuota {approved_quota} must be between 1 and the candidate "
             f"pool {target_entity_count}"
@@ -390,7 +196,6 @@ def build_execution_spec(
         worker_host_set_binding=worker_host_set_binding,
     )
     source_pool_fields = source_pool_policy_fields(
-        validated_execution_id,
         binding=scale_source_pool,
         evidence_root_ref=source_pool_evidence_root_ref,
         selection=source_pool_selection,
@@ -406,12 +211,6 @@ def build_execution_spec(
     if video_works_per_target > 0:
         research_lanes.append("video")
     runtime_policy = active_runtime_policy()
-    lane_concurrency = {
-        "homepage": runtime_policy.research_workers,
-        "article": runtime_policy.research_workers,
-        "image": runtime_policy.research_workers,
-        "video": runtime_policy.research_workers,
-    }
     carriers = []
     if entity_homepages_per_target > 0:
         carriers.append("homepage")
@@ -432,7 +231,11 @@ def build_execution_spec(
         + image_works_per_target
         + video_works_per_target
     )
-    target_object_count = target_entity_count * objects_per_target
+    target_object_count = (
+        len(media_work_units)
+        if media_work_units
+        else target_entity_count * objects_per_target
+    )
     selected_entity_types = sorted(
         {
             str(row.get("entityType") or "").strip()
@@ -467,8 +270,6 @@ def build_execution_spec(
             "modalityContract": "separated_research",
             "research": {
                 "lanes": research_lanes,
-                "maxConcurrency": runtime_policy.download_concurrency,
-                "laneConcurrency": {lane: lane_concurrency[lane] for lane in research_lanes},
             },
             "carriers": carriers,
             "quotas": {
@@ -478,11 +279,25 @@ def build_execution_spec(
                 "entityHomepagesPerTarget": entity_homepages_per_target,
                 "routeArticles": 0,
             },
+            **(
+                {"workUnits": [dict(row) for row in media_work_units]}
+                if media_work_units
+                else {}
+            ),
+            **(
+                {
+                    "workUnitExclusions": [
+                        dict(row) for row in media_work_unit_exclusions
+                    ]
+                }
+                if media_work_unit_exclusions
+                else {}
+            ),
         },
         acceptance={
             # 准出只认配额；候选池是过采冗余，不是交付承诺。
-            "minEntities": approved_quota,
-            "minPostsPerEntity": objects_per_target,
+            "minEntities": target_entity_count if media_work_units else approved_quota,
+            "minPostsPerEntity": 0 if media_work_units else objects_per_target,
             "requiredAngles": required_article_angles,
             "scoredAngles": (["image"] if image_works_per_target else []),
         },
@@ -498,9 +313,6 @@ def build_execution_spec(
         "approvedQuota": approved_quota,
         "oversampleFactor": float(oversample_factor),
         **capacity_fields,
-        # Scale article source plans must use the registry-admitted commercial
-        # frontier; they may not fall back to uncontrolled platform sources.
-        "articleCommercialClosure": carriers == ["article"],
     }
     spec["executionPolicy"].update(source_pool_fields)
     # 冻结当前正式分支与 commit，供 execution schema、重放与审计同源消费。
@@ -558,11 +370,41 @@ def create_execution_selection(request: SelectionRequest) -> tuple[dict[str, Any
             source_qualifier=request.source_qualifier,
             qualification_source_key=request.qualification_source_key,
             persist_qualified_source=request.persist_qualified_source,
+            qualification_candidate_names=request.qualification_candidate_names,
+            qualification_supply_count=request.qualification_supply_count,
             target_names=request.target_names,
             category=request.category,
             inherit_frozen_targets=bool(request.inherit_frozen_targets),
             inherited_targets=request.inherited_targets,
+            diversity_carriers=_diversity_carriers(request),
         )
+    media_work_units: tuple[dict[str, Any], ...] = ()
+    media_work_unit_exclusions: tuple[dict[str, Any], ...] = ()
+    if request.media_work_unit_candidates:
+        projection = project_media_work_units(
+            request.media_work_unit_candidates,
+            targets,
+        )
+        if not projection.work_units:
+            raise ValueError(
+                "GATE_BLOCK DATA.SOURCE.ENTITY_CATALOG_UNMAPPED: "
+                "frozen external media supply has zero governed work units"
+            )
+        admitted_names = set(projection.coverage_target_names)
+        targets = [
+            row
+            for row in targets
+            if str(row.get("name") or "").strip() in admitted_names
+        ]
+        media_work_units = projection.work_units
+        media_work_unit_exclusions = projection.exclusions
+        report["availableSupplyCount"] = projection.mapped_object_count
+        report["selectionShortfall"] = projection.shortfall(approved_quota)
+        report["workUnitCount"] = projection.mapped_object_count
+        report["workUnitExclusionCount"] = len(projection.exclusions)
+        report["workUnitExclusions"] = [dict(row) for row in projection.exclusions]
+        report["selectedCount"] = len(targets)
+        report["targets"] = targets
     spec = build_execution_spec(
         execution_id=execution_id,
         name=request.name,
@@ -588,6 +430,8 @@ def create_execution_selection(request: SelectionRequest) -> tuple[dict[str, Any
         source_pool_evidence_root_ref=request.source_pool_evidence_root_ref,
         source_pool_selection=request.source_pool_selection,
         selection_policy=request.selection_policy,
+        media_work_units=media_work_units,
+        media_work_unit_exclusions=media_work_unit_exclusions,
     )
     spec["title"] = str(request.title or request.name)
     report["executionId"] = spec["executionId"]

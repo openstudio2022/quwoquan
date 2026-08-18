@@ -25,7 +25,6 @@ import 'package:quwoquan_app/l10n/copy/app_concept_constants.dart';
 import 'package:quwoquan_app/design_system/semantics/settings_semantic_constants.dart';
 import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
-import 'package:quwoquan_app/runtime/di/client_state_sync_dependencies.dart';
 import 'package:quwoquan_app/runtime/transport/state_sync/client_state_sync.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
@@ -44,7 +43,6 @@ import 'package:quwoquan_app/service/chat_service/chat/chat_inbox_view/presentat
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/presentation/gathering_actions_discovery_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/home_featured_immersive_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/home_page.dart';
-import 'package:quwoquan_app/service/content_service/content/post/application/discovery_feed_provider.dart';
 import 'package:quwoquan_app/runtime/shell/interest_match/interest_match_page.dart';
 import 'package:quwoquan_app/service/user_service/account/account_session/presentation/login_page.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/my_profile_page.dart';
@@ -133,12 +131,10 @@ List<Override> _shellTestOverrides({
       const EmptyAppMessageQueryDouble(),
     ),
     greetingRepositoryProvider.overrideWithValue(alphaGreetingRepository()),
-    authorImpactQueryProvider(
-      AppUiSurfaces.profileHome,
-    ).overrideWithValue(const MockUserProfileRepository()),
-    profileQueryProvider(
-      AppUiSurfaces.profileHome,
-    ).overrideWithValue(const MockUserProfileRepository()),
+    authorImpactQueryProvider(AppUiSurfaces.profileHome)
+        .overrideWithValue(const MockUserProfileRepository()),
+    profileQueryProvider(AppUiSurfaces.profileHome)
+        .overrideWithValue(const MockUserProfileRepository()),
     intersectionRepositoryProvider.overrideWithValue(
       const _EmptyIntersectionRepository(),
     ),
@@ -770,7 +766,7 @@ void main() {
         ),
         findsOneWidget,
       );
-      // 视频书退出底栏，改为首页顶部固定入口（心动供给 → 心动变现的漏斗上游）。
+      // 视频书属于首页文本频道，不占底栏，也不保留独立图标入口。
       expect(
         find.descendant(
           of: find.byType(BottomNavigationWidget),
@@ -780,6 +776,10 @@ void main() {
       );
       expect(
         find.byKey(const ValueKey<String>('home-featured-entry')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(HomePrimaryTabStrip.channelKey('featured')),
         findsOneWidget,
       );
       expect(
@@ -821,27 +821,21 @@ void main() {
       );
     });
 
-    testWidgets('从首页顶部固定入口进入视频书，不在 IndexedStack build 期间写 Feed Provider', (
-      tester,
-    ) async {
+    testWidgets('从首页视频书文本 Tab 进入沉浸正文，不切换壳层目的地', (tester) async {
       await tester.pumpWidget(_buildShell(AppRoutePaths.home));
       await tester.pump(const Duration(milliseconds: 300));
-      final container = ProviderScope.containerOf(
-        tester.element(find.byType(MainAppShell)),
-      );
-      expect(
-        container.read(discoveryFeedMapProvider)['recommend']?.value?.items,
-        isNotEmpty,
-      );
 
-      await tester.tap(
-        find.byKey(const ValueKey<String>('home-featured-entry')),
-      );
+      await tester.tap(find.byKey(HomePrimaryTabStrip.channelKey('featured')));
       await tester.pump();
-      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
       expect(tester.takeException(), isNull);
       expect(find.byType(HomeFeaturedImmersivePage), findsOneWidget);
+      expect(find.byType(BottomNavigationWidget), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('home-featured-entry')),
+        findsNothing,
+      );
     });
 
     testWidgets('底栏「行动」进入线下行动与发现页，游客可浏览且保留底栏', (tester) async {
@@ -1389,80 +1383,6 @@ void main() {
       expect(await iconSizeForLogicalWidth(1200), 40.0);
     });
 
-    test('视频书方案 B 图标几何算法支持三状态与多尺寸缩放', () {
-      void expectRectClose(Rect actual, Rect expected) {
-        expect(actual.left, closeTo(expected.left, 0.01));
-        expect(actual.top, closeTo(expected.top, 0.01));
-        expect(actual.width, closeTo(expected.width, 0.01));
-        expect(actual.height, closeTo(expected.height, 0.01));
-      }
-
-      const designSize = Size.square(AppVideoBookIconGeometry.designSize);
-      expectRectClose(
-        AppVideoBookIconGeometry.outerBounds(designSize),
-        AppVideoBookIconGeometry.outerBoundsInDesign,
-      );
-      expectRectClose(
-        AppVideoBookIconGeometry.frontCoverRect(designSize),
-        AppVideoBookIconGeometry.frontCoverRectInDesign,
-      );
-      expect(
-        AppVideoBookIconGeometry.coverCornerRadius(designSize),
-        closeTo(AppVideoBookIconGeometry.coverCornerRadiusInDesign, 0.01),
-      );
-
-      for (final state in AppVideoBookIconState.values) {
-        expect(
-          AppVideoBookIconGeometry.strokeWidth(designSize, state: state),
-          closeTo(AppVideoBookIconGeometry.unselectedStrokeWidth, 0.01),
-        );
-      }
-
-      final layerBounds = AppVideoBookIconGeometry.rightPageLayerPath(
-        designSize,
-      ).getBounds();
-      final frontBounds = AppVideoBookIconGeometry.frontCoverRect(designSize);
-      expect(
-        layerBounds.left,
-        greaterThan(
-          frontBounds.right -
-              AppVideoBookIconGeometry.coverCornerRadiusInDesign,
-        ),
-      );
-      expect(layerBounds.top, closeTo(frontBounds.top, 0.01));
-      expect(
-        layerBounds.right - frontBounds.right,
-        closeTo(AppVideoBookIconGeometry.rightPageLayerOffsetInDesign, 0.01),
-      );
-      expect(layerBounds.height, closeTo(frontBounds.height, 0.01));
-
-      final playBounds = AppVideoBookIconGeometry.playPath(
-        designSize,
-      ).getBounds();
-      expect(playBounds.center.dx, closeTo(frontBounds.center.dx, 0.4));
-      expect(playBounds.center.dy, closeTo(12.0, 0.01));
-      expect(playBounds.width, greaterThan(5.5));
-      expect(playBounds.width, lessThan(5.9));
-      expect(playBounds.height, greaterThan(6.4));
-      expect(playBounds.height, lessThan(6.9));
-
-      for (final iconSize in <double>[28.0, 32.0, 40.0]) {
-        final size = Size.square(iconSize);
-        final scale = iconSize / AppVideoBookIconGeometry.designSize;
-        expect(
-          AppVideoBookIconGeometry.strokeWidth(
-            size,
-            state: AppVideoBookIconState.selected,
-          ),
-          closeTo(AppVideoBookIconGeometry.selectedStrokeWidth * scale, 0.01),
-        );
-        expectRectClose(
-          AppVideoBookIconGeometry.outerBounds(size),
-          Rect.fromLTWH(3.75 * scale, 3.0 * scale, 16.45 * scale, 18.0 * scale),
-        );
-      }
-    });
-
     testWidgets('底部导航自绘图标选中态使用主蓝并保持语义形态', (tester) async {
       _suppressExpectedErrors();
       await tester.pumpWidget(_buildShell(AppRoutePaths.chat));
@@ -1694,7 +1614,7 @@ void main() {
       );
       expect(
         find.byKey(const ValueKey<String>('web-primary-featured')),
-        findsOneWidget,
+        findsNothing,
       );
       expect(
         find.byKey(const ValueKey<String>('web-primary-create')),
@@ -1740,16 +1660,8 @@ void main() {
       );
       expect(tester.getTopLeft(recommendedTab).dx, tabLeftBeforePinned);
 
-      await tester.tap(
-        find.byKey(const ValueKey<String>('web-primary-featured')),
-      );
-      await tester.pump(const Duration(milliseconds: 300));
-
-      expect(find.text(DiscoveryText.workFormatFilterAll), findsWidgets);
-      expect(find.text(DiscoveryText.workFormatFilterVideo), findsWidgets);
-      expect(find.text(DiscoveryText.workFormatFilterImage), findsOneWidget);
-      expect(find.text(DiscoveryText.workFormatFilterArticle), findsOneWidget);
-      expect(find.text(DiscoveryText.webPcSearchHintFeatured), findsOneWidget);
+      expect(find.text(DiscoveryText.homeTabFeatured), findsOneWidget);
+      expect(find.text(DiscoveryText.webPcSearchHintFeatured), findsNothing);
 
       await tester.tap(
         find.byKey(const ValueKey<String>('web-primary-create')),

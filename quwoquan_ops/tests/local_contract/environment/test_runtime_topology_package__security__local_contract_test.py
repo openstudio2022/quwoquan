@@ -230,6 +230,65 @@ class RuntimeTopologyPackageSecurityTest(unittest.TestCase):
         self.assertGreaterEqual(len(result["serviceNames"]), 14)
         self.assertNotIn("travel-service", result["serviceNames"])
 
+    def _merged_workload_services(
+        self,
+        workload: str,
+    ) -> dict[str, dict[str, object]]:
+        result = load_runtime_topology_package(
+            self.candidate,
+            environment="gamma",
+            target="gamma-local",
+            workload=workload,
+        )
+        merged: dict[str, dict[str, object]] = {}
+        for path in result["composeFiles"]:
+            document = yaml.safe_load(path.read_text(encoding="utf-8"))
+            for name, definition in (document.get("services") or {}).items():
+                merged.setdefault(name, {}).update(definition or {})
+        return merged
+
+    def test_every_workload_closure_is_a_valid_compose_project(self) -> None:
+        """投影掉某服务的 image 来源时,共享注册条目必须被 profile 门控。
+
+        共享 compose 的服务集是 first_party_service_names 判定活跃 image owner
+        的真相源,所以 rtc-service、realtime-gateway、product-ops-service 与
+        platform-ops-service 必须留在那里,而它们的 image 只由各自 fragment 提
+        供。bounded content workload 整份投影掉那些 fragment,若共享条目没有
+        profile,残留条目就是一个无 image 无 build 的服务:`docker compose` 判
+        定整个 project 失效,连 `down` 都执行不了——而 `up` 要求先 `down`,环境
+        由此彻底死锁。带上 profile 后 Compose 在该 profile 未激活时整体排除该
+        服务,投影与激活重新对齐。
+        """
+
+        materialize_runtime_topology_package(
+            "gamma",
+            "gamma-local",
+            self.shared,
+            repo_root=REPO_ROOT,
+        )
+
+        full = self._merged_workload_services("full")
+        self.assertEqual(
+            sorted(
+                name
+                for name, definition in full.items()
+                if "image" not in definition and "build" not in definition
+            ),
+            [],
+        )
+
+        for workload in ("content-release", "content-commercial"):
+            with self.subTest(workload=workload):
+                merged = self._merged_workload_services(workload)
+                ungated = sorted(
+                    name
+                    for name, definition in merged.items()
+                    if "image" not in definition
+                    and "build" not in definition
+                    and not definition.get("profiles")
+                )
+                self.assertEqual(ungated, [])
+
     def test_stackctl_runtime_shared_package_seals_the_runtime_topology(self) -> None:
         from quwoquan_ops.cli import stackctl
 

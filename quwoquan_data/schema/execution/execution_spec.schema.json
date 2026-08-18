@@ -218,10 +218,6 @@
         "targetObjectCount",
         "approvedQuota",
         "oversampleFactor",
-        "requiredWorkers",
-        "partitionCount",
-        "capacityPlanDigest",
-        "workerHostSetBinding",
         "executionBranch",
         "gitCommitSha"
       ],
@@ -232,41 +228,9 @@
         "targetObjectCount": {"type": "integer", "minimum": 0},
         "approvedQuota": {"type": "integer", "minimum": 1},
         "oversampleFactor": {"type": "number", "minimum": 1},
-        "requiredWorkers": {"type": "integer", "minimum": 1},
-        "partitionCount": {"enum": [16, 32, 64, 128, 256]},
-        "capacityPlanDigest": {
-          "type": "string",
-          "pattern": "^sha256:[a-f0-9]{64}$"
-        },
-        "workerHostSetBinding": {
-          "oneOf": [
-            {"type": "null"},
-            {"$ref": "governed_worker_host_binding.schema.json"}
-          ]
-        },
-        "scaleSourcePool": {"$ref": "scale_source_pool_binding.schema.json"},
-        "sourcePoolEvidenceRootRef": {"type": "string", "minLength": 1},
-        "sourcePoolSelection": {"$ref": "scale_source_pool_selection.schema.json"},
-        "articleCommercialClosure": {"type": "boolean"},
         "executionBranch": {"type": "string", "minLength": 1},
         "gitCommitSha": {"type": "string", "minLength": 1}
-      },
-      "allOf": [
-        {
-          "if": {"required": ["scaleSourcePool"]},
-          "then": {
-            "required": ["sourcePoolEvidenceRootRef", "sourcePoolSelection"]
-          },
-          "else": {
-            "not": {
-              "anyOf": [
-                {"required": ["sourcePoolEvidenceRootRef"]},
-                {"required": ["sourcePoolSelection"]}
-              ]
-            }
-          }
-        }
-      ]
+      }
     },
     "queuePolicy": {
       "type": "object",
@@ -279,7 +243,7 @@
       ],
       "additionalProperties": false,
       "properties": {
-        "backend": {"enum": ["local_file", "reliabletask"]},
+        "backend": {"const": "reliabletask"},
         "reliableTask": {
           "type": "object",
           "required": ["taskType", "queue", "store", "readyIndex"],

@@ -10,7 +10,9 @@ import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/
 import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/discovery_feed_query.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/post_interaction_state.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/discovery_feed_provider.dart';
 import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
@@ -77,45 +79,7 @@ void main() {
     );
   });
 
-  test('release-bound 首页缺 active release 时返回 stillBlocked', () async {
-    _hydrateReleaseBoundRuntime();
-    final recommend = ContentUIConfig.homeChannels.firstWhere(
-      (channel) => channel.id == 'recommend',
-    );
-    final container = ProviderContainer(
-      overrides: <Override>[
-        contentDiscoveryFeedQueryProvider.overrideWithValue(
-          _ImmediateDiscoveryFeedQuery(
-            () async => DiscoveryFeedPage(
-              items: [],
-              outcome: ContentFeedOutcome.empty,
-              emptyReason: ContentFeedEmptyReason.noActiveRelease,
-            ),
-          ),
-        ),
-        homeChannelsProvider.overrideWithValue(<HomeChannelConfig>[recommend]),
-        postInteractionStateProvider.overrideWith(
-          _NoopPostInteractionStateNotifier.new,
-        ),
-      ],
-    );
-    addTearDown(container.dispose);
-
-    final result = await container
-        .read(discoveryFeedMapProvider.notifier)
-        .load('recommend', force: true);
-
-    expect(result.terminal, DiscoveryFeedLoadTerminal.stillBlocked);
-    expect(
-      container
-          .read(discoveryFeedMapProvider)['recommend']
-          ?.value
-          ?.blockingError,
-      isNotNull,
-    );
-  });
-
-  test('非 release-bound 首页仍接受 noActiveRelease canonicalEmpty', () async {
+  test('noActiveRelease 始终是服务确认的 canonicalEmpty', () async {
     final recommend = ContentUIConfig.homeChannels.firstWhere(
       (channel) => channel.id == 'recommend',
     );
@@ -147,6 +111,38 @@ void main() {
       container.read(discoveryFeedMapProvider)['recommend']?.value?.emptyReason,
       ContentFeedEmptyReason.noActiveRelease,
     );
+  });
+
+  test('runtime provider 不可用时快速收敛 typed unavailable 且绑定 generation', () async {
+    final recommend = ContentUIConfig.homeChannels.firstWhere(
+      (channel) => channel.id == 'recommend',
+    );
+    final container = ProviderContainer(
+      overrides: <Override>[
+        homeChannelsProvider.overrideWithValue(<HomeChannelConfig>[recommend]),
+        postInteractionStateProvider.overrideWith(
+          _NoopPostInteractionStateNotifier.new,
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final result = await container
+        .read(discoveryFeedMapProvider.notifier)
+        .load('recommend', force: true);
+    final state = container
+        .read(discoveryFeedMapProvider)['recommend']
+        ?.requireValue;
+
+    expect(result.terminal, DiscoveryFeedLoadTerminal.stillBlocked);
+    expect(result.generation, greaterThan(0));
+    expect(
+      (result.failure! as CloudException).runtimeFailure.kind,
+      RuntimeFailureKind.unavailable,
+    );
+    expect(state?.blockingError, isA<CloudException>());
+    expect(state?.items, isEmpty);
+    expect(state?.emptyReason, isNull);
   });
 
   test('load 失败返回 stillBlocked 并绑定本次 generation', () async {
@@ -188,18 +184,17 @@ void main() {
     final recommend = ContentUIConfig.homeChannels.firstWhere(
       (channel) => channel.id == 'recommend',
     );
-    final query = _SequencedDiscoveryFeedQuery(<
-      Future<DiscoveryFeedPage> Function()
-    >[
-      () async => throw StateError('service unavailable'),
-      () async => DiscoveryFeedPage(
-        items: <ContentPostViewData>[_recoveredCanonicalPost()],
-        outcome: ContentFeedOutcome.content,
-        feedRequestId: 'feed-request-recovered',
-        policyDigest:
-            'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-      ),
-    ]);
+    final query = _SequencedDiscoveryFeedQuery(
+      <Future<DiscoveryFeedPage> Function()>[
+        () async => throw StateError('service unavailable'),
+        () async => DiscoveryFeedPage(
+          items: <ContentPostViewData>[_recoveredCanonicalPost()],
+          outcome: ContentFeedOutcome.content,
+          feedRequestId: 'feed-request-recovered',
+          policyDigest: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        ),
+      ],
+    );
     final container = ProviderContainer(
       overrides: <Override>[
         contentDiscoveryFeedQueryProvider.overrideWithValue(query),
@@ -231,17 +226,6 @@ void main() {
     expect(state?.blockingError, isNull);
     expect(state?.items.single.id, 'post-recovered');
     expect(state?.feedRequestId, 'feed-request-recovered');
-  });
-}
-
-void _hydrateReleaseBoundRuntime() {
-  CloudRuntimeConfig.hydrateFromNativeRuntimePackage(const <String, String>{
-    'QWQ_APP_LAUNCH_MODE': 'direct_flutter_run',
-    'contentReleaseId': 'release-alpha',
-    'contentManifestDigest':
-        'sha256:1111111111111111111111111111111111111111111111111111111111111111',
-    'contentReadinessReceiptDigest':
-        'sha256:2222222222222222222222222222222222222222222222222222222222222222',
   });
 }
 

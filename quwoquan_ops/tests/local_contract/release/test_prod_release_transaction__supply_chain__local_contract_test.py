@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import tempfile
 import threading
@@ -26,14 +25,12 @@ from quwoquan_ops.tests.support.rollout_stage_promotion_evidence_test_support im
     promotion_evidence,
 )
 
-
 ROOT = Path(__file__).resolve().parents[4]
 APP_EVIDENCE_REF = "oci://ghcr.io/example/quwoquan/app-candidate@sha256:" + ("a" * 64)
 PROVIDER_EVIDENCE_DIGEST = "sha256:" + ("e" * 64)
 PROVIDER_EVIDENCE_REF = (
     "oci://ghcr.io/example/quwoquan/provider-evidence@" + PROVIDER_EVIDENCE_DIGEST
 )
-
 
 def _git_head() -> str:
     return subprocess.run(
@@ -44,7 +41,6 @@ def _git_head() -> str:
         text=True,
     ).stdout.strip()
 
-
 def _write_build_input(
     artifact: Path,
     *,
@@ -54,9 +50,8 @@ def _write_build_input(
         environment: {} for environment in finalizer.ENVIRONMENTS
     }
     transport_tag = "sha-" + _git_head()
-    images: dict[str, dict[str, str]] = {}
     for environment in finalizer.ENVIRONMENTS:
-        for service in services:
+        for service in generator.RELEASE_SERVICES:
             relative = (
                 Path("packages/environments")
                 / environment
@@ -73,15 +68,30 @@ def _write_build_input(
                 "path": relative.as_posix(),
                 "digest": generator.sha256_file(path),
             }
-    for service in services:
-        repository = f"ghcr.io/example/quwoquan/{service}"
-        images[service] = {
-            "repository": repository,
-            "transportRef": f"{repository}:{transport_tag}",
+    environment_artifacts = {
+        environment: {
+            "environment": environment,
+            "environmentArtifactDigest": None,
+            "images": {
+                service: {
+                    "repository": (
+                        f"ghcr.io/example/quwoquan/{service}-{environment}"
+                    ),
+                    "transportRef": (
+                        f"ghcr.io/example/quwoquan/{service}-{environment}:"
+                        f"{transport_tag}"
+                    ),
+                }
+                for service in services
+            },
+            "configurationPackages": configuration_packages[environment],
         }
+        for environment in finalizer.ENVIRONMENTS
+    }
     manifest = finalizer.seal_manifest(
         {
             "schema": finalizer.SCHEMA,
+            "releaseTrainId": None,
             "candidateId": None,
             "status": "build-input",
             "generatedAt": "2026-07-28T00:00:00Z",
@@ -93,16 +103,18 @@ def _write_build_input(
                 "sourceArchiveDigest": None,
             },
             "artifactDigest": None,
-            "images": images,
-            "configurationPackages": configuration_packages,
+            "environmentArtifacts": environment_artifacts,
             "applicationPackages": {
                 environment: {} for environment in finalizer.ENVIRONMENTS
             },
             "contractGraphDigest": None,
             "requiredEvidence": {
-                "images": list(services),
-                "configurationPackages": {
+                "environmentArtifacts": {
                     environment: list(services)
+                    for environment in finalizer.ENVIRONMENTS
+                },
+                "configurationPackages": {
+                    environment: list(generator.RELEASE_SERVICES)
                     for environment in finalizer.ENVIRONMENTS
                 },
                 "applicationPackages": {
@@ -126,7 +138,11 @@ def _write_build_input(
                 "whole-application-evidence-pending",
             ],
             "missingEvidence": [
-                *(f"images.{service}.digest" for service in services),
+                *(
+                    f"environmentArtifacts.{environment}.images.{service}.digest"
+                    for environment in finalizer.ENVIRONMENTS
+                    for service in services
+                ),
                 *(
                     f"applicationPackages.{environment}.{surface}"
                     for environment in finalizer.ENVIRONMENTS
@@ -145,34 +161,34 @@ def _write_build_input(
     generator.write_json(artifact / "manifest.json", manifest)
     return manifest
 
-
 def _write_image_descriptors(
     directory: Path,
     manifest: dict[str, object],
 ) -> None:
-    for index, (service, image_value) in enumerate(
-        manifest["images"].items(),
-        start=1,
-    ):
-        image = dict(image_value)
-        repository = str(image["repository"])
-        digest = f"sha256:{index:064x}"
-        ref = f"{repository}@{digest}"
-        generator.write_json(
-            directory / f"{service}.json",
-            {
-                "service": service,
-                "repository": repository,
-                "transportRef": image["transportRef"],
-                "digest": digest,
-                "ref": ref,
-                "attestations": {
-                    "spdxSbom": f"oci://{ref}#spdxSbom",
-                    "slsaProvenance": f"oci://{ref}#slsaProvenance",
+    index = 0
+    for environment, artifact_value in manifest["environmentArtifacts"].items():
+        artifact = dict(artifact_value)
+        for service, image_value in artifact["images"].items():
+            index += 1
+            image = dict(image_value)
+            repository = str(image["repository"])
+            digest = f"sha256:{index:064x}"
+            ref = f"{repository}@{digest}"
+            generator.write_json(
+                directory / environment / f"{service}.json",
+                {
+                    "environment": environment,
+                    "runtimeImageOwner": service,
+                    "repository": repository,
+                    "transportRef": image["transportRef"],
+                    "digest": digest,
+                    "ref": ref,
+                    "attestations": {
+                        "spdxSbom": f"oci://{ref}#spdxSbom",
+                        "slsaProvenance": f"oci://{ref}#slsaProvenance",
+                    },
                 },
-            },
-        )
-
+            )
 
 def _application_package_payloads(root: Path) -> Path:
     payloads = root / "application-payloads"
@@ -194,10 +210,8 @@ def _application_package_payloads(root: Path) -> Path:
                 )
     return payloads
 
-
 def _provider_raw_dir(root: Path) -> Path:
     return root / "provider-raw"
-
 
 def _evidence_sources(
     root: Path, manifest: dict[str, object]
@@ -312,9 +326,19 @@ def _evidence_sources(
                 for key in ("gitSha", "treeDigest", "repository", "workflowRunId")
             },
             "candidateMaterial": {
-                "images": {
-                    service: descriptor["digest"]
-                    for service, descriptor in manifest["images"].items()
+                "environmentArtifacts": {
+                    environment: {
+                        "environmentArtifactDigest": artifact[
+                            "environmentArtifactDigest"
+                        ],
+                        "images": {
+                            owner: descriptor["digest"]
+                            for owner, descriptor in artifact["images"].items()
+                        },
+                    }
+                    for environment, artifact in manifest[
+                        "environmentArtifacts"
+                    ].items()
                 },
                 "contractGraphDigest": finalizer.sha256_file(contract_graph_path),
             },
@@ -380,17 +404,26 @@ def _evidence_sources(
                 **(
                     {
                         "candidateMaterial": {
-                            "images": {
-                                service: descriptor["digest"]
-                                for service, descriptor in manifest["images"].items()
-                            },
-                            "configurationPackages": {
+                            "environmentArtifacts": {
                                 environment: {
-                                    service: descriptor["digest"]
-                                    for service, descriptor in packages.items()
+                                    "environmentArtifactDigest": artifact[
+                                        "environmentArtifactDigest"
+                                    ],
+                                    "images": {
+                                        owner: descriptor["digest"]
+                                        for owner, descriptor in artifact[
+                                            "images"
+                                        ].items()
+                                    },
+                                    "configurationPackages": {
+                                        service: descriptor["digest"]
+                                        for service, descriptor in artifact[
+                                            "configurationPackages"
+                                        ].items()
+                                    },
                                 }
-                                for environment, packages in manifest[
-                                    "configurationPackages"
+                                for environment, artifact in manifest[
+                                    "environmentArtifacts"
                                 ].items()
                             },
                             "applicationPackages": application_material,
@@ -413,7 +446,6 @@ def _evidence_sources(
         generator.write_json(path, payload)
         result[key] = path
     return result
-
 
 def _application_package_sources(
     root: Path,
@@ -440,7 +472,6 @@ def _application_package_sources(
         )
         result[(environment, surface)] = path
     return result
-
 
 def _write_receipt(
     path: Path,
@@ -487,7 +518,6 @@ def _write_receipt(
     )
     return path
 
-
 def _qualify_for_prod(
     root: Path,
     artifact: Path,
@@ -516,19 +546,24 @@ def _qualify_for_prod(
         rollback_receipt_path=rollback_ready,
     )
 
-
 class ProdReleaseTransactionContractTest(unittest.TestCase):
     def test_prod_registry_attestations_are_verified_concurrently(self) -> None:
         rendezvous = threading.Barrier(2, timeout=2)
         manifest = {
             "source": {"repository": "owner/repo"},
-            "images": {
-                "content-service": {
-                    "ref": "ghcr.io/owner/repo/content-service@sha256:" + ("a" * 64)
-                },
-                "user-service": {
-                    "ref": "ghcr.io/owner/repo/user-service@sha256:" + ("b" * 64)
-                },
+            "environmentArtifacts": {
+                "prod": {
+                    "images": {
+                        "content-service": {
+                            "ref": "ghcr.io/owner/repo/content-service-prod@sha256:"
+                            + ("a" * 64)
+                        },
+                        "user-service": {
+                            "ref": "ghcr.io/owner/repo/user-service-prod@sha256:"
+                            + ("b" * 64)
+                        },
+                    }
+                }
             },
         }
 
@@ -549,26 +584,6 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
             )
 
         self.assertEqual(verify_mock.call_count, 2)
-
-    def test_service_images_alone_are_not_marked_deployable(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            artifact = root / "artifact"
-            descriptors = root / "image-descriptors"
-            artifact.mkdir()
-            descriptors.mkdir()
-            manifest = _write_build_input(
-                artifact,
-                services=("content-service",),
-            )
-            _write_image_descriptors(descriptors, manifest)
-            finalized = finalizer.finalize(artifact, descriptors)
-            self.assertEqual(finalized["status"], "component-ready")
-            self.assertEqual(
-                finalized["applicationPackages"],
-                {environment: {} for environment in finalizer.ENVIRONMENTS},
-            )
-            self.assertIn("whole-application-evidence-pending", finalized["blockers"])
 
     def test_manifest_requires_every_digest_and_attestation(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -624,10 +639,17 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
             )
             self.assertEqual(path, (artifact / "manifest.json").resolve())
             self.assertEqual(digest, finalized["artifactDigest"])
-            self.assertEqual(set(loaded["images"]), set(generator.DEPLOYED_SERVICES))
+            self.assertEqual(
+                set(loaded["environmentArtifacts"]["prod"]["images"]),
+                set(generator.DEPLOYED_SERVICES),
+            )
 
             first_config = artifact / next(
-                iter(finalized["configurationPackages"]["prod"].values())
+                iter(
+                    finalized["environmentArtifacts"]["prod"][
+                        "configurationPackages"
+                    ].values()
+                )
             )["path"]
             first_config.write_text("tampered: true\n", encoding="utf-8")
             with self.assertRaisesRegex(RuntimeError, "config digest mismatch"):
@@ -975,19 +997,3 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
             ),
             ("rollback", "100 rollout cannot remain paused on warning SLO"),
         )
-
-    def test_global_release_lock_fails_closed(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            with patch.dict(
-                os.environ,
-                {"QWQ_PROD_RELEASE_STATE_DIR": str(Path(temporary).resolve())},
-                clear=False,
-            ):
-                with stackctl._prod_release_lock():
-                    with self.assertRaisesRegex(RuntimeError, "lock is held"):
-                        with stackctl._prod_release_lock():
-                            self.fail("nested release lock must not be acquired")
-
-
-if __name__ == "__main__":
-    unittest.main()

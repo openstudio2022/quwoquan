@@ -476,7 +476,6 @@ def test_download_source_unit_images_keeps_complete_source_page(monkeypatch) -> 
     """页面自有图片无数量 cap：散图与 gallery 成员全部进入下载处置。"""
     import content.source.image_download as hi
 
-    monkeypatch.setattr(hi, "validate_image_rights", lambda spec, vertical: [])
     monkeypatch.setattr(hi, "_cached_source_image_payload", lambda *a, **k: None)
     from content.source.fetch_images import PageImageFetchResult, PageImagePayload
 

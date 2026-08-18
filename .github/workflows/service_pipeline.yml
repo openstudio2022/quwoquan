@@ -205,7 +205,7 @@ jobs:
           echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
 
   build-release-images:
-    name: 构建 ${{ matrix.service }} 不可变镜像
+    name: 构建 ${{ matrix.environment }}/${{ matrix.runtime_image_owner }} 不可变镜像
     runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 10
     needs: [prepare-release]
@@ -231,15 +231,37 @@ jobs:
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
           import json
           from pathlib import Path
+          environment = "${{ matrix.environment }}"
           runtime = json.loads(
-              Path("quwoquan_ops/environments/prod/runtime.yaml").read_text(
+              Path(f"quwoquan_ops/environments/{environment}/runtime.yaml").read_text(
                   encoding="utf-8"
               )
           )
-          images = runtime["targets"]["prod-hosted"]["buildImages"]
+          target = "prod-hosted" if environment == "prod" else f"{environment}-local"
+          images = runtime["targets"][target]["buildImages"]
+          import hashlib
+          from quwoquan_ops.cli.lib.immutable_image_composition import first_party_service_names
+          from quwoquan_ops.cli.prod.generate_mainline_release_artifact import render_release_snapshot
+
+          encoded = json.dumps(
+              {
+                  service: render_release_snapshot(service, environment)
+                  for service in first_party_service_names()
+              },
+              ensure_ascii=False,
+              separators=(",", ":"),
+              sort_keys=True,
+          ).encode("utf-8")
+          config_digest = "sha256:" + hashlib.sha256(encoded).hexdigest()
+          prod_images = json.loads(
+              Path("quwoquan_ops/environments/prod/runtime.yaml").read_text(
+                  encoding="utf-8"
+              )
+          )["targets"]["prod-hosted"]["buildImages"]
           print(f"go_base_image={images['goBaseImage']}")
           print(f"alpine_base_image={images['alpineBaseImage']}")
-          print(f"python_base_image={images['pythonBaseImage']}")
+          print(f"python_base_image={images.get('pythonBaseImage', prod_images['pythonBaseImage'])}")
+          print(f"artifact_config_digest={config_digest}")
           PY
       - name: 设置 QEMU
         if: ${{ matrix.action == 'build' }}
@@ -267,6 +289,7 @@ jobs:
           GO_BASE_IMAGE: ${{ steps.base_images.outputs.go_base_image }}
           ALPINE_BASE_IMAGE: ${{ steps.base_images.outputs.alpine_base_image }}
           PYTHON_BASE_IMAGE: ${{ steps.base_images.outputs.python_base_image }}
+          ARTIFACT_CONFIG_DIGEST: ${{ steps.base_images.outputs.artifact_config_digest }}
         run: |
           docker buildx build \
             --file "${{ matrix.dockerfile }}" \
@@ -274,9 +297,11 @@ jobs:
             --build-arg "GO_BASE_IMAGE=$GO_BASE_IMAGE" \
             --build-arg "ALPINE_BASE_IMAGE=$ALPINE_BASE_IMAGE" \
             --build-arg "PYTHON_BASE_IMAGE=$PYTHON_BASE_IMAGE" \
+            --build-arg "QWQ_ARTIFACT_ENVIRONMENT=${{ matrix.environment }}" \
+            --build-arg "QWQ_ARTIFACT_CONFIG_DIGEST=$ARTIFACT_CONFIG_DIGEST" \
             --tag "${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.image_name }}:${{ needs.prepare-release.outputs.image_transport_tag }}" \
-            --cache-from "type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.image_name }}-buildcache:main" \
-            --cache-to "type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.image_name }}-buildcache:main,mode=max,oci-mediatypes=true" \
+            --cache-from "type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.runtime_image_owner }}-buildcache:main" \
+            --cache-to "type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.runtime_image_owner }}-buildcache:main,mode=max,oci-mediatypes=true" \
             --sbom=true \
             --provenance=mode=max \
             --push \
@@ -310,7 +335,7 @@ jobs:
         run: |
           python3 quwoquan_ops/cli/prod/oci_supply_chain.py extract-sbom \
             --ref "${{ steps.exact_image.outputs.exact_ref }}" \
-            --output "${{ runner.temp }}/release-image-sbom/${{ matrix.service }}.spdx.json"
+            --output "${{ runner.temp }}/release-image-sbom/${{ matrix.environment }}--${{ matrix.runtime_image_owner }}.spdx.json"
       - name: Sign image provenance with GitHub OIDC
         if: ${{ matrix.action == 'build' }}
         uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
@@ -324,7 +349,7 @@ jobs:
         with:
           subject-name: ${{ steps.exact_image.outputs.subject_name }}
           subject-digest: ${{ steps.exact_image.outputs.subject_digest }}
-          sbom-path: ${{ runner.temp }}/release-image-sbom/${{ matrix.service }}.spdx.json
+          sbom-path: ${{ runner.temp }}/release-image-sbom/${{ matrix.environment }}--${{ matrix.runtime_image_owner }}.spdx.json
           push-to-registry: true
       - name: Verify signed provenance, SBOM, signer and issuer
         env:
@@ -470,10 +495,11 @@ jobs:
 
           root = Path(os.environ["QWQ_OUTPUT_ROOT"]) / "env/repo/local/ci-packages/process/service/mainline"
           manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
-          environments = manifest.get("configurationPackages")
+          environments = manifest.get("environmentArtifacts")
           if not isinstance(environments, dict) or set(environments) != {"alpha", "beta", "gamma", "prod"}:
-              raise SystemExit("component configuration package evidence is not four-environment")
-          for environment, packages in environments.items():
+              raise SystemExit("component environment artifact evidence is not four-environment")
+          for environment, artifact in environments.items():
+              packages = artifact.get("configurationPackages") if isinstance(artifact, dict) else None
               if not isinstance(packages, dict) or not packages:
                   raise SystemExit(f"component configuration package evidence is missing for {environment}")
               for service, descriptor in packages.items():
@@ -499,7 +525,7 @@ jobs:
       - name: 安装 kustomize
         run: bash quwoquan_ops/cli/shared/install_kustomize.sh
 
-      - name: 校验 56 个服务环境入口及四环境装配
+      - name: 校验服务环境入口及四环境装配
         run: |
           for env in alpha beta gamma prod; do
             for service_root in quwoquan_service/services/*; do

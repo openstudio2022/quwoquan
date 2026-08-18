@@ -16,13 +16,16 @@ from content.release.canonical.release_header import (
 from content.release.environment.release_runtime import load_release
 from core.io import write_json
 from core.release_layout import payload_file
-from core.source_digest import content_source_revision, current_source_digest
+from core.source_digest import (
+    content_source_revision,
+    current_source_definition_snapshot,
+)
 
 _ENTITY_CATALOG_DIGEST = "sha256:" + "1" * 64
 
 
 def _header(*, release_id: str, release_kind: str = "content") -> dict[str, object]:
-    source = current_source_digest()
+    source = current_source_definition_snapshot()
     document: dict[str, object] = {
         "schema": "quwoquan_data.release",
         "releaseId": release_id,
@@ -88,6 +91,14 @@ def test_typed_header_accepts_one_derived_content_identity() -> None:
     assert validate_release_header(document) == document
 
 
+def test_typed_header_rejects_execution_bundle_inputs_as_source_identity() -> None:
+    document = _header(release_id="content-typed-execution-inputs-001")
+    document["sourceDigests"][0]["inputs"] = ["quwoquan_data/scripts"]
+
+    with pytest.raises(ReleaseHeaderError, match="source-definition inputs|必须等于"):
+        validate_release_header(document)
+
+
 def _target_environment_identity_set_header() -> dict[str, object]:
     document = _header(release_id="content-alpha-identity-set-001")
     execution_id = str(document["executionIds"][0])
@@ -146,30 +157,33 @@ def test_typed_header_rejects_scalar_and_set_identity_together() -> None:
         validate_release_header(document)
 
 
-@pytest.mark.parametrize("mode", ["commercial", "non_pool"])
-def test_typed_header_rejects_identity_set_outside_research_pool(mode: str) -> None:
+def test_typed_header_accepts_commercial_target_environment_identity_set() -> None:
     document = _target_environment_identity_set_header()
-    if mode == "commercial":
-        document.update(
-            {
-                "releaseClass": "commercial",
-                "productLifecycleState": "commercial",
-                "releaseMode": "commercial",
-            }
-        )
-    else:
-        for key in (
-            "targetEnvironment",
-            "releaseMode",
-            "poolDigest",
-            "counts",
-            "contents",
-            "authors",
-            "buildResult",
-        ):
-            document.pop(key)
+    document.update(
+        {
+            "releaseClass": "commercial",
+            "productLifecycleState": "commercial",
+            "releaseMode": "commercial",
+        }
+    )
 
-    with pytest.raises(ReleaseHeaderError, match="research pool"):
+    assert validate_release_header(document) == document
+
+
+def test_typed_header_rejects_identity_set_outside_pool_release() -> None:
+    document = _target_environment_identity_set_header()
+    for key in (
+        "targetEnvironment",
+        "releaseMode",
+        "poolDigest",
+        "counts",
+        "contents",
+        "authors",
+        "buildResult",
+    ):
+        document.pop(key)
+
+    with pytest.raises(ReleaseHeaderError, match="pool release"):
         validate_release_header(document)
 
 

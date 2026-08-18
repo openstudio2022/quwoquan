@@ -110,10 +110,11 @@
 ## 7. 开放事项
 
 <a id="open-001"></a>
-### OPEN-001 词汇单轨的 gamma-local 全栈冒烟证据
+### OPEN-001 生产搜索 DeepLink 与非空语料闭环
 
-- 类型：`external_blocker`
+- 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：词汇单轨、PIT、黄金查询与 SearchPage GraphQL 生产装配已在分层测试闭合。gamma 实跑（candidate 前缀 `328189ca` 已部署，全栈 healthy）确认正式 GraphQL 搜索存在两级「替身规整、真实拒绝」断链。第一级已修复：api-edge `SearchPage` executor 的 `X-Contract-Graph-SHA256` wire 形态在构造期规范化为 canonical `sha256:<hex>`（`search_page_query_executor.go`），生产同款 service token 探针已证明 owner 分支 200 + typed OwnerSearchResponse（opaque `objectRef`、`searchRequestId`、`rankPosition`、响应头咬合）。第二级尚未修复：全部 owner 生产投影（content post/place、user、entity、circle）都不写 `Document.DeepLink`，owner hit 的 `action` 为空，api-edge 按契约（fields.yaml `action NOT_NULL`）整片 fail-closed，网关对任何真实文档仍 503；既有绿灯全部来自测试 fixture 自带 DeepLink，且 fixture 形态 `quwoquan://content/posts/{id}` 与 canonical `link_templates.yaml` 的 `quwoquan://content/post/{postId}` 不一致。修复路线：各 owner 投影按 `contracts/metadata/_shared/link_templates.yaml` 补 canonical DeepLink；`user.profile` 深链键为 `userHandle`，投影事件需 contracts-first 增加该字段再 codegen 与 backfill 重放。数据面独立阻断：canonical release 导入被数据迁移双重阻断（存量 release header 缺 `executionId`/`sourceIdentityDigest`；重建 release 被 `DATA.POOL.AUTHOR_NOT_ADMITTED` 与池账本 `DATA.POOL.RECORD_SEQUENCE_MISSING` 挡住），ES `article`/`image`/`video` 语料为零。已归档证据：`.qwq_output/env/repo/runs/search-fullstack-smoke/report.json`（`contract_mismatch`）与 `report-prefix-bug-baseline.json`（第一级修复前基线）；ES 现状 `user.profile` 12、`content.post` 21（micro）、`entity.homepage` 1。
-- 完成判定：`GWT-003.t5` 的全栈冒烟 CaseResult 半区满足——各 owner 投影补齐 canonical DeepLink（user 侧 contracts-first 加 `userHandle`）并 backfill 重放、api-edge 集成测试 owner 替身与真实 search-service handler 同源化、数据迁移收口后 canonical release 导入使 ES `content.post`（article/image/video）、`entity.homepage`、`user.profile` doc count > 0，执行冒烟 runner（覆盖 `GWT-003.t1`、`GWT-003.t2`、`GWT-003.t4`、`GWT-003.t5`），`status=passed` 且非空命中，归档 `.qwq_output/env/repo/runs/search-fullstack-smoke/`。
+- 影响或价值：仍缺各 owner 生产投影的 canonical `Document.DeepLink` 与 article/image/video 非空搜索语料。缺 DeepLink 时 owner hit 无法形成契约要求的 action，测试 fixture 自带链接不得替代生产投影；缺 canonical release 导入时 ES 无法证明多载体查询。
+- 完成判定：`GWT-003.t5` 的全栈冒烟 CaseResult 证明各 owner 投影按 `link_templates.yaml` 生成 DeepLink，user 投影 contracts-first 提供 `userHandle`，canonical release 导入后 ES 的 article/image/video、entity homepage 与 user profile 均有非空命中；同一 runner 同时覆盖 `GWT-003.t1/t2/t4/t5` 并返回 passed。
+- 依赖：owner 投影事件与 DeepLink codegen、canonical release 导入、SearchPage 与真实 search-service handler。

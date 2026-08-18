@@ -138,7 +138,16 @@ export const eventCatalog = {
       "internal_priority": "critical",
       "log_type": "event",
       "normal_sample_rate": 1,
-      "optional_extensions": [],
+      "optional_extensions": [
+        "environment",
+        "buildMode",
+        "distributionClass",
+        "launchProvenance",
+        "buildNumber",
+        "launchManifestDigest",
+        "terminalState",
+        "contentIdentityOutcome"
+      ],
       "required_extensions": [
         "tClickToFirstFrameMs",
         "tFirstFrameToShellMs",
@@ -625,6 +634,18 @@ export const eventCatalog = {
       ],
       "type": "string"
     },
+    "buildMode": {
+      "enum": [
+        "debug",
+        "profile",
+        "release"
+      ],
+      "type": "string"
+    },
+    "buildNumber": {
+      "max_length": 32,
+      "type": "string"
+    },
     "cacheAgeBucket": {
       "enum": [
         "not_applicable",
@@ -721,6 +742,15 @@ export const eventCatalog = {
       "max_length": 32,
       "type": "string"
     },
+    "contentIdentityOutcome": {
+      "enum": [
+        "bound",
+        "absent",
+        "protocol_failure",
+        "unavailable"
+      ],
+      "type": "string"
+    },
     "contentType": {
       "enum": [
         "micro",
@@ -787,6 +817,17 @@ export const eventCatalog = {
     },
     "dismissPolicy": {
       "max_length": 64,
+      "type": "string"
+    },
+    "distributionClass": {
+      "enum": [
+        "dev_direct",
+        "simulator",
+        "registered_device",
+        "store",
+        "official_web",
+        "hosted_web"
+      ],
       "type": "string"
     },
     "droppedFrames": {
@@ -878,6 +919,14 @@ export const eventCatalog = {
     },
     "journey": {
       "max_length": 128,
+      "type": "string"
+    },
+    "launchManifestDigest": {
+      "max_length": 80,
+      "type": "string"
+    },
+    "launchProvenance": {
+      "max_length": 64,
       "type": "string"
     },
     "limitValue": {

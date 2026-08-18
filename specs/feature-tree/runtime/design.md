@@ -70,6 +70,20 @@
 - 关联要求：`REQ-001`
 - 关联能力：[`deliver-deploy-prod-pipeline`](./deliver-deploy-prod-pipeline/spec.md)、[`development-workflow-governance`](./development-workflow-governance/spec.md)、[`native-edge-gesture-navigation`](./native-edge-gesture-navigation/spec.md)、[`runtime-agentpack`](./runtime-agentpack/spec.md)、[`runtime-assistant`](./runtime-assistant/spec.md)、[`runtime-client-foundation`](./runtime-client-foundation/spec.md)、[`runtime-codegen`](./runtime-codegen/spec.md)、[`runtime-config`](./runtime-config/spec.md)、[`runtime-context`](./runtime-context/spec.md)、[`runtime-control-plane-foundation`](./runtime-control-plane-foundation/spec.md)、[`runtime-data-engineering`](./runtime-data-engineering/spec.md)、[`runtime-errors`](./runtime-errors/spec.md)、[`runtime-eventstore`](./runtime-eventstore/spec.md)、[`runtime-experiments`](./runtime-experiments/spec.md)、[`runtime-external-integration`](./runtime-external-integration/spec.md)、[`runtime-governance`](./runtime-governance/spec.md)、[`runtime-http`](./runtime-http/spec.md)、[`runtime-interceptor`](./runtime-interceptor/spec.md)、[`runtime-learning`](./runtime-learning/spec.md)、[`runtime-media`](./runtime-media/spec.md)、[`runtime-messaging`](./runtime-messaging/spec.md)、[`runtime-observability`](./runtime-observability/spec.md)、[`runtime-projector`](./runtime-projector/spec.md)、[`runtime-recommendation`](./runtime-recommendation/spec.md)、[`runtime-redis`](./runtime-redis/spec.md)、[`runtime-rpc`](./runtime-rpc/spec.md)、[`runtime-skill`](./runtime-skill/spec.md)、[`runtime-streaming`](./runtime-streaming/spec.md)、[`runtime-test-pyramid`](./runtime-test-pyramid/spec.md)、[`runtime-testinfra`](./runtime-testinfra/spec.md)、[`system-architecture-and-engineering-guide`](./system-architecture-and-engineering-guide/spec.md)
 
+<a id="dec-002"></a>
+### DEC-002 端云制品在构建期绑定环境且运行时只验证身份
+
+- 决策：同一受控 source capsule 先生成一个 `releaseTrainId`，再为 `alpha / beta / gamma / prod` 分别构建不可交换的环境制品。端侧由 flavor/scheme 在原生构建图解析前绑定环境；云侧由单环境 codegen、rendered config、Provider binding、endpoint authority、模块拓扑与六类镜像共同生成 `environmentArtifactDigest`。
+- 决策：业务进程只读取制品内嵌 identity core 与只读 activation manifest。`APP_ENV` 在迁移期只允许与内嵌环境做相等断言，不得选择配置、Adapter、endpoint、数据源或策略；迁移完成后从业务进程移除。
+- 决策：`prod-sim` 与 `prod-hosted` 同属 Prod 环境但拥有不同 target activation seal；prevalidate 与 rollout 只改变 authority receipt，不重构同一 `prod-hosted` payload。
+- 理由：运行时环境选择会让同一二进制被环境变量重新解释，也让配置、Provider 与候选身份分裂。构建期单环境闭包使跨环境镜像复用、替身注入和历史回执冒充当前事实都能在 listener 前被判定。
+- 被否决方案：四环境 Binding 表进入同一生产二进制、`APP_ENV` 运行时选表、同一最终镜像跨环境复用、共享 current-environment 生成文件、启动时重新 codegen，以及以字符串扫描代替最终 AOT/Go/OCI 可达性证明。
+- 失败恢复：启动 identity 任一字段不一致时 fail-closed；回滚只启动上一份同环境 artifact 的精确 image/config/binding/topology bytes，不允许只改环境变量或混搭候选。
+- 可测试观察面：local_contract 证明四环境 artifact digest 相互隔离，且单环境生成物不含其他环境。
+- 可测试观察面：api_integration 交换 image/config/binding 或篡改环境变量时，在 listener 前失败。
+- 可测试观察面：user_acceptance 回读 App 与服务同一 activation identity。
+- 影响能力：[`runtime-config`](./runtime-config/spec.md)、[`deliver-deploy-prod-pipeline`](./deliver-deploy-prod-pipeline/spec.md)、[`runtime-external-integration`](./runtime-external-integration/spec.md)
+
 ## 6. 质量与运行约束
 
 - 环境和 rollout stage 是证据维度。任何商用外部能力缺 Gamma Port 对等替身证据、Prod 真实 Adapter 证据、观测或回滚均不能准出。

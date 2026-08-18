@@ -55,7 +55,7 @@ def _source_ready_batch(
             candidate_name = entity_ref.rsplit("/", 1)[-1]
             coverage_key = {
                 "coverageEntityIdentity": (
-                    f"name_location:{candidate_name}|浙江省|杭州市|西湖区"
+                    f"name_location:{candidate_name}|示例省|示例市|示例区"
                 ),
                 "coverageRecordDigest": _digest(
                     f"coverage:{carrier}:{entity_ref}:{source['sourceUrl']}"
@@ -74,7 +74,7 @@ def _source_ready_batch(
                 ),
                 "coverageKey": coverage_key,
                 "candidateName": entity_ref.rsplit("/", 1)[-1],
-                "province": "浙江省",
+                "province": "示例省",
                 "city": "杭州市",
                 "district": "西湖区",
                 "entityType": "/".join(entity_ref.split("/")[2:4]),

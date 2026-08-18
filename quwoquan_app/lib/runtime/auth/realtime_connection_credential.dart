@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 import 'package:quwoquan_app/runtime/auth/cloud_auth_token_provider.dart';
+import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
 
 /// 由可信 AuthSession 提供的实时连接凭据。
 ///
@@ -49,7 +51,15 @@ final class RealtimeConnectionCredential {
     final String ticket;
     try {
       ticket = (await issueTicket()).trim();
-    } catch (_) {
+    } catch (error, stackTrace) {
+      // 签发失败按无凭证处理，交给传输层重连；但这是真实故障，必须留证据。
+      unawaited(
+        AppExceptionTelemetryService.instance.recordHandledException(
+          source: 'runtime.auth.issue_connection_ticket',
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      );
       return null;
     }
     if (ticket.isEmpty) {

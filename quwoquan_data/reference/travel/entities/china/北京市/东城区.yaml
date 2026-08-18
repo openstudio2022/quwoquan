@@ -1,0 +1,20 @@
+# 全国地点主清单 · 北京市东城区（discovery_seed/2，直辖市区县级一文件）
+# schema: quwoquan_data/schema/governance/master_list.schema.json
+# 门禁: qwq-data verify coverage-static-identity
+schema: quwoquan_data.discovery_seed
+country: 中国
+province: 北京市
+city: 东城区
+districts:
+- district: 东城区
+  leaves:
+  - name: 故宫
+    canonicalName: 故宫
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/北京市/东城区
+    aliases:
+    - Forbidden City
+    - 北京故宫
+    selectionPriority: 1

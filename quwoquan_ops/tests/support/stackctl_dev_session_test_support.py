@@ -28,7 +28,6 @@ def _handoff_completed() -> subprocess.CompletedProcess[str]:
         stdout=json.dumps(
             {
                 "launchPolicy": "test_live",
-                "contentBindingState": "unbound",
             }
         ),
         stderr="",
@@ -70,6 +69,13 @@ def _runtime_started_with_identity(report_dir: Path) -> dict[str, object]:
         "publishedPorts": {"api-edge": 17000},
         "tlsProfile": "local-managed",
         "resolverHandoffDigest": "sha256:" + "4" * 64,
+        "publicWebPackage": {
+            "environment": "alpha",
+            "packageVersion": "web-release-alpha",
+            "manifestDigest": "sha256:" + "7" * 64,
+            "contentDigest": "sha256:" + "8" * 64,
+            "publicOrigin": "https://alpha.quwoquan.com",
+        },
         "serviceCoreModules": sorted(stackctl.SERVICE_CORE_MODULE_SET),
         "workspaceIdentity": {
             "sourceRevision": "a" * 40,
@@ -81,7 +87,6 @@ def _runtime_started_with_identity(report_dir: Path) -> dict[str, object]:
         "schema": "stackctl.mutable_test_live_startup_attempt",
         "launchPolicy": "test_live",
         "nonPromotable": True,
-        "contentBindingState": "unbound",
         "attemptId": "alpha-test-live-attempt-1",
         "status": "running",
         "runRoot": str(report_dir),
@@ -99,6 +104,7 @@ def _runtime_started_with_identity(report_dir: Path) -> dict[str, object]:
                 "publishedPorts",
                 "tlsProfile",
                 "resolverHandoffDigest",
+                "publicWebPackage",
             )
         },
         "sourceRevision": "a" * 40,

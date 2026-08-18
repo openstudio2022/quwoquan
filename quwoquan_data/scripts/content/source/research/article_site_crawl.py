@@ -27,13 +27,12 @@ from content.source.research.article_frontier_profile import (
     canonicalize_article_url,
 )
 from content.source.research.article_frontier_robots import (
-    SiteRateLimiter,
     fetch_with_backoff,
     network_issue,
     policy_issue,
     robots_for_url,
-    shared_rate_limiter,
 )
+from core.rate_limit import SiteRateLimiter, shared_rate_limiter
 from content.source.research.article_mediawiki_content_links import (
     ENTITY_SEEDED_METHOD,
     ENTITY_SEEDED_PAGE_LINK_METHOD,

@@ -26,6 +26,10 @@ type feedDeliveryPageReplay struct {
 	paginationExpiresAt time.Time
 	feedRequestID       string
 	policyDigest        string
+	// releaseID/manifestDigest 回放页绑定的内容激活身份；continuation 页
+	// 必须携带首刷时冻结的同一 release 身份。
+	releaseID      string
+	manifestDigest string
 }
 
 type feedDeliveryPageAppendInput struct {
@@ -220,6 +224,8 @@ func (s *FeedService) replayFeedDeliveryPage(
 		paginationExpiresAt: paginationExpiry,
 		feedRequestID:       page.FeedRequestID,
 		policyDigest:        page.PolicyDigest,
+		releaseID:           page.ReleaseID,
+		manifestDigest:      page.ManifestDigest,
 	}, nil
 }
 

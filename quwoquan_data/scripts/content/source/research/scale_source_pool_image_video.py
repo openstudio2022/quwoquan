@@ -33,7 +33,7 @@ PROJECTION_INVALID = "DATA.SOURCE.POOL_INVALID"
 PROJECTION_SHORTFALL = "DATA.SOURCE.POOL_SHORTFALL"
 
 _SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
-_SCALES = frozenset({"M100", "M1000", "M10000"})
+_SCALES = frozenset({"WORKLOAD", "M100", "M1000", "M10000"})
 _ACCEPTED = frozenset({"research_allowed", "commercial_allowed"})
 _PIN = frozenset({"pinterest", "pinterest.com", "www.pinterest.com"})
 _TUCHONG = frozenset({"tuchong", "tuchong.com", "www.tuchong.com", "图虫", "图虫社区"})
@@ -467,10 +467,26 @@ def project_scale_source_pool_image_video(
         "candidates": rows,
     }
     carriers = ("homepage", "article", "image", "video")
+    active = tuple(
+        carrier
+        for carrier in carriers
+        if any(str(row.get("carrier") or "") == carrier for row in rows)
+    )
+    physical_workloads = {
+        carrier: sum(str(row.get("carrier") or "") == carrier for row in rows)
+        for carrier in active
+    }
     shape_probe = {
         "schema": "quwoquan_data.scale_source_pool",
         "poolId": "projection-shape-probe",
         "targetScale": target_scale,
+        "workloadMode": (
+            "milestone_preset"
+            if target_scale != "WORKLOAD" and active == carriers
+            else "explicit"
+        ),
+        "activeCarriers": list(active),
+        "workloadTargets": physical_workloads,
         "sourceRevision": source_revision,
         "sourceDigest": source_digest,
         "entityCatalogDigest": entity_catalog_digest,
@@ -482,7 +498,7 @@ def project_scale_source_pool_image_video(
                     str(row.get("carrier") or "") == carrier for row in rows
                 ),
             }
-            for carrier in carriers
+            for carrier in active
         ],
         "candidates": rows,
     }

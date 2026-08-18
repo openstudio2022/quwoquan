@@ -23,7 +23,6 @@ from governance.coverage.distribution import (
 )
 from governance.coverage.license import (
     normalize_rights_payload,
-    validate_image_rights,
 )
 
 from content.source.contracts import MediaProvenance
@@ -175,20 +174,6 @@ def _download_source_unit_images(
         label = f"{entity_id}/{source_id}#{idx_img}"
         spec_url = str(spec.get("url") or "")
         provenance = MediaProvenance.from_mapping(spec, vertical=vertical)
-        admission_spec = {
-            **spec,
-            "modelReleaseStatus": provenance.model_release_status.value,
-        }
-        blocking_rights_issues = validate_image_rights(admission_spec, vertical=vertical)
-        if blocking_rights_issues:
-            issues.extend(f"{label}: {issue}" for issue in blocking_rights_issues)
-            _record_drop(
-                PageImageDropCode.RIGHTS_POLICY,
-                slug=label,
-                url=spec_url,
-                reason=blocking_rights_issues[0],
-            )
-            continue
         payload = _cached_source_image_payload(
             object_dir,
             ordinal=ordinal,

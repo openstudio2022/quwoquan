@@ -198,7 +198,9 @@ class LocalParticipant extends Participant<LocalTrackPublication> {
     ]);
 
     Future<lk_models.TrackInfo> negotiate() async {
-      track.transceiver = await room.engine.createTransceiverRTCRtpSender(track, publishOptions!, encodings);
+      // Dart 3.13：嵌套 async 在 await 后不再提升外层可空变量。
+      final options = publishOptions!;
+      track.transceiver = await room.engine.createTransceiverRTCRtpSender(track, options, encodings);
       await room.engine.negotiate();
       return lk_models.TrackInfo();
     }
@@ -374,29 +376,31 @@ class LocalParticipant extends Participant<LocalTrackPublication> {
     logger.fine('Video layers: ${layers.map((e) => e)}');
 
     Future<lk_models.TrackInfo> negotiate() async {
-      track.transceiver = await room.engine.createTransceiverRTCRtpSender(track, publishOptions!, encodings);
+      // Dart 3.13：嵌套 async 在 await 后不再提升外层可空变量。
+      final options = publishOptions!;
+      track.transceiver = await room.engine.createTransceiverRTCRtpSender(track, options, encodings);
 
-      track.codec = publishOptions.videoCodec;
+      track.codec = options.videoCodec;
       if (lkBrowser() != BrowserType.firefox) {
         await room.engine.setPreferredCodec(
           track.transceiver!,
           'video',
-          publishOptions.videoCodec,
+          options.videoCodec,
         );
       }
 
       if ([TrackSource.camera, TrackSource.screenShareVideo].contains(track.source)) {
-        final degradationPreference = publishOptions.degradationPreference ?? DegradationPreference.maintainResolution;
+        final degradationPreference = options.degradationPreference ?? DegradationPreference.maintainResolution;
         await track.setDegradationPreference(degradationPreference);
       }
 
       if (kIsWeb && lkBrowser() == BrowserType.firefox && track.kind == TrackType.AUDIO) {
         //TOOD:
-      } else if (isSVCCodec(publishOptions.videoCodec) && encodings?.first.maxBitrate != null) {
+      } else if (isSVCCodec(options.videoCodec) && encodings?.first.maxBitrate != null) {
         room.engine.publisher?.setTrackBitrateInfo(TrackBitrateInfo(
             cid: track.getCid(),
             transceiver: track.transceiver,
-            codec: publishOptions.videoCodec,
+            codec: options.videoCodec,
             maxbr: encodings![0].maxBitrate! ~/ 1000));
       }
 

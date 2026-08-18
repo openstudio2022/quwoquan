@@ -44,7 +44,7 @@ from content.source.research.image_search_providers import (
     openverse_images_for_entity,
     wikidata_commons_images_for_entity,
 )
-from content.source.research.source_quality import _license_allows_app_publish
+from content.source.research.source_quality import license_allows_commercial_distribution
 from content.source.research.wiki_common import _canonical_terms_url
 from content.source.research.wiki_media import _mediawiki_page_images
 
@@ -276,7 +276,7 @@ def acquire_open_image_assets(
             license_name=license_name,
             source_url=raw.get("sourceUrl"),
         )
-        if not _license_allows_app_publish(license_name, terms_url):
+        if not license_allows_commercial_distribution(license_name, terms_url):
             continue
         response = network_io.fetch_http(
             original_url,

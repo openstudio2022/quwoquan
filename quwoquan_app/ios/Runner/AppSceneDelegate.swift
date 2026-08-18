@@ -27,6 +27,12 @@ import UIKit
 }
 
 @objc final class AppSceneDelegate: FlutterSceneDelegate {
+  // Flutter 自绘 UI 不消费 UIKit state restoration；返回持久化 activity 会让
+  // 系统在冷启动时尝试恢复过期 scene 状态，Debug 直装场景下可能卡死在启动屏。
+  override func stateRestorationActivity(for scene: UIScene) -> NSUserActivity? {
+    nil
+  }
+
   override func scene(
     _ scene: UIScene,
     openURLContexts URLContexts: Set<UIOpenURLContext>

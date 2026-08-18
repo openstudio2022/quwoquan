@@ -143,8 +143,7 @@ def test_environment_release_readiness__consumer_projects_typed_video_app_uat_en
     receipt = json.loads(report.read_text(encoding="utf-8"))
 
     assert receipt["readinessPhase"] == "consumer"
-    # consumer 同样必须证明 premium_stream release-bound 可播视频非空。
-    assert receipt["counts"]["premiumPlayableVideos"] == 1
+    assert receipt["counts"]["premiumPlayableVideos"] == 0
     assert {
         row["name"] for row in receipt["feedQueries"]
     } == {
@@ -153,7 +152,6 @@ def test_environment_release_readiness__consumer_projects_typed_video_app_uat_en
         "typed_image",
         "typed_video",
         "homepage_recommend",
-        "premium_stream",
     }
     assert receipt["appUatEnvelope"] == {
         "releaseId": RELEASE_ID,

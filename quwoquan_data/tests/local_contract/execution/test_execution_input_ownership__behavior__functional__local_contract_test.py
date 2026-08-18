@@ -74,11 +74,12 @@ def test_execution_publish_ref_binds_only_canonical_objects(tmp_path, monkeypatc
     assert payload == {
         "schema": "quwoquan_data.execution_publish_ref",
         "executionId": EXECUTION_ID,
-        "canonicalPublishRoot": "quwoquan_data/publish",
+        "canonicalPublishRoot": "canonical-publish",
         "publishedRefs": {
             "entities": ["地点/景区/验收景区"],
             "posts": ["posts/article/攻略/验收景区/1"],
         },
+        "publishDiscards": [],
     }
     assert "releaseId" not in payload
 

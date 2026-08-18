@@ -241,7 +241,9 @@ def render_prod_soak_request(
         "sourceTreeDigest": source["treeDigest"],
         "rolloutConfigDigest": full["configDigest"],
         "configGraphDigest": _digest_bytes(
-            _canonical_bytes(manifest["configurationPackages"])
+            _canonical_bytes(
+                manifest["environmentArtifacts"]["prod"]["configurationPackages"]
+            )
         ),
         "contractGraphDigest": manifest["contractGraphDigest"],
         "requiredSoakSeconds": required_soak_seconds,

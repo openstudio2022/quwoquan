@@ -56,6 +56,7 @@ from content.release.canonical.post_transaction_sources import (
 from content.release.canonical.post_transaction_sources import (
     source_catalog as _source_catalog,
 )
+from core.content_library import link_from_library
 from core.control_types import SourcePolicyRevision
 from core.paths import OUTPUT_ROOT, PUBLISH_ROOT, now_iso
 from core.schema import assert_valid
@@ -68,7 +69,6 @@ from core.tree_integrity import tree_integrity_stats
 from governance.coverage.license import (
     RightsAuditStatus,
     parse_rights_audit_status,
-    rights_proof_required,
 )
 
 
@@ -104,7 +104,14 @@ def _media_dimensions(path: Path, raw: Mapping[str, Any]) -> tuple[int, int, str
     return probe.width, probe.height, resolved_mime
 
 
-def _copy_post_surface(source: Path, target: Path) -> str:
+def _copy_post_surface(source: Path, target: Path) -> None:
+    """Copy the reviewed post surface into the transaction package.
+
+    The package still carries the bodies alongside the documents, because the
+    transaction is what admits them into the content library. Which of those
+    files canonical publish ends up owning is decided once, in
+    ``build_transaction_delta``, not by what is copied here.
+    """
     for name in ("article.md", "video.md", "provenance.json", "subtitles.vtt"):
         path = source / name
         if path.is_file():
@@ -112,13 +119,21 @@ def _copy_post_surface(source: Path, target: Path) -> str:
     assets = source / "assets"
     if assets.is_dir():
         shutil.copytree(assets, target / "assets")
+
+
+def _final_content_ref(target: Path, *, holds_media: bool) -> str:
+    """Name the document a consumer opens first for one canonical post.
+
+    It must name a document, because canonical publish holds no media body: an
+    image post therefore points at its asset reference record, which is the
+    surface that resolves the work's bodies in the content library.
+    """
     if (target / "article.md").is_file():
         return "article.md"
-    if (target / "assets/video.mp4").is_file():
-        return "assets/video.mp4"
-    candidates = sorted(path for path in (target / "assets").glob("*") if path.is_file())
-    if candidates:
-        return candidates[0].relative_to(target).as_posix()
+    if (target / "video.md").is_file():
+        return "video.md"
+    if holds_media:
+        return "asset.refs.json"
     raise ObjectTransactionError("post object has no final publishable content")
 
 
@@ -384,7 +399,7 @@ def build_post_object_transaction_package(
     try:
         object_root = staging / "object"
         object_root.mkdir(parents=True)
-        final_content_ref = _copy_post_surface(source, object_root)
+        _copy_post_surface(source, object_root)
         shutil.copy2(attestation_source, object_root / "attestation.json")
         shutil.copy2(evidence_source, object_root / "evidence_index.json")
         source_catalog = _source_catalog(execution_root, source, source_manifest)
@@ -398,7 +413,6 @@ def build_post_object_transaction_package(
         vertical = str(effective_source_manifest.get("vertical") or "").strip()
         if not vertical:
             raise ObjectTransactionError("post manifest 缺 vertical policy owner")
-        require_rights_proof = rights_proof_required(vertical)
         for index, raw_value in enumerate(source_manifest.get("assets") or []):
             if not isinstance(raw_value, Mapping):
                 raise ObjectTransactionError("post manifest.assets item 必须为 object")
@@ -414,7 +428,7 @@ def build_post_object_transaction_package(
             cas_ref = Path("cas") / f"{digest_hex}.{suffix}"
             cas_target = staging / cas_ref
             cas_target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(asset_source, cas_target)
+            link_from_library(asset_source, cas_target, kind="media", expected_sha256=digest_hex)
             width, height, mime = _media_dimensions(asset_source, raw)
             related_sources = _asset_sources(raw, source_assets)
             primary_source = related_sources[0] if related_sources else {}
@@ -480,8 +494,7 @@ def build_post_object_transaction_package(
                 if str(issue).strip()
             ]
             if (
-                not require_rights_proof
-                and source_use_mode == "rights_audit_only"
+                source_use_mode == "rights_audit_only"
                 and rights_audit_status is RightsAuditStatus.VERIFIED
                 and not authorization_proof
             ):
@@ -489,24 +502,7 @@ def build_post_object_transaction_package(
                 rights_audit_issues.append(
                     "authorizationProof: not independently verified for research distribution"
                 )
-            if require_rights_proof and rights_audit_issues:
-                raise ObjectTransactionError(
-                    f"post asset 权利审计仍有未关闭问题：{asset_id}"
-                )
-            if require_rights_proof and not all(
-                (
-                    source_url,
-                    authorization_proof,
-                    license_url,
-                    author,
-                    license_name,
-                    fetched_at,
-                )
-            ):
-                raise ObjectTransactionError(f"post asset 权利字段不完整：{asset_id}")
-            if require_rights_proof and rights_audit_status is not RightsAuditStatus.VERIFIED:
-                raise ObjectTransactionError(f"post asset 权利状态未经核实：{asset_id}")
-            if not require_rights_proof and not all((source_url, fetched_at)):
+            if not all((source_url, fetched_at)):
                 raise ObjectTransactionError(f"post asset 权利审计字段不完整：{asset_id}")
             effective_license_name = license_name or "unknown"
             if (
@@ -552,11 +548,31 @@ def build_post_object_transaction_package(
                 raise ObjectTransactionError(
                     f"post asset 缺 canonical modelReleaseStatus：{asset_id}"
                 )
-            # Source units in the research lifecycle are deliberately ingested
-            # as rights_audit_only/internal_reference.  A verified independent
-            # asset review closes that audit for the immutable research object;
-            # project the final rights truth instead of copying intermediate
-            # admission vocabulary into the publish closure.
+            distribution_decision = str(
+                raw.get("distributionDecision")
+                or primary_source.get("distributionDecision")
+                or ""
+            ).strip()
+            if distribution_decision not in {
+                "research_allowed",
+                "commercial_allowed",
+            }:
+                raise ObjectTransactionError(
+                    f"post asset 缺 canonical distributionDecision：{asset_id}"
+                )
+            if distribution_decision == "commercial_allowed" and (
+                rights_audit_status is not RightsAuditStatus.VERIFIED
+                or not authorization_proof.startswith("https://")
+                or not license_url.startswith("https://")
+                or not author
+                or not license_name
+            ):
+                distribution_decision = "research_allowed"
+                rights_audit_issues.append(
+                    "commercial distribution proof incomplete; retained for research"
+                )
+            # Independent review may close an audit without changing the shared
+            # pool or selecting a release class.
             if (
                 rights_audit_status is RightsAuditStatus.VERIFIED
                 and source_use_mode == "rights_audit_only"
@@ -604,6 +620,7 @@ def build_post_object_transaction_package(
                         "height": height,
                     },
                     "authorizationProof": authorization_proof,
+                    "distributionDecision": distribution_decision,
                     "rightsAuditStatus": rights_audit_status.value,
                     "rightsAuditIssues": rights_audit_issues,
                     "modelReleaseStatus": model_release_status,
@@ -644,6 +661,10 @@ def build_post_object_transaction_package(
         publish_media_mode = str(effective_source_manifest.get("publishMediaMode") or "").strip()
         if not cas_rows and publish_media_mode != "text_only":
             raise ObjectTransactionError("post transaction requires at least one rights-bound asset")
+        final_content_ref = _final_content_ref(
+            object_root,
+            holds_media=bool(cas_rows),
+        )
 
         creator_ref = _creator_ref(effective_source_manifest)
         creator_root = project_creator_object(

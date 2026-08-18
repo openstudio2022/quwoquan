@@ -9,11 +9,15 @@ import pytest
 from content.execution.campaign.external_inputs import content_source_revision
 from core.io import read_json, write_json
 from support.campaign_request_envelope_fixture import (
+    _expected_count,
     _patch_envelope_deps,
     _promotion_output_root,
     _research_m100_receipt,
 )
-from support.semantic_preflight_fixture import ready_semantic_preflight
+from support.semantic_preflight_fixture import (
+    ready_semantic_preflight,
+    write_typed_cursor_grok_failure,
+)
 
 
 def test_campaign_retry_envelope_requires_one_matching_predecessor(
@@ -22,7 +26,9 @@ def test_campaign_retry_envelope_requires_one_matching_predecessor(
 ) -> None:
     repo = Path(__file__).resolve().parents[4]
     _patch_envelope_deps(monkeypatch)
-    predecessor = "20260805--travel-image-m3--china--scale-001"
+    predecessor = (
+        "20260805--travel-image-workload-image-3--china--scale-001"
+    )
 
     with pytest.raises(ValueError, match="sequence=1 forbids"):
         envelopes.build_envelope(
@@ -54,14 +60,17 @@ def test_campaign_retry_envelope_requires_one_matching_predecessor(
     )
 
     assert retry["retryOf"] == predecessor
+    assert retry["quota"] == 3
+    assert retry["count"] == _expected_count(3)
     assert retry["semanticSelectionId"] == "default"
     assert retry["executionId"] == (
-        "20260805--travel-image-m3--china--scale-002"
+        "20260805--travel-image-workload-image-3--china--scale-002"
     )
     assert retry["rootExecutionId"] == (
-        "20260805--travel-homepage-m3--china--scale-002"
+        "20260805--travel-image-workload-image-3--china--scale-002"
     )
     preflight_root = tmp_path / "semantic-output"
+    write_typed_cursor_grok_failure(predecessor, output_root=preflight_root)
     preflight_path, _preflight_binding = ready_semantic_preflight(
         "cursor_auto",
         output_root=preflight_root,
@@ -80,18 +89,17 @@ def test_campaign_retry_envelope_requires_one_matching_predecessor(
     )
     assert cursor_retry["semanticSelectionId"] == "cursor_auto"
     assert cursor_retry["semanticPreflightReceipt"] == _preflight_binding
-    cursor_first = envelopes.build_envelope(
-        scale="M3",
-        carrier="image",
-        region_ref="china",
-        repo_root=repo,
-        day="20260805",
-        semantic_selection_id="cursor_auto",
-        semantic_preflight_receipt=preflight_path,
-        semantic_preflight_output_root=preflight_root,
-    )
-    assert cursor_first["retryOf"] is None
-    assert cursor_first["semanticSelectionId"] == "cursor_auto"
+    with pytest.raises(ValueError, match="CURSOR_AUTO_RETRY_REQUIRED"):
+        envelopes.build_envelope(
+            scale="M3",
+            carrier="image",
+            region_ref="china",
+            repo_root=repo,
+            day="20260805",
+            semantic_selection_id="cursor_auto",
+            semantic_preflight_receipt=preflight_path,
+            semantic_preflight_output_root=preflight_root,
+        )
     with pytest.raises(ValueError, match="preserve execution scope"):
         envelopes.build_envelope(
             scale="M3",
@@ -101,25 +109,52 @@ def test_campaign_retry_envelope_requires_one_matching_predecessor(
             day="20260805",
             sequence=2,
             predecessor_execution_id=(
-                "20260805--travel-video-m3--china--scale-001"
+                "20260805--travel-video-workload-video-3--china--scale-001"
             ),
         )
+    subset_predecessor = (
+        "20260805--travel-image-"
+        "workload-homepage-3-article-3-image-3-video-3--china--scale-001"
+    )
+    with pytest.raises(ValueError, match="preserve execution scope"):
+        envelopes.build_envelope(
+            scale="M1",
+            carrier="image",
+            region_ref="china",
+            repo_root=repo,
+            day="20260805",
+            sequence=2,
+            predecessor_execution_id=subset_predecessor,
+        )
+    subset_retry = envelopes.build_envelope(
+        scale="M1",
+        carrier="image",
+        region_ref="china",
+        repo_root=repo,
+        day="20260805",
+        sequence=2,
+        predecessor_execution_id=subset_predecessor,
+        allow_retry_intent_change=True,
+    )
+    assert subset_retry["retryOf"] == subset_predecessor
+    assert subset_retry["executionId"] == (
+        "20260805--travel-image-workload-image-1--china--scale-002"
+    )
 
 
-def test_campaign_retry_write_requires_four_predecessors_and_separate_path(
+def test_campaign_retry_write_requires_all_active_predecessors_and_separate_path(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     repo = Path(__file__).resolve().parents[4]
     _patch_envelope_deps(monkeypatch)
+    intent = "workload-homepage-3-article-3-image-3-video-3"
     predecessors = {
-        carrier: (
-            f"20260805--travel-{carrier}-m3--china--scale-001"
-        )
+        carrier: f"20260805--travel-{carrier}-{intent}--china--scale-001"
         for carrier in ("homepage", "article", "image", "video")
     }
 
-    with pytest.raises(ValueError, match="complete four-carrier"):
+    with pytest.raises(ValueError, match="exactly match active carriers"):
         envelopes.write_scale_envelopes(
             "M3",
             region_ref="china",
@@ -176,12 +211,17 @@ def test_campaign_retry_envelopes_bind_submission_reconciliation_targets(
     repo = Path(__file__).resolve().parents[4]
     _patch_envelope_deps(monkeypatch)
     receipt_path = tmp_path / "submission-only-abandonment.json"
+    active_carriers = ("homepage", "article", "image", "video")
+    workloads = {carrier: 3 for carrier in active_carriers}
+    intent = "workload-homepage-3-article-3-image-3-video-3"
     predecessors = {
-        carrier: f"20260805--travel-{carrier}-m3--china--scale-001"
-        for carrier in ("homepage", "article", "image", "video")
+        carrier: f"20260805--travel-{carrier}-{intent}--china--scale-001"
+        for carrier in active_carriers
     }
     receipt = {
         "rootExecutionId": predecessors["homepage"],
+        "activeCarriers": list(active_carriers),
+        "workloads": workloads,
         "reason": "source_drift",
         "originalSourceIdentity": {
             "sourceRevision": content_source_revision(
@@ -273,7 +313,7 @@ def test_campaign_retry_envelopes_bind_submission_reconciliation_targets(
         "sourceDigest": {
             "algorithm": "sha256",
             "digest": "sha256:" + "a" * 64,
-            "inputs": ["quwoquan_data/scripts"],
+            "inputs": ["quwoquan_data/control_plane"],
         },
         "entityCatalogDigest": "sha256:" + "b" * 64,
     }

@@ -245,6 +245,13 @@ func TestListFeedInitialRecommendWithoutActiveReleaseReturnsCanonicalEmpty(t *te
 	if !present || len(objectCards) != 0 {
 		t.Fatalf("no-release wire objectCards = %#v, want required empty list", envelope["objectCards"])
 	}
+	// no_active_release 必须明确缺席内容激活身份（DEC-004 四态约束）。
+	if _, has := envelope["releaseId"]; has {
+		t.Fatalf("no-release wire must omit releaseId, got %#v", envelope["releaseId"])
+	}
+	if _, has := envelope["manifestDigest"]; has {
+		t.Fatalf("no-release wire must omit manifestDigest, got %#v", envelope["manifestDigest"])
+	}
 	if active.calls != 1 {
 		t.Fatalf("active supply calls = %d, want 1", active.calls)
 	}
@@ -307,6 +314,13 @@ func TestListFeedPremiumInitialHealthyEmptyIsCanonicalEmpty(t *testing.T) {
 	if response.Outcome != FeedResponseOutcomeEmpty ||
 		response.EmptyReason != FeedEmptyReasonNoEligibleContent {
 		t.Fatalf("unexpected premium empty response: %+v", response)
+	}
+	// release-bound 空页（no_eligible_content）必须携带完整内容激活身份。
+	if response.ReleaseID == "" || response.ManifestDigest == "" {
+		t.Fatalf(
+			"no_eligible_content must carry full activation identity, got releaseId=%q manifestDigest=%q",
+			response.ReleaseID, response.ManifestDigest,
+		)
 	}
 	if active.calls != 1 {
 		t.Fatalf("premium initial page must read active supply once, calls=%d", active.calls)

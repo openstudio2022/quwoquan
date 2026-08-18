@@ -52,9 +52,9 @@ class CandidateBinding:
                 raise ValueError(f"{name} must be sha256")
         if not self.release_id or not self.import_run_id:
             raise ValueError("release and import run identities are required")
-        if self.readiness_phase not in {"research", "commercial"}:
+        if self.readiness_phase not in {"consumer", "research", "commercial"}:
             raise ValueError(
-                "test-data readiness must be an immutable research or commercial release"
+                "test-data readiness phase must be consumer, research or commercial"
             )
         for name, object_type in (
             ("release_posts", "Post"),

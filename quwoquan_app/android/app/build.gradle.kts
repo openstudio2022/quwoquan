@@ -15,8 +15,7 @@ plugins {
 }
 
 fun buildCanonicalDirectDebugHandoff(): Map<String, Any?> {
-    val environment =
-        System.getenv("QWQ_ENVIRONMENT")?.trim().orEmpty().ifEmpty { "alpha" }
+    val environment = selectedGradleFlavor
     check(environment in setOf("alpha", "beta", "gamma")) {
         "GATE_BLOCK: QWQ_ENVIRONMENT must be alpha|beta|gamma for direct Flutter Debug."
     }
@@ -67,11 +66,6 @@ fun buildCanonicalDirectDebugHandoff(): Map<String, Any?> {
         ?.map { it.toString().trim() }
         ?.filter { it.isNotEmpty() }
         ?.forEach { logger.warn("[android-runtime] WARN: $it") }
-    val contentReleaseId = preflight["releaseId"]?.toString()?.trim().orEmpty()
-    val contentManifestDigest =
-        preflight["manifestDigest"]?.toString()?.trim().orEmpty()
-    val contentReadinessReceiptDigest =
-        preflight["readinessReceiptDigest"]?.toString()?.trim().orEmpty()
     val output =
         providers.exec {
             commandLine(
@@ -90,16 +84,6 @@ fun buildCanonicalDirectDebugHandoff(): Map<String, Any?> {
                 "--app-instance-namespace",
                 "direct-flutter-run",
             )
-            if (contentReleaseId.isNotEmpty()) {
-                args(
-                    "--content-release-id",
-                    contentReleaseId,
-                    "--content-manifest-digest",
-                    contentManifestDigest,
-                    "--content-readiness-receipt-digest",
-                    contentReadinessReceiptDigest,
-                )
-            }
             environment("PYTHONDONTWRITEBYTECODE", "1")
         }.standardOutput.asText.get()
     @Suppress("UNCHECKED_CAST")
@@ -126,6 +110,46 @@ fun handoffLocalPorts(handoff: Map<String, Any?>?): List<Int> =
         .distinct()
         .sorted()
 
+data class AppIdentityProjection(
+    val applicationId: String,
+    val displayName: String,
+)
+
+@Suppress("UNCHECKED_CAST")
+val generatedAppIdentity =
+    JsonSlurper().parse(projectDir.resolve("app_identity.generated.json")) as Map<String, Any?>
+val generatedIdentityEnvironments =
+    (generatedAppIdentity["environments"] as? List<*>)
+        ?.map { it.toString() }
+        .orEmpty()
+val generatedAndroidIdentities =
+    ((generatedAppIdentity["identities"] as? Map<*, *>)?.get("android") as? Map<*, *>)
+        ?.entries
+        ?.associate { entry ->
+            val value = entry.value as Map<*, *>
+            entry.key.toString() to AppIdentityProjection(
+                applicationId = value["applicationId"].toString(),
+                displayName = value["displayName"].toString(),
+            )
+        }
+        .orEmpty()
+check(generatedIdentityEnvironments == listOf("alpha", "beta", "gamma", "prod")) {
+    "GATE_BLOCK: generated App identity environment matrix is incomplete"
+}
+
+val selectedGradleFlavor =
+    gradle.startParameter.taskNames
+        .asSequence()
+        .map { it.substringAfterLast(':') }
+        .mapNotNull { task ->
+            generatedIdentityEnvironments.firstOrNull { environment ->
+                task.contains(environment, ignoreCase = true)
+            }
+        }
+        .firstOrNull()
+        ?: System.getenv("QWQ_ENVIRONMENT")?.trim().orEmpty().ifEmpty { null }
+        ?: "alpha"
+
 val googleServicesConfig = projectDir.resolve("google-services.json")
 val releaseKeystorePath = System.getenv("QWQ_ANDROID_RELEASE_KEYSTORE_PATH")?.trim().orEmpty()
 val releaseKeystorePassword = System.getenv("QWQ_ANDROID_RELEASE_STORE_PASSWORD")?.trim().orEmpty()
@@ -142,12 +166,6 @@ val explicitRuntimeConfigDigest =
     System.getenv("QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST")?.trim().orEmpty()
 val explicitEffectiveLaunchManifestDigest =
     System.getenv("QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST")?.trim().orEmpty()
-val explicitContentReleaseId =
-    System.getenv("QWQ_CONTENT_RELEASE_ID")?.trim().orEmpty()
-val explicitContentManifestDigest =
-    System.getenv("QWQ_CONTENT_MANIFEST_DIGEST")?.trim().orEmpty()
-val explicitContentReadinessReceiptDigest =
-    System.getenv("QWQ_CONTENT_READINESS_RECEIPT_DIGEST")?.trim().orEmpty()
 val directDebugHandoff =
     if (
         listOf(
@@ -169,7 +187,12 @@ val appRuntimeEnvironment =
     explicitAppRuntimeEnvironment.ifEmpty {
         handoffString(directDebugHandoff, "environment")
     }
-val effectiveAppRuntimeEnvironment = appRuntimeEnvironment.ifEmpty { "alpha" }
+if (appRuntimeEnvironment.isNotEmpty()) {
+    check(appRuntimeEnvironment == selectedGradleFlavor) {
+        "GATE_BLOCK: APP_RUNTIME_ENV=$appRuntimeEnvironment conflicts with selected flavor $selectedGradleFlavor."
+    }
+}
+val effectiveAppRuntimeEnvironment = selectedGradleFlavor
 val appLaunchTarget =
     explicitAppLaunchTarget.ifEmpty { handoffString(directDebugHandoff, "target") }
 val appBuildContext =
@@ -192,21 +215,36 @@ val effectiveLaunchManifestDigest =
     explicitEffectiveLaunchManifestDigest.ifEmpty {
         handoffString(directDebugHandoff, "effectiveLaunchManifestDigest")
     }
-val contentReleaseId =
-    explicitContentReleaseId.ifEmpty {
-        handoffString(directDebugHandoff, "contentReleaseId")
-    }
-val contentManifestDigest =
-    explicitContentManifestDigest.ifEmpty {
-        handoffString(directDebugHandoff, "contentManifestDigest")
-    }
-val contentReadinessReceiptDigest =
-    explicitContentReadinessReceiptDigest.ifEmpty {
-        handoffString(directDebugHandoff, "contentReadinessReceiptDigest")
-    }
 require(effectiveAppRuntimeEnvironment in setOf("alpha", "beta", "gamma", "prod")) {
     "QWQ_APP_RUNTIME_ENV must be alpha|beta|gamma|prod"
 }
+fun appIdentity(environment: String, buildMode: String): AppIdentityProjection =
+    generatedAndroidIdentities["$environment/$buildMode"]
+        ?: throw GradleException(
+            "GATE_BLOCK: generated App identity is missing for $environment/$buildMode",
+        )
+
+fun generatedModeApplicationIdSuffix(buildMode: String): String {
+    val releaseId = appIdentity("alpha", "release").applicationId
+    val modeId = appIdentity("alpha", buildMode).applicationId
+    check(modeId.startsWith(releaseId)) {
+        "GATE_BLOCK: generated Android $buildMode identity does not extend release identity"
+    }
+    return modeId.removePrefix(releaseId)
+}
+
+fun generatedModeDisplayMark(buildMode: String): String {
+    val releaseName = appIdentity("alpha", "release").displayName
+    val modeName = appIdentity("alpha", buildMode).displayName
+    check(modeName.startsWith(releaseName)) {
+        "GATE_BLOCK: generated Android $buildMode display name does not extend release display name"
+    }
+    return modeName.removePrefix(releaseName)
+}
+
+val qwqEnvironmentReleaseIdentity = appIdentity(effectiveAppRuntimeEnvironment, "release")
+val qwqDirectDebugApplicationId =
+    appIdentity(effectiveAppRuntimeEnvironment, "debug").applicationId
 val runNativeStartupInstrumentation =
     providers.gradleProperty("qwq.nativeStartupInstrumentation").orNull == "true"
 val nativeRecoveryBaseUrl =
@@ -236,7 +274,6 @@ val nativeRuntimeDefineKeys =
         "RTC_MEDIA_CONNECTION_URL",
         "QWQ_APP_LAUNCH_MODE",
         "APP_LAUNCH_POLICY",
-        "CONTENT_BINDING_STATE",
     )
 val suppliedRuntimeDefines =
     decodeDartDefines(providers.gradleProperty("dart-defines").orNull)
@@ -348,7 +385,11 @@ fun escapedBuildConfigString(name: String, defaultValue: String): String {
 }
 android {
     namespace = "com.quwoquan.quwoquan_app"
-    compileSdk = flutter.compileSdkVersion
+    // Flutter 3.47 默认 compileSdk 36；flutter_secure_storage 11 / permission_handler 13
+    // 要求 37。插件 compileSdk 高于工程时，把工程抬到最高值（不改 targetSdk）。
+    // sdkmanager 发布的是 platforms/android-37.0（ApiLevel=37.0），AGP 8.11 需 minor=0。
+    compileSdk = maxOf(flutter.compileSdkVersion, 37)
+    compileSdkMinor = 0
     ndkVersion = flutter.ndkVersion
     buildFeatures {
         buildConfig = true
@@ -357,12 +398,29 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-        // Patrol/AndroidX Test 依赖在 minSdk 24 上使用 Java 8+ API，需要 desugaring。
+        // Patrol/AndroidX Test 依赖在产品 minSdk 上使用 Java 8+ API，需要 desugaring。
         isCoreLibraryDesugaringEnabled = true
     }
 
+    flavorDimensions += "environment"
+    productFlavors {
+        generatedIdentityEnvironments.forEach { environment ->
+            create(environment) {
+                dimension = "environment"
+                applicationId = appIdentity(environment, "release").applicationId
+                manifestPlaceholders["qwqAppLabel"] =
+                    appIdentity(environment, "release").displayName
+                buildConfigField("String", "QWQ_FLAVOR_ENVIRONMENT", "\"$environment\"")
+            }
+        }
+    }
+
     defaultConfig {
-        applicationId = "com.quwoquan.quwoquan_app"
+        applicationId = qwqEnvironmentReleaseIdentity.applicationId
+        manifestPlaceholders["qwqAppLabel"] = qwqEnvironmentReleaseIdentity.displayName
+        manifestPlaceholders["qwqModeLabel"] = ""
+        // 产品安装下限跟随 Flutter SDK（DEC-006）：能下探就下探。
+        // 对应 Android 正式发布须已满五年；未满五年时不得人为或跟随 SDK 上浮。
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -429,21 +487,6 @@ android {
             "QWQ_RUNTIME_DART_DEFINES_JSON",
             escapedBuildConfigValue(nativeRuntimeDefinesJson),
         )
-        buildConfigField(
-            "String",
-            "QWQ_CONTENT_RELEASE_ID",
-            escapedBuildConfigValue(contentReleaseId),
-        )
-        buildConfigField(
-            "String",
-            "QWQ_CONTENT_MANIFEST_DIGEST",
-            escapedBuildConfigValue(contentManifestDigest),
-        )
-        buildConfigField(
-            "String",
-            "QWQ_CONTENT_READINESS_RECEIPT_DIGEST",
-            escapedBuildConfigValue(contentReadinessReceiptDigest),
-        )
         // Patrol remains the default runner for Dart tests. Native Gate tests
         // explicitly select AndroidJUnitRunner so they can validate recovery
         // without starting Patrol or a second Flutter product flow.
@@ -494,8 +537,18 @@ android {
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix = generatedModeApplicationIdSuffix("debug")
+            manifestPlaceholders["qwqModeLabel"] = generatedModeDisplayMark("debug")
+        }
         release {
+            manifestPlaceholders["qwqModeLabel"] = ""
             signingConfig = signingConfigs.findByName("officialRelease")
+        }
+        // Flutter Gradle 插件注册 profile buildType；缺席时（纯 AGP 求值）跳过。
+        findByName("profile")?.apply {
+            applicationIdSuffix = generatedModeApplicationIdSuffix("profile")
+            manifestPlaceholders["qwqModeLabel"] = generatedModeDisplayMark("profile")
         }
     }
 
@@ -780,7 +833,7 @@ val verifyAndroidLocalLauncherContract by tasks.registering {
                     "--consumer",
                     "direct-flutter-run",
                     "--package-name",
-                    "com.quwoquan.quwoquan_app",
+                    qwqDirectDebugApplicationId,
                     "--ports",
                     directPorts.joinToString(","),
                     "--handoff-digest",
@@ -803,19 +856,6 @@ val verifyAndroidLocalLauncherContract by tasks.registering {
         }
         check(buildContext == "runtime") {
             "GATE_BLOCK: QWQ_APP_BUILD_CONTEXT must be runtime or package-only."
-        }
-        if (appLaunchPolicy == "prod_release") {
-            check(contentReleaseId.isNotEmpty()) {
-                "GATE_BLOCK: Android Prod content release identity is absent."
-            }
-            check(contentManifestDigest.matches(Regex("sha256:[0-9a-f]{64}"))) {
-                "GATE_BLOCK: Android Prod content manifest digest is absent."
-            }
-            check(
-                contentReadinessReceiptDigest.matches(Regex("sha256:[0-9a-f]{64}")),
-            ) {
-                "GATE_BLOCK: Android Prod content readiness receipt digest is absent."
-            }
         }
         check(launchTarget in setOf("alpha-local", "beta-local", "gamma-local", "prod-sim")) {
             "GATE_BLOCK: Android debug/profile runtime launch requires an explicit local target; " +
@@ -923,7 +963,11 @@ afterEvaluate {
         }
         if (name.contains("Release", ignoreCase = true)) {
             doFirst {
-                requireCompleteRuntimeDartDefines(dartDefines, name)
+                requireCompleteRuntimeDartDefines(
+                    dartDefines,
+                    name,
+                    expectedEnvironment = effectiveAppRuntimeEnvironment,
+                )
             }
         }
     }

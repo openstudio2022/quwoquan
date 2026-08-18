@@ -549,51 +549,15 @@ def test_related_wiki_titles_are_supporting_only_for_museum_parent_topics():
     finally:
         network_io_mod.wiki_api = original
 
-def test_article_base_accepts_entity_encyclopedia_with_same_source_images():
+def test_article_base_rejects_entity_encyclopedia_with_same_source_images():
     image = {
         "url": "https://img.example/1.jpg",
         "license": "CC-BY-SA 4.0",
         "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
         "authorizationProof": "https://commons.wikimedia.org/wiki/File:Example.jpg",
-        "caption": "九寨沟",
-        "relevance": "九寨沟",
-        "credit": "Example",
-        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Example.jpg",
-        "licenseSnapshot": "CC-BY-SA 4.0",
-        "usageScope": "app_publish",
-        "modelReleaseStatus": "not_required",
-        "width": 1600,
-        "height": 1000,
     }
     source = _source(
         source_id="article_wikipedia_as_base",
-        platform="维基百科",
-        url="https://zh.wikipedia.org/wiki/九寨沟",
-        category="encyclopedia",
-        discovery_provider="test",
-        match_confidence=0.99,
-        source_role="base",
-        image_evidence_mode="same_source",
-        images=[image],
-    )
-    verdict = _candidate_gate(
-        source, entity_id="九寨沟", lane="article", vertical="travel"
-    )
-    assert verdict["passed"], verdict
-    assert verdict["role"] == "base"
-
-
-def test_article_base_rejects_encyclopedia_with_cross_collection_images():
-    image = {
-        "url": "https://img.example/1.jpg",
-        "license": "CC-BY-SA 4.0",
-        "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
-        "authorizationProof": "https://commons.wikimedia.org/wiki/File:Example.jpg",
-        "caption": "九寨沟",
-        "relevance": "九寨沟",
-    }
-    source = _source(
-        source_id="article_wikipedia_cross_collection",
         platform="维基百科",
         url="https://zh.wikipedia.org/wiki/九寨沟",
         category="encyclopedia",
@@ -607,7 +571,7 @@ def test_article_base_rejects_encyclopedia_with_cross_collection_images():
         source, entity_id="九寨沟", lane="article", vertical="travel"
     )
     assert not verdict["passed"]
-    assert any("same_authorized_collection" in issue for issue in verdict["issues"])
+    assert any("article-quality source class" in issue for issue in verdict["issues"])
 
 def test_article_base_accepts_ugc_and_platform_article_source_classes_equally():
     image = {

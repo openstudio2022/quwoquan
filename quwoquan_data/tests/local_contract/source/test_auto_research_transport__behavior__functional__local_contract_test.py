@@ -43,7 +43,12 @@ def test_auto_research_curl_json_preserves_call_timeout_and_retry_floor(monkeypa
     assert cmd[cmd.index("--max-time") + 1] == "25"
     assert cmd[cmd.index("--retry") + 1] == "1"
 
-def test_auto_research_curl_json_tolerates_non_utf8_stdout():
+def test_auto_research_curl_json_survives_non_utf8_stdout_and_reports_undecodable_body():
+    """非法字节不得炸成 UnicodeDecodeError，但也不得被读成「主机说没有内容」。
+
+    HTTP 200 配一个解不出 JSON 的正文，说明我们要的东西没拿到。上抛才让调用方能
+    重试或记缺口；返回空对象会把它伪装成一次成功的空答复。
+    """
     original_run = network_io_mod.subprocess.run
 
     class _Proc:
@@ -59,6 +64,10 @@ def test_auto_research_curl_json_tolerates_non_utf8_stdout():
 
     try:
         network_io_mod.subprocess.run = _fake_run
-        assert network_io_mod.curl_json("https://example.test/bad-encoding", timeout=25) == {}
+        with pytest.raises(network_io_mod.NetworkFetchError) as caught:
+            network_io_mod.curl_json("https://example.test/bad-encoding", timeout=25)
     finally:
         network_io_mod.subprocess.run = original_run
+    # 走到 JSON 解析才抛，证明解码本身已容错，没有死在非法字节上。
+    assert caught.value.reason == "response body is not JSON"
+    assert caught.value.status_code == 200

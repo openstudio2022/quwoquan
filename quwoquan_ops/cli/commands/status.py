@@ -56,6 +56,7 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
     try:
         report = json.loads(report_path.read_text(encoding="utf-8"))
         if isinstance(report, dict):
+            report["command"] = "status"
             report["candidateWorkspace"] = candidate_workspace
             _stackctl.write_json(report_path, report)
     except (OSError, json.JSONDecodeError):

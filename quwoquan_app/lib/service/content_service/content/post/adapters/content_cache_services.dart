@@ -8,11 +8,13 @@ import 'package:quwoquan_app/service/content_service/content/post/domain/generat
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_detail_payload.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_app/runtime/transport/models/cursor_page.dart';
+import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/content_activation_identity.dart';
 import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/discovery_feed_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_projection_codec.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/content_read_model_projection.dart';
 import 'package:quwoquan_app/runtime/platform/storage/cache/cache_read_result.dart';
 import 'package:quwoquan_app/runtime/platform/storage/cache/cache_telemetry_sink.dart';
+import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/runtime/platform/storage/cache/object_cache_store.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show ContentFeedEmptyReason, ContentFeedOutcome, isCanonicalSha256Digest;
@@ -115,6 +117,7 @@ class ContentQuerySnapshot {
     this.policyDigest,
     this.outcome = ContentFeedOutcome.content,
     this.emptyReason,
+    this.activationIdentity,
   }) {
     final digest = policyDigest;
     if (digest != null && !isCanonicalSha256Digest(digest)) {
@@ -137,6 +140,9 @@ class ContentQuerySnapshot {
   final String? policyDigest;
   final ContentFeedOutcome outcome;
   final ContentFeedEmptyReason? emptyReason;
+
+  /// 快照绑定的运行时内容激活身份；`null` 表示该页不绑定 release。
+  final ContentActivationIdentity? activationIdentity;
 
   CursorPage<ContentPostViewData> toCursorPage() {
     return CursorPage<ContentPostViewData>(
@@ -165,6 +171,7 @@ class ContentQuerySnapshot {
       paginationExpiresAt: paginationIsUsable ? paginationExpiresAt : null,
       feedRequestId: feedRequestId,
       policyDigest: policyDigest,
+      activationIdentity: activationIdentity,
     );
   }
 
@@ -181,6 +188,8 @@ class ContentQuerySnapshot {
       'policyDigest': policyDigest,
       'outcome': outcome.name,
       'emptyReason': _feedEmptyReasonToWire(emptyReason),
+      'releaseId': activationIdentity?.releaseId,
+      'manifestDigest': activationIdentity?.manifestDigest,
     };
   }
 
@@ -227,8 +236,21 @@ class ContentQuerySnapshot {
         policyDigest: _optionalSnapshotPolicyDigest(map['policyDigest']),
         outcome: outcome,
         emptyReason: emptyReason,
+        activationIdentity: resolveContentActivationIdentity(
+          releaseId: map['releaseId']?.toString(),
+          manifestDigest: map['manifestDigest']?.toString(),
+          emptyReason: emptyReason,
+        ),
       );
-    } catch (_) {
+    } catch (error, stackTrace) {
+      // 快照损坏时按「无缓存」继续，但损坏本身是真实故障，必须留证据。
+      unawaited(
+        AppExceptionTelemetryService.instance.recordHandledException(
+          source: 'content.query_snapshot.decode',
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      );
       return null;
     }
   }
@@ -547,6 +569,50 @@ class ContentQuerySnapshotStore {
   Future<void>? _persistenceDrain;
   bool _persistenceDirty = false;
 
+  /// 当前采纳的内容激活身份（运行时由 Content API 响应驱动）。
+  ///
+  /// `_identityAdopted == false` 表示本进程尚未收到任何权威身份，此时允许
+  /// 在最大年龄内回放 LKG 快照（网络失败兜底）；一旦采纳身份，release-bound
+  /// 快照只在身份一致时回放。旧 release 的快照保留（不删除），服务端回滚到
+  /// 旧 release 时可原子恢复其 namespace。
+  ContentActivationIdentity? _activeContentIdentity;
+  bool _identityAdopted = false;
+
+  ContentActivationIdentity? get activeContentIdentity =>
+      _activeContentIdentity;
+
+  /// 采纳服务端下发的运行时内容激活身份。
+  ///
+  /// - 新身份与当前不同：原子切换 namespace（旧快照保留、不回放）。
+  /// - `identity == null`（no_active_release）：当前可见 release-bound
+  ///   快照全部停止回放，不回放旧 release。
+  void adoptContentActivationIdentity(ContentActivationIdentity? identity) {
+    if (_identityAdopted && identity == _activeContentIdentity) {
+      return;
+    }
+    final previous = _identityAdopted ? _activeContentIdentity : null;
+    _activeContentIdentity = identity;
+    _identityAdopted = true;
+    _telemetrySink.record('query_snapshot.identity_switch', <String, Object?>{
+      'previousManifestDigest': previous?.manifestDigest,
+      'manifestDigest': identity?.manifestDigest,
+      'releaseId': identity?.releaseId,
+    });
+  }
+
+  bool _replayableUnderActiveIdentity(ContentQuerySnapshot snapshot) {
+    if (snapshot.activationIdentity == null) {
+      // 不绑定 release 的快照（userPosts、no_active_release 空页等）不受
+      // 身份切换影响。
+      return true;
+    }
+    if (!_identityAdopted) {
+      // 尚未收到权威身份：LKG 语义，最大年龄内允许回放。
+      return true;
+    }
+    return snapshot.activationIdentity == _activeContentIdentity;
+  }
+
   Future<void> ensureHydrated() async {
     if (!_persistToPreferences) {
       return;
@@ -590,6 +656,10 @@ class ContentQuerySnapshotStore {
       return null;
     }
     _snapshots[normalized] = snapshot;
+    if (!_replayableUnderActiveIdentity(snapshot)) {
+      // 身份不一致的快照保留在存储中（服务端回滚可恢复），但绝不回放。
+      return null;
+    }
     final freshness = age <= freshFor
         ? CacheFreshness.fresh
         : CacheFreshness.stale;
@@ -620,6 +690,7 @@ class ContentQuerySnapshotStore {
     String? policyDigest,
     ContentFeedOutcome outcome = ContentFeedOutcome.content,
     ContentFeedEmptyReason? emptyReason,
+    ContentActivationIdentity? activationIdentity,
   }) {
     final normalized = key.trim();
     if (normalized.isEmpty) {
@@ -632,6 +703,12 @@ class ContentQuerySnapshotStore {
       if (!validEnvelope) {
         throw const FormatException(
           'feed snapshot requires a canonical outcome envelope',
+        );
+      }
+      if (emptyReason == ContentFeedEmptyReason.noActiveRelease &&
+          activationIdentity != null) {
+        throw const FormatException(
+          'no_active_release snapshot must not carry an activation identity',
         );
       }
     }
@@ -647,6 +724,7 @@ class ContentQuerySnapshotStore {
       policyDigest: policyDigest,
       outcome: outcome,
       emptyReason: emptyReason,
+      activationIdentity: activationIdentity,
       fetchedAt: _now(),
     );
     _diskBackedKeys.remove(normalized);

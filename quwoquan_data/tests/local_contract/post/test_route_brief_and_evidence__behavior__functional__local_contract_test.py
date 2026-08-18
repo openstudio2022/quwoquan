@@ -606,13 +606,8 @@ retained: true
     assert any("intraDocRepetition" in issue for issue in review_payload["checks"]["provenanceRewrite"]["issues"]), review_payload
 
 
-def test_article_prompt_preserves_whole_base_draft_no_irrelevant_city_trim():
-    """根因：多目的地路书底稿被框成单实体 guide 并被指示「删除无关城市段落」，
-
-    agent 为聚焦单一实体而丢弃其它站点章节 → baseDraftFidelity 崩到 18-49% < 55% 全挂。
-    1:1 源中心：底稿写到的所有目的地/行程段落都是正文内容，必须整篇保留，实体只是标签不是
-    裁剪边界；prompt 只允许删平台/广告/隐私噪声，不得以「与本篇实体无关」为由删其它城市段落。
-    """
+def test_factual_article_prompt_uses_source_as_facts_not_expression_draft():
+    """factual_reference_only 不得再以保真为由要求保留跨城原段落。"""
     from content.post.article.prompt_renderer import render_prompt_md
 
     pack = {
@@ -629,12 +624,11 @@ def test_article_prompt_preserves_whole_base_draft_no_irrelevant_city_trim():
         "wordCount": {"min": 600, "max": 2000},
     }
     prompt = render_prompt_md(pack)
-    # 旧裁剪许可必须消失（这是 fidelity 崩塌根因）。
-    assert "无关城市段落" not in prompt, "prompt 仍保留「无关城市段落」裁剪许可，会诱导 agent 丢站点脱稿"
-    # 新的整篇保真指令必须在场。
-    assert "整篇保留" in prompt, prompt[:400]
-    assert ("多目的地" in prompt) or ("全部站点" in prompt), prompt[:400]
-    assert "实体只是标签" in prompt, prompt[:400]
+    assert "事实参考材料" in prompt
+    assert "只取事实，不保留表达" in prompt
+    assert "禁止保留来源连续长句" in prompt
+    assert "整篇保留" not in prompt
+    assert "实体只是标签" not in prompt
 
 
 def test_article_section_intents_do_not_force_single_entity_focus():
@@ -674,8 +668,7 @@ def test_article_prompt_first_pass_hardening_contract():
     assert "同实体差异化" in prompt
     assert "禁止与其它文章共用同一套开场白或标题序列" in prompt
     # ② 底稿内重复段落去重（治 intraDocRepetition）。
-    assert "底稿内重复去重" in prompt
-    assert "只保留一次" in prompt
+    assert "禁止保留来源连续长句" in prompt
     # ③ 平台词点名（治 provenanceRewrite 泄漏「大众点评」等）。
     assert "大众点评" in prompt
     assert "去哪儿" in prompt
@@ -702,7 +695,7 @@ def test_base_aware_word_count_tracks_long_base_draft():
     long_base = "都江堰的清晨薄雾未散，我们沿着秦堰楼一路下行，江风裹着水汽扑面而来。\n" * 200
     clean_len = clean_base_draft_length(long_base)
     assert clean_len > 5000, clean_len
-    wc = base_aware_word_count(long_base, carrier="article", source_use_mode="factual_reference_only")
+    wc = base_aware_word_count(long_base, carrier="article", source_use_mode="licensed_adaptation")
     assert wc is not None
     # 上限跟随底稿，不再被固定 1600 钉死。
     assert wc["max"] > 1600 and wc["max"] >= clean_len, wc
@@ -710,10 +703,11 @@ def test_base_aware_word_count_tracks_long_base_draft():
     # 数学可行：成稿达到 min 且逐句沿用底稿即可覆盖 >=55% 三连。
     assert wc["min"] >= int(clean_len * 0.55), (wc, clean_len)
     # image/gallery（短配文）与非改编源不设底稿字数门。
-    assert base_aware_word_count(long_base, carrier="image", source_use_mode="factual_reference_only") is None
+    assert base_aware_word_count(long_base, carrier="article", source_use_mode="factual_reference_only") is None
+    assert base_aware_word_count(long_base, carrier="image", source_use_mode="licensed_adaptation") is None
     assert base_aware_word_count(long_base, carrier="article", source_use_mode="blocked") is None
     # 短底稿（< 文章下限）不强行抬高字数门。
-    assert base_aware_word_count("一句话。", carrier="article", source_use_mode="factual_reference_only") is None
+    assert base_aware_word_count("一句话。", carrier="article", source_use_mode="licensed_adaptation") is None
 
 
 if __name__ == "__main__":

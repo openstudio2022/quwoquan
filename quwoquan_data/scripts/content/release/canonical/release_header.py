@@ -19,7 +19,7 @@ from content.release.canonical.object_transaction_contract import ObjectTransact
 from content.release.model import ReleaseKind
 from core.schema import assert_valid
 from core.source_digest import (
-    SourceDigest,
+    SourceDefinitionSnapshot,
     SourceDigestError,
     content_source_revision,
 )
@@ -38,29 +38,6 @@ _SOURCE_IDENTITY_FIELDS = (
 _SOURCE_IDENTITY_SET_FIELDS = ("sourceIdentities", "sourceIdentitySetDigest")
 
 
-def _frozen_milestone_source_digest(value: object) -> str:
-    """Validate historical frozen bytes without rewriting their input list."""
-
-    if not isinstance(value, Mapping) or set(value) != {
-        "algorithm",
-        "digest",
-        "inputs",
-    }:
-        raise ReleaseHeaderError("milestone sourceDigest document is invalid")
-    digest = str(value.get("digest") or "")
-    inputs = value.get("inputs")
-    if (
-        value.get("algorithm") != "sha256"
-        or not digest.startswith("sha256:")
-        or len(digest) != 71
-        or not isinstance(inputs, list)
-        or not inputs
-        or any(not str(item or "").strip() for item in inputs)
-    ):
-        raise ReleaseHeaderError("milestone sourceDigest document is invalid")
-    return digest
-
-
 def validate_release_header(
     value: object,
     *,
@@ -77,16 +54,10 @@ def validate_release_header(
         isinstance(value, Mapping)
         and any(field in value for field in _SOURCE_IDENTITY_SET_FIELDS)
         and value.get("milestone") is None
-        and (
-            value.get("targetEnvironment") is None
-            or value.get("releaseClass") != ReleaseClass.RESEARCH.value
-            or value.get("productLifecycleState")
-            != ProductLifecycleState.RESEARCH.value
-            or value.get("releaseMode") != ReleaseClass.RESEARCH.value
-        )
+        and value.get("targetEnvironment") is None
     ):
         raise ReleaseHeaderError(
-            f"{label} source identity set requires a research pool release"
+            f"{label} source identity set requires a pool release"
         )
     if (
         isinstance(value, Mapping)
@@ -125,6 +96,10 @@ def validate_release_header(
         if release_mode != release_class.value:
             raise ReleaseHeaderError(
                 f"{label} releaseMode/releaseClass are inconsistent"
+            )
+        if milestone is not None and release_class is not ReleaseClass.RESEARCH:
+            raise ReleaseHeaderError(
+                f"{label} milestone cohort must be a research release"
             )
         counts = document.get("counts")
         if not isinstance(counts, Mapping) or int(counts.get("total") or 0) != sum(
@@ -269,11 +244,7 @@ def validate_release_header(
     try:
         identity_set_mode = bool(present_identity_set)
         frozen_digests = tuple(
-            (
-                _frozen_milestone_source_digest(item)
-                if identity_set_mode
-                else SourceDigest.from_document(item).digest
-            )
+            SourceDefinitionSnapshot.from_document(item).digest
             for item in source_documents
         )
         if frozen_digests != tuple(sorted(set(frozen_digests))):
@@ -287,14 +258,10 @@ def validate_release_header(
                 )
             if not (
                 milestone is not None
-                or (
-                    target_environment is not None
-                    and release_class is ReleaseClass.RESEARCH
-                    and release_mode == ReleaseClass.RESEARCH.value
-                )
+                or target_environment is not None
             ):
                 raise ReleaseHeaderError(
-                    f"{label} source identity set requires a research pool release"
+                    f"{label} source identity set requires a pool release"
                 )
             raw_identities = document.get("sourceIdentities")
             if not isinstance(raw_identities, list) or not raw_identities:

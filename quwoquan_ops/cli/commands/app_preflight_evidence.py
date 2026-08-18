@@ -11,8 +11,8 @@
   的 fail-closed 校验;
 - `_app_content_readback_summary`:readiness feedQueries/counts 的 readback
   摘要投影;
-- `_run_app_content_release_probe`:Search、20 条视频页与 release media 的
-  release-bound live readback 探针。
+- `_run_app_content_release_probe`:按 readiness phase 执行 20 条视频页、
+  release media 与必需 Search 的 release-bound live readback 探针。
 
 `command_app_content_preflight` 等命令入口在 `commands/app_preflight.py`;
 data readiness 真相源家族在 `commands/app_preflight_shared.py` 与
@@ -335,16 +335,24 @@ def _run_app_content_release_probe(
     app_uat_plan: Mapping[str, Any],
     report_dir: Path,
 ) -> dict[str, Any]:
-    """Verify Search, a 20-video page, and release media before device UAT."""
+    """Verify the phase-scoped live content surface before device UAT."""
     import quwoquan_ops.cli.stackctl as _stackctl
 
+    readiness = _stackctl._read_json_object(str(readiness_path))
+    readiness_phase = str(readiness.get("readinessPhase") or "").strip()
+    search_canaries_required = readiness_phase != ReadinessPhase.CONSUMER.value
     raw_search = app_uat_plan.get("searchCanaries")
     raw_pagination = app_uat_plan.get("videoPagination")
     raw_media = app_uat_plan.get("mediaChecks")
     if (
-        not isinstance(raw_search, list)
-        or len(raw_search) != 3
-        or not all(isinstance(item, Mapping) for item in raw_search)
+        (
+            search_canaries_required
+            and (
+                not isinstance(raw_search, list)
+                or len(raw_search) != 3
+                or not all(isinstance(item, Mapping) for item in raw_search)
+            )
+        )
         or not isinstance(raw_pagination, Mapping)
         or raw_pagination.get("pageSize") != 20
         or not isinstance(raw_pagination.get("expectedWorkIds"), list)
@@ -360,6 +368,11 @@ def _run_app_content_release_probe(
     }
     if len(video_work_ids) != len(raw_pagination["expectedWorkIds"]):
         raise ValueError("App content UAT video page identities are invalid")
+    search_canaries = (
+        [dict(item) for item in raw_search]
+        if search_canaries_required and isinstance(raw_search, list)
+        else []
+    )
     sample_resolution: dict[str, Any] = {}
     if isinstance(app_uat_plan.get("stratifiedSamples"), Mapping):
         sample_resolution = _stackctl.resolve_release_sample_requests(
@@ -373,7 +386,7 @@ def _run_app_content_release_probe(
         report_dir,
         require_non_empty_content_feed=True,
         release_post_expectations={"video_book_feed": video_work_ids},
-        release_search_canaries=[dict(item) for item in raw_search],
+        release_search_canaries=search_canaries,
         release_samples=list(sample_resolution.get("samples") or []),
         release_readiness_path=readiness_path,
         video_page_size=20,
@@ -384,7 +397,7 @@ def _run_app_content_release_probe(
             "premium_feed",
             # feed items 非空不等于媒体可显示：设备 UAT 前逐 slice 字节读回。
             "feed_media_slices",
-            "global_search",
+            *(("global_search",) if search_canaries_required else ()),
             "media_sample",
             *(("release_sample",) if sample_resolution else ()),
         ),
@@ -397,7 +410,6 @@ def _run_app_content_release_probe(
         )
     sample_execution: dict[str, Any] = {}
     if sample_resolution:
-        readiness = _stackctl._read_json_object(str(readiness_path))
         sample_execution = _stackctl.validate_release_sample_probe(
             report=_stackctl._read_json_object(str(report_dir / "integration-probe.json")),
             resolved=sample_resolution,
@@ -409,7 +421,9 @@ def _run_app_content_release_probe(
         "suite": "release-bound-search-and-video-page",
         "exitCode": 0,
         "reportRef": str(check.get("reportPath") or ""),
-        "searchCanaries": [dict(item) for item in raw_search],
+        "readinessPhase": readiness_phase,
+        "searchCanariesRequired": search_canaries_required,
+        "searchCanaries": search_canaries,
         "videoPagination": dict(raw_pagination),
         "mediaChecks": dict(raw_media),
         "sampleExecution": sample_execution,

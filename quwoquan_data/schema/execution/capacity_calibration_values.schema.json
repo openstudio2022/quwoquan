@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/capacity_calibration_values.schema.json",
+  "title": "Governed capacity calibration values and applicability scope",
+  "description": "有界并发面的共享值对象。calibration receipt 与 execution 冻结后的 executionPolicy 绑定引用同一定义，两处的字段集与约束不可能分别漂移。具体取值由受治理 soak 冻结进 receipt，契约不提供默认常量。外部引用的 $defs 不含内部 $ref，以便被任一消费者内联。",
+  "$defs": {
+    "frozenCapacity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "autoResearchMaxConcurrentWorkers",
+        "fleetMaxConcurrentWorkers",
+        "objectWallClockSeconds",
+        "completionGraceSeconds"
+      ],
+      "properties": {
+        "autoResearchMaxConcurrentWorkers": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "来源发现阶段任一时刻可同时运行的 worker 进程数上限。"
+        },
+        "fleetMaxConcurrentWorkers": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "ReliableTask 交付阶段任一时刻可同时运行的 worker 进程数上限。"
+        },
+        "objectWallClockSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "单对象 wall-clock 上限。运行期与批次剩余时间取更小者。"
+        },
+        "completionGraceSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "批次绝对截止推导中的完成宽限。"
+        }
+      }
+    },
+    "applicabilityScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hostClass", "providerTier"],
+      "properties": {
+        "hostClass": {
+          "type": "string",
+          "minLength": 1,
+          "description": "标定所在运行主机类别。超出该类别的 execution 不得复用本 receipt 的数值。"
+        },
+        "providerTier": {
+          "type": "string",
+          "minLength": 1,
+          "description": "标定所在 Provider 档位。"
+        }
+      }
+    }
+  }
+}

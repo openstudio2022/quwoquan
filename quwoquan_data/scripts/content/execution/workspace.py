@@ -400,9 +400,9 @@ def create_execution_manifest(
     target_set_ref: str,
     target_set_digest: str,
     retry_of: str | None = None,
+    allow_campaign_retry_scope: bool = False,
     semantic_selection_id: str = "default",
     semantic_preflight_binding: Mapping[str, Any] | None = None,
-    semantic_preflight_require_fresh: bool = True,
 ) -> dict[str, Any]:
     """Create exactly one immutable execution manifest and work-package tree.
 
@@ -423,13 +423,9 @@ def create_execution_manifest(
     normalized_retry_of = validate_execution_id(retry_of) if retry_of else None
     if normalized_retry_of:
         retry_identity = parse_execution_id(normalized_retry_of)
-        comparable = (
-            "vertical",
-            "content_type",
-            "intent",
-            "scope",
-            "phase",
-        )
+        comparable = ["vertical", "content_type", "scope", "phase"]
+        if not allow_campaign_retry_scope:
+            comparable.append("intent")
         if normalized_retry_of == identity.execution_id or any(
             getattr(retry_identity, field) != getattr(identity, field) for field in comparable
         ):
@@ -451,9 +447,6 @@ def create_execution_manifest(
         requested_binding=semantic_preflight_binding,
         semantic_selection_id=semantic_selection_id,
         output_root=core_paths.OUTPUT_ROOT,
-        require_requested_fresh=(
-            semantic_preflight_require_fresh and existing_manifest is None
-        ),
     )
     if existing_manifest is not None:
         # A v2 work package is its own immutable execution authority.  Resume
@@ -581,42 +574,20 @@ def execution_manifest_recipe_ref(execution_id: str) -> str:
     return recipe_ref
 
 
-def _canonical_object_refs(refs: Iterable[str], *, kind: str) -> list[str]:
-    singular = {"entities": "entity", "posts": "post"}.get(kind)
-    if singular is None:
-        raise ValueError(f"unsupported canonical object kind: {kind}")
-    prefix = f"/{singular}/"
-    normalized: set[str] = set()
-    for raw in refs:
-        ref = str(raw or "").strip().strip("/")
-        if raw and str(raw).startswith(prefix):
-            ref = str(raw)[len(prefix):].strip("/")
-        candidate = Path(ref)
-        if not ref or candidate.is_absolute() or ".." in candidate.parts:
-            raise ValueError(f"unsafe canonical {kind} ref: {raw}")
-        normalized.add(ref)
-    return sorted(normalized)
-
-
 def write_publish_ref(
     execution_id: str,
     *,
     entity_refs: Iterable[str] = (),
     post_refs: Iterable[str] = (),
+    publish_discards: Iterable[Mapping[str, Any]] = (),
 ) -> Path:
     """Record this execution's canonical object closure, never a release alias."""
-    target = execution_root(execution_id) / "publish_ref.json"
-    payload = {
-        "schema": "quwoquan_data.execution_publish_ref",
-        "executionId": validate_execution_id(execution_id),
-        "canonicalPublishRoot": "quwoquan_data/publish",
-        "publishedRefs": {
-            "entities": _canonical_object_refs(entity_refs, kind="entities"),
-            "posts": _canonical_object_refs(post_refs, kind="posts"),
-        },
-    }
-    from core.schema import assert_valid
+    from content.execution.closure.publish_ref import write_publish_ref_document
 
-    assert_valid(payload, "execution", "publish_ref", label=f"publish_ref:{execution_id}")
-    write_json(target, payload)
-    return target
+    return write_publish_ref_document(
+        execution_root(execution_id) / "publish_ref.json",
+        execution_id,
+        entity_refs=entity_refs,
+        post_refs=post_refs,
+        publish_discards=publish_discards,
+    )

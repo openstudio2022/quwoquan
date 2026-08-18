@@ -32,6 +32,18 @@ type capturingExternalInteractionClient struct {
 	runtime  *externalInteractionContractRuntime
 }
 
+func (client *capturingExternalInteractionClient) GetSMSOTPDeliveryReadiness(
+	ctx context.Context,
+) (application.SMSOTPDeliveryReadiness, error) {
+	query, ok := client.delegate.(application.SMSOTPDeliveryReadinessQuery)
+	if !ok {
+		return application.SMSOTPDeliveryReadiness{}, fmt.Errorf(
+			"SMS OTP readiness query is unavailable",
+		)
+	}
+	return query.GetSMSOTPDeliveryReadiness(ctx)
+}
+
 func (client *capturingExternalInteractionClient) SubmitSMSOTP(
 	ctx context.Context,
 	request application.SMSOTPDispatchRequest,
@@ -60,6 +72,10 @@ func startExternalInteractionContractRuntime() (*externalInteractionContractRunt
 	}
 	runtime := &externalInteractionContractRuntime{captureBridge: captureBridge}
 	mux := http.NewServeMux()
+	mux.HandleFunc(
+		"/internal/integrations/external-requests/capabilities/identity.sms.otp/readiness",
+		runtime.handleSMSOTPReadiness,
+	)
 	mux.HandleFunc("/integrations/external-requests", runtime.handleExternalInteractionRequest)
 	server := httptest.NewServer(mux)
 	serverAddress := server.Listener.Addr().String()
@@ -157,6 +173,32 @@ func (runtime *externalInteractionContractRuntime) forwardToLocalCapture(
 	return nil
 }
 
+func (runtime *externalInteractionContractRuntime) handleSMSOTPReadiness(
+	writer http.ResponseWriter,
+	request *http.Request,
+) {
+	if request.Method != http.MethodGet {
+		http.Error(writer, "invalid readiness request", http.StatusMethodNotAllowed)
+		return
+	}
+	token := strings.TrimPrefix(request.Header.Get("Authorization"), "Bearer ")
+	claims, authErr := testAccessVerifier.Verify(token)
+	if authErr != nil || claims.Subject != "service:user-service" ||
+		!containsString(claims.Roles, "service") ||
+		!strings.Contains(
+			claims.Scope,
+			"integration.identity.sms.otp.readiness.read",
+		) {
+		http.Error(writer, "invalid readiness service principal", http.StatusUnauthorized)
+		return
+	}
+	writer.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(writer).Encode(map[string]any{
+		"availability":      "ready",
+		"retryAfterSeconds": 0,
+	})
+}
+
 func (runtime *externalInteractionContractRuntime) handleExternalInteractionRequest(
 	writer http.ResponseWriter,
 	request *http.Request,
@@ -224,6 +266,19 @@ func validOTPTemplateForPlatform(platform string, templateID string) bool {
 		"acceptance": "sms_otp_login_acceptance",
 	}[strings.ToLower(strings.TrimSpace(platform))]
 	return expected != "" && templateID == expected
+}
+
+func TestExternalInteractionContractRuntime_ProductionClientReadsScopedSMSOTPReadiness(t *testing.T) {
+	if externalInteractionRuntime == nil || externalInteractionRuntime.client == nil {
+		t.Fatal("external interaction contract runtime is not initialized")
+	}
+	readiness, err := externalInteractionRuntime.client.GetSMSOTPDeliveryReadiness(
+		context.Background(),
+	)
+	if err != nil || readiness.Availability != "ready" ||
+		readiness.RetryAfterSeconds != 0 {
+		t.Fatalf("SMS OTP readiness=%+v err=%v", readiness, err)
+	}
 }
 
 func TestExternalInteractionContractRuntime_ProductionClientSubmitsSecretReference(t *testing.T) {

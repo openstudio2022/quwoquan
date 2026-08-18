@@ -54,6 +54,14 @@ _LANE_PROCESS_SAMPLE_SECONDS = 5.0
 _MAX_IDENTICAL_CHECKPOINT_RESUMES = 2
 
 
+class _LaneDeadlineExpired(TimeoutError):
+    """Only the configured campaign lane deadline may raise this signal."""
+
+    def __init__(self, timeout_seconds: float) -> None:
+        self.timeout_seconds = timeout_seconds
+        super().__init__(f"campaign lane deadline expired after {timeout_seconds}s")
+
+
 def _verify_workspace_external_inputs(workspace: CampaignLaneWorkspace) -> None:
     lane = workspace.capsule.lane_external_inputs[workspace.carrier]
     verify_external_input_refs(
@@ -69,14 +77,19 @@ def _verify_workspace_external_inputs(workspace: CampaignLaneWorkspace) -> None:
 def _process_group_rss_bytes(pgid: int) -> int:
     """Sample the exact lane process group without a shell."""
 
-    observed = subprocess.run(
-        ["ps", "-ax", "-o", "pgid=", "-o", "rss="],
-        check=False,
-        capture_output=True,
-        text=True,
-        timeout=active_runtime_policy()
-        .runtime_evidence.process_inspection_timeout_seconds,
-    )
+    try:
+        observed = subprocess.run(
+            ["ps", "-ax", "-o", "pgid=", "-o", "rss="],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=active_runtime_policy()
+            .runtime_evidence.process_inspection_timeout_seconds,
+        )
+    except subprocess.TimeoutExpired:
+        # RSS is diagnostic evidence, never a lane deadline. Returning zero
+        # preserves the previous max sample at the caller and lets work proceed.
+        return 0
     if observed.returncode != 0:
         return 0
     total_kib = 0
@@ -172,7 +185,7 @@ def _default_lane_runner(
     cwd: Path,
     env: dict[str, str],
     log_path: Path,
-    timeout_seconds: float,
+    timeout_seconds: float | None,
     *,
     run_session: CampaignRunSession,
     workspace: CampaignLaneWorkspace,
@@ -188,9 +201,12 @@ def _default_lane_runner(
     with log_path.open("w", encoding="utf-8") as log:
         while True:
             elapsed = time.monotonic() - started
-            remaining = timeout_seconds - elapsed
-            if remaining <= 0:
-                raise subprocess.TimeoutExpired(command, timeout_seconds)
+            remaining = (
+                None if timeout_seconds is None else timeout_seconds - elapsed
+            )
+            if remaining is not None and remaining <= 0:
+                assert timeout_seconds is not None
+                raise _LaneDeadlineExpired(timeout_seconds)
             proc = subprocess.Popen(
                 command,
                 cwd=cwd,
@@ -220,13 +236,22 @@ def _default_lane_runner(
             try:
                 while True:
                     elapsed = time.monotonic() - started
-                    remaining = timeout_seconds - elapsed
-                    if remaining <= 0:
-                        raise subprocess.TimeoutExpired(command, timeout_seconds)
+                    remaining = (
+                        None
+                        if timeout_seconds is None
+                        else timeout_seconds - elapsed
+                    )
+                    if remaining is not None and remaining <= 0:
+                        assert timeout_seconds is not None
+                        raise _LaneDeadlineExpired(timeout_seconds)
                     try:
                         code = int(
                             proc.wait(
-                                timeout=min(_LANE_PROCESS_SAMPLE_SECONDS, remaining)
+                                timeout=(
+                                    _LANE_PROCESS_SAMPLE_SECONDS
+                                    if remaining is None
+                                    else min(_LANE_PROCESS_SAMPLE_SECONDS, remaining)
+                                )
                             )
                         )
                         break
@@ -255,7 +280,7 @@ def _default_lane_runner(
                                 heartbeat_at=last_execution_heartbeat_at,
                             ),
                         )
-            except subprocess.TimeoutExpired:
+            except _LaneDeadlineExpired:
                 terminate_lane_process(
                     {
                         "pid": proc.pid,
@@ -353,7 +378,7 @@ def run_lane(
     stage: str,
     runtime: CampaignRuntimePaths,
     root_execution_id: str,
-    timeout_seconds: float,
+    timeout_seconds: float | None,
     lane_runner: LaneRunner | None,
     run_session: CampaignRunSession,
     observer_binary_binding: ReliableTaskObserverBinaryBinding | None,
@@ -505,7 +530,8 @@ def run_lane(
         if code == 0:
             return 0, None
         return int(code), failure_detail
-    except subprocess.TimeoutExpired:
+    except _LaneDeadlineExpired as exc:
+        deadline_seconds = exc.timeout_seconds
         run_session.lane_checkpoint(
             carrier=workspace.carrier,
             execution_id=execution_id,
@@ -514,9 +540,9 @@ def run_lane(
             capsule_ref=workspace.ref,
             execution_root=workspace.execution_root,
             return_code=124,
-            error=f"{stage} timed out after {timeout_seconds}s",
+            error=f"{stage} timed out after {deadline_seconds}s",
         )
-        return 124, f"{stage} timed out after {timeout_seconds}s"
+        return 124, f"{stage} timed out after {deadline_seconds}s"
     except Exception as exc:  # noqa: BLE001
         run_session.lane_checkpoint(
             carrier=workspace.carrier,

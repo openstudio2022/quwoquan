@@ -544,7 +544,7 @@ def test_failed_campaign_reconciliation_terminalizes_dead_source_drift_lane(
     _patch_observed_identity(monkeypatch)
     monkeypatch.setattr(
         failed_execution_reconciliation,
-        "current_source_digest",
+        "current_source_definition_snapshot",
         reconciliation.current_source_digest,
     )
     monkeypatch.setattr(

@@ -18,6 +18,8 @@
 - 对象 `presentation/**`、`application/**` 与横切 `lib/runtime/**` 不直连 mock 目录，也不直接实例化 Mock/Remote Repository。
 - Repository、route、surface、operation、错误码、decoder context 以 metadata/codegen 为真相源。
 - 结构化错误统一走 `RuntimeFailure`、`RuntimeRecoveryPolicy`、runtime mapper；不要回退到原始字符串异常。
+- 可空类型只表达「缺席」，不表达「失败」：禁止用 `Future<T?>` 表达一次没做成的加工；失败必须重抛、转 `RuntimeFailure` 或返回显式领域结果（`LocationPlaceReadResult` 是范式）。降级可达成时返回可用替代值并经 `ExceptionTelemetryPort` 上报，不得静默返回空引用。非可空列表默认 `const []`，不返回 null。
+- `catch` 内 `return null` 只有两条合法出路：异常本身就是形状判定时，函数用 `try` 前缀命名承诺「返回 null 表示这不是一个 X」（对齐 `int.tryParse`）；否则必须留证据（`recordHandledException`、显式失败态，或 `developer.log(error:)`）。观测基础设施自身不能自指上报，用 `developer.log`，它在 release 下同样生效。
 - 用户可见错误提示必须来自 codegen 错误枚举、`toDisplayMessage(context.l10n)`、`UITextConstants` 或 l10n；禁止在 UI/Provider 中 switch 硬编码错误码字符串或中文提示。
 - `CloudException` 必须由 runtime mapper 生成并暴露 `runtimeFailure`；UI 状态只消费 `RuntimeFailure`、`runtimeErrorDisplayMessage` 和 `RuntimeRecoveryPolicy`，不得展示 raw exception/debugMessage。
 - 新页面或页面行为变化，要同步核对页面横向质量矩阵、metadata-driven UI 清单与相关测试。
@@ -72,12 +74,12 @@ key 命名表达归属，避免 15 条 domain 并行流互相覆盖。
 ## 典型触发与 E2E
 
 - 用户说“页面、登录、搜索、创作、消息、错误提示、恢复按钮、推荐曝光、行为反馈”时，默认加载本文件。
-- 若同时涉及服务错误码、Remote API、数据导入、推荐反馈或环境发布，必须按根 `AGENTS.md` 的 Pre-work Reflection 启用跨域 E2E 模式。
+- 若同时涉及服务错误码、Remote API、数据导入、推荐反馈或环境发布，必须按根 `AGENTS.md` 的 PRE 准入启用跨域 E2E 模式。
 - App 不得单独完成端云链路：`api_integration` Remote 行为必须能回到 `local_contract` generated-client/object-level typed double/Widget/Provider 断言。
 
 ## Review 与测试要求
 
-- 每次改动都要按产品、架构、代码评审、质量、测试、用户、运维、运营八角色自检。
+- 每次改动都要经 `.agents/skills/review` 按工作流与 profile 派发角色评审；角色清单以其 `references/roles/` 为准，此处不再复制。
 - `local_contract` 覆盖 metadata/codegen/静态规则、provider/widget/Mock 行为；`api_integration` 覆盖 Remote/API/真实存储或集成环境；`user_acceptance` 覆盖用户旅程、权限、弱网、性能或发布前 UAT。
 - Remote 行为的 `api_integration` 断言必须在 `local_contract` generated-client/object-level typed double/Widget/Provider 测试中有对应断言；测试 double 不能进入任何环境 App，也不能替代集成测试。
 - 错误码链路的 `local_contract` 必须覆盖 mapper、Provider 状态、UI 文案、恢复按钮和 typed 错误响应；`api_integration` 必须覆盖 RemoteRepository 对服务错误响应的映射。

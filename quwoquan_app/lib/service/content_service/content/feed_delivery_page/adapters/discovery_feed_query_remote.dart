@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/runtime/transport/generated/content/content_request_page_ids.g.dart';
+import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/content_activation_identity.dart';
 import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/discovery_feed_page.dart';
 import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/discovery_feed_query.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/generated/content_feed_delivery_category_policy.g.dart';
@@ -109,6 +110,13 @@ final class RemoteContentDiscoveryFeedQuery
         cancellation: effectiveCancellation,
       ),
     );
+    // malformed 身份（半身份 / 非 canonical digest / no_active_release 却携带
+    // 身份）与解码失败同路径向上抛：这是 Remote 协议失败，不得编码为空态。
+    final activationIdentity = resolveContentActivationIdentity(
+      releaseId: response.releaseId,
+      manifestDigest: response.manifestDigest,
+      emptyReason: response.emptyReason,
+    );
     return DiscoveryFeedPage(
       items: response.items.map(projectionMapper.toDto).toList(growable: false),
       outcome: response.outcome,
@@ -119,6 +127,7 @@ final class RemoteContentDiscoveryFeedQuery
       paginationExpiresAt: response.paginationExpiresAt,
       feedRequestId: response.feedRequestId,
       policyDigest: response.policyDigest,
+      activationIdentity: activationIdentity,
     );
   }
 

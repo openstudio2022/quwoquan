@@ -97,10 +97,18 @@ def handle_verify(args: argparse.Namespace) -> None:
         from verify.verify_control_literals import main as control_literals_main
 
         raise SystemExit(control_literals_main())
+    if cmd == "scale-parameterization":
+        from verify.verify_scale_parameterization import main as scale_parameterization_main
+
+        raise SystemExit(scale_parameterization_main())
+    if cmd == "object-size-budget":
+        from verify.verify_object_size_budget import main as object_size_budget_main
+
+        raise SystemExit(object_size_budget_main())
     if cmd == "source-digest":
         from verify.verify_source_digest import main as source_digest_main
 
-        argv = []
+        argv = ["--scope", str(args.scope)]
         if getattr(args, "source_execution_id", None):
             argv.extend(["--execution-id", str(args.source_execution_id)])
         raise SystemExit(source_digest_main(argv))
@@ -267,6 +275,7 @@ def handle_all() -> None:
     from verify import verify_script_architecture
     from verify import verify_python_symbols
     from verify import verify_control_literals
+    from verify import verify_scale_parameterization
     from verify import verify_prompt_templates
     from verify import verify_no_flat_roots
     from verify import verify_no_runtime_draft_kit
@@ -276,6 +285,7 @@ def handle_all() -> None:
     from verify import verify_works_classification
     from verify import verify_coverage_static_identity
     from verify import verify_media_release_contract
+    from verify import verify_object_size_budget
 
     gates = (
         ("cli-first", verify_cli_first.main),
@@ -283,6 +293,7 @@ def handle_all() -> None:
         ("script-architecture", verify_script_architecture.main),
         ("python-symbols", verify_python_symbols.main),
         ("control-literals", verify_control_literals.main),
+        ("scale-parameterization", verify_scale_parameterization.main),
         ("prompt-templates", verify_prompt_templates.main),
         ("no-flat-roots", verify_no_flat_roots.main),
         ("no-runtime-draft-kit", verify_no_runtime_draft_kit.main),
@@ -296,6 +307,7 @@ def handle_all() -> None:
         ("output-root-isolation", verify_output_root_isolation.main),
         ("coverage-static-identity", verify_coverage_static_identity.main),
         ("media-release-contract", verify_media_release_contract.main),
+        ("object-size-budget", verify_object_size_budget.main),
         ("filter-catalog", _run_filter_catalog_gate),
         ("publish-closure", verify_publish_closure.main),
         ("single-contract-source", verify_single_contract_source.main),
@@ -482,11 +494,26 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     sub.add_parser("script-architecture", help="校验脚本目录职责、模块尺寸与 core 依赖方向")
     sub.add_parser("python-symbols", help="校验 Data Python 运行时符号均有明确所有者")
     sub.add_parser("control-literals", help="校验双省链路控制字面量只有一个真相源")
+    sub.add_parser(
+        "scale-parameterization",
+        help="校验里程碑目标只有 control-plane 一个真相源且各消费者一致",
+    )
+    sub.add_parser(
+        "object-size-budget",
+        help="校验单对象闭包体积不超过图文 10MiB / 视频 50MiB 预算",
+    )
     source_digest = sub.add_parser(
         "source-digest",
-        help="校验 candidate source-definition snapshot 与 execution bundle",
+        help=(
+            "current 精确校验显式 candidate/现行 release 视图；"
+            "all 审计全部历史 source identity"
+        ),
     )
-    source_digest.add_argument("--execution-id", dest="source_execution_id")
+    source_digest.add_argument(
+        "--execution-id",
+        dest="source_execution_id",
+        help="显式选择 current execution candidate；省略时不从 tasks 历史推断",
+    )
     sub.add_parser("execution-identity-purity", help="校验 active code 已删除旧运行身份与旧路径")
     release_lifecycle = sub.add_parser("release-lifecycle", help="校验 immutable release 的闭环证据")
     release_lifecycle.add_argument("--release", dest="lifecycle_release", required=True)

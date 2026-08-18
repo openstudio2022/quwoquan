@@ -1,0 +1,29 @@
+{
+  "schema": "quwoquan_data.review_attestation",
+  "stage": "5.review",
+  "executionId": "20260817--travel-video-workload-video-1--china--scale-003",
+  "executionBinding": "frozen",
+  "objectRef": "成都大熊猫繁育研究基地_video_ee1ad1212d32",
+  "decision": "approved",
+  "deterministicGate": {
+    "status": "passed",
+    "issues": []
+  },
+  "independentReviewer": {
+    "status": "passed",
+    "provider": "cursor_sdk",
+    "model": "grok-4.6",
+    "modelFamily": "grok",
+    "runId": "run-b73741a7-8484-40d1-8499-03587b07a0d9",
+    "resultHash": "sha256:7a117081e78f6b6bfa05b43e43f8e95579470ae25e75e92fbf25aca28445c10d"
+  },
+  "mediaRefReview": {
+    "status": "passed",
+    "issues": []
+  },
+  "repair": {
+    "status": "not_required"
+  },
+  "finalizationRef": "5.review/finalization_report.json",
+  "evidenceIndexRef": "5.review/evidence_index.json"
+}

@@ -41,7 +41,6 @@ type FleetRequest struct {
 	PartitionCount          int                                      `json:"partitionCount"`
 	PartitionAlgorithm      string                                   `json:"partitionAlgorithm"`
 	CheckpointPolicy        DataContentCheckpointPolicy              `json:"checkpointPolicy"`
-	RequireCommercial       bool                                     `json:"requireCommercial"`
 	RecoverDeadTasks        *bool                                    `json:"recoverDeadTasks"`
 	ObjectTimeoutMS         int                                      `json:"objectTimeoutMilliseconds"`
 	GlobalRequiredQuota     int                                      `json:"globalRequiredQuota"`
@@ -89,17 +88,28 @@ type DataContentCheckpointPolicy struct {
 	TriggerMode           string `json:"triggerMode"`
 }
 
-const dataContentPartitionAlgorithm = "sha256_carrier_object_ref_mod_v1"
+const (
+	dataContentPartitionAlgorithm = "sha256_carrier_object_ref_mod_v1"
+	dataContentMinPartitionCount  = 16
+	dataContentMaxPartitionCount  = 256
+)
 
-func dataContentPartitionCount(requiredWorkers int) int {
-	if requiredWorkers >= 64 {
-		return 256
+// dataContentPartitionCount implements the partition topology bands declared by
+// quwoquan_data/schema/execution/data_content_fleet_request.schema.json, which
+// Data implements in
+// quwoquan_data/scripts/content/execution/queue/partition.py#partition_count.
+// Partitions isolate queue and checkpoint state, so the frozen work-unit count
+// is the only admitted input; requiredWorkers and any per-worker resource ratio
+// are deliberately absent.
+func dataContentPartitionCount(workUnitCount int) int {
+	requested := workUnitCount
+	if requested < dataContentMinPartitionCount {
+		requested = dataContentMinPartitionCount
 	}
-	requested := 4 * requiredWorkers
-	if requested < 16 {
-		requested = 16
+	if requested >= dataContentMaxPartitionCount {
+		return dataContentMaxPartitionCount
 	}
-	count := 16
+	count := dataContentMinPartitionCount
 	for count < requested {
 		count *= 2
 	}
@@ -207,11 +217,19 @@ func ReadFleetRequest(path string) (FleetRequest, error) {
 			"fleet request requires scaleClass and execution/job-set digests",
 		)
 	}
-	if request.RequiredWorkers < 1 ||
-		request.PartitionCount != dataContentPartitionCount(request.RequiredWorkers) ||
+	if request.RequiredWorkers < 1 {
+		return FleetRequest{}, errors.New("fleet request requiredWorkers must be positive")
+	}
+	expectedPartitionCount := dataContentPartitionCount(len(request.Jobs))
+	if request.PartitionCount != expectedPartitionCount ||
 		request.PartitionAlgorithm != dataContentPartitionAlgorithm {
-		return FleetRequest{}, errors.New(
-			"fleet request partition contract does not match requiredWorkers",
+		return FleetRequest{}, fmt.Errorf(
+			"fleet request partitionCount=%d partitionAlgorithm=%q does not match the %d frozen work units; want partitionCount=%d partitionAlgorithm=%q",
+			request.PartitionCount,
+			request.PartitionAlgorithm,
+			len(request.Jobs),
+			expectedPartitionCount,
+			dataContentPartitionAlgorithm,
 		)
 	}
 	if err := request.CheckpointPolicy.validate(); err != nil {

@@ -16,10 +16,7 @@ func requireTagAPIMessageTransport(
 	router *rtredis.Router,
 	sceneModes map[string]string,
 ) (*runtimemessaging.RedisMessageTransport, error) {
-	binding, found := bindingdescriptor.ExternalProviderBindingFor(
-		environment,
-		runtimemessaging.RuntimeMessageTransportCapability,
-	)
+	binding, found := bindingdescriptor.CompiledBindingFor(runtimemessaging.RuntimeMessageTransportCapability)
 	rootID := bindingdescriptor.ExternalProviderBindingObject
 	resolved, err := runtimemessaging.RequireConfiguredRedisMessageTransport(
 		ctx,

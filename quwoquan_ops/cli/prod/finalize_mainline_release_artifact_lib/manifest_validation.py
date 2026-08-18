@@ -65,7 +65,7 @@ def _validate_required_evidence(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError("requiredEvidence must be an object")
     expected_fields = {
-        "images",
+        "environmentArtifacts",
         "configurationPackages",
         "applicationPackages",
         "contractGraphDigest",
@@ -77,21 +77,31 @@ def _validate_required_evidence(value: Any) -> dict[str, Any]:
     }
     if set(value) != expected_fields:
         raise ValueError("requiredEvidence fields are not canonical")
-    images = _require_string_list(value["images"], "requiredEvidence.images")
+    environment_artifacts = value["environmentArtifacts"]
+    if not isinstance(environment_artifacts, dict) or set(
+        environment_artifacts
+    ) != set(ENVIRONMENTS):
+        raise ValueError("requiredEvidence.environmentArtifacts is not four-environment")
+    image_owners: list[str] | None = None
+    for environment in ENVIRONMENTS:
+        owners = _require_string_list(
+            environment_artifacts[environment],
+            f"requiredEvidence.environmentArtifacts.{environment}",
+        )
+        if image_owners is None:
+            image_owners = owners
+        elif owners != image_owners:
+            raise ValueError("requiredEvidence environment image owner sets differ")
     configuration_packages = value["configurationPackages"]
     if not isinstance(configuration_packages, dict) or set(
         configuration_packages
     ) != set(ENVIRONMENTS):
         raise ValueError("requiredEvidence.configurationPackages is not four-environment")
     for environment in ENVIRONMENTS:
-        services = _require_string_list(
+        _require_string_list(
             configuration_packages[environment],
             f"requiredEvidence.configurationPackages.{environment}",
         )
-        if services != images:
-            raise ValueError(
-                f"requiredEvidence.configurationPackages.{environment} service set differs"
-            )
     applications = value["applicationPackages"]
     if not isinstance(applications, dict) or set(applications) != set(ENVIRONMENTS):
         raise ValueError("requiredEvidence.applicationPackages is not four-environment")
@@ -142,22 +152,6 @@ def _validate_packages(
     return value
 
 
-def _validate_configuration_packages(
-    value: Any,
-    *,
-    required: dict[str, list[str]],
-) -> dict[str, dict[str, dict[str, Any]]]:
-    if not isinstance(value, dict) or set(value) != set(ENVIRONMENTS):
-        raise ValueError("configurationPackages must contain four autonomous environments")
-    for environment in ENVIRONMENTS:
-        _validate_packages(
-            value[environment],
-            expected=required[environment],
-            label=f"configurationPackages.{environment}",
-        )
-    return value
-
-
 def _validate_application_packages(
     value: Any,
     *,
@@ -191,25 +185,29 @@ def _validate_images(
     *,
     required: list[str],
     status: str,
+    environment: str,
 ) -> dict[str, dict[str, Any]]:
     if not isinstance(value, dict) or set(value) != set(required):
-        raise ValueError("images set is not canonical")
+        raise ValueError(f"environmentArtifacts.{environment}.images set is not canonical")
     transport_tags: set[str] = set()
-    for service, image in value.items():
+    for owner, image in value.items():
+        label = f"environmentArtifacts.{environment}.images.{owner}"
         if not isinstance(image, dict):
-            raise ValueError(f"images.{service} must be an object")
+            raise ValueError(f"{label} must be an object")
         repository = str(image.get("repository") or "").strip()
         transport_ref = str(image.get("transportRef") or "").strip()
+        if not repository.endswith(f"/{owner}-{environment}"):
+            raise ValueError(f"{label} repository is not environment-bound")
         if not repository.startswith("ghcr.io/") or not transport_ref.startswith(
             repository + ":"
         ):
-            raise ValueError(f"images.{service} transport reference is invalid")
+            raise ValueError(f"{label} transport reference is invalid")
         if transport_ref.endswith(":latest"):
-            raise ValueError(f"images.{service} transport reference must not use latest")
+            raise ValueError(f"{label} transport reference must not use latest")
         transport_tags.add(transport_ref[len(repository) + 1 :])
         if status == "build-input":
             if set(image) != {"repository", "transportRef"}:
-                raise ValueError(f"images.{service} build input is not canonical")
+                raise ValueError(f"{label} build input is not canonical")
             continue
         if set(image) != {
             "repository",
@@ -218,22 +216,80 @@ def _validate_images(
             "ref",
             "attestations",
         }:
-            raise ValueError(f"images.{service} immutable descriptor is not canonical")
+            raise ValueError(f"{label} immutable descriptor is not canonical")
         digest = str(image.get("digest") or "")
         ref = str(image.get("ref") or "")
         if DIGEST_PATTERN.fullmatch(digest) is None or ref != f"{repository}@{digest}":
-            raise ValueError(f"images.{service} digest reference is invalid")
+            raise ValueError(f"{label} digest reference is invalid")
         attestations = image.get("attestations")
         if not isinstance(attestations, dict) or set(attestations) != {
             "spdxSbom",
             "slsaProvenance",
         }:
-            raise ValueError(f"images.{service} attestations are incomplete")
+            raise ValueError(f"{label} attestations are incomplete")
         for kind in ("spdxSbom", "slsaProvenance"):
             if attestations.get(kind) != f"oci://{ref}#{kind}":
-                raise ValueError(f"images.{service} {kind} reference is invalid")
+                raise ValueError(f"{label} {kind} reference is invalid")
     if len(transport_tags) != 1:
-        raise ValueError("images must use one common transport tag")
+        raise ValueError(f"{environment} images must use one common transport tag")
+    return value
+
+
+def _validate_environment_artifacts(
+    value: Any,
+    *,
+    required_images: dict[str, list[str]],
+    required_configurations: dict[str, list[str]],
+    status: str,
+) -> dict[str, dict[str, Any]]:
+    from quwoquan_ops.cli.prod.finalize_mainline_release_artifact_lib.canonical_digests import (
+        canonical_environment_artifact_digest,
+    )
+
+    if not isinstance(value, dict) or set(value) != set(ENVIRONMENTS):
+        raise ValueError("environmentArtifacts must contain alpha/beta/gamma/prod")
+    seen_digests: dict[str, str] = {}
+    for environment in ENVIRONMENTS:
+        artifact = value[environment]
+        if not isinstance(artifact, dict) or set(artifact) != {
+            "environment",
+            "environmentArtifactDigest",
+            "images",
+            "configurationPackages",
+        }:
+            raise ValueError(f"environmentArtifacts.{environment} fields are not canonical")
+        if artifact.get("environment") != environment:
+            raise ValueError(f"environmentArtifacts.{environment} identity mismatch")
+        images = _validate_images(
+            artifact.get("images"),
+            required=required_images[environment],
+            status=status,
+            environment=environment,
+        )
+        _validate_packages(
+            artifact.get("configurationPackages"),
+            expected=required_configurations[environment],
+            label=f"environmentArtifacts.{environment}.configurationPackages",
+        )
+        declared = artifact.get("environmentArtifactDigest")
+        projection_artifact = dict(artifact)
+        projection_artifact["environmentArtifactDigest"] = None
+        expected_digest = canonical_environment_artifact_digest(
+            {"environmentArtifacts": {environment: projection_artifact}}, environment
+        )
+        if declared != expected_digest:
+            raise ValueError(
+                f"environmentArtifacts.{environment} digest mismatch"
+            )
+        if status != "build-input":
+            for image in images.values():
+                digest = str(image["digest"])
+                previous_environment = seen_digests.setdefault(digest, environment)
+                if previous_environment != environment:
+                    raise ValueError(
+                        "environmentArtifacts reuse an image digest across environments: "
+                        f"{previous_environment}/{environment}"
+                    )
     return value
 
 
@@ -411,8 +467,12 @@ def _validate_receipts(manifest: dict[str, Any]) -> None:
 
 
 def _derive_status(manifest: dict[str, Any]) -> str:
-    images = manifest["images"]
-    immutable_images = all("digest" in item for item in images.values())
+    artifacts = manifest["environmentArtifacts"]
+    immutable_images = all(
+        "digest" in descriptor
+        for artifact in artifacts.values()
+        for descriptor in artifact["images"].values()
+    )
     candidate_complete = manifest.get("candidateId") is not None
     if not immutable_images:
         return "build-input"
@@ -447,9 +507,11 @@ def _expected_gaps(manifest: dict[str, Any], status: str) -> tuple[list[str], li
     missing: list[str] = []
     if status == "build-input":
         missing.extend(
-            f"images.{service}.digest"
-            for service in manifest["requiredEvidence"]["images"]
-            if "digest" not in manifest["images"][service]
+            f"environmentArtifacts.{environment}.images.{owner}.digest"
+            for environment in ENVIRONMENTS
+            for owner in manifest["requiredEvidence"]["environmentArtifacts"][environment]
+            if "digest"
+            not in manifest["environmentArtifacts"][environment]["images"][owner]
         )
     if status in {"build-input", "component-ready"}:
         missing.extend(
@@ -505,7 +567,16 @@ def validate_manifest(
 ) -> dict[str, Any]:
     """Validate the one canonical online contract and reject forbidden fields."""
 
-    forbidden_paths = sorted(_forbidden_field_paths(manifest))
+    forbidden_paths = sorted(
+        path
+        for path in _forbidden_field_paths(manifest)
+        if path != "configurationPackages"
+        and not (
+            path.startswith("environmentArtifacts.")
+            and path.endswith(".configurationPackages")
+        )
+        and not path.startswith("requiredEvidence.configurationPackages")
+    )
     if forbidden_paths:
         raise ValueError(
             f"release evidence manifest fields are forbidden: {forbidden_paths}"
@@ -518,6 +589,8 @@ def validate_manifest(
         )
     if manifest.get("schema") != SCHEMA:
         raise ValueError("release evidence manifest schema mismatch")
+    if "images" in manifest or "configurationPackages" in manifest:
+        raise ValueError("retired flat release image/config fields are forbidden")
     status = str(manifest.get("status") or "")
     accepted = set(allowed_statuses or STATUSES)
     if status not in STATUSES or status not in accepted:
@@ -547,22 +620,20 @@ def validate_manifest(
         raise ValueError("release evidence sourceArchiveDigest is invalid")
     if not str(manifest.get("generatedAt") or "").strip():
         raise ValueError("release evidence generatedAt is missing")
+    from quwoquan_ops.cli.prod.finalize_mainline_release_artifact_lib.canonical_digests import (
+        canonical_release_train_digest,
+    )
+
+    if manifest.get("releaseTrainId") != canonical_release_train_digest(manifest):
+        raise ValueError("release evidence releaseTrainId mismatch")
 
     required = _validate_required_evidence(manifest.get("requiredEvidence"))
-    images = _validate_images(
-        manifest.get("images"),
-        required=required["images"],
+    _validate_environment_artifacts(
+        manifest.get("environmentArtifacts"),
+        required_images=required["environmentArtifacts"],
+        required_configurations=required["configurationPackages"],
         status=status,
     )
-    configurations = _validate_configuration_packages(
-        manifest.get("configurationPackages"),
-        required=required["configurationPackages"],
-    )
-    for environment in ENVIRONMENTS:
-        if set(images) != set(configurations[environment]):
-            raise ValueError(
-                f"image and {environment} configuration package service sets differ"
-            )
 
     if status in {"build-input", "component-ready"}:
         if manifest.get("applicationPackages") != {

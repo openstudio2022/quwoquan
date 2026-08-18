@@ -226,14 +226,14 @@ def test_video_index_state_tamper_and_stale_inventory_fence_fail_closed(
     publish.mkdir()
     base = load_or_bootstrap_inventory(publish)
 
-    stale_path = publish / "posts/video/体验/stale/1/note.txt"
+    stale_path = publish / "posts/video/体验/stale/1/note.md"
     stale_path.parent.mkdir(parents=True)
     stale_path.write_text("stale", encoding="utf-8")
     stale = apply_inventory_delta(
         base,
         [
             {
-                "destination": "posts/video/体验/stale/1/note.txt",
+                "destination": "posts/video/体验/stale/1/note.md",
                 "operation": "create",
                 "sha256": _sha("stale"),
                 "bytes": 5,
@@ -241,14 +241,14 @@ def test_video_index_state_tamper_and_stale_inventory_fence_fail_closed(
         ],
         publish_root=publish,
     )
-    winner_path = publish / "posts/video/体验/winner/1/note.txt"
+    winner_path = publish / "posts/video/体验/winner/1/note.md"
     winner_path.parent.mkdir(parents=True)
     winner_path.write_text("winner", encoding="utf-8")
     winner = apply_inventory_delta(
         base,
         [
             {
-                "destination": "posts/video/体验/winner/1/note.txt",
+                "destination": "posts/video/体验/winner/1/note.md",
                 "operation": "create",
                 "sha256": _sha("winner"),
                 "bytes": 6,

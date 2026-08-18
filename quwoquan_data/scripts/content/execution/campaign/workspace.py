@@ -5,7 +5,6 @@ import fcntl
 import hashlib
 import json
 import os
-import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -13,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from core import paths
+from core.content_library import library_root_for_output
 from core.io import read_json, write_json
 from core.schema import assert_valid
 from core.source_digest import (
@@ -33,6 +33,12 @@ from content.execution.campaign.source_snapshot import (
     SNAPSHOT_FORMAT,
     campaign_snapshot_roots,
     materialize_source_snapshot,
+)
+from content.execution.campaign.capsule_seal import (
+    capsule_tree_digest,
+    capsule_tree_is_sealed,
+    discard_capsule_tree,
+    seal_capsule_tree,
 )
 from content.execution.identity import validate_execution_id
 from content.execution.campaign.source_pool_binding import (
@@ -58,6 +64,10 @@ class CampaignRuntimePaths:
     def acquisition_root(self) -> Path:
         relative = paths.SOURCE_ACQUISITION_ROOT.relative_to(paths.OUTPUT_ROOT)
         return (self.output_root / relative).resolve()
+
+    @property
+    def library_root(self) -> Path:
+        return library_root_for_output(self.output_root).resolve()
 
     @classmethod
     def defaults(cls) -> CampaignRuntimePaths:
@@ -246,32 +256,6 @@ def _canonical_digest(payload: dict[str, Any]) -> str:
     return "sha256:" + hashlib.sha256(encoded).hexdigest()
 
 
-def _file_digest(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def _capsule_tree_digest(root: Path) -> str:
-    """Verify every exported executor byte, not only sourceDigest inputs."""
-    digest = hashlib.sha256()
-    for path in sorted(root.rglob("*")):
-        relative = path.relative_to(root).as_posix()
-        if relative == ".qwq_campaign_capsule.json":
-            continue
-        if path.is_symlink():
-            row = f"L\0{relative}\0{os.readlink(path)}\n"
-        elif path.is_file():
-            executable = path.stat().st_mode & 0o111
-            row = f"F\0{relative}\0{executable:o}\0{_file_digest(path)}\n"
-        else:
-            continue
-        digest.update(row.encode("utf-8"))
-    return "sha256:" + digest.hexdigest()
-
-
 def _capsule_identity(
     *,
     git_branch: str,
@@ -302,47 +286,6 @@ def _capsule_identity(
     return stable, _canonical_digest(stable)
 
 
-def _make_tree_writable(root: Path) -> None:
-    if not root.exists():
-        return
-    for path in sorted(root.rglob("*"), reverse=True):
-        if path.is_symlink():
-            continue
-        try:
-            path.chmod(path.stat().st_mode | 0o700)
-        except OSError:
-            pass
-    try:
-        root.chmod(root.stat().st_mode | 0o700)
-    except OSError:
-        pass
-
-
-def _remove_tree(root: Path) -> None:
-    if not root.exists():
-        return
-    _make_tree_writable(root)
-    shutil.rmtree(root)
-
-
-def _make_tree_read_only(root: Path) -> None:
-    for path in sorted(root.rglob("*"), reverse=True):
-        if path.is_symlink():
-            continue
-        mode = path.stat().st_mode
-        path.chmod(mode & ~0o222)
-    root.chmod(root.stat().st_mode & ~0o222)
-
-
-def _tree_is_read_only(root: Path) -> bool:
-    if root.stat().st_mode & 0o222:
-        return False
-    for path in root.rglob("*"):
-        if not path.is_symlink() and path.stat().st_mode & 0o222:
-            return False
-    return True
-
-
 def load_source_capsule_manifest(
     runtime_paths: CampaignRuntimePaths,
     path: Path,
@@ -367,7 +310,7 @@ def load_source_capsule_manifest(
         raise ValueError("campaign capsule manifest drift")
     if manifest.get("capsuleDigest") != capsule_digest:
         raise ValueError("campaign capsule identity digest drift")
-    if manifest.get("treeDigest") != _capsule_tree_digest(path):
+    if manifest.get("treeDigest") != capsule_tree_digest(path):
         raise ValueError("campaign capsule tree digest drift")
     observed_digest = SourceDefinitionSnapshot.build(repo_root=path).digest
     if observed_digest != stable["sourceDigest"]:
@@ -394,7 +337,7 @@ def load_source_capsule_manifest(
     pool_binding, lane_pool_selections, snapshot_root_ref = load_capsule_source_pool(
         stable, capsule_path=path
     )
-    if not _tree_is_read_only(path):
+    if not capsule_tree_is_sealed(path):
         raise ValueError("campaign capsule must be read-only")
     return SourceCapsule(
         path=path,
@@ -434,9 +377,10 @@ def prepare_source_capsule(
     source_pool_evidence_root_ref: str | None = None,
     lane_source_pool_selections: dict[str, dict[str, Any]] | None = None,
 ) -> SourceCapsule:
-    """Export one immutable source tree shared by all four lane processes."""
-    if set(lane_external_inputs) != {"homepage", "article", "image", "video"}:
-        raise ValueError("campaign capsule requires all four external input lanes")
+    """Export one immutable source tree shared by the active lane processes."""
+    from content.execution.campaign.lane import normalize_active_carriers
+
+    active = normalize_active_carriers(lane_external_inputs)
     expected_aggregate = payload_digest(
         {
             "schema": "quwoquan_data.campaign_external_input_lanes",
@@ -456,7 +400,7 @@ def prepare_source_capsule(
                 lane_external_inputs[carrier]["externalInputsDigest"]
             ),
         }
-        for carrier in ("homepage", "article", "image", "video")
+        for carrier in active
     }
     for carrier, lane in capsule_lanes.items():
         if lane["externalInputsDigest"] != refs_digest(lane["externalInputRefs"]):
@@ -511,7 +455,7 @@ def prepare_source_capsule(
                     capsule_digest=capsule_digest,
                 )
             except (OSError, TypeError, ValueError):
-                _remove_tree(capsule_path)
+                discard_capsule_tree(capsule_path)
 
         temp_root = Path(
             tempfile.mkdtemp(prefix=f".{key}.", dir=capsules_root)
@@ -523,6 +467,7 @@ def prepare_source_capsule(
                 roots=roots,
                 expected_digest=source_digest,
                 expected_execution_bundle=str(execution_bundle["digest"]),
+                library_root=runtime_paths.library_root,
             )
             for carrier, lane in capsule_lanes.items():
                 materialize_external_input_bundle(
@@ -533,6 +478,7 @@ def prepare_source_capsule(
                     source_revision=source_revision,
                     source_digest=source_digest,
                     entity_catalog_digest=entity_catalog_digest,
+                    library_root=runtime_paths.library_root,
                 )
             if scale_source_pool is not None:
                 materialize_bound_scale_source_pool(
@@ -548,14 +494,14 @@ def prepare_source_capsule(
                 {
                     **stable,
                     "capsuleDigest": capsule_digest,
-                    "treeDigest": _capsule_tree_digest(temp_root),
+                    "treeDigest": capsule_tree_digest(temp_root),
                 },
             )
-            _make_tree_read_only(temp_root)
+            seal_capsule_tree(temp_root)
             os.replace(temp_root, capsule_path)
         finally:
             if temp_root.exists():
-                _remove_tree(temp_root)
+                discard_capsule_tree(temp_root)
         return load_source_capsule_manifest(
             runtime_paths,
             capsule_path,

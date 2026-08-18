@@ -26,10 +26,12 @@
 
 <a id="dec-001"></a>
 ### DEC-001 外部能力以 typed Port 和显式 Adapter 在 composition root 装配
-- 决策：外部能力以 typed Port 和显式 Adapter 在 composition root 装配。
-- 理由：以能力专属 typed Port、Provider Adapter、构建期 BindingCompiler、统一 Conformance Suite、3×3 证据和双层 readiness 隔离第三方差异；integration-service 只是 runtime 治理的一种部署形态。
-- 被否决方案：由调用方、页面或脚本复制本层状态并绕过公开契约。
-- 约束与影响：实现只能细化对应规格与 canonical contract；冲突时先修正规格或契约。
+- 决策：外部能力以 typed Port 和环境专属 Provider Workload 装配。第一方业务 Service 只调用固定内部 Provider protocol，不编入正式厂商或替身 Adapter；BindingCompiler 在 package 阶段只生成当前环境的 workload binding。
+- 理由：typed Port、独立 Provider 制品、统一 Conformance Suite、3×3 证据和双层 readiness 能隔离第三方差异，同时让 Prod 与 nonprod 在依赖闭包、镜像、SBOM 和签名上物理分离。
+- 被否决方案：由调用方、页面或脚本复制本层状态并绕过公开契约；同一第一方服务二进制包含正式与替身 Adapter并按环境字符串切换。
+- 约束与影响：App operation/path/error 保持单轨。
+- 约束与影响：第一方 Service 不持有 Provider selector，只调用固定 typed Provider protocol。
+- 约束与影响：环境只选择 package 阶段封存的 Provider Workload digest 与 authority binding。
 - 关联要求：`REQ-001`
 - 影响 Story：[`capability-provider-commercial-readiness-gate`](./capability-provider-commercial-readiness-gate/spec.md)、[`integration-service-foundation`](./integration-service-foundation/spec.md)、[`provider-adapter-conformance-suite`](./provider-adapter-conformance-suite/spec.md)、[`user-connector-capability-gateway`](./user-connector-capability-gateway/spec.md)
 - 关联验收：`SIT-001`
@@ -45,7 +47,7 @@
   root、endpoint、secret 或 adapter 复制到全局 registry、manifest 或 path 清单会重新
   建立第二真相源，也会允许调用方绕开 Binding 和启动预检。
 - 约束：consumer 不得声明 endpoint、secret、adapter 或外置 root list；每个 generated
-  descriptor 都绑定具体对象与环境，composition root 必须消费 descriptor 并 fail-closed。
+  descriptor 都绑定具体对象与单一环境，生成到 candidate-scoped derived package；运行时 API 不接受 environment 参数，composition root 必须消费已编译 descriptor 并 fail-closed。
   `runtime.message.transport` 的 durable fact 使用 Streams，Pub/Sub 只用于显式 ephemeral
   hint；任何本地硬编码 enabled/adapter/timeout 选择均不属于可发布 Binding。
 - 被否决方案：按 service 命令入口维护消费者清单；由 runtime helper 默认选择 Redis
@@ -54,19 +56,18 @@
 
 <a id="dec-003"></a>
 ### DEC-003 Alpha/Beta/Gamma 受管非生产 Provider 与 Prod hosted receipt
-- 决策：Alpha、Beta、Gamma 的 required 验收由环境 Binding 显式选择受管
-  `protocol_fixture/local_*` Port 对等 Adapter；LLM/Search/Weather/Finance/Embedding/
-  Map/Carrier/Federated/Push 统一访问 Ops 外置、独立镜像的
-  `provider-protocol-substitute`，SMS 访问独立 TLS substitute，RTC 运行真实本地
-  LiveKit。App 与第一方 Service 制品不含 substitute 实现或 Provider 选择器。Prod
-  只选择真实厂商 Adapter 和生产租户，且其 OCI/SBOM/可达图排除 substitute。
+- 决策：Alpha、Beta、Gamma 的 required 验收由环境专属 Provider Workload 编入受管 `protocol_fixture/local_*` Port 对等 Adapter。
+- 非生产装配：LLM/Search/Weather/Finance/Embedding/Map/Carrier/Federated/Push 使用 nonprod Provider 镜像，SMS 使用独立 TLS capture 镜像，RTC 运行真实本地 LiveKit。
+- 生产装配：Prod Provider Workload 只编入真实厂商 Adapter 和生产租户。
+- 制品纯度：App 与第一方 Service 制品不含 Provider Adapter、substitute 实现或选择器，Prod OCI/SBOM/可达图排除 substitute。
 - 理由：Alpha/Beta/Gamma 需要无生产凭据、可重复、可故障注入的端云功能闭环；显式替代 Adapter 仍执行正式 Port、命令、事件、HTTP 与观测链，而 Prod hosted receipt 另行证明真实 SDK、鉴权、限流、回调、推送与 RTC 媒体链。
 - 被否决方案：以 nonprod evidence 提升 Prod readiness、在 Gamma 注入生产租户凭据、缺 Provider 时运行时 fallback、App/UI Mock，以及不经 Binding 的临时环境变量 override。
 - 约束与影响：governance 要求 Alpha/Beta/Gamma 选择 fixture/local_* Port 对等 Adapter；Prod 禁止 mock、fixture、recorder 与本地替代 Adapter。
 - 约束与影响：stackctl 只从 local topology 投影 Alpha/Beta/Gamma 的替代 endpoint。
   capability-scoped Secret Bundle、TLS 和渲染材料仅位于 target-scoped deploy root，
   `provider-config` 输出只含 digest/缺失 key；Prod 验证外部注入的生产 Provider 材料并拒绝替代 Adapter。
-- 约束与影响：九格证据绑定当前环境 config、candidate image、ContractGraph、Adapter digest 与真实 CaseResult；Gamma nonprod receipt 不能替代 Prod hosted receipt。Object Storage 与四环境 Elasticsearch Log sink 都必须登记 capability 并走 Binding。
+- 约束与影响：九格证据绑定当前环境 artifact、Provider Workload image、config、ContractGraph、Adapter digest 与真实 CaseResult；Gamma nonprod receipt 不能替代 Prod hosted receipt。Object Storage 与四环境 Elasticsearch Log sink 都必须登记 capability 并走单环境 Workload Binding。
+- 约束与影响：Provider Workload readiness 按 capability 单独查询，不以 integration-service 通用 health 代替；公开 App readiness wire 保持不变。
 - 关联要求：`REQ-006`
 - 关联验收：`SIT-002`、`SIT-003`
 

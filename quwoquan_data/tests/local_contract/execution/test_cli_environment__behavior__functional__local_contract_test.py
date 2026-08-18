@@ -32,6 +32,7 @@ from core import (  # noqa: E402
     python_environment,
     python_network,
 )
+from core import cursor_workspace_probe  # noqa: E402
 from core.control_types import AgentProvider  # noqa: E402
 
 
@@ -60,19 +61,26 @@ def test_cli_exposes_only_durable_task_facades():
         if line.strip().startswith("{") and line.strip().endswith("}")
     )
     assert choices.split(",") == [
-            "preflight",
-            "prepare-campaign",
-            "execute",
-            "drain-pool-delivery",
-            "discard",
+        "preflight",
+        "prepare-campaign",
+        "execute",
+        "drain-pool-delivery",
+        "discard",
         "supersede-execution",
         "plan-images",
-            "probe-images",
-            "acquire-images",
-            "prepare-image-supported-api-input",
-            "prepare-video-manual-input",
-            "acquire-videos",
+        "discover-image-supported-api-metadata",
+        "probe-images",
+        "acquire-images",
+        "rebind-image-acquisition-manifest",
+        "prepare-image-supported-api-input",
+        "prepare-video-manual-input",
+        "acquire-videos",
+        "rebind-video-acquisition-manifest",
         "review-asset",
+        "review-image-supported-api-input",
+        "author-image-supported-api-input",
+        "author-video-acquisition-input",
+        "review-video-acquisition-input",
         "reconcile-stale",
         "reconcile-failed-campaign",
         "reconcile-submissions",
@@ -179,6 +187,8 @@ def test_cli_exposes_only_durable_task_facades():
         "--kind",
         "--acquisition-root-ref",
         "--article-image-input",
+        "--alpha-m100-readiness-receipt",
+        "--alpha-m100-app-uat-receipt",
     ):
         assert forbidden not in prepare.stdout
 
@@ -217,6 +227,18 @@ def test_cli_exposes_only_durable_task_facades():
         "--output-root",
     ):
         assert forbidden not in review.stdout
+
+
+def test_prepare_campaign_help_forbids_alpha_acceptance_dispatch_inputs() -> None:
+    prepare = subprocess.run(
+        [sys.executable, str(CLI), "task", "prepare-campaign", "--help"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert prepare.returncode == 0, prepare.stderr
+    assert "--alpha-m100-readiness-receipt" not in prepare.stdout
+    assert "--alpha-m100-app-uat-receipt" not in prepare.stdout
 
 
 def test_python_runtime_prefers_data_venv_when_current_lacks_agent_modules(monkeypatch):
@@ -439,10 +461,25 @@ def test_environment_preflight_never_exports_key_to_parent_environment(
         seen.append(os.environ.get("CURSOR_API_KEY", ""))
         return {"checked": True, "ready": True, "started": True, "issues": []}
 
+    def catalog_probe(selection=None):
+        seen.append(os.environ.get("CURSOR_API_KEY", ""))
+        return {
+            "checked": True,
+            "ready": True,
+            "modelCount": 1,
+            "selectionSupport": {"checked": True, "supported": True, "issues": []},
+            "issues": [],
+        }
+
     monkeypatch.setattr(
         semantic_provider,
         "semantic_agent_startup_probe",
         startup_probe,
+    )
+    monkeypatch.setattr(
+        cursor_workspace_probe,
+        "cursor_model_catalog",
+        catalog_probe,
     )
     first = semantic_provider.semantic_agent_environment_preflight(
         provider=AgentProvider.CURSOR_SDK,
@@ -461,7 +498,9 @@ def test_environment_preflight_never_exports_key_to_parent_environment(
     )
 
     assert first["ready"] is True and second["ready"] is True
-    assert seen == ["", ""]
+    # Startup and catalog probes each run once per preflight; neither may see
+    # the key through the parent environment.
+    assert seen == ["", "", "", ""]
     assert "CURSOR_API_KEY" not in os.environ
     assert second["semanticAgentCredential"] == {
         "provider": "cursor_sdk",

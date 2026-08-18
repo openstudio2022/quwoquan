@@ -23,11 +23,7 @@ CONTENT_POST_PROJECTION_PATH = REPO_ROOT / (
     "content_post_projection.yaml"
 )
 SEARCH_PAGE_ID = "search.global"
-_SEARCH_OBJECT_TYPES = {
-    "article": "article",
-    "image": "photo",
-    "video": "video",
-}
+_SEARCH_CONTENT_TYPES = frozenset({"article", "image", "video"})
 
 
 def _operation_payload(response: Any, *, endpoint: str) -> dict[str, Any]:
@@ -89,13 +85,12 @@ def reject_unknown_content_post_projection_fields(
         )
 
 
-def _search_object_type(content_type: str) -> str:
-    try:
-        return _SEARCH_OBJECT_TYPES[content_type]
-    except KeyError as exc:
+def _search_content_type(content_type: str) -> str:
+    if content_type not in _SEARCH_CONTENT_TYPES:
         raise PostApiVerificationError(
             f"unsupported Content search projection type: {content_type}"
-        ) from exc
+        )
+    return content_type
 
 
 def _safe_evidence_value(value: object, *, default: str = "none") -> str:
@@ -141,18 +136,22 @@ def _search_hits(
     *,
     query: str,
     object_types: list[str],
+    content_types: list[str] | None = None,
     object_id: str,
 ) -> dict[str, Any]:
+    request_body: dict[str, Any] = {
+        "query": query,
+        "mode": "result",
+        "objectTypes": object_types,
+        "ids": [object_id],
+        "limit": 20,
+    }
+    if content_types:
+        request_body["contentTypes"] = content_types
     response = client.post_json(
         "search",
         page_id=SEARCH_PAGE_ID,
-        body={
-            "query": query,
-            "mode": "result",
-            "objectTypes": object_types,
-            "ids": [object_id],
-            "limit": 20,
-        },
+        body=request_body,
         session_header_name="X-Session-Id",
     )
     hits = response.payload.get("hits")
@@ -219,7 +218,8 @@ def verify_search_projection(
         proof = _search_hits(
             client,
             query=query,
-            object_types=[_search_object_type(case.content_type.value)],
+            object_types=["content.post"],
+            content_types=[_search_content_type(case.content_type.value)],
             object_id=case.post_id,
         )
         rows.append(
@@ -236,7 +236,7 @@ def verify_search_projection(
         proof = _search_hits(
             client,
             query=creator.display_name,
-            object_types=["user"],
+            object_types=["user.profile"],
             object_id=creator.persona_id,
         )
         rows.append(

@@ -15,8 +15,10 @@ from content.release.canonical.content_pool_record import (  # noqa: E402
     append_pool_record,
     build_canonical_pool_record,
     build_content_pool_fields,
+    iter_pool_records,
     latest_pool_record,
     pool_payload_digest,
+    read_pool_record_history,
 )
 from content.release.canonical.object_source_identity import (  # noqa: E402
     source_identity_digest,
@@ -24,7 +26,7 @@ from content.release.canonical.object_source_identity import (  # noqa: E402
 from content.release.canonical.object_transaction_contract import (  # noqa: E402
     ObjectTransactionError,
 )
-from core.source_digest import SourceDigest, content_source_revision  # noqa: E402
+from core.source_digest import SourceDefinitionSnapshot, content_source_revision  # noqa: E402
 
 
 def _attestation(tmp_path: Path) -> Path:
@@ -51,9 +53,12 @@ def _commercial_manifest() -> dict[str, object]:
 def _commercial_rights() -> list[dict[str, object]]:
     return [
         {
+            "distributionDecision": "commercial_allowed",
             "rightsAuditStatus": "verified",
             "authorizationProof": "https://example.test/proof",
             "licenseUrl": "https://example.test/terms",
+            "author": "Commercial Creator",
+            "licenseName": "Commercial License",
         }
     ]
 
@@ -82,8 +87,10 @@ def _source_attribution() -> dict[str, object]:
     }
 
 
-def _source_identity(execution_id: str) -> tuple[dict[str, str], SourceDigest]:
-    source_digest = SourceDigest("sha256:" + "1" * 64)
+def _source_identity(
+    execution_id: str,
+) -> tuple[dict[str, str], SourceDefinitionSnapshot]:
+    source_digest = SourceDefinitionSnapshot("sha256:" + "1" * 64)
     entity_catalog_digest = "sha256:" + "2" * 64
     identity = {
         "executionId": execution_id,
@@ -149,6 +156,67 @@ def _pre_contract_record(root: Path, *, migration_identity: bool) -> None:
     )
 
 
+def _legacy_author_record(*, payload_digest: str) -> dict[str, object]:
+    return {
+        "schema": POOL_RECORD_SCHEMA,
+        "objectType": "author",
+        "objectId": "builtin_travel_geo_editor",
+        "objectRef": "qwq_creator_geo_editor_001",
+        "status": "active",
+        "processResult": "completed",
+        "qualityResult": "passed",
+        "eligibilityResult": "passed",
+        "usageScope": None,
+        "evidenceRef": "evidence/system_builtin_author_admission.json",
+        "evidenceDigest": "sha256:" + "e" * 64,
+        "payloadDigest": payload_digest,
+        "version": 1,
+    }
+
+
+def _canonical_author_record(
+    *,
+    payload_digest: str,
+    record_sequence: int = 2,
+) -> dict[str, object]:
+    legacy = _legacy_author_record(payload_digest=payload_digest)
+    legacy.pop("version")
+    return {
+        **legacy,
+        "recordSequence": record_sequence,
+        "contentVersion": 1,
+    }
+
+
+def _write_author_history(
+    root: Path,
+    *,
+    legacy_payload_digest: str,
+    canonical_payload_digest: str | None = None,
+    canonical_record_sequence: int = 2,
+) -> None:
+    versions = root / "_pool/versions"
+    versions.mkdir(parents=True)
+    (versions / "1.json").write_text(
+        json.dumps(
+            _legacy_author_record(payload_digest=legacy_payload_digest),
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    if canonical_payload_digest is not None:
+        (versions / "2.json").write_text(
+            json.dumps(
+                _canonical_author_record(
+                    payload_digest=canonical_payload_digest,
+                    record_sequence=canonical_record_sequence,
+                ),
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+
 def test_unknown_usage_defaults_to_research(tmp_path: Path) -> None:
     source_manifest = {"contentId": "content-a", "version": 1}
     fields = build_content_pool_fields(
@@ -168,7 +236,7 @@ def test_unknown_usage_defaults_to_research(tmp_path: Path) -> None:
 def test_commercial_variant_requires_publication_proof(tmp_path: Path) -> None:
     manifest = _commercial_manifest()
     manifest["sourceAttribution"] = {}
-    with pytest.raises(ObjectTransactionError, match="COMMERCIAL_PROOF_INCOMPLETE"):
+    with pytest.raises(ObjectTransactionError, match="COMMERCIAL_VARIANT_NOT_ADMITTED"):
         build_content_pool_fields(
             source_manifest=manifest,
             canonical_ref="article/guide/a-commercial/1",
@@ -202,8 +270,10 @@ def test_existing_version_requires_exact_next_append(tmp_path: Path) -> None:
     assert fields["admission"]["usageScope"] == "commercial"
 
 
-def test_pre_sequence_record_shape_fails_closed(tmp_path: Path) -> None:
-    """Records lacking an explicit recordSequence stay rejected, never inferred."""
+def test_pre_sequence_record_is_excluded_but_does_not_block_new_identity(
+    tmp_path: Path,
+) -> None:
+    """Retired sidecars reserve identity without becoming pool admission."""
 
     stale = tmp_path / "publish/posts/article/pre-contract/1"
     stale.mkdir(parents=True)
@@ -212,20 +282,103 @@ def test_pre_sequence_record_shape_fails_closed(tmp_path: Path) -> None:
     )
     _pre_contract_record(stale, migration_identity=False)
 
-    with pytest.raises(ObjectTransactionError, match="RECORD_SEQUENCE_MISSING"):
+    fields = build_content_pool_fields(
+        source_manifest={"contentId": "modern-content", "version": 1},
+        canonical_ref="article/modern/1",
+        source_task_id="modern-task",
+        attestation_path=_attestation(tmp_path),
+        publish_root=tmp_path / "publish",
+        rights_rows=[],
+        reserved_identity=_reserved_identity("modern-content", 1),
+    )
+
+    assert fields["contentId"] == "modern-content"
+    assert fields["version"] == 1
+    with pytest.raises(ObjectTransactionError, match="VERSION_CONFLICT"):
         build_content_pool_fields(
-            source_manifest={"contentId": "modern-content", "version": 1},
+            source_manifest={"contentId": "pre-contract-content", "version": 1},
             canonical_ref="article/modern/1",
             source_task_id="modern-task",
             attestation_path=_attestation(tmp_path),
             publish_root=tmp_path / "publish",
             rights_rows=[],
-            reserved_identity=_reserved_identity("modern-content", 1),
+            reserved_identity=_reserved_identity("pre-contract-content", 1),
         )
 
 
-def test_retired_migration_identity_record_fails_closed(tmp_path: Path) -> None:
-    """Migration-kind source identities are no longer a valid pool record shape."""
+def test_exact_legacy_author_record_isolated_by_canonical_successor(
+    tmp_path: Path,
+) -> None:
+    """A proven v2 repair admits the author without rewriting invalid v1."""
+
+    root = tmp_path / "publish/creators/qwq_creator_geo_editor_001"
+    payload_digest = "sha256:" + "a" * 64
+    _write_author_history(
+        root,
+        legacy_payload_digest=payload_digest,
+        canonical_payload_digest=payload_digest,
+    )
+
+    history = read_pool_record_history(root, object_type="author")
+
+    assert [row["recordSequence"] for row in history.records] == [2]
+    assert len(history.exclusions) == 1
+    exclusion = history.exclusions[0]
+    assert exclusion.record_ref == "_pool/versions/1.json"
+    assert exclusion.record_sequence == 1
+    assert exclusion.reason == "DATA.POOL.RECORD_SEQUENCE_MISSING"
+    assert exclusion.superseded_by == 2
+    assert [row["recordSequence"] for row in iter_pool_records(
+        root, object_type="author"
+    )] == [2]
+    assert latest_pool_record(root, "author")["recordSequence"] == 2
+
+
+def test_all_invalid_author_history_remains_excluded(tmp_path: Path) -> None:
+    root = tmp_path / "publish/creators/qwq_creator_geo_editor_001"
+    _write_author_history(
+        root,
+        legacy_payload_digest="sha256:" + "a" * 64,
+    )
+
+    history = read_pool_record_history(root, object_type="author")
+
+    assert history.records == ()
+    assert history.exclusions[0].superseded_by is None
+    with pytest.raises(ObjectTransactionError, match="RECORD_SEQUENCE_MISSING"):
+        latest_pool_record(root, "author")
+
+
+def test_legacy_author_digest_conflict_remains_blocking(tmp_path: Path) -> None:
+    root = tmp_path / "publish/creators/qwq_creator_geo_editor_001"
+    _write_author_history(
+        root,
+        legacy_payload_digest="sha256:" + "a" * 64,
+        canonical_payload_digest="sha256:" + "b" * 64,
+    )
+
+    with pytest.raises(ObjectTransactionError, match="RECORD_DIGEST_CONFLICT"):
+        read_pool_record_history(root, object_type="author")
+
+
+def test_record_path_and_embedded_sequence_conflict_remains_blocking(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "publish/creators/qwq_creator_geo_editor_001"
+    payload_digest = "sha256:" + "a" * 64
+    _write_author_history(
+        root,
+        legacy_payload_digest=payload_digest,
+        canonical_payload_digest=payload_digest,
+        canonical_record_sequence=3,
+    )
+
+    with pytest.raises(ObjectTransactionError, match="RECORD_SEQUENCE_CONFLICT"):
+        read_pool_record_history(root, object_type="author")
+
+
+def test_retired_migration_identity_is_collision_only(tmp_path: Path) -> None:
+    """Retired identity stays non-admitted but cannot block unrelated content."""
 
     stale = tmp_path / "publish/posts/article/pre-contract/1"
     stale.mkdir(parents=True)
@@ -234,15 +387,28 @@ def test_retired_migration_identity_record_fails_closed(tmp_path: Path) -> None:
     )
     _pre_contract_record(stale, migration_identity=True)
 
+    fields = build_content_pool_fields(
+        source_manifest={"contentId": "modern-content", "version": 1},
+        canonical_ref="article/modern/1",
+        source_task_id="modern-task",
+        attestation_path=_attestation(tmp_path),
+        publish_root=tmp_path / "publish",
+        rights_rows=[],
+        reserved_identity=_reserved_identity("modern-content", 1),
+    )
+
+    assert fields["contentId"] == "modern-content"
     with pytest.raises(ObjectTransactionError, match="SOURCE_IDENTITY_INVALID"):
+        latest_pool_record(stale, "content")
+    with pytest.raises(ObjectTransactionError, match="VERSION_CONFLICT"):
         build_content_pool_fields(
-            source_manifest={"contentId": "modern-content", "version": 1},
+            source_manifest={"contentId": "pre-contract-content", "version": 1},
             canonical_ref="article/modern/1",
             source_task_id="modern-task",
             attestation_path=_attestation(tmp_path),
             publish_root=tmp_path / "publish",
             rights_rows=[],
-            reserved_identity=_reserved_identity("modern-content", 1),
+            reserved_identity=_reserved_identity("pre-contract-content", 1),
         )
 
 

@@ -274,6 +274,109 @@ def _current_runtime_health_scope(target_name: str) -> str:
     return "full"
 
 
+def _normal_down_structurally_impossible(
+    target_name: str,
+    startup: Mapping[str, Any],
+) -> str:
+    """Name the sealed-topology defect that makes candidate-bound down unusable.
+
+    Normal down replays the receipt's own candidate topology under the receipt's
+    own workload. If that projection merges into a service carrying neither an
+    image nor a build context and no gating profile, `docker compose` rejects
+    the whole project, so down can never converge and up refuses to run before
+    down. Returning a non-empty reason is the objective evidence that the
+    orphan path is the only remaining governed exit; returning "" keeps the
+    normal path mandatory.
+    """
+
+    import yaml
+
+    import quwoquan_ops.cli.stackctl as _stackctl
+    from quwoquan_ops.cli.lib.runtime_topology_package import (
+        RuntimeTopologyPackageError,
+        load_runtime_topology_package,
+    )
+
+    candidate_digest = str(startup.get("candidateDigest") or "").strip()
+    workload = str(startup.get("workload") or "full").strip()
+    if not candidate_digest:
+        return ""
+    try:
+        candidate_root = _stackctl.deployment_candidate_dir(
+            target_name,
+            candidate_digest,
+        ).resolve()
+        topology = load_runtime_topology_package(
+            candidate_root,
+            environment=target_name.removesuffix("-local"),
+            target=target_name,
+            workload=workload,
+        )
+    except (OSError, RuntimeTopologyPackageError, ValueError):
+        return ""
+    merged: dict[str, dict[str, Any]] = {}
+    for path in topology["composeFiles"]:
+        try:
+            document = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except (OSError, yaml.YAMLError):
+            return ""
+        if not isinstance(document, Mapping):
+            return ""
+        for name, definition in (document.get("services") or {}).items():
+            if isinstance(definition, Mapping):
+                merged.setdefault(str(name), {}).update(definition)
+    broken = sorted(
+        name
+        for name, definition in merged.items()
+        if "image" not in definition
+        and "build" not in definition
+        and not definition.get("profiles")
+    )
+    if not broken:
+        return ""
+    return (
+        f"candidate {candidate_digest} projects workload={workload} into an "
+        "invalid Compose project; services without image, build or gating "
+        "profile: " + ",".join(broken)
+    )
+
+
+def _close_orphan_reclaimed_startup_receipt(
+    target_name: str,
+    startup: Mapping[str, Any] | None,
+) -> str:
+    """Retire a non-stopped receipt whose runtime the orphan path just removed.
+
+    A receipt admitted through the structurally-impossible-down exit still
+    claims live resources after teardown removed them. Leaving it non-stopped
+    would keep blocking every later up, so the receipt is transitioned to
+    stopped with the reclaim named as its failure. Already-stopped receipts and
+    absent receipts need nothing.
+    """
+
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    if not isinstance(startup, Mapping):
+        return ""
+    status = str(startup.get("status") or "").strip()
+    if status == "stopped":
+        return ""
+    attempt_id = str(startup.get("attemptId") or "").strip()
+    if not attempt_id:
+        return ""
+    _stackctl.transition_startup_attempt(
+        env=str(startup.get("env") or target_name.removesuffix("-local")),
+        target=target_name,
+        attempt_id=attempt_id,
+        status="stopped",
+        failure=(
+            "reclaimed by governed orphan Compose teardown; the receipt's own "
+            "candidate topology could not produce a valid Compose project"
+        ),
+    )
+    return f"retired startup receipt status={status} attempt={attempt_id}"
+
+
 def _orphan_compose_runtime_gate(target_name: str) -> dict[str, Any] | None:
     """Return the stopped receipt when normal candidate-bound down cannot apply."""
     import quwoquan_ops.cli.stackctl as _stackctl

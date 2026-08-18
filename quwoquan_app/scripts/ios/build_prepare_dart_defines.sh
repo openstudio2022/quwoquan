@@ -113,7 +113,6 @@ required_define_keys = {
     "APP_RUNTIME_ENV",
     "QWQ_APP_LAUNCH_MODE",
     "APP_LAUNCH_POLICY",
-    "CONTENT_BINDING_STATE",
     "CLOUD_GATEWAY_BASE_URL",
     "PUBLIC_WEB_BASE_URL",
     "APP_DOWNLOAD_BASE_URL",
@@ -125,7 +124,6 @@ expected_define_values = {
     "APP_RUNTIME_ENV": str(handoff.get("environment") or ""),
     "QWQ_APP_LAUNCH_MODE": str(handoff.get("launchMode") or ""),
     "APP_LAUNCH_POLICY": str(handoff.get("launchPolicy") or ""),
-    "CONTENT_BINDING_STATE": str(handoff.get("contentBindingState") or ""),
     "CLOUD_GATEWAY_BASE_URL": str(handoff.get("recoveryBaseUrl") or ""),
     "PUBLIC_WEB_BASE_URL": str(handoff.get("publicWebBaseUrl") or ""),
     "APP_DOWNLOAD_BASE_URL": str(handoff.get("appDownloadBaseUrl") or ""),
@@ -149,27 +147,12 @@ for environment_key, handoff_key in digest_fields.items():
     if not value.startswith("sha256:") or len(value) != 71:
         fail(f"canonical launcher handoff {handoff_key} is invalid")
 
-content_fields = {
-    "QWQ_CONTENT_RELEASE_ID": "contentReleaseId",
-    "QWQ_CONTENT_MANIFEST_DIGEST": "contentManifestDigest",
-    "QWQ_CONTENT_READINESS_RECEIPT_DIGEST": "contentReadinessReceiptDigest",
-}
-content_values = [str(handoff.get(field) or "") for field in content_fields.values()]
-binding_state = str(handoff.get("contentBindingState") or "")
-if binding_state == "bound" and not all(content_values):
-    fail("bound canonical launcher handoff has incomplete content identity")
-if binding_state == "unbound" and any(content_values):
-    fail("unbound canonical launcher handoff contains content identity")
-if binding_state not in {"bound", "unbound"}:
-    fail("canonical launcher handoff contentBindingState is invalid")
-
 identity_fields = {
     "QWQ_APP_RUNTIME_ENV": "environment",
     "QWQ_LAUNCH_TARGET": "target",
     "QWQ_APP_LAUNCH_MODE": "launchMode",
     "QWQ_APP_LAUNCH_POLICY": "launchPolicy",
     **digest_fields,
-    **content_fields,
 }
 for environment_key, handoff_key in identity_fields.items():
     supplied = os.environ.get(environment_key, "").strip()
@@ -207,10 +190,6 @@ exports = {
         environment_key: handoff[handoff_key]
         for environment_key, handoff_key in digest_fields.items()
     },
-    **{
-        environment_key: str(handoff.get(handoff_key) or "")
-        for environment_key, handoff_key in content_fields.items()
-    },
     "DIRECT_RUNTIME_DEFINES_JSON": json.dumps(
         defines,
         ensure_ascii=False,
@@ -229,14 +208,7 @@ PY
   LAUNCH_MODE="$QWQ_APP_LAUNCH_MODE"
   echo "[ios-dart-defines] using canonical launcher handoff for $QWQ_LAUNCH_TARGET." >&2
 fi
-DIRECT_ENVIRONMENT="${QWQ_ENVIRONMENT:-${EXISTING_RUNTIME_ENV:-alpha}}"
-case "$DIRECT_ENVIRONMENT" in
-  alpha|beta|gamma) ;;
-  *)
-    echo "[ios-dart-defines] GATE_BLOCK: QWQ_ENVIRONMENT must be alpha|beta|gamma." >&2
-    exit 2
-    ;;
-esac
+DIRECT_ENVIRONMENT="${QWQ_ENVIRONMENT:-${QWQ_APP_RUNTIME_ENV:-${EXISTING_RUNTIME_ENV:-alpha}}}"
 DIRECT_TARGET="${DIRECT_ENVIRONMENT}-local"
 LAUNCH_POLICY="${QWQ_APP_LAUNCH_POLICY:-${EXISTING_LAUNCH_POLICY:-test_live}}"
 
@@ -298,14 +270,6 @@ if payload.get("status") not in {"passed", "warning"}:
     raise SystemExit("App Debug preflight did not allow test_live")
 for warning in payload.get("warnings") or []:
     print(f"[ios-dart-defines] WARN: {warning}", file=sys.stderr)
-for key, field in (
-    ("QWQ_CONTENT_RELEASE_ID", "releaseId"),
-    ("QWQ_CONTENT_MANIFEST_DIGEST", "manifestDigest"),
-    ("QWQ_CONTENT_READINESS_RECEIPT_DIGEST", "readinessReceiptDigest"),
-):
-    value = str(payload.get(field) or "").strip()
-    if value:
-        print(f"export {key}={shlex.quote(value)}")
 PY
   )" || {
     echo "[ios-dart-defines] GATE_BLOCK: App content preflight returned an invalid receipt." >&2
@@ -322,14 +286,6 @@ PY
     --app-instance-id direct-flutter-run
     --app-instance-namespace direct-flutter-run
   )
-  if [[ -n "${QWQ_CONTENT_RELEASE_ID:-}" ]]; then
-    DIRECT_HANDOFF_COMMAND+=(
-      --content-release-id "$QWQ_CONTENT_RELEASE_ID"
-      --content-manifest-digest "$QWQ_CONTENT_MANIFEST_DIGEST"
-      --content-readiness-receipt-digest
-      "$QWQ_CONTENT_READINESS_RECEIPT_DIGEST"
-    )
-  fi
   if ! DIRECT_HANDOFF_JSON="$(
     PYTHONDONTWRITEBYTECODE=1 "${DIRECT_HANDOFF_COMMAND[@]}"
   )"; then
@@ -352,11 +308,6 @@ values = {
     "QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST": handoff["runtimeConfigDigest"],
     "QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST": handoff[
         "effectiveLaunchManifestDigest"
-    ],
-    "QWQ_CONTENT_RELEASE_ID": handoff["contentReleaseId"],
-    "QWQ_CONTENT_MANIFEST_DIGEST": handoff["contentManifestDigest"],
-    "QWQ_CONTENT_READINESS_RECEIPT_DIGEST": handoff[
-        "contentReadinessReceiptDigest"
     ],
     "DIRECT_RUNTIME_DEFINES_JSON": json.dumps(
         handoff["dartDefines"],
@@ -403,7 +354,7 @@ PY
       consumer-lease acquire --target "$DIRECT_TARGET" \
       --platform ios-simulator --device "$DIRECT_SIMULATOR_UDID" \
       --consumer "direct-flutter-run" \
-      --bundle-id "${PRODUCT_BUNDLE_IDENTIFIER:-com.example.quwoquanApp}" \
+      --bundle-id "${PRODUCT_BUNDLE_IDENTIFIER:-}" \
       --ports "" \
       --handoff-digest "$QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST" >/dev/null; then
       echo "[ios-dart-defines] WARN: Simulator runtime lease is unavailable; compile-first test_live continues." >&2
@@ -439,6 +390,38 @@ case "$ENV_NAME" in
     exit 2
     ;;
 esac
+
+# App package identity is immutable build input selected by the Xcode flavor
+# configuration before this phase runs. This phase only verifies that the selected
+# configuration and canonical handoff agree; it never mutates future build settings.
+if [[ -n "${PRODUCT_BUNDLE_IDENTIFIER:-}" ]]; then
+  case "${CONFIGURATION:-}" in
+    Debug-*) QWQ_EXPECTED_BUILD_MODE="debug"; QWQ_EXPECTED_CONFIGURATION_PREFIX="Debug" ;;
+    Profile-*) QWQ_EXPECTED_BUILD_MODE="profile"; QWQ_EXPECTED_CONFIGURATION_PREFIX="Profile" ;;
+    Release-*) QWQ_EXPECTED_BUILD_MODE="release"; QWQ_EXPECTED_CONFIGURATION_PREFIX="Release" ;;
+    *)
+      echo "[ios-dart-defines] GATE_BLOCK: iOS builds must use a generated <BuildMode>-<environment> configuration." >&2
+      exit 2
+      ;;
+  esac
+  QWQ_EXPECTED_CONFIGURATION_NAME="$QWQ_EXPECTED_CONFIGURATION_PREFIX-$ENV_NAME"
+  if [[ "${CONFIGURATION:-}" != "$QWQ_EXPECTED_CONFIGURATION_NAME" ]]; then
+    echo "[ios-dart-defines] GATE_BLOCK: Xcode configuration ${CONFIGURATION:-<missing>} does not match environment=$ENV_NAME buildMode=$QWQ_EXPECTED_BUILD_MODE; select flavor $ENV_NAME before rebuilding." >&2
+    exit 2
+  fi
+  QWQ_EXPECTED_BUNDLE_ID="$(
+    PYTHONPATH="$APP_DIR/..${PYTHONPATH:+:$PYTHONPATH}" PYTHONDONTWRITEBYTECODE=1 \
+      "$RUNTIME_PYTHON" -c "from quwoquan_ops.cli.lib.app_identity import application_id_for; import sys; print(application_id_for('ios', sys.argv[1], sys.argv[2]))" \
+      "$ENV_NAME" "$QWQ_EXPECTED_BUILD_MODE"
+  )" || {
+    echo "[ios-dart-defines] GATE_BLOCK: failed to derive the expected bundle id for environment=$ENV_NAME buildMode=$QWQ_EXPECTED_BUILD_MODE." >&2
+    exit 2
+  }
+  if [[ "$PRODUCT_BUNDLE_IDENTIFIER" != "$QWQ_EXPECTED_BUNDLE_ID" ]]; then
+    echo "[ios-dart-defines] GATE_BLOCK: resolved bundle id $PRODUCT_BUNDLE_IDENTIFIER does not match $QWQ_EXPECTED_BUNDLE_ID for environment=$ENV_NAME; generated flavor identity is stale." >&2
+    exit 2
+  fi
+fi
 
 if [[ -z "$LAUNCH_MODE" ]]; then
   echo "[ios-dart-defines] GATE_BLOCK: canonical launch mode is required; use ./run.sh -d <device>." >&2
@@ -482,15 +465,6 @@ runtime_config_digest = os.environ.get(
     "QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST",
     "",
 ).strip()
-content_release_id = os.environ.get("QWQ_CONTENT_RELEASE_ID", "").strip()
-content_manifest_digest = os.environ.get(
-    "QWQ_CONTENT_MANIFEST_DIGEST",
-    "",
-).strip()
-content_readiness_receipt_digest = os.environ.get(
-    "QWQ_CONTENT_READINESS_RECEIPT_DIGEST",
-    "",
-).strip()
 if not launch_target:
     print(
         "[ios-dart-defines] FAIL: canonical QWQ_LAUNCH_TARGET is required.",
@@ -508,26 +482,6 @@ for label, value in (
             file=sys.stderr,
         )
         raise SystemExit(5)
-if runtime_defines.get("APP_LAUNCH_POLICY", "") == "prod_release":
-    if not content_release_id:
-        print(
-            "[ios-dart-defines] FAIL: release-bound contentReleaseId is required.",
-            file=sys.stderr,
-        )
-        raise SystemExit(5)
-    for label, value in (
-        ("QWQ_CONTENT_MANIFEST_DIGEST", content_manifest_digest),
-        (
-            "QWQ_CONTENT_READINESS_RECEIPT_DIGEST",
-            content_readiness_receipt_digest,
-        ),
-    ):
-        if not value.startswith("sha256:") or len(value) != 71:
-            print(
-                f"[ios-dart-defines] FAIL: canonical {label} is required.",
-                file=sys.stderr,
-            )
-            raise SystemExit(5)
 required_keys = {
     "APP_RUNTIME_ENV",
     "CLOUD_GATEWAY_BASE_URL",
@@ -541,7 +495,6 @@ required_keys = {
     "MEDIA_UPLOAD_BASE_URL",
     "RTC_MEDIA_CONNECTION_URL",
     "APP_LAUNCH_POLICY",
-    "CONTENT_BINDING_STATE",
 }
 native_runtime_keys = required_keys | {"QWQ_APP_LAUNCH_MODE"}
 
@@ -617,11 +570,6 @@ if target_build_dir and resources_folder:
     resource_root.mkdir(parents=True, exist_ok=True)
     manifest_path = resource_root / "QWQNativeRuntime.plist"
     temporary_path = manifest_path.with_suffix(".plist.tmp")
-    content_binding = {
-        "contentReleaseId": content_release_id,
-        "contentManifestDigest": content_manifest_digest,
-        "contentReadinessReceiptDigest": content_readiness_receipt_digest,
-    }
     with temporary_path.open("wb") as stream:
         plistlib.dump(
             {
@@ -633,9 +581,6 @@ if target_build_dir and resources_folder:
                 "entrypoint": native_entrypoint,
                 "launchMode": runtime_defines.get("QWQ_APP_LAUNCH_MODE", ""),
                 "launchPolicy": runtime_defines.get("APP_LAUNCH_POLICY", ""),
-                "contentBindingState": runtime_defines.get(
-                    "CONTENT_BINDING_STATE", ""
-                ),
                 "runtimeDefines": {
                     key: merged[key]
                     for key in sorted(native_runtime_keys)
@@ -644,11 +589,6 @@ if target_build_dir and resources_folder:
                 "recoveryBaseURL": merged["CLOUD_GATEWAY_BASE_URL"],
                 "publicWebURL": merged["PUBLIC_WEB_BASE_URL"],
                 "appDownloadBaseURL": merged["APP_DOWNLOAD_BASE_URL"],
-                **{
-                    key: value
-                    for key, value in content_binding.items()
-                    if value
-                },
             },
             stream,
             sort_keys=True,

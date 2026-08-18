@@ -104,8 +104,6 @@
         "sourceReviewRequestSha256",
         "sourceReviewAttemptRef",
         "sourceReviewAttemptSha256",
-        "sourceCapacityReceiptRef",
-        "sourceCapacityReceiptSha256",
         "provider",
         "model",
         "runId",
@@ -118,10 +116,8 @@
         "sourceReviewRequestSha256": {"$ref": "#/$defs/sha256"},
         "sourceReviewAttemptRef": {"$ref": "#/$defs/relativeRef"},
         "sourceReviewAttemptSha256": {"$ref": "#/$defs/sha256"},
-        "sourceCapacityReceiptRef": {"$ref": "#/$defs/relativeRef"},
-        "sourceCapacityReceiptSha256": {"$ref": "#/$defs/sha256"},
         "provider": {"const": "cursor_sdk"},
-        "model": {"const": "grok-4.5"},
+        "model": {"type": "string", "pattern": "^grok-"},
         "runId": {"type": "string", "minLength": 1},
         "resultSha256": {"$ref": "#/$defs/sha256"}
       }

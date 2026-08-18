@@ -5,9 +5,13 @@ from pathlib import Path
 
 import pytest
 from content.execution.campaign import external_input_runtime as campaign_external_input_runtime
-from content.execution.controller.execute.materialization import _video_source_qualifier
+from content.execution.controller.execute import materialization
+from content.execution.controller.execute.materialization import (
+    _video_source_qualification_binding,
+    _video_source_qualifier,
+)
 from content.execution.planning.source_selection import TargetSourceCandidate
-from content.source import professional_video_receipt
+from content.source import professional_video_spec_index
 from content.source.research import auto_plan_video
 
 
@@ -59,7 +63,7 @@ def test_frozen_professional_video_qualifier_bypasses_commons(
         ]
 
     monkeypatch.setattr(
-        professional_video_receipt,
+        professional_video_spec_index,
         "acquired_video_specs_for_entity",
         acquired,
     )
@@ -93,7 +97,7 @@ def test_frozen_professional_video_missing_entity_fails_closed_without_commons(
         lambda *_args, **_kwargs: _VideoContext(),
     )
     monkeypatch.setattr(
-        professional_video_receipt,
+        professional_video_spec_index,
         "acquired_video_specs_for_entity",
         lambda *_args, **_kwargs: [],
     )
@@ -132,3 +136,68 @@ def test_video_qualifier_keeps_commons_fallback_without_external_receipt(
         _target(),
     )
     assert result.accepted is True
+
+
+def test_video_binding_builds_one_verified_index_for_all_qualifier_calls(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        campaign_external_input_runtime,
+        "bound_runtime_external_input_context",
+        lambda *_args, **_kwargs: _VideoContext(),
+    )
+    builds: list[tuple[tuple[str, ...], Path]] = []
+    lookups: list[tuple[str, ...]] = []
+
+    class FakeIndex:
+        entity_names = ("西湖", "都江堰")
+        accepted_asset_count = 3
+        work_unit_candidates = ()
+
+        def specs_for_names(self, entity_names: tuple[str, ...]):
+            lookups.append(entity_names)
+            if "西湖" not in entity_names:
+                return []
+            return [
+                {
+                    "title": "西湖热门旅行实拍",
+                    "assetUrl": "cas://sha256/" + "a" * 64,
+                }
+            ]
+
+    def build(receipt_refs, *, root, work_unit_bindings):
+        assert work_unit_bindings == {}
+        builds.append((tuple(receipt_refs), root))
+        return FakeIndex()
+
+    monkeypatch.setattr(
+        professional_video_spec_index,
+        "build_acquired_video_spec_index",
+        build,
+    )
+    monkeypatch.setattr(
+        materialization,
+        "_video_work_unit_bindings",
+        lambda *_args, **_kwargs: {},
+    )
+
+    binding = _video_source_qualification_binding(
+        "20260814--travel-video-workload-video-15--china--scale-002"
+    )
+    assert binding.candidate_names == ("西湖", "都江堰")
+    assert binding.available_supply_count == 3
+    assert binding.qualifier(_target()).accepted is True
+    assert binding.qualifier(
+        TargetSourceCandidate(
+            name="未覆盖实体",
+            aliases=(),
+            geo_tag_ref="Topic/地理/中国",
+        )
+    ).accepted is False
+    assert builds == [
+        (
+            ("receipts/frozen-video.json",),
+            Path("/capsule/external-inputs/video"),
+        )
+    ]
+    assert lookups == [("西湖", "杭州西湖"), ("未覆盖实体",)]

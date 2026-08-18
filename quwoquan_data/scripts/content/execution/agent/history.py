@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Iterable
+from typing import TYPE_CHECKING, Iterable, Mapping
 
 from core.codec import JsonObject, JsonObjectDecodeError
 from core.control_types import (
@@ -44,13 +44,9 @@ def _required_boolean(value: object, *, field_name: str) -> bool:
 
 @dataclass(frozen=True, slots=True)
 class ManagedAgentScheduler:
-    requested_max_workers: int
     effective_worker_count: int
-    local_cursor_max_workers: int
     runtime: str
     prompt_count: int
-    estimated_min_waves: int
-    lane_limits: tuple[tuple[str, int], ...]
     provider: AgentProvider
     started_at: str
     finished_at: str
@@ -58,11 +54,8 @@ class ManagedAgentScheduler:
 
     def __post_init__(self) -> None:
         for field_name in (
-            "requested_max_workers",
             "effective_worker_count",
-            "local_cursor_max_workers",
             "prompt_count",
-            "estimated_min_waves",
         ):
             _non_negative_int(getattr(self, field_name), field_name=field_name)
         _non_negative_float(self.elapsed_seconds, field_name="elapsed_seconds")
@@ -70,45 +63,18 @@ class ManagedAgentScheduler:
             raise ValueError("scheduler runtime and timestamps are required")
         if not isinstance(self.provider, AgentProvider):
             raise TypeError("scheduler provider must be AgentProvider")
-        for lane, limit in self.lane_limits:
-            if not lane or _non_negative_int(limit, field_name=f"lane_limits.{lane}") < 1:
-                raise ValueError("scheduler lane limits must be positive")
 
     @classmethod
     def from_document(cls, value: object, *, label: str) -> "ManagedAgentScheduler":
         try:
             doc = JsonObject.from_value(value, label=label)
-            lane_values = doc.value("laneLimits")
-            lane_doc = JsonObject.from_value(lane_values, label=f"{label}.laneLimits")
-            lane_limits = tuple(
-                sorted(
-                    (
-                        lane,
-                        _non_negative_int(limit, field_name=f"laneLimits.{lane}"),
-                    )
-                    for lane, limit in lane_doc.to_document().items()
-                )
-            )
             return cls(
-                requested_max_workers=_non_negative_int(
-                    doc.value("requestedMaxWorkers"),
-                    field_name="requestedMaxWorkers",
-                ),
                 effective_worker_count=_non_negative_int(
                     doc.value("effectiveWorkerCount"),
                     field_name="effectiveWorkerCount",
                 ),
-                local_cursor_max_workers=_non_negative_int(
-                    doc.value("localCursorMaxWorkers"),
-                    field_name="localCursorMaxWorkers",
-                ),
                 runtime=doc.string("runtime").strip(),
                 prompt_count=_non_negative_int(doc.value("promptCount"), field_name="promptCount"),
-                estimated_min_waves=_non_negative_int(
-                    doc.value("estimatedMinWaves"),
-                    field_name="estimatedMinWaves",
-                ),
-                lane_limits=lane_limits,
                 provider=AgentProvider(doc.string("agentProvider")),
                 started_at=doc.string("startedAt").strip(),
                 finished_at=doc.string("finishedAt").strip(),
@@ -122,13 +88,9 @@ class ManagedAgentScheduler:
 
     def to_document(self) -> dict[str, object]:
         return {
-            "requestedMaxWorkers": self.requested_max_workers,
             "effectiveWorkerCount": self.effective_worker_count,
-            "localCursorMaxWorkers": self.local_cursor_max_workers,
             "runtime": self.runtime,
             "promptCount": self.prompt_count,
-            "estimatedMinWaves": self.estimated_min_waves,
-            "laneLimits": dict(self.lane_limits),
             "agentProvider": self.provider.value,
             "startedAt": self.started_at,
             "finishedAt": self.finished_at,
@@ -146,6 +108,10 @@ class ManagedAgentRunRecord:
     started_count: int
     finished_count: int
     infrastructure_failures: int
+    successful_refs: tuple[str, ...]
+    excluded_refs: tuple[str, ...]
+    shortfall_count: int
+    repair_issue_records: tuple[Mapping[str, object], ...]
     outcomes: tuple[ManagedAgentJobOutcome, ...]
     finished_at: str
     recovered: bool = False
@@ -164,14 +130,27 @@ class ManagedAgentRunRecord:
             "started_count",
             "finished_count",
             "infrastructure_failures",
+            "shortfall_count",
             "cancelled_queued_job_count",
             "cancelled_active_job_count",
         ):
             _non_negative_int(getattr(self, field_name), field_name=field_name)
         if self.finished_count > self.job_count or self.started_count > self.job_count:
             raise ValueError("managed agent run counts cannot exceed job_count")
+        if self.shortfall_count != max(0, self.planned_job_count - self.finished_count):
+            raise ValueError("managed agent run shortfall_count must be derived from planned/finished")
         if len(self.outcomes) != self.job_count:
             raise ValueError("managed agent run outcomes must match job_count")
+        if any(not ref.strip() for ref in (*self.successful_refs, *self.excluded_refs)):
+            raise ValueError("managed agent run evidence refs must be non-empty")
+        if len(set(self.successful_refs)) != len(self.successful_refs):
+            raise ValueError("managed agent run successful_refs must be unique")
+        if len(set(self.excluded_refs)) != len(self.excluded_refs):
+            raise ValueError("managed agent run excluded_refs must be unique")
+        if set(self.successful_refs).intersection(self.excluded_refs):
+            raise ValueError("managed agent run successful/excluded refs must be disjoint")
+        if any(not isinstance(issue, Mapping) for issue in self.repair_issue_records):
+            raise TypeError("managed agent run repair_issue_records must be objects")
         if not self.finished_at:
             raise ValueError("managed agent run finished_at is required")
         if self.recovered and not (self.recovered_at and self.recovery_reason):
@@ -182,6 +161,14 @@ class ManagedAgentRunRecord:
             self.interrupt_reason
         ):
             raise ValueError("interrupted managed agent run requires an interrupt reason")
+        if self.status is ManagedAgentCheckpointStatus.COMPLETED and self.shortfall_count:
+            raise ValueError("completed managed agent run cannot have shortfall")
+        if self.status is ManagedAgentCheckpointStatus.PARTIAL and not (
+            0 < self.finished_count < self.planned_job_count
+        ):
+            raise ValueError("partial managed agent run requires success and shortfall")
+        if self.status is ManagedAgentCheckpointStatus.BLOCKED and self.finished_count:
+            raise ValueError("blocked managed agent run cannot contain successful jobs")
         if any(pid < 1 for pid in self.terminated_subprocess_pids):
             raise ValueError("terminated subprocess pids must be positive")
 
@@ -195,6 +182,11 @@ class ManagedAgentRunRecord:
             raw_pids = doc.value("terminatedSubprocessPids")
             if not isinstance(raw_pids, list):
                 raise ValueError("terminatedSubprocessPids must be an array")
+            raw_repair_issues = doc.value("repairIssueRecords")
+            if not isinstance(raw_repair_issues, list) or not all(
+                isinstance(item, Mapping) for item in raw_repair_issues
+            ):
+                raise ValueError("repairIssueRecords must be an object array")
             return cls(
                 stage=ExecutionStage(doc.string("stage")),
                 job_count=_non_negative_int(doc.value("jobCount"), field_name="jobCount"),
@@ -213,6 +205,13 @@ class ManagedAgentRunRecord:
                     doc.value("infrastructureFailures"),
                     field_name="infrastructureFailures",
                 ),
+                successful_refs=doc.string_sequence("successfulRefs"),
+                excluded_refs=doc.string_sequence("excludedRefs"),
+                shortfall_count=_non_negative_int(
+                    doc.value("shortfallCount"),
+                    field_name="shortfallCount",
+                ),
+                repair_issue_records=tuple(dict(item) for item in raw_repair_issues),
                 outcomes=tuple(
                     ManagedAgentJobOutcome.from_document(
                         item,
@@ -252,6 +251,10 @@ class ManagedAgentRunRecord:
             "startedCount": self.started_count,
             "finishedCount": self.finished_count,
             "infrastructureFailures": self.infrastructure_failures,
+            "successfulRefs": list(self.successful_refs),
+            "excludedRefs": list(self.excluded_refs),
+            "shortfallCount": self.shortfall_count,
+            "repairIssueRecords": [dict(issue) for issue in self.repair_issue_records],
             "outcomes": [outcome.to_document() for outcome in self.outcomes],
             "finishedAt": self.finished_at,
             "recovered": self.recovered,

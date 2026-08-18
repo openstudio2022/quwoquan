@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import json
 import shutil
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -21,7 +22,11 @@ from content.source.independent_asset_review import (
     write_independent_asset_review_receipt,
 )
 from content.source.independent_asset_review_contract import canonical_digest
-from content.source.professional_image_acquisition import acquire_professional_images
+from content.source.professional_image_acquisition import (
+    ProfessionalImageAcquisitionError,
+    acquire_professional_images,
+    load_professional_image_acquisition_receipt,
+)
 from content.source.professional_image_admission import (
     admit_independently_reviewed_image,
 )
@@ -29,7 +34,7 @@ from content.source.professional_image_discovery import (
     create_professional_image_discovery_plan,
 )
 from core.io import read_json, write_json
-from core.source_digest import content_source_revision
+from core.source_digest import content_source_revision, current_execution_bundle_identity
 from PIL import Image
 
 EXECUTION_ID = "20260805--travel-image-m100--china--scale-010"
@@ -54,6 +59,19 @@ def _governed_acquisition_handoff(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def _digest(seed: str) -> str:
     return "sha256:" + hashlib.sha256(seed.encode("utf-8")).hexdigest()
+
+
+def _journal_digest(document: dict[str, object]) -> str:
+    body = (
+        json.dumps(
+            document,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n"
+    ).encode("utf-8")
+    return "sha256:" + hashlib.sha256(body).hexdigest()
 
 
 def _image_bytes() -> bytes:
@@ -174,12 +192,22 @@ def _acquisition(
     }
     manifest_path = output_root / "inputs/image-acquisition.json"
     write_json(manifest_path, manifest)
-    return acquire_professional_images(
-        manifest_path,
-        handoff_ref=output_root / "handoff.json",
-        manual_root=manual_root,
-        output_root=acquisition_root,
-    )
+    try:
+        return acquire_professional_images(
+            manifest_path,
+            handoff_ref=output_root / "handoff.json",
+            manual_root=manual_root,
+            output_root=acquisition_root,
+        )
+    except ProfessionalImageAcquisitionError as exc:
+        receipt_path = acquisition_root / exc.receipt_ref
+        return (
+            load_professional_image_acquisition_receipt(
+                exc.receipt_ref,
+                root=acquisition_root,
+            ),
+            receipt_path,
+        )
 
 
 def _execution_manifest(output_root: Path, *, source_digest: str) -> Path:
@@ -205,6 +233,7 @@ def _execution_manifest(output_root: Path, *, source_digest: str) -> Path:
                 "digest": source_digest,
                 "inputs": ["quwoquan_data/control_plane"],
             },
+            "executionBundle": current_execution_bundle_identity().to_document(),
             "modelBinding": {
                 "provider": "codex_sdk",
                 "authorModel": "gpt-5.6-terra",
@@ -534,12 +563,40 @@ def test_supported_api_reviewer_keeps_distinct_frozen_execution_identity(
         "preparations/professional-image-supported-api-dc7af7dd5436c975",
     ):
         shutil.copytree(source / relative, output_root / relative)
-    author_token = "97f35fc1a0d7db726bd5"
+
+    # The copied provider result intentionally keeps its historical reviewer
+    # execution/run identity, while the journal fixture is projected onto the
+    # current single-track attempt contract.  This is test-data migration only;
+    # immutable runtime evidence in `.qwq_output` is never edited.
     reviewer_ref = (
         "data/tasks/20260812--travel-image-review--china--pilot-001/"
         "evidence/source_reviews/results/97f35fc1a0d7db726bd5.json"
     )
-    reviewer = read_json(output_root / reviewer_ref)
+    reviewer_path = output_root / reviewer_ref
+    reviewer = read_json(reviewer_path)
+    attempt_path = output_root / reviewer["semanticTaskAttemptRef"]
+    attempt = read_json(attempt_path)
+    attempt.pop("capacityReceiptRef", None)
+    attempt.pop("capacityReceiptDigest", None)
+    attempt.update(
+        {
+            "started": True,
+            "messageSha256": _digest(""),
+            "retryAfterSeconds": 0,
+            "attempts": 1,
+            "warmAttempts": 0,
+        }
+    )
+    attempt["attemptDigest"] = _journal_digest(
+        {key: value for key, value in attempt.items() if key != "attemptDigest"}
+    )
+    write_json(attempt_path, attempt)
+    reviewer["semanticTaskAttemptSha256"] = (
+        "sha256:" + hashlib.sha256(attempt_path.read_bytes()).hexdigest()
+    )
+    write_json(reviewer_path, reviewer)
+
+    author_token = "97f35fc1a0d7db726bd5"
     judgment = {
         "rightsStatus": "unverified",
         "authorizationRequired": True,
@@ -666,6 +723,102 @@ def test_unknown_rights_remain_research_admissible_after_independent_review(
     assert receipt["reviewDecision"] == "accepted"
     assert receipt["assetSnapshot"]["rightsStatus"] == "unknown"
     assert receipt["assetSnapshot"]["authorizationRequired"] is True
+
+
+def test_research_review_projects_rights_from_acquisition_without_commercial_upgrade() -> None:
+    from content.source.independent_asset_review import _review_decision
+    from content.source.independent_asset_review_contract import (
+        project_research_judgment_to_acquisition_truth,
+    )
+
+    snapshot = {
+        "rightsStatus": "unverified",
+        "authorizationRequired": True,
+        "distributionDecision": "research_allowed",
+    }
+    semantic_judgment = {
+        **_judgment(),
+        "rightsStatus": "verified",
+        "authorizationRequired": False,
+        "distributionDecision": "commercial_allowed",
+    }
+    projected = project_research_judgment_to_acquisition_truth(
+        semantic_judgment,
+        snapshot=snapshot,
+    )
+
+    assert projected["rightsStatus"] == "unverified"
+    assert projected["authorizationRequired"] is True
+    assert projected["distributionDecision"] == "research_allowed"
+    assert _review_decision(
+        projected,
+        snapshot=snapshot,
+        acquisition_safety={
+            "status": "passed",
+            "entityMatch": "matched",
+            "privacyRisk": "none",
+            "minorRisk": "none",
+            "maliciousMediaRisk": "none",
+            "watermarkStatus": "absent",
+        },
+    ) == "accepted"
+
+
+def test_author_file_tamper_still_fails_independent_asset_review(tmp_path: Path) -> None:
+    output_root = tmp_path / "output"
+    acquisition, acquisition_path = _acquisition(output_root)
+    manifest = _execution_manifest(
+        output_root,
+        source_digest=acquisition["sourceDigest"],
+    )
+    judgment = _judgment()
+    author, reviewer = _semantic_evidence(output_root, judgment=judgment)
+    authored = author.parent / "authored.json"
+    write_json(authored, {"objectRef": OBJECT_REF, "title": "篡改后的标题"})
+
+    with pytest.raises(IndependentAssetReviewError, match="author file evidence drift"):
+        write_independent_asset_review_receipt(
+            acquisition_receipt_path=acquisition_path,
+            asset_kind="image",
+            asset_id="pin-independent-1",
+            execution_manifest_path=manifest,
+            author_evidence_path=author,
+            reviewer_evidence_path=reviewer,
+            object_ref=OBJECT_REF,
+            judgment=judgment,
+            output_root=output_root,
+        )
+
+
+def test_strict_review_gate_still_rejects_commercial_rights_upgrade() -> None:
+    from content.source.independent_asset_review import _review_decision
+
+    snapshot = {
+        "rightsStatus": "unverified",
+        "authorizationRequired": True,
+        "distributionDecision": "research_allowed",
+    }
+    with pytest.raises(
+        IndependentAssetReviewError,
+        match="rightsStatus cannot upgrade",
+    ):
+        _review_decision(
+            {
+                **_judgment(),
+                "rightsStatus": "verified",
+                "authorizationRequired": False,
+                "distributionDecision": "commercial_allowed",
+            },
+            snapshot=snapshot,
+            acquisition_safety={
+                "status": "passed",
+                "entityMatch": "matched",
+                "privacyRisk": "none",
+                "minorRisk": "none",
+                "maliciousMediaRisk": "none",
+                "watermarkStatus": "absent",
+            },
+        )
 
 
 def test_review_cannot_upgrade_restricted_rights_to_research_allowed(tmp_path: Path) -> None:

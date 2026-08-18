@@ -25,8 +25,11 @@ def write_json(path: Path, payload: object) -> None:
 
 
 def build_canonical(root: Path) -> Path:
+    # Only the roots canonical publish may own. There is no `media` root: bodies
+    # belong to the content library, and a fixture that pre-creates one would
+    # hand every test a tree the real contract already rejects.
     canonical = root / "publish"
-    for name in ("creators", "entities", "posts", "media/objects"):
+    for name in ("creators", "entities", "posts"):
         (canonical / name).mkdir(parents=True, exist_ok=True)
     creator = canonical / "creators" / CREATOR_ID
     write_json(

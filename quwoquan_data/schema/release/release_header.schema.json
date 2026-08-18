@@ -74,9 +74,19 @@
           "algorithm": {"const": "sha256"},
           "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
           "inputs": {
-            "type": "array",
-            "minItems": 1,
-            "items": {"type": "string", "minLength": 1}
+            "const": [
+              "quwoquan_data/schema",
+              "quwoquan_data/control_plane",
+              "quwoquan_data/prompts",
+              "quwoquan_data/templates",
+              "quwoquan_data/verticals/travel",
+              "quwoquan_data/reference",
+              "quwoquan_data/requirements.txt",
+              "quwoquan_data/requirements-cursor.txt",
+              "quwoquan_service/services/content-service/contracts/media/media_asset",
+              "quwoquan_service/services/content-service/contracts/content/post/ui_config.yaml",
+              "quwoquan_service/services/recommendation-service/contracts/recommendation/recommendation_feature_profile_view/projections/intersection_reason.yaml"
+            ]
           }
         }
       }
@@ -237,16 +247,6 @@
             }
           }
         ]
-      }
-    },
-    {
-      "if": {"required": ["targetEnvironment", "sourceIdentities"]},
-      "then": {
-        "properties": {
-          "releaseClass": {"const": "research"},
-          "productLifecycleState": {"const": "research"},
-          "releaseMode": {"const": "research"}
-        }
       }
     },
     {

@@ -27,6 +27,8 @@ import urllib.parse
 from pathlib import Path
 from typing import Any, Mapping
 
+from quwoquan_ops.cli.lib.content_release_readiness import ReadinessPhase
+
 
 def _execute_otp_login_journey(
     *,
@@ -542,6 +544,14 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
         probed_media = release_probe.get("mediaChecks")
         probed_media = probed_media if isinstance(probed_media, Mapping) else {}
         probed_search = release_probe.get("searchCanaries")
+        consumer_probe = (
+            runtime_mode == "test_live"
+            and content_binding.get("readinessPhase")
+            == ReadinessPhase.CONSUMER.value
+            and release_probe.get("readinessPhase")
+            == ReadinessPhase.CONSUMER.value
+            and release_probe.get("searchCanariesRequired") is False
+        )
         binding_ready = (
             (
                 bool(content_binding)
@@ -572,7 +582,9 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
             and matched_query("typed_video"),
             "search": release_probe.get("exitCode") == 0
             and isinstance(probed_search, list)
-            and len(probed_search) == 3,
+            and len(probed_search) == 3
+            if not consumer_probe
+            else None,
             "recommendation": release_probe.get("exitCode") == 0
             and matched_query("homepage_recommend"),
             "readiness": int(content_preflight.get("exitCode", 2)) == 0
@@ -584,6 +596,7 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
             name
             for name, ready in content_live_components.items()
             if ready is not True
+            and not (name == "search" and consumer_probe and ready is None)
         )
         if blocked_content_components:
             details.append(

@@ -31,7 +31,16 @@ LAYOUT_SCHEMA = "quwoquan_data.canonical_publish"
 RELEASE_SCHEMA = "quwoquan_data.release"
 REQUIRED_SOURCE_POLICY = SourcePolicyRevision.ENCYCLOPEDIA_PRIMARY.value
 ALLOWED_OBJECT_KINDS = {"creators", "entities", "posts"}
-ALLOWED_CANONICAL_ROOTS = {"creators", "entities", "posts", "tags", "media"}
+# Canonical publish holds the documents that describe a work, never the bytes it
+# shows: media bodies are owned once by the content library and reached by the
+# digests those documents record.
+#
+# Roots alone cannot express that. A body nested at `posts/<ref>/assets/x.jpg`
+# has a canonical root and would pass a root-only check, so the rule that keeps
+# the versioned tree free of bodies is stated over the whole path: a canonical
+# destination is a document, wherever it sits.
+ALLOWED_CANONICAL_ROOTS = {"creators", "entities", "posts", "tags"}
+CANONICAL_DOCUMENT_SUFFIXES = frozenset({".json", ".md", ".ndjson", ".vtt"})
 EXPECTED_OBJECT_SCHEMAS = {
     "creators": "quwoquan_data.creator_object",
     "entities": "quwoquan_data.entity_object",
@@ -120,6 +129,33 @@ def _safe_rel(value: str, *, label: str) -> Path:
     ):
         raise ObjectTransactionError(f"{label} 路径逃逸：{value!r}")
     return candidate
+
+
+def is_canonical_document(relative: Path) -> bool:
+    """Whether one relative path names a document canonical publish may hold."""
+
+    return relative.suffix.casefold() in CANONICAL_DOCUMENT_SUFFIXES
+
+
+def canonical_destination(value: str, *, label: str) -> Path:
+    """Return the canonical publish path ``value`` names, or refuse it.
+
+    Every write into the versioned tree passes here, so this is the one place
+    that decides what canonical publish may contain: a document under a known
+    root. A media body reaching this point means some producer tried to make the
+    tree the owner of bytes the content library already owns, and failing here is
+    what keeps that from becoming permanent Git history.
+    """
+
+    relative = _safe_rel(value, label=label)
+    if relative.parts[0] not in ALLOWED_CANONICAL_ROOTS:
+        raise ObjectTransactionError(f"{label} is outside canonical roots: {value}")
+    if not is_canonical_document(relative):
+        raise ObjectTransactionError(
+            f"{label} is a media body, which canonical publish never owns: {value}"
+        )
+    return relative
+
 
 def _files(root: Path) -> Iterable[Path]:
     if not root.is_dir():

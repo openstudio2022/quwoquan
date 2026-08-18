@@ -22,8 +22,6 @@
     "sourceReviewRequestSha256": {"$ref": "#/$defs/sha256"},
     "sourceReviewAttemptRef": {"$ref": "#/$defs/safeRef"},
     "sourceReviewAttemptSha256": {"$ref": "#/$defs/sha256"},
-    "sourceCapacityReceiptRef": {"$ref": "#/$defs/safeRef"},
-    "sourceCapacityReceiptSha256": {"$ref": "#/$defs/sha256"},
     "provider": {"enum": ["cursor_sdk", "codex_sdk"]},
     "model": {"type": "string", "minLength": 1},
     "runId": {"type": "string", "minLength": 1},
@@ -43,8 +41,7 @@
     {
       "required": [
         "sourceReview", "sourceReviewRequestRef", "sourceReviewRequestSha256",
-        "sourceReviewAttemptRef", "sourceReviewAttemptSha256",
-        "sourceCapacityReceiptRef", "sourceCapacityReceiptSha256"
+        "sourceReviewAttemptRef", "sourceReviewAttemptSha256"
       ],
       "not": {"required": ["semanticTaskRequestRef"]}
     }

@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
+import 'package:quwoquan_app/runtime/errors/generated/ops/ops_event_record_errors.g.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 Map<String, String> _nativeRuntimePackageFor(String environment) {
   return <String, String>{
@@ -50,8 +52,7 @@ void main() {
         'APP_LAUNCH_POLICY': 'test_live',
         'CONTENT_BINDING_STATE': 'unbound',
         'launchTarget': 'alpha-local',
-        'effectiveLaunchManifestDigest':
-            'sha256:3333333333333333333333333333333333333333333333333333333333333333',
+        'effectiveLaunchManifestDigest': 'sha256:3333333333333333333333333333333333333333333333333333333333333333',
       });
 
       expect(CloudRuntimeConfig.appRuntimeEnv, 'alpha');
@@ -75,6 +76,38 @@ void main() {
       );
     });
 
+    test('runtime package 未水合或无效时业务请求得到 typed unavailable', () {
+      final pending = CloudRuntimeConfig.runtimeAvailabilityFailure();
+      expect(pending, isNotNull);
+      expect(pending!.kind, RuntimeFailureKind.unavailable);
+      expect(
+        pending.code,
+        OpsEventRecordErrorCode.startupConfigurationInvalid.code,
+      );
+      expect(pending.recovery.action, 'retry');
+
+      CloudRuntimeConfig.hydrateFromNativeRuntimePackage(<String, String>{
+        ..._nativeRuntimePackageFor('alpha'),
+        'CLOUD_GATEWAY_BASE_URL': '',
+      });
+      final invalid = CloudRuntimeConfig.runtimeAvailabilityFailure();
+      expect(invalid, isNotNull);
+      expect(invalid!.kind, RuntimeFailureKind.unavailable);
+      expect(
+        invalid.context.attributes.any(
+          (attribute) =>
+              attribute.key == 'configurationState' &&
+              attribute.value == 'invalid',
+        ),
+        isTrue,
+      );
+
+      CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
+        _nativeRuntimePackageFor('alpha'),
+      );
+      expect(CloudRuntimeConfig.runtimeAvailabilityFailure(), isNull);
+    });
+
     test('内容发布绑定缺失或 digest 非 canonical 时保持 invalid', () {
       CloudRuntimeConfig.hydrateFromNativeRuntimePackage(<String, String>{
         ..._nativeRuntimePackageFor('prod'),
@@ -82,8 +115,7 @@ void main() {
         'CONTENT_BINDING_STATE': 'bound',
         'contentReleaseId': 'release-alpha',
         'contentManifestDigest': 'invalid',
-        'contentReadinessReceiptDigest':
-            'sha256:2222222222222222222222222222222222222222222222222222222222222222',
+        'contentReadinessReceiptDigest': 'sha256:2222222222222222222222222222222222222222222222222222222222222222',
       });
 
       expect(CloudRuntimeConfig.hasCompleteContentBinding, isFalse);

@@ -55,15 +55,23 @@ def _validate_release_artifacts(
 
 def _release_transport_tag(manifest: dict[str, Any]) -> str:
     tags: set[str] = set()
-    for service, descriptor in manifest["images"].items():
-        repository = str(descriptor["repository"])
-        transport_ref = str(descriptor["transportRef"])
-        prefix = repository + ":"
-        if not transport_ref.startswith(prefix):
-            raise RuntimeError(
-                f"release evidence image transport reference is invalid: {service}"
-            )
-        tags.add(transport_ref.removeprefix(prefix))
+    artifacts = manifest.get("environmentArtifacts")
+    if not isinstance(artifacts, dict):
+        raise RuntimeError("release evidence environmentArtifacts are missing")
+    for environment, artifact in artifacts.items():
+        images = artifact.get("images") if isinstance(artifact, dict) else None
+        if not isinstance(images, dict):
+            raise RuntimeError(f"release evidence images are missing: {environment}")
+        for owner, descriptor in images.items():
+            repository = str(descriptor["repository"])
+            transport_ref = str(descriptor["transportRef"])
+            prefix = repository + ":"
+            if not transport_ref.startswith(prefix):
+                raise RuntimeError(
+                    "release evidence image transport reference is invalid: "
+                    f"{environment}/{owner}"
+                )
+            tags.add(transport_ref.removeprefix(prefix))
     if len(tags) != 1:
         raise RuntimeError("release evidence images must share one transport tag")
     return next(iter(tags))
@@ -201,15 +209,20 @@ def _prevalidation_release_manifest(
         raise RuntimeError("release manifest source is not a Service Pipeline commit")
     image_transport_tag = _stackctl._release_transport_tag(manifest)
     candidate_digest = str(manifest["candidateId"])
-    required_images = manifest["requiredEvidence"]["images"]
-    images = manifest.get("images")
+    required_artifacts = manifest["requiredEvidence"]["environmentArtifacts"]
+    artifacts = manifest.get("environmentArtifacts")
+    prod_artifact = artifacts.get("prod") if isinstance(artifacts, dict) else None
+    required_images = (
+        required_artifacts.get("prod") if isinstance(required_artifacts, dict) else None
+    )
+    images = prod_artifact.get("images") if isinstance(prod_artifact, dict) else None
     if (
         not isinstance(required_images, list)
         or not required_images
         or not isinstance(images, dict)
         or set(required_images) != set(images)
     ):
-        raise RuntimeError("release manifest image set is incomplete")
+        raise RuntimeError("release manifest Prod image set is incomplete")
     access = _stackctl.load_json_yaml(
         _stackctl.ROOT / "quwoquan_ops/environments/prod/access-isolation.yaml"
     )
@@ -263,9 +276,11 @@ def _verify_release_registry_attestations(
 ) -> None:
     import quwoquan_ops.cli.stackctl as _stackctl
 
-    images = manifest.get("images")
+    artifacts = manifest.get("environmentArtifacts")
+    prod_artifact = artifacts.get("prod") if isinstance(artifacts, dict) else None
+    images = prod_artifact.get("images") if isinstance(prod_artifact, dict) else None
     if not isinstance(images, dict):
-        raise RuntimeError("release manifest images are missing")
+        raise RuntimeError("release manifest Prod artifact images are missing")
     source = manifest.get("source")
     repository = str(source.get("repository") or "") if isinstance(source, dict) else ""
     signer_workflow = f"{repository}/.github/workflows/service_pipeline.yml"

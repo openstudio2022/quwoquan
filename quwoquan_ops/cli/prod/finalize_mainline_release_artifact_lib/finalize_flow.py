@@ -174,22 +174,39 @@ def finalize(
         if original_status != "build-input" or operations != 1:
             raise ValueError("image evidence is only accepted from build-input")
         descriptors = load_image_descriptors(descriptors_dir)
-        required = manifest["requiredEvidence"]["images"]
-        if set(descriptors) != set(required):
-            missing = sorted(set(required) - set(descriptors))
-            extra = sorted(set(descriptors) - set(required))
-            raise ValueError(
-                f"image descriptor set mismatch: missing={missing}, extra={extra}"
-            )
-        manifest["images"] = {
-            service: validate_descriptor(
-                service,
-                descriptors[service],
-                expected_repository=str(manifest["images"][service]["repository"]),
-                expected_transport_ref=str(manifest["images"][service]["transportRef"]),
-            )
-            for service in required
-        }
+        required = manifest["requiredEvidence"]["environmentArtifacts"]
+        seen_digests: dict[str, str] = {}
+        for environment in ENVIRONMENTS:
+            if set(descriptors[environment]) != set(required[environment]):
+                missing = sorted(
+                    set(required[environment]) - set(descriptors[environment])
+                )
+                extra = sorted(
+                    set(descriptors[environment]) - set(required[environment])
+                )
+                raise ValueError(
+                    "image descriptor set mismatch: "
+                    f"environment={environment}, missing={missing}, extra={extra}"
+                )
+            images: dict[str, dict[str, Any]] = {}
+            for owner in required[environment]:
+                current = manifest["environmentArtifacts"][environment]["images"][owner]
+                descriptor = validate_descriptor(
+                    environment,
+                    owner,
+                    descriptors[environment][owner],
+                    expected_repository=str(current["repository"]),
+                    expected_transport_ref=str(current["transportRef"]),
+                )
+                digest = str(descriptor["digest"])
+                previous_environment = seen_digests.setdefault(digest, environment)
+                if previous_environment != environment:
+                    raise ValueError(
+                        "image descriptor reuses a digest across environments: "
+                        f"{previous_environment}/{environment}"
+                    )
+                images[owner] = descriptor
+            manifest["environmentArtifacts"][environment]["images"] = images
     elif artifact_descriptors_dir is not None:
         if original_status != "component-ready" or operations != 1:
             raise ValueError("candidate material is only accepted from component-ready")
@@ -304,8 +321,12 @@ def main() -> int:
     except (OSError, ValueError, json.JSONDecodeError) as error:
         print(f"FAIL: {error}")
         return 1
+    image_count = sum(
+        len(artifact["images"])
+        for artifact in manifest["environmentArtifacts"].values()
+    )
     print(
         f"OK: {manifest['status']} release evidence "
-        f"{manifest['artifactDigest']} includes {len(manifest['images'])} immutable images"
+        f"{manifest['artifactDigest']} includes {image_count} immutable images"
     )
     return 0

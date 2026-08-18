@@ -104,6 +104,7 @@ def _validate_adoption_lane_publish(
             for field in (
                 "approvedQuota",
                 "qualifiedCount",
+                "reviewQualifiedCount",
                 "finalizedCount",
                 "selectedCount",
             )
@@ -111,6 +112,7 @@ def _validate_adoption_lane_publish(
         or int(receipt.get("discardedCount") or 0) != 0
         or int(receipt.get("shortfallCount") or 0) != 0
         or receipt.get("discards") != []
+        or receipt.get("publishDiscards") != []
         or "executionPublishRef" in receipt
         or "executionPublishSha256" in receipt
     ):
@@ -214,11 +216,14 @@ def validate_lane_publish(
         "campaignFencingToken": runtime["fencingToken"],
     }
     finalized = int(receipt.get("finalizedCount") or 0)
+    review_qualified = int(receipt.get("reviewQualifiedCount") or 0)
+    publish_discards = receipt.get("publishDiscards") or []
     if (
         any(receipt.get(key) != value for key, value in expected_receipt.items())
         or receipt.get("status") not in {"finalized", "partial"}
         or finalized <= 0
-        or finalized != int(receipt.get("qualifiedCount") or 0)
+        or review_qualified != int(receipt.get("qualifiedCount") or 0)
+        or finalized + len(publish_discards) != review_qualified
         or int(receipt.get("approvedQuota") or 0) != int(submission["quota"])
     ):
         raise typed_error(
@@ -279,6 +284,20 @@ def validate_lane_publish(
             f"{carrier} publish_ref differs from finalizedCount",
             evidence=publish_path,
         )
+    if set(selected) & {
+        str(row.get("objectRef") or "")
+        .strip()
+        .removeprefix("posts/")
+        .removeprefix("entities/")
+        .removeprefix("/entity/")
+        for row in publish_discards
+        if isinstance(row, Mapping)
+    }:
+        raise typed_error(
+            "PUBLISH_OUTCOME_DRIFT",
+            f"{carrier} publish success overlaps publishDiscards",
+            evidence=receipt_path,
+        )
     canonical_refs = _canonical_refs(execution_id, roots=roots)
     if canonical_refs != publish_refs:
         raise typed_error(
@@ -307,6 +326,8 @@ def validate_lane_publish(
     return {
         "executionId": execution_id,
         "finalizedCount": finalized,
+        "reviewQualifiedCount": review_qualified,
+        "publishDiscardedCount": len(publish_discards),
         "publishReceiptRef": output_ref(
             receipt_path, roots=roots, label=f"{carrier} receipt"
         ),

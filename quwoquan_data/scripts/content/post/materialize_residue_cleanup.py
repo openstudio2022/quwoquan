@@ -12,11 +12,16 @@ for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
+from content.release.canonical.media_retention_policy import (
+    MEDIA_TIER_ORIGINAL,
+    classify_media_tier,
+)
 from core.paths import execution_root
 
 
 _PROVISIONAL_RESIDUE_STAGES = ("1.download", "2.quality", "3.compose", "4.draft", "5.review")
 _MATERIALIZED_POST_ENTRIES = ("manifest.json", "_object.json", "article.md", "gallery.md", "assets")
+_VARIANT_SUFFIX = ".variants"
 
 
 def prune_materialized_post_refs(
@@ -46,6 +51,40 @@ def prune_materialized_post_refs(
                 path.unlink()
                 removed.append(path)
     return removed
+
+
+def prune_original_tier_residue(execution_id: str) -> list[Path]:
+    """Drop acquisition originals from an execution once discovery no longer reads them.
+
+    Discovery only ever reads the derivative and metadata tiers, so an original
+    left in the work package is a body no reader will request.  Removing the
+    reference here does not destroy content: the body stays singly owned by the
+    content library, which a release binds by digest and the collector reclaims on
+    its own retention window.
+    """
+    base = execution_root(execution_id).resolve()
+    download_root = base / "posts"
+    if not download_root.is_dir():
+        return []
+    removed: list[Path] = []
+    for path in sorted(download_root.rglob("*")):
+        if not path.is_file() or path.is_symlink():
+            continue
+        relative = path.relative_to(download_root).as_posix()
+        if classify_media_tier(relative) != MEDIA_TIER_ORIGINAL:
+            continue
+        # Only assets that a materialized variant already supersedes are residue;
+        # an original with no derivative beside it is still the only readable body.
+        if not _has_derivative(path):
+            continue
+        path.unlink()
+        removed.append(path)
+    return removed
+
+
+def _has_derivative(original: Path) -> bool:
+    variants = original.with_name(f"{original.name}{_VARIANT_SUFFIX}")
+    return variants.is_dir() and any(variants.iterdir())
 
 
 def prune_unregistered_post_residue(execution_id: str) -> list[Path]:

@@ -142,7 +142,9 @@ def _required_release_candidate_digests(
     if not graph_path.is_file():
         raise RuntimeError("hosted release receipt requires generated ContractGraph")
     graph_digest = "sha256:" + hashlib.sha256(graph_path.read_bytes()).hexdigest()
-    images = manifest.get("images")
+    artifacts = manifest.get("environmentArtifacts")
+    prod_artifact = artifacts.get("prod") if isinstance(artifacts, dict) else None
+    images = prod_artifact.get("images") if isinstance(prod_artifact, dict) else None
     rtc_image = images.get("rtc-service") if isinstance(images, dict) else None
     image_digest = str(rtc_image.get("digest") or "") if isinstance(rtc_image, dict) else ""
     governance = _stackctl._external_provider_governance()

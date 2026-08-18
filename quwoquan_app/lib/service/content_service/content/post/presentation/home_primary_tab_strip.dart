@@ -33,6 +33,7 @@ class HomePrimaryTabStrip extends StatelessWidget {
   static const List<String> homeChannelIds = <String>[
     followingChannelId,
     recommendedChannelId,
+    featuredChannelId,
     campusChannelId,
     travelChannelId,
     photographyChannelId,
@@ -88,8 +89,9 @@ class HomePrimaryTabStrip extends StatelessWidget {
         ? channels!.map((channel) => channel.id).toList(growable: false)
         : homeChannelIds;
     final channelIds = regularChannelIds;
-    String labelFor(String channelId) =>
-        labelByChannelId[channelId] ?? _labelForChannel(channelId);
+    String labelFor(String channelId) => channelId == featuredChannelId
+        ? DiscoveryText.homeTabFeatured
+        : labelByChannelId[channelId] ?? _labelForChannel(channelId);
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onHorizontalDragEnd: onHorizontalDragEnd,
@@ -185,8 +187,7 @@ class _HomePrimaryTabStripItem extends StatelessWidget {
       fontSize,
       selectedWeight,
     );
-    final showUnderline =
-        selected && channelId != HomePrimaryTabStrip.featuredChannelId;
+    final showUnderline = selected;
 
     return SizedBox(
       width: slotWidth,

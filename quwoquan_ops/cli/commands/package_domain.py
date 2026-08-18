@@ -45,11 +45,34 @@ def register_parser(
             "legal-static",
             "ops-portal",
             "app-release",
+            "app-artifact",
             "web",
             "release-manifest",
         ],
         default="runtime",
     )
+    # app-artifact（DEC-004 canonical App 制品入口）：显式接收
+    # platform/build-mode/distribution-class/device，按 metadata 裁决身份。
+    package_parser.add_argument(
+        "--app-platform", choices=["android", "ios"], default=""
+    )
+    package_parser.add_argument(
+        "--app-build-mode", choices=["debug", "profile", "release"], default=""
+    )
+    package_parser.add_argument(
+        "--distribution-class",
+        choices=[
+            "dev_direct",
+            "simulator",
+            "registered_device",
+            "store",
+            "official_web",
+            "hosted_web",
+        ],
+        default="",
+    )
+    package_parser.add_argument("--device", default="")
+    package_parser.add_argument("--artifact-path", default="")
     package_parser.add_argument("--service", default="")
     package_parser.add_argument("--include-services", action="store_true")
     package_parser.add_argument(

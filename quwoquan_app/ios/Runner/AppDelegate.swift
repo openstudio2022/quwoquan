@@ -637,9 +637,6 @@ private final class RecoveryFailureEncryptedStore {
       }
       var packageValues = values
       for key in [
-        "contentReleaseId",
-        "contentManifestDigest",
-        "contentReadinessReceiptDigest",
         "launchTarget",
         "effectiveLaunchManifestDigest",
       ] {

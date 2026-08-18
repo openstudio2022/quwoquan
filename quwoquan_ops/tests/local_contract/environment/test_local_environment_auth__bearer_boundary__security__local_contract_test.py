@@ -9,6 +9,7 @@ import base64
 import json
 import tempfile
 import unittest
+from contextlib import contextmanager
 from pathlib import Path
 from unittest import mock
 
@@ -16,6 +17,28 @@ from quwoquan_ops.cli.lib import local_environment_auth
 
 
 class LocalEnvironmentAuthBoundaryTest(unittest.TestCase):
+    def test_http_error_survives_generator_context_without_frozen_masking(
+        self,
+    ) -> None:
+        @contextmanager
+        def scope():
+            yield
+
+        error = local_environment_auth.LocalEnvironmentHTTPError(
+            method="POST",
+            path="/chat/conversations",
+            status=403,
+        )
+        with self.assertRaises(
+            local_environment_auth.LocalEnvironmentHTTPError
+        ) as raised:
+            with scope():
+                raise error
+
+        self.assertIs(raised.exception, error)
+        self.assertEqual(raised.exception.status, 403)
+        self.assertNotIn("token", str(raised.exception).lower())
+
     def test_direct_acceptance_token_issuer_is_retired(self) -> None:
         self.assertFalse(
             hasattr(local_environment_auth, "open_local_acceptance_session")

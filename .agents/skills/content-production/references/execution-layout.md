@@ -1,0 +1,74 @@
+# 仓库输入与 execution 布局
+
+## 可复用工程输入（唯一允许进版本库的内容输入）
+
+```text
+quwoquan_data/control_plane/families/content/<vertical>/<contentType>/
+quwoquan_data/verticals/
+quwoquan_data/reference/
+quwoquan_data/prompts/
+quwoquan_data/templates/
+quwoquan_data/schema/
+```
+
+- family recipe 只声明可复用规模、runtime 和质量参数，不包含省份、日期、实体、
+  executionId 或输出路径。
+- 区域范围、discovery、count、execution phase 和 executionId 只通过 CLI 参数进入执行。
+- 实体类型只读 taxonomy/schema；内容结构和语言规则只读 template/prompt。
+- 默认凭证源是仓外且权限为 `0600` 的 `~/.config/quwoquan/cursor_api_key`；
+  `QWQ_CURSOR_API_KEY_FILE` 只允许受控测试或显式替换该位置。
+
+## 单任务 execution 工作包
+
+每次内容任务只写：
+
+```text
+.qwq_output/data/tasks/<executionId>/
+  execution_manifest.json
+  0.plan/
+  sources/
+  entities/**/1.content.source..5.review/
+  posts/<kind>/**/1.content.source..5.review/
+  _shared/
+  evidence/
+  publish_ref.json
+```
+
+`executionId` 必须符合：
+
+```text
+YYYYMMDD--<vertical>-<contentType>-<intent>--<scope>--<pilot|scale|full>-<sequence>
+```
+
+同一 ID 只允许 resume。新尝试递增 sequence，并在根 manifest 中声明 `retryOf`。
+不允许 taskId、batchId、planId、workerId 或其它平行身份。
+
+阶段 packet 只携带 `executionId` 关联根 manifest；recipe、参数、源码、prompt 和
+来源 revision 不在每个对象重复写入。图片、事实、权利、creator、tag、实体与
+review 决策必须可回溯。
+
+## 发布与环境输出
+
+approved 对象先原子写入 canonical：
+
+```text
+quwoquan_data/publish/{creators,entities,posts,media,tags}/
+```
+
+canonical 只含最终业务对象，不得包含 raw source、草稿、prompt、日志、报告、SOP、
+环境回执或运行状态。
+
+静态 release 与环境证据分离：
+
+```text
+.qwq_output/data/releases/<releaseId>/
+.qwq_output/env/<env>/runs/data-release/<releaseId>/<runId>/
+```
+
+`ship apply|rollback` 只读 canonical 和 immutable release desired state。
+导入回执、API 核验、回滚与重放证据写环境 run；禁止修改 canonical，
+禁止 dual-read 或旧路径 fallback。
+
+`task execute` 是唯一任务门面：组合 family、运行 request、target selection、执行、
+review、publish 与 ship，不建立独立 schema、runner 或输出根。
+禁止暴露阶段角色命令、退役的双层运行身份或第二运行根。

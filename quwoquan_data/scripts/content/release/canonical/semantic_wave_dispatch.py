@@ -14,6 +14,8 @@ from typing import Any
 from content.execution.campaign.source_pool_binding import (
     validate_bound_scale_source_pool,
 )
+from content.execution.campaign.lane import normalize_workloads
+from content.execution.campaign.request_envelope import workload_intent
 from content.execution.identity import build_execution_id, parse_execution_id
 from content.execution.planning.semantic_preflight_admission import (
     bind_semantic_preflight_receipt,
@@ -22,6 +24,7 @@ from content.execution.planning.retry_unfinished_scope import (
     load_retry_unfinished_scope,
 )
 from content.execution.request import RuntimeExecutionRequest
+from content.execution.queue.partition import partition_count as workload_partition_count
 from content.release.canonical.object_transaction_contract import _read_json
 from content.release.canonical.semantic_wave_dispatch_command import (
     task_execute_argv,
@@ -170,6 +173,9 @@ def _source_binding(
     binding = {
         "poolId": str(plan["poolId"]),
         "targetScale": str(plan["targetScale"]),
+        "workloadMode": str(plan["workloadMode"]),
+        "activeCarriers": list(plan["activeCarriers"]),
+        "workloadTargets": dict(plan["workloadTargets"]),
         "sourceRevision": str(plan["sourceRevision"]),
         "sourceDigest": str(plan["sourceDigest"]),
         "entityCatalogDigest": str(plan["entityCatalogDigest"]),
@@ -179,6 +185,8 @@ def _source_binding(
     }
     if (
         plan.get("targetScale") != inspection.get("milestone")
+        or plan.get("activeCarriers") != wave.get("activeCarriers")
+        or plan.get("workloadTargets") != wave.get("workloadTargets")
         or plan.get("planDigest") != source_input.get("sourcePoolDigest")
     ):
         raise _fail(DISPATCH_INVALID, "source pool milestone or digest drift")
@@ -302,7 +310,7 @@ def build_semantic_wave_dispatch(
     *,
     dispatch_id: str,
     pool_inspection_ref: str,
-    semantic_preflight_receipt_ref: str,
+    semantic_preflight_receipt_ref: str | None,
     run_date: str,
     scope: str,
     region_ref: str,
@@ -310,12 +318,9 @@ def build_semantic_wave_dispatch(
     predecessor_dispatch_ref: str | None = None,
     predecessor_execution_ids: Mapping[str, str] | None = None,
     predecessor_unfinished_refs: Mapping[str, Sequence[str]] | None = None,
-    required_workers: int,
-    partition_count: int,
-    capacity_plan_digest: str,
+    workload_targets: Mapping[str, int] | None = None,
     output_root: Path,
     publish_root: Path,
-    require_fresh_preflight: bool = True,
 ) -> dict[str, Any]:
     """Validate one inspection and project only its candidate-backed slots."""
 
@@ -395,6 +400,10 @@ def build_semantic_wave_dispatch(
         )
     except (FileNotFoundError, TypeError, ValueError) as exc:
         raise _fail(DISPATCH_INVALID, exc) from exc
+    if workload_targets is not None and normalize_workloads(
+        workload_targets
+    ) != normalize_workloads(inspection["workloadTargets"]):
+        raise _fail(DISPATCH_INVALID, "dispatch workloadTargets drift from inspection")
     wave = _wave_input(inspection)
     binding, evidence_ref, selected, scheduling = _source_binding(
         inspection=inspection,
@@ -410,20 +419,21 @@ def build_semantic_wave_dispatch(
             DISPATCH_INVALID,
             "retry wave must preserve predecessor source-pool and waveInput binding",
         )
-    receipt_path, _ = _output_path(
-        output_root,
-        semantic_preflight_receipt_ref,
-        label="semanticPreflightReceiptRef",
-    )
-    try:
-        preflight = bind_semantic_preflight_receipt(
-            receipt_path,
-            semantic_selection_id="cursor_grok",
-            output_root=output_root,
-            require_fresh=require_fresh_preflight,
+    preflight: dict[str, str] | None = None
+    if str(semantic_preflight_receipt_ref or "").strip():
+        receipt_path, _ = _output_path(
+            output_root,
+            semantic_preflight_receipt_ref,
+            label="semanticPreflightReceiptRef",
         )
-    except (OSError, TypeError, ValueError) as exc:
-        raise _fail(DISPATCH_INVALID, exc) from exc
+        try:
+            preflight = bind_semantic_preflight_receipt(
+                receipt_path,
+                semantic_selection_id="cursor_grok",
+                output_root=output_root,
+            )
+        except (OSError, TypeError, ValueError) as exc:
+            raise _fail(DISPATCH_INVALID, exc) from exc
     ordered_by_carrier = {
         carrier: [
             selected[str(row["candidateId"])]
@@ -437,6 +447,12 @@ def build_semantic_wave_dispatch(
     seen_candidates: set[str] = set()
     seen_objects: set[str] = set()
     predecessor_mappings: list[dict[str, Any]] = []
+    workloads = normalize_workloads(wave["workloadTargets"])
+    intent = workload_intent(
+        scale=str(inspection["milestone"]),
+        workload_mode=str(inspection["workloadMode"]),
+        workloads=workloads,
+    )
     for carrier in _CARRIERS:
         candidates = ordered_by_carrier[carrier]
         if not candidates:
@@ -466,7 +482,7 @@ def build_semantic_wave_dispatch(
                 run_date=run_date,
                 vertical="travel",
                 content_type=carrier,
-                intent=str(inspection["milestone"]).lower(),
+                intent=intent,
                 scope=scope,
                 phase="scale",
                 sequence=sequence,
@@ -547,6 +563,19 @@ def build_semantic_wave_dispatch(
                 raise _fail(DISPATCH_INVALID, "wave contains an already published object")
             seen_candidates.update(candidate_ids)
             seen_objects.update(object_refs)
+            required_workers = len(chunk)
+            # 分区数只由工作单元数决定。这里 required_workers 恰好等于 len(chunk)，
+            # 但把它当作分区输入会让「一个 slot 起几个 worker」这种容量决定重新
+            # 渗进拓扑，而 Service 侧按 len(Jobs) 校验，两者一旦分家就是 fleet 拒收。
+            partition_count = workload_partition_count(len(chunk))
+            workload_plan_digest = _digest(
+                {
+                    "schema": "quwoquan_data.semantic_slot_workload_plan",
+                    "dispatchId": dispatch_id,
+                    "slotId": slot_id,
+                    "candidateIds": candidate_ids,
+                }
+            )
             request = RuntimeExecutionRequest(
                 family_ref=_FAMILIES[carrier],
                 region_ref=region_ref,
@@ -555,9 +584,9 @@ def build_semantic_wave_dispatch(
                 quota=len(chunk),
                 required_workers=required_workers,
                 partition_count=partition_count,
-                capacity_plan_digest=capacity_plan_digest,
+                capacity_plan_digest=workload_plan_digest,
                 worker_host_set_binding=None,
-                topic=f"{str(inspection['milestone']).lower()}-{carrier}-wave",
+                topic=f"{intent}-{carrier}-wave",
                 source_providers=(),
                 target_names=target_names,
                 scale_source_pool=binding,
@@ -576,7 +605,11 @@ def build_semantic_wave_dispatch(
                     execution_id=execution_id,
                     carrier=carrier,
                     request=request,
-                    semantic_receipt_ref=str(preflight["receiptRef"]),
+                    semantic_receipt_ref=(
+                        str(preflight["receiptRef"])
+                        if preflight is not None
+                        else None
+                    ),
                     retry_of=retry_of,
                     retry_unfinished_refs=retry_unfinished_refs,
                 ),
@@ -603,22 +636,33 @@ def build_semantic_wave_dispatch(
         for carrier in _CARRIERS
         if any(slot["carrier"] == carrier for slot in slots)
     ]
+    dispatched_workloads = {
+        carrier: sum(
+            int(slot["taskRequest"]["quota"])
+            for slot in slots
+            if slot["carrier"] == carrier
+        )
+        for carrier in active
+    }
     stable: dict[str, Any] = {
         "schema": "quwoquan_data.semantic_wave_dispatch_manifest",
         "dispatchId": dispatch_id,
         "milestone": str(inspection["milestone"]),
+        "workloadMode": str(inspection["workloadMode"]),
+        "workloadTargets": dispatched_workloads,
         "poolInspectionRef": inspection_ref,
         "poolInspectionFileSha256": _file_sha256(inspection_path),
         "waveInputDigest": str(wave["waveInputDigest"]),
         "sourcePoolBinding": binding,
         "sourcePoolEvidenceRootRef": evidence_ref,
         "semanticSelectionId": "cursor_grok",
-        "semanticPreflightReceipt": preflight,
         "queueBackend": "local_file",
         "poolDeliveryBackend": "reliabletask",
         "activeCarriers": active,
         "slots": slots,
     }
+    if preflight is not None:
+        stable["semanticPreflightReceipt"] = preflight
     if predecessor_binding is not None:
         stable["predecessorDispatch"] = predecessor_binding
         stable["predecessorMappings"] = predecessor_mappings
@@ -669,6 +713,22 @@ def validate_semantic_wave_dispatch(document: Mapping[str, Any]) -> dict[str, An
     expected_active = [carrier for carrier in _CARRIERS if carrier in carriers]
     if value["activeCarriers"] != expected_active:
         raise _fail(DISPATCH_INVALID, "activeCarriers drift from slots")
+    workloads = normalize_workloads(
+        value["workloadTargets"], active_carriers=expected_active
+    )
+    dispatched = {
+        carrier: sum(
+            int(slot["taskRequest"]["quota"])
+            for slot in value["slots"]
+            if slot["carrier"] == carrier
+        )
+        for carrier in expected_active
+    }
+    if dispatched != workloads:
+        raise _fail(
+            DISPATCH_INVALID,
+            f"dispatch quotas drift from workloadTargets: {dispatched}",
+        )
     has_predecessor = "predecessorDispatch" in value
     has_mappings = "predecessorMappings" in value
     if has_predecessor != has_mappings:
@@ -730,7 +790,6 @@ def write_create_once_semantic_wave_dispatch(
     manifest = build_semantic_wave_dispatch(
         output_root=output_root,
         publish_root=publish_root,
-        require_fresh_preflight=not destination.is_file(),
         **kwargs,
     )
     body = json.dumps(

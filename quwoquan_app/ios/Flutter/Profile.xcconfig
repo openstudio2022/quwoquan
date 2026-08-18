@@ -5,3 +5,6 @@
 SDKROOT = iphoneos
 SUPPORTED_PLATFORMS = iphoneos iphonesimulator
 QWQ_APS_ENVIRONMENT = production
+
+// Environment identity is selected by generated Profile-<environment>.xcconfig.
+// This base file owns only Flutter Profile toolchain settings.

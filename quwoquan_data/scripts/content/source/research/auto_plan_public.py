@@ -3,11 +3,10 @@ from __future__ import annotations
 
 import copy
 import time
-from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, as_completed, wait
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from typing import Any, Callable, Mapping
 
 from core.data_issue import (
-    DataIssue,
     DataIssueCode, DataIssueStage,
     DataIssueError,
     DataIssueLane,
@@ -15,14 +14,18 @@ from core.data_issue import (
     data_issue,
 )
 from core.io import read_json
-from core.carrier_contract import research_plan_files
 from core.paths import execution_root
 from core.source_catalog import vertical_from_task_id
 from content.execution import store
-from content.source.source_unit import resolve_entity_object_dir
 from content.source.prepare import prepare_source_plan, resolve_research_entity_types
 
 from content.source.research import network_breaker
+from content.source.research.network_io import NetworkFetchError
+from content.source.research.auto_plan_recovery import (
+    _invalidate_forced_lane_plans,
+    _network_failure_entity_result,
+    _recover_homepage_source_plans,
+)
 from content.source.research.auto_plan_report import (
     _merge_auto_reports,
     _source_availability_summary,
@@ -31,147 +34,6 @@ from content.source.research.auto_plan_report import (
 from content.source.research.auto_plan_writer import _write_auto_research_plans_impl
 from content.source.research.progress import _write_auto_research_progress
 
-
-def _invalidate_forced_lane_plans(
-    execution_id: str,
-    entity_ids: list[str],
-    *,
-    entity_type: str,
-    lanes: set[str],
-) -> None:
-    """Remove stale consumable plans before a forced source-contract rebuild."""
-    resolved_types = resolve_research_entity_types(
-        execution_id,
-        entity_ids,
-        fallback_type=entity_type,
-    )
-    filenames = research_plan_files()
-    for entity_id in entity_ids:
-        object_dir = resolve_entity_object_dir(
-            execution_id,
-            entity_id,
-            etype_hint=resolved_types[entity_id],
-        )
-        for lane in lanes:
-            filename = filenames.get(lane)
-            if filename:
-                (object_dir / "1.download" / filename).unlink(missing_ok=True)
-
-
-def _homepage_source_plan_missing_entity_ids(
-    execution_id: str,
-    entity_ids: list[str],
-    *,
-    entity_type: str,
-) -> list[str]:
-    """Return homepage targets whose current plan has no encyclopedia source.
-
-    The initial parallel pass favors throughput. A source plan with no homepage
-    source can result from a transient provider response, so it receives the
-    bounded recovery pass declared by the runtime policy before Agent repair is
-    considered. This reads the current plan, never a report diagnostic.
-    """
-    resolved_types = resolve_research_entity_types(
-        execution_id,
-        entity_ids,
-        fallback_type=entity_type,
-    )
-    filename = research_plan_files()["homepage"]
-    missing: list[str] = []
-    for entity_id in entity_ids:
-        object_dir = resolve_entity_object_dir(
-            execution_id,
-            entity_id,
-            etype_hint=resolved_types[entity_id],
-        )
-        plan = read_json(object_dir / "1.download" / filename)
-        payload = plan.get("payload") if isinstance(plan.get("payload"), dict) else {}
-        sources = payload.get("sources") if isinstance(payload.get("sources"), list) else []
-        if not sources:
-            missing.append(entity_id)
-    return missing
-
-
-def _discard_recovered_homepage_source_issues(
-    report: dict[str, Any],
-    *,
-    recovered_entity_ids: set[str],
-) -> None:
-    """Discard only superseded homepage primary-source absence diagnostics."""
-    retained: list[dict[str, Any]] = []
-    for raw in report.get("sourceUnavailable") or []:
-        if not isinstance(raw, dict):
-            raise TypeError("sourceUnavailable rows must use DataIssue objects")
-        issue = DataIssue.from_dict(raw)
-        if (
-            issue.ref in recovered_entity_ids
-            and issue.lane is DataIssueLane.HOMEPAGE
-            and issue.code is DataIssueCode.SOURCE_PRIMARY_AUTHORITY_MISSING
-        ):
-            continue
-        retained.append(raw)
-    report["sourceUnavailable"] = retained
-
-
-def _recover_homepage_source_plans(
-    execution_id: str,
-    entity_ids: list[str],
-    *,
-    entity_type: str,
-    recovery_passes: int,
-    recovery_workers: int,
-    report: dict[str, Any],
-    external_input_context: Any | None = None,
-) -> list[str]:
-    """Replay only empty homepage plans with the bounded recovery pool."""
-    recovered: list[str] = []
-    for _ in range(recovery_passes):
-        unresolved = _homepage_source_plan_missing_entity_ids(
-            execution_id,
-            entity_ids,
-            entity_type=entity_type,
-        )
-        if not unresolved:
-            break
-        _invalidate_forced_lane_plans(
-            execution_id,
-            unresolved,
-            entity_type=entity_type,
-            lanes={"homepage"},
-        )
-        network_breaker.BREAKER.reset()
-        network_breaker.start_wave_budget()
-        with ThreadPoolExecutor(max_workers=min(recovery_workers, len(unresolved))) as executor:
-            futures = [
-                executor.submit(
-                    _write_auto_research_plans_impl,
-                    execution_id,
-                    [entity_id],
-                    entity_type=entity_type,
-                    force=True,
-                    lanes={"homepage"},
-                    write_shared_report=False,
-                    external_input_context=external_input_context,
-                )
-                for entity_id in unresolved
-            ]
-            for future in as_completed(futures):
-                _merge_auto_reports(report, future.result())
-        still_unresolved = set(
-            _homepage_source_plan_missing_entity_ids(
-                execution_id,
-                unresolved,
-                entity_type=entity_type,
-            )
-        )
-        newly_recovered = [entity_id for entity_id in unresolved if entity_id not in still_unresolved]
-        recovered.extend(newly_recovered)
-        if newly_recovered:
-            _discard_recovered_homepage_source_issues(
-                report,
-                recovered_entity_ids=set(newly_recovered),
-            )
-    return recovered
 
 
 def _existing_report_entity_ids(report: Mapping[str, Any] | None) -> list[str]:
@@ -295,7 +157,6 @@ def write_auto_research_plans(
     entity_type: str,
     force: bool = False,
     lanes: set[str] | None = None,
-    max_workers: int | None = None,
     progress_callback: Callable[[dict[str, Any]], None] | None = None,
     external_input_context: Any | None = None,
 ) -> dict[str, Any]:
@@ -319,7 +180,7 @@ def write_auto_research_plans(
     from core.runtime_policy import active_runtime_policy
 
     runtime_policy = active_runtime_policy()
-    workers = max_workers or runtime_policy.research_workers
+    workers = len(entity_ids)
 
     def emit_progress(
         status: str,
@@ -349,21 +210,28 @@ def write_auto_research_plans(
             entity_type=entity_type,
             lanes=selected_lanes,
         )
-    # 每次 wave 独立判定出口故障；跨 wave 网络状态可能已恢复。
+    # 每次 exact pending workload 独立判定出口故障。
     network_breaker.BREAKER.reset()
-    network_breaker.start_wave_budget()
     no_progress_timed_out = False
     remaining_after_timeout: list[str] = []
     if workers <= 1 or len(entity_ids) <= 1:
-        report = _write_auto_research_plans_impl(
-            execution_id,
-            entity_ids,
-            entity_type=entity_type,
-            force=force,
-            lanes=selected_lanes,
-            write_shared_report=False,
-            external_input_context=external_input_context,
-        )
+        try:
+            report = _write_auto_research_plans_impl(
+                execution_id,
+                entity_ids,
+                entity_type=entity_type,
+                force=force,
+                lanes=selected_lanes,
+                write_shared_report=False,
+                external_input_context=external_input_context,
+            )
+        except NetworkFetchError as exc:
+            # 单实体路径的出口故障与并行路径同义，必须落成同一个网络码，否则同一种
+            # 失败会因实体数量走成两种终态。
+            report = _network_failure_entity_result(
+                entity_ids[0] if entity_ids else execution_id,
+                exc,
+            )
         emit_progress(
             "running",
             completed_count=len(entity_ids),
@@ -399,7 +267,7 @@ def write_auto_research_plans(
         results: dict[str, dict[str, Any]] = {}
         completed_entity_ids: list[str] = []
         base_report = _read_existing_auto_research_report(execution_id)
-        executor = ThreadPoolExecutor(max_workers=min(workers, len(entity_ids)))
+        executor = ThreadPoolExecutor(max_workers=len(entity_ids))
         futures = {}
         shutdown_wait = True
         try:
@@ -441,6 +309,8 @@ def write_auto_research_plans(
                         results[entity_id] = future.result()
                     except DataIssueError:
                         raise
+                    except NetworkFetchError as exc:
+                        results[entity_id] = _network_failure_entity_result(entity_id, exc)
                     except Exception as exc:  # noqa: BLE001
                         results[entity_id] = {
                             "updated": [],
@@ -517,7 +387,6 @@ def write_auto_research_plans(
             entity_ids,
             entity_type=entity_type,
             recovery_passes=runtime_policy.source_plan_recovery_passes,
-            recovery_workers=runtime_policy.source_plan_recovery_workers,
             report=report,
             external_input_context=external_input_context,
         )
@@ -539,14 +408,11 @@ def write_auto_research_plans(
         "elapsedSeconds": round(elapsed, 3),
         "entitiesPerMinute": round(len(scope_ids) / elapsed * 60.0, 3),
     }
-    wave_budget_exceeded = network_breaker.wave_budget_exceeded()
     outage = network_breaker.BREAKER.snapshot()
-    network_breaker.clear_wave_budget()
-    if outage.get("openHosts") or no_progress_timed_out or wave_budget_exceeded:
+    if outage.get("openHosts") or no_progress_timed_out:
         report["networkOutage"] = {
             **outage,
             "noProgress": no_progress_timed_out,
-            "waveBudgetExceeded": wave_budget_exceeded,
         }
     if no_progress_timed_out:
         report["partialRun"] = True

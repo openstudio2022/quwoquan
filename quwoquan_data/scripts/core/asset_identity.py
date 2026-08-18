@@ -34,6 +34,9 @@ class PostAssetIdentity:
     caption_token: str
     execution_sequence: int
     digest: str
+    # 原始序号字面量：公开 slice segment 必须逐字节可跨语言复现，整数往返会吞掉
+    # 前导零这类差异，因此保留字面量而不是只留 int。
+    sequence_token: str
 
 
 def asset_token(value: str) -> str:
@@ -134,5 +137,6 @@ def parse_post_asset_id(asset_id: str) -> PostAssetIdentity:
             caption_token=caption,
             execution_sequence=int(execution_sequence),
             digest=digest,
+            sequence_token=execution_sequence,
         )
     raise ValueError(f"invalid post asset id: {asset_id!r}")

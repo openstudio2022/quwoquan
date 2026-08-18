@@ -13,6 +13,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from core import source_digest as source_digest_module
 from content.execution.planning.recipe import request as recipe_request
 from content.execution.campaign import workspace as campaign_workspace
 from content.execution.closure import adoption as reviewed_closure_adoption
@@ -37,25 +38,37 @@ from content.release.canonical.release_identity_incident import (
     record_release_identity_incident,
 )
 from core.paths import OUTPUT_ROOT, RELEASE_IDENTITY_INCIDENTS_ROOT, REPO_ROOT
-from core.release_layout import object_closure_digest, payload_digest
-from core.source_digest import content_source_revision, current_source_digest
+from core.release_layout import objects_merkle, payload_digest
+from core.source_digest import (
+    content_source_revision,
+    current_execution_bundle_identity,
+    current_source_definition_snapshot,
+)
 
 _RELEASE_ID = "reviewed-closure-source-001"
 _ADOPTION_ID = "reviewed-closure-adoption-001"
-_SOURCE_INPUTS = tuple(current_source_digest().to_document()["inputs"])
+_SOURCE_INPUTS = tuple(
+    current_source_definition_snapshot().to_document()["inputs"]
+)
 
 
 def _freeze_repo_source(monkeypatch: pytest.MonkeyPatch) -> None:
-    frozen = current_source_digest()
+    frozen_definition = current_source_definition_snapshot()
+    frozen_bundle = current_execution_bundle_identity()
     monkeypatch.setattr(
         reviewed_closure_adoption,
-        "current_source_digest",
-        lambda **_kwargs: frozen,
+        "current_source_definition_snapshot",
+        lambda **_kwargs: frozen_definition,
     )
     monkeypatch.setattr(
         campaign_workspace,
-        "current_source_digest",
-        lambda **_kwargs: frozen,
+        "current_source_definition_snapshot",
+        lambda **_kwargs: frozen_definition,
+    )
+    monkeypatch.setattr(
+        source_digest_module,
+        "current_execution_bundle_identity",
+        lambda **_kwargs: frozen_bundle,
     )
 
 
@@ -67,11 +80,15 @@ def _write_json(path: Path, value: object) -> None:
     )
 
 
-def _source_document(fill: str) -> dict[str, object]:
+def _source_document(
+    fill: str,
+    *,
+    inputs: tuple[str, ...] = _SOURCE_INPUTS,
+) -> dict[str, object]:
     return {
         "algorithm": "sha256",
         "digest": "sha256:" + fill * 64,
-        "inputs": list(_SOURCE_INPUTS),
+        "inputs": list(inputs),
     }
 
 
@@ -219,7 +236,7 @@ def _fixture(tmp_path: Path) -> dict[str, object]:
     )
     _write_json(payload_root / "sample_bundle.json", {"sample": []})
     _write_json(payload_root / "asset_admission.json", {"status": "passed"})
-    canonical_merkle = object_closure_digest(release_root)
+    canonical_merkle = objects_merkle(release_root)
     upstream_execution_ids = sorted(
         [
             "20260731--travel-homepage-reviewed--china--scale-001",
@@ -670,6 +687,7 @@ def test_adoption_cli_path_freezes_four_lane_campaign_without_release(
         build_campaign_release(
             root_execution_id=execution_ids["homepage"],
             release_id=_RELEASE_ID,
+            release_class="research",
             roots=roots,
         )
     assert caught.value.code == "DATA.CAMPAIGN.RELEASE_IDENTITY_REUSE_FORBIDDEN"
@@ -714,7 +732,7 @@ def test_adoption_campaign_aggregates_byte_exact_source_closure_to_new_release(
         release_id: str,
         objects_root: Path,
         desired: dict[str, list[str]],
-        policy: object,
+        release_class: str,
     ) -> dict[str, object]:
         del objects_root
         carriers = {
@@ -729,8 +747,8 @@ def test_adoption_campaign_aggregates_byte_exact_source_closure_to_new_release(
         return {
             "schema": "quwoquan_data.release_asset_admission",
             "releaseId": release_id,
-            "releaseClass": policy.release_class.value,
-            "productLifecycleState": policy.product_lifecycle_state.value,
+            "releaseClass": release_class,
+            "productLifecycleState": release_class,
             "containsUnverifiedAssets": False,
             "rightsStatusCounts": {
                 "verified": 0,
@@ -809,6 +827,7 @@ def test_adoption_campaign_aggregates_byte_exact_source_closure_to_new_release(
     result = build_campaign_release(
         root_execution_id=execution_ids["homepage"],
         release_id=release_id,
+        release_class="research",
         roots=roots,
     )
     selection_path = Path(result["campaignSelectionAttestation"])
@@ -816,6 +835,7 @@ def test_adoption_campaign_aggregates_byte_exact_source_closure_to_new_release(
     replay = build_campaign_release(
         root_execution_id=execution_ids["homepage"],
         release_id=release_id,
+        release_class="research",
         roots=roots,
     )
 
@@ -853,7 +873,7 @@ def test_adoption_campaign_aggregates_byte_exact_source_closure_to_new_release(
         "reviewedClosureAdoption"
     ]
     assert target_attestation["payloadSha256"] == payload_digest(target)
-    assert object_closure_digest(target) == object_closure_digest(source_release_root)
+    assert objects_merkle(target) == objects_merkle(source_release_root)
     assert _tree_file_digests(target / "payload/objects") == source_objects_before
     assert _tree_file_digests(target / "payload/media") == source_media_before
     assert target_media_manifest["assets"] == source_media_manifest["assets"]

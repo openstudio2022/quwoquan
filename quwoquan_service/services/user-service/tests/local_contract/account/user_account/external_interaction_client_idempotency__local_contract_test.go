@@ -16,6 +16,48 @@ import (
 	userintegration "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/integration"
 )
 
+func TestSMSOTPReadinessUsesCapabilityScopedServicePrincipal(t *testing.T) {
+	signer, err := rtauth.NewHS256Signer(rtauth.TokenConfig{
+		Secret:       []byte("0123456789abcdef0123456789abcdef"),
+		Issuer:       "quwoquan.test.local",
+		Audience:     "quwoquan-app",
+		Type:         rtauth.TokenTypeAccess,
+		TokenVersion: 1,
+		TTL:          time.Minute,
+	})
+	if err != nil {
+		t.Fatalf("signer: %v", err)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet ||
+			r.URL.Path != "/internal/integrations/external-requests/capabilities/identity.sms.otp/readiness" {
+			t.Fatalf("unexpected readiness request %s %s", r.Method, r.URL.Path)
+		}
+		if r.Header.Get("Authorization") == "" {
+			t.Fatal("authorization header missing")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"availability":"temporarily_unavailable","retryAfterSeconds":5}`))
+	}))
+	t.Cleanup(server.Close)
+
+	client, err := userintegration.NewExternalInteractionClient(
+		"http://integration-service:18086",
+		"gamma",
+		&http.Client{Transport: rewriteHostTransport{base: server.URL, next: http.DefaultTransport}},
+		signer,
+	)
+	if err != nil {
+		t.Fatalf("client: %v", err)
+	}
+	readiness, err := client.GetSMSOTPDeliveryReadiness(context.Background())
+	if err != nil || readiness.Availability != "temporarily_unavailable" ||
+		readiness.RetryAfterSeconds != 5 {
+		t.Fatalf("readiness=%+v err=%v", readiness, err)
+	}
+}
+
 func TestSubmitSMSOTPSetsRequiredIdempotencyKeyHeader(t *testing.T) {
 	signer, err := rtauth.NewHS256Signer(rtauth.TokenConfig{
 		Secret:       []byte("0123456789abcdef0123456789abcdef"),

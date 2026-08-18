@@ -21,7 +21,7 @@ from content.release.canonical.release_attestation import (
 )
 from core.source_digest import (
     content_source_revision,
-    current_source_digest,
+    current_source_definition_snapshot,
 )
 
 ENTITY_CATALOG_DIGEST = "sha256:" + "e" * 64
@@ -33,7 +33,7 @@ from governance.coverage.distribution import (
 
 
 def _receipt() -> ReleaseAttestation:
-    source_digest = current_source_digest()
+    source_digest = current_source_definition_snapshot()
     return ReleaseAttestation(
         release_id="20260718--travel-homepage-coverage--test-release-a--001",
         source_owner=DataSourceOwner.QWQ_DATA,
@@ -137,14 +137,14 @@ def test_release_attestation__accepts_research_pool_identity_set__contract() -> 
     assert receipt.to_document() == document
 
 
-def test_release_attestation__rejects_historical_inputs_for_scalar_identity__contract() -> None:
+def test_release_attestation__rejects_execution_inputs_for_source_identity__contract() -> None:
     document = _receipt().to_document()
     document["sourceDigests"][0]["inputs"] = ["quwoquan_data/scripts"]
 
     try:
         ReleaseAttestation.from_document(document)
     except ReleaseAttestationError as exc:
-        assert "fixed repository inputs" in str(exc)
+        assert "fixed source-definition inputs" in str(exc)
     else:
         raise AssertionError("scalar source identity must bind current repository inputs")
 

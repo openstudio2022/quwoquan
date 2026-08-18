@@ -57,7 +57,7 @@ def test_managed_agent_subprocess_imports_from_the_data_scripts_root(monkeypatch
     assert "QWQ_CURSOR_API_KEY_FD" not in captured["env"]
 
 
-def test_source_review_timeout_reports_progress_and_reaps_workspace_bridge(
+def test_source_review_timeout_reports_progress_without_reaping_sibling_bridges(
     monkeypatch,
     capsys,
 ) -> None:
@@ -113,7 +113,7 @@ def test_source_review_timeout_reports_progress_and_reaps_workspace_bridge(
     assert outcome.error_code == "semantic_provider_transport_timeout"
     assert outcome.retryable is True
     assert kills and kills[0][0] == 4242
-    assert cleanup == [Path.cwd()]
+    assert cleanup == []
     stderr = capsys.readouterr().err
     assert "[source-review] started" in stderr
     assert "[source-review] timed out" in stderr

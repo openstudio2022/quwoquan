@@ -38,8 +38,7 @@ var otpClientPlatforms = map[string]struct{}{
 // Provider names, dependency checks, response bodies and transport errors stay
 // inside the service boundary.
 func (s *AuthService) GetOtpDeliveryReadiness(ctx context.Context) OtpDeliveryReadiness {
-	checker, ok := s.externalClient.(SMSOTPReadinessChecker)
-	if !ok || checker == nil {
+	if s.smsOtpReadiness == nil {
 		return OtpDeliveryReadiness{
 			Availability:      "temporarily_unavailable",
 			RetryAfterSeconds: otpReadinessRetryAfterSeconds,
@@ -47,10 +46,15 @@ func (s *AuthService) GetOtpDeliveryReadiness(ctx context.Context) OtpDeliveryRe
 	}
 	probeCtx, cancel := context.WithTimeout(ctx, 1200*time.Millisecond)
 	defer cancel()
-	if err := checker.CheckSMSOTPReadiness(probeCtx); err != nil {
+	readiness, err := s.smsOtpReadiness.GetSMSOTPDeliveryReadiness(probeCtx)
+	if err != nil || readiness.Availability != "ready" {
+		retryAfterSeconds := readiness.RetryAfterSeconds
+		if retryAfterSeconds <= 0 {
+			retryAfterSeconds = otpReadinessRetryAfterSeconds
+		}
 		return OtpDeliveryReadiness{
 			Availability:      "temporarily_unavailable",
-			RetryAfterSeconds: otpReadinessRetryAfterSeconds,
+			RetryAfterSeconds: retryAfterSeconds,
 		}
 	}
 	return OtpDeliveryReadiness{Availability: "ready", RetryAfterSeconds: 0}

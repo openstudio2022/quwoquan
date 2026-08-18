@@ -279,7 +279,7 @@ def write_brief_object(
     from core.paths import STAGE_COMPOSE, ensure_object_stages
 
     obj_dir = content_object_dir(execution_id, ref)
-    ensure_object_stages(obj_dir, through_stage=STAGE_COMPOSE)
+    ensure_object_stages(obj_dir)
     path = content_object_stage_dir(execution_id, ref, STAGE_COMPOSE) / BRIEF_FILE
     write_json(path, payload)
     return path

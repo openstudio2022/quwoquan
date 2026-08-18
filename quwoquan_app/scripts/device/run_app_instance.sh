@@ -183,17 +183,21 @@ PY
   export QWQ_APP_PREFLIGHT_JSON="$APP_PREFLIGHT_JSON"
 fi
 
-if [[ "$LAUNCH_POLICY" == "prod_release" ]]; then
-  if [[ -z "$CONTENT_RELEASE_ID" \
-     || ! "$CONTENT_MANIFEST_DIGEST" =~ ^sha256:[0-9a-f]{64}$ \
-     || ! "$CONTENT_READINESS_RECEIPT_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
-    echo "GATE_BLOCK: canonical launcher requires release-bound content identity." >&2
-    exit 2
-  fi
-fi
+# 内容激活是服务端运行时事实，仅作为环境验收证据链导出；不再阻断启动，
+# 也不进入 launch manifest 或 Dart defines。
 export QWQ_CONTENT_RELEASE_ID="$CONTENT_RELEASE_ID"
 export QWQ_CONTENT_MANIFEST_DIGEST="$CONTENT_MANIFEST_DIGEST"
 export QWQ_CONTENT_READINESS_RECEIPT_DIGEST="$CONTENT_READINESS_RECEIPT_DIGEST"
+
+# App 包身份由静态 flavor/scheme 在构建图解析前选择。
+QWQ_ANDROID_DEBUG_PACKAGE_NAME="$(
+  PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" PYTHONDONTWRITEBYTECODE=1 \
+    python3 -c "from quwoquan_ops.cli.lib.app_identity import application_id_for; import sys; print(application_id_for('android', sys.argv[1], 'debug'))" \
+    "$ENV_NAME"
+)" || {
+  echo "GATE_BLOCK: failed to derive the Android debug application id for $ENV_NAME." >&2
+  exit 2
+}
 
 if [[ "$LAUNCH_POLICY" == "test_live" ]]; then
   if ! PYTHONDONTWRITEBYTECODE=1 python3 \
@@ -353,7 +357,7 @@ if [[ -n "${QWQ_ANDROID_LOCAL_TARGET:-}" ]]; then
       --target "$QWQ_ANDROID_LOCAL_TARGET"
       --device "$DEVICE_ID"
       --consumer "$QWQ_RUN_CONSUMER_ID"
-      --package-name com.quwoquan.quwoquan_app
+      --package-name "$QWQ_ANDROID_DEBUG_PACKAGE_NAME"
       --ports "$QWQ_ANDROID_LOCAL_PORTS"
     )
     if [[ -n "$CONTENT_RELEASE_ID" ]]; then
@@ -410,13 +414,6 @@ handoff_cmd=(
   --launch-mode canonical_launcher
   --launch-policy "$LAUNCH_POLICY"
 )
-if [[ -n "$CONTENT_RELEASE_ID" ]]; then
-  handoff_cmd+=(
-    --content-release-id "$CONTENT_RELEASE_ID"
-    --content-manifest-digest "$CONTENT_MANIFEST_DIGEST"
-    --content-readiness-receipt-digest "$CONTENT_READINESS_RECEIPT_DIGEST"
-  )
-fi
 if [[ -n "$GATEWAY_BASE_URL" ]]; then
   handoff_cmd+=(--gateway-base-url "$GATEWAY_BASE_URL")
 fi
@@ -528,7 +525,7 @@ if [[ "${QWQ_CONSUMER_LEASE_ACQUIRED:-0}" == "1" ]]; then
     --target "$QWQ_ANDROID_LOCAL_TARGET"
     --device "$DEVICE_ID"
     --consumer "$QWQ_RUN_CONSUMER_ID"
-    --package-name com.quwoquan.quwoquan_app
+    --package-name "$QWQ_ANDROID_DEBUG_PACKAGE_NAME"
     --ports "$QWQ_ANDROID_LOCAL_PORTS"
     --handoff-digest "$EFFECTIVE_LAUNCH_MANIFEST_DIGEST"
   )
@@ -572,7 +569,16 @@ state_path = Path(state_file)
 state_path.parent.mkdir(parents=True, exist_ok=True)
 
 entrypoint = str(handoff["entrypoint"])
-command = ["flutter", "run", "--target", entrypoint, "-d", device_id]
+command = [
+    "flutter",
+    "run",
+    "--flavor",
+    env_name,
+    "--target",
+    entrypoint,
+    "-d",
+    device_id,
+]
 for key, value in defines.items():
     command.append(f"--dart-define={key}={value}")
 

@@ -31,6 +31,12 @@ def _running_attempt(candidate_digest: str) -> dict[str, object]:
     }
 
 
+def _stopped_attempt(candidate_digest: str) -> dict[str, object]:
+    attempt = _running_attempt(candidate_digest)
+    attempt["status"] = "stopped"
+    return attempt
+
+
 def _down_args(report_dir: Path) -> argparse.Namespace:
     return argparse.Namespace(
         target="alpha-local",
@@ -136,12 +142,14 @@ class StackctlReceiptBoundImmutableTeardownTest(unittest.TestCase):
             candidate_manifest={"baselineId": receipt_candidate},
             candidate_root=candidate_root,
         )
+        # teardown 读的是回执记下的那个候选包，它可能早于当前 ContractGraph；
+        # 自校验用途正是为此不要求候选包与当前图一致。
         load_manifest.assert_called_once_with(
             "alpha",
             "alpha-local",
             receipt_candidate,
             require_full=True,
-            require_current_contract_graph=False,
+            purpose="self_verify",
         )
         provider_environment.assert_called_once_with(
             {"composition": {}},
@@ -149,6 +157,122 @@ class StackctlReceiptBoundImmutableTeardownTest(unittest.TestCase):
             workload="full",
         )
         active_candidate.assert_not_called()
+
+    def test_purging_rebuildable_state_binds_a_rolled_back_stopped_receipt(
+        self,
+    ) -> None:
+        """启动失败会自己回滚成 stopped，但挡住下次启动的卷还在原处。
+
+        把 stopped 一并拒掉，唯一受支持的清理入口就只在不需要它的时候可用。
+        """
+        receipt_candidate = "sha256:" + "1" * 64
+        environment: dict[str, str] = {}
+        with tempfile.TemporaryDirectory() as temporary:
+            candidate_root = (Path(temporary) / "receipt-candidate").resolve()
+            with self._bound_teardown_dependencies(
+                receipt_candidate,
+                candidate_root,
+                attempt=_stopped_attempt(receipt_candidate),
+            ):
+                bound = stackctl._bind_local_teardown_runtime(
+                    env_name="alpha",
+                    target_name="alpha-local",
+                    environment=environment,
+                    purge_rebuildable_state=True,
+                )
+
+        self.assertEqual(bound[1], "runtime-receipt")
+        # 清理仍绑定回执身份，不是盲删：Compose 项目来自刚被拆掉的那次运行。
+        self.assertEqual(bound[2], "quwoquan_alpha_release")
+        self.assertEqual(environment["QWQ_RELEASE_CANDIDATE_DIGEST"], receipt_candidate)
+
+    def test_plain_teardown_still_requires_a_non_stopped_receipt(self) -> None:
+        """不带清理的 down 对已停止的运行时无事可做，判据保持收紧。"""
+        receipt_candidate = "sha256:" + "1" * 64
+        with (
+            mock.patch.object(
+                stackctl,
+                "load_startup_attempt",
+                return_value=_stopped_attempt(receipt_candidate),
+            ),
+            self.assertRaisesRegex(ValueError, "non-stopped canonical startup receipt"),
+        ):
+            stackctl._bind_local_teardown_runtime(
+                env_name="alpha",
+                target_name="alpha-local",
+                environment={},
+                purge_rebuildable_state=False,
+            )
+
+    def test_missing_receipt_is_refused_even_when_purging(self) -> None:
+        """回执缺席时没有可绑定的身份，清理必须转显式 repair 而不是盲删。"""
+        with (
+            mock.patch.object(stackctl, "load_startup_attempt", return_value=None),
+            self.assertRaisesRegex(ValueError, "canonical startup receipt"),
+        ):
+            stackctl._bind_local_teardown_runtime(
+                env_name="alpha",
+                target_name="alpha-local",
+                environment={},
+                purge_rebuildable_state=True,
+            )
+
+    @contextlib.contextmanager
+    def _bound_teardown_dependencies(
+        self,
+        receipt_candidate: str,
+        candidate_root: Path,
+        *,
+        attempt: dict[str, object],
+    ):
+        with (
+            mock.patch.object(
+                stackctl, "load_startup_attempt", return_value=attempt
+            ),
+            mock.patch.object(
+                stackctl, "deployment_candidate_dir", return_value=candidate_root
+            ),
+            mock.patch.object(
+                stackctl,
+                "load_candidate_manifest",
+                return_value={"baselineId": receipt_candidate},
+            ),
+            mock.patch.object(
+                stackctl,
+                "_candidate_provider_runtime",
+                return_value={
+                    "candidateRoot": candidate_root,
+                    "providerRuntime": {"composition": {}},
+                },
+            ),
+            mock.patch.object(
+                stackctl,
+                "_provider_runtime_launch_environment",
+                return_value={"QWQ_PROVIDER_RUNTIME_DIGEST": "sha256:" + "2" * 64},
+            ),
+            mock.patch.object(
+                stackctl,
+                "_candidate_observability_log_sink",
+                return_value={"candidateRoot": candidate_root, "composition": {}},
+            ),
+            mock.patch.object(
+                stackctl,
+                "_observability_log_sink_launch_environment",
+                return_value={
+                    "QWQ_OBSERVABILITY_LOG_SINK_DIGEST": "sha256:" + "3" * 64
+                },
+            ),
+            mock.patch.object(
+                stackctl,
+                "_load_gamma_runtime_image_composition",
+                return_value=(
+                    {"configurationDigest": "sha256:" + "4" * 64, "images": {}},
+                    "quwoquan_alpha_release",
+                ),
+            ),
+            mock.patch.object(stackctl, "_apply_gamma_image_composition"),
+        ):
+            yield
 
     def test_candidate_provider_rejects_root_outside_receipt_baseline(self) -> None:
         receipt_candidate = "sha256:" + "1" * 64

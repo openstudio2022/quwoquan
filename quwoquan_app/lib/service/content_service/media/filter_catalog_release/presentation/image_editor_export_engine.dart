@@ -11,6 +11,19 @@ import 'package:quwoquan_app/service/content_service/media/filter_catalog_releas
 import 'package:quwoquan_app/service/content_service/media/filter_catalog_release/presentation/image_editor_text_models.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 
+/// 烘焙未达成：用户显式动作（裁剪 / 旋转 / 滤镜 / 马赛克 / 文字）没有产出可用结果。
+///
+/// 这类失败必须走错误态并被观测，不得降级成空结果让调用方判空，否则「没做成」
+/// 会和「本来就没有」混成同一个 null。
+class ImageEditorBakeException implements Exception {
+  const ImageEditorBakeException(this.reason);
+
+  final String reason;
+
+  @override
+  String toString() => 'ImageEditorBakeException: $reason';
+}
+
 /// 图片编辑像素导出引擎：预览与导出共用同一几何/合成真相源。
 ///
 /// 所有函数是纯 bytes/ui.Image 变换，不依赖页面状态，可在 local_contract 中直接测试。
@@ -54,9 +67,15 @@ class ImageEditorExportEngine {
     }
   }
 
-  static Future<Uint8List?> encodePng(ui.Image image) async {
+  /// 编码失败抛出 [ImageEditorBakeException]；不以可空返回值表达失败。
+  static Future<Uint8List> encodePng(ui.Image image) async {
     final data = await image.toByteData(format: ui.ImageByteFormat.png);
-    return data?.buffer.asUint8List();
+    if (data == null) {
+      throw ImageEditorBakeException(
+        'png encode returned no pixels (${image.width}x${image.height})',
+      );
+    }
+    return data.buffer.asUint8List();
   }
 
   /// 提交转码 JPEG 质量（编辑管线内部保持 PNG 无损，提交时一次性压缩）。
@@ -64,13 +83,18 @@ class ImageEditorExportEngine {
 
   /// 将编辑结果 RGBA 像素编码为交付 JPEG（isolate 内执行，防 UI 卡顿）。
   ///
-  /// 返回 null 表示编码失败，调用方应回退原文件。
-  static Future<Uint8List?> encodeDeliveryJpeg(
+  /// 编码失败抛出，由调用方决定回退策略；不以可空返回值表达失败。
+  static Future<Uint8List> encodeDeliveryJpeg(
     ui.Image image, {
     int quality = kDeliveryJpegQuality,
   }) async {
     final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
-    if (data == null) return null;
+    if (data == null) {
+      throw ImageEditorBakeException(
+        'delivery jpeg encode returned no pixels '
+        '(${image.width}x${image.height})',
+      );
+    }
     return compute(
       _encodeJpegInIsolate,
       _JpegEncodeRequest(
@@ -1514,17 +1538,13 @@ class _JpegEncodeRequest {
   final int quality;
 }
 
-Uint8List? _encodeJpegInIsolate(_JpegEncodeRequest request) {
-  try {
-    final image = img.Image.fromBytes(
-      width: request.width,
-      height: request.height,
-      bytes: request.rgba.buffer,
-      numChannels: 4,
-      order: img.ChannelOrder.rgba,
-    );
-    return Uint8List.fromList(img.encodeJpg(image, quality: request.quality));
-  } catch (_) {
-    return null;
-  }
+Uint8List _encodeJpegInIsolate(_JpegEncodeRequest request) {
+  final image = img.Image.fromBytes(
+    width: request.width,
+    height: request.height,
+    bytes: request.rgba.buffer,
+    numChannels: 4,
+    order: img.ChannelOrder.rgba,
+  );
+  return Uint8List.fromList(img.encodeJpg(image, quality: request.quality));
 }

@@ -1,49 +1,43 @@
+"""Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
-
-from core.entity_focus import classify_entity_focus as _classify_entity_focus
-from core.entity_focus import coverage_targets_mentioned as _coverage_targets_mentioned
-
-from content.execution import support as _support
-from content.execution.controller import content_plan_assets as _plan_assets
-from content.execution.controller.content_plan_asset_semantics import (
-    admitted_article_asset_rows as _admitted_article_asset_rows,
+from content.execution.coverage import coverage_entity_type, coverage_entity_type_for_entity
+from content.execution.support import Any, DataIssue, DataIssueCode, DataIssueStage, DataIssueLane, DataRecoveryAction, ExecutionContext, Mapping, Path, article_commercial_closure_enabled, data_issue, data_issues, execution_content_plan_packet_path, execution_root, image_count_is_hard_quota, minimum_publishable_images_per_target, read_json, relative_execution_ref, write_json
+from content.execution.controller.content_plan_assets import (
+    article_asset_claims as _article_asset_claims,
+    asset_ref as _asset_ref, asset_rows as _asset_rows, asset_sha as _asset_sha,
+    claim as _claim, claims_conflict as _claims_conflict,
+    image_claims as _image_claims,
+    source_ref as _source_ref,
 )
-from content.execution.controller.content_plan_asset_semantics import (
-    article_target_scope as _article_target_scope,
-)
+from content.execution.controller.content_plan_output import write_content_plan_diagnostics, write_content_plan_packet
 from content.execution.controller.content_plan_decisions import (
     ContentPlanRejectLedger,
+    absorb_content_plan_shortfalls,
     missing_source_diagnostic,
+    persist_content_plan_shortfall_absorb as _persist_content_plan_shortfall_absorb,
 )
-from content.execution.coverage import (
-    coverage_entity_type,
-    coverage_entity_type_for_entity,
+from core.entity_focus import (
+    VERDICT_STRONG as _VERDICT_STRONG,
+    classify_entity_focus as _classify_entity_focus,
+    coverage_targets_mentioned as _coverage_targets_mentioned,
 )
-from content.execution.support import Any, Mapping
 
-
-def _auto_content_plan(
-    ctx: _support.ExecutionContext, active_spec: Mapping[str, Any]
-) -> list[_support.DataIssue]:
+def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) -> list[DataIssue]:
     """Build exact per-entity content plans from validated source units."""
-    from core.quality_gates import derive_writing_intent
-
-    from content.execution.controller.content_plan_contract import (
-        resolve_content_plan_contract,
-    )
-    from content.execution.controller.content_plan_prep import (
-        _article_source_quality_sort_key,
-        _assess_content_plan_publish_image,
-        _clean_content_plan_outputs,
-    )
+    from content.execution.controller.content_plan_prep import _article_source_quality_sort_key, _assess_content_plan_publish_image, _clean_content_plan_outputs
     from content.execution.planning.source_ready_scope import source_ready_runtime_spec
     from content.post.article.base_draft import load_base_draft_text
     from content.post.article.base_draft_source import extract_source_title
+    from core.quality_gates import derive_writing_intent
     from content.post.content_plan import (
         ARTICLE_MIN_BASE_DRAFT_CHARS,
     )
+    from content.post.content_plan_validation import validate_content_plan
     from content.post.content_plan_state import load_content_plan_packet
     from content.source.source_unit import resolve_entity_object_dir
+    from content.execution.controller.content_plan_contract import (
+        resolve_content_plan_contract,
+    )
     active_spec = source_ready_runtime_spec(ctx.execution_id, active_spec)
     contract, contract_issues = resolve_content_plan_contract(ctx, active_spec)
     if contract is None:
@@ -64,18 +58,22 @@ def _auto_content_plan(
         else None
     )
     _clean_content_plan_outputs(ctx)
-    root = _support.execution_root(ctx.execution_id)
+    root = execution_root(ctx.execution_id)
     etype = coverage_entity_type(active_spec)
-    targets, target_aliases = _article_target_scope(active_spec)
+    targets = [
+        str(target.get("name") or "").strip()
+        for target in ((active_spec.get("scope") or {}).get("coverageTargets") or [])
+        if str(target.get("name") or "").strip()
+    ]
     task_region = str(((active_spec.get("scope") or {}).get("region") or "")).strip()
     execution_policy = active_spec.get("executionPolicy") if isinstance(active_spec.get("executionPolicy"), Mapping) else {}
     daily_object_target = int(execution_policy.get("targetObjectCount") or 0)
     if daily_object_target < 1:
-        return [_support.data_issue(
-            _support.DataIssueCode.CONTRACT_INVALID,
-            stage=_support.DataIssueStage.CONTENT_PLAN,
+        return [data_issue(
+            DataIssueCode.CONTRACT_INVALID,
+            stage=DataIssueStage.CONTENT_PLAN,
             ref=ctx.execution_id,
-            recovery=_support.DataRecoveryAction.STOP,
+            recovery=DataRecoveryAction.STOP,
             message="executionPolicy.targetObjectCount must be a positive frozen execution value",
         )]
     from content.execution.controller.content_plan_schedule import ContentPlanScheduler
@@ -86,11 +84,11 @@ def _auto_content_plan(
             daily_object_target=daily_object_target,
         )
     except (OSError, TypeError, ValueError) as exc:
-        return [_support.data_issue(
-            _support.DataIssueCode.CONTRACT_INVALID,
-            stage=_support.DataIssueStage.CONTENT_PLAN,
+        return [data_issue(
+            DataIssueCode.CONTRACT_INVALID,
+            stage=DataIssueStage.CONTENT_PLAN,
             ref=ctx.execution_id,
-            recovery=_support.DataRecoveryAction.STOP,
+            recovery=DataRecoveryAction.STOP,
             message=f"creator scheduling contract is invalid: {exc}",
         )]
     used_asset_refs: set[str] = set()
@@ -98,7 +96,7 @@ def _auto_content_plan(
     used_collection_ids: set[str] = set()
     used_article_source_refs: set[str] = set()
     items: list[dict[str, Any]] = []
-    issues: list[_support.DataIssue] = []
+    issues: list[DataIssue] = []
     source_diagnostics: dict[str, dict[str, Any]] = {}
     for target in targets:
         # 目标集可以跨实体类型（如金丝雀 景区+自然景观），必须按冻结目标逐一解析类型，
@@ -136,18 +134,18 @@ def _auto_content_plan(
             )
             if commercial_closure:
                 continue
-            issues.append(_support.data_issue(
-                _support.DataIssueCode.SOURCE_MISSING,
-                stage=_support.DataIssueStage.CONTENT_PLAN,
+            issues.append(data_issue(
+                DataIssueCode.SOURCE_MISSING,
+                stage=DataIssueStage.CONTENT_PLAN,
                 ref=target,
                 lane=(
-                    _support.DataIssueLane.IMAGE
+                    DataIssueLane.IMAGE
                     if image_lane_enabled and not article_lane_enabled
-                    else _support.DataIssueLane.ARTICLE
+                    else DataIssueLane.ARTICLE
                     if article_lane_enabled and not image_lane_enabled
-                    else _support.DataIssueLane.ALL
+                    else DataIssueLane.ALL
                 ),
-                recovery=_support.DataRecoveryAction.REPLACE_SOURCE,
+                recovery=DataRecoveryAction.REPLACE_SOURCE,
                 message=reason,
             ))
             continue
@@ -161,12 +159,12 @@ def _auto_content_plan(
             if not meta_path.is_file() or not (source_dir / "source.md").is_file():
                 continue
             try:
-                meta = _support.read_json(meta_path)
+                meta = read_json(meta_path)
             except (OSError, ValueError, TypeError):
                 meta = {}
             source_id = str(meta.get("sourceId") or source_dir.name).strip()
             lane = str(meta.get("researchLane") or "").strip()
-            rows = _plan_assets.asset_rows(source_dir)
+            rows = _asset_rows(source_dir)
             if lane == "article":
                 if str(meta.get("sourceRole") or "") != "base":
                     continue
@@ -177,7 +175,7 @@ def _auto_content_plan(
                     # P3 文章判据：含视频则放弃——不把视频内容强行图文化为攻略文章。
                     rejects.reject_article("contains_video", source_id, "来源含内联视频，文章类放弃")
                     continue
-                source_ref = _plan_assets.source_ref(ctx, source_dir)
+                source_ref = _source_ref(ctx, source_dir)
                 base_body = load_base_draft_text(ctx.execution_id, source_ref)
                 from content.post.article.base_draft import base_draft_readiness
                 readiness = base_draft_readiness(
@@ -220,14 +218,7 @@ def _auto_content_plan(
                         target,
                     }
                 )
-                admitted_rows, semantic_issues = _admitted_article_asset_rows(
-                    rows, entity_id=target, article_text=base_body, entity_aliases=target_aliases.get(target, ()),
-                )
-                for semantic_issue in semantic_issues:
-                    rejects.warn_article_image(
-                        "asset_semantic_mismatch", source_id, semantic_issue
-                    )
-                if not admitted_rows:
+                if not rows:
                     rejects.warn_article_image("no_source_assets", source_id)
                 article_candidates.append(
                     {
@@ -236,10 +227,7 @@ def _auto_content_plan(
                         "sourceId": source_id,
                         "title": str(meta.get("title") or source_id),
                         "draftTitle": draft_title,
-                        "writingIntent": str(meta.get("writingIntent") or "")
-                        or derive_writing_intent(base_body),
-                        "articleCategory": str(meta.get("articleCategory") or ""),
-                        "topicTagRefs": list(meta.get("topicTagRefs") or []),
+                        "writingIntent": derive_writing_intent(base_body),
                         "entityTags": entity_tags,
                         "sourceUseMode": str(meta.get("sourceUseMode") or "factual_reference_only"),
                         "sourceClass": str(meta.get("sourceClass") or meta.get("category") or ""),
@@ -257,16 +245,13 @@ def _auto_content_plan(
                             or ((meta.get("siteTemplate") or {}).get("freshnessTier") if isinstance(meta.get("siteTemplate"), Mapping) else "")
                             or ""
                         ),
-                        "rows": admitted_rows,
-                        "targetEntity": target,
-                        "targetAliases": list(target_aliases.get(target, ())),
-                        "articleAnchorText": base_body,
+                        "rows": rows,
                     }
                 )
             elif lane == "image":
                 for row in rows:
                     image_raw_count += 1
-                    asset_ref = _plan_assets.asset_ref(ctx, source_dir, row)
+                    asset_ref = _asset_ref(ctx, source_dir, row)
                     collection_id = str(row.get("sourceCollectionId") or "").strip()
                     if not asset_ref:
                         rejects.reject_image("missing_asset_ref", source_id)
@@ -277,16 +262,6 @@ def _auto_content_plan(
                     asset_path = root / asset_ref
                     if not asset_path.is_file():
                         rejects.reject_image("asset_file_missing", source_id, asset_ref)
-                        continue
-                    canonical_issue = _plan_assets._canonical_image_asset_issue(
-                        source_dir, row
-                    )
-                    if canonical_issue:
-                        rejects.reject_image(
-                            "canonical_duplicate",
-                            source_id,
-                            canonical_issue,
-                        )
                         continue
                     verdict = _assess_content_plan_publish_image(asset_path, ctx)
                     if verdict.blocks_image_publish:
@@ -299,10 +274,10 @@ def _auto_content_plan(
                     image_candidates.append(
                         {
                             "sourceDir": source_dir,
-                            "sourceRef": _plan_assets.source_ref(ctx, source_dir),
+                            "sourceRef": _source_ref(ctx, source_dir),
                             "sourceId": source_id,
                             "assetRef": asset_ref,
-                            "assetSha": _plan_assets.asset_sha(row),
+                            "assetSha": _asset_sha(row),
                             "collectionId": collection_id,
                             "caption": str(row.get("caption") or "").strip(),
                             "title": str(meta.get("title") or "").strip(),
@@ -314,10 +289,8 @@ def _auto_content_plan(
         protected_article_shas: set[str] = set()
         protected_article_collections: set[str] = set()
         for candidate in article_candidates:
-            refs, shas, collections, _asset_refs = _plan_assets.article_asset_claims(
-                ctx, root, candidate
-            )
-            _plan_assets.claim(
+            refs, shas, collections, _asset_refs = _article_asset_claims(ctx, root, candidate)
+            _claim(
                 refs,
                 shas,
                 collections,
@@ -329,15 +302,15 @@ def _auto_content_plan(
         for candidate in (image_candidates if image_lane_enabled else []):
             if per_target_images and len(picked_images) >= per_target_images:
                 break
-            refs, shas, collections = _plan_assets.image_claims(candidate)
-            if _plan_assets.claims_conflict(
+            refs, shas, collections = _image_claims(candidate)
+            if _claims_conflict(
                 refs,
                 shas,
                 collections,
                 claimed_refs=protected_article_refs,
                 claimed_shas=protected_article_shas,
                 claimed_collections=protected_article_collections,
-            ) or _plan_assets.claims_conflict(
+            ) or _claims_conflict(
                 refs,
                 shas,
                 collections,
@@ -352,7 +325,7 @@ def _auto_content_plan(
                 )
                 continue
             picked_images.append(candidate)
-            _plan_assets.claim(
+            _claim(
                 refs,
                 shas,
                 collections,
@@ -368,12 +341,15 @@ def _auto_content_plan(
             if source_ref in used_article_source_refs:
                 rejects.reject_article("source_ref_reused", str(candidate["sourceId"]))
                 continue
-            refs, shas, collections, asset_refs, media_mode = (
-                _plan_assets.normalize_article_media_claims(
-                    _plan_assets.article_asset_claims(ctx, root, candidate)
+            refs, shas, collections, asset_refs = _article_asset_claims(ctx, root, candidate)
+            if len(asset_refs) < 2:
+                rejects.reject_article(
+                    "same_source_cover_body_missing",
+                    str(candidate["sourceId"]),
+                    "article requires at least two publishable images from its base source unit",
                 )
-            )
-            if _plan_assets.claims_conflict(
+                continue
+            if _claims_conflict(
                 refs,
                 shas,
                 collections,
@@ -388,12 +364,11 @@ def _auto_content_plan(
                 continue
             claimed_candidate = dict(candidate)
             claimed_candidate["assetRefs"] = asset_refs
-            claimed_candidate["publishMediaMode"] = media_mode
             picked_articles.append(claimed_candidate)
             if source_ref:
                 used_article_source_refs.add(source_ref)
             if asset_refs:
-                _plan_assets.claim(
+                _claim(
                     refs,
                     shas,
                     collections,
@@ -409,12 +384,12 @@ def _auto_content_plan(
             if commercial_closure:
                 pass
             else:
-                issues.append(_support.data_issue(
-                    _support.DataIssueCode.SOURCE_RETAINED_SHORTFALL,
-                    stage=_support.DataIssueStage.CONTENT_PLAN,
+                issues.append(data_issue(
+                    DataIssueCode.SOURCE_RETAINED_SHORTFALL,
+                    stage=DataIssueStage.CONTENT_PLAN,
                     ref=target,
-                    lane=_support.DataIssueLane.ARTICLE,
-                    recovery=_support.DataRecoveryAction.REPLACE_SOURCE,
+                    lane=DataIssueLane.ARTICLE,
+                    recovery=DataRecoveryAction.REPLACE_SOURCE,
                     message=reason,
                     attributes={
                         "carrier": "article",
@@ -430,12 +405,12 @@ def _auto_content_plan(
             if commercial_closure:
                 pass
             else:
-                issues.append(_support.data_issue(
-                    _support.DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL,
-                    stage=_support.DataIssueStage.CONTENT_PLAN,
+                issues.append(data_issue(
+                    DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL,
+                    stage=DataIssueStage.CONTENT_PLAN,
                     ref=target,
-                    lane=_support.DataIssueLane.IMAGE,
-                    recovery=_support.DataRecoveryAction.REPLACE_MEDIA,
+                    lane=DataIssueLane.IMAGE,
+                    recovery=DataRecoveryAction.REPLACE_MEDIA,
                     message=reason,
                     attributes={
                         "carrier": "image",
@@ -489,13 +464,37 @@ def _auto_content_plan(
             candidates=picked_images,
             items=items,
         )
-    from content.execution.controller.content_plan_finalize import finalize_content_plan
+    write_content_plan_diagnostics(ctx.execution_id, source_diagnostics=source_diagnostics)
+    if issues:
+        from content.execution.identity import parse_execution_id
 
-    return finalize_content_plan(
-        ctx=ctx,
-        active_spec=active_spec,
-        items=items,
-        issues=issues,
-        source_diagnostics=source_diagnostics,
-        existing_source_site=existing_source_site,
+        # Source/media shortfalls are object dispositions. Any real planned
+        # object continues through materialization/review; only a zero-object
+        # closure remains blocking.
+        absorbed = absorb_content_plan_shortfalls(
+            ctx=ctx,
+            active_spec=active_spec,
+            items=items,
+            issues=issues,
+            carrier=parse_execution_id(ctx.execution_id).content_type.value,
+            persist_absorb=_persist_content_plan_shortfall_absorb,
+        )
+        if not absorbed:
+            _clean_content_plan_outputs(ctx)
+            return issues
+    if not items:
+        _clean_content_plan_outputs(ctx)
+        return [data_issue(
+            DataIssueCode.SOURCE_RETAINED_SHORTFALL,
+            stage=DataIssueStage.CONTENT_PLAN,
+            ref=ctx.execution_id,
+            recovery=DataRecoveryAction.REPLACE_SOURCE,
+            message="auto content_plan produced no items",
+        )]
+    write_content_plan_packet(ctx.execution_id, items=items, source_site=existing_source_site)
+    return data_issues(
+        DataIssueCode.CONTRACT_INVALID,
+        stage=DataIssueStage.CONTENT_PLAN,
+        messages=validate_content_plan(ctx.execution_id, active_spec),
+        recovery=DataRecoveryAction.REWIND_COMPOSE,
     )

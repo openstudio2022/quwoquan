@@ -1,4 +1,4 @@
-"""Patrol 运行证据的读取与设备矩阵校验（视频/feed/edge/恢复/账号处置 + iOS 证据流）。
+"""Patrol 运行证据的读取与设备矩阵校验（视频/feed/edge/恢复/账号处置 + 移动端证据流）。
 
 正文自 run_environment_patrol_smoke.py 逐字搬入。
 """
@@ -15,6 +15,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
+from quwoquan_ops.ci.device_matrix.android import resolve_android_debug_bridge
 from quwoquan_ops.ci.device_matrix.evidence import repo_relative
 from quwoquan_ops.cli.lib.video_playback_evidence import (
     read_native_video_playback_evidence,
@@ -23,10 +24,17 @@ from quwoquan_ops.cli.lib.video_playback_evidence import (
 from .constants import (
     ACCOUNT_ENFORCEMENT_EVIDENCE_PREFIX,
     ACCOUNT_ENFORCEMENT_EXPECTED_EVIDENCE,
+    ANDROID_DEVICE_EVIDENCE_LOG_TAG,
+    ANDROID_DEVICE_EVIDENCE_TOKENS,
+    APP_CONTENT_PAGE_SCREENSHOT_READY_PREFIX,
     CONTROLLED_EDGE_FAULT_COPY_KEYS,
     CONTROLLED_EDGE_FAULT_EVIDENCE_PREFIX,
+    CORE_READBACK_TARGET,
     FEED_CONTENT_EVIDENCE_PREFIX,
+    FEED_LOAD_TARGET,
     IOS_DEVICE_EVIDENCE_TOKENS,
+    MESSAGE_HOME_TARGET,
+    PROFILE_JOURNEY_TARGET,
     REPO_ROOT,
     RUNTIME_RECOVERY_EVIDENCE_FIELDS,
     RUNTIME_RECOVERY_EVIDENCE_PREFIX,
@@ -34,6 +42,7 @@ from .constants import (
 )
 from .session import (
     _is_account_enforcement_target,
+    _is_feed_load_target,
     _is_runtime_recovery_target,
 )
 
@@ -74,6 +83,178 @@ def _read_feed_content_evidence(patrol_log: Path) -> dict[str, Any]:
             "visibleCardKeys": visible_keys,
         }
     return {}
+
+
+_APP_CONTENT_PAGE_SCREENSHOT_EXPECTATIONS = (
+    (
+        FEED_LOAD_TARGET,
+        "homepage-feed",
+        "/",
+        "",
+        ("home-feed-card-", "dual-discovery-card-"),
+    ),
+    (
+        CORE_READBACK_TARGET,
+        "app-core-readback",
+        "/",
+        "works_immersive_pager",
+        (),
+    ),
+    (
+        MESSAGE_HOME_TARGET,
+        "message-home",
+        "/chat/",
+        "chat_input_text_field",
+        (),
+    ),
+    (
+        PROFILE_JOURNEY_TARGET,
+        "profile-journey",
+        "/user/",
+        "",
+        ("profile-header-avatar", "profile-shell-summary-card"),
+    ),
+)
+
+
+def _app_content_page_screenshot_expectation(
+    args: argparse.Namespace,
+) -> tuple[str, str, str, tuple[str, ...]] | None:
+    target = str(getattr(args, "target", "") or "").replace("\\", "/")
+    for suffix, suite, route, terminal_key, terminal_key_prefixes in (
+        _APP_CONTENT_PAGE_SCREENSHOT_EXPECTATIONS
+    ):
+        if target.endswith(suffix):
+            return suite, route, terminal_key, terminal_key_prefixes
+    return None
+
+
+def _parse_app_content_page_screenshot_marker(
+    line: str,
+    *,
+    args: argparse.Namespace,
+    runtime_env: str,
+) -> dict[str, str] | None:
+    marker = line.find(APP_CONTENT_PAGE_SCREENSHOT_READY_PREFIX)
+    if marker < 0:
+        return None
+    expectation = _app_content_page_screenshot_expectation(args)
+    if expectation is None:
+        raise RuntimeError(
+            "app-content page screenshot marker came from an unsupported target"
+        )
+    encoded = line[
+        marker + len(APP_CONTENT_PAGE_SCREENSHOT_READY_PREFIX) :
+    ].strip()
+    try:
+        payload = json.loads(encoded)
+    except json.JSONDecodeError as error:
+        raise RuntimeError(
+            "app-content page screenshot marker is not valid JSON"
+        ) from error
+    if not isinstance(payload, dict):
+        raise RuntimeError("app-content page screenshot marker must be an object")
+    environment = str(payload.get("environment") or "").strip()
+    suite = str(payload.get("suite") or "").strip()
+    route = str(payload.get("route") or "").strip()
+    terminal_key = str(payload.get("terminalKey") or "").strip()
+    expected_suite, expected_route, expected_key, expected_key_prefixes = expectation
+    if environment != runtime_env or runtime_env not in {"alpha", "beta", "gamma"}:
+        raise RuntimeError(
+            "app-content page screenshot marker environment does not match runtime"
+        )
+    if suite != expected_suite:
+        raise RuntimeError(
+            "app-content page screenshot marker suite does not match target"
+        )
+    if expected_route == "/":
+        route_matches = route == expected_route
+    else:
+        route_matches = route.startswith(expected_route) and route != expected_route
+    if not route_matches:
+        raise RuntimeError(
+            "app-content page screenshot marker route does not match target"
+        )
+    if expected_key:
+        key_matches = terminal_key == expected_key
+    else:
+        key_matches = any(
+            terminal_key.startswith(prefix) for prefix in expected_key_prefixes
+        )
+    if not key_matches:
+        raise RuntimeError(
+            "app-content page screenshot marker terminalKey does not match target"
+        )
+    return {
+        "environment": environment,
+        "suite": suite,
+        "route": route,
+        "terminalKey": terminal_key,
+    }
+
+
+class _AppContentPageScreenshotCapture:
+    """Capture one exact page frame while the four app-content UATs are alive."""
+
+    def __init__(
+        self,
+        *,
+        args: argparse.Namespace,
+        runtime_env: str,
+        capture: Callable[[], dict[str, Any]],
+    ) -> None:
+        self.args = args
+        self.runtime_env = runtime_env
+        self.capture = capture
+        self.required = _app_content_page_screenshot_expectation(args) is not None
+        self.marker_count = 0
+        self.evidence: dict[str, Any] = {
+            "status": "missing" if self.required else "not-required"
+        }
+
+    def handle_line(self, line: str) -> None:
+        marker = _parse_app_content_page_screenshot_marker(
+            line,
+            args=self.args,
+            runtime_env=self.runtime_env,
+        )
+        if marker is None:
+            return
+        self.marker_count += 1
+        if self.marker_count != 1:
+            raise RuntimeError(
+                "app-content page screenshot marker must occur exactly once"
+            )
+        captured = self.capture()
+        if captured.get("status") != "captured" or not str(
+            captured.get("path") or ""
+        ).strip():
+            raise RuntimeError(
+                "app-content page screenshot capture failed during Patrol"
+            )
+        self.evidence = {
+            **captured,
+            "capturedDuringPatrol": True,
+            "marker": marker,
+        }
+
+    def apply_success_gate(self, result: dict[str, Any], *, dry_run: bool) -> None:
+        if (
+            not self.required
+            or dry_run
+            or int(result.get("exitCode", 1)) != 0
+            or (
+                self.marker_count == 1
+                and self.evidence.get("status") == "captured"
+                and self.evidence.get("capturedDuringPatrol") is True
+            )
+        ):
+            return
+        result["exitCode"] = 1
+        result["outputSummary"] = (
+            str(result.get("outputSummary") or "")
+            + "\napp-content UAT passed without one in-run route/key screenshot"
+        ).strip()
 
 
 def _read_controlled_edge_fault_evidence(patrol_log: Path) -> dict[str, Any]:
@@ -126,6 +307,61 @@ def _is_ios_device(device: dict[str, Any]) -> bool:
     return str(device.get("targetPlatform") or "").strip().lower() == "ios"
 
 
+def _is_android_device(device: dict[str, Any]) -> bool:
+    return (
+        str(device.get("targetPlatform") or "")
+        .strip()
+        .lower()
+        .startswith("android")
+    )
+
+
+def _android_device_evidence_commands(
+    device_id: str,
+    run_boundary: str,
+    *,
+    adb_path: str | None = None,
+) -> tuple[list[str], list[str]]:
+    exact_device_id = device_id.strip()
+    exact_run_boundary = run_boundary.strip()
+    if not exact_device_id:
+        raise ValueError("Android device evidence requires one exact device id")
+    if not exact_run_boundary:
+        raise ValueError("Android device evidence requires one exact run boundary")
+    executable = adb_path or resolve_android_debug_bridge()
+    if not executable:
+        raise RuntimeError(
+            "GATE_BLOCK: adb is required for exact-device Android UAT evidence"
+        )
+    return (
+        [
+            executable,
+            "-s",
+            exact_device_id,
+            "logcat",
+            "-v",
+            "raw",
+            "-T",
+            "1",
+            "flutter:I",
+            f"{ANDROID_DEVICE_EVIDENCE_LOG_TAG}:I",
+            "*:S",
+        ],
+        [
+            executable,
+            "-s",
+            exact_device_id,
+            "shell",
+            "log",
+            "-p",
+            "i",
+            "-t",
+            ANDROID_DEVICE_EVIDENCE_LOG_TAG,
+            exact_run_boundary,
+        ],
+    )
+
+
 def _ios_device_evidence_command(
     device_id: str,
     *,
@@ -159,6 +395,12 @@ def _ios_device_evidence_command(
     ]
 
 
+def _is_ios_log_stream_predicate_banner(line: str) -> bool:
+    """Identify the transport banner emitted by ``log stream`` itself."""
+
+    return line.startswith('Filtering the log data using "')
+
+
 class _IosDeviceEvidenceStream:
     """Capture whitelisted Flutter markers from one Simulator execution window."""
 
@@ -169,17 +411,24 @@ class _IosDeviceEvidenceStream:
         log_path: Path,
         output_line_handler: Callable[[str], None] | None = None,
         command: list[str] | None = None,
+        evidence_tokens: tuple[str, ...] = IOS_DEVICE_EVIDENCE_TOKENS,
+        run_boundary: str = "",
+        run_boundary_command: list[str] | None = None,
     ) -> None:
         self.device_id = device_id.strip()
         self.log_path = log_path
         self.output_line_handler = output_line_handler
         self.command = command or _ios_device_evidence_command(self.device_id)
+        self.evidence_tokens = evidence_tokens
+        self.run_boundary = run_boundary.strip()
+        self.run_boundary_command = run_boundary_command
         self.started_at = ""
         self.ended_at = ""
         self._process: subprocess.Popen[str] | None = None
         self._reader: threading.Thread | None = None
         self._handler_error: Exception | None = None
         self._log_file: Any | None = None
+        self._run_boundary_observed = threading.Event()
 
     def start(self) -> None:
         if self._process is not None:
@@ -206,7 +455,16 @@ class _IosDeviceEvidenceStream:
             assert self._log_file is not None
             try:
                 for line in self._process.stdout:
-                    if not any(token in line for token in IOS_DEVICE_EVIDENCE_TOKENS):
+                    if _is_ios_log_stream_predicate_banner(line):
+                        continue
+                    if (
+                        self.run_boundary
+                        and not self._run_boundary_observed.is_set()
+                    ):
+                        if self.run_boundary in line:
+                            self._run_boundary_observed.set()
+                        continue
+                    if not any(token in line for token in self.evidence_tokens):
                         continue
                     self._log_file.write(line)
                     self._log_file.flush()
@@ -221,6 +479,40 @@ class _IosDeviceEvidenceStream:
 
         self._reader = threading.Thread(target=read_output, daemon=True)
         self._reader.start()
+        if self.run_boundary_command is not None:
+            for boundary_attempt in range(3):
+                try:
+                    boundary_result = subprocess.run(
+                        self.run_boundary_command,
+                        cwd=str(REPO_ROOT),
+                        text=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        check=False,
+                        timeout=10,
+                    )
+                except BaseException:
+                    self.stop(grace_seconds=0)
+                    raise
+                if boundary_result.returncode != 0:
+                    self.stop(grace_seconds=0)
+                    raise RuntimeError(
+                        "GATE_BLOCK: exact-device Android evidence boundary "
+                        "could not be emitted: "
+                        + boundary_result.stderr.strip()[-1000:]
+                    )
+                if self._run_boundary_observed.wait(
+                    timeout=2 if boundary_attempt < 2 else 6
+                ):
+                    break
+        elif self.run_boundary:
+            self._run_boundary_observed.wait(timeout=10)
+        if self.run_boundary and not self._run_boundary_observed.is_set():
+            self.stop(grace_seconds=0)
+            raise RuntimeError(
+                "GATE_BLOCK: exact-device Android evidence stream did not "
+                "observe its current-run boundary"
+            )
         time.sleep(0.25)
         if self._process.poll() is not None:
             self.stop(grace_seconds=0)
@@ -269,7 +561,94 @@ class _IosDeviceEvidenceStream:
             "startedAt": self.started_at,
             "endedAt": self.ended_at,
             "logPath": repo_relative(self.log_path),
+            "runBoundaryObserved": (
+                not self.run_boundary or self._run_boundary_observed.is_set()
+            ),
         }
+
+
+class _AndroidDeviceEvidenceStream(_IosDeviceEvidenceStream):
+    """Capture marker-only logcat after an exact-device, current-run boundary."""
+
+    def __init__(
+        self,
+        *,
+        device_id: str,
+        log_path: Path,
+        output_line_handler: Callable[[str], None] | None = None,
+        command: list[str] | None = None,
+        run_boundary: str = "",
+        run_boundary_command: list[str] | None = None,
+    ) -> None:
+        exact_boundary = run_boundary.strip() or (
+            f"qwq-patrol-evidence-{os.getpid()}-{time.time_ns()}"
+        )
+        if command is None:
+            command, run_boundary_command = _android_device_evidence_commands(
+                device_id,
+                exact_boundary,
+            )
+        super().__init__(
+            device_id=device_id,
+            log_path=log_path,
+            output_line_handler=output_line_handler,
+            command=command,
+            evidence_tokens=ANDROID_DEVICE_EVIDENCE_TOKENS,
+            run_boundary=exact_boundary,
+            run_boundary_command=run_boundary_command,
+        )
+
+
+def _device_evidence_stream(
+    device: dict[str, Any],
+    *,
+    log_path: Path,
+    output_line_handler: Callable[[str], None] | None = None,
+) -> _IosDeviceEvidenceStream | None:
+    device_id = str(device.get("id") or "")
+    if _is_ios_device(device):
+        return _IosDeviceEvidenceStream(
+            device_id=device_id,
+            log_path=log_path,
+            output_line_handler=output_line_handler,
+        )
+    if _is_android_device(device):
+        return _AndroidDeviceEvidenceStream(
+            device_id=device_id,
+            log_path=log_path,
+            output_line_handler=output_line_handler,
+        )
+    return None
+
+
+def _structured_evidence_log_path(
+    device: dict[str, Any],
+    run_dir: Path,
+) -> Path:
+    device_log = run_dir / "device-evidence.log"
+    if (
+        (_is_ios_device(device) or _is_android_device(device))
+        and device_log.is_file()
+    ):
+        return device_log
+    return run_dir / "patrol.log"
+
+
+def _apply_feed_content_evidence_gate(
+    result: dict[str, Any],
+    args: argparse.Namespace,
+    feed_content_evidence: dict[str, Any],
+) -> None:
+    if (
+        _is_feed_load_target(args)
+        and not args.dry_run
+        and not feed_content_evidence
+    ):
+        result["exitCode"] = 1
+        result["outputSummary"] = (
+            str(result.get("outputSummary") or "")
+            + "\nfeed UAT did not emit a release-bound visible-card evidence marker"
+        ).strip()
 
 
 def _read_runtime_recovery_evidence(path: Path) -> dict[str, bool]:

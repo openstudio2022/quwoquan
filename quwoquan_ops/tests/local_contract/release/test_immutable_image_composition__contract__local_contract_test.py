@@ -58,10 +58,18 @@ class ImmutableImageCompositionContractTest(unittest.TestCase):
         )
 
     def test_runtime_build_specs_resolve_from_canonical_compose_project(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        overlay = Path(temporary.name) / "compiled-provider-bindings"
+        overlay.mkdir()
         environment = {
+            "QWQ_COMPOSE_ENV": "gamma",
+            "LOCAL_GAMMA_CONFIG_VERSION": "sha256:" + "c" * 64,
             "QWQ_COMPOSE_GO_BASE_IMAGE": "golang:test",
             "QWQ_COMPOSE_ALPINE_BASE_IMAGE": "alpine:test",
             "QWQ_COMPOSE_GO_BUILD_FLAGS": "-p=1",
+            "QWQ_PROVIDER_BINDING_OVERLAY_CONTEXT": str(overlay),
+            "QWQ_PROVIDER_BINDING_MANIFEST_DIGEST": "sha256:" + "d" * 64,
         }
 
         context, dockerfile, build_args = stackctl._runtime_image_build_spec(
@@ -77,6 +85,11 @@ class ImmutableImageCompositionContractTest(unittest.TestCase):
         )
         self.assertEqual(build_args["GO_BASE_IMAGE"], "golang:test")
         self.assertEqual(build_args["ALPINE_BASE_IMAGE"], "alpine:test")
+        self.assertEqual(build_args["QWQ_ARTIFACT_ENVIRONMENT"], "gamma")
+        self.assertEqual(
+            build_args["QWQ_ARTIFACT_CONFIG_DIGEST"],
+            "sha256:" + "c" * 64,
+        )
 
         context, dockerfile, _ = stackctl._runtime_image_build_spec(
             "recommendation-service",
@@ -90,13 +103,28 @@ class ImmutableImageCompositionContractTest(unittest.TestCase):
             / "quwoquan_service/services/recommendation-service/build/Dockerfile",
         )
 
-    def test_package_binding_uses_full_source_digest_and_one_identity(self) -> None:
+        for missing in ("QWQ_COMPOSE_ENV", "LOCAL_GAMMA_CONFIG_VERSION"):
+            with self.subTest(missing=missing):
+                invalid = dict(environment)
+                invalid.pop(missing)
+                with self.assertRaisesRegex(ValueError, "artifact"):
+                    stackctl._runtime_image_build_spec(
+                        "rtc-service",
+                        source_root=ROOT,
+                        environment=invalid,
+                    )
+
+    def test_package_binding_uses_environment_source_and_config_identity(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             services = ("api-edge", "tag-service")
             digests = {
                 "api-edge": "1" * 64,
                 "tag-service": "2" * 64,
+            }
+            config_versions = {
+                "api-edge": "3" * 64,
+                "tag-service": "4" * 64,
             }
             for service in services:
                 package = root / service
@@ -107,6 +135,7 @@ class ImmutableImageCompositionContractTest(unittest.TestCase):
                             "schema": "qwq.service_package",
                             "service": service,
                             "environment": "gamma",
+                            "configVersion": f"sha256:{config_versions[service]}",
                             "digests": {
                                 "sourceTree": f"sha256:{digests[service]}",
                             },
@@ -127,17 +156,34 @@ class ImmutableImageCompositionContractTest(unittest.TestCase):
                     services=services,
                     include_local_release_aliases=True,
                 )
+                gamma_refs = dict(receipt["images"])
+                for service in services:
+                    provenance = json.loads(
+                        (root / service / "provenance.json").read_text(encoding="utf-8")
+                    )
+                    provenance["environment"] = "beta"
+                    (root / service / "provenance.json").write_text(
+                        json.dumps(provenance),
+                        encoding="utf-8",
+                    )
+                beta_refs = {
+                    service: composition.packaged_service_source_image_ref(
+                        "beta", service
+                    )
+                    for service in services
+                }
 
             self.assertRegex(str(receipt["digest"]), r"^sha256:[0-9a-f]{64}$")
             self.assertEqual(
                 environment["QWQ_COMPOSE_IMAGE_VERSION"],
                 environment["LOCAL_GAMMA_IMAGE_VERSION"],
             )
+            self.assertNotEqual(gamma_refs, beta_refs)
             for service in services:
                 compose_key = composition.compose_image_environment_key(service)
                 local_key = composition.local_release_image_environment_key(service)
                 self.assertEqual(environment[compose_key], environment[local_key])
-                self.assertTrue(environment[compose_key].endswith(digests[service]))
+                self.assertRegex(environment[compose_key], r":[0-9a-f]{64}$")
                 self.assertNotIn(":latest", environment[compose_key])
 
     def test_composition_digest_rejects_mutable_refs(self) -> None:
@@ -173,7 +219,9 @@ class ImmutableImageCompositionContractTest(unittest.TestCase):
 
     def test_candidate_oci_projects_core_modules_to_one_image(self) -> None:
         candidate = "sha256:" + "a" * 64
-        environment: dict[str, str] = {}
+        environment: dict[str, str] = {
+            "QWQ_PROVIDER_BINDING_MANIFEST_DIGEST": "sha256:" + "d" * 64,
+        }
         with (
             mock.patch.object(
                 stackctl,
@@ -198,7 +246,11 @@ class ImmutableImageCompositionContractTest(unittest.TestCase):
         images = set(projected["images"])
         self.assertIn("service-core", images)
         self.assertNotIn("search-service", images)
-        self.assertTrue(
+        self.assertRegex(
+            projected["images"]["service-core"]["ref"],
+            r"^localhost/quwoquan_service_core:[0-9a-f]{64}$",
+        )
+        self.assertFalse(
             projected["images"]["service-core"]["ref"].endswith("a" * 64)
         )
         self.assertEqual(

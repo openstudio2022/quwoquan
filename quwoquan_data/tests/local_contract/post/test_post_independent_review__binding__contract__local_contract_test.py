@@ -10,6 +10,7 @@ from content.execution.controller import post_independent_review
 from content.review.independent import apply_independent_post_review
 from core.control_types import AgentProvider
 from core.data_issue import DataIssueCode, DataRecoveryAction
+from content.execution.model_contract import governed_cursor_grok_model
 
 EXECUTION_ID = "20260722--travel-article-supply--test-region-a--pilot-903"
 OBJECT_REF = "test-entity-a__article_source_a"
@@ -114,7 +115,7 @@ def test_independent_post_review_replaces_deterministic_reviewer_binding(
     issues = apply_independent_post_review(
         review_dir=review_dir,
         provider="cursor_sdk",
-        model="grok-4.5",
+        model=governed_cursor_grok_model(),
         model_family="grok",
         run_id="review-run-903",
         result_payload=response,
@@ -146,7 +147,7 @@ def test_independent_post_review_returns_typed_object_issue(
     author_family = SimpleNamespace(value="grok")
     reviewer_family = SimpleNamespace(value="composer")
     pair = SimpleNamespace(
-        author=SimpleNamespace(model_id="grok-4.5", family=author_family),
+        author=SimpleNamespace(model_id=governed_cursor_grok_model(), family=author_family),
         reviewer=SimpleNamespace(
             model_id="composer-2.5",
             family=reviewer_family,

@@ -21,6 +21,7 @@ from content.execution.controller.execute.pre_acquisition_handoff import (
     load_pre_acquisition_handoff,
 )
 from content.source.professional_image_openverse_contract import (
+    ANONYMOUS_MAX_PAGE_SIZE as OPENVERSE_ANONYMOUS_MAX_PAGE_SIZE,
     openverse_metadata,
     openverse_search_url,
 )
@@ -157,7 +158,12 @@ def _supported_queries(
                 }
             )
             if provider == "wikimedia_commons"
-            else openverse_search_url(str(row["queryText"]), page_size=limit)
+            # Commons 与 Openverse 的单页上限不同（50 vs 匿名 20）。同一个
+            # resultsPerQuery 必须落到各自协议允许的值，否则 Openverse 回 401。
+            else openverse_search_url(
+                str(row["queryText"]),
+                page_size=min(limit, OPENVERSE_ANONYMOUS_MAX_PAGE_SIZE),
+            )
         )
         queries.append(
             {

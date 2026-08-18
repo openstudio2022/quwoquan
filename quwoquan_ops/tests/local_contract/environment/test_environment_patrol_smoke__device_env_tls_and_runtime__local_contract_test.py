@@ -96,7 +96,7 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
 
         self.assertEqual(env["QWQ_LAUNCH_TARGET"], "alpha-local")
 
-    def test_canonical_test_live_handoff_uses_current_binding_and_device_transport(
+    def test_canonical_test_live_handoff_uses_device_transport_without_content(
         self,
     ) -> None:
         args = self._args()
@@ -112,13 +112,6 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
             "QWQ_CONSUMER_LEASE_ID": "sha256:" + "7" * 64,
         }
         handoff = self._launcher_handoff(args)
-        binding = {
-            "releaseId": handoff["contentReleaseId"],
-            "manifestDigest": handoff["contentManifestDigest"],
-            "readinessReceiptDigest": handoff[
-                "contentReadinessReceiptDigest"
-            ],
-        }
         completed = subprocess.CompletedProcess(
             args=[str(smoke.APP_LAUNCHER_HANDOFF_BUILDER)],
             returncode=0,
@@ -127,11 +120,6 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
         )
 
         with (
-            mock.patch.object(
-                smoke_handoff,
-                "load_test_live_content_binding",
-                return_value=binding,
-            ),
             mock.patch.object(smoke.subprocess, "run", return_value=completed) as run,
         ):
             actual = smoke._canonical_test_live_launcher_handoff(
@@ -147,13 +135,14 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
             builder_command[builder_command.index("--launch-policy") + 1],
             "test_live",
         )
+        # 内容激活是运行时服务端事实，launcher handoff 不得携带内容身份。
+        self.assertNotIn("--content-release-id", builder_command)
+        self.assertNotIn("--content-manifest-digest", builder_command)
+        self.assertNotIn(
+            "--content-readiness-receipt-digest",
+            builder_command,
+        )
         for option, value in (
-            ("--content-release-id", binding["releaseId"]),
-            ("--content-manifest-digest", binding["manifestDigest"]),
-            (
-                "--content-readiness-receipt-digest",
-                binding["readinessReceiptDigest"],
-            ),
             ("--reverse-expected-ports", "19000,19010,19100,19130"),
             ("--reverse-actual-ports", "19000,19010,19100,19130"),
             ("--reverse-receipt-digest", "sha256:" + "6" * 64),
@@ -218,10 +207,7 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
         )
         self.assertEqual(environment["QWQ_APP_BUILD_CONTEXT"], "runtime")
         self.assertEqual(environment["QWQ_APP_LAUNCH_POLICY"], "test_live")
-        self.assertEqual(
-            environment["QWQ_CONTENT_RELEASE_ID"],
-            handoff["contentReleaseId"],
-        )
+        self.assertNotIn("QWQ_CONTENT_RELEASE_ID", environment)
         command_defines: dict[str, list[str]] = {}
         for argument in command:
             if not argument.startswith("--dart-define="):
@@ -236,7 +222,7 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
     ) -> None:
         args = self._args()
         missing_define = self._launcher_handoff(args)
-        del missing_define["dartDefines"]["CONTENT_BINDING_STATE"]
+        del missing_define["dartDefines"]["APP_LAUNCH_POLICY"]
         with self.assertRaisesRegex(ValueError, "Dart defines are incomplete"):
             smoke._canonical_handoff_projection(missing_define)
 

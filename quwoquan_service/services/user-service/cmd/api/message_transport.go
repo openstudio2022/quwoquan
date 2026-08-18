@@ -26,10 +26,7 @@ func newUserMessageTransport(
 	if strings.TrimSpace(sceneModes["realtime"]) == "" {
 		sceneModes["realtime"] = sceneModes["general"]
 	}
-	binding, found := bindingdescriptor.ExternalProviderBindingFor(
-		environment,
-		runtimemessaging.RuntimeMessageTransportCapability,
-	)
+	binding, found := bindingdescriptor.CompiledBindingFor(runtimemessaging.RuntimeMessageTransportCapability)
 	resolved, err := runtimemessaging.RequireConfiguredRedisMessageTransport(
 		ctx,
 		environment,

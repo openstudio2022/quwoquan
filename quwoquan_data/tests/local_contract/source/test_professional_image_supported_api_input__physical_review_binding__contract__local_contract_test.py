@@ -302,11 +302,13 @@ def _write_semantic_result(
     attempt_stable = {
         "schema": "quwoquan_data.semantic_task_journal_attempt",
         "workUnitId": request["workUnitId"], "requestDigest": request["requestDigest"],
-        "attempt": 1, "recordedAt": "2026-08-11T10:05:00Z", "status": "finished",
+        "attempt": 1, "recordedAt": "2026-08-11T10:05:00Z", "started": True,
+        "status": "finished",
         "provider": "cursor_sdk", "runId": "run-review-1", "agentId": "agent-1",
         "requestId": "request-1", "durationMs": 50, "resultSha256": judgment_digest,
-        "failureKind": "", "errorCode": "", "retryable": False,
-        "capacityReceiptRef": "", "capacityReceiptDigest": "",
+        "failureKind": "", "messageSha256": "sha256:" + hashlib.sha256(b"").hexdigest(),
+        "errorCode": "", "retryable": False, "retryAfterSeconds": 0,
+        "attempts": 1, "warmAttempts": 1,
     }
     attempt = {**attempt_stable, "attemptDigest": _digest(attempt_stable, newline=True)}
     attempt_path = _write(root / f"semantic/attempt{slot}.json", attempt)
@@ -520,7 +522,9 @@ def test_pending_checkpoint_resumes_without_refetch_and_binds_semantic_review(
             "bytes": drifted_body, "ext": ".png", "contentType": "image/png"
         },
     )
-    with pytest.raises(ValueError, match="image safety evidence payload drift"):
+    # Same manifest identity cannot replace its prior successful immutable receipt,
+    # even when a later fetch would now be excluded for safety-byte drift.
+    with pytest.raises(ValueError, match="acquisition receipt collision"):
         acquisition.acquire_professional_images(
             receipt_path.parent.parent / receipt["acquisitionManifestRef"],
             handoff_ref=tmp_path / "handoff.json",

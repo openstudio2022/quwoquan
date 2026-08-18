@@ -4,7 +4,7 @@
 >
 > Journey / Scenario：[`JNY-001 / SCN-004`](../../../spec.md#scn-004)
 >
-> 设计归属：[L2 DEC-001](../design.md#dec-001)
+> 设计归属：[L2 DEC-001](../design.md#dec-001)、[L2 DEC-003](../design.md#dec-003)、[L2 DEC-006](../design.md#dec-006)
 
 ## 1. 用户价值
 
@@ -20,6 +20,7 @@
 - 体验一致性契约。
 - Web 宽屏和安装提示基线。
 - 跨平台测试 profile 与门禁证据口径。
+- iOS / Android 可安装操作系统下限。
 
 ### Out of Scope
 
@@ -41,6 +42,21 @@
 
 - **禁止**用一个 `pubspec.yaml` 同时满足两套 SDK 的全部约束；OH 依赖替换走独立 `configs/ohos_dependency_overrides.yaml`（Git 依赖指向 openharmony-tpc/flutter_packages `br_<库>-v<版本>_ohos` 分支）。
 
+<a id="req-003"></a>
+### REQ-003 iOS 可安装下限为 16.0，满五年才允许抬升
+
+- iOS 工程的 `platform :ios` 与 `IPHONEOS_DEPLOYMENT_TARGET` 必须同为 **16.0**。
+- 不得在 iOS 16.0 正式发布未满五年时把该下限抬到 16.0 以上。
+- 满五年后抬升是许可，不是自动义务；抬升须同步改 Podfile、Xcode 工程与本要求。
+- 本要求不改变 Product Ops 的 App Build minimum。Android 安装下限见 REQ-004。
+
+<a id="req-004"></a>
+### REQ-004 Android 可安装下限跟随 Flutter SDK，且对应系统必须已满五年
+
+- Android 工程 `defaultConfig.minSdk` 必须写 `flutter.minSdkVersion`，不得人为写死更高 API。
+- 解析出的 Flutter `minSdk` 对应 Android 正式发布必须已满五年；未满五年时不得跟随 SDK 上浮。
+- 本要求不改变 `targetSdk` / `compileSdk`，也不改变 Product Ops 的 App Build minimum。
+
 ## 4. 契约引用
 
 - canonical：`specs/feature-tree/runtime/runtime-client-foundation/cross-platform-portability/spec.md`
@@ -54,11 +70,27 @@
 - WHEN 页面或服务读取平台能力。
 - THEN 调用方只消费 PlatformCapabilities、AppPlatform、FileStorageGateway 或 NativeBridge 防腐层。
 
+<a id="gwt-002"></a>
+### GWT-002 iOS 安装下限锁定 16.0
+
+- GIVEN 当前 App iOS 工程与 [L2 DEC-003](../design.md#dec-003)。
+- WHEN 读取 `Podfile` 的 `platform :ios` 与 `Runner.xcodeproj` 的 `IPHONEOS_DEPLOYMENT_TARGET`。
+- THEN 两处均为 `16.0`。
+- AND 不存在把 iOS 下限声明为高于 16.0 的工程设置。
+
+<a id="gwt-003"></a>
+### GWT-003 Android 安装下限跟随 Flutter 且满五年
+
+- GIVEN 当前 App Android 工程与 [L2 DEC-006](../design.md#dec-006)。
+- WHEN 读取 `android/app/build.gradle.kts` 的 `defaultConfig.minSdk`，并解析当前 Flutter SDK 的 `minSdkVersion`。
+- THEN 工程声明为 `flutter.minSdkVersion`。
+- AND 解析出的 API 对应 Android 正式发布已满五年。
+
 ## 6. 依赖
 
 - 前置要求：[`runtime-client-foundation`](../spec.md) 的范围、要求与 SIT。
 - 下游结果：本 Story 声明的 GWT 可观察结果。
-- 父级设计：[L2 DEC-001](../design.md#dec-001)
+- 父级设计：[L2 DEC-001](../design.md#dec-001)、[L2 DEC-003](../design.md#dec-003)、[L2 DEC-006](../design.md#dec-006)
 
 ## 7. 开放事项
 

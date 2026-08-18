@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"quwoquan_service/runtime/artifactidentity"
 	"quwoquan_service/runtime/servicehost"
 	apiedge "quwoquan_service/services/api-edge/cmd/api"
 	assistant "quwoquan_service/services/assistant-service/cmd/api"
@@ -142,6 +143,13 @@ func main() {
 		}
 		return
 	}
+	if _, err := artifactidentity.LoadAndValidate(
+		os.Getenv("QWQ_ARTIFACT_IDENTITY_FILE"),
+		os.Getenv("APP_ENV"),
+	); err != nil {
+		slog.Error("service-core artifact identity is invalid", "error", err)
+		os.Exit(1)
+	}
 	if *preflightOnly {
 		if err := runPreflight(composition); err != nil {
 			slog.Error("service-core preflight failed", "error", err)
@@ -158,20 +166,13 @@ func main() {
 func runPreflight(composition *servicehost.Composition) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
-	router, err := prepareVirtualHTTPRouting()
+	modules, err := composition.Build(ctx)
 	if err != nil {
 		return err
 	}
-	modules, err := composition.Build(ctx)
-	if err != nil {
-		return errors.Join(err, shutdownRouter(router))
-	}
 	host, err := servicehost.NewSupervisor(modules...)
 	if err != nil {
-		return errors.Join(
-			errorsWithShutdown(modules, err),
-			shutdownRouter(router),
-		)
+		return errorsWithShutdown(modules, err)
 	}
 	var result error
 	for _, module := range modules {
@@ -180,6 +181,10 @@ func runPreflight(composition *servicehost.Composition) error {
 				result,
 				fmt.Errorf("module %q validation: %w", module.Name(), err),
 			)
+			break
+		}
+		if ctx.Err() != nil {
+			result = errors.Join(result, ctx.Err())
 			break
 		}
 		if err := module.PrepareMigration(ctx); err != nil {
@@ -198,7 +203,6 @@ func runPreflight(composition *servicehost.Composition) error {
 	return errors.Join(
 		result,
 		host.Shutdown(shutdownCtx),
-		router.Shutdown(shutdownCtx),
 	)
 }
 

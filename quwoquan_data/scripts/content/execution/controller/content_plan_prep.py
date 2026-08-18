@@ -13,7 +13,6 @@ from content.execution.support import (
     Mapping,
     Path,
     _active_spec,
-    article_commercial_closure_enabled,
     defaultdict,
     execution_root,
     image_count_is_hard_quota,
@@ -53,11 +52,14 @@ def _entity_name_from_source_dir(source_dir: Path) -> str:
             return parts[index - 1]
     return ""
 
-def _article_source_quality_sort_key(row: Mapping[str, Any]) -> tuple[int, int, int, int, int, str]:
-    """实体聚焦优先、再质量、再长度的 article 候选排序（无平台/来源类别偏置）。"""
+def _article_source_quality_sort_key(row: Mapping[str, Any]) -> tuple[int, int, int, int, int, int, int, str]:
+    """严格实体锚定优先，再按聚焦、质量与长度排序。"""
     from core.qunar_template import qunar_source_freshness_rank
 
     from content.post.content_plan import ARTICLE_MIN_BASE_DRAFT_CHARS
+    title_anchor = int(row.get("entityTitleAnchorRank") or 0)
+    anchor_score = float(row.get("entityAnchorScore") or 0.0)
+    anchor_bucket = int(max(0.0, min(anchor_score, 1.0)) * 1000)
     focus = float(row.get("entityFocusScore") or 0.0)
     focus_bucket = int(max(0.0, min(focus, 1.0)) * 20)  # 5% 一档，避免微小噪声扰动排序
     freshness_rank = qunar_source_freshness_rank(row)
@@ -66,7 +68,16 @@ def _article_source_quality_sort_key(row: Mapping[str, Any]) -> tuple[int, int, 
     text_len = int(row.get("textLen") or 0)
     length_score = min(max(text_len, 0), ARTICLE_MIN_BASE_DRAFT_CHARS)
     source_id = str(row.get("sourceId") or "")
-    return (-focus_bucket, freshness_rank, -source_quality, -length_score, -image_count, source_id)
+    return (
+        -title_anchor,
+        -anchor_bucket,
+        -focus_bucket,
+        freshness_rank,
+        -source_quality,
+        -length_score,
+        -image_count,
+        source_id,
+    )
 
 def _assess_content_plan_publish_image(asset_path: Path, ctx: ExecutionContext):
     """Use the same publish-safety decision before an image enters content_plan."""
@@ -112,16 +123,11 @@ def _content_capacity_gate_for_entity(
     from content.source.source_unit import iter_source_units, resolve_entity_object_dir
     spec = active_spec or _active_spec(ctx)
     quotas = (spec.get("content") or {}).get("quotas") or {}
-    commercial_closure = article_commercial_closure_enabled(spec)
     # entityArticlesPerTarget 是放量对象数合同。前置容量门必须与最终
     # content_plan_packet 校验同口径，否则短缺目标会穿过 download_fetch，
     # 到 content_plan 才被误派给 Agent 反复重试。
     desired_articles = max(0, int(quotas.get("entityArticlesPerTarget") or 0))
-    required_articles = (
-        1
-        if commercial_closure and desired_articles > 0
-        else desired_articles
-    )
+    required_articles = desired_articles
     desired_images = max(0, int(quotas.get("imageWorksPerTarget") or 0))
     required_images = (
         desired_images
@@ -185,6 +191,9 @@ def _content_capacity_gate_for_entity(
         for alias in target.get("aliases") or []
         if str(alias).strip()
     )
+    from content.execution.controller.content_plan_article_anchor import (
+        assess_article_entity_anchor,
+    )
     for source_dir in source_units:
         meta_path = source_dir / "meta.json"
         quality_path = source_dir / "source.quality.json"
@@ -240,6 +249,15 @@ def _content_capacity_gate_for_entity(
                 article_rejects["text_too_short"] += 1
                 continue
             entity_name = _entity_name_from_source_dir(source_dir)
+            entity_anchor = assess_article_entity_anchor(
+                body=base_body,
+                title=str(meta.get("title") or ""),
+                target=entity_name,
+                aliases=entity_aliases,
+            )
+            if not entity_anchor.eligible:
+                article_rejects["entity_anchor_mismatch"] += 1
+                continue
             focus_score, focus_verdict = _classify_entity_focus(
                 base_body,
                 entity_name,
@@ -302,6 +320,7 @@ def _content_capacity_gate_for_entity(
                 "targetEntity": entity_id,
                 "targetAliases": list(entity_aliases),
                 "articleAnchorText": base_body,
+                **entity_anchor.candidate_fields(),
             }
             refs, shas, collections, asset_refs, media_mode = (
                 normalize_article_media_claims(

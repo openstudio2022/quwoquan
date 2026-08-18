@@ -18,6 +18,7 @@ import (
 	rtmongo "quwoquan_service/internal/platform/mongodb"
 
 	"quwoquan_service/internal/platform/pgoutbox"
+	"quwoquan_service/runtime/artifactidentity"
 	rtauth "quwoquan_service/runtime/auth"
 	runtimeconfig "quwoquan_service/runtime/config"
 	"quwoquan_service/runtime/controlplane"
@@ -71,6 +72,12 @@ type productService struct {
 }
 
 func main() {
+	if _, err := artifactidentity.LoadAndValidate(
+		os.Getenv("QWQ_ARTIFACT_IDENTITY_FILE"),
+		os.Getenv("APP_ENV"),
+	); err != nil {
+		log.Fatalf("product-ops-service artifact identity invalid: %v", err)
+	}
 	serviceName, appEnv, configRoot, configVersion, imageVersion, err := resolveRuntimeIdentity()
 	if err != nil {
 		log.Fatalf("product-ops-service runtime identity invalid: %v", err)

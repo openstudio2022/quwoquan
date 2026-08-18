@@ -8,7 +8,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from core.io import read_json
-from core.release_layout import object_closure_digest, payload_file
+from core.release_layout import objects_merkle, payload_file
 
 
 class ReleaseReadinessClosureError(ValueError):
@@ -199,7 +199,7 @@ def _assert_attestation_projection(
         raise ReleaseReadinessClosureError(
             "release attestation object counts drift from desiredRefs"
         )
-    actual_merkle = object_closure_digest(release_root)
+    actual_merkle = objects_merkle(release_root)
     if header.get("canonicalMerkle") != actual_merkle:
         raise ReleaseReadinessClosureError(
             "release canonicalMerkle drifts from immutable object closure"

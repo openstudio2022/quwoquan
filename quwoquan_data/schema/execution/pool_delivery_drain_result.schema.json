@@ -15,7 +15,13 @@
       "type": "string",
       "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(pilot|scale|full)-[0-9]{3,}$"
     },
-    "recoveryMode": {"enum": ["frozen_publish_jobs", "reviewed_delivery_only"]},
+    "recoveryMode": {
+      "enum": [
+        "frozen_publish_jobs",
+        "reviewed_delivery_only",
+        "campaign_reviewed_publish"
+      ]
+    },
     "executionStatePreserved": {"const": true},
     "status": {"enum": ["waiting", "blocked", "completed"]},
     "attemptedCount": {"type": "integer", "minimum": 0},

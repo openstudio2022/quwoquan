@@ -60,7 +60,11 @@ def _managed_agent_worker_main() -> None:
         spec=ctx_payload.get("spec") or {},
         managed=True,
         runtime=str(ctx_payload.get("runtime") or "local"),
-        max_workers=int(ctx_payload.get("maxWorkers") or 1),
+        max_workers=(
+            int(ctx_payload["maxWorkers"])
+            if ctx_payload.get("maxWorkers") is not None
+            else None
+        ),
         model=_resolve_managed_model(agent_provider, model_selection.model_id),
         model_parameters=model_selection.parameters,
         agent_provider=agent_provider,
@@ -95,7 +99,6 @@ def _source_review_agent_worker_main() -> None:
         runtime=str(payload.get("runtime") or "local"),
         model_selection=model_selection,
         agent_provider="cursor_sdk",
-        max_workers=1,
     )
     outcome = _default_managed_agent_runner(
         context,
@@ -118,9 +121,6 @@ def run_source_review_agent_isolated(
     from core.control_types import AgentFailureKind, AgentProvider
 
     from content.execution.agent.agent_runner import _redact_managed_secret
-    from content.execution.agent.managed_workspace import (
-        terminate_workspace_cursor_bridges,
-    )
     from content.execution.agent.outcome import AgentRunOutcome
 
     timeout = float(
@@ -264,7 +264,6 @@ def run_source_review_agent_isolated(
                 )
         finally:
             _unregister_managed_agent_subprocess(proc.pid)
-            terminate_workspace_cursor_bridges(Path.cwd())
 
 
 def _register_managed_agent_subprocess(pid: int) -> None:

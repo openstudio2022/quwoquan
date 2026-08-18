@@ -26,11 +26,8 @@
 
 ## 3. Journey / Scenario 贡献
 
-- [`JNY-001 / SCN-004`](../../spec.md#scn-004)
-  - 本能力接收：该 Scenario 进入本能力边界的已授权主体与 canonical 输入。
-  - 本能力处理：`runtime-data-engineering` 是运行时数据工程能力，负责把离线/半自动数据产物整理为 App 与云服务可消费的稳定契约输入。
-  - 本能力输出：直属 Story 组合产生的可观察结果与明确失败终态。
-  - 失败时终态：保留已确认事实，并返回可恢复的 canonical failure。
+- 本节点是横切 runtime 工程能力，不拥有 App 用户 command 或 Scenario。
+- 下游价值证据由 [`AppRoot UAT-001`](../../spec.md#uat-001) 承接：本能力只向发现、搜索与对象连接旅程提供 immutable release 绑定的 canonical projection。
 
 ## 4. Story
 
@@ -58,12 +55,12 @@
 
 - 标签真相源为数据工程 `control_plane/governance/taxonomy`；`publish/tags` 仅保存发布对象实际引用的 consumer snapshot，不得恢复扁平枚举或复制整棵 taxonomy。
 - 实体归一产物必须能映射到运行时 `canonicalEntityId`。
-- 作者池与内容池是四环境的统一源头。环境定向 ReleaseManifest 可按稳定选择生成，Alpha 最多 2,100 个 Data Post，Beta 最多 10,000，Gamma 最多 100,000，Homepage 不计入 Post cap。M100/M1000 的环境无关 Research Manifest 分别精确冻结 `100/100/100/10` 与 `1000/1000/1000/100`，同一 manifest 可依次供 Alpha/Beta/Gamma/Prod 在 private Research isolation 下激活。Prod Commercial 是另一个显式授权 release，不得由环境名推导。
+- 作者池与内容池是四环境的统一源头。环境定向 ReleaseManifest 可按稳定选择生成，Alpha 最多 2,100 个 Data Post，Beta 最多 10,000，Gamma 最多 100,000，Homepage 不计入 Post cap。M100/M1000 的环境无关 Research Manifest 分别精确冻结 `100/100/100/10` 与 `1000/1000/1000/100`，同一 manifest 可依次供 Alpha/Beta/Gamma/Prod 在 private Research isolation 下激活。Commercial 生产发布是另一个显式授权 release，不得由环境名或全局运行配置推导。
 - ReleaseManifest 以 `releaseId + payload digest` 作为唯一发布身份，精确绑定内容版本、作者版本及 Entity/Tag/媒体闭包；环境 activation/import/rollback/replay receipt 不得建立第二套 snapshot/bundle 发布身份。
 - Data CLI 只暴露易于理解的池入口。`release pool-inspect --milestone M100|M1000` 统一输出 `ready|partial|blocked`，并按 `quality|eligibility|delivery` 展示 Homepage、Article、Image、Video 的 observed、admitted、累计唯一 publishable、deliveryPending、target、gap 与确定性 next wave。
 - 逐对象问题只影响该对象，成功部分可以继续构建 Release。inspect/build/select 只读取显式 create-once pool record；缺 admission、稳定 `contentId/contentVersion`、完整 `sourceAttribution` 或 source identity 的历史对象一律按对象排除，禁止从 review、路径或当前 source identity 只读推导默认 Research。
 - governed repair 只能基于 canonical object bytes 与 fresh source evidence 追加更高 `recordSequence`，保持原 `contentVersion`，并冻结完整 attribution、Research admission 与 modern execution 或 typed legacy migration identity；旧 record、旧 release 与旧 task receipt 不改写、不复用。
-- `release pool-build` 可从全池按目标环境选择 publishable 对象，也可用 `--milestone M100|M1000 --release-class research` 构建环境无关的精确 cohort；缺 admission、完整 `sourceAttribution`、引用或授权范围不匹配的对象只进入 excluded/deliveryPending，不阻断同池其它对象。Manifest 冻结后仍要求完整导入与验证，禁止部分激活。
+- `release pool-build` 必须显式传入 `--release-class research|commercial`：两者读取同一 frozen canonical pool snapshot 并记录相同 `poolDigest`，Research 可选择 `research|commercial` 内容，Commercial 只选择 `usageScope=commercial` 且 entity/post 全资产商用权利闭合的授权子集；Commercial 仅携带该子集引用的 Creator，头像仍按作者既有 identity/CAS/quality/rights-evidence 闭包而不新增 usageScope。也可用 `--milestone M100|M1000 --release-class research` 构建环境无关精确 cohort。缺 admission、完整 `sourceAttribution`、引用或授权范围不匹配的对象只进入 typed excluded/deliveryPending，不阻断同池其它对象。Manifest 冻结后仍要求完整导入与验证，禁止部分激活。
 - `release pool-inspect --by-task` 必须显式接收一个或多个 exact execution ref，只读取这些 execution 的 semantic journal、review 与 pool-delivery intent。不得遍历全部 task tree或读取旧 receipt。它按批输出 target、generated、quality、usageScope、admitted、publishable、deliveryPending、excluded、成功率与阶段耗时。这些运行统计只定位瓶颈，不改变对象准入。
 - 定向改写只能由 `task execute --rewrite-content-id --expected-version --rewrite-reason` 创建新的 retry execution：保持 `contentId`、版本精确加一、重新验证作者/实体/标签/媒体闭包，旧版本与历史 release 只读；头像或作者资料变化不触发内容改写。
 - `release supply-chain-drill` 只编排现有 Data/stackctl 正式入口，按 inspect/delivery/rehearsal 输出一个可重建 receipt，逐阶段记录耗时、输入/成功/失败/排除数和首个 typed blocker；不得直写数据库、容器、Search 或 Recommendation 投影。
@@ -85,6 +82,14 @@
 - 同一现实概念跨轴出现时由节点自身声明同义引用，跨轴权重传播只读取该声明，不按路径前缀推测轴间关系。
 - 境外行政区必须覆盖声明的最小目的地集合，覆盖不足时视为发布物不完整并阻断发布。
 
+<a id="req-004"></a>
+### REQ-004 作废 canonical 内容必须经 empty release 与受治理 replay
+
+- 需要清除作废对象时，操作者必须先对所有仍承载这些对象的环境 full-sync 同一已核验 empty immutable release，并以 release lifecycle 与 baseline API readback 证明环境已进入零对象状态。
+- `release reset-canonical` 只能在无 active content task、全局 release operation lock 与 canonical publish lock 均可独占时原子清空 publish 与 inventory；禁止手工删除 inventory、提交脏中间态或为旧 execution 事后补 receipt。
+- reset 后只允许从 terminal execution 通过同 execution ID resume，或以新 sequence `retryOf` 执行 typed recovery；已完成 acquisition、author、review 的 `retry_delivery` 只能恢复 exact pool delivery，不得重跑或改变上游身份。
+- 本要求不冻结长期 `content_library + holdings` 的对象所有权或 durability。
+
 ## 6. 契约与依赖
 
 - 上游能力：[`runtime`](../spec.md) 声明的领域入口。
@@ -100,7 +105,7 @@
 - WHEN 参与者发起“数据工程同源输入验收”对应动作。
 - THEN tagRef、canonicalEntityId、entityRef、内容语义 relationEdge、creator/avatar 与 post media 均有 canonical publish/release 来源，在线交易关系不存在于 Data release。
 - THEN 作者只按完成、质量和 active 准入；同一合格头像可进入 alpha/beta/gamma/prod，头像变化只增加作者版本，不改变内容 `usageScope` 或创建内容变体。
-- THEN 环境定向 Research Manifest 接受 research/commercial 内容。环境无关 M100/M1000 Research Manifest 可由 Alpha/Beta/Gamma/Prod 逐环境独立激活，Prod 必须保持白名单、签名媒体、禁止公开索引/分享/导出且不得升级为 Commercial。显式 Prod Commercial Manifest 仍只接受 commercial 内容。
+- THEN 环境定向 Research 与 Commercial Manifest 从同一 frozen canonical pool snapshot 构建并绑定相同 `poolDigest`；Research 接受 research/commercial 内容，Commercial 只接受逐对象授权闭合子集且只携带被该子集引用的 Creator，坏对象 typed excluded 不阻断其余合格对象。环境无关 M100/M1000 Research Manifest 可由 Alpha/Beta/Gamma/Prod 逐环境独立激活，Prod Research 必须保持白名单、签名媒体、禁止公开索引/分享/导出且不得升级为 Commercial。
 - THEN 池报告只用 `quality`、`eligibility`、`delivery` 解释 `ready|partial|blocked`；单对象缺 admission 或引用时成功对象仍可发布，M100 gap 和所有过程统计不改变对象准入结果。
 - THEN 历史对象缺显式 pool record、稳定身份、完整 `sourceAttribution` 或 source identity 时按对象排除；只有 governed repair 追加同 contentVersion 的新 record 后才可重新计数，reader 不运行 compatibility fallback。
 - THEN 批次统计、定向改写和 supply-chain drill 均引用既有 task/object/release/environment receipt，不建立第二套内容或发布真相源。
@@ -111,6 +116,16 @@
 - THEN 活跃任务、passed readiness 或未 revoke acceptance lease 任一存在时 cleanup 均 fail-closed。
 - THEN release A 的未 revoke acceptance lease 阻断同一环境 release B 的 ship 与 lease acquire，且不同环境可独立推进。
 - THEN 对象主页网络可引用同一数据工程输入构建交集、推荐和小艺上下文。
+
+<a id="sit-002"></a>
+### SIT-002 empty baseline、canonical reset 与 exact replay 保持同一证据链
+
+- GIVEN 作废对象仍可能存在于环境或 canonical publish，且已选定 immutable empty baseline 与可恢复 terminal execution。
+- WHEN 操作者依次完成 empty baseline full-sync/readback、`release reset-canonical` 和 terminal execution replay/adopt。
+- THEN reset 只在环境零对象 lifecycle、无 active task、全局 release lock 与 canonical publish lock 同时可证时发生，publish 与 inventory 不留下未归属删除或部分清空。
+- THEN replay 只消费原 terminal evidence 与 typed recovery，`retry_delivery` 不重新执行 acquisition、author 或 review，也不改写旧 execution receipt。
+- THEN 重建后的 creator、entity、post、tag、media、rights、source identity、payload digest 与 release staging/CAS 引用形成 exact closure。
+- THEN 任一环境不是零对象 readback、active task 仍存在、任一锁冲突、replay evidence/closure 错配或执行中断时产生 typed blocker/terminal receipt；publish、inventory 与旧 receipt 保持进入该步骤前的已确认状态，部分新 sequence 不得进入 release。
 
 ## 8. 开放事项
 
@@ -140,3 +155,12 @@
 - 准出影响：`track`
 - 影响或价值：当前发布物虽已按 REQ-003 为每个节点声明采集通道，但该声明止步于 taxonomy，没有随标签进入在线特征。排序侧对一篇内容的全部标签施加同一个由停留深度与来源渠道推导的权重，因此拍摄元数据测量出的机身与焦段、地点选择解析出的行政区、创作者自行勾选的风格三者在召回与排序中完全等价。自填标签的噪声因此被当作实测证据参与分发，而实测证据也拿不到应有的置信优势。对象标签倒排只存扁平 tagRef 数组，不承载单条赋值的权重与置信度，所以该信息在存储层同样缺位。
 - 完成判定：单条标签赋值的采集通道与置信度可从发布物经倒排索引到达排序侧，排序按该置信度区分实测标签与自填标签。置信度只有发布物声明这一个来源，Go 侧不得按 tagRef 路径前缀推测采集通道。倒排索引改造后，反查与子树前缀反查的命中集合与改造前等价，并有真实存储证据。
+
+<a id="open-005"></a>
+### OPEN-005 作废 canonical 内容的受治理 reset 与 exact replay
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：当前仍缺一次 current、digest-bound 的 empty baseline full-sync/readback、原子 `reset-canonical` 与 terminal execution exact replay/adopt 证据；手工删除、旧 receipt 补写或重新执行已闭合上游均会破坏 release 与来源身份。
+- 完成判定：`SIT-002.t1/t2/t4` 由 reset 锁、active task、非零 readback、publish/inventory 原子性、旧 receipt 不变、replay evidence/closure 错配、执行中断与部分新 sequence 不得进入 release 的 `local_contract` 直接覆盖；`SIT-002.t3` 由 empty baseline lifecycle、重建 canonical release、importer 与 API readback 的 `api_integration` 覆盖。真实 App 消费继续由 `OPEN-004` 承接，不作为本 OPEN 的模糊第三层证据。

@@ -74,6 +74,7 @@ def test_geo_content_trinity_legacy_golden_cannot_bypass_current_release_gates(
             release_root=tmp_path / "releases",
             release_id="legacy-golden-must-not-be-reused",
             execution_ids=execution_ids,
+            release_class="research",
             source_revision=content_source_revision(
                 source_digest=source_digest,
                 entity_catalog_digest=ENTITY_CATALOG_DIGEST,

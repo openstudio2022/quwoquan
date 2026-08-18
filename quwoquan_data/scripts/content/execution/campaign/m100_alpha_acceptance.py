@@ -1,4 +1,4 @@
-"""Bind M1000 semantic waves to the verified M100 Alpha milestone."""
+"""Bind final M1000 promotion to the verified M100 Alpha milestone."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from typing import Any
 
 from core.io import read_json
 from core.schema import assert_valid
+from governance.coverage.distribution import load_content_distribution_policy
 
 
 class M100AlphaAcceptanceError(ValueError):
@@ -52,7 +53,7 @@ def _load_receipt(
 
 def _validate_promotion_receipt(
     promotion: Mapping[str, Any], *, output_root: Path
-) -> None:
+) -> dict[str, Any]:
     ref = str(promotion.get("receiptRef") or "").strip()
     expected_file_digest = str(promotion.get("receiptDigest") or "").strip()
     if not ref or not expected_file_digest:
@@ -81,9 +82,10 @@ def _validate_promotion_receipt(
     }
     if any(receipt.get(field) != value for field, value in expected.items()):
         raise M100AlphaAcceptanceError("M100 promotion receipt identity drift")
+    return receipt
 
 
-def _exact_promotion_counts(promotion: Mapping[str, Any]) -> dict[str, int]:
+def _promotion_counts(promotion: Mapping[str, Any]) -> dict[str, int]:
     rows = promotion.get("carrierCounts")
     if not isinstance(rows, list):
         raise M100AlphaAcceptanceError("M100 promotion carrier counts are missing")
@@ -92,17 +94,26 @@ def _exact_promotion_counts(promotion: Mapping[str, Any]) -> dict[str, int]:
         for row in rows
         if isinstance(row, Mapping)
     }
-    expected = {"homepage": 100, "article": 100, "image": 100, "video": 10}
-    if observed != expected:
+    minimums = load_content_distribution_policy().milestone_targets()["M100"]
+    if set(observed) != set(minimums) or any(
+        observed[carrier] < minimum for carrier, minimum in minimums.items()
+    ):
         raise M100AlphaAcceptanceError(
-            "DATA.SCALE.ALPHA_M100_COUNT_MISMATCH: M100 promotion is not exactly "
-            "100/100/100/10"
+            "DATA.SCALE.ALPHA_M100_COUNT_MISMATCH: M100 promotion is below the "
+            "governed M100 target "
+            + "/".join(
+                str(minimums[carrier])
+                for carrier in ("homepage", "article", "image", "video")
+            )
         )
     return observed
 
 
 def _validate_readiness(
-    readiness: Mapping[str, Any], *, promotion: Mapping[str, Any]
+    readiness: Mapping[str, Any],
+    *,
+    promotion: Mapping[str, Any],
+    promotion_counts: Mapping[str, int],
 ) -> None:
     assert_valid(
         dict(readiness),
@@ -125,18 +136,23 @@ def _validate_readiness(
             "DATA.SCALE.ALPHA_M100_READBACK_DRIFT: Alpha readiness does not bind "
             "the promoted M100 research release"
         )
+    expected_entities = promotion_counts["homepage"]
+    expected_posts = sum(
+        promotion_counts[carrier] for carrier in ("article", "image", "video")
+    )
+    expected_videos = promotion_counts["video"]
     counts = readiness.get("counts")
     if (
         not isinstance(counts, Mapping)
-        or counts.get("entities") != 100
-        or counts.get("posts") != 210
-        or counts.get("premiumPlayableVideos") != 10
-        or len(readiness.get("entityRefs") or []) != 100
-        or len(readiness.get("postIds") or []) != 210
+        or counts.get("entities") != expected_entities
+        or counts.get("posts") != expected_posts
+        or counts.get("premiumPlayableVideos") != expected_videos
+        or len(readiness.get("entityRefs") or []) != expected_entities
+        or len(readiness.get("postIds") or []) != expected_posts
     ):
         raise M100AlphaAcceptanceError(
-            "DATA.SCALE.ALPHA_M100_COUNT_MISMATCH: Alpha readback is not exactly "
-            "100 homepages and 210 posts including 10 playable videos"
+            "DATA.SCALE.ALPHA_M100_COUNT_MISMATCH: Alpha readback counts do not "
+            "exactly match the immutable M100 promotion"
         )
     unsigned = dict(readiness)
     declared_checksum = str(unsigned.pop("verificationChecksum", ""))
@@ -348,18 +364,24 @@ def bind_m100_alpha_acceptance(
 ) -> dict[str, Any]:
     if readiness_receipt is None or app_uat_receipt is None:
         raise M100AlphaAcceptanceError(
-            "DATA.SCALE.ALPHA_M100_ACCEPTANCE_MISSING: M1000 requires Alpha "
-            "activation/readback and passed App UAT receipts"
+            "DATA.SCALE.ALPHA_M100_ACCEPTANCE_MISSING: M1000 promotion requires "
+            "Alpha activation/readback and passed App UAT receipts"
         )
-    _validate_promotion_receipt(predecessor_promotion, output_root=output_root)
-    counts = _exact_promotion_counts(predecessor_promotion)
+    immutable_promotion = _validate_promotion_receipt(
+        predecessor_promotion, output_root=output_root
+    )
+    counts = _promotion_counts(immutable_promotion)
     readiness, readiness_ref = _load_receipt(
         readiness_receipt, output_root=output_root, label="Alpha readiness receipt"
     )
     app_uat, app_uat_ref = _load_receipt(
         app_uat_receipt, output_root=output_root, label="Alpha App UAT receipt"
     )
-    _validate_readiness(readiness, promotion=predecessor_promotion)
+    _validate_readiness(
+        readiness,
+        promotion=predecessor_promotion,
+        promotion_counts=counts,
+    )
     readiness_digest = _digest(readiness)
     _validate_app_uat(app_uat, readiness=readiness, readiness_digest=readiness_digest)
     return {
@@ -371,7 +393,10 @@ def bind_m100_alpha_acceptance(
         "manifestDigest": str(predecessor_promotion["manifestDigest"]),
         "appUatEnvelopeDigest": str(readiness["appUatEnvelopeDigest"]),
         "activationEnvelopeDigest": str(readiness["activationEnvelopeDigest"]),
-        "exactCounts": {**counts, "posts": 210},
+        "exactCounts": {
+            **counts,
+            "posts": sum(counts[carrier] for carrier in ("article", "image", "video")),
+        },
         "readinessReceiptRef": readiness_ref,
         "readinessReceiptFileSha256": _file_digest(readiness_receipt.resolve()),
         "readinessReceiptDigest": readiness_digest,

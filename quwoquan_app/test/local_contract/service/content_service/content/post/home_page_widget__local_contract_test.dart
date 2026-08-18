@@ -11,10 +11,7 @@ import 'package:quwoquan_app/service/content_service/content/post/adapters/conte
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
-import 'package:quwoquan_app/design_system/semantics/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/design_system/semantics/settings_semantic_constants.dart';
-import 'package:quwoquan_app/design_system/typography/app_typography.dart';
-import 'package:quwoquan_app/design_system/providers/theme_provider.dart';
 import 'package:quwoquan_app/runtime/testing/test_keys.dart';
 import 'package:quwoquan_app/runtime/shell/actions/global_surface_actions.dart';
 import 'package:quwoquan_app/runtime/auth/auth_gate.dart';
@@ -37,6 +34,7 @@ import 'package:quwoquan_app/service/search_service/search/search_index_view/app
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:quwoquan_app/l10n/copy/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
+
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
 import '../../../../../support/service/content_service/content/post/content_post_test_builder.dart';
 import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
@@ -118,41 +116,6 @@ Widget _buildApp() {
   );
 }
 
-Widget _buildDarkApp() {
-  return ProviderScope(
-    overrides: [
-      ...mockContentFacetOverrides(store: _homeStore()),
-      isDarkProvider.overrideWith((ref) => true),
-    ],
-    child: ScreenUtilInit(
-      designSize: const Size(393, 852),
-      child: MaterialApp.router(
-        theme: ThemeData.dark(),
-        routerConfig: GoRouter(
-          initialLocation: '/',
-          routes: [
-            GoRoute(
-              path: '/',
-              builder: (context, state) =>
-                  const Scaffold(body: HomePage(routeLocation: '/')),
-            ),
-            GoRoute(
-              path: '/search',
-              builder: (context, state) => GlobalSearchPage(
-                launchContext: SearchLaunchContext(entrySurfaceId: '/'),
-              ),
-            ),
-            GoRoute(
-              path: '/user/:userHandle',
-              builder: (_, _) => const SizedBox(),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
-}
-
 Widget _buildAppWithStableFollowingArticles() {
   return ProviderScope(
     overrides: [
@@ -167,9 +130,8 @@ Widget _buildAppWithStableFollowingArticles() {
       ),
       followingSubjectsProvider.overrideWith((_) async => const []),
       ...mockContentFacetOverrides(store: _homeStore()),
-      contentFeatureFlagProvider(
-        'enable_article_distribution_profiles',
-      ).overrideWith((ref) => true),
+      contentFeatureFlagProvider('enable_article_distribution_profiles')
+          .overrideWith((ref) => true),
       discoveryFeedMapProvider.overrideWith(
         _StableFollowingDiscoveryFeedMapNotifier.new,
       ),
@@ -232,9 +194,8 @@ Widget _buildAppWithStableFollowingFeed({bool stableArticles = false}) {
         ...mockContentFacetOverrides(store: _homeStore())
       else ...[
         ...mockContentFacetOverrides(store: _homeStore()),
-        contentFeatureFlagProvider(
-          'enable_article_distribution_profiles',
-        ).overrideWith((ref) => true),
+        contentFeatureFlagProvider('enable_article_distribution_profiles')
+            .overrideWith((ref) => true),
       ],
     ],
     child: ScreenUtilInit(
@@ -297,8 +258,7 @@ List<ContentPostViewData> _stableFollowingArticles() {
     _stableFollowingArticlePost(
       id: 'diffuse_cover_body_only',
       body: '把路线、风向和停留时间直接写进正文里，让临场决定也能保持连贯。',
-      coverUrl:
-          'media/image/s/archived-image/post/fixture_article_001/v1/image-2.png',
+      coverUrl: 'media/image/s/archived-image/post/fixture_article_001/v1/image-2.png',
     ),
     _stableFollowingArticlePost(
       id: 'journal_plain_body_only',
@@ -486,7 +446,7 @@ void main() {
   });
 
   group('HomePage', () {
-    testWidgets('展示首页频道与小趣搜入口', (tester) async {
+    testWidgets('展示八个首页文本频道并删除移动搜索栏', (tester) async {
       _suppressExpectedErrors();
       await tester.pumpWidget(_buildApp());
       await tester.pump(const Duration(milliseconds: 300));
@@ -494,51 +454,21 @@ void main() {
       expect(find.byType(HomePage), findsOneWidget);
       expect(find.text(DiscoveryText.homeTabFollowing), findsWidgets);
       expect(find.text(DiscoveryText.homeTabRecommended), findsWidgets);
+      expect(find.text(DiscoveryText.homeTabFeatured), findsOneWidget);
       expect(find.text(DiscoveryText.circleScenarioCampus), findsWidgets);
       expect(find.text(DiscoveryText.homeTabTravel), findsWidgets);
       expect(find.text(DiscoveryText.homeTabPhotography), findsWidgets);
       expect(find.text(DiscoveryText.homeTabTech), findsWidgets);
       expect(find.text(DiscoveryText.homeTabCarFriends), findsWidgets);
+      expect(find.byType(GlobalXiaoquSearchBar), findsNothing);
+      expect(find.byKey(TestKeys.globalSearchLauncherButton), findsNothing);
       expect(
-        find.text(DiscoveryText.circleScenarioTravelPhotography),
+        find.byKey(const ValueKey<String>('home-search-chrome')),
         findsNothing,
       );
-      expect(find.byIcon(CupertinoIcons.search), findsAtLeastNWidgets(1));
-      expect(find.byIcon(CupertinoIcons.sparkles), findsAtLeastNWidgets(1));
     });
 
-    testWidgets('首页小趣搜入口保留统一全屏搜索启动器', (tester) async {
-      _suppressExpectedErrors();
-      _setPhoneSize(tester);
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      await tester.pumpWidget(_buildApp());
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-
-      expect(find.byKey(TestKeys.globalSearchLauncherButton), findsOneWidget);
-      expect(find.text(DiscoveryText.globalXiaoquSearchHint), findsOneWidget);
-      expect(find.text(DiscoveryText.globalXiaoquSearchAsk), findsOneWidget);
-      expect(
-        tester.getSize(find.byKey(TestKeys.globalAssistantEntryMark)),
-        const Size.square(AppSpacing.globalAssistantEntryMarkSize),
-      );
-      final assistantMarkRect = tester.getRect(
-        find.byKey(TestKeys.globalAssistantEntryMark),
-      );
-      final assistantLabelRect = tester.getRect(
-        find.text(DiscoveryText.globalXiaoquSearchAsk),
-      );
-      expect(
-        assistantLabelRect.top - assistantMarkRect.bottom,
-        moreOrLessEquals(
-          AppSpacing.globalAssistantEntryLabelGap,
-          epsilon: AppSpacing.hairline,
-        ),
-      );
-    });
-
-    testWidgets('浅色首页状态栏和搜索区使用品牌蓝沉浸背景', (tester) async {
+    testWidgets('首页文本频道栏避开安全区且状态栏跟随主题', (tester) async {
       _suppressExpectedErrors();
       _setPhoneSize(tester);
       tester.view.viewPadding = const FakeViewPadding(top: 59, bottom: 34);
@@ -549,51 +479,11 @@ void main() {
       await tester.pumpWidget(_buildApp());
       await tester.pumpAndSettle();
 
-      final chrome = tester.widget<Container>(
-        find.byKey(const ValueKey<String>('home-search-chrome')),
-      );
-      expect(chrome.color, AppColors.primaryColor);
-      expect(
-        tester
-            .widget<GlobalXiaoquSearchBar>(find.byType(GlobalXiaoquSearchBar))
-            .surface,
-        AppChromeSurface.immersive,
-      );
-      final searchField = tester
-          .widgetList<Container>(
-            find.descendant(
-              of: find.byType(GlobalXiaoquSearchBar),
-              matching: find.byType(Container),
-            ),
-          )
-          .firstWhere((widget) => widget.decoration is BoxDecoration);
-      final searchFieldDecoration = searchField.decoration! as BoxDecoration;
-      expect(
-        searchFieldDecoration.color,
-        AppColorsFunctional.getColor(
-          false,
-          ColorType.globalSearchFieldBackground,
-        ),
-      );
-      final searchHint = tester.widget<Text>(
-        find.text(DiscoveryText.globalXiaoquSearchHint),
-      );
-      final searchIcon = tester.widget<Icon>(
-        find
-            .descendant(
-              of: find.byType(GlobalXiaoquSearchBar),
-              matching: find.byIcon(CupertinoIcons.search),
-            )
-            .first,
-      );
-      expect(
-        searchHint.style?.color,
-        AppColorsFunctional.getColor(false, ColorType.foregroundSecondary),
-      );
-      expect(
-        searchIcon.color,
-        AppColorsFunctional.getColor(false, ColorType.foregroundSecondary),
-      );
+      final stripTop = tester.getTopLeft(find.byType(HomePrimaryTabStrip)).dy;
+      final safeTop =
+          tester.view.viewPadding.top / tester.view.devicePixelRatio;
+      expect(stripTop, greaterThanOrEqualTo(safeTop));
+
       final overlay = tester.widget<AnnotatedRegion<SystemUiOverlayStyle>>(
         find
             .descendant(
@@ -602,86 +492,8 @@ void main() {
             )
             .first,
       );
-      expect(overlay.value.statusBarIconBrightness, Brightness.light);
-      expect(overlay.value.statusBarBrightness, Brightness.dark);
-    });
-
-    testWidgets('深色首页搜索输入框使用低对比语义背景', (tester) async {
-      _suppressExpectedErrors();
-      _setPhoneSize(tester);
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-
-      await tester.pumpWidget(_buildDarkApp());
-      await tester.pumpAndSettle();
-
-      expect(
-        tester
-            .widget<GlobalXiaoquSearchBar>(find.byType(GlobalXiaoquSearchBar))
-            .surface,
-        AppChromeSurface.immersive,
-      );
-      final searchField = tester
-          .widgetList<Container>(
-            find.descendant(
-              of: find.byType(GlobalXiaoquSearchBar),
-              matching: find.byType(Container),
-            ),
-          )
-          .firstWhere((widget) => widget.decoration is BoxDecoration);
-      final decoration = searchField.decoration! as BoxDecoration;
-      expect(
-        decoration.color,
-        AppColorsFunctional.getColor(
-          true,
-          ColorType.globalSearchFieldBackground,
-        ),
-      );
-      expect(decoration.color, isNot(AppColors.white));
-    });
-
-    testWidgets('首页搜索框避开安全区并使用 post 正文字号', (tester) async {
-      _suppressExpectedErrors();
-      _setPhoneSize(tester);
-      tester.view.viewPadding = const FakeViewPadding(top: 59, bottom: 34);
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      addTearDown(tester.view.resetViewPadding);
-
-      await tester.pumpWidget(_buildApp());
-      await tester.pumpAndSettle();
-
-      final page = tester.element(find.byType(HomePage));
-      final searchBar = find.byType(GlobalXiaoquSearchBar);
-      final stripTop = tester.getTopLeft(find.byType(HomePrimaryTabStrip)).dy;
-      final searchTop = tester.getTopLeft(searchBar).dy;
-      final searchSize = tester.getSize(searchBar);
-      final searchHint = tester.widget<Text>(
-        find.text(DiscoveryText.globalXiaoquSearchHint),
-      );
-      final safeTop =
-          tester.view.viewPadding.top / tester.view.devicePixelRatio;
-      final expectedTopInset = safeTop + AppSpacing.intraGroupXs;
-      final searchHeight = AppSpacing.globalSearchFieldHeight;
-      final searchToTabGap = AppSpacing.intraGroupXs;
-      final navHeight = AppSpacing.primaryTopBarHeight(page);
-
-      expect(searchTop, greaterThanOrEqualTo(expectedTopInset));
-      expect(searchSize.height, equals(searchHeight));
-      expect(
-        searchHint.style?.fontSize,
-        equals(AppTypography.feedBodyResponsive(page)),
-      );
-      expect(
-        stripTop,
-        greaterThanOrEqualTo(expectedTopInset + searchHeight + searchToTabGap),
-      );
-      expect(
-        stripTop,
-        lessThanOrEqualTo(
-          expectedTopInset + searchHeight + searchToTabGap + navHeight,
-        ),
-      );
+      expect(overlay.value.statusBarIconBrightness, Brightness.dark);
+      expect(overlay.value.statusBarBrightness, Brightness.light);
     });
 
     testWidgets('浅色首页一级 Tab 选中 label 和下划线使用蓝色', (tester) async {
@@ -763,9 +575,8 @@ void main() {
       expect(divider.thickness, AppSpacing.hairline);
       expect(
         divider.color,
-        SettingsSemanticConstants.conversationSheetDividerColor(
-          false,
-        ).withValues(alpha: 0.9),
+        SettingsSemanticConstants.conversationSheetDividerColor(false)
+            .withValues(alpha: 0.9),
       );
     });
 
@@ -1103,27 +914,7 @@ void main() {
       await tester.pump(const Duration(seconds: 3));
     });
 
-    testWidgets('全局搜索以全屏面板呈现', (tester) async {
-      _suppressExpectedErrors();
-      _setPhoneSize(tester);
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-
-      await tester.pumpWidget(_buildApp());
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.byKey(TestKeys.globalSearchLauncherButton));
-      await tester.pumpAndSettle();
-
-      final searchPanel = find.byKey(TestKeys.fullscreenModalSurface);
-      final logicalSize =
-          tester.view.physicalSize / tester.view.devicePixelRatio;
-
-      expect(searchPanel, findsOneWidget);
-      expect(tester.getSize(searchPanel), equals(logicalSize));
-    });
-
-    testWidgets('首页一级频道包含关注推荐与五个业务垂类', (tester) async {
+    testWidgets('首页一级频道按关注推荐视频书与五个业务垂类排序', (tester) async {
       _suppressExpectedErrors();
       await tester.pumpWidget(_buildApp());
       await tester.pumpAndSettle();
@@ -1150,47 +941,53 @@ void main() {
         ),
         findsOneWidget,
       );
+      final tabLabels = <String>[];
+      for (final channelId in HomePrimaryTabStrip.homeChannelIds) {
+        tabLabels.add(
+          tester
+              .widget<Text>(
+                find.descendant(
+                  of: find.byKey(HomePrimaryTabStrip.channelKey(channelId)),
+                  matching: find.byType(Text),
+                ),
+              )
+              .data!,
+        );
+      }
       expect(
-        find.byKey(
-          HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.featuredChannelId),
-        ),
-        findsNothing,
+        tabLabels,
+        equals(<String>['关注', '推荐', '视频书', '校园', '旅行', '摄影', '科技', '车之家']),
       );
     });
 
-    testWidgets('精品沉浸页独立承接全屏作品体验', (tester) async {
+    testWidgets('视频书文本 Tab 复用 premium 沉浸 viewer 作为特殊正文', (tester) async {
       _suppressExpectedErrors();
-      var exited = false;
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [...mockContentFacetOverrides(store: _homeStore())],
-          child: MaterialApp(
-            home: Scaffold(
-              body: HomeFeaturedImmersivePage(
-                onExitToHome: () => exited = true,
-              ),
-            ),
-          ),
+      await tester.pumpWidget(_buildApp());
+      await tester.pump(const Duration(milliseconds: 300));
+
+      await tester.tap(
+        find.byKey(
+          HomePrimaryTabStrip.channelKey(HomePrimaryTabStrip.featuredChannelId),
         ),
       );
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      // 顶部不再有形态分段，仅保留返回与更多。
       expect(
-        find.byKey(const ValueKey<String>('works-format-tab-strip')),
-        findsNothing,
+        find.byKey(const ValueKey<String>('home-featured-channel-body')),
+        findsOneWidget,
       );
+      expect(find.byType(HomeFeaturedImmersivePage), findsOneWidget);
+      expect(find.byType(WorksImmersiveViewer), findsOneWidget);
       expect(
         find.byKey(const ValueKey<String>('works-top-back')),
         findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey<String>('works-top-more')),
-        findsOneWidget,
+        find.byKey(const ValueKey<String>('home-featured-entry')),
+        findsNothing,
       );
-      expect(find.byType(WorksImmersiveViewer), findsOneWidget);
-      expect(exited, isFalse);
+      expect(find.byType(GlobalXiaoquSearchBar), findsNothing);
     });
 
     testWidgets('横滑校园内容切到旅行频道', (tester) async {

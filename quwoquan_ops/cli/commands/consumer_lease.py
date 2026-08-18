@@ -38,9 +38,10 @@ def register_parser(
         choices=("android", "ios-simulator"),
         default="android",
     )
+    # 缺省时按 target 环境 × Debug 由 canonical application_identity 派生。
     consumer_lease_parser.add_argument(
         "--package-name",
-        default="com.quwoquan.quwoquan_app",
+        default="",
     )
     consumer_lease_parser.add_argument("--bundle-id", default="")
     consumer_lease_parser.add_argument(
@@ -80,12 +81,23 @@ def command_consumer_lease(args: argparse.Namespace) -> dict[str, Any]:
                 for value in str(args.ports).split(",")
                 if value.strip()
             ]
+            lease_environment = (
+                target[: -len("-local")]
+                if target.endswith("-local")
+                else "prod"
+            )
             with _stackctl._local_stack_operation_lock(target):
-                application_id = str(args.package_name)
+                application_id = str(args.package_name).strip()
                 if platform == "ios-simulator":
                     application_id = str(getattr(args, "bundle_id", "") or "").strip()
                     if not application_id:
-                        raise ValueError("--bundle-id is required for ios-simulator")
+                        application_id = _stackctl.application_id_for(
+                            "ios", lease_environment, "debug"
+                        )
+                elif not application_id:
+                    application_id = _stackctl.application_id_for(
+                        "android", lease_environment, "debug"
+                    )
                 lease = _stackctl.acquire_consumer_lease(
                     target=target,
                     device=device,

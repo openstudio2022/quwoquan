@@ -57,80 +57,15 @@ def _asset_judgment_from_text(text: str) -> dict[str, Any] | None:
     return None
 
 
-def _acquisition_receipt_path(asset_kind: str, receipt_ref: str) -> Path:
-    from core.paths import OUTPUT_ROOT
-
-    acquisition_root = OUTPUT_ROOT / "data/local/workspace/source-acquisition"
-    if asset_kind == "video":
-        acquisition_root /= "video"
-    elif asset_kind != "image":
-        raise ValueError(f"professional asset kind is unsupported: {asset_kind}")
-    return acquisition_root / receipt_ref
-
-
 def _professional_asset_review_candidates(
     ctx: ExecutionContext,
     ref: str,
 ) -> list[dict[str, str]]:
+    from core.paths import OUTPUT_ROOT
+
     from content.release.canonical.asset_review_adoption import (
         _professional_identity,
     )
-    root = execution_root(ctx.execution_id)
-    if ref.startswith("/entity/"):
-        from content.release.canonical.object_transaction import (
-            _image_dimensions,
-            _source_asset_for_manifest_asset,
-            _source_assets_by_ref,
-        )
-
-        rel = Path(ref.removeprefix("/entity/"))
-        if rel.is_absolute() or ".." in rel.parts or len(rel.parts) < 3:
-            raise ValueError(f"professional entity objectRef is invalid: {ref}")
-        object_dir = root / "entities" / rel
-        manifest_path = object_dir / "manifest.json"
-        if not manifest_path.is_file():
-            return []
-        manifest = read_json(manifest_path)
-        source_assets = _source_assets_by_ref(root)
-        candidates: list[dict[str, str]] = []
-        for raw in manifest.get("assets") or []:
-            if not isinstance(raw, Mapping):
-                continue
-            file_name = str(raw.get("fileName") or "").strip()
-            asset_path = object_dir / "assets" / file_name
-            if not file_name or not asset_path.is_file():
-                continue
-            _width, _height, mime = _image_dimensions(asset_path)
-            if not mime.startswith("image/"):
-                continue
-            _source_ref, source_asset = _source_asset_for_manifest_asset(
-                raw,
-                source_assets,
-            )
-            identity = _professional_identity(
-                raw,
-                (source_asset,),
-                asset_kind="image",
-            )
-            if identity is None:
-                continue
-            receipt_ref, asset_id, content_sha256 = identity
-            candidates.append(
-                {
-                    "assetKind": "image",
-                    "assetId": asset_id,
-                    "contentSha256": content_sha256,
-                    "acquisitionReceiptPath": _acquisition_receipt_path(
-                        "image", receipt_ref
-                    ).as_posix(),
-                }
-            )
-        unique = {
-            (item["assetKind"], item["assetId"], item["contentSha256"]): item
-            for item in candidates
-        }
-        return [unique[key] for key in sorted(unique)]
-
     from content.release.canonical.post_transaction import (
         _asset_sources,
         _media_dimensions,
@@ -138,11 +73,9 @@ def _professional_asset_review_candidates(
         _source_assets,
     )
 
+    root = execution_root(ctx.execution_id)
     object_dir = content_object.content_object_dir(ctx.execution_id, ref)
-    manifest_path = object_dir / "manifest.json"
-    if not manifest_path.is_file():
-        return []
-    manifest = read_json(manifest_path)
+    manifest = read_json(object_dir / "manifest.json")
     source_assets = _source_assets(root)
     candidates: list[dict[str, str]] = []
     for raw in manifest.get("assets") or []:
@@ -160,7 +93,12 @@ def _professional_asset_review_candidates(
         if identity is None:
             continue
         receipt_ref, asset_id, content_sha256 = identity
-        acquisition_receipt = _acquisition_receipt_path(asset_kind, receipt_ref)
+        acquisition_receipt = (
+            OUTPUT_ROOT
+            / "data/local/workspace/source-acquisition"
+            / asset_kind
+            / receipt_ref
+        )
         candidates.append(
             {
                 "assetKind": asset_kind,
@@ -176,15 +114,16 @@ def _professional_asset_review_candidates(
     return [unique[key] for key in sorted(unique)]
 
 
-def _existing_asset_review_decision(
+def _existing_asset_review_is_accepted(
     ctx: ExecutionContext,
     *,
     ref: str,
     candidate: Mapping[str, str],
-) -> tuple[str, dict[str, Any]] | None:
+) -> bool:
     from core.paths import OUTPUT_ROOT
 
     from content.source.independent_asset_review import (
+        assert_asset_review_accepted,
         load_independent_asset_review_receipt,
     )
 
@@ -206,7 +145,7 @@ def _existing_asset_review_decision(
         ):
             matches.append(path)
     if len(matches) != 1:
-        return None
+        return False
     manifest = read_json(root / "execution_manifest.json")
     source_identity = manifest.get("sourceDigest")
     source_identity = source_identity if isinstance(source_identity, Mapping) else {}
@@ -214,41 +153,13 @@ def _existing_asset_review_decision(
         matches[0].relative_to(OUTPUT_ROOT).as_posix(),
         output_root=OUTPUT_ROOT,
     )
-    snapshot = receipt.get("assetSnapshot")
-    if not isinstance(snapshot, Mapping):
-        raise ValueError("professional asset review snapshot is invalid")
-    decision = str(receipt.get("reviewDecision") or "").strip()
-    if (
-        decision not in {"accepted", "blocked"}
-        or receipt.get("sourceDigest") != str(source_identity.get("digest") or "")
-        or snapshot.get("assetId") != candidate["assetId"]
-        or snapshot.get("contentSha256") != candidate["contentSha256"]
-    ):
-        raise ValueError("professional asset review identity drift")
-    return decision, receipt
-
-
-def _blocked_asset_review_issue(
-    *,
-    ref: str,
-    asset_id: str,
-    receipt: Mapping[str, Any],
-) -> DataIssue:
-    judgment = receipt.get("judgment")
-    judgment = judgment if isinstance(judgment, Mapping) else {}
-    findings = [
-        str(item).strip()
-        for item in (judgment.get("findings") or [])
-        if str(item).strip()
-    ]
-    detail = "; ".join(findings[:3]) or "independent reviewer blocked this asset"
-    return data_issue(
-        DataIssueCode.QUALITY_FAILED,
-        stage=DataIssueStage.POST_REVIEW,
-        ref=ref,
-        message=f"professional asset review blocked: {asset_id}: {detail}",
-        recovery=DataRecoveryAction.REWIND_COMPOSE,
+    assert_asset_review_accepted(
+        receipt,
+        content_sha256=candidate["contentSha256"],
+        source_digest=str(source_identity.get("digest") or ""),
+        asset_id=candidate["assetId"],
     )
+    return True
 
 
 def run_professional_asset_independent_reviews(
@@ -279,29 +190,15 @@ def run_professional_asset_independent_reviews(
     root = execution_root(ctx.execution_id)
     issues: list[DataIssue] = []
     for ref in refs:
-        object_dir = (
-            root / "entities" / Path(ref.removeprefix("/entity/"))
-            if ref.startswith("/entity/")
-            else content_object.content_object_dir(ctx.execution_id, ref)
-        )
+        object_dir = content_object.content_object_dir(ctx.execution_id, ref)
         author_evidence = object_dir / "4.draft/agent_result_envelope.json"
         for candidate in _professional_asset_review_candidates(ctx, ref):
             try:
-                existing = _existing_asset_review_decision(
+                if _existing_asset_review_is_accepted(
                     ctx,
                     ref=ref,
                     candidate=candidate,
-                )
-                if existing is not None and existing[0] == "accepted":
-                    continue
-                if existing is not None and existing[0] == "blocked":
-                    issues.append(
-                        _blocked_asset_review_issue(
-                            ref=ref,
-                            asset_id=candidate["assetId"],
-                            receipt=existing[1],
-                        )
-                    )
+                ):
                     continue
             except (OSError, TypeError, ValueError):
                 pass
@@ -425,16 +322,10 @@ def run_professional_asset_independent_reviews(
                     object_ref=ref,
                     judgment=judgment,
                 )
-                if receipt.get("reviewDecision") == "blocked":
-                    issues.append(
-                        _blocked_asset_review_issue(
-                            ref=ref,
-                            asset_id=candidate["assetId"],
-                            receipt=receipt,
-                        )
+                if receipt.get("reviewDecision") != "accepted":
+                    raise ValueError(
+                        f"professional asset review blocked: {candidate['assetId']}"
                     )
-                elif receipt.get("reviewDecision") != "accepted":
-                    raise ValueError("professional asset review decision is invalid")
             except (OSError, TypeError, ValueError) as exc:
                 issues.append(
                     data_issue(

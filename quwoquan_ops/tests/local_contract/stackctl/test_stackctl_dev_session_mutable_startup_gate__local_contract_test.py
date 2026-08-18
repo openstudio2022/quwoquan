@@ -65,6 +65,8 @@ class StackctlDevSessionMutableStartupGateTest(StackctlDevSessionTestBase):
                     subprocess.CompletedProcess(
                         ["docker", "compose", "config"], 0, "", ""
                     ),
+                    subprocess.CompletedProcess([], 0, "", ""),
+                    subprocess.CompletedProcess([], 0, "", ""),
                     subprocess.CompletedProcess(
                         ["docker", "compose", "up", "product-ops-service"],
                         0,
@@ -151,6 +153,8 @@ class StackctlDevSessionMutableStartupGateTest(StackctlDevSessionTestBase):
                 side_effect=[
                     subprocess.CompletedProcess([], 0, "", ""),
                     subprocess.CompletedProcess([], 0, "", ""),
+                    subprocess.CompletedProcess([], 0, "", ""),
+                    subprocess.CompletedProcess([], 0, "", ""),
                     subprocess.CompletedProcess([], 1, "", "build failed"),
                 ],
             ) as run_mock,
@@ -176,7 +180,7 @@ class StackctlDevSessionMutableStartupGateTest(StackctlDevSessionTestBase):
             )
 
         self.assertEqual(result["blockerKind"], "mutable_compose_build_failed")
-        self.assertEqual(run_mock.call_count, 3)
+        self.assertEqual(run_mock.call_count, 5)
         self.assertEqual(
             [row["status"] for row in transitions],
             ["prepared", "partial", "partial"],
@@ -222,6 +226,8 @@ class StackctlDevSessionMutableStartupGateTest(StackctlDevSessionTestBase):
                     subprocess.CompletedProcess([], 0, "", ""),
                     subprocess.CompletedProcess([], 0, "", ""),
                     subprocess.CompletedProcess([], 0, "", ""),
+                    subprocess.CompletedProcess([], 0, "", ""),
+                    subprocess.CompletedProcess([], 0, "", ""),
                     subprocess.CompletedProcess([], 1, "", "replacement failed"),
                 ],
             ) as run_mock,
@@ -249,7 +255,7 @@ class StackctlDevSessionMutableStartupGateTest(StackctlDevSessionTestBase):
         self.assertEqual(
             result["blockerKind"], "mutable_compose_service_replacement_failed"
         )
-        self.assertEqual(run_mock.call_count, 4)
+        self.assertEqual(run_mock.call_count, 6)
         self.assertEqual(
             [row["status"] for row in transitions],
             ["prepared", "partial", "partial"],
@@ -291,6 +297,8 @@ class StackctlDevSessionMutableStartupGateTest(StackctlDevSessionTestBase):
                 "run",
                 side_effect=[
                     subprocess.CompletedProcess(["compose", "config"], 0, "", ""),
+                    subprocess.CompletedProcess([], 0, "", ""),
+                    subprocess.CompletedProcess([], 0, "", ""),
                     subprocess.CompletedProcess(
                         ["compose", "up", "product-ops-service"], 1, "", "owner failed"
                     ),
@@ -313,7 +321,16 @@ class StackctlDevSessionMutableStartupGateTest(StackctlDevSessionTestBase):
             )
 
         self.assertEqual(result["blockerKind"], "test_live_policy_owner_bootstrap_failed")
-        self.assertEqual(execute.call_count, 2)
+        self.assertEqual(execute.call_count, 4)
+        commands = [call.args[0] for call in execute.call_args_list]
+        self.assertIn("--wait", commands[1])
+        self.assertNotIn("service-core", commands[1])
+        self.assertNotIn("recommendation-service", commands[1])
+        self.assertEqual(commands[2][-3:], ["up", "--no-deps", "mongo-init"])
+        self.assertEqual(
+            commands[3][-4:],
+            ["--build", "-d", "--no-deps", "product-ops-service"],
+        )
         activate.assert_not_called()
         self.assertEqual([row["status"] for row in transitions], ["prepared", "partial", "partial"])
 
@@ -353,6 +370,8 @@ class StackctlDevSessionMutableStartupGateTest(StackctlDevSessionTestBase):
                 "run",
                 side_effect=[
                     subprocess.CompletedProcess(["compose", "config"], 0, "", ""),
+                    subprocess.CompletedProcess([], 0, "", ""),
+                    subprocess.CompletedProcess([], 0, "", ""),
                     subprocess.CompletedProcess(
                         ["compose", "up", "product-ops-service"], 0, "", ""
                     ),
@@ -381,7 +400,7 @@ class StackctlDevSessionMutableStartupGateTest(StackctlDevSessionTestBase):
         self.assertEqual(
             result["blockerKind"], "test_live_experiment_policy_activation_failed"
         )
-        self.assertEqual(execute.call_count, 2)
+        self.assertEqual(execute.call_count, 4)
         self.assertEqual([row["status"] for row in transitions], ["prepared", "partial", "partial"])
 
     def test_mutable_runtime_blocks_retry_until_partial_receipt_is_stopped(self) -> None:
@@ -792,4 +811,3 @@ class StackctlDevSessionMutableStartupGateTest(StackctlDevSessionTestBase):
         self.assertEqual(result["contentBindingState"], "unbound")
         self.assertTrue(result["warnings"])
         self.assertIn("./run.sh --env alpha -d emulator-5554", result["details"][0])
-

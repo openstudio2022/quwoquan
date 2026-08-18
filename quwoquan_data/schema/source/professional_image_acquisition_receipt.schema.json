@@ -12,6 +12,7 @@
   "additionalProperties": false,
   "properties": {
     "schema": {"const": "quwoquan_data.professional_image_acquisition_receipt"},
+    "status": {"enum": ["ready", "partial", "blocked"]},
     "manifestId": {"type": "string", "minLength": 1},
     "manifestDigest": {"$ref": "#/$defs/sha256"},
     "sourceRevision": {"type": "string", "minLength": 1},

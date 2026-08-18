@@ -1,3 +1,4 @@
+import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/content_activation_identity.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show ContentFeedEmptyReason, ContentFeedOutcome, FeedObjectCard;
@@ -18,6 +19,7 @@ class DiscoveryFeedPage {
     this.paginationExpiresAt,
     this.feedRequestId,
     this.policyDigest,
+    this.activationIdentity,
     this.cacheFallbackError,
     this.cacheAgeMs,
     this.revalidation,
@@ -39,6 +41,11 @@ class DiscoveryFeedPage {
 
   /// 本次推荐结果唯一的策略内容摘要（观测 / AB 归因）。
   final String? policyDigest;
+
+  /// 运行时内容激活身份；`null` 表示合法缺席（no_active_release 或
+  /// 不绑定 release 的页面）。malformed 身份在 Remote adapter 即失败，
+  /// 不会以半身份进入本对象。
+  final ContentActivationIdentity? activationIdentity;
 
   /// 远端失败后回退到本地快照时保留原始失败；null 表示本次不是缓存兜底。
   final Object? cacheFallbackError;

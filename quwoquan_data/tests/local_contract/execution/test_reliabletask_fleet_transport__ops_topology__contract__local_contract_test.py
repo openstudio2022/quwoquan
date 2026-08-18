@@ -34,7 +34,7 @@ def test_reliabletask_fleet_transport__ignores_caller_endpoint_variables__contra
         )
     )
 
-    assert transport.target == policy["localTarget"]
+    assert transport.target == policy["target"]
     assert "caller.invalid" not in transport.mongo_uri
     assert "caller.invalid" not in transport.redis_addr
     assert os.environ["QWQ_DATA_FLEET_MONGO_URI"] == "mongodb://caller.invalid:27017"
@@ -76,9 +76,24 @@ def test_campaign_lane__uses_plan_bound_fleet_without_stackctl__local_contract(
         "run",
         reject_stackctl,
     )
+    monkeypatch.setattr(
+        reliabletask_transport,
+        "_stackctl_fleet_document",
+        lambda *_args: {
+            "exitCode": 0,
+            "fleet": reliabletask_transport.transport_document(transport),
+            "evidence": {
+                "ready": True,
+                "mongo": True,
+                "redis": True,
+                "owned": True,
+            },
+        },
+    )
 
     assert not capsule_stackctl.exists()
     assert reliabletask_transport.resolve_reliabletask_fleet_transport() == transport
+    assert stackctl_calls == []
     assert reliabletask_transport.reliabletask_fleet_preflight() == {
         "checked": True,
         "ready": True,
@@ -88,7 +103,6 @@ def test_campaign_lane__uses_plan_bound_fleet_without_stackctl__local_contract(
         "owned": True,
         "issues": [],
     }
-    assert stackctl_calls == []
 
 
 def test_campaign_lane__rejects_incomplete_or_drifted_fleet_binding__local_contract(

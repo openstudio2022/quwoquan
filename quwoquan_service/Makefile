@@ -7,7 +7,7 @@
 .PHONY: verify-api-edge-errors codegen-api-edge-errors
 .PHONY: verify-assistant-tool-catalog codegen-assistant-tool-catalog
 .PHONY: codegen-event-constants
-.PHONY: verify-app-shell-navigation codegen-app-shell-navigation
+.PHONY: verify-app-shell-navigation codegen-app-shell-navigation verify-app-identity codegen-app-identity
 .PHONY: verify-domain-model-compatibility
 
 SCENARIO ?= content_feed
@@ -51,7 +51,7 @@ export QWQ_OUTPUT_ROOT
 export PYTHONDONTWRITEBYTECODE ?= 1
 
 # ─── Quality Gate ────────────────────────────────────────────────────
-gate: verify-metadata verify-redis-routes verify-go-single-module verify-service-layering verify-production-wiring-purity verify-api-edge-rate-limit-single-track verify-append-only-fact-command-admission
+gate: verify-metadata verify-redis-routes verify-go-single-module verify-service-layering verify-production-wiring-purity verify-api-edge-rate-limit-single-track verify-append-only-fact-command-admission verify-nullability-single-semantics
 	@PYTHONDONTWRITEBYTECODE=1 python3 ../quwoquan_ops/gate/verify_service_architecture.py
 	@set -e; for service in $(DOMAIN_SERVICES); do \
 		echo "[gate] $$service"; \
@@ -160,6 +160,11 @@ verify-shared-contract-enums: service-contract-view
 
 verify-storage-keyset-single-track:
 	go test ./tools/codegen_storage -run 'TestStorageSchemaKeepsTopLevelKeySetClosed|TestCodegenStorageReaderKeySetIsSubsetOfSchema|TestStorageSchemaKeysArePartitionedByCodegenConsumption|TestCodegenStorageReaderHasNoDeadKeys' -count=1
+
+# 契约可空性只有一种读法：必填缺失 fail-closed，可空的缺席与空值不得互相塌陷，
+# 生成器不得补入契约未声明的默认值。没有这条过滤目标时，这些测试只是躺在树里。
+verify-nullability-single-semantics:
+	go test ./tools/codegen_app_metadata -run 'TestAssistantWireRequiredScalarsFailClosedOnAbsence|TestAssistantWireNullableScalarsKeepAbsenceDistinctFromEmpty|TestRtcPayloadWithoutDefaultKeepsAbsence|TestRtcPayloadWithDefaultUsesDeclaredValue' -count=1
 
 verify-storage-index-governance:
 	go run ./tools/storage_index_governance -repo-root "$(REPO_ROOT)"
@@ -304,7 +309,7 @@ codegen-product-ops-service codegen-platform-ops-service codegen-user-service \
 codegen-chat-service codegen-chat-domain-events codegen-event-constants codegen-rec-model-python \
 codegen-storage: service-contract-view
 
-codegen-app: codegen-contract-graph
+codegen-app: codegen-contract-graph codegen-app-identity
 
 codegen-observability-catalog:
 	go run ./tools/codegen_observability_catalog --metadata-dir "$(CONTRACT_VIEW)" --repo-root "$(REPO_ROOT)"
@@ -320,6 +325,12 @@ codegen-impact:
 
 codegen-app:
 	go run ./tools/codegen_app_metadata --metadata-dir "$(CONTRACT_VIEW)" --contract-graph generated/contract_graph.json --contract-graph-lock ../quwoquan_app/tool/cloud_codegen/contract_graph.lock.json --app-dir ../quwoquan_app --generated-manifest ../quwoquan_app/tool/cloud_codegen/generated_manifest.json
+
+codegen-app-identity: service-contract-view
+	go run ./tools/codegen_app_metadata --metadata-dir "$(CONTRACT_VIEW)" --app-dir ../quwoquan_app --app-identity-only --app-identity-manifest ../quwoquan_app/tool/app_identity_codegen/generated_manifest.json
+
+verify-app-identity: service-contract-view
+	go run ./tools/codegen_app_metadata --metadata-dir "$(CONTRACT_VIEW)" --app-dir ../quwoquan_app --app-identity-only --check-app-identity --app-identity-manifest ../quwoquan_app/tool/app_identity_codegen/generated_manifest.json
 
 codegen-app-shell-navigation: service-contract-view
 	go run ./tools/codegen_app_metadata --metadata-dir "$(CONTRACT_VIEW)" --app-dir ../quwoquan_app --shell-navigation-metadata-only --shell-navigation-manifest ../quwoquan_app/tool/shell_navigation_codegen/generated_manifest.json

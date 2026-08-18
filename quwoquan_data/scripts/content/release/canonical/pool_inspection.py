@@ -34,10 +34,10 @@ from content.release.canonical.pool_delivery_intent_inspection import (
 from content.release.canonical.pool_semantic_scheduling import (
     semantic_scheduling_projection,
 )
+from content.execution.campaign.lane import normalize_workloads
 
 _SUPPLY_TYPES = ("homepage", "article", "image", "video")
 M100_TARGETS = MILESTONE_TARGETS["M100"]
-_NEXT_WAVE_SIZE = 12
 _USAGE_SCOPES = {"research", "commercial"}
 _REASON_MESSAGES = {
     "DATA.POOL.EMPTY": "池中还没有可发布的 Homepage 或 Post",
@@ -251,20 +251,56 @@ def inspect_pool(
     strict_delivery: bool = True,
     include_batches: bool = False,
     output_root: Path | None = None,
-    milestone: str = "M100",
+    milestone: str | None = None,
     execution_ids: Sequence[str] = (),
     source_ready_backlog: Mapping[str, int] | None = None,
     p10_per_slot_throughput: Mapping[str, float] | None = None,
     source_ready_candidates: Mapping[str, list[Mapping[str, Any]]] | None = None,
     source_ready_input: Mapping[str, Any] | None = None,
     throughput_input: Mapping[str, str] | None = None,
+    workload_targets: Mapping[str, int] | None = None,
 ) -> dict[str, Any]:
     """Report quality, eligibility and delivery without mutating pool facts."""
 
-    milestone_name = str(milestone).strip()
+    source_scale = (
+        str(source_ready_input.get("targetScale") or "").strip()
+        if isinstance(source_ready_input, Mapping)
+        else ""
+    )
+    milestone_name = str(milestone or "").strip() or (
+        "WORKLOAD" if workload_targets is not None else source_scale or "M100"
+    )
     targets = MILESTONE_TARGETS.get(milestone_name)
-    if targets is None:
+    if targets is None and milestone_name != "WORKLOAD":
         raise ValueError(f"unsupported milestone: {milestone_name!r}")
+    requested_workloads = (
+        normalize_workloads(workload_targets)
+        if workload_targets is not None
+        else None
+    )
+    source_workloads = None
+    if isinstance(source_ready_input, Mapping) and source_ready_input.get(
+        "status"
+    ) == "validated":
+        source_workloads = normalize_workloads(
+            source_ready_input.get("workloadTargets", {})
+        )
+    if (
+        requested_workloads is not None
+        and source_workloads is not None
+        and requested_workloads != source_workloads
+    ):
+        raise ValueError("pool inspection workloadTargets drift from source pool")
+    explicit_workloads = source_workloads or requested_workloads
+    if milestone_name == "WORKLOAD" and explicit_workloads is None:
+        raise ValueError("WORKLOAD inspection requires explicit workloadTargets")
+    effective_targets = explicit_workloads or dict(targets or {})
+    active_carriers = tuple(effective_targets)
+    workload_mode = (
+        str(source_ready_input["workloadMode"])
+        if source_workloads is not None
+        else ("explicit" if requested_workloads is not None else "milestone_preset")
+    )
     issues: list[dict[str, str]] = []
     author_admission: dict[str, bool] = {}
     creators_root = publish_root / "creators"
@@ -341,10 +377,7 @@ def inspect_pool(
             continue
         if strict_delivery:
             try:
-                if not effective_source_attribution_ready(
-                    entity_admission,
-                    release_mode="research",
-                ):
+                if not effective_source_attribution_ready(entity_admission):
                     raise ObjectTransactionError(
                         "DATA.POOL.SOURCE_ATTRIBUTION_INCOMPLETE"
                     )
@@ -410,10 +443,7 @@ def inspect_pool(
                 ref=f"posts/{post_ref}",
             )
             continue
-        if strict_delivery and not effective_source_attribution_ready(
-            post_admission,
-            release_mode="research",
-        ):
+        if strict_delivery and not effective_source_attribution_ready(post_admission):
             _issue(
                 issues,
                 gate="delivery",
@@ -445,6 +475,7 @@ def inspect_pool(
                     publish_root=publish_root,
                     post_refs=post_refs,
                     environment=environment,
+                    release_class="research",
                     strict_admission=True,
                 )
                 strict_capacity[environment] = selections[environment].counts["total"]
@@ -499,10 +530,12 @@ def inspect_pool(
             )
             + pending_by_carrier[supply_type],
             "explicitAdmissionPending": admission_missing[supply_type],
-            "target": targets[supply_type],
-            "gap": max(0, targets[supply_type] - publishable[supply_type]),
+            "target": effective_targets[supply_type],
+            "gap": max(
+                0, effective_targets[supply_type] - publishable[supply_type]
+            ),
         }
-        for supply_type in _SUPPLY_TYPES
+        for supply_type in active_carriers
     }
     research_post_count = sum(publishable[carrier] for carrier in _SUPPLY_TYPES[1:])
     # Environment capacity is a delivery estimate for Posts only. Homepage,
@@ -525,19 +558,19 @@ def inspect_pool(
     next_wave = [
         {
             "carrier": supply_type,
-            "requestedCandidateCount": min(
-                _NEXT_WAVE_SIZE,
-                max(0, targets[supply_type] - publishable[supply_type]),
+            "requestedCandidateCount": max(
+                0,
+                effective_targets[supply_type] - publishable[supply_type],
             ),
         }
         for supply_type in sorted(
-            _SUPPLY_TYPES,
+            active_carriers,
             key=lambda item: (
-                -max(0, targets[item] - publishable[item]),
+                -max(0, effective_targets[item] - publishable[item]),
                 _SUPPLY_TYPES.index(item),
             ),
         )
-        if publishable[supply_type] < targets[supply_type]
+        if publishable[supply_type] < effective_targets[supply_type]
     ]
     target_attained = not next_wave
     result = (
@@ -547,6 +580,9 @@ def inspect_pool(
         "schema": "quwoquan_data.pool_inspection",
         "result": result,
         "milestone": milestone_name,
+        "workloadMode": workload_mode,
+        "activeCarriers": list(active_carriers),
+        "workloadTargets": effective_targets,
         "targetAttained": target_attained,
         "checks": checks,
         "authors": {
@@ -571,6 +607,7 @@ def inspect_pool(
             source_ready_candidates=source_ready_candidates,
             source_ready_input=source_ready_input,
             throughput_input=throughput_input,
+            workload_targets=explicit_workloads,
         ),
         "nextAction": (
             (

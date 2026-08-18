@@ -1,6 +1,8 @@
 ARG GO_BASE_IMAGE
 ARG ALPINE_BASE_IMAGE
 ARG GO_BUILD_FLAGS=-p=1
+ARG QWQ_ARTIFACT_ENVIRONMENT
+ARG QWQ_ARTIFACT_CONFIG_DIGEST
 
 FROM --platform=${BUILDPLATFORM} ${GO_BASE_IMAGE} AS builder
 ARG GO_BUILD_FLAGS
@@ -21,6 +23,18 @@ RUN --mount=type=cache,id=quwoquan-go-build,target=/root/.cache/go-build \
     go build ${GO_BUILD_FLAGS} -o /product-ops-service ./services/product-ops-service/cmd/api
 
 FROM ${ALPINE_BASE_IMAGE}
+ARG QWQ_ARTIFACT_ENVIRONMENT
+ARG QWQ_ARTIFACT_CONFIG_DIGEST
+RUN set -eu; \
+    case "${QWQ_ARTIFACT_ENVIRONMENT}" in alpha|beta|gamma|prod) ;; *) exit 2 ;; esac; \
+    digest_hex="${QWQ_ARTIFACT_CONFIG_DIGEST#sha256:}"; \
+    test "${#digest_hex}" -eq 64; \
+    test -z "$(printf '%s' "${digest_hex}" | tr -d '0-9a-f')"; \
+    install -d /etc/quwoquan; \
+    printf '{"schema":"qwq.environment-artifact-identity","environment":"%s","configDigest":"%s"}\n' \
+      "${QWQ_ARTIFACT_ENVIRONMENT}" "${QWQ_ARTIFACT_CONFIG_DIGEST}" \
+      > /etc/quwoquan/artifact-identity.json; \
+    chmod 0444 /etc/quwoquan/artifact-identity.json
 RUN if command -v apk >/dev/null 2>&1; then \
       apk add --no-cache ca-certificates tzdata; \
     else \

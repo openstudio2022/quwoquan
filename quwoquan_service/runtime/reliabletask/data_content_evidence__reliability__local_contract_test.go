@@ -76,18 +76,29 @@ func TestDataContentFilesystemEvidenceVerifierBindsAppliedTransactionAndCanonica
 		CanonicalObjectSHA256: digest,
 		ObjectTransactionID:   transactionID,
 		ResultEnvelopeRef:     applyRef,
-		AcceptanceClass:       DataContentAcceptanceCommercialCanonical,
+		AcceptanceClass:       DataContentAcceptanceCanonicalPool,
 	}
 	verifier := DataContentFilesystemEvidenceVerifier{
 		PublishRoot:  publishRoot,
 		EvidenceRoot: evidenceRoot,
 	}
 	if err := verifier.VerifyDataContentResult(context.Background(), item, result); err != nil {
-		t.Fatalf("valid commercial evidence was rejected: %v", err)
+		t.Fatalf("valid canonical-pool evidence was rejected: %v", err)
 	}
-	result.AcceptanceClass = DataContentAcceptanceResearchCanonical
-	if err := verifier.VerifyDataContentResult(context.Background(), item, result); err != nil {
-		t.Fatalf("valid research evidence was rejected: %v", err)
+	for _, skipped := range []string{
+		DataContentAcceptanceStageCompleted,
+		DataContentAcceptanceContractFixture,
+	} {
+		unverified := result
+		unverified.AcceptanceClass = skipped
+		unverified.ResultEnvelopeRef = "../escaping.json"
+		if err := verifier.VerifyDataContentResult(
+			context.Background(),
+			item,
+			unverified,
+		); err != nil {
+			t.Fatalf("%s must not require canonical evidence: %v", skipped, err)
+		}
 	}
 
 	if err := os.WriteFile(
@@ -128,7 +139,7 @@ func TestDataContentFilesystemEvidenceVerifierRejectsEscapingEvidenceRef(t *test
 			CanonicalObjectSHA256: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 			ObjectTransactionID:   "txn",
 			ResultEnvelopeRef:     "../apply_report.json",
-			AcceptanceClass:       DataContentAcceptanceCommercialCanonical,
+			AcceptanceClass:       DataContentAcceptanceCanonicalPool,
 		},
 	)
 	if err == nil || !strings.Contains(err.Error(), "escapes its root") {

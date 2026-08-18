@@ -22,7 +22,7 @@ from content.release.canonical.object_transaction_contract import (
 )
 from core.media_asset_url import sha256_file
 from core.release_layout import payload_file, payload_root
-from core.source_digest import SourceDigest
+from core.source_digest import SourceDefinitionSnapshot
 
 OBJECT_KINDS = ("creators", "entities", "posts", "tags")
 
@@ -36,7 +36,7 @@ class ReviewedClosureSelection:
     object_root: Path
     source_release_root: Path
     media_manifest: dict[str, Any]
-    source_digest: SourceDigest
+    source_digest: SourceDefinitionSnapshot
 
 
 def _normalized_refs(value: object, *, label: str) -> tuple[str, ...]:

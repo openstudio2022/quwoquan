@@ -26,18 +26,6 @@ type ReadyQueue interface {
 	FailTask(ctx context.Context, taskID string, leaseToken string, failure RuntimeFailure, policy RetryPolicy, now time.Time) error
 }
 
-// FencedReadyQueue atomically validates immutable generation ownership while claiming.
-type FencedReadyQueue interface {
-	ClaimReadyTaskByIDWithFence(
-		ctx context.Context,
-		taskID string,
-		workerID string,
-		leaseTTL time.Duration,
-		now time.Time,
-		fence map[string]string,
-	) (*ReliableAsyncTask, error)
-}
-
 type ReadyIndex interface {
 	Ensure(ctx context.Context) error
 	EnqueueReadyOrMerge(ctx context.Context, task ReliableAsyncTask) error
@@ -75,21 +63,14 @@ type IndexEnsurer interface {
 	EnsureIndexes(ctx context.Context) error
 }
 
-// TaskStore is the smallest durable boundary required by task dispatchers and
-// workers. Data content execution must not depend on notification delivery or
-// provider ledgers merely because those adapters share the same state machine.
-type TaskStore interface {
+type Store interface {
 	TransactionRunner
 	OutboxStore
 	ReadyQueue
-	IndexEnsurer
-}
-
-type Store interface {
-	TaskStore
 	NotificationStore
 	DeliveryLedgerStore
 	LeaseStore
+	IndexEnsurer
 }
 
 type Dispatcher struct {
@@ -154,36 +135,14 @@ func (d Dispatcher) DispatchDue(ctx context.Context, limit int) ([]ReliableAsync
 type TaskHandler func(context.Context, ReliableAsyncTask) error
 
 type Worker struct {
-	Store              TaskStore
-	Ready              ReadyIndex
-	TaskTypes          []string
-	WorkerID           string
-	LeaseTTL           time.Duration
-	Retry              RetryPolicy
-	RetryPolicyForTask func(ReliableAsyncTask) (RetryPolicy, error)
-	Now                func() time.Time
-	PendingMinIdle     time.Duration
-	ClaimFence         map[string]string
-}
-
-func (w Worker) claimByID(
-	ctx context.Context,
-	taskID string,
-	leaseTTL time.Duration,
-	now time.Time,
-) (*ReliableAsyncTask, error) {
-	if len(w.ClaimFence) == 0 {
-		return w.Store.ClaimReadyTaskByID(
-			ctx, taskID, w.WorkerID, leaseTTL, now,
-		)
-	}
-	store, ok := w.Store.(FencedReadyQueue)
-	if !ok {
-		return nil, fmt.Errorf("reliabletask fenced worker requires fenced ready queue")
-	}
-	return store.ClaimReadyTaskByIDWithFence(
-		ctx, taskID, w.WorkerID, leaseTTL, now, w.ClaimFence,
-	)
+	Store          Store
+	Ready          ReadyIndex
+	TaskTypes      []string
+	WorkerID       string
+	LeaseTTL       time.Duration
+	Retry          RetryPolicy
+	Now            func() time.Time
+	PendingMinIdle time.Duration
 }
 
 func (w Worker) Claim(ctx context.Context) (*ReliableAsyncTask, error) {
@@ -206,7 +165,7 @@ func (w Worker) Claim(ctx context.Context) (*ReliableAsyncTask, error) {
 		return nil, err
 	}
 	for _, message := range messages {
-		task, err := w.claimByID(ctx, message.TaskID, leaseTTL, now)
+		task, err := w.Store.ClaimReadyTaskByID(ctx, message.TaskID, w.WorkerID, leaseTTL, now)
 		if err != nil {
 			return nil, err
 		}
@@ -229,34 +188,11 @@ func (w Worker) ProcessOne(ctx context.Context, handler TaskHandler) (bool, erro
 	if err != nil || task == nil {
 		return false, err
 	}
-	policy := w.Retry
-	if w.RetryPolicyForTask != nil {
-		policy, err = w.RetryPolicyForTask(*task)
-		if err != nil {
-			now := time.Now().UTC()
-			if w.Now != nil {
-				now = w.Now().UTC()
-			}
-			if failErr := w.Store.FailTask(
-				ctx,
-				task.TaskID,
-				task.LeaseToken,
-				RuntimeFailure{
-					Code:    "RELIABLETASK.WORKER.invalid_retry_policy",
-					Message: err.Error(),
-				},
-				RetryPolicy{MaxAttempts: 1},
-				now,
-			); failErr != nil {
-				return false, failErr
-			}
-			return true, err
-		}
-	}
-	if policy.MaxAttempts <= 0 {
-		policy = DefaultRetryPolicy()
-	}
 	if err := w.runHandlerWithLeaseRenewal(ctx, *task, handler); err != nil {
+		policy := w.Retry
+		if policy.MaxAttempts <= 0 {
+			policy = DefaultRetryPolicy()
+		}
 		now := time.Now().UTC()
 		if w.Now != nil {
 			now = w.Now().UTC()
@@ -363,7 +299,7 @@ func (w Worker) claimWithMessage(ctx context.Context) (*ReliableAsyncTask, *Read
 		return nil, nil, err
 	}
 	for _, message := range messages {
-		task, err := w.claimByID(ctx, message.TaskID, leaseTTL, now)
+		task, err := w.Store.ClaimReadyTaskByID(ctx, message.TaskID, w.WorkerID, leaseTTL, now)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -387,7 +323,7 @@ func (w Worker) claimWithMessage(ctx context.Context) (*ReliableAsyncTask, *Read
 			return nil, nil, err
 		}
 		for _, message := range pending {
-			task, err := w.claimByID(ctx, message.TaskID, leaseTTL, now)
+			task, err := w.Store.ClaimReadyTaskByID(ctx, message.TaskID, w.WorkerID, leaseTTL, now)
 			if err != nil {
 				return nil, nil, err
 			}

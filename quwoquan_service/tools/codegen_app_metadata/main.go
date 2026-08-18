@@ -23,6 +23,9 @@ func main() {
 	var shellNavigationMetadataOnly bool
 	var checkShellNavigationMetadata bool
 	var shellNavigationManifestPath string
+	var appIdentityOnly bool
+	var checkAppIdentity bool
+	var appIdentityManifestPath string
 	flag.StringVar(&metadataDir, "metadata-dir", "contracts/metadata", "metadata root directory")
 	flag.StringVar(&appDir, "app-dir", "../quwoquan_app", "app root directory")
 	flag.StringVar(&contractGraphPath, "contract-graph", "generated/contract_graph.json", "fixed ContractGraph JSON bundle")
@@ -39,6 +42,24 @@ func main() {
 		"shell-navigation-manifest",
 		"",
 		"shell/navigation metadata-only generated output manifest",
+	)
+	flag.BoolVar(
+		&appIdentityOnly,
+		"app-identity-only",
+		false,
+		"generate only Android/iOS App identity artifacts from app_artifact_manifest metadata",
+	)
+	flag.BoolVar(
+		&checkAppIdentity,
+		"check-app-identity",
+		false,
+		"verify generated Android/iOS App identity artifacts are current",
+	)
+	flag.StringVar(
+		&appIdentityManifestPath,
+		"app-identity-manifest",
+		"",
+		"App identity codegen output manifest",
 	)
 	flag.StringVar(
 		&assistantRuntimeEnumsGoOutput,
@@ -101,6 +122,27 @@ func main() {
 		exitErr(fmt.Errorf(
 			"--check-shell-navigation-metadata requires --shell-navigation-metadata-only",
 		))
+	}
+	if checkAppIdentity && !appIdentityOnly {
+		exitErr(fmt.Errorf(
+			"--check-app-identity requires --app-identity-only",
+		))
+	}
+	if appIdentityOnly && (shellNavigationMetadataOnly || serviceOutputRequested) {
+		exitErr(fmt.Errorf(
+			"--app-identity-only cannot be combined with other output modes",
+		))
+	}
+	if appIdentityOnly {
+		if err := runAppIdentityMode(
+			metadataDir,
+			appDir,
+			appIdentityManifestPath,
+			checkAppIdentity,
+		); err != nil {
+			exitErr(err)
+		}
+		return
 	}
 	if shellNavigationMetadataOnly && serviceOutputRequested {
 		exitErr(fmt.Errorf(

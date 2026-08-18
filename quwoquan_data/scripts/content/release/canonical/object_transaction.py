@@ -15,6 +15,7 @@ from content.release.canonical.asset_review_adoption import (
 from content.release.canonical.content_pool_record import (
     append_pool_record,
     build_canonical_pool_record,
+    pool_usage_scope,
 )
 from content.release.canonical.creator_projection import project_creator_object
 from content.release.canonical.entity_transaction_sources import (
@@ -57,7 +58,6 @@ from core.tree_integrity import tree_integrity_stats
 from governance.coverage.license import (
     RightsAuditStatus,
     parse_rights_audit_status,
-    rights_proof_required,
 )
 
 
@@ -243,7 +243,6 @@ def build_entity_object_transaction_package(
         vertical = str(source_manifest.get("vertical") or "").strip()
         if not vertical:
             raise ObjectTransactionError("entity manifest 缺 vertical policy owner")
-        require_rights_proof = rights_proof_required(vertical)
         for raw in source_manifest.get("assets") or []:
             if not isinstance(raw, dict):
                 raise ObjectTransactionError("manifest.assets item 必须为 object")
@@ -299,8 +298,6 @@ def build_entity_object_transaction_package(
                 license_url = "https://" + license_url.removeprefix("http://")
             if not canonical_file_page.startswith("https://"):
                 raise ObjectTransactionError(f"asset {asset_id} 缺 HTTPS 来源证明")
-            if require_rights_proof and not license_url.startswith("https://"):
-                raise ObjectTransactionError(f"asset {asset_id} 缺 HTTPS 权利证明")
             snapshot_payload = {
                 "schema": "quwoquan_data.asset_rights_snapshot",
                 "executionId": execution_id,
@@ -335,19 +332,7 @@ def build_entity_object_transaction_package(
                 raise ObjectTransactionError(
                     f"asset {asset_id} 缺有效 rightsAuditStatus"
                 ) from exc
-            if require_rights_proof and (
-                not author
-                or not license_name
-                or not fetched_at
-                or not authorization_proof.startswith("https://")
-            ):
-                raise ObjectTransactionError(f"asset {asset_id} 权利字段不完整")
-            if (
-                require_rights_proof
-                and rights_audit_status is not RightsAuditStatus.VERIFIED
-            ):
-                raise ObjectTransactionError(f"asset {asset_id} 权利状态未经核实")
-            if not require_rights_proof and not fetched_at:
+            if not fetched_at:
                 raise ObjectTransactionError(f"asset {asset_id} 权利审计字段不完整")
             effective_license_name = license_name or "unknown"
             rights_audit_issues = [
@@ -356,8 +341,7 @@ def build_entity_object_transaction_package(
                 if str(issue).strip()
             ]
             if (
-                not require_rights_proof
-                and rights_audit_status is RightsAuditStatus.VERIFIED
+                rights_audit_status is RightsAuditStatus.VERIFIED
                 and not authorization_proof
             ):
                 rights_audit_status = RightsAuditStatus.UNVERIFIED
@@ -392,7 +376,6 @@ def build_entity_object_transaction_package(
             # commercial lifecycle still requires explicit proof above.
             if (
                 not usage_scope
-                and not require_rights_proof
                 and source_asset.get("acquisitionStatus") == "acquired"
                 and source_asset.get("distributionDecision") == "research_allowed"
                 and canonical_file_page.startswith("https://")
@@ -415,6 +398,29 @@ def build_entity_object_transaction_package(
             }:
                 raise ObjectTransactionError(
                     f"asset {asset_id} 缺 canonical modelReleaseStatus"
+                )
+            distribution_decision = str(
+                raw.get("distributionDecision")
+                or source_asset.get("distributionDecision")
+                or ""
+            ).strip()
+            if distribution_decision not in {
+                "research_allowed",
+                "commercial_allowed",
+            }:
+                raise ObjectTransactionError(
+                    f"asset {asset_id} 缺 canonical distributionDecision"
+                )
+            if distribution_decision == "commercial_allowed" and (
+                rights_audit_status is not RightsAuditStatus.VERIFIED
+                or not authorization_proof.startswith("https://")
+                or not license_url.startswith("https://")
+                or not author
+                or not license_name
+            ):
+                distribution_decision = "research_allowed"
+                rights_audit_issues.append(
+                    "commercial distribution proof incomplete; retained for research"
                 )
             rights_row = {
                     "assetId": asset_id,
@@ -460,6 +466,7 @@ def build_entity_object_transaction_package(
                         "height": height,
                     },
                     "authorizationProof": authorization_proof,
+                    "distributionDecision": distribution_decision,
                     "rightsAuditStatus": rights_audit_status.value,
                     "rightsAuditIssues": rights_audit_issues,
                     "modelReleaseStatus": model_release_status,
@@ -546,7 +553,10 @@ def build_entity_object_transaction_package(
                 "admission": {
                     "processResult": "completed",
                     "qualityResult": "passed",
-                    "usageScope": "research",
+                    "usageScope": pool_usage_scope(
+                        {"sourceAttribution": source_attribution},
+                        rights_rows,
+                    ),
                     "evidenceRef": "attestation.json",
                     "evidenceDigest": _digest_file(attestation_source),
                 },

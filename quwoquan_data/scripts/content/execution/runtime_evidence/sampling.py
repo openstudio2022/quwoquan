@@ -447,6 +447,13 @@ def capture_resource_sample(
             for row in workspaces
             if row["kind"] == "transaction_staging"
         ),
+        "hostCpuPercent": round(
+            sum(float(row["cpuPercent"]) for row in processes),
+            3,
+        ),
+        "cursorBridgeProcessCount": sum(
+            1 for row in processes if row["isCursorSdkBridge"] is True
+        ),
         "openFdCount": sum(int(row["openFdCount"]) for row in processes),
         "queueDepth": sum(int(row["queueDepth"]) for row in queues),
         "oldestReadyAgeSeconds": max(

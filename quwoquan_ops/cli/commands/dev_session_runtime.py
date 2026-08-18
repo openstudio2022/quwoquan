@@ -331,7 +331,17 @@ def _dev_session_source_compose_files(
             / "quwoquan_service/control-plane/platform-ops/deploy/compose.yaml",
         )
     )
-    profiles = {"assistant-runtime", "commercial-observability", "edge-media"}
+    # 上面无条件把 control-plane/platform-ops 的 compose 选入闭包，而该文件用
+    # profile 门控 platform-ops-service。test_live 只有 full workload 一种形态，
+    # 因此这里必须与 immutable full workload 激活同一组 profile；漏掉
+    # control-plane 会让服务只存在于声明里而永不启动，运行态 roster 随之永久
+    # 判定漂移。
+    profiles = {
+        "assistant-runtime",
+        "commercial-observability",
+        "control-plane",
+        "edge-media",
+    }
     validated_provider = _stackctl.validate_provider_runtime_composition(
         dict(provider_composition),
         expected_environment=environment,
@@ -680,6 +690,13 @@ def _dev_session_render_runtime_inputs(
     profile_name = str(target_contract.get("portProfile") or "")
     if profile_name != target:
         raise ValueError("mutable test_live target must own its canonical port profile")
+    public_web_package, public_web_root = (
+        _stackctl._resolve_dev_session_public_web_package(
+            environment=environment,
+            target=target,
+            target_contract=target_contract,
+        )
+    )
     manifest = _stackctl.load_port_manifest()
     profile = manifest.get("profiles", {}).get(profile_name)
     if not isinstance(profile, dict):
@@ -796,15 +813,27 @@ def _dev_session_render_runtime_inputs(
     # service-core 镜像不再内嵌 skill release 资产;mutable test_live 与
     # immutable package 走同一条 skill-package-build 签名链路,把官方
     # publication 物化进 config-root 供 assistant asset-reader 消费。
-    from quwoquan_ops.cli.commands.package_runtime import (
-        _build_official_skill_package_publication,
+    from quwoquan_ops.cli.lib.assistant_skill_package_artifact import (
+        build_official_skill_package_publication,
     )
 
-    skill_publication = _build_official_skill_package_publication(
+    source_revision_result = _stackctl.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=_stackctl.ROOT,
+    )
+    source_revision = source_revision_result.stdout.strip()
+    if source_revision_result.returncode != 0 or re.fullmatch(
+        r"[0-9a-f]{40}",
+        source_revision,
+    ) is None:
+        raise ValueError("mutable official Skill package source revision is invalid")
+    skill_publication = build_official_skill_package_publication(
         environment,
         target,
         package_source_root=_stackctl.ROOT,
-        package_environment={},
+        package_environment={
+            "QWQ_PACKAGE_SOURCE_REVISION": source_revision,
+        },
         output_root=config_root / "skill-packages" / "official",
     )
     if int(skill_publication.get("exitCode") or 0) != 0:
@@ -842,6 +871,10 @@ def _dev_session_render_runtime_inputs(
             "LOCAL_GAMMA_MEDIA_ROOT": str(media_root),
             "LOCAL_GAMMA_LEGAL_STATIC_ROOT": str(legal_root),
             "LOCAL_GAMMA_PORTAL_ROOT": str(portal_root),
+            "LOCAL_GAMMA_PUBLIC_WEB_ROOT": str(public_web_root),
+            "QWQ_PUBLIC_WEB_CONTENT_DIGEST": public_web_package[
+                "contentDigest"
+            ],
             "QWQ_COMPOSE_CONFIG_ROOT": str(config_root),
             "QWQ_COMPOSE_ENV": environment,
             "QWQ_WORKLOAD": "full",
@@ -951,6 +984,7 @@ def _dev_session_render_runtime_inputs(
         "resolverHandoffDigest": resolver_handoff["handoffDigest"],
         "workspaceIdentity": dict(workspace_snapshot),
         "graphqlReadRegistry": dict(graphql_read_registry),
+        "publicWebPackage": dict(public_web_package),
         "serviceCoreModules": sorted(_stackctl.SERVICE_CORE_MODULE_SET),
     }
     _stackctl.write_json(report_dir / "mutable-runtime-plan.json", plan)

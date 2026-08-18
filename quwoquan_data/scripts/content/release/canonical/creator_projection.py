@@ -14,9 +14,10 @@ from content.release.canonical.object_transaction_contract import (
     _safe_id,
     _safe_rel,
 )
+from core.content_library import MediaHoldingError, resolve_media_holding
 from core.io import write_json
-from core.media_asset_url import is_cas_media_object_key, sha256_file
-from core.paths import CONTROL_PLANE_CREATOR_POOL_ROOT, PUBLISH_ROOT
+from core.media_asset_url import is_cas_media_object_key
+from core.paths import CONTROL_PLANE_CREATOR_POOL_ROOT
 
 _SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 
@@ -91,15 +92,15 @@ def _avatar_asset_projection(
         raise ObjectTransactionError(
             "creator avatarAsset objectKey does not bind sha256"
         )
-    physical = PUBLISH_ROOT / object_key
-    if (
-        not physical.is_file()
-        or physical.stat().st_size != byte_count
-        or sha256_file(physical) != sha256
-    ):
+    # The library is content-addressed and verifies a body against its digest at
+    # admission, so reaching the entry at this digest is the identity check;
+    # re-hashing it here would only re-derive the address it was found under.
+    try:
+        resolve_media_holding(sha256, expected_bytes=byte_count)
+    except (MediaHoldingError, ValueError) as exc:
         raise ObjectTransactionError(
-            "creator avatarAsset CAS bytes are missing or drifted"
-        )
+            "creator avatarAsset body is not reachable in the content library"
+        ) from exc
     evidence_source = CONTROL_PLANE_CREATOR_POOL_ROOT / evidence_ref
     try:
         evidence = json.loads(evidence_source.read_text(encoding="utf-8"))

@@ -2,13 +2,13 @@
 from __future__ import annotations
 
 import ipaddress
-import shutil
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
 
+from core.content_library import link_from_library
 from core.runtime_policy import active_runtime_policy
 
 from content.source.professional_image_network_admission import (
@@ -232,7 +232,7 @@ def copy_manual_video(relative_ref: str, destination: Path, *, manual_root: Path
     if suffix not in _VIDEO_EXTENSIONS:
         raise ValueError("manual professional video container is not supported")
     destination.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(source, destination)
+    link_from_library(source, destination, kind="media")
     return suffix
 
 

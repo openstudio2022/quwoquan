@@ -44,7 +44,10 @@ https://{$QWQ_PUBLIC_WEB_HOST}:{$LOCAL_GAMMA_HTTP_PORT:19000} {
 		host {$QWQ_PUBLIC_WEB_HOST}
 		path /api/*
 	}
-	uri @web_api strip_prefix /api
+	handle @web_api {
+		uri strip_prefix /api
+		import business_api_edge
+	}
 	# 公开 SEO 读面（public-content-web-entry）：publicWeb host 的对象页、
 	# robots/sitemap 与 UA 分流中转页直连 content-service /public-web/*；
 	# 业务 API 路径所有权不在此复制。
@@ -83,6 +86,96 @@ https://{$QWQ_PUBLIC_WEB_HOST}:{$LOCAL_GAMMA_HTTP_PORT:19000} {
 				tls_trust_pool file /etc/caddy/tls/object-storage-ca.pem
 				tls_server_name {$QWQ_PUBLIC_UPLOAD_HOST}
 			}
+		}
+		file_server
+	}
+	# 公开 Web official artifact 静态交付：与 prod renderer 同一规则——
+	# HTML/service worker 不缓存，字体与 hashed 资产 immutable，全部绑定
+	# 不可变包的 content digest。
+	@public_web_service_worker {
+		host {$QWQ_PUBLIC_WEB_HOST}
+		path /flutter_service_worker.js
+	}
+	handle @public_web_service_worker {
+		header {
+			Cache-Control "no-cache, no-store, must-revalidate"
+			Content-Type "application/javascript; charset=utf-8"
+			X-Content-Type-Options "nosniff"
+			X-QWQ-Web-Content-Digest "{$QWQ_PUBLIC_WEB_CONTENT_DIGEST}"
+		}
+		root * /srv/web
+		file_server
+	}
+	@public_web_font_ttf {
+		host {$QWQ_PUBLIC_WEB_HOST}
+		path *.ttf
+	}
+	handle @public_web_font_ttf {
+		header {
+			Cache-Control "public, max-age=31536000, immutable"
+			Content-Type "font/ttf"
+			X-Content-Type-Options "nosniff"
+			X-QWQ-Web-Content-Digest "{$QWQ_PUBLIC_WEB_CONTENT_DIGEST}"
+		}
+		root * /srv/web
+		file_server
+	}
+	@public_web_font_woff2 {
+		host {$QWQ_PUBLIC_WEB_HOST}
+		path *.woff2
+	}
+	handle @public_web_font_woff2 {
+		header {
+			Cache-Control "public, max-age=31536000, immutable"
+			Content-Type "font/woff2"
+			X-Content-Type-Options "nosniff"
+			X-QWQ-Web-Content-Digest "{$QWQ_PUBLIC_WEB_CONTENT_DIGEST}"
+		}
+		root * /srv/web
+		file_server
+	}
+	# bootstrap surface 产物文件名不带 hash，必须随 HTML 一起再验证，
+	# 否则旧缓存的 bootstrap 会与新 index.html 漂移。
+	@public_web_bootstrap_surface {
+		host {$QWQ_PUBLIC_WEB_HOST}
+		path /qwq_bootstrap.js /qwq_bootstrap.css
+	}
+	handle @public_web_bootstrap_surface {
+		header {
+			Cache-Control "no-cache"
+			X-Content-Type-Options "nosniff"
+			X-QWQ-Web-Content-Digest "{$QWQ_PUBLIC_WEB_CONTENT_DIGEST}"
+		}
+		root * /srv/web
+		file_server
+	}
+	@public_web_immutable_asset {
+		host {$QWQ_PUBLIC_WEB_HOST}
+		path /assets/* /canvaskit/* /icons/* /main.dart.js /flutter.js /flutter_bootstrap.js
+	}
+	handle @public_web_immutable_asset {
+		header {
+			Cache-Control "public, max-age=31536000, immutable"
+			X-Content-Type-Options "nosniff"
+			X-QWQ-Web-Content-Digest "{$QWQ_PUBLIC_WEB_CONTENT_DIGEST}"
+		}
+		root * /srv/web
+		file_server
+	}
+	@public_web_app host {$QWQ_PUBLIC_WEB_HOST}
+	@public_web_html path / /index.html
+	handle @public_web_app {
+		header {
+			X-Content-Type-Options "nosniff"
+			X-Frame-Options "DENY"
+			Referrer-Policy "no-referrer"
+			X-QWQ-Web-Content-Digest "{$QWQ_PUBLIC_WEB_CONTENT_DIGEST}"
+		}
+		root * /srv/web
+		try_files {path} /index.html
+		header @public_web_html {
+			Cache-Control "no-cache"
+			Content-Type "text/html; charset=utf-8"
 		}
 		file_server
 	}

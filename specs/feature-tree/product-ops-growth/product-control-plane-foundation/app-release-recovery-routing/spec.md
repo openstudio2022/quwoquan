@@ -20,12 +20,14 @@
 - 公开版本查询、通用官网下载页、Android APK、iOS 官方更新通道和 Web 强制刷新/恢复入口。
 - User-Agent 平台识别、Build 数值比较、受信 URL 校验和下载失败终态。
 - Android APK 生产签名、不可变 CDN 对象、SHA-256 与 latest 指针发布门禁。
+- Apple App Store/TestFlight 与已登记 Android 受信市场（华为、小米、OPPO、vivo、应用宝）的渠道事实：channelId、store product 标识、当前 version/build、上架状态与回退方式。
 - `stackctl package --kind app-release` 生成发布清单、Product Ops 版本事实环境配置，并可选对已上传 CDN 对象做全量摘要、大小、Content-Type 和 immutable 缓存校验。
 - `stackctl deploy --artifact-kind web|app-release` 只消费同一候选 `ReleaseManifest` 已绑定的子清单，以 CAS 原子切换 Web `current` 或 Android `latest.json`；`stackctl verify --kind distribution` 与 `stackctl inspect --scope release` 只读复核本地发布根及可选公网响应。
 
 ### Out of Scope
 
-- 领域模型版本、兼容握手、灰度客户端契约分支或第三方应用商店。
+- 领域模型版本、兼容握手、灰度客户端契约分支。
+- 未登记的应用商店、来源不明 APK 与可变同名安装包。
 - 应用内 APK 下载器、增量包、热更新、公众 iOS IPA 与 iOS 企业分发。
 - 根据 User-Agent 判断客户端是否最新；最新版判断只使用客户端显式提交的 Build。
 
@@ -81,6 +83,15 @@
 - 正式提升由同一环境发布包原子更新 Product Ops 权威事实与 API Edge 只读投影，并校验 source digest 一致；任一目标写入或回读失败不得形成新 minimum 成功事实。
 - latest 与 minimum 的历史 App Version/Build 分布、`would_block` 命中数、426 数量和恢复结果必须按平台可观测；App 版本仅用于用户更新体验、兼容门和灰度 audience，不向领域模型版本或端侧迁移状态继续扩展。
 
+<a id="req-007"></a>
+### REQ-007 受信分发渠道事实单一真相源
+
+- 每个平台的受信安装渠道集合只由 `app_release` 发布事实声明：iOS 为 Apple App Store（TestFlight 仅内测轨）；Android 为官网 CDN APK 与已登记受信市场（华为、小米、OPPO、vivo、应用宝）；Web 为官方 PWA。未在发布事实登记的渠道不得出现在任何查询响应或页面。
+- 每个市场渠道声明 channelId、store product 标识、该渠道当前已上架 version/build、上架状态与回退方式；一个渠道审核未过或下架不得使其他渠道的发布事实不可用。
+- Android 恢复页“前往更新”固定走官网 HTTPS CDN 下载；市场渠道只用于更新引导（跳转本机安装来源对应市场的详情页），不作为恢复页下载源。
+- 官网 APK 的 `androidApkUrl`、`androidApkSha256`、`androidPackageName`、`androidSigningCertificateSha256` 是恢复页、更新提示与官网/网页版安装转化组件共用的唯一真相源，禁止任何组件持有第二份下载配置或硬编码地址。
+- 市场上传、审核与发布回执按渠道独立登记为 install-channel 事实；缺少某渠道账号、凭据或审核回执时该渠道保持 `GATE_BLOCK/OPEN`，不得以另一渠道回执替代。
+
 ## 4. 契约引用
 
 - canonical：`quwoquan_service/services/product-ops-service/contracts/product_ops/app_release/operations.yaml`
@@ -111,6 +122,14 @@
 - THEN 普通业务请求收到 426 与 canonical 恢复动作，版本查询和官方更新/恢复链路不被该门阻断；完成更新后客户端可重新进入正常业务面。
 - AND minimum 提升前的 `would_block`、30 天活跃安装比例、12 个月支持窗口、发布包原子更新及 source digest 回读均有不可变证据，否则保持上一 minimum。
 
+<a id="gwt-004"></a>
+### GWT-004 受信市场渠道路由与回执
+
+- GIVEN `app_release` 发布事实已登记 iOS App Store 与五个 Android 受信市场的渠道事实，其中部分渠道可能未就绪。
+- WHEN 客户端或官网查询平台安装/更新路由，或发布流水线登记某渠道的上传、审核与发布回执。
+- THEN 查询只返回该平台已登记且就绪的受信渠道；Android 更新引导按本机安装来源匹配市场渠道，恢复页下载仍固定官网 CDN；iOS 更新只跳转 App Store。
+- AND 每个渠道的上传、审核、发布与真机安装回执独立登记；未就绪渠道显式保持 `GATE_BLOCK/OPEN`，不阻塞其他渠道，也不得由其他渠道回执替代。
+
 ## 6. 依赖
 
 - 前置要求：[`product-control-plane-foundation`](../spec.md) 的范围、要求与 SIT。
@@ -126,8 +145,8 @@
 - 优先级：`P0`
 - 准出影响：`block`
 - 影响或价值：仓库已禁止 Android release 回退 debug signing，但当前仍没有生产 keystore Secret、经正式域名/CDN 上传并校验的 APK 对象以及四环境 Web DNS/TLS，无法形成可对外宣称的正式下载事实。
-- 完成判定：`GWT-002` 使用生产签名和官方 CDN 真文件通过，iOS 官方更新通道由真实 iPhone 完成更新，Web PWA 由正式浏览器安装并以 standalone 模式启动。
-- 依赖：移动端发布 Secret、官方 CDN、Web 部署与 DNS/TLS。
+- 完成判定：`GWT-002` 使用生产签名和官方 CDN 真文件通过，iOS 官方更新通道由真实 iPhone 完成更新，Web PWA 由正式浏览器安装并以 standalone 模式启动；`GWT-004` 的 App Store 与五个 Android 受信市场渠道分别绑定真实上传、审核、发布与真机安装回执，未就绪渠道保持显式阻断。
+- 依赖：移动端发布 Secret、官方 CDN、Web 部署与 DNS/TLS、各市场开发者账号与审核。
 
 <a id="open-002"></a>
 ### OPEN-002 三平台 minimum 更新与恢复能力证据缺口

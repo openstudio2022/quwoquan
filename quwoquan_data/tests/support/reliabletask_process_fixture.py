@@ -363,7 +363,7 @@ def prepare(
             object_issues={},
         )
     )
-    for relative in ("creators", "entities", "posts", "tags", "media/objects"):
+    for relative in ("creators", "entities", "posts", "tags"):
         (publish_root / relative).mkdir(parents=True, exist_ok=True)
 
     job = enqueue_ref_job(

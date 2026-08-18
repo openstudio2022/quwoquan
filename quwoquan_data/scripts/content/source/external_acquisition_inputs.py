@@ -181,20 +181,25 @@ def professional_image_context_binding(
     entity_id: str,
     carrier: str,
     external_input_context: ExternalInputRuntimeContext | None,
+    entity_aliases: tuple[str, ...] = (),
+    verified_index: Any | None = None,
 ) -> tuple[list[str], list[dict[str, Any]]]:
     """Project one lane's complete frozen image receipt set for one entity."""
-    from content.source.professional_image_acquisition import (
-        acquired_image_specs_for_entity,
+    from content.source.professional_image_acquisition_index import (
+        build_acquired_image_spec_index,
     )
 
     context = _required_context(execution_id, carrier, external_input_context)
     kind = _professional_image_kind()
     refs = context.receipt_refs(kind)
     context.require_receipt_refs(kind, refs)
-    specs = acquired_image_specs_for_entity(
+    index = verified_index or build_acquired_image_spec_index(
         refs,
-        entity_id=entity_id,
         root=context.acquisition_root(kind),
+        descriptors=context.descriptors(kind),
+    )
+    specs = index.specs_for_names(
+        tuple(dict.fromkeys([entity_id, *entity_aliases]))
     )
     for spec in specs:
         spec["url"] = context.blob_path(

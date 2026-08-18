@@ -29,8 +29,14 @@ from content.release.canonical.object_transaction_contract import (
     _json_bytes,
     _read_json,
     _safe_rel,
+    refresh_canonical_tag_snapshots,
 )
-from content.release.canonical.pool_append_report import batch_reason, batch_report
+from content.release.canonical.pool_append_report import (
+    batch_reason,
+    batch_report,
+    excluded_outcome,
+    is_hard_batch_failure,
+)
 from content.release.canonical.pool_backfill_canonical import (
     build_pool_record,
     canonical_plan_items,
@@ -428,6 +434,22 @@ def _restore_batch(
             os.replace(backup, target)
 
 
+def _prepare_item_rollback(
+    item: Mapping[str, Any], *, publish_root: Path, rollback_root: Path, index: int
+) -> tuple[list[tuple[Path, Path | None]], list[Path]]:
+    target = _item_target(item, publish_root)
+    record = item["record"]
+    if record["objectType"] != "author":
+        return [], [
+            target / "_pool" / "versions" / f"{record['recordSequence']}.json"
+        ]
+    backup = rollback_root / f"author-{index}"
+    if target.exists():
+        shutil.copytree(target, backup)
+        return [(target, backup)], []
+    return [(target, None)], []
+
+
 def append_pool_batch(
     *,
     input_path: Path,
@@ -435,13 +457,14 @@ def append_pool_batch(
     creator_pool_root: Path = CONTROL_PLANE_CREATOR_POOL_ROOT,
     apply: bool = False,
 ) -> dict[str, Any]:
-    """Preflight the whole batch, then apply every admitted record or none."""
+    """Append every valid object; only structural corruption aborts siblings."""
 
     document = _read_json(input_path)
     items = _validate_batch(document)
-    preflight: list[dict[str, Any]] = []
+    preflight: dict[str, dict[str, Any]] = {}
     reasons: list[dict[str, str]] = []
     pending = 0
+    failed = 0
     for item in items:
         try:
             outcome = _apply_item(
@@ -450,7 +473,7 @@ def append_pool_batch(
                 creator_pool_root=creator_pool_root,
                 apply=False,
             )
-            preflight.append(outcome)
+            preflight[str(item["itemId"])] = outcome
             if outcome["eligibilityResult"] != "passed":
                 pending += 1
                 reasons.append(
@@ -464,39 +487,33 @@ def append_pool_batch(
                     }
                 )
         except (OSError, TypeError, ValueError, ObjectTransactionError) as exc:
+            if is_hard_batch_failure(exc):
+                return batch_report(
+                    apply=apply,
+                    total=len(items),
+                    ready=0,
+                    pending=0,
+                    failed=len(items),
+                    reasons=[batch_reason(item, exc)],
+                    outcomes=[],
+                )
+            failed += 1
             reasons.append(batch_reason(item, exc))
-    failed_preflight = len(items) - len(preflight)
-    if pending or failed_preflight:
-        failed = len(items) - pending
-        failed_ids = {row["itemId"] for row in reasons}
-        reasons.extend(
-            {
-                "category": "eligibility",
-                "itemId": str(item["itemId"]),
-                "code": "DATA.POOL.BATCH_PREFLIGHT_ABORTED",
-            }
-            for item in items
-            if item["itemId"] not in failed_ids
-            and item["record"]["eligibilityResult"] == "passed"
-        )
-        return batch_report(
-            apply=apply,
-            total=len(items),
-            ready=0,
-            pending=pending,
-            failed=failed,
-            reasons=reasons,
-            outcomes=[],
-        )
+            preflight[str(item["itemId"])] = excluded_outcome(item)
+    ready_items = [
+        item
+        for item in items
+        if preflight[str(item["itemId"])]["status"] not in {"pending", "excluded"}
+    ]
     if not apply:
         return batch_report(
             apply=False,
             total=len(items),
-            ready=len(items),
-            pending=0,
-            failed=0,
-            reasons=[],
-            outcomes=preflight,
+            ready=len(ready_items),
+            pending=pending,
+            failed=failed,
+            reasons=reasons,
+            outcomes=[preflight[str(item["itemId"])] for item in items],
         )
 
     rollback_root = Path(tempfile.mkdtemp(
@@ -504,59 +521,67 @@ def append_pool_batch(
     ))
     author_backups: list[tuple[Path, Path | None]] = []
     record_targets: list[Path] = []
+    ready = 0
     try:
-        for index, (item, outcome) in enumerate(zip(items, preflight, strict=True)):
+        for index, item in enumerate(ready_items):
+            outcome = preflight[str(item["itemId"])]
             if outcome["status"] == "replayed":
+                ready += 1
                 continue
-            target = _item_target(item, publish_root)
-            record = item["record"]
-            if record["objectType"] == "author":
-                backup = rollback_root / f"author-{index}"
-                if target.exists():
-                    shutil.copytree(target, backup)
-                    author_backups.append((target, backup))
-                else:
-                    author_backups.append((target, None))
-            else:
-                record_targets.append(
-                    target
-                    / "_pool"
-                    / "versions"
-                    / f"{record['recordSequence']}.json"
-                )
-        outcomes = [
-            _apply_item(
+            item_authors, item_records = _prepare_item_rollback(
                 item,
                 publish_root=publish_root,
-                creator_pool_root=creator_pool_root,
-                apply=True,
+                rollback_root=rollback_root,
+                index=index,
             )
-            for item in items
-        ]
-    except (OSError, TypeError, ValueError, ObjectTransactionError) as exc:
-        _restore_batch(
-            author_backups=author_backups,
-            record_targets=record_targets,
-        )
-        return batch_report(
-            apply=True,
-            total=len(items),
-            ready=0,
-            pending=0,
-            failed=len(items),
-            reasons=[batch_reason(items[0], exc)],
-            outcomes=[],
-        )
+            try:
+                preflight[str(item["itemId"])] = _apply_item(
+                    item,
+                    publish_root=publish_root,
+                    creator_pool_root=creator_pool_root,
+                    apply=True,
+                )
+            except (OSError, TypeError, ValueError, ObjectTransactionError) as exc:
+                if is_hard_batch_failure(exc):
+                    _restore_batch(
+                        author_backups=[*author_backups, *item_authors],
+                        record_targets=[*record_targets, *item_records],
+                    )
+                    return batch_report(
+                        apply=True,
+                        total=len(items),
+                        ready=0,
+                        pending=0,
+                        failed=len(items),
+                        reasons=[batch_reason(item, exc)],
+                        outcomes=[],
+                    )
+                _restore_batch(
+                    author_backups=item_authors,
+                    record_targets=item_records,
+                )
+                failed += 1
+                reasons.append(batch_reason(item, exc))
+                preflight[str(item["itemId"])] = excluded_outcome(item)
+                continue
+            author_backups.extend(item_authors)
+            record_targets.extend(item_records)
+            ready += 1
     finally:
         shutil.rmtree(rollback_root, ignore_errors=True)
+    # A projected creator carries its own tag references, so the batch owns their
+    # snapshot closure. Collection walks the whole canonical tree, which is why it
+    # settles once per batch here instead of per admitted object; an unresolvable
+    # reference leaves publish unclosed and must surface rather than be absorbed.
+    refresh_canonical_tag_snapshots(publish_root)
     return batch_report(
         apply=True,
         total=len(items),
-        ready=len(items),
-        pending=0,
-        failed=0,
-        reasons=[],
-        outcomes=outcomes,
+        ready=ready,
+        pending=pending,
+        failed=failed,
+        reasons=reasons,
+        outcomes=[preflight[str(item["itemId"])] for item in items],
     )
 
 

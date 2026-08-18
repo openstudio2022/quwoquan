@@ -217,6 +217,58 @@ func TestAppReleaseRejectsUntrustedAndroidAPKAndIncompleteProof(t *testing.T) {
 	}
 }
 
+func TestIOSInstallPageOffersAppStoreAndPWAWithoutSideload(t *testing.T) {
+	service := newAppReleaseService(t)
+	mux := http.NewServeMux()
+	httpadapter.NewHandler(service).Register(mux)
+	request := httptest.NewRequest(http.MethodGet, "/download/ios", nil)
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("ios install status=%d body=%s", response.Code, response.Body.String())
+	}
+	body := response.Body.String()
+	// 已登记 iOS release 时必须同时提供 App Store 跳转与 PWA 添加主屏指引。
+	if !strings.Contains(body, "https://apps.apple.com/app/id1234567890") {
+		t.Fatalf("ios install page must link the registered App Store release, body=%q", body)
+	}
+	if !strings.Contains(body, "添加到主屏幕") {
+		t.Fatalf("ios install page must keep the PWA guidance, body=%q", body)
+	}
+	// iOS 网页版不提供二进制下载：不得出现 IPA 侧载或 APK 链接。
+	for _, forbidden := range []string{".ipa", ".apk", "itms-services"} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("ios install page must not offer sideload %q, body=%q", forbidden, body)
+		}
+	}
+}
+
+func TestIOSInstallPageWithoutRegisteredReleaseKeepsPWAOnly(t *testing.T) {
+	catalog := appReleaseCatalog()
+	catalog.IOS = apprelease.Release{}
+	service, err := apprelease.NewService(catalog)
+	if err != nil {
+		t.Fatalf("android-only release service: %v", err)
+	}
+	mux := http.NewServeMux()
+	httpadapter.NewHandler(service).Register(mux)
+	request := httptest.NewRequest(http.MethodGet, "/download/ios", nil)
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("ios install status=%d body=%s", response.Code, response.Body.String())
+	}
+	body := response.Body.String()
+	if strings.Contains(body, "apps.apple.com") {
+		t.Fatalf("without a registered ios release the page must not fabricate an App Store link, body=%q", body)
+	}
+	if !strings.Contains(body, "添加到主屏幕") {
+		t.Fatalf("ios install page must keep the PWA guidance, body=%q", body)
+	}
+}
+
 func TestAndroidOfficialReleaseRemainsAvailableWithoutIOSRelease(t *testing.T) {
 	catalog := appReleaseCatalog()
 	catalog.IOS = apprelease.Release{}

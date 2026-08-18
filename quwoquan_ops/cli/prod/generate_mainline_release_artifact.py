@@ -22,6 +22,7 @@ if str(ROOT) not in sys.path:
 
 from quwoquan_ops.cli.lib.immutable_image_composition import (
     first_party_service_names,
+    runtime_image_owner_names,
 )
 from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
     APPLICATION_PACKAGES,
@@ -35,10 +36,7 @@ from quwoquan_ops.cli.render_runtime_config import render_workload
 
 
 RELEASE_SERVICES = first_party_service_names(ROOT)
-DOMAIN_SERVICES = tuple(
-    service for service in RELEASE_SERVICES if service != "platform-ops-service"
-)
-DEPLOYED_SERVICES = RELEASE_SERVICES
+DEPLOYED_SERVICES = runtime_image_owner_names(ROOT)
 TRANSPORT_TAG_PATTERN = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}")
 
 
@@ -132,17 +130,21 @@ def write_summary(path: Path, manifest: dict[str, Any]) -> None:
     lines = [
         "## Release Evidence Manifest",
         "",
+        f"- `releaseTrainId`: `{manifest['releaseTrainId']}`",
         f"- `candidateId`: `{manifest['candidateId']}`",
         f"- `artifactDigest`: `{manifest['artifactDigest']}`",
         "- `status`: `build-input`（全部不可变摘要与证据收齐后才可部署）",
         "",
-        "### Image transport references",
-        *[
-            f"- `{service}`: `{descriptor['transportRef']}`"
-            for service, descriptor in manifest["images"].items()
-        ],
-        "",
+        "### Environment image transport references",
     ]
+    for environment in ENVIRONMENTS:
+        for owner, descriptor in manifest["environmentArtifacts"][environment][
+            "images"
+        ].items():
+            lines.append(
+                f"- `{environment}/{owner}`: `{descriptor['transportRef']}`"
+            )
+    lines.append("")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines), encoding="utf-8")
 
@@ -180,15 +182,27 @@ def main() -> int:
 
     registry = args.registry.rstrip("/")
     repository = args.repository.strip("/")
-    images = {
-        service: {
-            "repository": f"{registry}/{repository}/{service}",
-            "transportRef": f"{registry}/{repository}/{service}:{transport_tag}",
+    environment_artifacts: dict[str, dict[str, Any]] = {}
+    for environment in ENVIRONMENTS:
+        images = {
+            owner: {
+                "repository": f"{registry}/{repository}/{owner}-{environment}",
+                "transportRef": (
+                    f"{registry}/{repository}/{owner}-{environment}:{transport_tag}"
+                ),
+            }
+            for owner in DEPLOYED_SERVICES
         }
-        for service in DEPLOYED_SERVICES
-    }
+        environment_artifacts[environment] = {
+            "environment": environment,
+            "environmentArtifactDigest": None,
+            "images": images,
+            "configurationPackages": configuration_packages[environment],
+        }
     required_evidence = {
-        "images": list(DEPLOYED_SERVICES),
+        "environmentArtifacts": {
+            environment: list(DEPLOYED_SERVICES) for environment in ENVIRONMENTS
+        },
         "configurationPackages": {
             environment: list(RELEASE_SERVICES) for environment in ENVIRONMENTS
         },
@@ -206,6 +220,7 @@ def main() -> int:
     manifest = seal_manifest(
         {
             "schema": SCHEMA,
+            "releaseTrainId": None,
             "candidateId": None,
             "status": "build-input",
             "generatedAt": utc_now(),
@@ -217,8 +232,7 @@ def main() -> int:
                 "sourceArchiveDigest": None,
             },
             "artifactDigest": None,
-            "images": images,
-            "configurationPackages": configuration_packages,
+            "environmentArtifacts": environment_artifacts,
             "applicationPackages": {environment: {} for environment in ENVIRONMENTS},
             "contractGraphDigest": None,
             "requiredEvidence": required_evidence,
@@ -232,7 +246,11 @@ def main() -> int:
                 "whole-application-evidence-pending",
             ],
             "missingEvidence": [
-                *(f"images.{service}.digest" for service in DEPLOYED_SERVICES),
+                *(
+                    f"environmentArtifacts.{environment}.images.{owner}.digest"
+                    for environment in ENVIRONMENTS
+                    for owner in DEPLOYED_SERVICES
+                ),
                 *(
                     f"applicationPackages.{environment}.{surface}"
                     for environment in ENVIRONMENTS

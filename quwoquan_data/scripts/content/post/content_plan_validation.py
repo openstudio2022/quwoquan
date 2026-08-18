@@ -1,41 +1,25 @@
 """Validate immutable content-plan packets against execution contracts."""
 from __future__ import annotations
-
-from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
-
-from core import ops_governance as og
+from typing import Any, Mapping
 from core.article_commercial_policy import article_commercial_closure_enabled
+from content.post.article.base_draft import base_draft_readiness, load_base_draft_text
+from core import ops_governance as og
+from content.post.object_index import BRIEF_FILE, content_object_stage_dir, load_index
+from governance.creators.assignment import creator_assignment_issues, creator_assignment_required
 from core.image_rules import image_caption_quality_issue
-from core.image_safety import assess_image_publish_prefilter
 from core.io import read_json
+from core.image_safety import assess_image_publish_prefilter
 from core.paths import STAGE_COMPOSE, execution_root
 from core.quality_gates import WRITING_INTENTS, writing_intent_issues
 from core.qunar_template import qunar_article_base_block_reason
-from core.source_catalog import ARTICLE_BASE_SOURCE_CATEGORIES
-from governance.coverage.distribution import asset_contract_missing_fields
-from governance.creators.assignment import (
-    creator_assignment_issues,
-    creator_assignment_required,
-)
-
-from content.post.article.base_draft import base_draft_readiness, load_base_draft_text
+from content.post.content_plan_state import load_content_plan_packet, packet_items as _items, reject_source_ids
 from content.post.content_plan import (
-    ARTICLE_BASE_SOURCE_ROLES,
-    ARTICLE_MIN_BASE_DRAFT_CHARS,
-    ARTICLE_SUPPORTING_ONLY_CATEGORIES,
-    CONTENT_PLAN_SCHEMA,
-    _article_source_category,
-    _source_asset_ref,
-    _source_asset_rows,
-    _source_meta,
-    content_plan_quotas_required,
+    ARTICLE_BASE_SOURCE_CATEGORIES, ARTICLE_BASE_SOURCE_ROLES,
+    ARTICLE_MIN_BASE_DRAFT_CHARS, ARTICLE_SUPPORTING_ONLY_CATEGORIES,
+    CONTENT_PLAN_SCHEMA, _article_source_category, _source_asset_ref,
+    _source_asset_rows, _source_meta, content_plan_quotas_required,
 )
-from content.post.content_plan_state import load_content_plan_packet, reject_source_ids
-from content.post.content_plan_state import packet_items as _items
-from content.post.object_index import BRIEF_FILE, content_object_stage_dir, load_index
-
 
 def validate_content_plan(execution_id: str, spec: Mapping[str, Any]) -> list[str]:
     """校验 content_plan 是否满足配额与证据链。"""
@@ -54,16 +38,14 @@ def validate_content_plan(execution_id: str, spec: Mapping[str, Any]) -> list[st
             f"content_plan_packet.schema must be {CONTENT_PLAN_SCHEMA!r}, "
             f"got {packet.get('schema')!r}"
         )
+    from content.execution.workspace import load_execution_manifest
+
     try:
-        from governance.coverage.license import rights_proof_required
-
-        from content.execution.identity import parse_execution_id
-
-        execution_identity = parse_execution_id(execution_id)
-        execution_content_type = execution_identity.content_type.value
-        require_rights_proof = rights_proof_required(execution_identity.vertical)
-    except ValueError as exc:
-        return [f"canonical execution identity unavailable: {exc}"]
+        execution_content_type = str(
+            load_execution_manifest(execution_id).get("contentType") or ""
+        )
+    except (FileNotFoundError, TypeError, ValueError) as exc:
+        return [f"canonical execution manifest unavailable: {exc}"]
 
     packet_content_types = {
         str(item.get("carrier") or item.get("contentType") or "article").strip()
@@ -155,10 +137,11 @@ def validate_content_plan(execution_id: str, spec: Mapping[str, Any]) -> list[st
             issues.append(
                 f"videoWorks quota {want_videos} but packet has {video_n}"
             )
-        if want_route and route_n != want_route:
-            issues.append(
-                f"routeArticles quota {want_route} but packet has {route_n}"
-            )
+        if want_route:
+            if route_n != want_route:
+                issues.append(
+                    f"routeArticles quota {want_route} but packet has {route_n}"
+                )
 
     root = execution_root(execution_id)
     index = load_index(execution_id)
@@ -253,13 +236,12 @@ def validate_content_plan(execution_id: str, spec: Mapping[str, Any]) -> list[st
         carrier = _item_carrier(item)
         raw_carrier = str(item.get("carrier") or item.get("contentType") or "article")
         if require_creator_assignment and carrier in {"article", "image", "video"}:
-            issues.extend(
-                creator_assignment_issues(
-                    item,
-                    carrier=carrier,
-                    prefix=f"item[{ref}].creatorAssignment",
-                )
-            )
+            for creator_issue in creator_assignment_issues(
+                item,
+                carrier=carrier,
+                prefix=f"item[{ref}].creatorAssignment",
+            ):
+                issues.append(creator_issue)
         image_work_mode = carrier == "image" and (raw_carrier == "image" or separated_research)
         if not image_work_mode and not title:
             issues.append(f"item[{ref}]: missing title")
@@ -346,13 +328,10 @@ def validate_content_plan(execution_id: str, spec: Mapping[str, Any]) -> list[st
                         _claim_asset_sha(ref, str(entry.get("sha256") or ""))
                     _claim_asset(ref, str(asset_ref))
         elif carrier == "video":
-            from content.post.content_plan_video_validation import (
-                validate_video_plan_item,
-            )
+            from content.post.content_plan_video_validation import validate_video_plan_item
             issues.extend(
                 validate_video_plan_item(
                     root=root,
-                    vertical=execution_identity.vertical,
                     item=item,
                     ref=ref,
                     claim_asset=_claim_asset,
@@ -531,20 +510,11 @@ def validate_content_plan(execution_id: str, spec: Mapping[str, Any]) -> list[st
                 if not isinstance(asset, Mapping):
                     issues.append(f"item[{ref}]: article asset metadata missing: {asset_ref}")
                     continue
-                missing_asset_fields = asset_contract_missing_fields(asset)
-                if require_rights_proof:
-                    missing_asset_fields.extend(
-                        field
-                        for field in (
-                            "license",
-                            "credit",
-                            "sourceUrl",
-                            "termsUrl",
-                            "usageScope",
-                        )
-                        if not str(asset.get(field) or "").strip()
-                    )
-                missing_asset_fields = sorted(set(missing_asset_fields))
+                missing_asset_fields = [
+                    field
+                    for field in ("license", "credit", "sourceUrl", "termsUrl", "usageScope")
+                    if not str(asset.get(field) or "").strip()
+                ]
                 if missing_asset_fields:
                     issues.append(
                         f"item[{ref}]: baseSourceRef asset {asset.get('fileName') or '?'} "

@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/semantic_task_recovery_grant.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "workUnitId",
+    "requestDigest",
+    "grant",
+    "grantedAttempts",
+    "attemptsBeforeGrant",
+    "reason",
+    "grantedBy",
+    "grantedAt",
+    "grantDigest"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.semantic_task_recovery_grant"},
+    "workUnitId": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "requestDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "grant": {"type": "integer", "minimum": 1},
+    "grantedAttempts": {"type": "integer", "minimum": 1},
+    "attemptsBeforeGrant": {"type": "integer", "minimum": 0},
+    "reason": {
+      "enum": [
+        "infrastructure_interruption",
+        "provider_quota_exhausted",
+        "transport_unavailable",
+        "operator_disposition"
+      ]
+    },
+    "grantedBy": {"type": "string", "minLength": 1},
+    "grantedAt": {"type": "string", "minLength": 1},
+    "grantDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}
+  }
+}

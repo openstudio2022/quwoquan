@@ -1,5 +1,4 @@
 import 'package:quwoquan_runtime_errors/src/runtime_failure.dart';
-import 'package:quwoquan_runtime_errors/src/runtime_recovery_directive.dart';
 
 enum RuntimeRecoveryAction {
   absorb,

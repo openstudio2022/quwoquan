@@ -755,7 +755,24 @@ def portal_deployment_package_dir(env_name: str, *, target: str = "") -> Path:
 
 
 def web_deployment_package_dir(env_name: str, *, target: str = "") -> Path:
-    return deployment_package_root(env_name, target=target) / "public-web"
+    """Return the only home of the immutable public Web package for one target.
+
+    Unlike app/service/legal packages, the Web package is not a member of a
+    runtime candidate: `stackctl package --kind web` builds it in its own
+    standalone root, it carries its own content digest plus a `current` pointer,
+    and CI produces it in a separate job from the runtime shard.  Routing it
+    through `deployment_package_root` made the writer follow the standalone
+    override while every reader resolved the active candidate instead, so the
+    package was always written where nobody looked for it.
+    """
+    target_name = deployment_target_for_env(env_name, target=target)
+    return deployment_target_path(
+        target_name,
+        "standalone-packages",
+        "web",
+        "packages",
+        "public-web",
+    )
 
 
 def deployment_render_dir(

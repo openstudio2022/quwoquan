@@ -39,9 +39,36 @@ PROVENANCE_FORMAT = "contract-view-provenance"
 RETAINED_VIEWS = 8
 RETENTION_MINUTES = 60
 
+#: `_shared/test_fixtures` 是 canonical 树里唯一同时存放契约文档和「文档所描述的媒体
+#: 字节」的地方，视图只投影前者。文档确实被视图消费方读——`internal/metadata/load` 的
+#: collectSourceDigests 摘要视图内全部 `.yaml/.yml/.json`，fixture 的 descriptor/manifest
+#: 因此进入 ContractGraph 的 sources；载荷则没有任何视图消费方，object/governance/schema
+#: 三处 WalkDir 都对 `test_fixtures` SkipDir，真正读字节的 gate 与环境脚本一律直读
+#: canonical 路径。
+#:
+#: 这不削弱完整性证明：载荷的 sha256 本就记在随行文档里（coverSha256、probeHash、
+#: sourceHash……），保留文档即传递性钉住载荷，只是不再逐份拷贝已被钉住的字节——那笔拷贝
+#: 让单视图 680MB 里有 670MB 是死重量。
+#:
+#: 只放行文档后缀，而不是屏蔽已知媒体后缀：新增一种媒体格式时视图默认不收，而不是
+#: 默默重新长回去。
+FIXTURE_TREE_NAME = "test_fixtures"
+FIXTURE_DOCUMENT_SUFFIXES = frozenset({".json", ".yaml", ".yml"})
+
 
 def repository_root() -> Path:
     return REPO_ROOT
+
+
+def is_fixture_media_payload(view_path: Path) -> bool:
+    """判断视图内相对路径是否为 fixture 树的媒体载荷。
+
+    按视图内相对路径而不是绝对路径判断：仓库若被检出到名为 `test_fixtures` 的目录
+    之下，绝对路径判断会把整棵契约树误判成载荷。
+    """
+    if FIXTURE_TREE_NAME not in view_path.parts:
+        return False
+    return view_path.suffix.lower() not in FIXTURE_DOCUMENT_SUFFIXES
 
 
 def load_domain(path: Path, snapshot: ContractViewSnapshot | None = None) -> str:
@@ -160,12 +187,13 @@ class ContractViewSnapshot:
         self._write_file(target, self.read_source(source), [source])
 
     def copy_tree(self, source: Path, target: Path) -> None:
-        target.mkdir(parents=True, exist_ok=True)
+        # 目录由 `_write_file` 按需创建：只含媒体载荷的 fixture 目录不投影任何文件，
+        # 预先 mkdir 会在视图里留下上千个空目录，看起来像内容丢失。
         for child in sorted(source.iterdir()):
             destination = target / child.name
             if child.is_dir():
                 self.copy_tree(child, destination)
-            else:
+            elif not is_fixture_media_payload(destination.relative_to(self.output)):
                 self.copy_file(child, destination)
 
     def write_derived(

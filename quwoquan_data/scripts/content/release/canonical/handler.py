@@ -82,6 +82,7 @@ def handle_campaign_aggregate_release(args: argparse.Namespace) -> None:
         report = build_campaign_release(
             root_execution_id=str(args.root_execution_id),
             release_id=str(args.release_id),
+            release_class=str(args.release_class),
             roots=roots,
             target_environment=(
                 str(getattr(args, "target_environment", None))
@@ -235,6 +236,7 @@ def handle_baseline_release(args: argparse.Namespace) -> None:
                 publish_root=publish_root,
                 release_root=release_root,
                 release_id=release_id,
+                release_class=str(args.release_class),
             )
     except (
         FileNotFoundError,
@@ -308,11 +310,30 @@ def handle_research_scale_promotion(args: argparse.Namespace) -> None:
         document, path = write_research_scale_promotion(
             release_id=str(args.release_id),
             promotion_id=str(args.promotion_id),
-            campaign_evidence_path=Path(args.campaign_evidence),
+            campaign_evidence_path=(
+                Path(args.campaign_evidence)
+                if getattr(args, "campaign_evidence", None)
+                else None
+            ),
             target_scale=str(args.target_scale),
             predecessor_promotion_path=(
                 Path(args.predecessor_promotion)
                 if args.predecessor_promotion
+                else None
+            ),
+            m100_alpha_readiness_receipt_path=(
+                Path(args.m100_alpha_readiness_receipt)
+                if getattr(args, "m100_alpha_readiness_receipt", None)
+                else None
+            ),
+            m100_alpha_app_uat_receipt_path=(
+                Path(args.m100_alpha_app_uat_receipt)
+                if getattr(args, "m100_alpha_app_uat_receipt", None)
+                else None
+            ),
+            m100_alpha_acceptance_binding_path=(
+                Path(args.m100_alpha_acceptance_binding)
+                if getattr(args, "m100_alpha_acceptance_binding", None)
                 else None
             ),
             release_root=Path(args.release_root or (OUTPUT_ROOT / "data/releases")),
@@ -418,7 +439,9 @@ def handle_campaign_scale_evidence(args: argparse.Namespace) -> None:
             evidence_id=str(args.evidence_id),
             release_id=str(args.release_id),
             campaign_plan_path=Path(args.campaign_plan),
-            runtime_session_path=Path(args.runtime_session),
+            runtime_session_path=(
+                Path(args.runtime_session) if args.runtime_session else None
+            ),
             calibration_preflight_receipt_path=Path(
                 args.calibration_preflight_receipt
             ),

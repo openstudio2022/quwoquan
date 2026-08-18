@@ -1,6 +1,8 @@
 """Managed semantic-agent outcomes are typed after the provider boundary."""
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 from content.execution.agent.history import (
@@ -10,11 +12,14 @@ from content.execution.agent.history import (
 )
 from content.execution.agent.agent_runner import (
     _cursor_provider_rejection,
+    _managed_agent_runner_for_provider_unjournaled,
     _prompt_cursor_agent,
 )
+from content.execution.agent import agent_runner
 from content.execution.agent.outcome import AgentRunOutcome, ManagedAgentJobOutcome
 from core.control_types import AgentFailureKind, AgentProvider, AgentRunStatus, ExecutionStage
 from core.data_issue import DataIssueCode, DataRecoveryAction
+from core.runtime_policy import active_runtime_policy
 
 
 def test_agent_run_outcome__failure__reliability__local_contract_test() -> None:
@@ -99,6 +104,37 @@ def test_cursor_prompt__preserves_terminal_status_message__contract__local_contr
     assert message == "provider account is not ready"
 
 
+def test_managed_provider_dispatch_invokes_task_without_shared_admission(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    selection = active_runtime_policy().explicit_semantic_selection(
+        "cursor_auto"
+    ).binding.selection
+    context = SimpleNamespace(
+        agent_provider=AgentProvider.CURSOR_SDK,
+        semantic_role="author",
+        model_selection=selection,
+    )
+    expected = AgentRunOutcome.failed(
+        AgentFailureKind.PROVIDER_REJECTED,
+        provider=AgentProvider.CURSOR_SDK,
+        message="this invocation was rejected",
+        started=True,
+        error_code="provider_rejected",
+    )
+    calls: list[str] = []
+    monkeypatch.setattr(
+        agent_runner,
+        "_default_managed_agent_runner",
+        lambda _ctx, prompt: calls.append(prompt) or expected,
+    )
+
+    actual = _managed_agent_runner_for_provider_unjournaled(context, "one task")
+
+    assert actual is expected
+    assert calls == ["one task"]
+
+
 def test_agent_run_outcome__wire_decode__contract__local_contract_test() -> None:
     encoded = AgentRunOutcome.finished(
         provider=AgentProvider.CODEX_SDK,
@@ -113,7 +149,7 @@ def test_agent_run_outcome__wire_decode__contract__local_contract_test() -> None
     assert decoded.run_id == "run-1"
 
 
-def test_agent_run_outcome__capacity_receipt_and_retry_after__contract__local_contract_test() -> None:
+def test_agent_run_outcome__invocation_attempt_and_retry_after__contract__local_contract_test() -> None:
     outcome = AgentRunOutcome.failed(
         AgentFailureKind.PROVIDER_REJECTED,
         provider=AgentProvider.CODEX_SDK,
@@ -122,16 +158,16 @@ def test_agent_run_outcome__capacity_receipt_and_retry_after__contract__local_co
         retryable=True,
         error_code="semantic_provider_rate_limited",
         retry_after_seconds=45,
-    ).with_capacity_receipt(
-        receipt_ref="data/local/workspace/runtime/semantic-agent-capacity/receipts/run/receipt.json",
-        receipt_digest="sha256:" + "a" * 64,
+    ).with_invocation_attempt(
+        attempt_ref="data/tasks/execution/_shared/semantic_tasks/work/attempts/0001.json",
+        attempt_digest="sha256:" + "a" * 64,
     )
 
     decoded = AgentRunOutcome.from_document(outcome.to_document())
 
     assert decoded.retry_after_seconds == 45
-    assert decoded.capacity_receipt_ref.endswith("receipt.json")
-    assert decoded.capacity_receipt_digest == "sha256:" + "a" * 64
+    assert decoded.invocation_attempt_ref.endswith("0001.json")
+    assert decoded.invocation_attempt_digest == "sha256:" + "a" * 64
     issue = decoded.issue()
     assert issue is not None
     assert dict(issue.attributes)["retryAfterSeconds"] == "45"
@@ -183,13 +219,9 @@ def test_managed_agent_run_record__wire_boundary__contract__local_contract_test(
         job_count=1,
         planned_job_count=1,
         scheduler=ManagedAgentScheduler(
-            requested_max_workers=1,
             effective_worker_count=1,
-            local_cursor_max_workers=1,
             runtime="managed-local",
             prompt_count=1,
-            estimated_min_waves=1,
-            lane_limits=(("article", 1),),
             provider=AgentProvider.CURSOR_SDK,
             started_at="2026-07-18T00:00:00Z",
             finished_at="2026-07-18T00:01:00Z",
@@ -199,6 +231,10 @@ def test_managed_agent_run_record__wire_boundary__contract__local_contract_test(
         started_count=1,
         finished_count=1,
         infrastructure_failures=0,
+        successful_refs=("posts/article/example",),
+        excluded_refs=(),
+        shortfall_count=0,
+        repair_issue_records=(),
         outcomes=(
             ManagedAgentJobOutcome(
                 outcome=AgentRunOutcome.finished(
@@ -225,7 +261,7 @@ def test_managed_agent_run_record__wire_boundary__contract__local_contract_test(
 
 
 def test_managed_agent_run_record__rejects_incomplete_wire__contract__local_contract_test() -> None:
-    with pytest.raises(ValueError, match="jobCount"):
+    with pytest.raises(ValueError, match="repairIssueRecords"):
         ManagedAgentRunRecord.from_document(
             {
                 "stage": ExecutionStage.POST_AUTHOR.value,

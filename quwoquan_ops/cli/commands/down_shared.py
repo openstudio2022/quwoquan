@@ -24,6 +24,7 @@ import argparse
 import json
 import os
 import stat
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -107,6 +108,7 @@ def _mutable_test_live_runtime_plan_from_receipt(
         "publishedPorts",
         "tlsProfile",
         "resolverHandoffDigest",
+        "publicWebPackage",
     ):
         if runtime_plan.get(field) != receipt.get(field):
             raise ValueError(f"mutable test-live receipt/plan drift: {field}")
@@ -125,6 +127,56 @@ def _mutable_test_live_runtime_plan_from_receipt(
     return runtime_plan, run_root
 
 
+def _compose_service_profiles(
+    payloads: Iterable[Mapping[str, Any]],
+) -> dict[str, set[str]]:
+    """Collect each service's declared Compose profiles across the overlay set.
+
+    A service may appear in several overlays with its `profiles` key declared in
+    only one of them. Unioning keeps the gate on the conservative side: a wider
+    profile set can only ever move a service into the expected roster, never out
+    of it.
+    """
+    declared: dict[str, set[str]] = {}
+    for payload in payloads:
+        services = payload.get("services")
+        if services is not None and not isinstance(services, dict):
+            raise ValueError("mutable test-live execution Compose services are invalid")
+        for name, definition in (services or {}).items():
+            profiles = (
+                definition.get("profiles")
+                if isinstance(definition, Mapping)
+                else None
+            )
+            if profiles is not None and not isinstance(profiles, list):
+                raise ValueError(
+                    "mutable test-live execution Compose profiles are invalid"
+                )
+            declared.setdefault(str(name), set()).update(
+                str(item) for item in (profiles or [])
+            )
+    return declared
+
+
+def _compose_activated_services(
+    payloads: Iterable[Mapping[str, Any]],
+    *,
+    activated_profiles: Iterable[str],
+) -> set[str]:
+    """Return only the services Compose can materialize under these profiles.
+
+    A profile-gated service has no container while its profile stays inactive,
+    so counting it as expected turns a by-design projection into a false roster
+    drift and strands both teardown and content binding.
+    """
+    activated = {str(item) for item in activated_profiles}
+    return {
+        name
+        for name, profiles in _compose_service_profiles(payloads).items()
+        if not profiles or (profiles & activated)
+    }
+
+
 def _mutable_test_live_teardown_manifest(
     *,
     receipt: Mapping[str, Any],
@@ -138,9 +190,12 @@ def _mutable_test_live_teardown_manifest(
     execution_refs = runtime_plan.get("executionComposeFiles")
     if not isinstance(execution_refs, list) or not execution_refs:
         raise ValueError("mutable test-live runtime plan has no execution Compose files")
+    activated_profiles = runtime_plan.get("composeProfiles")
+    if activated_profiles is not None and not isinstance(activated_profiles, list):
+        raise ValueError("mutable test-live runtime plan Compose profiles are invalid")
+    activated_profiles = [str(item) for item in (activated_profiles or [])]
     declared_config_files: set[str] = set()
     execution_payloads: dict[str, dict[str, Any]] = {}
-    expected_services: set[str] = set()
     for index, raw_ref in enumerate(execution_refs):
         ref = Path(str(raw_ref or ""))
         path = ref if ref.is_absolute() else _stackctl.ROOT / ref
@@ -151,10 +206,6 @@ def _mutable_test_live_teardown_manifest(
             path,
             label=f"mutable test-live execution Compose file {index}",
         )
-        services = compose.get("services")
-        if services is not None and not isinstance(services, dict):
-            raise ValueError("mutable test-live execution Compose services are invalid")
-        expected_services.update(str(service) for service in (services or {}))
         declared_config_files.add(str(path))
         if path.name in execution_payloads:
             raise ValueError("mutable test-live execution Compose filename is duplicated")
@@ -169,6 +220,10 @@ def _mutable_test_live_teardown_manifest(
         if not path.is_relative_to(_stackctl.ROOT):
             raise ValueError("mutable test-live source Compose file escapes repository")
         declared_config_files.add(str(path))
+    expected_services = _compose_activated_services(
+        execution_payloads.values(),
+        activated_profiles=activated_profiles,
+    )
     if not expected_services:
         raise ValueError("mutable test-live execution Compose service roster is empty")
 
@@ -252,7 +307,7 @@ def _mutable_test_live_teardown_manifest(
         ):
             archived_root = Path(os.path.abspath(_stackctl.env_runs_root(str(receipt["environment"]))))
             archived_config_files_match = True
-            archived_services: set[str] = set()
+            archived_payloads: list[Mapping[str, Any]] = []
             for raw_path in config_files:
                 archived_path = Path(raw_path)
                 if (
@@ -273,18 +328,19 @@ def _mutable_test_live_teardown_manifest(
                 except ValueError:
                     archived_config_files_match = False
                     break
-                archived_payload_services = archived_payload.get("services")
-                if (
-                    archived_payload_services is not None
-                    and not isinstance(archived_payload_services, dict)
-                ):
+                archived_payloads.append(archived_payload)
+            if archived_config_files_match:
+                try:
+                    archived_services = _compose_activated_services(
+                        archived_payloads,
+                        activated_profiles=activated_profiles,
+                    )
+                except ValueError:
                     archived_config_files_match = False
-                    break
-                archived_services.update(
-                    str(item) for item in (archived_payload_services or {})
-                )
-            if archived_services != expected_services:
-                archived_config_files_match = False
+                else:
+                    archived_config_files_match = (
+                        archived_services == expected_services
+                    )
         identity_issues: list[str] = []
         if container_id not in container_ids:
             identity_issues.append("container-id")
@@ -369,6 +425,7 @@ def _command_mutable_test_live_down(
     env_name: str,
     report_dir: Path,
     receipt: Mapping[str, Any],
+    allow_active_immutable_ports: bool = False,
 ) -> dict[str, Any]:
     """Stop one receipt-bound mutable runtime without deleting named volumes."""
     import quwoquan_ops.cli.stackctl as _stackctl
@@ -490,14 +547,20 @@ def _command_mutable_test_live_down(
             for role, port in published_ports.items()
             if str(role) not in fleet_owned_roles
         }
-        occupied_ports = _stackctl._wait_for_exact_tcp_ports_released(
-            list(release_scope.values())
-        )
-        for role, port in release_scope.items():
-            if port in occupied_ports:
-                resource_release_issues.append(
-                    f"canonical port remains occupied after mutable down: {role}:{port}"
-                )
+        if allow_active_immutable_ports:
+            details.append(
+                "mutable partial teardown preserved the active immutable runtime "
+                "and its canonical port ownership"
+            )
+        else:
+            occupied_ports = _stackctl._wait_for_exact_tcp_ports_released(
+                list(release_scope.values())
+            )
+            for role, port in release_scope.items():
+                if port in occupied_ports:
+                    resource_release_issues.append(
+                        f"canonical port remains occupied after mutable down: {role}:{port}"
+                    )
         if resource_release_issues:
             raise ValueError("; ".join(resource_release_issues))
 
@@ -542,6 +605,7 @@ def _command_mutable_test_live_down(
         "argv": command,
         "destructiveRepairPerformed": False,
         "destructiveActions": [],
+        "activeImmutableRuntimePreserved": allow_active_immutable_ports,
         "namedVolumesPreserved": preserved_volumes,
         "resourceReleaseIssues": resource_release_issues,
         "startupAttempt": stopped_receipt or dict(receipt),
@@ -575,5 +639,4 @@ def _command_mutable_test_live_down(
         "blockerKind": blocker_kind,
         "runtimeMode": "mutable-test-live",
     }
-
 

@@ -1075,7 +1075,7 @@ void main() {
     );
   });
 
-  testWidgets('test_live 无 active release 显示 typed unavailable 并可重试', (
+  testWidgets('test_live 无 active release 显示无 CTA 空态并支持下拉刷新观察激活', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
@@ -1103,12 +1103,21 @@ void main() {
       find.byKey(const ValueKey('home-feed-completed-empty')),
       findsNothing,
     );
+    // DEC-004 surface 映射：canonical empty 不提供任何 CTA，
+    // 后续激活由下拉刷新观察。
+    expect(
+      find.byKey(const ValueKey('home-feed-no-active-release-retry')),
+      findsNothing,
+    );
+    expect(find.text(SearchText.reload), findsNothing);
     expect(notifier.forceLoadCalls, 0);
 
-    await tester.tap(
-      find.byKey(const ValueKey('home-feed-no-active-release-retry')),
+    await tester.fling(
+      find.byKey(const ValueKey('home-feed-no-active-release-refresh')),
+      const Offset(0, 320),
+      1200,
     );
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(notifier.forceLoadCalls, 1);
   });

@@ -1,23 +1,6 @@
 """Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
-
-from content.execution.queue.reliabletask.attempt import (
-    latest_attempt_report_path_from_root,
-)
-from content.execution.support import (
-    Any,
-    ExecutionContext,
-    ExecutionStateTransition,
-    Mapping,
-    Path,
-    datetime,
-    execution_root,
-    load_execution_state,
-    re,
-    read_json,
-    store,
-)
-
+from content.execution.support import Any, ExecutionContext, ExecutionStateTransition, Mapping, Path, datetime, execution_root, load_execution_state, re, read_json, store
 
 def _parse_iso_seconds(value: object) -> float | None:
     text = str(value or "").strip()
@@ -47,8 +30,8 @@ def _batch_file_elapsed_seconds(root: Path) -> float | None:
     return elapsed if elapsed > 0 else None
 
 def _reliabletask_accepted_throughput(root: Path) -> dict[str, Any] | None:
-    report_path = latest_attempt_report_path_from_root(root, "publish")
-    if report_path is None:
+    report_path = root / "evidence/reliabletask/publish_fleet_report.json"
+    if not report_path.is_file():
         return None
     from core.schema import assert_valid
 
@@ -61,11 +44,12 @@ def _reliabletask_accepted_throughput(root: Path) -> dict[str, Any] | None:
     )
     from content.execution.queue.reliabletask.report import ReliableTaskFleetReport
 
-    decoded = ReliableTaskFleetReport.from_document(report)
-    canonical_accepted = (
-        decoded.research_accepted_count + decoded.commercial_accepted_count
-    )
-    accepted = canonical_accepted
+    ReliableTaskFleetReport.from_document(report)
+    commercial_accepted = int(report.get("commercialAcceptedCount") or 0)
+    finalized = int(report.get("finalizedObjectCount") or 0)
+    # Dead publish jobs may still finalize via absorption; readiness must honor
+    # finalizedObjectCount whenever the fleet report already passed.
+    accepted = max(commercial_accepted, finalized)
     required_quota = int(report.get("requiredQuota") or 0)
     if (
         report.get("passed") is not True
@@ -78,12 +62,9 @@ def _reliabletask_accepted_throughput(root: Path) -> dict[str, Any] | None:
             f"（status={report.get('acceptedContentThroughputStatus')}）"
         )
     return {
-        "measurementMode": "reliabletask_canonical_accepted_end_to_end",
+        "measurementMode": "reliabletask_commercial_accepted_end_to_end",
         "backend": str(report.get("backend") or ""),
         "publishedObjectCount": accepted,
-        "researchAcceptedCount": decoded.research_accepted_count,
-        "commercialAcceptedCount": decoded.commercial_accepted_count,
-        "objectTransactionResultCount": decoded.object_transaction_result_count,
         "requiredQuota": required_quota,
         "finalizedObjectCount": int(report.get("finalizedObjectCount") or 0),
         "elapsedSeconds": round(
@@ -148,9 +129,8 @@ def _review_repaired_refs(ctx: ExecutionContext) -> set[str]:
     return repaired
 
 def _agent_active_throughput(state: ExecutionStateTransition) -> dict[str, Any]:
-    from core.control_types import ExecutionStage
-
     from content.execution.agent.history import state_managed_agent_runs
+    from core.control_types import ExecutionStage
 
     agent_runs = state_managed_agent_runs(state)
     source_stage = ExecutionStage.POST_AUTHOR
@@ -245,9 +225,8 @@ def _homepage_agent_review_stats(
             run_id = str(meta.get("agentRunId") or "").strip()
             if run_id:
                 run_id_to_entity[run_id] = meta_path.parent.parent.name
-    from core.control_types import ExecutionStage
-
     from content.execution.agent.history import state_managed_agent_runs
+    from core.control_types import ExecutionStage
 
     attempts_by_entity: dict[str, list[str]] = {}
     for row in state_managed_agent_runs(state):
@@ -282,9 +261,9 @@ def _homepage_agent_review_stats(
 
 def _write_execution_metrics(ctx: ExecutionContext, state: ExecutionStateTransition) -> None:
     """Persist production-readiness metrics derived from batch artifacts and real usage."""
-    from content.execution.agent.history import state_managed_agent_runs
     from content.post import object_index as content_object
     from content.release.canonical.runtime_integrity import scan_runtime_batch_integrity
+    from content.execution.agent.history import state_managed_agent_runs
 
     state.agent_run_history = [
         run.to_document() for run in state_managed_agent_runs(state)[-20:]

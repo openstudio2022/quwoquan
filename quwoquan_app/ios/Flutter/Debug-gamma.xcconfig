@@ -1,0 +1,13 @@
+// Generated from _shared/app_artifact_manifest.yaml; do not edit.
+#include "Debug.xcconfig"
+#include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.debug-gamma.xcconfig"
+#include? "Pods/Target Support Files/Pods-RunnerTests/Pods-RunnerTests.debug-gamma.xcconfig"
+#include? "Pods/Target Support Files/Pods-Runner-RunnerUITests/Pods-Runner-RunnerUITests.debug-gamma.xcconfig"
+#include "Identity/gamma.xcconfig"
+QWQ_EXPECTED_BUILD_MODE = debug
+QWQ_EXPECTED_CONFIGURATION = Debug-gamma
+QWQ_MODE_BUNDLE_ID_SUFFIX = .debug
+QWQ_MODE_DISPLAY_MARK = ·D
+QWQ_BUNDLE_ID_SUFFIX = $(QWQ_ENV_BUNDLE_ID_SUFFIX)$(QWQ_MODE_BUNDLE_ID_SUFFIX)
+QWQ_APP_DISPLAY_NAME = $(QWQ_APP_DISPLAY_NAME_BASE)$(QWQ_ENV_DISPLAY_MARK)$(QWQ_MODE_DISPLAY_MARK)
+FLUTTER_TARGET = lib/main_prod.dart

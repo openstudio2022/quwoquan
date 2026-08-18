@@ -22,6 +22,11 @@ from typing import Any
 from typing import Mapping
 
 
+_VERSION_PINNED_QUWOQUAN_INFRA_IMAGE_PREFIXES = (
+    "quwoquan/elasticsearch-cjk:",
+)
+
+
 def _start_mutable_test_live_runtime(
     *,
     environment: str,
@@ -163,17 +168,18 @@ def _start_mutable_test_live_runtime(
             "reportDir": _stackctl.relpath(report_dir),
         }
     )
+    compose_up_timeout = float(
+        rendered["environment"].get(
+            "LOCAL_GAMMA_COMPOSE_UP_TIMEOUT_SECONDS", "420"
+        )
+    )
     build_timeout = max(
         float(
             rendered["environment"].get(
                 "LOCAL_GAMMA_COMPOSE_BUILD_TIMEOUT_SECONDS", "3600"
             )
         ),
-        float(
-            rendered["environment"].get(
-                "LOCAL_GAMMA_COMPOSE_UP_TIMEOUT_SECONDS", "420"
-            )
-        ),
+        compose_up_timeout,
     )
     # A brand-new target has no Product Ops ExperimentPolicyActivated fact.
     # Recommendation intentionally refuses a full runtime without that fact,
@@ -181,31 +187,60 @@ def _start_mutable_test_live_runtime(
     # command owner (and its authored dependencies), activates the exact
     # run-bound policies, then starts the complete stack.  This is not a DB
     # seed or a private Recommendation fallback.
-    policy_owner_command = [
-        *base_command,
-        "up",
-        "--build",
-        "-d",
-        "product-ops-service",
-    ]
-    policy_owner_result = _stackctl.run(
-        policy_owner_command,
-        env=dict(rendered["environment"]),
-        timeout_seconds=build_timeout,
+    policy_owner_steps = (
+        (
+            "test-live-policy-owner-dependencies",
+            "Product Ops data dependencies became healthy",
+            [
+                *base_command,
+                "up",
+                "-d",
+                "--wait",
+                "--wait-timeout",
+                str(max(1, int(compose_up_timeout))),
+                "postgres",
+                "mongodb",
+                "redis",
+                "elasticsearch",
+            ],
+        ),
+        (
+            "test-live-policy-owner-mongo-init",
+            "Product Ops Mongo initialization completed",
+            [*base_command, "up", "--no-deps", "mongo-init"],
+        ),
+        (
+            "test-live-policy-owner-bootstrap",
+            "Product Ops policy command owner bootstrap completed",
+            [
+                *base_command,
+                "up",
+                "--build",
+                "-d",
+                "--no-deps",
+                "product-ops-service",
+            ],
+        ),
     )
-    phases.append(
-        {
-            "name": "test-live-policy-owner-bootstrap",
-            "exitCode": policy_owner_result.returncode,
-            "summary": "Product Ops policy command owner bootstrap completed",
-            "details": _stackctl._command_details(policy_owner_result),
-            "reportDir": _stackctl.relpath(report_dir),
-        }
-    )
-    if policy_owner_result.returncode != 0:
+    for phase_name, phase_summary, policy_owner_command in policy_owner_steps:
+        policy_owner_result = _stackctl.run(
+            policy_owner_command,
+            env=dict(rendered["environment"]),
+            timeout_seconds=build_timeout,
+        )
+        phases.append(
+            {
+                "name": phase_name,
+                "exitCode": policy_owner_result.returncode,
+                "summary": phase_summary,
+                "details": _stackctl._command_details(policy_owner_result),
+                "reportDir": _stackctl.relpath(report_dir),
+            }
+        )
+        if policy_owner_result.returncode == 0:
+            continue
         failure = (
-            f"Product Ops policy owner bootstrap exited "
-            f"{policy_owner_result.returncode}: "
+            f"{phase_summary} exited {policy_owner_result.returncode}: "
             + "; ".join(_stackctl._command_details(policy_owner_result))
         )
         try:
@@ -513,7 +548,6 @@ def _dev_session_resume_running_mutable_runtime(
     if (
         receipt.get("launchPolicy") != "test_live"
         or receipt.get("nonPromotable") is not True
-        or receipt.get("contentBindingState") != "unbound"
         or receipt.get("environment") != environment
         or receipt.get("target") != target
         or receipt.get("workload") != "full"
@@ -556,6 +590,7 @@ def _dev_session_resume_running_mutable_runtime(
         "publishedPorts",
         "tlsProfile",
         "resolverHandoffDigest",
+        "publicWebPackage",
     ):
         if runtime_plan.get(field) != receipt.get(field):
             raise ValueError(f"running mutable receipt/plan drift: {field}")
@@ -719,10 +754,16 @@ def _dev_session_resume_running_mutable_runtime(
                 raise ValueError(
                     f"running mutable configuration identity drifted: {service}"
                 )
-        if image_ref.startswith("quwoquan/") and not (
-            image_ref.endswith(":" + expected_image_suffix)
-            or image_ref.endswith(
-                f":{environment}-test-live-{expected_image_suffix}"
+        if (
+            image_ref.startswith("quwoquan/")
+            and not image_ref.startswith(
+                _VERSION_PINNED_QUWOQUAN_INFRA_IMAGE_PREFIXES
+            )
+            and not (
+                image_ref.endswith(":" + expected_image_suffix)
+                or image_ref.endswith(
+                    f":{environment}-test-live-{expected_image_suffix}"
+                )
             )
         ):
             raise ValueError(f"running mutable image ref drifted: {service}")

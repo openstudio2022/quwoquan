@@ -69,6 +69,37 @@ DATA_GC_WORKSPACE_ROOT = DATA_WORKSPACE_ROOT / "gc"
 DATA_QUARANTINE_ROOT = DATA_WORKSPACE_ROOT / "quarantine"
 RELEASE_ROOT = DATA_OUTPUT_ROOT / "releases"
 
+# ─── content_library：内容字节的唯一物理归属 ──────────────────────────
+# 库把「每个阶段复制一份字节」换成「一次入库、多处引用」：入库条目按 sha256 内容
+# 寻址，一旦写入即不可变，任何阶段只保存指向库内条目的引用。
+#
+# 库根必须落在仓库工作树之外。媒体原始字节已刻意移出 Git（release 用 holdings
+# 引用而非复制字节），库因此是这些字节的唯一持有者、无法从受版本控制真相源重建。
+# 而 `.qwq_output/` 的契约恰恰是「随时可整个删除并重建」，仓库工作树内的其他
+# gitignored 目录同样在 `git clean -xdf` 射程内——把不可重建资产放进任一处，都会
+# 让一次例行清理静默销毁唯一副本。QWQ_LIBRARY_ROOT 覆盖默认位置（例如挂到独立
+# 卷）；库与其引用方必须同卷，跨卷由 reference_library_entry 显式 fail-closed。
+def _default_library_root() -> Path:
+    xdg_data_home = str(os.environ.get("XDG_DATA_HOME") or "").strip()
+    base = Path(xdg_data_home) if xdg_data_home else Path.home() / ".local" / "share"
+    return base / "quwoquan" / "content_library"
+
+
+LIBRARY_ROOT = Path(
+    os.environ.get("QWQ_LIBRARY_ROOT") or _default_library_root()
+).expanduser()
+# 媒体字节：source 阶段下载一次入库，成品与 publish 只引用同一条目。
+LIBRARY_MEDIA_CAS_ROOT = LIBRARY_ROOT / "_media_cas"
+# 受治理代码/输入字节：campaign capsule 与 execution bundle 共享同一份入库字节。
+LIBRARY_SOURCE_CAS_ROOT = LIBRARY_ROOT / "_source_cas"
+LIBRARY_CAS_ROOT_BY_KIND = {
+    "media": LIBRARY_MEDIA_CAS_ROOT,
+    "source": LIBRARY_SOURCE_CAS_ROOT,
+}
+# canonical publish 根的逻辑身份。物理位置是环境事实（QWQ_PUBLISH_ROOT / DATA_ROOT），
+# 只由本模块解析；receipt 文档记录这个与位置无关的身份，不再内嵌仓库相对路径。
+CANONICAL_PUBLISH_ROOT_REF = "canonical-publish"
+
 CAMPAIGN_SCALE_EVIDENCE_OUTPUT_REF = CAMPAIGN_SCALE_EVIDENCE_ROOT.relative_to(
     OUTPUT_ROOT
 ).as_posix()

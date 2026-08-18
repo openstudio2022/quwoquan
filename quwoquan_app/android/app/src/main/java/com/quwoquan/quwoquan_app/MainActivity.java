@@ -336,17 +336,6 @@ public class MainActivity extends FlutterFragmentActivity {
               } catch (Exception ignored) {
                 // Dart 侧会把空配置收敛为既有 runtime configuration failure。
               }
-              if (!BuildConfig.QWQ_CONTENT_RELEASE_ID.isEmpty()) {
-                values.put("contentReleaseId", BuildConfig.QWQ_CONTENT_RELEASE_ID);
-              }
-              if (!BuildConfig.QWQ_CONTENT_MANIFEST_DIGEST.isEmpty()) {
-                values.put("contentManifestDigest", BuildConfig.QWQ_CONTENT_MANIFEST_DIGEST);
-              }
-              if (!BuildConfig.QWQ_CONTENT_READINESS_RECEIPT_DIGEST.isEmpty()) {
-                values.put(
-                    "contentReadinessReceiptDigest",
-                    BuildConfig.QWQ_CONTENT_READINESS_RECEIPT_DIGEST);
-              }
               if (!BuildConfig.QWQ_LAUNCH_TARGET.isEmpty()) {
                 values.put("launchTarget", BuildConfig.QWQ_LAUNCH_TARGET);
               }

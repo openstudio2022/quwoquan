@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import shutil
+import os
 from pathlib import Path
 
+from core.content_library import link_from_library
 from core.source_digest import (
     ExecutionBundleIdentity,
     SourceDefinitionSnapshot,
@@ -13,7 +14,10 @@ from core.source_digest import (
 )
 
 SNAPSHOT_FORMAT = "source-capsule-v2"
-_IGNORED_NAMES = ("__pycache__", ".pytest_cache", ".DS_Store")
+_IGNORED_NAMES = frozenset({"__pycache__", ".pytest_cache", ".DS_Store"})
+# Capsule digests record the executable bit, so two files with equal bytes but
+# different modes are not interchangeable and cannot share one library inode.
+_EXECUTABLE_ENTRY_SUFFIX = ".x"
 
 
 def source_snapshot_roots(
@@ -51,6 +55,59 @@ def campaign_snapshot_roots(
     return tuple(dict.fromkeys((*source_roots, *bundle["inputs"])))
 
 
+def _reference_entry(source: Path, target: Path, *, library_root: Path) -> None:
+    if source.is_symlink():
+        target.symlink_to(os.readlink(source))
+        return
+    if not source.is_file():
+        raise ValueError(f"campaign source snapshot input is invalid: {source}")
+    executable = bool(source.stat().st_mode & 0o111)
+    link_from_library(
+        source,
+        target,
+        kind="source",
+        library_root=library_root,
+        suffix=_EXECUTABLE_ENTRY_SUFFIX if executable else "",
+        executable=executable,
+    )
+
+
+def _reference_tree(source: Path, target: Path, *, library_root: Path) -> None:
+    target.mkdir(parents=True, exist_ok=True)
+    for entry in sorted(source.iterdir()):
+        if entry.name in _IGNORED_NAMES:
+            continue
+        child = target / entry.name
+        if not entry.is_symlink() and entry.is_dir():
+            _reference_tree(entry, child, library_root=library_root)
+        else:
+            _reference_entry(entry, child, library_root=library_root)
+
+
+def reference_governed_inputs(
+    repo_root: Path,
+    destination: Path,
+    *,
+    roots: tuple[str, ...],
+    library_root: Path,
+) -> None:
+    """Expose each governed input as a hard link onto an immutable library entry.
+
+    A lane therefore reads exactly the frozen bytes while the capsule owns no
+    second copy of them, so repeated freezes of one revision cost no new bytes.
+    """
+    if destination.exists() and any(destination.iterdir()):
+        raise ValueError("campaign source snapshot destination must be empty")
+    for relative in roots:
+        source = repo_root / relative
+        target = destination / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if not source.is_symlink() and source.is_dir():
+            _reference_tree(source, target, library_root=library_root)
+        else:
+            _reference_entry(source, target, library_root=library_root)
+
+
 def materialize_source_snapshot(
     repo_root: Path,
     destination: Path,
@@ -58,25 +115,15 @@ def materialize_source_snapshot(
     roots: tuple[str, ...],
     expected_digest: str,
     expected_execution_bundle: str,
+    library_root: Path,
 ) -> None:
-    """Copy each governed input once, then prove source and snapshot stayed equal."""
-    if destination.exists() and any(destination.iterdir()):
-        raise ValueError("campaign source snapshot destination must be empty")
-    for relative in roots:
-        source = repo_root / relative
-        target = destination / relative
-        target.parent.mkdir(parents=True, exist_ok=True)
-        if source.is_dir():
-            shutil.copytree(
-                source,
-                target,
-                symlinks=True,
-                ignore=shutil.ignore_patterns(*_IGNORED_NAMES),
-            )
-        elif source.is_file():
-            shutil.copy2(source, target, follow_symlinks=False)
-        else:
-            raise ValueError(f"campaign source snapshot input is invalid: {relative}")
+    """Reference each governed input once, then prove source and snapshot stayed equal."""
+    reference_governed_inputs(
+        repo_root,
+        destination,
+        roots=roots,
+        library_root=library_root,
+    )
     source_digest = current_source_definition_snapshot(repo_root=repo_root).digest
     snapshot_digest = SourceDefinitionSnapshot.build(repo_root=destination).digest
     source_bundle = current_execution_bundle_identity(repo_root=repo_root).digest
@@ -99,5 +146,6 @@ __all__ = [
     "SNAPSHOT_FORMAT",
     "campaign_snapshot_roots",
     "materialize_source_snapshot",
+    "reference_governed_inputs",
     "source_snapshot_roots",
 ]

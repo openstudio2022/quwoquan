@@ -148,18 +148,19 @@ class _HomeFeedCompletedNotice extends StatelessWidget {
   }
 }
 
-/// test_live 尚未绑定 active release 时的显式可恢复终态。
+/// 环境尚未激活 active release 时的显式空终态。
 ///
-/// `no_active_release` 是服务端确认的 canonical empty，不是健康的“内容已加载完毕”；
-/// 这里保留 unavailable 语义并允许用户在 release 激活后重试同一 Remote Query。
+/// `no_active_release` 是服务端确认的 canonical empty，不是失败，因此按
+/// runtime-client-foundation DEC-004 的 surface 映射渲染无 CTA 的
+/// `AppEmptyState`；后续激活由页面生命周期与下拉刷新观察，不提供重试按钮。
 class _HomeFeedNoActiveReleaseState extends StatelessWidget {
   const _HomeFeedNoActiveReleaseState({
     required this.isDark,
-    required this.onRetry,
+    required this.onRefresh,
   });
 
   final bool isDark;
-  final VoidCallback onRetry;
+  final Future<void> Function() onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -167,16 +168,27 @@ class _HomeFeedNoActiveReleaseState extends StatelessWidget {
         SettingsSemanticConstants.conversationSheetCardSurface(isDark);
     return ColoredBox(
       color: pageBackground,
-      child: AppTerminalViewport(
-        padding: EdgeInsets.all(AppSpacing.containerLg),
-        child: AppEmptyState(
-          key: const ValueKey<String>('home-feed-no-active-release'),
-          title: SearchText.recoveryContentUnavailableTitle,
-          subtitle: SearchText.recoveryContentUnavailableMessage,
-          actionLabel: SearchText.reload,
-          actionKey: const ValueKey<String>('home-feed-no-active-release-retry'),
-          onAction: onRetry,
+      child: CustomScrollView(
+        key: const ValueKey<String>('home-feed-no-active-release-refresh'),
+        physics: const BouncingScrollPhysics(
+          parent: AlwaysScrollableScrollPhysics(),
         ),
+        slivers: <Widget>[
+          CupertinoSliverRefreshControl(onRefresh: onRefresh),
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: Padding(
+              padding: EdgeInsets.all(AppSpacing.containerLg),
+              child: const Center(
+                child: AppEmptyState(
+                  key: ValueKey<String>('home-feed-no-active-release'),
+                  title: SearchText.recoveryContentUnavailableTitle,
+                  subtitle: SearchText.recoveryContentUnavailableMessage,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

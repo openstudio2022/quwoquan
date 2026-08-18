@@ -20,7 +20,7 @@ from content.release.environment.release_readiness import (
     write_environment_release_readiness,
 )
 from core.io import write_json
-from core.release_layout import object_closure_digest, payload_digest
+from core.release_layout import objects_merkle, payload_digest
 from core.schema import assert_valid
 from core.source_digest import (
     content_source_revision,
@@ -383,7 +383,7 @@ def _fixture(root: Path) -> dict[str, Path]:
             "assets": [],
         },
     )
-    canonical_merkle = object_closure_digest(release)
+    canonical_merkle = objects_merkle(release)
     release_header_path = release / "payload/release.json"
     release_header = json.loads(release_header_path.read_text(encoding="utf-8"))
     release_header["canonicalMerkle"] = canonical_merkle
@@ -650,7 +650,7 @@ def _fixture(root: Path) -> dict[str, Path]:
 
 def _resign_release(paths: dict[str, Path]) -> None:
     release = paths["release"]
-    canonical_merkle = object_closure_digest(release)
+    canonical_merkle = objects_merkle(release)
     header_path = release / "payload/release.json"
     header = json.loads(header_path.read_text(encoding="utf-8"))
     header["canonicalMerkle"] = canonical_merkle
@@ -693,11 +693,15 @@ def _convert_fixture_to_research(paths: dict[str, Path]) -> str:
 
 
 def _convert_fixture_to_consumer(paths: dict[str, Path]) -> None:
-    # consumer 与 commercial 一样必须携带 premium_stream 读回证据（App 视频书
-    # 唯一消费 premium 池），因此只翻转阶段、不剥离 premium query。
     post_path = paths["verify"] / "post-api-verification.json"
     post_report = json.loads(post_path.read_text(encoding="utf-8"))
     post_report["readinessPhase"] = "consumer"
+    post_report["feedQueries"] = [
+        row
+        for row in post_report["feedQueries"]
+        if row["name"] != "premium_stream"
+    ]
+    post_report.pop("searchQueries")
     write_json(post_path, post_report)
 
 

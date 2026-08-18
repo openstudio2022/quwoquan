@@ -317,18 +317,30 @@ def write_publish_receipt(
         runtime_paths=runtime,
     )
     refs = projection.publish_ref.get("publishedRefs") or {}
+    from content.execution.closure.publish_outcome import (
+        normalize_publish_discards,
+    )
+
     ref_key = "entities" if carrier == "homepage" else "posts"
     finalized_count = len(refs.get(ref_key) or [])
+    publish_discards = normalize_publish_discards(
+        projection.publish_ref.get("publishDiscards") or []
+    )
     qualified_count = int(review["qualifiedCount"])
     approved_quota = int(review["approvedQuota"])
-    if finalized_count != qualified_count:
+    if finalized_count + len(publish_discards) != qualified_count:
         raise ValueError(
-            "campaign publish closure differs from review qualified set: "
-            f"finalized={finalized_count} qualified={qualified_count}"
+            "campaign publish outcomes differ from review qualified set: "
+            f"finalized={finalized_count} publishDiscards={len(publish_discards)} "
+            f"reviewQualified={qualified_count}"
         )
-    if finalized_count <= 0:
-        raise ValueError("campaign publish has no qualified objects to finalize")
-    status = "finalized" if finalized_count >= approved_quota else "partial"
+    status = (
+        "blocked"
+        if finalized_count <= 0
+        else "finalized"
+        if finalized_count >= approved_quota and not publish_discards
+        else "partial"
+    )
     payload = {
         "schema": "quwoquan_data.content_campaign_lane_receipt",
         "rootExecutionId": validate_execution_id(root_execution_id),
@@ -338,11 +350,13 @@ def write_publish_receipt(
         "status": status,
         "approvedQuota": approved_quota,
         "qualifiedCount": qualified_count,
+        "reviewQualifiedCount": qualified_count,
         "finalizedCount": finalized_count,
         "selectedCount": int(review["selectedCount"]),
         "discardedCount": int(review["discardedCount"]),
         "shortfallCount": max(0, approved_quota - finalized_count),
         "discards": list(review["discards"]),
+        "publishDiscards": publish_discards,
         **projection.binding,
     }
     return _write_immutable_receipt(
@@ -399,11 +413,13 @@ def write_adoption_publish_receipt(
         "status": "finalized",
         "approvedQuota": count,
         "qualifiedCount": count,
+        "reviewQualifiedCount": count,
         "finalizedCount": count,
         "selectedCount": count,
         "discardedCount": 0,
         "shortfallCount": 0,
         "discards": [],
+        "publishDiscards": [],
         "campaignRunId": run_session.run_id,
         "campaignGeneration": run_session.generation,
         "campaignFencingToken": run_session.fencing_token,
@@ -457,6 +473,23 @@ def load_lane_receipt(
         for row in discards
     ):
         raise ValueError(f"campaign lane receipt discard evidence incomplete: {path}")
+    if phase == "publish":
+        from content.execution.closure.publish_outcome import (
+            normalize_publish_discards,
+        )
+
+        publish_discards = normalize_publish_discards(
+            payload.get("publishDiscards") or []
+        )
+        review_qualified = int(payload.get("reviewQualifiedCount") or 0)
+        if (
+            review_qualified != int(payload.get("qualifiedCount") or 0)
+            or int(payload.get("finalizedCount") or 0) + len(publish_discards)
+            != review_qualified
+        ):
+            raise ValueError(
+                f"campaign publish receipt object outcome count drift: {path}"
+            )
     return payload
 
 

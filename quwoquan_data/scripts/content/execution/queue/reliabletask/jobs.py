@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Mapping
+from typing import Mapping, Sequence
 
 from core.control_types import QueueBackend, QueueJobStage
 from core.io import read_json
@@ -288,19 +288,40 @@ def prepare_reliable_publish_jobs(
     from core.paths import execution_root
 
     from content.execution.closure.pool_delivery import write_pool_delivery_intent
+    from content.execution.closure.publish_outcome import is_hard_publish_failure
+    from content.release.canonical.object_transaction_contract import (
+        ObjectTransactionError,
+    )
 
     root = execution_root(ctx.execution_id)
     jobs: list[QueueJob] = []
+    # 被跳过的对象最终只会在 publish 收口时变成一条无信息的
+    # OBJECT_PREPARATION_FAILED。把每次跳过的具体原因留成证据，否则 publish
+    # 失败无法归因，还会连带耗尽 reviewer 的 attempt 预算。
+    skips: list[dict[str, str]] = []
+
+    def _record_skip(object_ref: str, reason: str) -> None:
+        skips.append({"objectRef": object_ref, "reason": reason})
+
     for object_ref in sorted(homepage_refs or set()):
         canonical_ref = object_ref.removeprefix("/entity/")
         object_dir = root / "entities" / canonical_ref
         relative = object_dir.relative_to(root).as_posix()
-        intent, intent_path = write_pool_delivery_intent(
-            ctx.execution_id,
-            carrier="homepage",
-            object_ref=object_ref,
-            content_object_dir=relative,
-        )
+        try:
+            intent, intent_path = write_pool_delivery_intent(
+                ctx.execution_id,
+                carrier="homepage",
+                object_ref=object_ref,
+                content_object_dir=relative,
+            )
+        except (ObjectTransactionError, ValueError) as exc:
+            if is_hard_publish_failure(exc):
+                raise
+            _record_skip(
+                object_ref,
+                f"pool delivery intent failed: {type(exc).__name__}: {exc}",
+            )
+            continue
         jobs.append(
             enqueue_ref_job(
                 ctx.execution_id,
@@ -320,6 +341,7 @@ def prepare_reliable_publish_jobs(
             )
         )
     if homepage_refs is not None:
+        _write_publish_job_skips(ctx.execution_id, skips)
         return tuple(jobs)
     from content.execution.closure.post_review import (
         indexed_post_targets,
@@ -336,20 +358,38 @@ def prepare_reliable_publish_jobs(
         object_dir = root / verdict.publish_ref
         attestation = object_dir / "5.review" / "attestation.json"
         if not attestation.is_file() or not (object_dir / "manifest.json").is_file():
-            raise ValueError(f"qualified post evidence is incomplete: {ref}")
+            _record_skip(
+                ref,
+                "missing publish inputs: "
+                f"attestation={attestation.is_file()} "
+                f"manifest={(object_dir / 'manifest.json').is_file()}",
+            )
+            continue
         review = read_json(attestation)
         if review.get("decision") != "approved":
-            raise ValueError(f"qualified post is no longer review-approved: {ref}")
+            _record_skip(ref, f"attestation decision={review.get('decision')!r}")
+            continue
         relative = verdict.publish_ref
         carrier = relative.split("/", 2)[1] if relative.startswith("posts/") else ""
         if not carrier:
-            raise ValueError(f"ReliableTask publish object path 无载体：{relative}")
-        intent, intent_path = write_pool_delivery_intent(
-            ctx.execution_id,
-            carrier=carrier,
-            object_ref=ref,
-            content_object_dir=relative,
-        )
+            _record_skip(ref, f"carrier unresolved from publishRef={relative!r}")
+            continue
+        try:
+            entity_ref = _post_entity_ref(ctx.execution_id, ref)
+            intent, intent_path = write_pool_delivery_intent(
+                ctx.execution_id,
+                carrier=carrier,
+                object_ref=ref,
+                content_object_dir=relative,
+            )
+        except (ObjectTransactionError, ValueError) as exc:
+            if is_hard_publish_failure(exc):
+                raise
+            _record_skip(
+                ref,
+                f"pool delivery intent failed: {type(exc).__name__}: {exc}",
+            )
+            continue
         jobs.append(
             enqueue_ref_job(
                 ctx.execution_id,
@@ -359,7 +399,7 @@ def prepare_reliable_publish_jobs(
                 meta={
                     "contentType": carrier,
                     "carrier": carrier,
-                    "entityRef": _post_entity_ref(ctx.execution_id, ref),
+                    "entityRef": entity_ref,
                     "sourceRevision": intent["transactionInputDigest"],
                     "contentObjectDir": relative,
                     "poolDeliveryIntentRef": intent_path.relative_to(root).as_posix(),
@@ -368,7 +408,28 @@ def prepare_reliable_publish_jobs(
                 queue_backend=QueueBackend.RELIABLE_TASK,
             )
         )
+    _write_publish_job_skips(ctx.execution_id, skips)
     return tuple(jobs)
+
+
+def _write_publish_job_skips(
+    execution_id: str,
+    skips: Sequence[Mapping[str, str]],
+) -> None:
+    """Keep why each reviewed object never became a publish job."""
+    if not skips:
+        return
+    from core.io import write_json
+    from core.paths import execution_root
+
+    write_json(
+        execution_root(execution_id) / "evidence/publish_job_skips.json",
+        {
+            "schema": "quwoquan_data.publish_job_skips",
+            "executionId": execution_id,
+            "skips": [dict(row) for row in skips],
+        },
+    )
 
 
 __all__ = [

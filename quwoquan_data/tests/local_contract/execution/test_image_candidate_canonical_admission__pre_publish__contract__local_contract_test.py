@@ -25,7 +25,7 @@ from core.data_issue import DataIssueCode
 from core.image_deduplication import perceptual_hash, perceptual_hash_distance
 from core.io import read_json, write_json
 from core.paths import execution_entity_object_dir, execution_root
-from core.source_digest import SourceDigest
+from core.source_digest import SourceDefinitionSnapshot
 from PIL import Image, ImageDraw
 from support.execution_manifest_fixture import ExecutionFixtureBuilder
 
@@ -291,9 +291,11 @@ def _write_image_source(
         approved_quota=1,
     )
     manifest = fixture.build()
-    frozen_source_digest = SourceDigest.from_document(manifest["sourceDigest"])
+    frozen_source_digest = SourceDefinitionSnapshot.from_document(
+        manifest["sourceDigest"]
+    )
     monkeypatch.setattr(
-        "content.execution.workspace.current_source_digest",
+        "content.execution.workspace.current_source_definition_snapshot",
         lambda: frozen_source_digest,
     )
     write_source_unit(

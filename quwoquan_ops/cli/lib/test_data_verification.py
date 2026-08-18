@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import platform
+import re
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -359,6 +360,7 @@ def build_candidate_binding(
     target: str,
     manifest: Mapping[str, Any],
     readiness: Mapping[str, Any],
+    allow_consumer: bool = False,
 ) -> CandidateBinding:
     release = (manifest.get("release") or {}).get("candidate") or {}
     release_id = str(release.get("releaseId") or "").strip()
@@ -371,13 +373,21 @@ def build_candidate_binding(
     ):
         raise ValueError("Data readiness is not bound to the package candidate release")
     readiness_phase = str(readiness.get("readinessPhase") or "").strip()
-    if readiness_phase not in {"research", "commercial"}:
+    allowed_readiness_phases = {"research", "commercial"}
+    if allow_consumer:
+        allowed_readiness_phases.add("consumer")
+    if readiness_phase not in allowed_readiness_phases:
         raise ValueError(
             "test-data readiness must be an immutable research or commercial release"
         )
+    release_class = str(readiness.get("releaseClass") or "").strip()
+    expected_release_class = (
+        release_class if readiness_phase == "consumer" else readiness_phase
+    )
     if (
-        readiness.get("releaseClass") != readiness_phase
-        or readiness.get("productLifecycleState") != readiness_phase
+        expected_release_class not in {"research", "commercial"}
+        or release_class != expected_release_class
+        or readiness.get("productLifecycleState") != expected_release_class
     ):
         raise ValueError(
             "Data readiness releaseClass/productLifecycleState drift from phase"
@@ -391,11 +401,19 @@ def build_candidate_binding(
     if readiness_receipt_digest != canonical_digest(readiness_unsigned):
         raise ValueError("Data readiness verification checksum mismatch")
     source_revision = str(manifest.get("sourceRevision") or "").strip()
-    if (
-        len(source_revision) != 40
-        or any(character not in "0123456789abcdef" for character in source_revision)
-        or readiness.get("sourceRevision") != source_revision
-    ):
+    canonical_git_revision = len(source_revision) == 40 and all(
+        character in "0123456789abcdef" for character in source_revision
+    )
+    readiness_source_revision = str(readiness.get("sourceRevision") or "").strip()
+    source_revision_matches = readiness_source_revision == source_revision
+    if readiness_phase == "consumer":
+        # Consumer readiness is bound to the mutable test-live runtime by the
+        # exact release/verify/manifest/readiness tuple. Its Data provenance is
+        # represented by sourceIdentities, not by the package Git revision.
+        # Keep CandidateBinding source_revision tied to the current runtime and
+        # do not require the retired top-level Data sourceRevision projection.
+        source_revision_matches = allow_consumer
+    if not canonical_git_revision or not source_revision_matches:
         raise ValueError(
             "Data readiness sourceRevision is not bound to the package candidate"
         )

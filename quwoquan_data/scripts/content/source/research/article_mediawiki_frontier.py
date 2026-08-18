@@ -21,8 +21,8 @@ from content.source.research.article_frontier_robots import (
     fetch_with_backoff,
     network_issue,
     policy_issue,
-    shared_rate_limiter,
 )
+from core.rate_limit import shared_rate_limiter
 
 _MEDIAWIKI_SEARCH_METHOD = "mediawiki_api_search"
 

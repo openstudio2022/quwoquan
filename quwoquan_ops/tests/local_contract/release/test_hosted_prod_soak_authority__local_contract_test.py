@@ -146,11 +146,13 @@ def _fixture(
             "gitSha": SOURCE_SHA,
             "treeDigest": TREE_DIGEST,
         },
-        "configurationPackages": {
+        "environmentArtifacts": {
             "prod": {
-                "content-service": {
-                    "path": "packages/prod/content.yaml",
-                    "digest": DIGEST_A,
+                "configurationPackages": {
+                    "content-service": {
+                        "path": "packages/prod/content.yaml",
+                        "digest": DIGEST_A,
+                    }
                 }
             }
         },
@@ -177,7 +179,7 @@ def _fixture(
         "sourceTreeDigest": TREE_DIGEST,
         "rolloutConfigDigest": DIGEST_A,
         "configGraphDigest": _canonical_digest(
-            manifest["configurationPackages"]
+            manifest["environmentArtifacts"]["prod"]["configurationPackages"]
         ),
         "contractGraphDigest": DIGEST_D,
         "requiredSoakSeconds": 86400,

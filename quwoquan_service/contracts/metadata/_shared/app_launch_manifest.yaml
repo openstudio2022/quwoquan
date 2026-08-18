@@ -24,24 +24,13 @@ local_transport_targets:
   - gamma-local
   - prod-sim
 
-content_binding_contract:
-  fields:
-    - contentReleaseId
-    - contentManifestDigest
-    - contentReadinessReceiptDigest
-  digest_fields:
-    - contentManifestDigest
-    - contentReadinessReceiptDigest
-  required_launch_policies:
-    - prod_release
-
+# 内容激活是服务端运行时事实：App 制品与 launch manifest 不携带任何内容 release 身份。
+# 运行时内容身份（releaseId + manifestDigest）只由 Content API 响应下发（DEC-004）。
 launch_policies:
   test_live:
     environments: [alpha, beta, gamma]
-    content_binding_modes: [unbound, run_bound]
   prod_release:
     environments: [prod]
-    content_binding_modes: [immutable_release]
 
 schemas:
   app_effective_launch_manifest:
@@ -54,12 +43,8 @@ schemas:
       - entrypoint
       - launchMode
       - launchPolicy
-      - contentBindingState
       - dartDefinesDigest
       - runtimeConfigDigest
-      - contentReleaseId
-      - contentManifestDigest
-      - contentReadinessReceiptDigest
       - recoveryBaseUrl
       - publicWebBaseUrl
       - appDownloadBaseUrl
@@ -72,12 +57,8 @@ schemas:
       entrypoint: { type: string, const: lib/main_prod.dart }
       launchMode: { type: string, min_length: 1 }
       launchPolicy: { type: string, allowed_values: [test_live, prod_release] }
-      contentBindingState: { type: string, allowed_values: [unbound, bound] }
       dartDefinesDigest: { type: string, format: sha256_identity }
       runtimeConfigDigest: { type: string, format: sha256_identity }
-      contentReleaseId: { type: string }
-      contentManifestDigest: { type: string }
-      contentReadinessReceiptDigest: { type: string }
       recoveryBaseUrl: { type: string, format: https_origin }
       publicWebBaseUrl: { type: string, format: https_origin }
       appDownloadBaseUrl: { type: string, format: https_url_no_query_fragment_credentials }
@@ -104,7 +85,8 @@ schemas:
       - transport.required=false 时端口和本地 transport identity 必须为空；这种 package-only 或未附带设备 transport 的 handoff 不得成为 runtime UAT 证据。
       - prod-hosted 必须令 local transport 为 false，且全部端口与本地 transport identity 为空。
       - recoveryBaseUrl 与 publicWebBaseUrl 必须是 HTTPS origin；appDownloadBaseUrl 允许 path，但三个 URL 都不得包含 query、fragment 或凭据。
-      - 内容绑定字段必须全空或全部完整；test_live 只允许 Alpha/Beta/Gamma，默认 unbound，且仅可把显式绑定到当前 running mutable attempt 的完整三元投影为 run_bound；禁止 generic bound、implicit latest、candidate 或 package。prod_release 只允许 Prod 的 immutable_release，且必须绑定非空 releaseId 和两个 sha256 identity。
+      - launchPolicy 必须与 environment 满足 launch_policies 声明的映射；launchMode 只记录启动来源（launch provenance），任何消费方不得据此改变业务行为。
+      - 本清单不携带内容 release 身份；内容激活身份只由 Content API 响应在运行时下发。
 
   app_launcher_handoff:
     schema_value: app-launcher-handoff
@@ -116,12 +98,8 @@ schemas:
       - entrypoint
       - launchMode
       - launchPolicy
-      - contentBindingState
       - dartDefinesDigest
       - runtimeConfigDigest
-      - contentReleaseId
-      - contentManifestDigest
-      - contentReadinessReceiptDigest
       - recoveryBaseUrl
       - publicWebBaseUrl
       - appDownloadBaseUrl
@@ -137,12 +115,8 @@ schemas:
       entrypoint: { type: string, source: app_effective_launch_manifest.entrypoint }
       launchMode: { type: string, source: app_effective_launch_manifest.launchMode }
       launchPolicy: { type: string, source: app_effective_launch_manifest.launchPolicy }
-      contentBindingState: { type: string, source: app_effective_launch_manifest.contentBindingState }
       dartDefinesDigest: { type: string, source: app_effective_launch_manifest.dartDefinesDigest }
       runtimeConfigDigest: { type: string, source: app_effective_launch_manifest.runtimeConfigDigest }
-      contentReleaseId: { type: string, source: app_effective_launch_manifest.contentReleaseId }
-      contentManifestDigest: { type: string, source: app_effective_launch_manifest.contentManifestDigest }
-      contentReadinessReceiptDigest: { type: string, source: app_effective_launch_manifest.contentReadinessReceiptDigest }
       recoveryBaseUrl: { type: string, source: app_effective_launch_manifest.recoveryBaseUrl }
       publicWebBaseUrl: { type: string, source: app_effective_launch_manifest.publicWebBaseUrl }
       appDownloadBaseUrl: { type: string, source: app_effective_launch_manifest.appDownloadBaseUrl }

@@ -27,6 +27,14 @@ ALLOWED_TOP_LEVEL = frozenset(
         ".gitignore",
         ".dockerignore",
         ".cursor",
+        ".cursorignore",
+        # Agent harness 入口：技能与角色定义只有 .agents/ 一处真相源，
+        # .claude/.codex/CLAUDE.md 是 Claude Code 与 Codex 的桥接投影
+        # （目录名由各 harness 固定，不能收进域根）。
+        ".agents",
+        ".claude",
+        ".codex",
+        "CLAUDE.md",
         # 本地 IDE 配置：不入库，但开发机上必然存在
         ".vscode",
         # 唯一允许的运行输出根

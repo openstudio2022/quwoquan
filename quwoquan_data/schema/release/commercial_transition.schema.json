@@ -9,10 +9,9 @@
     "transitionRunId",
     "researchReleaseId",
     "researchManifestDigest",
-    "researchSourceDigest",
     "commercialReleaseId",
     "commercialManifestDigest",
-    "commercialSourceDigest",
+    "poolDigest",
     "objectMigrations",
     "environmentCleanup",
     "unauthorizedReadbackCount",
@@ -27,10 +26,13 @@
     "transitionRunId": {"type": "string", "minLength": 1},
     "researchReleaseId": {"type": "string", "minLength": 1},
     "researchManifestDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-    "researchSourceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "commercialReleaseId": {"type": "string", "minLength": 1},
     "commercialManifestDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "poolDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "researchSourceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "researchSourceIdentitySetDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "commercialSourceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "commercialSourceIdentitySetDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "objectMigrations": {
       "type": "array",
       "items": {
@@ -72,5 +74,31 @@
     "passed": {"const": true},
     "recordedAt": {"type": "string", "minLength": 1},
     "receiptDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
-  }
+  },
+  "allOf": [
+    {
+      "oneOf": [
+        {
+          "required": ["researchSourceDigest"],
+          "not": {"required": ["researchSourceIdentitySetDigest"]}
+        },
+        {
+          "required": ["researchSourceIdentitySetDigest"],
+          "not": {"required": ["researchSourceDigest"]}
+        }
+      ]
+    },
+    {
+      "oneOf": [
+        {
+          "required": ["commercialSourceDigest"],
+          "not": {"required": ["commercialSourceIdentitySetDigest"]}
+        },
+        {
+          "required": ["commercialSourceIdentitySetDigest"],
+          "not": {"required": ["commercialSourceDigest"]}
+        }
+      ]
+    }
+  ]
 }

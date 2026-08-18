@@ -3,12 +3,12 @@ from __future__ import annotations
 
 import hashlib
 import json
-import shutil
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
 from core.io import read_json
+from core.content_library import link_from_library
 from core.schema import assert_valid
 from core.source_digest import content_source_revision
 
@@ -334,15 +334,33 @@ def verify_external_input_refs(
     return observed
 
 
-def _copy_verified(source: Path, destination: Path, *, expected_digest: str) -> None:
+def _reference_verified(
+    source: Path,
+    destination: Path,
+    *,
+    expected_digest: str,
+    library_root: Path,
+) -> None:
+    """Expose one declared input as a reference onto its immutable library entry.
+
+    The digest is already frozen in the descriptor, so it addresses the library
+    directly and every lane that declares the same bytes shares one copy.
+    """
     destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists():
         if not destination.is_file() or file_digest(destination) != expected_digest:
             raise _typed("BUNDLE_COLLISION", f"bundle collision: {destination}")
         return
-    shutil.copyfile(source, destination)
-    if file_digest(destination) != expected_digest:
-        raise _typed("DIGEST_DRIFT", f"bundle copy drift: {destination}")
+    try:
+        link_from_library(
+            source,
+            destination,
+            kind="media",
+            library_root=library_root,
+            expected_sha256=expected_digest,
+        )
+    except ValueError as error:
+        raise _typed("DIGEST_DRIFT", f"bundle admission failed: {source}: {error}") from error
 
 
 def materialize_external_input_bundle(
@@ -354,8 +372,9 @@ def materialize_external_input_bundle(
     source_revision: str,
     source_digest: str,
     entity_catalog_digest: str,
+    library_root: Path,
 ) -> list[dict[str, Any]]:
-    """Copy one lane's declared inputs into a self-contained capsule subtree."""
+    """Reference one lane's declared inputs into a self-contained capsule subtree."""
     frozen = verify_external_input_refs(
         carrier,
         refs,
@@ -378,24 +397,27 @@ def materialize_external_input_bundle(
         receipt_ref, receipt = _safe_ref(
             source_kind_root, row["receiptRef"], label="receiptRef"
         )
-        _copy_verified(
+        _reference_verified(
             manifest,
             destination_kind_root / manifest_ref,
             expected_digest=str(row["manifestFileDigest"]),
+            library_root=library_root,
         )
-        _copy_verified(
+        _reference_verified(
             receipt,
             destination_kind_root / receipt_ref,
             expected_digest=str(row["receiptFileDigest"]),
+            library_root=library_root,
         )
         for blob in row["blobRefs"]:
             blob_ref, blob_path = _safe_ref(
                 source_kind_root, blob["blobRef"], label="blobRef"
             )
-            _copy_verified(
+            _reference_verified(
                 blob_path,
                 destination_kind_root / blob_ref,
                 expected_digest=str(blob["contentSha256"]),
+                library_root=library_root,
             )
     verify_external_input_refs(
         carrier,

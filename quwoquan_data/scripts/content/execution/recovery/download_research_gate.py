@@ -3,26 +3,8 @@ from __future__ import annotations
 from content.execution.coverage import coverage_entity_type, coverage_entity_type_for_entity
 from content.execution.support import Any, DOWNLOAD_FETCH_ONLY_RETRY_LIMIT, DataIssue, DataIssueCode, DataIssueLane, DataIssueStage, DataRecoveryAction, ExecutionContext, Iterable, Mapping, Path, _active_spec, _planned_pixel_issue, data_issue, execution_command_root, execution_root, hashlib, image_count_is_hard_quota, image_strategy_allows_ai_generated, image_strategy_requires_publishable_images, json, minimum_publishable_images_per_target, read_json, source_plan_rule_signature
 from core.data_issue import issue_messages
-from core.source_catalog import ARTICLE_BASE_SOURCE_CATEGORIES
 
 _MAX_IMAGES_PER_SOURCE_COLLECTION = 20
-
-
-def _commercial_video_candidate_issues(candidate: Mapping[str, Any]) -> list[str]:
-    """Return commercial admission gaps from one immutable video plan row."""
-    issues: list[str] = []
-    if str(candidate.get("publicationAdmission") or "") != "commercial_release":
-        issues.append("publicationAdmission must be commercial_release")
-    if str(candidate.get("commercialAuthorizationStatus") or "") != "verified":
-        issues.append("commercialAuthorizationStatus must be verified")
-    if str(candidate.get("rightsStatus") or "") != "verified":
-        issues.append("rightsStatus must be verified")
-    if list(candidate.get("rightsIssues") or []):
-        issues.append("rightsIssues must be empty")
-    for field in ("authorizationProofUrl", "termsUrl"):
-        if not str(candidate.get(field) or "").startswith("https://"):
-            issues.append(f"{field} must use HTTPS")
-    return issues
 
 
 def _article_source_identity_issues(
@@ -228,7 +210,20 @@ def _download_research_lane_issues(
                         f"article source {source.get('source_id')}: "
                         "Qunar search result directory cannot be article base"
                     )
-                if source_category not in ARTICLE_BASE_SOURCE_CATEGORIES:
+                if source_category not in {
+                    "travelogue",
+                    "guidebook",
+                    "travel_guide",
+                    "wikivoyage",
+                    "official_article",
+                    "vertical_professional",
+                    "ugc_longform",
+                    "community_post",
+                    "media_article",
+                    "platform_article",
+                    "forum_thread",
+                    "review_note",
+                }:
                     add(
                         DataIssueCode.SOURCE_CATEGORY_SHORTFALL,
                         f"article source {source.get('source_id')}: base source category "
@@ -363,36 +358,60 @@ def _download_research_lane_issues(
                 )
         return issues
     if lane == "video":
-        from governance.coverage.distribution import (
-            ProductLifecycleState,
-            load_content_distribution_policy,
-        )
-
         videos = curated_sourced_videos_for_entity(
             ctx.execution_id,
             eid,
             etype,
         )
-        if not videos:
+        frames = [
+            image
+            for image in curated_images_for_entity(ctx.execution_id, eid, etype)
+            if str(image.get("researchLane") or "") == "video"
+        ]
+        if not videos and len(frames) < requirements.min_video_frames:
             add(
                 DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL,
-                "video research needs an admitted direct-video candidate",
+                "video research needs an admitted direct-video candidate or "
+                f"{requirements.min_video_frames} rights-cleared frame(s) "
+                f"({len(frames)} retained)",
                 stage=DataIssueStage.IMAGE_RIGHTS,
                 recovery=DataRecoveryAction.REPLACE_MEDIA,
             )
-        elif (
-            load_content_distribution_policy().product_lifecycle_state
-            is ProductLifecycleState.COMMERCIAL
-        ):
-            for index, candidate in enumerate(videos, start=1):
-                gaps = _commercial_video_candidate_issues(candidate)
-                if gaps:
+        for index, frame in enumerate(frames, start=1):
+            if enforce_rights:
+                for issue in validate_image_rights(
+                    frame,
+                    vertical=ctx.spec.vertical,
+                ):
                     add(
                         DataIssueCode.MEDIA_RIGHTS_UNAVAILABLE,
-                        f"video[{index}] is not commercially admitted: "
-                        + "; ".join(gaps),
+                        f"video frame[{index}] {frame.get('url') or '?'}: {issue}",
                         stage=DataIssueStage.IMAGE_RIGHTS,
                         recovery=DataRecoveryAction.REPLACE_MEDIA,
                     )
+            relevance = str(frame.get("relevance") or frame.get("caption") or "")
+            rel_issue = relevance_issue(
+                relevance,
+                entity_id=eid,
+                asset_id=f"{eid}#video#{index}",
+            )
+            if rel_issue:
+                add(
+                    DataIssueCode.SOURCE_ENTITY_MISMATCH,
+                    f"video frame[{index}]: {rel_issue}",
+                    stage=DataIssueStage.IMAGE_RIGHTS,
+                    recovery=DataRecoveryAction.REPLACE_MEDIA,
+                )
+            px_issue = _planned_pixel_issue(
+                frame,
+                asset_id=f"{eid}#video#{index}",
+            )
+            if px_issue:
+                add(
+                    DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL,
+                    f"video frame[{index}]: {px_issue}",
+                    stage=DataIssueStage.IMAGE_RIGHTS,
+                    recovery=DataRecoveryAction.REPLACE_MEDIA,
+                )
         return issues
     return []

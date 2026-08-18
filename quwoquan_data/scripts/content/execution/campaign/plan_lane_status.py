@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from content.execution.campaign.lane import CAMPAIGN_CARRIERS
 from content.execution.campaign.receipt import load_lane_receipt
 from content.execution.campaign.workspace import CampaignRuntimePaths
 
@@ -99,8 +98,7 @@ def aggregate_status(lanes: dict[str, dict[str, Any]]) -> str:
     finalized_or_partial = 0
     delivery_pending = 0
     milestone_met = 0
-    for carrier in CAMPAIGN_CARRIERS:
-        lane = lanes[carrier]
+    for lane in lanes.values():
         qualified = int(lane.get("qualifiedCount") or 0)
         finalized = int(lane.get("finalizedCount") or 0)
         approved = int(lane.get("approvedQuota") or 0)
@@ -119,7 +117,7 @@ def aggregate_status(lanes: dict[str, dict[str, Any]]) -> str:
                 milestone_met += 1
     if finalized_or_partial == 0 and delivery_pending == 0:
         return "blocked"
-    if milestone_met == len(CAMPAIGN_CARRIERS):
+    if milestone_met == len(lanes):
         return "succeeded"
     return "succeeded_partial"
 

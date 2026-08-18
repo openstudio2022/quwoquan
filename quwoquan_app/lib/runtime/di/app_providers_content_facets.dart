@@ -1,8 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:crypto/crypto.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
 import 'package:quwoquan_app/runtime/di/cloud_http_client_provider.dart';
+import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/adapters/desktop_picker_services.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/adapters/local_video_file_readiness.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/application/public/desktop_picker_ports.dart';
@@ -14,6 +18,7 @@ import 'package:quwoquan_app/service/content_service/media/filter_catalog_releas
 import 'package:quwoquan_app/runtime/observability/app_trace_context_store.dart';
 import 'package:quwoquan_app/runtime/di/generated_operation_client_dependencies.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/content_repository_contract.dart';
+import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/discovery_feed_page.dart';
 import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/discovery_feed_query.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_delete.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/post_article_detail_projector.dart';
@@ -103,7 +108,9 @@ final _contentFacetsProvider = Provider<_ContentFacets>((ref) {
   );
 });
 
-final researchReleaseReadbackProvider = Provider<ResearchReleaseReadback>((ref) {
+final researchReleaseReadbackProvider = Provider<ResearchReleaseReadback>((
+  ref,
+) {
   return RemoteResearchReleaseReadback(
     client: ref.watch(generatedCloudOperationClientProvider),
     researchIdentityWriter: ref.watch(
@@ -160,9 +167,48 @@ final postArticleDetailProjectorProvider = Provider<PostArticleDetailProjector>(
   (ref) => const DefaultPostArticleDetailProjector(),
 );
 
-final contentDiscoveryFeedQueryProvider = Provider<ContentDiscoveryFeedQuery>(
-  (ref) => ref.watch(_contentFacetsProvider).feedQuery,
-);
+final contentDiscoveryFeedQueryProvider = Provider<ContentDiscoveryFeedQuery>((
+  ref,
+) {
+  final runtimeFailure = CloudRuntimeConfig.runtimeAvailabilityFailure();
+  if (runtimeFailure != null) {
+    return _UnavailableContentDiscoveryFeedQuery(runtimeFailure);
+  }
+  return ref.watch(_contentFacetsProvider).feedQuery;
+});
+
+final class _UnavailableContentDiscoveryFeedQuery
+    implements ContentDiscoveryFeedQuery {
+  const _UnavailableContentDiscoveryFeedQuery(this.failure);
+
+  final RuntimeFailure failure;
+
+  @override
+  Future<DiscoveryFeedPage> listDiscoveryFeedPage({
+    required String category,
+    String? channelId,
+    String? identity,
+    String? type,
+    String? subCategory,
+    required int limit,
+    String? cursor,
+    String sort = kFeedSortRecommend,
+    String? sessionId,
+    String? feedRequestId,
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  }) {
+    return Future<DiscoveryFeedPage>.error(
+      CloudException(
+        type: CloudErrorType.server,
+        message: failure.code,
+        code: failure.code,
+        runtimeFailure: failure,
+      ),
+    );
+  }
+}
+
 final contentPostDeleteCommandWriterProvider =
     Provider<ContentPostDeleteCommandWriter>(
       (ref) => ref.watch(_contentFacetsProvider).postDeleteWriter,

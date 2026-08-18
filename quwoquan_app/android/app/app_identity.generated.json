@@ -1,0 +1,142 @@
+{
+  "schema": "qwq.app-identity-generated",
+  "source": "_shared/app_artifact_manifest.yaml",
+  "sourceSha256": "sha256:5994c108683f0ad45628ea4f57052c1381f6154cc204b1354c141708ab1adc84",
+  "environments": [
+    "alpha",
+    "beta",
+    "gamma",
+    "prod"
+  ],
+  "buildModes": [
+    "debug",
+    "profile",
+    "release"
+  ],
+  "identities": {
+    "android": {
+      "alpha/debug": {
+        "applicationId": "com.quwoquan.quwoquan_app.alpha.debug",
+        "displayName": "趣我圈α·D",
+        "registered": true
+      },
+      "alpha/profile": {
+        "applicationId": "com.quwoquan.quwoquan_app.alpha.profile",
+        "displayName": "趣我圈α·P",
+        "registered": true
+      },
+      "alpha/release": {
+        "applicationId": "com.quwoquan.quwoquan_app.alpha",
+        "displayName": "趣我圈α",
+        "registered": true
+      },
+      "beta/debug": {
+        "applicationId": "com.quwoquan.quwoquan_app.beta.debug",
+        "displayName": "趣我圈β·D",
+        "registered": true
+      },
+      "beta/profile": {
+        "applicationId": "com.quwoquan.quwoquan_app.beta.profile",
+        "displayName": "趣我圈β·P",
+        "registered": true
+      },
+      "beta/release": {
+        "applicationId": "com.quwoquan.quwoquan_app.beta",
+        "displayName": "趣我圈β",
+        "registered": true
+      },
+      "gamma/debug": {
+        "applicationId": "com.quwoquan.quwoquan_app.gamma.debug",
+        "displayName": "趣我圈γ·D",
+        "registered": true
+      },
+      "gamma/profile": {
+        "applicationId": "com.quwoquan.quwoquan_app.gamma.profile",
+        "displayName": "趣我圈γ·P",
+        "registered": true
+      },
+      "gamma/release": {
+        "applicationId": "com.quwoquan.quwoquan_app.gamma",
+        "displayName": "趣我圈γ",
+        "registered": true
+      },
+      "prod/debug": {
+        "applicationId": "com.quwoquan.quwoquan_app.debug",
+        "displayName": "趣我圈·D",
+        "registered": true
+      },
+      "prod/profile": {
+        "applicationId": "com.quwoquan.quwoquan_app.profile",
+        "displayName": "趣我圈·P",
+        "registered": true
+      },
+      "prod/release": {
+        "applicationId": "com.quwoquan.quwoquan_app",
+        "displayName": "趣我圈",
+        "registered": true
+      }
+    },
+    "ios": {
+      "alpha/debug": {
+        "applicationId": "com.example.quwoquanApp.alpha.debug",
+        "displayName": "趣我圈α·D",
+        "registered": false
+      },
+      "alpha/profile": {
+        "applicationId": "com.example.quwoquanApp.alpha.profile",
+        "displayName": "趣我圈α·P",
+        "registered": false
+      },
+      "alpha/release": {
+        "applicationId": "com.example.quwoquanApp.alpha",
+        "displayName": "趣我圈α",
+        "registered": false
+      },
+      "beta/debug": {
+        "applicationId": "com.example.quwoquanApp.beta.debug",
+        "displayName": "趣我圈β·D",
+        "registered": false
+      },
+      "beta/profile": {
+        "applicationId": "com.example.quwoquanApp.beta.profile",
+        "displayName": "趣我圈β·P",
+        "registered": false
+      },
+      "beta/release": {
+        "applicationId": "com.example.quwoquanApp.beta",
+        "displayName": "趣我圈β",
+        "registered": false
+      },
+      "gamma/debug": {
+        "applicationId": "com.example.quwoquanApp.gamma.debug",
+        "displayName": "趣我圈γ·D",
+        "registered": false
+      },
+      "gamma/profile": {
+        "applicationId": "com.example.quwoquanApp.gamma.profile",
+        "displayName": "趣我圈γ·P",
+        "registered": false
+      },
+      "gamma/release": {
+        "applicationId": "com.example.quwoquanApp.gamma",
+        "displayName": "趣我圈γ",
+        "registered": false
+      },
+      "prod/debug": {
+        "applicationId": "com.example.quwoquanApp.debug",
+        "displayName": "趣我圈·D",
+        "registered": false
+      },
+      "prod/profile": {
+        "applicationId": "com.example.quwoquanApp.profile",
+        "displayName": "趣我圈·P",
+        "registered": false
+      },
+      "prod/release": {
+        "applicationId": "com.example.quwoquanApp",
+        "displayName": "趣我圈",
+        "registered": false
+      }
+    }
+  }
+}

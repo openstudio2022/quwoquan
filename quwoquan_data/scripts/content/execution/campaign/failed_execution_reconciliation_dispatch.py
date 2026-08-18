@@ -69,7 +69,10 @@ def failed_campaign_evidence(
             original_source_identity,
             output_root=output_root,
         )
-    if reason == "terminal_unpublished_source_drift":
+    if reason in {
+        "terminal_unpublished_source_drift",
+        "terminal_unpublished_retryable_shortfall",
+    }:
         return terminal_unpublished_source_drift_evidence(
             root_execution_id,
             submissions,

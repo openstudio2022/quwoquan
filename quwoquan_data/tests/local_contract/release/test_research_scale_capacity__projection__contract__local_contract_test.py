@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import pytest
 
-from content.execution.scale.capacity_plan import throughput_basis_digest
 from content.release.canonical.research_scale_capacity import (
     ResearchScaleCapacityEvidenceError,
     project_capacity_throughput,
+    throughput_basis_digest,
 )
 
 

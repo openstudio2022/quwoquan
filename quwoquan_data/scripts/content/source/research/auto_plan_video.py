@@ -6,10 +6,6 @@ from pathlib import Path
 from typing import Any
 
 from core.data_issue import DataIssueCode, DataRecoveryAction
-from governance.coverage.distribution import (
-    ProductLifecycleState,
-    load_content_distribution_policy,
-)
 
 from content.source.professional_video_receipt import (
     acquired_video_specs_for_entity,
@@ -21,7 +17,7 @@ from content.source.research.plan_state import (
     _write_lane,
 )
 from content.source.research.source_quality import (
-    _license_allows_app_publish,
+    license_allows_commercial_distribution,
 )
 from content.source.research.text_match import _normalized_title
 from content.source.research.wiki_common import _strip_html
@@ -38,7 +34,6 @@ def discover_commons_sourced_videos(
     """Discover anonymous public Commons video candidates with an audit funnel."""
 
     pages: list[dict[str, Any]] = []
-    lifecycle = load_content_distribution_policy().product_lifecycle_state
     seen_page_ids: set[str] = set()
     search_terms = list(dict.fromkeys([entity_id, *entity_aliases]))[:3]
     funnel = {
@@ -153,7 +148,7 @@ def discover_commons_sourced_videos(
             funnel["rejectedByQuality"] += 1
             continue
         if (
-            not _license_allows_app_publish(license_name, license_url)
+            not license_allows_commercial_distribution(license_name, license_url)
             or "license review needed" in categories
         ):
             funnel["rejectedByRights"] += 1
@@ -192,11 +187,7 @@ def discover_commons_sourced_videos(
                 "rightsIssues": [
                     "downloaded bytes have not yet completed media and rights admission"
                 ],
-                "publicationAdmission": (
-                    "research_release"
-                    if lifecycle is ProductLifecycleState.RESEARCH
-                    else "commercial_release"
-                ),
+                "distributionDecision": "research_allowed",
                 "modelReleaseStatus": "not_required",
                 "propertyReleaseStatus": "not_required",
                 "takedownPolicy": "quwoquan_standard_notice_and_takedown",
@@ -275,19 +266,28 @@ def write_video_lane(
     acquisition_receipt_refs: list[str] | None = None,
     acquisition_root: Path | None = None,
     entity_aliases: tuple[str, ...] = (),
+    desired_video_works: int = 1,
+    verified_index: Any | None = None,
 ) -> None:
     # receipt 的 entityId 可能是 canonical 名的别名（如「西湖」对
     # 「杭州西湖」）。与 qualification 侧同一归一化语义：canonical 名
     # 优先，其后按 aliases 依次匹配；不改变 frozen receipt 集合。
-    professional_videos: list[dict[str, Any]] = []
-    for entity_name in dict.fromkeys([entity_id, *entity_aliases]):
-        professional_videos = acquired_video_specs_for_entity(
-            acquisition_receipt_refs or [],
-            entity_id=entity_name,
-            root=acquisition_root,
+    if isinstance(desired_video_works, bool) or desired_video_works < 1:
+        raise ValueError("desired_video_works must be a positive integer")
+    if verified_index is not None:
+        professional_videos = verified_index.specs_for_names(
+            tuple(dict.fromkeys([entity_id, *entity_aliases]))
         )
-        if professional_videos:
-            break
+    else:
+        professional_videos: list[dict[str, Any]] = []
+        for entity_name in dict.fromkeys([entity_id, *entity_aliases]):
+            professional_videos = acquired_video_specs_for_entity(
+                acquisition_receipt_refs or [],
+                entity_id=entity_name,
+                root=acquisition_root,
+            )
+            if professional_videos:
+                break
     merged: list[dict[str, Any]] = []
     seen: set[str] = set()
     for candidate in [*professional_videos, *sourced_video_pool]:
@@ -302,7 +302,7 @@ def write_video_lane(
         seen.add(identity)
         merged.append(candidate)
     ranked = rank_video_candidates_by_popularity(merged)
-    sourced_videos = ranked[:1]
+    sourced_videos = ranked[:desired_video_works]
     report.setdefault("videoDiscovery", []).append(
         {
             "entityId": entity_id,
@@ -320,7 +320,7 @@ def write_video_lane(
             report,
             entity_id=entity_id,
             lane="video",
-            reason="acquired playable video files=0 need>=1",
+            reason=f"acquired playable video files=0 need>={desired_video_works}",
             code=DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL,
             recovery=DataRecoveryAction.RETRY_SOURCE_DISCOVERY,
         )

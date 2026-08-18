@@ -13,7 +13,9 @@
 ### In Scope
 
 - AppRoot/L1/L2/L3 的目录、规格、设计与验收规则。
-- `explore/prd/design/dev/verify` 等命令的统一上下文链。
+- 工作流技能（`explore/prd/design/dev/continue/plan-next/review/commit` 与自动触发的 `environment-ops/content-production/incident-inspection`）的统一模板、上下文链与工作流间交接契约。
+- 按 `(workflow, deliverable, profiles)` 派发角色评审的 review 机制与分级语义。
+- 跨 harness（Cursor / Codex / Claude Code）的指令载体分配与上下文预算。
 - 动态特性上下文、总览、变更影响报告和机器门禁。
 
 ### Out of Scope
@@ -30,6 +32,7 @@
 
 
 - [`directory-native-sdd`](./directory-native-sdd/spec.md)：工具必须直接扫描目录与 Markdown；删除 `.qwq_output` 后仍可从受版本控制真相源重建上下文。
+- [`agent-skill-review-context-organization`](./agent-skill-review-context-organization/spec.md)：顶层 Skill 只收录完整工作流并套用统一八段模板；评审按 profile 精确装配，无关 gate 零加载；三家 harness 从同一真相源加载。
 
 ## 5. 能力要求
 
@@ -43,9 +46,19 @@
 <a id="req-002"></a>
 ### REQ-002 命令与自然语言一致执行
 
-- 命令和自然语言执行必须使用同一 Spec Entry、Pre-work Reflection 与 Exit Review。
+- 显式调用工作流技能与自然语言意图必须使用同一 `RESOLVE / PRE / DURING / POST / HANDOFF` 五段执行契约；两者只在 RESOLVE 的输入方式上不同，产出同一 `(workflow, deliverable, scope)` 三元组。
+- 工作流之间必须经 HANDOFF 交接：未决项必须落到「最低可关闭节点 `OPEN-###`」「Out of Scope」「下一工作流承接」三者之一；HANDOFF 必须声明唯一合法下游并覆盖其输入必需项，下一工作流的 RESOLVE 必须消费上一工作流的 HANDOFF，断链必须阻断。
 - 动态上下文、总览和变更报告只写入 `.qwq_output`。
 - 目录、链接、章节、验收证据和禁止文件必须由可执行门禁校验。
+
+<a id="req-003"></a>
+### REQ-003 角色化评审与跨 harness 载体
+
+- 评审必须由 `review` 工作流按 `(workflow, deliverable, profiles)` 从注册表派发角色执行：profile 由 changed_paths 与 deliverable 派生，未匹配 profile 的角色不派发，选中 bundle 内相同 gate 只执行一次。角色名以 `.agents/skills/review/references/roles/` 为唯一真相源，其他文件不得自行列举角色清单。
+- Agent 上下文载体只允许五类，各有唯一职责：顶层 Skill 只收录可独立触发、有输入/步骤/交付件/失败终态的完整工作流；role 定义评审或执行职责；checklist 只放带分级的可执行判定；reference 只放唯一 owner 的未分级知识；tool 只放该工作流独占的小工具。原则、标准、检查项不得作为顶层 Skill 存在。
+- checklist 每条必须带 `MUST / MUST NOT / SHOULD / SHOULD NOT / MAY / ADVISORY` 分级；标 MUST 的条目必须绑定真实存在的 `gate:` 命令或客观可判定的 `check:` 谓词，否则必须降级为 SHOULD。
+- 指令真相源必须放在三家 harness 共享载体（`AGENTS.md` 与 `.agents/skills/`）；harness 专属目录只允许放触发加速器与生成产物。
+- 任一工作目录下 `AGENTS.md` 的合并总量必须落在最严 harness 的上下文预算内，超限必须阻断而不是静默截断。
 
 ## 6. 契约与依赖
 

@@ -87,50 +87,8 @@ class NetworkFailureBreaker:
             self._short_circuited.clear()
 
 
-# 进程级共享实例：auto research 的 curl 层与 wave 编排共同消费。
+# 进程级共享实例：auto research 的 curl 层与编排共同消费。
 BREAKER = NetworkFailureBreaker()
-
-_wave_deadline_lock = threading.Lock()
-_wave_deadline_monotonic: float | None = None
-_wave_deadline_exceeded_flag = False
-
-
-def wave_budget_seconds() -> float:
-    """单 wave wall-clock 预算（秒）：0 = 关闭。
-
-    串行路径（maxWorkers=1）没有并行 watchdog；预算耗尽后 curl 层直接短路
-    剩余请求，保证 wave 在有界时间内收口并进入可自愈的 outage 通道。
-    """
-    return float(active_runtime_policy().research_wave_budget_seconds)
-
-
-def start_wave_budget(budget_seconds: float | None = None) -> None:
-    import time
-
-    global _wave_deadline_monotonic, _wave_deadline_exceeded_flag
-    budget = wave_budget_seconds() if budget_seconds is None else max(0.0, float(budget_seconds))
-    with _wave_deadline_lock:
-        _wave_deadline_monotonic = (time.monotonic() + budget) if budget else None
-        _wave_deadline_exceeded_flag = False
-
-
-def clear_wave_budget() -> None:
-    global _wave_deadline_monotonic, _wave_deadline_exceeded_flag
-    with _wave_deadline_lock:
-        _wave_deadline_monotonic = None
-        _wave_deadline_exceeded_flag = False
-
-
-def wave_budget_exceeded() -> bool:
-    import time
-
-    global _wave_deadline_exceeded_flag
-    with _wave_deadline_lock:
-        if _wave_deadline_monotonic is None:
-            return _wave_deadline_exceeded_flag
-        if time.monotonic() >= _wave_deadline_monotonic:
-            _wave_deadline_exceeded_flag = True
-        return _wave_deadline_exceeded_flag
 
 
 def stage_no_progress_timeout_seconds() -> float:

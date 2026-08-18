@@ -92,15 +92,20 @@ def register_acquisition_inventory(
                 kind = "acquisition_receipt"
                 receipt_root = root / "video" if parts[0] == "video" else root
                 try:
+                    # The collector reads receipts long after acquisition, so a
+                    # unit whose bodies were all reclaimed is a normal input
+                    # rather than a defect. A partly reclaimed unit still fails.
                     if parts[0] == "video":
                         document = load_professional_video_acquisition_receipt(
                             path.relative_to(root / "video").as_posix(),
                             root=root / "video",
+                            require_bodies=False,
                         )
                     else:
                         document = load_professional_image_acquisition_receipt(
                             path.relative_to(root).as_posix(),
                             root=root,
+                            require_bodies=False,
                         )
                 except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
                     raise _typed("ACQUISITION_RECEIPT_INVALID", str(exc)) from exc
@@ -137,11 +142,25 @@ def register_acquisition_inventory(
                         asset_ref,
                         label="acquisition receipt assetRef",
                     )
-                    if blob.is_symlink() or not blob.is_file():
+                    if blob.is_symlink():
                         raise _typed(
                             "ACQUISITION_REFERENCE_MISSING",
-                            f"receipt CAS blob is missing: {blob}",
+                            f"receipt CAS blob is a symlink: {blob}",
                         )
+                    if not blob.is_file():
+                        # The receipt above already validated as a tombstone, so
+                        # the body is reclaimed rather than lost. Recording the
+                        # absence as a node keeps the receipt's claim visible in
+                        # the graph without resurrecting a byte the collector
+                        # deliberately released.
+                        blob_ref = _source_ref(
+                            blob,
+                            output_root=graph.output_root,
+                            publish_root=graph.publish_root,
+                        )
+                        graph.node(blob_ref, "absent_acquisition_body")
+                        graph.edge(source, blob_ref, "acquisition_receipt_blob")
+                        continue
                     graph.artifact(
                         blob,
                         kind="acquisition_cas",

@@ -17,7 +17,6 @@
     "verifiedAt",
     "passed",
     "feedQueries",
-    "searchQueries",
     "creators",
     "posts",
     "issues"
@@ -100,7 +99,6 @@
     },
     "searchQueries": {
       "type": "array",
-      "minItems": 2,
       "uniqueItems": true,
       "items": {
         "type": "object",
@@ -236,16 +234,49 @@
       }
     },
     {
-      "properties": {
-        "feedQueries": {
-          "minItems": 6,
-          "contains": {
-            "type": "object",
-            "properties": {
-              "name": {"const": "premium_stream"},
-              "query": {"pattern": "^sort=recommend&channelId=premium_stream&limit=[1-9][0-9]*$"}
-            },
-            "required": ["name", "query"]
+      "if": {
+        "properties": {"readinessPhase": {"enum": ["research", "commercial"]}},
+        "required": ["readinessPhase"]
+      },
+      "then": {
+        "required": ["searchQueries"],
+        "properties": {"searchQueries": {"minItems": 2}}
+      },
+      "else": {
+        "not": {"required": ["searchQueries"]}
+      }
+    },
+    {
+      "if": {
+        "properties": {"readinessPhase": {"enum": ["research", "commercial"]}},
+        "required": ["readinessPhase"]
+      },
+      "then": {
+        "properties": {
+          "feedQueries": {
+            "minItems": 6,
+            "contains": {
+              "type": "object",
+              "properties": {
+                "name": {"const": "premium_stream"},
+                "query": {"pattern": "^sort=recommend&channelId=premium_stream&limit=[1-9][0-9]*$"}
+              },
+              "required": ["name", "query"]
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "feedQueries": {
+            "maxItems": 5,
+            "not": {
+              "contains": {
+                "type": "object",
+                "properties": {"name": {"const": "premium_stream"}},
+                "required": ["name"]
+              }
+            }
           }
         }
       }

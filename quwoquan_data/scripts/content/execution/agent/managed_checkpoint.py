@@ -59,8 +59,19 @@ def _run_managed_checkpoint(ctx: ExecutionContext, stage: str) -> bool:
     if ctx.agent_runner is not None:
         runner = ctx.agent_runner
     else:
+        from dataclasses import replace
+
         def runner(prompt: str):
-            return _default_managed_agent_runner_isolated(ctx, prompt)
+            object_ref = _managed_checkpoint_ref(ctx, stage, prompt)
+            scoped_ctx = replace(
+                ctx,
+                agent_usage_scope=(
+                    "content_object" if object_ref else "execution_stage"
+                ),
+                agent_content_object_ref=object_ref,
+                agent_execution_stage=stage,
+            )
+            return _default_managed_agent_runner_isolated(scoped_ctx, prompt)
     queued = list(range(len(prompts)))
     futures: dict[Any, tuple[int, str, float]] = {}
     active_by_lane: dict[str, int] = defaultdict(int)
@@ -129,7 +140,6 @@ def _run_managed_checkpoint(ctx: ExecutionContext, stage: str) -> bool:
                     outcome = AgentRunOutcome.failed(
                         AgentFailureKind.SDK_EXECUTION_FAILED,
                         message=f"managed agent runner failed: {type(exc).__name__}: {exc}",
-                        provider=ctx.agent_provider,
                     )
                 checkpoint_ref = _managed_checkpoint_ref(ctx, stage, prompts[index])
                 job_outcome = ManagedAgentJobOutcome(
@@ -171,7 +181,6 @@ def _run_managed_checkpoint(ctx: ExecutionContext, stage: str) -> bool:
                                 f"{int(now - started_at)}s for {stage}/{lane}"
                             ),
                             retryable=True,
-                            provider=ctx.agent_provider,
                         ),
                         job_index=index,
                         lane=lane,
@@ -382,15 +391,16 @@ def _managed_checkpoint_ref(
     if stage != "build_homepage":
         return ""
     entity = _managed_prompt_entity(prompt)
-    from content.execution.workspace import frozen_target_by_name
-
-    target = frozen_target_by_name(ctx.execution_id, entity)
+    target = next(
+        (row for row in ctx.spec.scope.coverage_targets if row.name == entity),
+        None,
+    )
     if target is None:
         return ""
     from governance.coverage.entity_extract import require_domain_etype
 
     domain, entity_type = require_domain_etype(target.entity_type, context=entity)
-    return f"/entity/{domain}/{entity_type}/{entity}"
+    return f"entities/{domain}/{entity_type}/{entity}"
 
 
 def _managed_checkpoint_worker_count(ctx: ExecutionContext, prompt_count: int) -> int:

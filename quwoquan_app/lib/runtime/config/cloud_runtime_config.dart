@@ -1,3 +1,6 @@
+import 'package:quwoquan_app/runtime/errors/generated/ops/ops_event_record_errors.g.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
+
 /// compile-time 业务环境配置缺失或非法。
 ///
 /// 该异常只承载脱敏的 define 键集合，不承载 URL、token 或原始异常文本。
@@ -436,21 +439,63 @@ class CloudRuntimeConfig {
       if (requiresReleaseBoundContent && launchTarget != '$appRuntimeEnv-local')
         'launchTarget',
       if (requiresReleaseBoundContent &&
-          !RegExp(
-            r'^sha256:[0-9a-f]{64}$',
-          ).hasMatch(effectiveLaunchManifestDigest))
+          !RegExp(r'^sha256:[0-9a-f]{64}$')
+              .hasMatch(effectiveLaunchManifestDigest))
         'effectiveLaunchManifestDigest',
       if (requiresReleaseBoundContent &&
           !RegExp(r'^sha256:[0-9a-f]{64}$').hasMatch(contentManifestDigest))
         'contentManifestDigest',
       if (requiresReleaseBoundContent &&
-          !RegExp(
-            r'^sha256:[0-9a-f]{64}$',
-          ).hasMatch(contentReadinessReceiptDigest))
+          !RegExp(r'^sha256:[0-9a-f]{64}$')
+              .hasMatch(contentReadinessReceiptDigest))
         'contentReadinessReceiptDigest',
       for (final key in _nativeRuntimeDriftKeys) 'NATIVE_RUNTIME_PACKAGE.$key',
     ];
     return List<String>.unmodifiable(invalid);
+  }
+
+  /// 业务请求发出前的 runtime availability 快照。
+  ///
+  /// 返回 null 表示当前 package 已可用于 Remote；非 null 是现有启动配置错误码
+  /// 对应的 typed unavailable，调用方必须直接失败，不能等待网络 deadline 或伪造空结果。
+  static RuntimeFailure? runtimeAvailabilityFailure() {
+    final configurationState =
+        shouldLoadNativeRuntimePackage && !_nativeRuntimePackageHydrated
+        ? 'pending_native'
+        : missingRequiredDefineKeys.isEmpty
+        ? 'complete'
+        : 'invalid';
+    if (configurationState == 'complete') {
+      return null;
+    }
+    return RuntimeFailure(
+      code: OpsEventRecordErrorCode.startupConfigurationInvalid.code,
+      semanticReason: OpsEventRecordErrorCode.startupConfigurationInvalid.name,
+      origin: RuntimeFailureOrigin.localClient,
+      kind: RuntimeFailureKind.unavailable,
+      nature: RuntimeFailureNature.transient,
+      location: const RuntimeFailureLocation(
+        businessObject: 'runtime.configuration',
+        functionModule: 'cloud_runtime_config',
+      ),
+      context: RuntimeFailureContext(
+        attributes: <RuntimeContextAttribute>[
+          RuntimeContextAttribute(
+            key: 'configurationState',
+            value: configurationState,
+          ),
+          if (configurationState == 'invalid')
+            RuntimeContextAttribute(
+              key: 'invalidDefineKeys',
+              value: missingRequiredDefineKeys.join(','),
+            ),
+        ],
+      ),
+      recovery: const RuntimeRecoveryDirective(
+        action: 'retry',
+        disruptionLevel: 'fullPage',
+      ),
+    );
   }
 
   /// 只用于启动证据的环境摘要；绝不返回 URL。

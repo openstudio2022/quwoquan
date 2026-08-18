@@ -35,11 +35,22 @@ CORE_READBACK_TARGET = (
     "test/user_acceptance/journeys/app_startup/"
     "app_core_readback__user_acceptance_test.dart"
 )
+PROFILE_JOURNEY_TARGET = (
+    "test/user_acceptance/journeys/profile/"
+    "profile_journey__user_acceptance_test.dart"
+)
+MESSAGE_HOME_TARGET = (
+    "test/user_acceptance/service/chat_service/chat/chat_inbox_view/"
+    "message_home_remote__user_acceptance_test.dart"
+)
 FEED_LOAD_TARGET = (
     "test/user_acceptance/service/content_service/content/feed_delivery_page/"
     "feed_load__user_acceptance_test.dart"
 )
 FEED_CONTENT_EVIDENCE_PREFIX = "QWQ_FEED_CONTENT_EVIDENCE "
+APP_CONTENT_PAGE_SCREENSHOT_READY_PREFIX = (
+    "QWQ_APP_CONTENT_PAGE_SCREENSHOT_READY "
+)
 CONTROLLED_EDGE_FAULT_TARGET = (
     "test/user_acceptance/service/content_service/content/feed_delivery_page/"
     "feed_controlled_edge_recovery__user_acceptance_test.dart"
@@ -76,6 +87,7 @@ RELEASE_APP_UAT_DEFINES = (
     ("data_release_tag_label", "DATA_RELEASE_TAG_LABEL"),
     ("data_release_video_attribution", "DATA_RELEASE_VIDEO_ATTRIBUTION"),
 )
+APP_CONTENT_VIDEO_PAGE_COUNT_ENV = "QWQ_APP_CONTENT_VIDEO_PAGE_COUNT"
 BASIC_VIABILITY_TARGET = (
     "test/user_acceptance/journeys/app_startup/"
     "basic_viability__user_acceptance_test.dart"
@@ -151,7 +163,6 @@ CANONICAL_TEST_LIVE_DART_DEFINE_KEYS = frozenset(
         "APP_RUNTIME_ENV",
         "QWQ_APP_LAUNCH_MODE",
         "APP_LAUNCH_POLICY",
-        "CONTENT_BINDING_STATE",
         "CLOUD_GATEWAY_BASE_URL",
         "APP_LEGAL_BASE_URL",
         "PUBLIC_WEB_BASE_URL",
@@ -220,11 +231,18 @@ TYPED_TEST_DATA_ACTOR_ENV = {
     "owner_id": "QWQ_TEST_DATA_OWNER_ID",
     "persona_id": "QWQ_TEST_DATA_PERSONA_ID",
 }
+TYPED_TEST_DATA_CONVERSATION_ENV = {
+    "conversation_id": "QWQ_TEST_DATA_CONVERSATION_ID",
+    "message_ids_json": "QWQ_TEST_DATA_MESSAGE_IDS_JSON",
+}
 TYPED_AUTHENTICATED_SESSION_TARGETS = (
     BASIC_VIABILITY_TARGET,
     CORE_READBACK_TARGET,
     HOME_VIDEO_PLAYBACK_TARGET,
+    MESSAGE_HOME_TARGET,
+    PROFILE_JOURNEY_TARGET,
 )
+TYPED_TEST_DATA_CONVERSATION_TARGETS = (MESSAGE_HOME_TARGET,)
 ALPHA_APP_CONTENT_TYPED_SESSION_TARGETS = (
     FEED_LOAD_TARGET,
     DEFAULT_TARGET,
@@ -233,12 +251,35 @@ ALPHA_APP_CONTENT_TYPED_SESSION_TARGETS = (
 FORBIDDEN_PROD_PLAYBACK_CANARY_TOKENS = frozenset(
     {"fixture", "mock", "seed", "test"}
 )
-IOS_RELEASE_UAT_BUNDLE_IDS = (
-    "com.example.quwoquanApp",
-    "com.example.quwoquanApp.RunnerUITests.xctrunner",
+# App 主包身份按 canonical application_identity 映射推导（环境 × BuildMode），
+# 不再自持单一字面值；UITests xctrunner 的 bundle id 不随主包身份变化。
+IOS_RUNNER_UITESTS_XCTRUNNER_BUNDLE_ID = (
+    "com.example.quwoquanApp.RunnerUITests.xctrunner"
 )
+
+
+def ios_release_uat_bundle_ids(
+    environment: str,
+    build_mode: str = "debug",
+) -> tuple[str, ...]:
+    from quwoquan_ops.cli.lib.app_identity import application_id_for
+
+    return (
+        application_id_for("ios", environment, build_mode),
+        IOS_RUNNER_UITESTS_XCTRUNNER_BUNDLE_ID,
+    )
+
+
+def android_release_uat_package(
+    environment: str,
+    build_mode: str = "debug",
+) -> str:
+    from quwoquan_ops.cli.lib.app_identity import application_id_for
+
+    return application_id_for("android", environment, build_mode)
 IOS_DEVICE_EVIDENCE_TOKENS = (
     FEED_CONTENT_EVIDENCE_PREFIX,
+    APP_CONTENT_PAGE_SCREENSHOT_READY_PREFIX,
     VIDEO_PLAYBACK_EVIDENCE_MARKER,
     CONTROLLED_EDGE_RESTORE_REQUEST_PREFIX,
     CONTROLLED_EDGE_FAULT_EVIDENCE_PREFIX,
@@ -247,7 +288,8 @@ IOS_DEVICE_EVIDENCE_TOKENS = (
     "[bootstrap] source=zone_guarded exception=",
     "feed recovery did not leave blocking error",
 )
-ANDROID_RELEASE_UAT_PACKAGE = "com.quwoquan.quwoquan_app"
+ANDROID_DEVICE_EVIDENCE_TOKENS = IOS_DEVICE_EVIDENCE_TOKENS
+ANDROID_DEVICE_EVIDENCE_LOG_TAG = "QWQPatrolEvidence"
 PATROL_FLUTTER_COMMAND_ENV = "PATROL_FLUTTER_COMMAND"
 ANDROID_DEVICE_PROXY = (
     REPO_ROOT / "quwoquan_ops" / "cli" / "lib" / "flutter_android_device_proxy.py"

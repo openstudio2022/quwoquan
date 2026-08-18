@@ -23,7 +23,6 @@ from core.paths import (
     STAGE_COMPOSE,
     STAGE_DRAFT,
     STAGE_QUALITY,
-    STAGE_REVIEW,
     ensure_object_stages,
     execution_entity_object_dir,
     execution_entity_stage_dir,
@@ -269,7 +268,7 @@ def materialize_entity_page(execution_id: str, domain: str, etype: str, name: st
         ]
     obj = execution_entity_object_dir(execution_id, domain, etype, name)
     obj.mkdir(parents=True, exist_ok=True)
-    ensure_object_stages(obj, through_stage=STAGE_REVIEW)
+    ensure_object_stages(obj)
     assets: list[dict[str, Any]] = []
     for index, image in enumerate(images):
         # 三段角色契约（cover/inline/related）：初始非封面图默认 related，

@@ -14,7 +14,7 @@ class ResearchScaleCapacityEvidenceError(RuntimeError):
 _CARRIERS = ("homepage", "article", "image", "video")
 
 
-def _throughput_basis_digest(row: Mapping[str, Any]) -> str:
+def throughput_basis_digest(row: Mapping[str, Any]) -> str:
     document = {
         "schema": "quwoquan_data.capacity_throughput_basis",
         "carrier": row.get("carrier"),
@@ -116,7 +116,7 @@ def project_capacity_throughput(
             "evidenceRef": evidence_ref,
             "evidenceDigest": evidence_digest,
         }
-        projection["throughputBasisDigest"] = _throughput_basis_digest(
+        projection["throughputBasisDigest"] = throughput_basis_digest(
             projection
         )
         projected.append(projection)
@@ -126,4 +126,5 @@ def project_capacity_throughput(
 __all__ = [
     "ResearchScaleCapacityEvidenceError",
     "project_capacity_throughput",
+    "throughput_basis_digest",
 ]

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -49,7 +50,15 @@ class HiveRuntime {
     }
     try {
       return await Hive.openBox<String>(boxName);
-    } catch (_) {
+    } catch (error, stackTrace) {
+      // 打不开 box 时调用方按「无本地存储」降级，但这是真实故障（文件损坏、磁盘
+      // 满、schema 不兼容），必须留证据，否则线上只表现为数据凭空消失。
+      developer.log(
+        'openStringBoxOrNull failed for $boxName',
+        name: 'runtime.platform.hive',
+        error: error,
+        stackTrace: stackTrace,
+      );
       return null;
     }
   }
@@ -75,7 +84,14 @@ class HiveRuntime {
         boxName,
         encryptionCipher: HiveAesCipher(encryptionKey),
       );
-    } catch (_) {
+    } catch (error, stackTrace) {
+      // 加密 box 打不开还可能意味着密钥轮换或密钥丢失，比明文 box 更需要证据。
+      developer.log(
+        'openEncryptedStringBoxOrNull failed for $boxName',
+        name: 'runtime.platform.hive',
+        error: error,
+        stackTrace: stackTrace,
+      );
       return null;
     }
   }

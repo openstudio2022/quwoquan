@@ -32,56 +32,73 @@ from quwoquan_ops.cli.prod.finalize_mainline_release_artifact_lib.manifest_valid
 )
 
 
-def load_image_descriptors(directory: Path) -> dict[str, dict[str, Any]]:
-    descriptors: dict[str, dict[str, Any]] = {}
-    for path in sorted(directory.glob("*.json")):
+def load_image_descriptors(
+    directory: Path,
+) -> dict[str, dict[str, dict[str, Any]]]:
+    descriptors: dict[str, dict[str, dict[str, Any]]] = {
+        environment: {} for environment in ENVIRONMENTS
+    }
+    for path in sorted(directory.glob("*/*.json")):
         descriptor = load_json(path)
-        service = str(descriptor.get("service") or "").strip()
-        if not service:
-            raise ValueError(f"{path} missing service")
-        if service in descriptors:
-            raise ValueError(f"duplicate image descriptor for {service}")
-        descriptors[service] = descriptor
+        environment = str(descriptor.get("environment") or "").strip()
+        owner = str(descriptor.get("runtimeImageOwner") or "").strip()
+        if environment not in ENVIRONMENTS or not owner:
+            raise ValueError(f"{path} missing environment/runtimeImageOwner")
+        if path.parent.name != environment:
+            raise ValueError(f"{path} descriptor path environment mismatch")
+        if owner in descriptors[environment]:
+            raise ValueError(
+                f"duplicate image descriptor for {environment}/{owner}"
+            )
+        descriptors[environment][owner] = descriptor
     return descriptors
 
 
 def validate_descriptor(
-    service: str,
+    environment: str,
+    owner: str,
     descriptor: dict[str, Any],
     *,
     expected_repository: str,
     expected_transport_ref: str,
 ) -> dict[str, Any]:
+    label = f"{environment}/{owner}"
     if set(descriptor) != {
-        "service",
+        "environment",
+        "runtimeImageOwner",
         "repository",
         "transportRef",
         "digest",
         "ref",
         "attestations",
     }:
-        raise ValueError(f"{service} image descriptor fields are not canonical")
+        raise ValueError(f"{label} image descriptor fields are not canonical")
+    if (
+        descriptor.get("environment") != environment
+        or descriptor.get("runtimeImageOwner") != owner
+    ):
+        raise ValueError(f"{label} image descriptor identity mismatch")
     repository = str(descriptor.get("repository") or "").strip()
     transport_ref = str(descriptor.get("transportRef") or "").strip()
     digest = str(descriptor.get("digest") or "").strip()
     if repository != expected_repository:
         raise ValueError(
-            f"{service} repository mismatch: {repository!r} != {expected_repository!r}"
+            f"{label} repository mismatch: {repository!r} != {expected_repository!r}"
         )
     if transport_ref != expected_transport_ref:
-        raise ValueError(f"{service} transport ref mismatch")
+        raise ValueError(f"{label} transport ref mismatch")
     if DIGEST_PATTERN.fullmatch(digest) is None:
-        raise ValueError(f"{service} missing immutable OCI digest")
+        raise ValueError(f"{label} missing immutable OCI digest")
     expected_ref = f"{repository}@{digest}"
     if str(descriptor.get("ref") or "") != expected_ref:
-        raise ValueError(f"{service} digest ref mismatch")
+        raise ValueError(f"{label} digest ref mismatch")
     attestations = descriptor.get("attestations")
     if not isinstance(attestations, dict):
-        raise ValueError(f"{service} missing attestations")
+        raise ValueError(f"{label} missing attestations")
     for attestation_type in ("spdxSbom", "slsaProvenance"):
         value = str(attestations.get(attestation_type) or "").strip()
         if value != f"oci://{expected_ref}#{attestation_type}":
-            raise ValueError(f"{service} missing {attestation_type} attestation reference")
+            raise ValueError(f"{label} missing {attestation_type} attestation reference")
     return {
         "repository": repository,
         "transportRef": transport_ref,
@@ -186,11 +203,12 @@ def load_release_evidence(
 
 
 def _verify_configuration_packages(artifact_dir: Path, manifest: dict[str, Any]) -> None:
-    for environment, packages in manifest["configurationPackages"].items():
+    for environment, artifact in manifest["environmentArtifacts"].items():
+        packages = artifact["configurationPackages"]
         for service, descriptor in packages.items():
             relative = _validate_relative_path(
                 descriptor.get("path"),
-                f"configurationPackages.{environment}.{service}",
+                f"environmentArtifacts.{environment}.configurationPackages.{service}",
             )
             path = _bound_file(
                 artifact_dir,

@@ -95,6 +95,7 @@ def _build_runtime_shared_package(
         env_name,
         target_name,
         package_dir,
+        repo_root=source_root,
     )
     _stackctl.write_json(
         package_dir / "manifest.json",
@@ -113,6 +114,7 @@ def _build_package_bound_local_images(
     target_name: str,
     *,
     report_dir: Path,
+    provider_binding_overlay: Mapping[str, Any],
     provider_runtime: Mapping[str, Any],
     observability_log_sink: Mapping[str, Any],
     candidate_root: Path,
@@ -175,6 +177,15 @@ def _build_package_bound_local_images(
         environment_name=env_name,
         runtime_composition=provider_runtime["composition"],
     )
+    overlay_dir, _, binding_manifest_digest = (
+        _stackctl.provider_binding_overlay_build_inputs(
+            provider_binding_overlay,
+            candidate_root=candidate_root,
+            build_context=source_root,
+        )
+    )
+    environment["QWQ_PROVIDER_BINDING_OVERLAY_CONTEXT"] = str(overlay_dir)
+    environment["QWQ_PROVIDER_BINDING_MANIFEST_DIGEST"] = binding_manifest_digest
     composition = _stackctl._bind_gamma_build_service_image_refs(
         env_name,
         environment,
@@ -267,6 +278,7 @@ def _build_package_bound_local_images(
                     "providerRuntimeDigest": sealed_provider_runtime["composition"][
                         "runtimeCompositionDigest"
                     ],
+                    "providerBindingManifestDigest": binding_manifest_digest,
                     "providerImageRefs": {
                         role: {
                             "buildInputDigest": descriptor["buildInputDigest"],

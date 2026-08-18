@@ -77,7 +77,6 @@ def test_acquisition_resumes_verified_capsules_without_repeating_network(
         "seed_selection": _seed_selection(
             tmp_path / "seed-selection.json", rows, homepage_count=2
         ),
-        "acquisition_concurrency": 2,
     }
 
     first = acquire_homepage_article_source_ready_batch(**arguments)

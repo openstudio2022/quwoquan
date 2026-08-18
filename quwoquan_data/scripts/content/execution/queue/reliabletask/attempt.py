@@ -33,7 +33,6 @@ def select_or_freeze_job_set_attempt(
     stage: str,
     *,
     active_tasks: Sequence[Mapping[str, Any]],
-    required_workers: int,
 ) -> dict[str, Any]:
     """Return one attempt containing active identities, or append a new one.
 
@@ -113,7 +112,6 @@ def select_or_freeze_job_set_attempt(
             execution_id,
             stage,
             expected_tasks=list(active_by_key.values()),
-            required_workers=required_workers,
         )
     new_tasks = [row for key, row in active_by_key.items() if key not in known]
     if new_tasks:
@@ -121,7 +119,6 @@ def select_or_freeze_job_set_attempt(
             execution_id,
             stage,
             expected_tasks=new_tasks,
-            required_workers=required_workers,
         )
     candidates = sorted(
         {
@@ -132,8 +129,6 @@ def select_or_freeze_job_set_attempt(
         reverse=True,
     )
     for attempt in candidates:
-        if int(attempt.get("requiredWorkers") or 0) != required_workers:
-            continue
         expected_by_key = {
             str(row.get("idempotencyKey") or ""): row
             for row in attempt.get("expectedTasks") or []
@@ -153,7 +148,7 @@ def select_or_freeze_job_set_attempt(
                     raise ValueError("ReliableTask active task drifted from its attempt")
         return attempt
     raise ValueError(
-        "ReliableTask active tasks cannot reuse an attempt with different workers"
+        "ReliableTask active tasks cannot reuse any frozen attempt"
     )
 
 

@@ -8,6 +8,7 @@ import urllib.parse
 from collections.abc import Mapping
 from typing import Any
 
+from core.runtime_policy import active_runtime_policy
 from core.source_attribution import canonical_source_attribution
 
 from content.post.article.base_draft import base_draft_readiness
@@ -124,7 +125,10 @@ def _candidate_batches(
             + urllib.parse.quote(entity_name)
         )
         try:
-            search_html = network_io.curl_text(search_url, timeout=15)
+            search_html = network_io.curl_text(
+                search_url,
+                timeout=active_runtime_policy().provider_timeouts.qunar_seconds,
+            )
         except Exception as exc:  # noqa: BLE001 - provider shard checkpoint
             search_html = ""
             search_error = f"{type(exc).__name__}: {exc}"

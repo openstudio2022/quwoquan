@@ -1,24 +1,8 @@
 ---
-description: 登录入口无死循环宪法：关闭回安全态，登录进目标态
-alwaysApply: true
+description: 登录入口无死循环指针：关闭回安全态，登录进目标态
+globs: quwoquan_app/lib/runtime/auth/**,quwoquan_app/lib/runtime/di/**,quwoquan_app/lib/runtime/shell/**,quwoquan_app/lib/service/**/presentation/**
+alwaysApply: false
 ---
 
-# 登录入口无死循环宪法
-
-所有登录入口必须满足「双目标」契约：
-
-- **关闭 / 稍后登录**：必须回到不会再次触发登录门的安全状态；强入口必须使用 `allowGuestDismissPop: false`。
-- **登录成功**：必须进入用户刚才想去的目标状态，或通过 `AuthContinuation` 续接原动作。
-- 禁止只传 `dismissFallback` 却允许 `pop` 回触发点；这会形成「关闭登录页 → 回到受限状态 → 再次弹登录」死循环。
-- 首页关注频道等内部 tab 不得只靠路由表达目标；必须用明确 continuation 区分「关闭回首页/推荐」与「登录后进入关注」。
-- `createEntry` / 底栏加号 / Web 创作主入口是添加入口，游客必须先看到动作面板或创建工作台；只有写文章、发图、发视频、草稿、加好友、群聊、建圈等具体动作才触发登录。
-- `/create?...` 真实创作页、消息、我的、评论、收藏、关注/私信、加入圈子等账号态入口仍需登录，并必须声明关闭安全态与成功目标态。
-- 新增或改动登录入口时，必须同步补测试：关闭后再 pump 不再弹登录；登录成功进入目标态或完成 continuation。
-
-门禁：
-
-```bash
-make verify-app-login-entry-loop-contract
-```
-
-该脚本已接入 `make gate`，任何回归必须在合入前阻断。
+新增或改动登录门、游客限制、AuthContinuation 或账号态入口时，先读
+`.agents/skills/review/references/roles/user/references/auth-entry-continuation.md`。

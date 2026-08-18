@@ -1,4 +1,4 @@
-"""Create-once lineage for a four-lane campaign that never created executions."""
+"""Create-once lineage for an active workload that never created executions."""
 
 from __future__ import annotations
 
@@ -16,18 +16,18 @@ from core.io import write_json
 from core.schema import assert_valid
 from core.source_digest import content_source_revision, current_source_digest
 
-from content.execution.campaign.lane import CAMPAIGN_CARRIERS
 from content.execution.campaign.submission_reconciliation_contract import (
     ERROR_CODES,
     REASONS,
     RECEIPT_SCHEMA,
     CampaignSubmissionReconciliationError,
+    campaign_root_for_submission,
     canonical_digest,
     execution_absence,
+    frozen_submission_workload,
     load_reconciliation_reference,
     load_submission_reconciliation_receipt,
     load_terminal_submission_documents,
-    predecessor_campaign_root_execution_id,
     reconciliation_receipt_path,
     reconciliation_reference,
     source_identity,
@@ -37,7 +37,7 @@ from content.execution.campaign.submission_reconciliation_contract import (
 from content.execution.campaign.submission_reconciliation_contract import (
     blocker_evidence as freeze_blocker_evidence,
 )
-from content.execution.identity import parse_execution_id
+from content.execution.identity import parse_execution_id, validate_execution_id
 from content.execution.workspace import entity_catalog_digest
 
 
@@ -64,7 +64,12 @@ def load_reconciled_predecessor_submission(
 ) -> dict[str, Any] | None:
     resolved_output = (output_root or paths.OUTPUT_ROOT).resolve()
     identity = parse_execution_id(execution_id)
-    root_id = predecessor_campaign_root_execution_id(execution_id)
+    root_id = campaign_root_for_submission(
+        identity.execution_id,
+        output_root=resolved_output,
+    )
+    if root_id is None:
+        return None
     path = reconciliation_receipt_path(root_id, output_root=resolved_output)
     if not path.is_file():
         return None
@@ -101,7 +106,7 @@ def assert_campaign_not_reconciled(
     )
     raise typed(
         "TERMINAL",
-        "campaign submissions are already abandoned; create a new four-lane "
+        "campaign submissions are already abandoned; create a new active-workload "
         f"sequence with retryOf; receiptDigest={receipt['receiptDigest']}",
     )
 
@@ -114,7 +119,7 @@ def reconcile_submission_only_campaign(
     repo_root: Path | None = None,
     output_root: Path | None = None,
 ) -> tuple[dict[str, Any], Path]:
-    """Abandon four immutable submissions only when no execution ever started."""
+    """Abandon immutable active-workload submissions before execution starts."""
 
     normalized_reason = str(reason or "").strip()
     if normalized_reason not in REASONS:
@@ -124,20 +129,24 @@ def reconcile_submission_only_campaign(
         )
     source_repo = (repo_root or paths.REPO_ROOT).resolve()
     resolved_output = (output_root or paths.OUTPUT_ROOT).resolve()
-    root_id = predecessor_campaign_root_execution_id(root_execution_id)
-    if root_id != root_execution_id:
-        raise typed("IDENTITY_DRIFT", "rootExecutionId must be the homepage lane")
+    root_id = validate_execution_id(root_execution_id)
     submissions = load_terminal_submission_documents(
         root_id,
         output_root=resolved_output,
         require_all=False,
+    )
+    active_carriers, workloads, _frozen_root = frozen_submission_workload(
+        submissions,
+        root_execution_id=root_id,
     )
     submission_rows, original_identity = submission_evidence(
         submissions,
         output_root=resolved_output,
         root_execution_id=root_id,
     )
-    missing_submissions = sorted(set(CAMPAIGN_CARRIERS) - set(submissions))
+    missing_submissions = [
+        carrier for carrier in active_carriers if carrier not in submissions
+    ]
     absence = execution_absence(
         root_id,
         submissions,
@@ -163,6 +172,8 @@ def reconcile_submission_only_campaign(
             )
             expected = {
                 "rootExecutionId": root_id,
+                "activeCarriers": list(active_carriers),
+                "workloads": workloads,
                 "reason": normalized_reason,
                 "errorCode": ERROR_CODES[normalized_reason],
                 "originalSourceIdentity": original_identity,
@@ -177,7 +188,9 @@ def reconcile_submission_only_campaign(
             return existing, receipt_path
 
         observed_source = current_source_digest(repo_root=source_repo).to_document()
-        representative = submissions.get("homepage") or next(iter(submissions.values()))
+        representative = submissions.get(active_carriers[0]) or next(
+            iter(submissions.values())
+        )
         discovery = (
             source_repo
             / "quwoquan_data/reference"
@@ -200,6 +213,8 @@ def reconcile_submission_only_campaign(
         stable = {
             "schema": RECEIPT_SCHEMA,
             "rootExecutionId": root_id,
+            "activeCarriers": list(active_carriers),
+            "workloads": workloads,
             "decision": "abandoned",
             "reason": normalized_reason,
             "errorCode": ERROR_CODES[normalized_reason],
@@ -208,7 +223,7 @@ def reconcile_submission_only_campaign(
             "submissions": submission_rows,
             "executionEvidence": absence,
             "blockerEvidence": blocker,
-            "retryPolicy": "new_four_lane_execution_with_retryOf",
+            "retryPolicy": "active_workload_execution_with_retryOf",
             "recordedAt": _now(),
         }
         if missing_submissions:
@@ -235,7 +250,7 @@ def _handle(args: argparse.Namespace) -> None:
         reason=str(args.reason),
         blocker_evidence=Path(str(args.blocker_evidence)),
     )
-    representative = receipt["submissions"].get("homepage") or next(
+    representative = receipt["submissions"].get(receipt["activeCarriers"][0]) or next(
         iter(receipt["submissions"].values())
     )
     summary = {
@@ -247,7 +262,7 @@ def _handle(args: argparse.Namespace) -> None:
         "observedSourceIdentity": receipt["observedSourceIdentity"],
         "predecessorExecutionIds": {
             carrier: receipt["submissions"][carrier]["executionId"]
-            for carrier in CAMPAIGN_CARRIERS
+            for carrier in receipt["activeCarriers"]
             if carrier in receipt["submissions"]
         },
         "missingSubmissions": receipt.get("missingSubmissions", []),
@@ -264,7 +279,7 @@ def register_reconcile_submissions_parser(
 ) -> None:
     parser = subparsers.add_parser(
         "reconcile-submissions",
-        help="收敛从未创建 execution 的四路 submissions",
+        help="收敛从未创建 execution 的 active-workload submissions",
     )
     parser.add_argument("--campaign-root-execution-id", required=True)
     parser.add_argument("--reason", required=True, choices=tuple(sorted(REASONS)))
@@ -279,7 +294,6 @@ __all__ = [
     "load_reconciled_predecessor_submission",
     "load_reconciliation_reference",
     "load_submission_reconciliation_receipt",
-    "predecessor_campaign_root_execution_id",
     "reconcile_submission_only_campaign",
     "reconciliation_receipt_path",
     "reconciliation_reference",

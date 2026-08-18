@@ -30,43 +30,28 @@ def _build_handoff(
     target: str,
     *extra_arguments: str,
     launch_mode: str = "metadata_contract_test",
-    bind_prod: bool = True,
 ) -> dict[str, object]:
-    arguments = list(extra_arguments)
-    if environment == "prod" and bind_prod and "--content-release-id" not in arguments:
-        digest = "sha256:" + "f" * 64
-        arguments.extend(
-            (
-                "--content-release-id",
-                "release-prod",
-                "--content-manifest-digest",
-                digest,
-                "--content-readiness-receipt-digest",
-                digest,
-            )
-        )
     return build_test_handoff(
         launcher,
         environment,
         target,
         launch_mode=launch_mode,
-        extra_arguments=tuple(arguments),
+        extra_arguments=tuple(extra_arguments),
     )
 
 
 class LauncherHandoffMetadataContractTest(unittest.TestCase):
-    def test_metadata_rejects_non_string_content_binding_mode(self) -> None:
-        metadata = LAUNCH_MANIFEST_METADATA.read_text(encoding="utf-8").replace(
-            "content_binding_modes: [unbound, run_bound]",
-            "content_binding_modes: [unbound, {}]",
-            1,
+    def test_metadata_rejects_reintroduced_content_binding_contract(self) -> None:
+        metadata = LAUNCH_MANIFEST_METADATA.read_text(encoding="utf-8") + (
+            "\ncontent_binding_contract:\n"
+            "  content_binding_modes: [unbound, run_bound]\n"
         )
         with tempfile.TemporaryDirectory() as temporary_directory:
             path = Path(temporary_directory) / "app_launch_manifest.yaml"
             path.write_text(metadata, encoding="utf-8")
             with self.assertRaisesRegex(
                 LaunchManifestContractError,
-                "content_binding_contract definition is invalid",
+                "must not declare content binding",
             ):
                 load_launch_manifest_contract(path)
 
@@ -93,7 +78,7 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.strip(), "app_launch_manifest")
 
-    def test_direct_platform_builds_preflight_before_digesting_content_binding(
+    def test_direct_platform_builds_preflight_without_content_binding(
         self,
     ) -> None:
         ios = (APP_DIR / "scripts/ios/build_prepare_dart_defines.sh").read_text(
@@ -109,15 +94,10 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
             'app-debug-preflight --target "$DIRECT_TARGET" --runtime-mode test_live',
             ios_direct,
         )
-        self.assertIn('--content-release-id "$QWQ_CONTENT_RELEASE_ID"', ios_direct)
-        self.assertIn(
-            '--content-manifest-digest "$QWQ_CONTENT_MANIFEST_DIGEST"',
-            ios_direct,
-        )
-        self.assertIn(
-            '"QWQ_CONTENT_READINESS_RECEIPT_DIGEST", "readinessReceiptDigest"',
-            ios_direct,
-        )
+        # 内容激活是运行时服务端事实，direct 构建不得把内容身份注入 handoff。
+        self.assertNotIn("--content-release-id", ios)
+        self.assertNotIn("CONTENT_BINDING_STATE", ios)
+        self.assertNotIn("QWQ_CONTENT_RELEASE_ID", ios)
 
         android = (APP_DIR / "android/app/build.gradle.kts").read_text(
             encoding="utf-8"
@@ -131,11 +111,11 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
             android_direct.index('"app-debug-preflight"'),
             android_direct.index('"--launch-policy"'),
         )
-        self.assertIn('preflight["releaseId"]', android_direct)
         self.assertIn('"--runtime-mode"', android_direct)
         self.assertIn('"test_live"', android_direct)
-        self.assertIn('"--content-release-id"', android_direct)
-        self.assertIn('"--content-readiness-receipt-digest"', android_direct)
+        self.assertNotIn("--content-release-id", android)
+        self.assertNotIn("CONTENT_BINDING_STATE", android)
+        self.assertNotIn("QWQ_CONTENT_RELEASE_ID", android)
         self.assertNotIn("handoff[handoffKey]", android_direct)
 
     def test_all_test_live_launchers_use_one_explicit_preflight_policy(self) -> None:
@@ -193,110 +173,53 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
                     ),
                 )
 
-    def test_test_live_is_unbound_or_explicitly_run_bound_and_prod_is_immutable(
-        self,
-    ) -> None:
+    def test_launch_policies_never_carry_content_identity(self) -> None:
         test_live = _build_handoff(
             "alpha",
             "alpha-local",
             launch_mode="direct_flutter_run",
         )
         self.assertEqual(test_live["launchPolicy"], "test_live")
-        self.assertEqual(test_live["contentBindingState"], "unbound")
-        self.assertEqual(test_live["contentReleaseId"], "")
+        self.assertNotIn("contentBindingState", test_live)
+        self.assertNotIn("contentReleaseId", test_live)
+        self.assertEqual(validate_handoff_against_metadata(test_live), [])
 
-        digest = "sha256:" + "a" * 64
-        run_bound = _build_handoff(
-            "alpha",
-            "alpha-local",
-            "--content-release-id",
-            "release-alpha-run",
-            "--content-manifest-digest",
-            digest,
-            "--content-readiness-receipt-digest",
-            digest,
+        prod = _build_handoff(
+            "prod",
+            "prod-hosted",
             launch_mode="canonical_launcher",
         )
-        self.assertEqual(run_bound["launchPolicy"], "test_live")
-        self.assertEqual(run_bound["contentBindingState"], "bound")
-        self.assertEqual(run_bound["contentReleaseId"], "release-alpha-run")
-        self.assertEqual(validate_handoff_against_metadata(run_bound), [])
+        self.assertEqual(
+            prod["launchPolicy"], launcher.PROD_RELEASE_LAUNCH_POLICY
+        )
+        self.assertNotIn("contentBindingState", prod)
+        self.assertNotIn("contentReleaseId", prod)
+        self.assertEqual(validate_handoff_against_metadata(prod), [])
 
-        with self.assertRaisesRegex(
-            ValueError,
-            "effective launch content binding must be all empty or complete",
-        ):
+    def test_builder_rejects_retired_content_binding_arguments(self) -> None:
+        digest = "sha256:" + "a" * 64
+        with self.assertRaises(SystemExit):
             _build_handoff(
                 "alpha",
                 "alpha-local",
                 "--content-release-id",
-                "release-alpha-partial",
+                "release-alpha-run",
+                "--content-manifest-digest",
+                digest,
+                "--content-readiness-receipt-digest",
+                digest,
                 launch_mode="canonical_launcher",
             )
 
-        with self.assertRaisesRegex(
-            ValueError,
-            "effective launch content binding is required for launch policy "
-            + launcher.PROD_RELEASE_LAUNCH_POLICY,
-        ):
-            _build_handoff(
-                "prod",
-                "prod-hosted",
-                launch_mode="canonical_launcher",
-                bind_prod=False,
-            )
-
-        handoff = _build_handoff(
-            "prod",
-            "prod-hosted",
-            "--content-release-id",
-            "release-alpha",
-            "--content-manifest-digest",
-            digest,
-            "--content-readiness-receipt-digest",
-            digest,
-            launch_mode="canonical_launcher",
-        )
-        self.assertEqual(handoff["contentReleaseId"], "release-alpha")
-        self.assertEqual(
-            handoff["launchPolicy"], launcher.PROD_RELEASE_LAUNCH_POLICY
-        )
-        self.assertEqual(handoff["contentBindingState"], "bound")
-
-    def test_test_live_rejects_generic_bound_without_complete_run_binding(self) -> None:
+    def test_validator_rejects_reintroduced_content_fields(self) -> None:
         handoff = _build_handoff("alpha", "alpha-local")
         handoff["contentBindingState"] = "bound"
-        effective = handoff["effectiveLaunchManifest"]
-        self.assertIsInstance(effective, dict)
-        effective["contentBindingState"] = "bound"
-        handoff["effectiveLaunchManifestDigest"] = effective_launch_manifest_digest(
-            effective
-        )
 
         self.assertIn(
-            "effective launch contentBindingState disagrees with content binding mode",
+            "handoff.contentBindingState is not declared by metadata",
             validate_handoff_against_metadata(handoff),
         )
 
-    def test_content_binding_is_inside_effective_manifest_digest(self) -> None:
-        digest = "sha256:" + "b" * 64
-        handoff = _build_handoff(
-            "prod",
-            "prod-hosted",
-            "--content-release-id",
-            "release-alpha",
-            "--content-manifest-digest",
-            digest,
-            "--content-readiness-receipt-digest",
-            digest,
-        )
-        effective = handoff["effectiveLaunchManifest"]
-        self.assertIsInstance(effective, dict)
-        effective["contentReleaseId"] = "release-tampered"
-        self.assertIn(
-            "effectiveLaunchManifestDigest does not match canonical metadata",
-            validate_handoff_against_metadata(handoff),
-        )
     def test_metadata_is_the_only_target_environment_authority(self) -> None:
         contract = load_launch_manifest_contract(LAUNCH_MANIFEST_METADATA)
         handoff = _build_handoff("alpha", "alpha-local")

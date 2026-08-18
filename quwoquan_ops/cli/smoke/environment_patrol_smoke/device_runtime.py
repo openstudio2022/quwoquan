@@ -32,9 +32,9 @@ from quwoquan_ops.cli.lib.local_runtime_consumer_lease import (
 from .cli_args import summarize_output
 from .constants import (
     ANDROID_DEVICE_PROXY,
-    ANDROID_RELEASE_UAT_PACKAGE,
-    IOS_RELEASE_UAT_BUNDLE_IDS,
     PATROL_FLUTTER_COMMAND_ENV,
+    android_release_uat_package,
+    ios_release_uat_bundle_ids,
 )
 from .handoff import (
     _apply_launcher_handoff_to_command_env,
@@ -234,14 +234,17 @@ def _acquire_patrol_consumer_lease(
         )
     target_name = _local_target_for_environment_alias(args.env_name)
     consumer = f"environment-patrol-{os.getpid()}-{sanitize_device_id(device_id)}"
+    lease_runtime_env = str(getattr(args, "runtime_env", "") or "").strip() or (
+        _runtime_env_for_alias(args.env_name)
+    )
     lease = acquire_consumer_lease(
         target=target_name,
         device=device_id,
         consumer=consumer,
         package_name=(
-            "com.quwoquan.quwoquan_app"
+            android_release_uat_package(lease_runtime_env, "debug")
             if is_android
-            else "com.example.quwoquanApp"
+            else ios_release_uat_bundle_ids(lease_runtime_env, "debug")[0]
         ),
         ports=ports,
         platform="android" if is_android else "ios-simulator",
@@ -287,23 +290,21 @@ def _bind_patrol_consumer_lease_to_handoff(
         for value in command_env.get("QWQ_ANDROID_LOCAL_PORTS", "").split(",")
         if value.strip()
     ]
+    rebind_runtime_env = str(getattr(args, "runtime_env", "") or "").strip() or (
+        _runtime_env_for_alias(args.env_name)
+    )
     rebound = acquire_consumer_lease(
         target=target_name,
         device=device_id,
         consumer=consumer,
         package_name=(
-            "com.quwoquan.quwoquan_app"
+            android_release_uat_package(rebind_runtime_env, "debug")
             if is_android
-            else "com.example.quwoquanApp"
+            else ios_release_uat_bundle_ids(rebind_runtime_env, "debug")[0]
         ),
         ports=ports,
         platform="android" if is_android else "ios-simulator",
         handoff_digest=str(handoff["effectiveLaunchManifestDigest"]),
-        release_id=str(handoff.get("contentReleaseId") or ""),
-        manifest_digest=str(handoff.get("contentManifestDigest") or ""),
-        readiness_receipt_digest=str(
-            handoff.get("contentReadinessReceiptDigest") or ""
-        ),
     )
     if rebound.get("leaseId") != lease_id:
         raise RuntimeError(
@@ -327,13 +328,18 @@ def _reset_release_uat_device_state(
     if not device_id:
         raise RuntimeError("release-bound UAT device identity is empty")
 
+    # patrol UAT 以 Flutter Debug 构建执行，App 身份必须按环境 × BuildMode 推导，
+    # 与安装制品的 applicationId/bundle id 单轨一致，禁止字面值。
+    runtime_env = str(getattr(args, "runtime_env", "") or "").strip() or (
+        _runtime_env_for_alias(args.env_name)
+    )
     reset_rows: list[dict[str, Any]] = []
     if target == "ios":
         if not bool(device.get("emulator", False)):
             raise RuntimeError(
                 "release-bound iOS UAT requires a simulator with resettable App state"
             )
-        for bundle_id in IOS_RELEASE_UAT_BUNDLE_IDS:
+        for bundle_id in ios_release_uat_bundle_ids(runtime_env, "debug"):
             command = ["xcrun", "simctl", "uninstall", device_id, bundle_id]
             result = subprocess.run(command, text=True, capture_output=True, check=False)
             output = ((result.stdout or "") + (result.stderr or "")).strip()
@@ -354,6 +360,7 @@ def _reset_release_uat_device_state(
         adb = resolve_android_debug_bridge()
         if adb is None:
             raise RuntimeError("release-bound Android UAT requires adb for App state reset")
+        android_uat_package = android_release_uat_package(runtime_env, "debug")
         package_path_command = [
             str(adb),
             "-s",
@@ -361,7 +368,7 @@ def _reset_release_uat_device_state(
             "shell",
             "pm",
             "path",
-            ANDROID_RELEASE_UAT_PACKAGE,
+            android_uat_package,
         ]
         package_path = subprocess.run(
             package_path_command,
@@ -388,7 +395,7 @@ def _reset_release_uat_device_state(
                 "shell",
                 "pm",
                 "clear",
-                ANDROID_RELEASE_UAT_PACKAGE,
+                android_uat_package,
             ]
             clear_result = subprocess.run(
                 clear_command,
@@ -406,7 +413,7 @@ def _reset_release_uat_device_state(
                 )
         reset_rows.append(
             {
-                "package": ANDROID_RELEASE_UAT_PACKAGE,
+                "package": android_uat_package,
                 "exitCode": 0,
                 "alreadyAbsent": not installed,
             }

@@ -109,7 +109,14 @@ def test_discard_removes_only_inactive_execution_and_derived_workspace(
     transactions = tmp_path / "transactions"
     derived = transactions / f"{EXECUTION_ID}--entity-测试对象"
     derived.mkdir(parents=True)
+    target_set = root / "0.plan" / "target_set.json"
+    write_json(target_set, {"executionId": EXECUTION_ID, "targets": []})
     monkeypatch.setattr(discard, "execution_root", lambda _execution_id: root)
+    monkeypatch.setattr(
+        workspace,
+        "execution_target_set_path",
+        lambda _execution_id: target_set,
+    )
     monkeypatch.setattr(discard, "transaction_workspace_root", lambda: transactions)
     monkeypatch.setattr(discard, "active_controller_issue", lambda _execution_id: None)
     monkeypatch.setattr(discard, "_active_execution_processes", lambda _execution_id: ())
