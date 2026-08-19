@@ -1,1 +1,25 @@
-{"assets":[{"assetId":"成都大熊猫繁育研究基地_cover_Entrance_sign_at_334_04926570","bytes":534362,"sha256":"sha256:4d679368cb8722b723da16dd239650be3b993bba46b84e77a45745e13f008f9c","kind":"image"},{"assetId":"成都大熊猫繁育研究基地_detail_Grand_Panda_at_t_334_8eea8601","bytes":439763,"sha256":"sha256:b8a05d8aebcc4fee743843c33927b759fed2a54a4e093f357d6c9c0beb1276ba","kind":"image"},{"assetId":"成都大熊猫繁育研究基地_detail_图3_334_a29c4a5d","bytes":558676,"sha256":"sha256:0e87a4258c1aa6e9c71c15e46e2dfe366f067657baf026ec7d9a99e38d077abb","kind":"image"}]}
+{
+  "assets": [
+    {
+      "assetId": "成都大熊猫繁育研究基地_cover_Entrance_sign_at_334_04926570",
+      "bytes": 534362,
+      "sha256": "sha256:4d679368cb8722b723da16dd239650be3b993bba46b84e77a45745e13f008f9c",
+      "objectKey": "media/objects/sha256/4d/67/4d679368cb8722b723da16dd239650be3b993bba46b84e77a45745e13f008f9c.jpg",
+      "kind": "image"
+    },
+    {
+      "assetId": "成都大熊猫繁育研究基地_detail_Grand_Panda_at_t_334_8eea8601",
+      "bytes": 439763,
+      "sha256": "sha256:b8a05d8aebcc4fee743843c33927b759fed2a54a4e093f357d6c9c0beb1276ba",
+      "objectKey": "media/objects/sha256/b8/a0/b8a05d8aebcc4fee743843c33927b759fed2a54a4e093f357d6c9c0beb1276ba.jpg",
+      "kind": "image"
+    },
+    {
+      "assetId": "成都大熊猫繁育研究基地_detail_图3_334_a29c4a5d",
+      "bytes": 558676,
+      "sha256": "sha256:0e87a4258c1aa6e9c71c15e46e2dfe366f067657baf026ec7d9a99e38d077abb",
+      "objectKey": "media/objects/sha256/0e/87/0e87a4258c1aa6e9c71c15e46e2dfe366f067657baf026ec7d9a99e38d077abb.jpg",
+      "kind": "image"
+    }
+  ]
+}

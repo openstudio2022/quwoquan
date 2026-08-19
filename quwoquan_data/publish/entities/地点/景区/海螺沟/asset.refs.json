@@ -1,1 +1,25 @@
-{"assets":[{"assetId":"海螺沟_cover_海螺沟冰川全景_冰舌部分_334_469c1787","bytes":667640,"sha256":"sha256:5d04fabcb18a4d9dec4019479516edf3c102bfa6215bd15b99ab70b61e9bfcdd","kind":"image"},{"assetId":"海螺沟_detail_中国四川甘孜藏族自治州海螺沟冰川_334_b3d6d862","bytes":1040321,"sha256":"sha256:21a553744a9f231b051fe8c1717da3e7c8f747050891aa9d45bfd2645f20e1bf","kind":"image"},{"assetId":"海螺沟_detail_冰川_334_ad88bda2","bytes":406565,"sha256":"sha256:b109f4e0eaab2ad081b502cb1f073e0519f73cc3b3759e5ef1dc3474a1cac23a","kind":"image"}]}
+{
+  "assets": [
+    {
+      "assetId": "海螺沟_cover_海螺沟冰川全景_冰舌部分_334_469c1787",
+      "bytes": 667640,
+      "sha256": "sha256:5d04fabcb18a4d9dec4019479516edf3c102bfa6215bd15b99ab70b61e9bfcdd",
+      "objectKey": "media/objects/sha256/5d/04/5d04fabcb18a4d9dec4019479516edf3c102bfa6215bd15b99ab70b61e9bfcdd.jpg",
+      "kind": "image"
+    },
+    {
+      "assetId": "海螺沟_detail_中国四川甘孜藏族自治州海螺沟冰川_334_b3d6d862",
+      "bytes": 1040321,
+      "sha256": "sha256:21a553744a9f231b051fe8c1717da3e7c8f747050891aa9d45bfd2645f20e1bf",
+      "objectKey": "media/objects/sha256/21/a5/21a553744a9f231b051fe8c1717da3e7c8f747050891aa9d45bfd2645f20e1bf.jpg",
+      "kind": "image"
+    },
+    {
+      "assetId": "海螺沟_detail_冰川_334_ad88bda2",
+      "bytes": 406565,
+      "sha256": "sha256:b109f4e0eaab2ad081b502cb1f073e0519f73cc3b3759e5ef1dc3474a1cac23a",
+      "objectKey": "media/objects/sha256/b1/09/b109f4e0eaab2ad081b502cb1f073e0519f73cc3b3759e5ef1dc3474a1cac23a.jpg",
+      "kind": "image"
+    }
+  ]
+}

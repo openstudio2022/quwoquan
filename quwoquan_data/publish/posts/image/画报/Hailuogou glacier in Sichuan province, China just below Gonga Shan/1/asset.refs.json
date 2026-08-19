@@ -1,1 +1,11 @@
-{"assets":[{"assetId":"海螺沟_cover_Hailuogou_glacie_330_ca0aeb02","bytes":873541,"sha256":"sha256:b6549a49ec9a78ef556be5678f8d210e889da4509ecfe1b804b1c5fd3baf5b6e","kind":"image"}]}
+{
+  "assets": [
+    {
+      "assetId": "海螺沟_cover_Hailuogou_glacie_330_ca0aeb02",
+      "bytes": 873541,
+      "sha256": "sha256:b6549a49ec9a78ef556be5678f8d210e889da4509ecfe1b804b1c5fd3baf5b6e",
+      "objectKey": "media/objects/sha256/b6/54/b6549a49ec9a78ef556be5678f8d210e889da4509ecfe1b804b1c5fd3baf5b6e.jpg",
+      "kind": "image"
+    }
+  ]
+}

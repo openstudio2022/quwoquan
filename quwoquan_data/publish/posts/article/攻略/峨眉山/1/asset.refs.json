@@ -1,1 +1,25 @@
-{"assets":[{"assetId":"峨眉山_cover_最高峰万佛顶_327_d64711d8","bytes":152686,"sha256":"sha256:dc1f7757aa6d3517fc0a8ef7bb7df2c537fe977e31b1d4020f1bd4fae80cba0a","kind":"image"},{"assetId":"峨眉山_detail_日出金顶_327_ba488085","bytes":522990,"sha256":"sha256:a8e803a92a7459039ed3b2906fa8e4344fc0fbe8e1fbe8d77a1cde7cdfaa718d","kind":"image"},{"assetId":"峨眉山_closing_星耀万佛顶_327_f9f0a11a","bytes":404742,"sha256":"sha256:3ade18d92fe134f78bf4b707fc6b975af3a7410e95621a0077e03094b180c2e5","kind":"image"}]}
+{
+  "assets": [
+    {
+      "assetId": "峨眉山_cover_最高峰万佛顶_327_d64711d8",
+      "bytes": 152686,
+      "sha256": "sha256:dc1f7757aa6d3517fc0a8ef7bb7df2c537fe977e31b1d4020f1bd4fae80cba0a",
+      "objectKey": "media/objects/sha256/dc/1f/dc1f7757aa6d3517fc0a8ef7bb7df2c537fe977e31b1d4020f1bd4fae80cba0a.jpg",
+      "kind": "image"
+    },
+    {
+      "assetId": "峨眉山_detail_日出金顶_327_ba488085",
+      "bytes": 522990,
+      "sha256": "sha256:a8e803a92a7459039ed3b2906fa8e4344fc0fbe8e1fbe8d77a1cde7cdfaa718d",
+      "objectKey": "media/objects/sha256/a8/e8/a8e803a92a7459039ed3b2906fa8e4344fc0fbe8e1fbe8d77a1cde7cdfaa718d.jpg",
+      "kind": "image"
+    },
+    {
+      "assetId": "峨眉山_closing_星耀万佛顶_327_f9f0a11a",
+      "bytes": 404742,
+      "sha256": "sha256:3ade18d92fe134f78bf4b707fc6b975af3a7410e95621a0077e03094b180c2e5",
+      "objectKey": "media/objects/sha256/3a/de/3ade18d92fe134f78bf4b707fc6b975af3a7410e95621a0077e03094b180c2e5.jpg",
+      "kind": "image"
+    }
+  ]
+}
