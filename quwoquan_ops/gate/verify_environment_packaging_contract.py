@@ -51,6 +51,7 @@ RUNTIME_SHARED_SOURCE_PREFIXES = {
 }
 RUNTIME_SHARED_EXTRA_TOP_LEVEL = frozenset(
     {
+        "compiled-provider-bindings",
         "oci-images.json",
         "observability-log-sink",
         "provider-runtime",

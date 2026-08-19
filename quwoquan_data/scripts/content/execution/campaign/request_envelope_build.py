@@ -45,26 +45,14 @@ from content.execution.planning.semantic_preflight_admission import (
     bind_semantic_preflight_receipt,
     validate_semantic_preflight_binding_at,
 )
-from content.execution.planning.capacity_policy import (
-    derive_workload_capacity_fields,
+from content.execution.planning.capacity_calibration import (
+    bind_capacity_calibration_source,
+    current_host_class,
+    resolve_capacity_calibration_ref,
 )
 from content.execution.request import resolve_candidate_pool
 from content.execution.workspace import entity_catalog_digest
 
-
-def _workload_binding(
-    *,
-    scale: str,
-    carrier: str,
-    work_unit_count: int,
-) -> dict[str, Any]:
-    if isinstance(work_unit_count, bool) or work_unit_count < 1:
-        raise ValueError("campaign workload requires at least one work unit")
-    return derive_workload_capacity_fields(
-        target_scale=scale,
-        carrier=carrier,
-        work_unit_count=work_unit_count,
-    )
 
 def build_envelope(
     *,
@@ -85,6 +73,8 @@ def build_envelope(
     semantic_selection_id: str = DEFAULT_SEMANTIC_SELECTION_ID,
     semantic_preflight_receipt: Path | None = None,
     semantic_preflight_output_root: Path | None = None,
+    capacity_calibration_receipt: Path | None = None,
+    capacity_calibration_output_root: Path | None = None,
     predecessor_reconciliation: Mapping[str, Any] | None = None,
     promotion_receipt: Path | None = None,
     promotion_output_root: Path | None = None,
@@ -276,10 +266,18 @@ def build_envelope(
         if semantic_preflight_receipt is not None
         else None
     )
-    capacity_binding = _workload_binding(
-        scale=resolved.scale,
-        carrier=carrier,
-        work_unit_count=quota_value,
+    if capacity_calibration_receipt is None:
+        raise ValueError(
+            "GATE_BLOCK DATA.CAPACITY.CALIBRATION_REQUIRED: "
+            "campaign envelope requires a governed capacity calibration receipt"
+        )
+    capacity_ref = capacity_calibration_receipt.as_posix()
+    capacity_path = resolve_capacity_calibration_ref(capacity_ref)
+    capacity_binding = bind_capacity_calibration_source(
+        receipt_path=capacity_path,
+        receipt_ref=capacity_ref,
+        host_class=current_host_class(),
+        provider_tier=frozen_semantic_selection_id,
     )
     reconciliation = (
         dict(predecessor_reconciliation)
@@ -361,7 +359,8 @@ def build_envelope(
         "selector": owner._SELECTORS[carrier],
         "quota": quota_value,
         "count": count,
-        **capacity_binding,
+        "capacityCalibration": capacity_binding,
+        "workerHostSetBinding": None,
         "topic": topic_value,
         "targetNames": names,
         "sourceProviders": providers,

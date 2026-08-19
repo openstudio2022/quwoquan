@@ -159,6 +159,9 @@ def _build_package_bound_local_images(
             "QWQ_WORKLOAD": "full",
             "QWQ_PRODUCT_TELEMETRY_AVAILABLE": "1",
             "QWQ_RELEASE_CANDIDATE_DIGEST": candidate_digest,
+            # 镜像在构建期固化 QWQ_ARTIFACT_ENVIRONMENT，其唯一来源是本次 package
+            # 的环境名；运行时不再选择环境，缺席时 build arg 解析必须 fail closed。
+            "QWQ_COMPOSE_ENV": env_name,
         }
     )
     environment.update(

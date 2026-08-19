@@ -150,12 +150,6 @@
               "maxItems": 1,
               "uniqueItems": true
             },
-            "maxConcurrency": {"type": "integer", "minimum": 1},
-            "laneConcurrency": {
-              "type": "object",
-              "propertyNames": {"enum": ["homepage", "article", "image", "video"]},
-              "additionalProperties": {"type": "integer", "minimum": 1}
-            },
             "imageAssetStrategy": {
               "enum": [
                 "open_license_publish",
@@ -190,6 +184,18 @@
             "videoWorksPerTarget": {"type": "integer", "minimum": 0},
             "routeArticles": {"type": "integer", "minimum": 0}
           }
+        },
+        "workUnits": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "media_work_unit.schema.json#/$defs/workUnit"}
+        },
+        "workUnitExclusions": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "media_work_unit.schema.json#/$defs/exclusion"}
         }
       }
     },
@@ -218,6 +224,10 @@
         "targetObjectCount",
         "approvedQuota",
         "oversampleFactor",
+        "requiredWorkers",
+        "partitionCount",
+        "capacityPlanDigest",
+        "workerHostSetBinding",
         "executionBranch",
         "gitCommitSha"
       ],
@@ -228,9 +238,44 @@
         "targetObjectCount": {"type": "integer", "minimum": 0},
         "approvedQuota": {"type": "integer", "minimum": 1},
         "oversampleFactor": {"type": "number", "minimum": 1},
+        "requiredWorkers": {"type": "integer", "minimum": 1},
+        "partitionCount": {"enum": [16, 32, 64, 128, 256]},
+        "capacityPlanDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "workerHostSetBinding": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "governed_worker_host_binding.schema.json"}
+          ]
+        },
+        "capacityCalibration": {
+          "$ref": "governed_capacity_calibration_receipt.schema.json#/$defs/executionPolicyBinding",
+          "description": "两个并行上限、单对象 wall-clock、完成宽限与批次绝对截止的冻结来源。取值只能来自一份 create-once calibration receipt；携带即按 DEC-006 校验摘要与适用范围。OPEN-003 冻结出首份 receipt 后本字段与 fleet 回执的 fleetWaveCount / fleetBatchDeadlineEpochSeconds 同批提为必填，并同批退役把工作单元数当作 worker 数的 requiredWorkers。"
+        },
+        "scaleSourcePool": {"$ref": "scale_source_pool_binding.schema.json"},
+        "sourcePoolEvidenceRootRef": {"type": "string", "minLength": 1},
+        "sourcePoolSelection": {"$ref": "scale_source_pool_selection.schema.json"},
         "executionBranch": {"type": "string", "minLength": 1},
         "gitCommitSha": {"type": "string", "minLength": 1}
-      }
+      },
+      "allOf": [
+        {
+          "if": {"required": ["scaleSourcePool"]},
+          "then": {
+            "required": ["sourcePoolEvidenceRootRef", "sourcePoolSelection"]
+          },
+          "else": {
+            "not": {
+              "anyOf": [
+                {"required": ["sourcePoolEvidenceRootRef"]},
+                {"required": ["sourcePoolSelection"]}
+              ]
+            }
+          }
+        }
+      ]
     },
     "queuePolicy": {
       "type": "object",
@@ -243,7 +288,7 @@
       ],
       "additionalProperties": false,
       "properties": {
-        "backend": {"const": "reliabletask"},
+        "backend": {"enum": ["local_file", "reliabletask"]},
         "reliableTask": {
           "type": "object",
           "required": ["taskType", "queue", "store", "readyIndex"],

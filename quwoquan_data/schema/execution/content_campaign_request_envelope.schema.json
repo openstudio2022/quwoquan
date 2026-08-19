@@ -13,15 +13,25 @@
     "selector",
     "quota",
     "count",
+    "requiredWorkers",
+    "partitionCount",
+    "capacityPlanDigest",
+    "workerHostSetBinding",
     "targetNames",
     "sourceProviders",
+    "semanticSelectionId",
     "retryOf",
     "rootExecutionId",
     "executionId",
     "gitBranch",
     "gitCommitSha",
+    "sourceRevision",
     "sourceDigest",
+    "executionBundle",
     "entityCatalogDigest",
+    "preAcquisitionHandoff",
+    "externalInputRefs",
+    "externalInputsDigest",
     "allowedStage",
     "operatorPrompt",
     "requestDigest",
@@ -52,6 +62,21 @@
     "selector": { "type": "string", "minLength": 1 },
     "quota": { "type": "integer", "minimum": 1, "maximum": 100000 },
     "count": { "type": "integer", "minimum": 1 },
+    "requiredWorkers": { "type": "integer", "minimum": 1 },
+    "partitionCount": { "enum": [16, 32, 64, 128, 256] },
+    "capacityPlanDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "workerHostSetBinding": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "governed_worker_host_binding.schema.json"}
+      ]
+    },
+    "scaleSourcePool": {"$ref": "scale_source_pool_binding.schema.json"},
+    "sourcePoolEvidenceRootRef": {"type": "string", "minLength": 1},
+    "sourcePoolSelection": {"$ref": "scale_source_pool_selection.schema.json"},
     "topic": { "type": ["string", "null"] },
     "targetNames": {
       "type": "array",
@@ -63,11 +88,16 @@
       "uniqueItems": true,
       "items": { "type": "string", "minLength": 1 }
     },
+    "semanticSelectionId": { "enum": ["default", "cursor_grok", "cursor_auto"] },
+    "semanticPreflightReceipt": {
+      "$ref": "semantic_provider_preflight_receipt_ref.schema.json"
+    },
     "retryOf": { "type": ["string", "null"] },
     "rootExecutionId": { "type": "string", "minLength": 1 },
     "executionId": { "type": "string", "minLength": 1 },
     "gitBranch": { "type": "string", "minLength": 1 },
     "gitCommitSha": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+    "sourceRevision": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
     "sourceDigest": {
       "type": "object",
       "required": ["algorithm", "digest", "inputs"],
@@ -82,83 +112,98 @@
         }
       }
     },
+    "executionBundle": {
+      "type": "object",
+      "required": ["algorithm", "digest", "inputs"],
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {"const": "sha256"},
+        "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "inputs": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+      }
+    },
     "entityCatalogDigest": {
       "type": "string",
       "pattern": "^sha256:[a-f0-9]{64}$"
     },
-    "imageScalePromotion": {
+    "preAcquisitionHandoff": {
       "type": "object",
-      "additionalProperties": false,
       "required": [
-        "predecessorExecutionId",
-        "receiptDigest",
-        "gitBranch",
-        "gitCommitSha",
-        "sourceDigest",
-        "entityCatalogDigest",
-        "qualifiedCount",
-        "finalizedCount"
+        "handoffId",
+        "handoffRevision",
+        "handoffRef",
+        "handoffDigest",
+        "handoffFileDigest"
       ],
+      "additionalProperties": false,
       "properties": {
-        "predecessorExecutionId": { "type": "string", "minLength": 1 },
-        "receiptDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
-        "gitBranch": { "type": "string", "minLength": 1 },
-        "gitCommitSha": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
-        "sourceDigest": {
-          "type": "object",
-          "required": ["algorithm", "digest", "inputs"],
-          "additionalProperties": false,
-          "properties": {
-            "algorithm": { "const": "sha256" },
-            "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
-            "inputs": {
-              "type": "array",
-              "minItems": 1,
-              "items": { "type": "string", "minLength": 1 }
-            }
-          }
+        "handoffId": { "type": "string", "minLength": 1 },
+        "handoffRevision": { "type": "integer", "minimum": 1 },
+        "handoffRef": { "type": "string", "minLength": 1 },
+        "handoffDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
         },
-        "entityCatalogDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
-        "qualifiedCount": { "type": "integer", "minimum": 100 },
-        "finalizedCount": { "type": "integer", "minimum": 100 }
+        "handoffFileDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
       }
     },
-    "videoScalePromotion": {
+    "externalInputRefs": {
+      "type": "array",
+      "items": { "$ref": "campaign_external_input_ref.schema.json" }
+    },
+    "externalInputsDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "predecessorReconciliation": {
+      "$ref": "campaign_submission_reconciliation_ref.schema.json"
+    },
+    "researchScalePromotion": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "predecessorExecutionId",
-        "receiptDigest",
-        "gitBranch",
-        "gitCommitSha",
+        "promotionId",
+        "releaseId",
+        "manifestDigest",
+        "sourceRevision",
         "sourceDigest",
         "entityCatalogDigest",
-        "qualifiedCount",
-        "finalizedCount"
+        "targetScale",
+        "carrierCounts",
+        "receiptRef",
+        "receiptDigest"
       ],
       "properties": {
-        "predecessorExecutionId": { "type": "string", "minLength": 1 },
-        "receiptDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
-        "gitBranch": { "type": "string", "minLength": 1 },
-        "gitCommitSha": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
-        "sourceDigest": {
-          "type": "object",
-          "required": ["algorithm", "digest", "inputs"],
-          "additionalProperties": false,
-          "properties": {
-            "algorithm": { "const": "sha256" },
-            "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
-            "inputs": {
-              "type": "array",
-              "minItems": 1,
-              "items": { "type": "string", "minLength": 1 }
+        "promotionId": { "type": "string", "minLength": 1 },
+        "releaseId": { "type": "string", "minLength": 1 },
+        "manifestDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "sourceRevision": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "sourceDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "entityCatalogDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "targetScale": {"enum": ["M100", "M1000"]},
+        "carrierCounts": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["carrier", "totalUniqueFinalizedCount"],
+            "properties": {
+              "carrier": {"enum": ["homepage", "article", "image", "video"]},
+              "totalUniqueFinalizedCount": {"type": "integer", "minimum": 1}
             }
           }
         },
-        "entityCatalogDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
-        "qualifiedCount": { "type": "integer", "minimum": 100 },
-        "finalizedCount": { "type": "integer", "minimum": 100 }
+        "receiptRef": { "type": "string", "minLength": 1 },
+        "receiptDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
       }
+    },
+    "m100AlphaAcceptance": {
+      "$ref": "m100_alpha_acceptance_binding.schema.json"
     },
     "allowedStage": { "const": "submit-only" },
     "operatorPrompt": { "type": "string", "minLength": 1 },
@@ -168,28 +213,87 @@
   "allOf": [
     {
       "if": {
-        "properties": {
-          "scale": { "const": "M1000" },
-          "vertical": { "const": "travel" },
-          "carrier": { "const": "image" }
-        },
-        "required": ["scale", "vertical", "carrier"]
+        "properties": { "semanticSelectionId": { "enum": ["cursor_grok", "cursor_auto"] } },
+        "required": ["semanticSelectionId"]
       },
       "then": {
-        "required": ["imageScalePromotion"]
+        "required": ["semanticPreflightReceipt"]
       }
     },
     {
       "if": {
         "properties": {
-          "scale": { "const": "M1000" },
-          "vertical": { "const": "travel" },
-          "carrier": { "const": "video" }
+          "scale": { "enum": ["M1000", "M10000"] },
+          "vertical": { "const": "travel" }
         },
-        "required": ["scale", "vertical", "carrier"]
+        "required": ["scale", "vertical"]
       },
       "then": {
-        "required": ["videoScalePromotion"]
+        "required": ["researchScalePromotion"]
+      }
+    },
+    {
+      "if": {
+        "properties": {"scale": {"const": "M1000"}},
+        "required": ["scale"]
+      },
+      "then": {
+        "required": ["m100AlphaAcceptance"]
+      },
+      "else": {
+        "not": {"required": ["m100AlphaAcceptance"]}
+      }
+    },
+    {
+      "if": {
+        "properties": {"scale": {"const": "M10000"}},
+        "required": ["scale"]
+      },
+      "then": {
+        "required": [
+          "scaleSourcePool", "sourcePoolEvidenceRootRef", "sourcePoolSelection"
+        ],
+        "properties": {
+          "workerHostSetBinding": {"$ref": "governed_worker_host_binding.schema.json"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"scale": {"enum": ["M100", "M1000"]}},
+        "required": ["scale"]
+      },
+      "then": {
+        "properties": {"targetNames": {"minItems": 1}}
+      }
+    },
+    {
+      "if": {"required": ["scaleSourcePool"]},
+      "then": {
+        "required": ["sourcePoolEvidenceRootRef", "sourcePoolSelection"]
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            {"required": ["sourcePoolEvidenceRootRef"]},
+            {"required": ["sourcePoolSelection"]}
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"scale": {"enum": ["M100", "M1000", "M10000"]}},
+        "required": ["scale"]
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            {"required": ["scaleSourcePool"]},
+            {"required": ["sourcePoolEvidenceRootRef"]},
+            {"required": ["sourcePoolSelection"]}
+          ]
+        }
       }
     }
   ]

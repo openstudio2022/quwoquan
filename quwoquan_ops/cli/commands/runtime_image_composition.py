@@ -688,6 +688,7 @@ def _resolve_gamma_release_image_composition(
     """Resolve one validated candidate manifest without mutating or pulling."""
     import quwoquan_ops.cli.stackctl as _stackctl
 
+
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:

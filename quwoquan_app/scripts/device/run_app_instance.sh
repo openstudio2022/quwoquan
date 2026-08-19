@@ -189,7 +189,8 @@ export QWQ_CONTENT_RELEASE_ID="$CONTENT_RELEASE_ID"
 export QWQ_CONTENT_MANIFEST_DIGEST="$CONTENT_MANIFEST_DIGEST"
 export QWQ_CONTENT_READINESS_RECEIPT_DIGEST="$CONTENT_READINESS_RECEIPT_DIGEST"
 
-# App 包身份由静态 flavor/scheme 在构建图解析前选择。
+# App 包身份（DEC-004）：环境 × BuildMode 推导 applicationId/bundle ID。
+# iOS 环境后缀必须在 Xcode build settings 解析前写入生成 xcconfig。
 QWQ_ANDROID_DEBUG_PACKAGE_NAME="$(
   PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" PYTHONDONTWRITEBYTECODE=1 \
     python3 -c "from quwoquan_ops.cli.lib.app_identity import application_id_for; import sys; print(application_id_for('android', sys.argv[1], 'debug'))" \

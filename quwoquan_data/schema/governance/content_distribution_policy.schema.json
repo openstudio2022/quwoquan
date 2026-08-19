@@ -61,7 +61,7 @@
         },
         "videoPopularity": {
           "type": "object",
-          "description": "Observed popularity availability and comparable-bucket ranking coverage are receipt statistics only.",
+          "description": "Observed popularity details are optional statistics and never decide object admission or Research release eligibility.",
           "required": ["signals", "normalization", "statistical", "nonBlocking"],
           "additionalProperties": false,
           "properties": {
@@ -117,21 +117,36 @@
           "minimum": 0,
           "maximum": 1
         },
-        "requireCoverAndBodyImage": {"const": true}
+        "requireCoverAndBodyImage": {"const": false}
       }
     },
     "scaleMilestones": {
       "type": "object",
-      "description": "Workload targets and structural M100-to-M1000 binding; target attainment and recovery rate do not gate promotion.",
-      "required": ["m100Targets", "m1000Targets", "requireM100PromotionBeforeM1000", "automaticRecovery"],
+      "description": "Cumulative unique admitted-object targets; predecessor identity and operational measurements are statistical and do not block Research publication.",
+      "required": [
+        "m100Targets",
+        "m1000Targets",
+        "m10000Targets",
+        "requireM100PromotionBeforeM1000",
+        "requireM1000PromotionBeforeM10000",
+        "milestoneAttainmentRequired",
+        "attainmentCountingMode",
+        "automaticRecovery"
+      ],
       "additionalProperties": false,
       "properties": {
         "m100Targets": {"$ref": "#/$defs/m100Targets"},
         "m1000Targets": {"$ref": "#/$defs/m1000Targets"},
-        "requireM100PromotionBeforeM1000": {"const": true},
+        "m10000Targets": {"$ref": "#/$defs/m10000Targets"},
+        "requireM100PromotionBeforeM1000": {"const": false},
+        "requireM1000PromotionBeforeM10000": {"const": false},
+        "milestoneAttainmentRequired": {"const": true},
+        "attainmentCountingMode": {
+          "const": "cumulative_unique_finalized_objects"
+        },
         "automaticRecovery": {
           "type": "object",
-          "description": "Automatic recovery rate is recorded but never participates in aggregate passed or M1000 eligibility.",
+          "description": "Automatic recovery detail is statistical evidence and never decides object admission or Research release eligibility.",
           "required": ["targetRate", "statistical", "nonBlocking"],
           "additionalProperties": false,
           "properties": {
@@ -168,6 +183,17 @@
         "article": {"const": 1000},
         "image": {"const": 1000},
         "video": {"const": 100}
+      }
+    },
+    "m10000Targets": {
+      "type": "object",
+      "required": ["homepage", "article", "image", "video"],
+      "additionalProperties": false,
+      "properties": {
+        "homepage": {"const": 10000},
+        "article": {"const": 10000},
+        "image": {"const": 10000},
+        "video": {"const": 1000}
       }
     }
   },

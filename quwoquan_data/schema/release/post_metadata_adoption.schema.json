@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/post_metadata_adoption.schema.json",
+  "title": "Forward-only reviewed Post metadata adoption",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "adoptionId",
+    "source",
+    "target",
+    "allowedChanges",
+    "invocationCounts",
+    "receiptDigest"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.post_metadata_adoption"},
+    "adoptionId": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^/\\\\]+$"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "executionId",
+        "transactionId",
+        "packageRef",
+        "packageTreeDigest",
+        "verifiedPackageTreeDigest",
+        "packageSha256",
+        "objectRef",
+        "contentId",
+        "contentVersion",
+        "manifestSha256",
+        "provenanceRef",
+        "provenanceCanonicalSha256",
+        "provenanceFileSha256",
+        "semanticInventoryRef",
+        "semanticInventoryDigest",
+        "attestationSha256",
+        "evidenceIndexSha256",
+        "authorRunId",
+        "reviewerRunId"
+      ],
+      "properties": {
+        "executionId": {"type": "string", "minLength": 1},
+        "transactionId": {"type": "string", "minLength": 1},
+        "packageRef": {"type": "string", "minLength": 1},
+        "packageTreeDigest": {"$ref": "#/$defs/digest"},
+        "verifiedPackageTreeDigest": {"$ref": "#/$defs/digest"},
+        "packageSha256": {"$ref": "#/$defs/digest"},
+        "objectRef": {"type": "string", "minLength": 1},
+        "contentId": {"type": "string", "minLength": 1},
+        "contentVersion": {"type": "integer", "minimum": 1},
+        "manifestSha256": {"$ref": "#/$defs/digest"},
+        "provenanceRef": {"type": "string", "minLength": 1},
+        "provenanceCanonicalSha256": {"$ref": "#/$defs/digest"},
+        "provenanceFileSha256": {"$ref": "#/$defs/digest"},
+        "semanticInventoryRef": {"type": "string", "minLength": 1},
+        "semanticInventoryDigest": {"$ref": "#/$defs/digest"},
+        "attestationSha256": {"$ref": "#/$defs/digest"},
+        "evidenceIndexSha256": {"$ref": "#/$defs/digest"},
+        "authorRunId": {"type": "string", "minLength": 1},
+        "reviewerRunId": {"type": "string", "minLength": 1}
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "transactionId",
+        "objectRef",
+        "contentId",
+        "contentVersion",
+        "manifestSha256",
+        "provenanceCanonicalSha256",
+        "provenanceFileSha256"
+      ],
+      "properties": {
+        "transactionId": {"type": "string", "minLength": 1},
+        "objectRef": {"type": "string", "minLength": 1},
+        "contentId": {"type": "string", "minLength": 1},
+        "contentVersion": {"type": "integer", "minimum": 2},
+        "manifestSha256": {"$ref": "#/$defs/digest"},
+        "provenanceCanonicalSha256": {"$ref": "#/$defs/digest"},
+        "provenanceFileSha256": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "allowedChanges": {
+      "const": [
+        "manifest.generator",
+        "manifest.version",
+        "provenance.final.generator",
+        "poolRecord"
+      ]
+    },
+    "invocationCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["acquisition", "semantic", "author", "review"],
+      "properties": {
+        "acquisition": {"const": 0},
+        "semantic": {"const": 0},
+        "author": {"const": 0},
+        "review": {"const": 0}
+      }
+    },
+    "receiptDigest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

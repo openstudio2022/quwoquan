@@ -36,6 +36,54 @@ def test_prepare_campaign_defaults_new_campaigns_to_cursor_grok() -> None:
     assert args.semantic_selection_id == "cursor_grok"
 
 
+def test_prepare_campaign_defaults_new_campaigns_to_cursor_grok() -> None:
+    parser = ArgumentParser()
+    commands = parser.add_subparsers(dest="command", required=True)
+    prepare_campaign.register_prepare_campaign_parser(commands)
+
+    args = parser.parse_args(
+        [
+            "prepare-campaign",
+            "--phase",
+            "handoff",
+            "--workload",
+            "image=1",
+            "--region-ref",
+            "china",
+            "--run-date",
+            "20260814",
+            "--sequence",
+            "1",
+        ]
+    )
+
+    assert args.semantic_selection_id == "cursor_grok"
+
+
+def test_prepare_campaign_defaults_new_campaigns_to_cursor_grok() -> None:
+    parser = ArgumentParser()
+    commands = parser.add_subparsers(dest="command", required=True)
+    prepare_campaign.register_prepare_campaign_parser(commands)
+
+    args = parser.parse_args(
+        [
+            "prepare-campaign",
+            "--phase",
+            "handoff",
+            "--workload",
+            "image=1",
+            "--region-ref",
+            "china",
+            "--run-date",
+            "20260814",
+            "--sequence",
+            "1",
+        ]
+    )
+
+    assert args.semantic_selection_id == "cursor_grok"
+
+
 def _args(tmp_path: Path) -> Namespace:
     return Namespace(
         phase="envelopes",

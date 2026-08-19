@@ -205,6 +205,7 @@ def _command_package_unlocked(
     reports: list[dict[str, Any]] = []
     packaged_services: list[str] = []
     provider_runtime_package: dict[str, Any] | None = None
+    provider_binding_overlay_package: dict[str, Any] | None = None
     observability_log_sink_package: dict[str, Any] | None = None
     graphql_read_registry_package: dict[str, Any] | None = None
     package_cache = _stackctl.target_cache_dir(target_name) / "package"
@@ -585,6 +586,30 @@ def _command_package_unlocked(
             )
         )
         try:
+            provider_binding_overlay_package = (
+                _stackctl.materialize_provider_binding_overlay(
+                    env_name,
+                    target_name,
+                    source_root=package_source_root,
+                )
+            )
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
+            timing = _stackctl._finish_timing(started_monotonic, started_at)
+            return {
+                "exitCode": 2,
+                "summary": (
+                    "stackctl package Provider binding overlay is GATE_BLOCK for "
+                    f"{env_name}"
+                ),
+                "details": [str(exc)],
+                "reportDir": _stackctl.relpath(report_dir),
+                **timing,
+            }
+        details.append(
+            "Provider binding overlay ready: "
+            + str(provider_binding_overlay_package["bindingManifestDigest"])
+        )
+        try:
             observability_log_sink_package = (
                 _stackctl.materialize_observability_log_sink_package(
                     env_name,
@@ -616,6 +641,7 @@ def _command_package_unlocked(
     ):
         if (
             provider_runtime_package is None
+            or provider_binding_overlay_package is None
             or observability_log_sink_package is None
         ):
             raise RuntimeError(
@@ -626,6 +652,7 @@ def _command_package_unlocked(
                 env_name,
                 target_name,
                 report_dir=report_dir,
+                provider_binding_overlay=provider_binding_overlay_package,
                 provider_runtime=provider_runtime_package,
                 observability_log_sink=observability_log_sink_package,
                 candidate_root=shared_package_dir.parent.parent,

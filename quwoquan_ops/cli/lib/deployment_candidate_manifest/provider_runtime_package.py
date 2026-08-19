@@ -47,6 +47,7 @@ from .constants import (
     PROVIDER_RUNTIME_PACKAGE_SCHEMA,
     ROOT,
 )
+from .provider_binding_overlay import load_provider_binding_overlay
 
 
 def materialize_provider_runtime_package(
@@ -533,12 +534,21 @@ def _validate_candidate_provider_oci_binding(
             }
             for role, descriptor in sorted(provider_images.items())
         }
+        # 首方镜像在构建期把单环境 Provider binding overlay 编译进二进制，
+        # 所以 buildInputDigest 必须闭合到候选内那份 overlay 的 manifest digest：
+        # 换绑定就换镜像身份，运行时无从再选。
+        overlay = load_provider_binding_overlay(
+            str(candidate.get("environment") or ""),
+            str(candidate.get("target") or ""),
+            candidate_root,
+        )
         expected_build_input = _sha256_json(
             {
                 "firstPartyImageVersion": immutable_image_digest(first_party_refs),
                 "providerRuntimeDigest": provider_runtime["composition"][
                     "runtimeCompositionDigest"
                 ],
+                "providerBindingManifestDigest": overlay["bindingManifestDigest"],
                 "providerImageRefs": provider_refs,
             }
         )

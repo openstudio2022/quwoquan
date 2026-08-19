@@ -57,7 +57,9 @@
         "weibo",
         "toutiao",
         "tourism_video_site",
-        "image_collection"
+        "image_collection",
+        "travelogue",
+        "encyclopedia"
       ]
     },
     "extractor": {
@@ -66,7 +68,10 @@
         "baidu_baike_html",
         "toutiao_baike_html",
         "sourced_video_direct_download",
-        "image_collection_download"
+        "image_collection_download",
+        "qunar_html",
+        "ctrip_sight_html",
+        "wikipedia_api"
       ]
     },
     "canonicalUrl": {
@@ -113,13 +118,15 @@
       "enum": [
         "encyclopedia-primary",
         "sourced-video-attribution",
-        "image-collection-attribution"
+        "image-collection-attribution",
+        "article-source-registry-v1"
       ]
     },
     "sourceUseMode": {
       "enum": [
         "licensed_adaptation",
         "factual_reference_only",
+        "rights_audit_only",
         "blocked"
       ]
     },
@@ -128,14 +135,54 @@
         "licensed_adaptation",
         "factual_reference_only",
         "attribution_no_watermark",
+        "rights_audit_only",
         "blocked"
       ]
+    },
+    "sourceAttribution": {
+      "$ref": "../content/post_manifest.schema.json#/$defs/sourceAttribution"
+    },
+    "articleSiteId": {"type": "string", "minLength": 1},
+    "sourceDiscoveryProfileDigest": {
+      "type": "string", "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "articleCommercialAdmission": {"const": "commercial_release"},
+    "publishMediaMode": {"enum": ["illustrated", "text_only"]},
+    "sourceRole": {"type": "string", "minLength": 1},
+    "imageEvidenceMode": {"type": "string"},
+    "researchLane": {"enum": ["homepage", "article", "image", "video"]},
+    "hasVideo": {"type": "boolean"},
+    "articleCategory": {"const": "photography"},
+    "writingIntent": {"const": "planning_consultation"},
+    "topicTagRefs": {
+      "type": "array", "minItems": 1, "maxItems": 1, "uniqueItems": true,
+      "items": {"const": "Topic/旅行/玩法/摄影旅拍"}
+    },
+    "sourceClassification": {
+      "$ref": "article_source_classification.schema.json"
     },
     "schema": {
       "const": "quwoquan_data.source_unit"
     }
   },
   "oneOf": [
+    {
+      "required": [
+        "researchLane", "articleSiteId", "sourceDiscoveryProfileDigest",
+        "articleCommercialAdmission", "publishMediaMode", "sourceRole"
+      ],
+      "properties": {
+        "researchLane": {"const": "article"},
+        "sourceKind": {"enum": ["travelogue", "encyclopedia"]},
+        "extractor": {
+          "enum": ["qunar_html", "ctrip_sight_html", "wikipedia_api"]
+        },
+        "policyRevision": {"const": "article-source-registry-v1"},
+        "sourceUseMode": {"const": "factual_reference_only"},
+        "rightsMode": {"const": "factual_reference_only"},
+        "articleCommercialAdmission": {"const": "commercial_release"}
+      }
+    },
     {
       "properties": {
         "sourceKind": {
@@ -197,10 +244,10 @@
           "const": "sourced-video-attribution"
         },
         "sourceUseMode": {
-          "const": "licensed_adaptation"
+          "enum": ["licensed_adaptation", "rights_audit_only"]
         },
         "rightsMode": {
-          "const": "attribution_no_watermark"
+          "enum": ["attribution_no_watermark", "rights_audit_only"]
         },
         "researchLane": {
           "const": "video"

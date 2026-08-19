@@ -343,11 +343,12 @@ def _load_data_release_readiness(
         "homepage_recommend": (
             r"^sort=recommend&channelId=recommend&limit=[1-9][0-9]*$"
         ),
-    }
-    if readiness_phase in {ReadinessPhase.RESEARCH, ReadinessPhase.COMMERCIAL}:
-        expected_query_patterns["premium_stream"] = (
+        # 视频书唯一消费 premium_stream；consumer/commercial 都必须证明该池
+        # release-bound 非空读回（typed_video 绿不代表视频书绿）。
+        "premium_stream": (
             r"^sort=recommend&channelId=premium_stream&limit=[1-9][0-9]*$"
-        )
+        ),
+    }
     for name, pattern in expected_query_patterns.items():
         query = str(queries_by_name.get(name, {}).get("query") or "")
         if re.fullmatch(pattern, query) is None:
@@ -364,7 +365,7 @@ def _load_data_release_readiness(
         issues.append("Data readiness discovery exact query is empty")
     if not video_ids:
         issues.append("Data readiness video-book exact query is empty")
-    if readiness_phase in {ReadinessPhase.RESEARCH, ReadinessPhase.COMMERCIAL} and not premium_video_ids:
+    if not premium_video_ids:
         issues.append("Data readiness premium_stream has no release-bound playable video")
     for count_name, expected_count in (("discoveryPosts", len(discovery_ids)),):
         value = counts.get(count_name)

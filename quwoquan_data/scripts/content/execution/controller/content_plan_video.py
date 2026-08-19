@@ -33,6 +33,7 @@ from governance.coverage.distribution import (
 class SourcedVideoCandidate:
     evidence: SourcedVideoEvidence
     source_use_mode: str
+    source_title: str
 
     def as_brief_value(self) -> dict[str, object]:
         return self.evidence.to_dict()
@@ -43,6 +44,19 @@ class VideoPlanOutcome:
     items: tuple[dict[str, Any], ...]
     issues: tuple[DataIssue, ...]
     diagnostic: dict[str, Any]
+
+
+def sourced_video_object_title(*, target: str, source_title: str) -> str:
+    """Freeze one source-specific, entity-bound video object coordinate."""
+    normalized_target = str(target or "").strip()
+    normalized_source_title = str(source_title or "").strip()
+    if not normalized_target:
+        raise ValueError("video target is required for immutable object routing")
+    if not normalized_source_title:
+        raise ValueError("sourced video title is required for immutable object routing")
+    if normalized_target in normalized_source_title:
+        return normalized_source_title[:80]
+    return f"{normalized_target}｜{normalized_source_title}"[:80]
 
 
 def _sourced_videos(
@@ -66,6 +80,10 @@ def _sourced_videos(
             reject("source_meta_unreadable")
             continue
         source_use_mode = str(meta.get("sourceUseMode") or "").strip()
+        source_title = str(meta.get("title") or "").strip()
+        if not source_title:
+            reject("source_title_missing")
+            continue
         allowed_source_modes = (
             {"rights_audit_only", "licensed_adaptation"}
             if lifecycle is ProductLifecycleState.RESEARCH
@@ -131,6 +149,7 @@ def _sourced_videos(
             SourcedVideoCandidate(
                 evidence=evidence,
                 source_use_mode=source_use_mode,
+                source_title=source_title,
             )
         )
     candidates.sort(key=lambda item: item.evidence.asset_ref)
@@ -166,8 +185,12 @@ def build_video_plan_for_target(
             )
             publish_schedule = scheduler.schedule(creator_assignment)
             source_video = candidate.as_brief_value()
+            title = sourced_video_object_title(
+                target=target,
+                source_title=candidate.source_title,
+            )
             brief = {
-                "titleHint": target,
+                "titleHint": title,
                 "carrier": "video",
                 "entityRefs": [entity_ref],
                 "entityTags": [target],
@@ -199,7 +222,7 @@ def build_video_plan_for_target(
                     "kind": "entity",
                     "carrier": "video",
                     "researchLane": "video",
-                    "title": target,
+                    "title": title,
                     "entityRefs": [entity_ref],
                     "entityTags": [target],
                     "evidenceRefs": [local_evidence_ref],

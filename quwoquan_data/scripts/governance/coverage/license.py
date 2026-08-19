@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import re
+from enum import Enum
 from typing import Any, Mapping
 
 import yaml
@@ -13,6 +14,60 @@ _POLICY_PATHS = {
     "photography": _VERTICALS_ROOT / "photography" / "rights" / "license_policy.yaml",
     "travel": _VERTICALS_ROOT / "travel" / "rights" / "license_policy.yaml",
 }
+
+
+class RightsEnforcementMode(str, Enum):
+    AUDIT_ONLY = "audit_only"
+    ENFORCE = "enforce"
+
+
+class RightsAuditStatus(str, Enum):
+    VERIFIED = "verified"
+    UNVERIFIED = "unverified"
+    RESTRICTED = "restricted"
+    UNKNOWN = "unknown"
+
+
+def rights_enforcement_mode(vertical: str) -> RightsEnforcementMode:
+    raw = str(load_vertical_license_policy(vertical).get("enforcementMode") or "").strip()
+    try:
+        return RightsEnforcementMode(raw)
+    except ValueError as exc:
+        raise ValueError(
+            f"{vertical} license policy enforcementMode is invalid: {raw!r}"
+        ) from exc
+
+
+def rights_proof_required(vertical: str) -> bool:
+    # The vertical policy owns what constitutes verified rights. Whether
+    # missing proof blocks this release is owned by the governed lifecycle,
+    # never inferred from alpha/beta/gamma/prod.
+    from governance.coverage.distribution import (
+        ProductLifecycleState,
+        load_content_distribution_policy,
+    )
+
+    return (
+        rights_enforcement_mode(vertical) is RightsEnforcementMode.ENFORCE
+        and load_content_distribution_policy().product_lifecycle_state
+        is ProductLifecycleState.COMMERCIAL
+    )
+
+
+def parse_rights_audit_status(*payloads: Mapping[str, Any]) -> RightsAuditStatus:
+    for payload in payloads:
+        raw = str(payload.get("rightsAuditStatus") or "").strip()
+        if raw:
+            return RightsAuditStatus(raw)
+    raise ValueError("rightsAuditStatus is required")
+
+
+def rights_audit_status_recorded(*payloads: Mapping[str, Any]) -> bool:
+    try:
+        parse_rights_audit_status(*payloads)
+    except ValueError:
+        return False
+    return True
 
 
 def load_photography_license_policy() -> dict[str, Any]:
@@ -46,6 +101,11 @@ def _normalized_license_kind(value: str) -> str:
     normalized = normalized.replace("_", " ").replace("-", " ")
     if not normalized:
         return ""
+    normalized = re.sub(r"\blicen[cs]e\b", "", normalized).strip()
+    if normalized.startswith("creative commons "):
+        normalized = "cc " + normalized.removeprefix("creative commons ")
+        normalized = re.sub(r"\battribution\b", "by", normalized)
+        normalized = re.sub(r"\bshare alike\b", "sa", normalized)
     if normalized == "attribution no watermark":
         return normalized
     if "cc0" in normalized:
@@ -82,7 +142,7 @@ def _scan_status_passed(value: Any) -> bool:
     }
 
 
-def validate_image_rights(spec: Mapping[str, Any], *, vertical: str) -> list[str]:
+def audit_image_rights(spec: Mapping[str, Any], *, vertical: str) -> list[str]:
     if vertical not in _POLICY_PATHS:
         return []
     policy = load_vertical_license_policy(vertical)
@@ -143,6 +203,12 @@ def validate_image_rights(spec: Mapping[str, Any], *, vertical: str) -> list[str
     if str(spec.get("modelReleaseRequired") or "").lower() in ("true", "1", "yes") and model_release != "obtained":
         issues.append("imageRights: modelReleaseRequired requires modelReleaseStatus=obtained")
     return issues
+
+
+def validate_image_rights(spec: Mapping[str, Any], *, vertical: str) -> list[str]:
+    """Return blocking rights issues under the vertical's current policy."""
+    issues = audit_image_rights(spec, vertical=vertical)
+    return issues if rights_proof_required(vertical) else []
 
 
 def normalize_rights_payload(spec: Mapping[str, Any]) -> dict[str, Any]:

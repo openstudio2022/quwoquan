@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 from core.data_issue import (
     DataIssueCode,
@@ -14,6 +15,8 @@ from core.data_issue import (
     data_issues,
 )
 from core.paths import execution_source_unit_dir
+from core.source_attribution import canonical_source_attribution
+
 from content.execution.stage_reports import write_gate_report
 from content.source.handler_images import (
     _prune_stale_rejected_source_units,
@@ -34,20 +37,18 @@ class EntityMediaClosureInput:
     sources: tuple[Mapping[str, Any], ...]
     image_specs: tuple[Mapping[str, Any], ...]
     pending_images: tuple[dict[str, Any], ...]
+    provider_asset_counts: tuple[Mapping[str, Any], ...]
     existing_image_source_dirs: frozenset[Path]
     written_source_dirs: frozenset[Path]
     written_rejected_source_dirs: frozenset[Path]
     selected_lanes: frozenset[str] | None
     image_rights_issues: tuple[str, ...]
-    video_rights_issues: tuple[str, ...]
     image_quality_issues: tuple[str, ...]
     rejected_by_category: Mapping[str, int]
     image_lane_selected: bool
     homepage_media_selected: bool
-    video_lane_selected: bool
     required_image_work_images: int
     required_homepage_media: int
-    required_video_frames: int
     required_images: int
     planned_homepage_source_images: int
     kept_source_homepage_images: int
@@ -57,6 +58,40 @@ def _source_collection_title(image: Mapping[str, Any]) -> str:
     """Keep only an explicit source title; collection identifiers are not copy."""
 
     return str(image.get("title") or "").strip()
+
+
+def _image_collection_source_use_mode(images: list[dict[str, Any]]) -> str:
+    professional = [
+        image
+        for image in images
+        if str(image.get("acquisitionReceiptRef") or "").strip()
+    ]
+    if not professional:
+        return "licensed_adaptation"
+    if len(professional) != len(images):
+        raise ValueError("image collection cannot mix professional and ordinary assets")
+    for image in professional:
+        identity = (
+            str(image.get("acquisitionReceiptRef") or "").strip(),
+            str(image.get("professionalAssetId") or "").strip(),
+            str(image.get("professionalContentSha256") or "").strip(),
+        )
+        if not all(identity):
+            raise ValueError(
+                "professional image collection lacks exact acquisition identity"
+            )
+        if image.get("distributionDecision") not in {
+            "research_allowed",
+            "commercial_allowed",
+        }:
+            raise ValueError("professional image collection is not distribution-admitted")
+        if image.get("rightsStatus") not in {"verified", "unverified", "unknown"}:
+            raise ValueError("professional image collection rights status is blocked")
+    return (
+        "licensed_adaptation"
+        if all(image.get("rightsStatus") == "verified" for image in professional)
+        else "rights_audit_only"
+    )
 
 
 def _materialize_image_collections(spec: EntityMediaClosureInput) -> set[Path]:
@@ -71,6 +106,17 @@ def _materialize_image_collections(spec: EntityMediaClosureInput) -> set[Path]:
         sorted(image_groups.items()), start=1
     ):
         first = group[0]
+        source_attribution = canonical_source_attribution(
+            first.get("sourceAttribution")
+        )
+        if any(
+            canonical_source_attribution(row.get("sourceAttribution"))
+            != source_attribution
+            for row in group[1:]
+        ):
+            raise ValueError(
+                "image collection sourceAttribution must be identical for all assets"
+            )
         source_id = str(first.get("sourceId") or "").strip() or f"{lane}_{slugify(collection_id)}"
         unit_lane = "homepage_image" if lane == "homepage" else lane
         collection_page = str(first.get("collectionPageUrl") or first.get("sourceUrl") or "")
@@ -110,7 +156,7 @@ def _materialize_image_collections(spec: EntityMediaClosureInput) -> set[Path]:
             source_kind="image_collection",
             extractor="image_collection_download",
             policy_revision="image-collection-attribution",
-            source_use_mode="licensed_adaptation",
+            source_use_mode=_image_collection_source_use_mode(group),
             research_lane=unit_lane,
             license_value=str(first.get("license") or ""),
             url=collection_page,
@@ -120,6 +166,7 @@ def _materialize_image_collections(spec: EntityMediaClosureInput) -> set[Path]:
             images=group,
             execution_id=spec.execution_id,
             build_variants=False,
+            source={"sourceAttribution": source_attribution},
         )
         written.add(
             execution_source_unit_dir(
@@ -137,7 +184,6 @@ def _media_gate_issues(
 ) -> tuple[list[str], list[str], list[Any]]:
     image_count_issues: list[str] = []
     homepage_count_issues: list[str] = []
-    video_count_issues: list[str] = []
     if spec.image_lane_selected and kept_by_lane["image"] < spec.required_image_work_images:
         image_count_issues.append(
             f"imageCount: {spec.entity_id} image lane 仅下到 {kept_by_lane['image']} 张合格图"
@@ -148,21 +194,11 @@ def _media_gate_issues(
             f"homepageMediaCount: {spec.entity_id} 独立主页媒体仅下到 "
             f"{kept_by_lane['homepage']} 张合格图（要求 ≥{spec.required_homepage_media}）"
         )
-    if spec.video_lane_selected and kept_by_lane["video"] < spec.required_video_frames:
-        video_count_issues.append(
-            f"videoFrameCount: {spec.entity_id} video lane retained "
-            f"{kept_by_lane['video']} rights-cleared frame(s) "
-            f"but requires {spec.required_video_frames}"
-        )
     count_issues = [
         *image_count_issues,
         *homepage_count_issues,
-        *video_count_issues,
     ]
-    all_rights_issues = [
-        *spec.image_rights_issues,
-        *spec.video_rights_issues,
-    ]
+    all_rights_issues = list(spec.image_rights_issues)
     fetch_issues = [*all_rights_issues, *count_issues]
     if spec.required_images > 0 and kept_images == 0 and not all_rights_issues:
         fetch_issues.append(
@@ -207,22 +243,6 @@ def _media_gate_issues(
             messages=remaining,
             recovery=DataRecoveryAction.RETRY_SOURCE_DISCOVERY,
         ))
-        typed_issues.extend(data_issues(
-            DataIssueCode.MEDIA_RIGHTS_UNAVAILABLE,
-            stage=DataIssueStage.IMAGE_FETCH,
-            ref=spec.entity_id,
-            lane=DataIssueLane.VIDEO,
-            messages=spec.video_rights_issues,
-            recovery=DataRecoveryAction.REPLACE_MEDIA,
-        ))
-        typed_issues.extend(data_issues(
-            DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL,
-            stage=DataIssueStage.IMAGE_FETCH,
-            ref=spec.entity_id,
-            lane=DataIssueLane.VIDEO,
-            messages=video_count_issues,
-            recovery=DataRecoveryAction.RETRY_SOURCE_DISCOVERY,
-        ))
     return fetch_issues, blocking_issues, typed_issues
 
 
@@ -244,7 +264,7 @@ def close_entity_media(spec: EntityMediaClosureInput) -> tuple[int, bool]:
             1 for image in spec.pending_images
             if str(image.get("researchLane") or "image") == lane
         )
-        for lane in ("image", "homepage", "video")
+        for lane in ("image", "homepage")
     }
     kept_by_lane["homepage"] += spec.kept_source_homepage_images
     fetch_issues, blocking_issues, typed_issues = _media_gate_issues(
@@ -284,7 +304,7 @@ def close_entity_media(spec: EntityMediaClosureInput) -> tuple[int, bool]:
     if (
         spec.image_lane_selected
         or spec.homepage_media_selected
-        or spec.video_lane_selected
+        or bool(spec.provider_asset_counts)
     ):
         rights_issues = [
             *data_issues(
@@ -293,14 +313,6 @@ def close_entity_media(spec: EntityMediaClosureInput) -> tuple[int, bool]:
                 ref=spec.entity_id,
                 lane=DataIssueLane.IMAGE,
                 messages=spec.image_rights_issues,
-                recovery=DataRecoveryAction.REPLACE_MEDIA,
-            ),
-            *data_issues(
-                DataIssueCode.MEDIA_RIGHTS_UNAVAILABLE,
-                stage=DataIssueStage.IMAGE_RIGHTS,
-                ref=spec.entity_id,
-                lane=DataIssueLane.VIDEO,
-                messages=spec.video_rights_issues,
                 recovery=DataRecoveryAction.REPLACE_MEDIA,
             ),
         ]
@@ -331,14 +343,27 @@ def close_entity_media(spec: EntityMediaClosureInput) -> tuple[int, bool]:
                 "requiredByLane": {
                     "image": spec.required_image_work_images,
                     "homepage": spec.required_homepage_media,
-                    "video": spec.required_video_frames,
                 },
                 "downloadedByLane": kept_by_lane,
                 "rejectedForQuality": image_quality_issues,
                 "rejectedByCategory": rejected_by_category,
                 "nonBlockingImageIssues": fetch_issues if not blocking_issues else [],
+                "sourceAssetCounts": [dict(row) for row in spec.provider_asset_counts],
             },
             next_step="quality_analysis",
+        )
+    for row in spec.provider_asset_counts:
+        print(
+            "[download] Source assets: "
+            f"displayName={row.get('displayName') or '?'} "
+            f"provider={row.get('provider') or 'unknown'} "
+            f"assets={int(row.get('acceptedAssetCount') or 0)} "
+            f"planned={int(row.get('plannedAssetCount') or 0)} "
+            f"discovered={int(row.get('discoveredAssetCount') or 0)} "
+            f"downloaded={int(row.get('downloadedAssetCount') or 0)} "
+            f"accepted={int(row.get('acceptedAssetCount') or 0)} "
+            f"rejected={int(row.get('rejectedAssetCount') or 0)}",
+            flush=True,
         )
     print(
         f"[download] Entity done {spec.entity_index}/{spec.entity_count}: {spec.entity_id} "
@@ -357,6 +382,5 @@ def close_entity_media(spec: EntityMediaClosureInput) -> tuple[int, bool]:
     failed = (
         spec.image_lane_selected
         or spec.homepage_media_selected
-        or spec.video_lane_selected
     ) and bool(blocking_issues)
     return kept_images, failed

@@ -111,6 +111,7 @@ def _target_environment_identity_set_header() -> dict[str, object]:
     identities, identity_set_digest = source_identity_set([identity])
     document.update(
         {
+            "selectionScope": "target_environment",
             "targetEnvironment": "alpha",
             "releaseMode": "research",
             "poolDigest": "sha256:" + "3" * 64,
@@ -173,8 +174,9 @@ def test_typed_header_accepts_commercial_target_environment_identity_set() -> No
 def test_typed_header_rejects_identity_set_outside_pool_release() -> None:
     document = _target_environment_identity_set_header()
     for key in (
-        "targetEnvironment",
-        "releaseMode",
+            "selectionScope",
+            "targetEnvironment",
+            "releaseMode",
         "poolDigest",
         "counts",
         "contents",
@@ -183,7 +185,7 @@ def test_typed_header_rejects_identity_set_outside_pool_release() -> None:
     ):
         document.pop(key)
 
-    with pytest.raises(ReleaseHeaderError, match="pool release"):
+    with pytest.raises(ReleaseHeaderError, match="pool selection"):
         validate_release_header(document)
 
 
@@ -214,6 +216,7 @@ def test_typed_header_accepts_environment_neutral_exact_m100_research_cohort() -
         for index in range(start, start + count)
     ]
     document.update({
+        "selectionScope": "milestone",
         "milestone": "M100",
         "milestoneTargets": {
             "homepage": 100,
@@ -288,7 +291,8 @@ def test_milestone_header_preserves_two_execution_identities_and_rejects_drift()
             "sourceDigests": sorted(
                 source_documents, key=lambda row: str(row["digest"])
             ),
-            "milestone": "M100",
+            "selectionScope": "milestone",
+        "milestone": "M100",
             "milestoneTargets": {
                 "homepage": 100,
                 "article": 100,

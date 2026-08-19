@@ -70,6 +70,7 @@ def deployment_input_roots(
         "quwoquan_ops/environments/gamma/local/Caddyfile",
         "quwoquan_ops/environments/external_provider_bindings.yaml",
         "quwoquan_ops/external/livekit/base/livekit.yaml",
+        *_provider_endpoint_contract_inputs(),
         # product-ops compose 以 bind 方式挂载遥测告警策略;candidate 必须封装该文件。
         "quwoquan_ops/observability/elasticsearch/product_telemetry_alerts.yaml",
         *(f"quwoquan_ops/environments/{name}/runtime.yaml" for name in ("alpha", "beta", "gamma", "prod")),
@@ -199,6 +200,28 @@ def workspace_drift_details(
             f"{end.get('deploymentInputDigest', '')}"
         ),
     ]
+
+
+def _provider_endpoint_contract_inputs() -> list[str]:
+    """Return the Provider endpoint contracts packaging reads from the capsule.
+
+    ``compile_provider_runtime_composition`` resolves every endpoint workload
+    from ``<source_root>/quwoquan_ops/external`` and seals each workload's
+    Compose bytes into the candidate, so both files are real package inputs.
+    They are derived from the workspace rather than hard-coded so a new
+    workload role cannot be sealed from a capsule that never captured it.
+    """
+
+    external_root = _pkg.ROOT / "quwoquan_ops" / "external"
+    inputs: list[str] = []
+    for contract in sorted(external_root.glob("*/contract/endpoints.yaml")):
+        inputs.append(contract.relative_to(_pkg.ROOT).as_posix())
+        compose = contract.parents[1] / "deploy" / "compose.yaml"
+        if compose.is_file():
+            inputs.append(compose.relative_to(_pkg.ROOT).as_posix())
+    if not inputs:
+        raise ValueError("Provider endpoint contract closure is empty")
+    return inputs
 
 
 def _expected_service_packages() -> list[str]:

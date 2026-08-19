@@ -157,6 +157,6 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现与验收证据：三条止损工具链虽已存在且不触发重打包，但尚未用带计时 receipt 的真实演练证明其各自在 300 秒内完成。三条路径分别为内容 active pointer 回上一 immutable release、Web current pointer 以 CAS 回上一 artifact、远端配置 kill switch 关闭不兼容能力；演练依赖环境在跑且存在可回切的上一 release/artifact。
+- 影响或价值：三条止损工具链均已存在且不触发重打包——内容 active pointer 回上一 immutable release（`quwoquan_data ship rollback`）、Web current pointer 回上一 artifact（`stackctl deploy --artifact-kind web --expected-current` CAS 切换）、远端配置关闭不兼容能力（`GetAppConfig` kill_switches `immediate`）；尚缺一次带计时 receipt 的真实演练证明三者各自在 300 秒内完成（依赖环境在跑且存在可回切的上一 release/artifact）。
 - 目标：在 `gamma-local` 对三条止损路径各执行一次演练，产出含开始/结束时间戳与恢复验证的机器 receipt，全程无打包/编译步骤。
 - 完成判定：`SIT-001` 的 auto rollback 可验证子句满足，且演练 receipt 证明三条路径耗时 ≤300 秒并有真实 `spec_ref` 绑定

@@ -4,6 +4,7 @@
   "type": "object",
   "required": [
     "schema",
+    "scale",
     "rootExecutionId",
     "executionId",
     "operation",
@@ -13,23 +14,42 @@
     "selector",
     "quota",
     "count",
+    "workerHostSetBinding",
     "targetNames",
     "sourceProviders",
+    "semanticSelectionId",
     "retryOf",
     "gitBranch",
     "gitCommitSha",
+    "sourceRevision",
     "sourceDigest",
+    "executionBundle",
     "entityCatalogDigest",
+    "externalInputRefs",
+    "externalInputsDigest",
     "requestDigest",
     "submittedAt"
   ],
   "additionalProperties": false,
   "properties": {
     "schema": { "const": "quwoquan_data.content_execution_submission" },
+    "scale": {
+      "type": "string",
+      "pattern": "^M[1-9][0-9]{0,5}$"
+    },
     "rootExecutionId": { "type": "string", "minLength": 1 },
     "executionId": { "type": "string", "minLength": 1 },
     "operation": {
-      "enum": ["homepage.generate", "article.generate", "image.generate", "video.generate"]
+      "enum": [
+        "homepage.generate",
+        "article.generate",
+        "image.generate",
+        "video.generate",
+        "homepage.adoptReviewedClosure",
+        "article.adoptReviewedClosure",
+        "image.adoptReviewedClosure",
+        "video.adoptReviewedClosure"
+      ]
     },
     "carrier": { "enum": ["homepage", "article", "image", "video"] },
     "familyRef": { "type": "string", "minLength": 1 },
@@ -37,6 +57,21 @@
     "selector": { "type": "string", "minLength": 1 },
     "quota": { "type": "integer", "minimum": 1 },
     "count": { "type": "integer", "minimum": 1 },
+    "requiredWorkers": { "type": "integer", "minimum": 1 },
+    "partitionCount": { "enum": [16, 32, 64, 128, 256] },
+    "capacityPlanDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "workerHostSetBinding": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "governed_worker_host_binding.schema.json"}
+      ]
+    },
+    "scaleSourcePool": {"$ref": "scale_source_pool_binding.schema.json"},
+    "sourcePoolEvidenceRootRef": {"type": "string", "minLength": 1},
+    "sourcePoolSelection": {"$ref": "scale_source_pool_selection.schema.json"},
     "topic": { "type": ["string", "null"] },
     "targetNames": {
       "type": "array",
@@ -48,9 +83,16 @@
       "uniqueItems": true,
       "items": { "type": "string", "minLength": 1 }
     },
+    "semanticSelectionId": {
+      "enum": ["default", "cursor_grok", "cursor_auto", "not_applicable"]
+    },
+    "semanticPreflightReceipt": {
+      "$ref": "semantic_provider_preflight_receipt_ref.schema.json"
+    },
     "retryOf": { "type": ["string", "null"] },
     "gitBranch": { "type": "string", "minLength": 1 },
     "gitCommitSha": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+    "sourceRevision": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
     "sourceDigest": {
       "type": "object",
       "required": ["algorithm", "digest", "inputs"],
@@ -65,11 +107,154 @@
         }
       }
     },
+    "executionBundle": {
+      "type": "object",
+      "required": ["algorithm", "digest", "inputs"],
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {"const": "sha256"},
+        "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "inputs": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+      }
+    },
     "entityCatalogDigest": {
       "type": "string",
       "pattern": "^sha256:[a-f0-9]{64}$"
     },
+    "externalInputRefs": {
+      "type": "array",
+      "items": { "$ref": "campaign_external_input_ref.schema.json" }
+    },
+    "externalInputsDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "predecessorReconciliation": {
+      "$ref": "campaign_submission_reconciliation_ref.schema.json"
+    },
+    "m100AlphaAcceptance": {
+      "$ref": "m100_alpha_acceptance_binding.schema.json"
+    },
+    "reviewedClosureAdoption": {
+      "$ref": "reviewed_closure_adoption_campaign_binding.schema.json"
+    },
     "requestDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
     "submittedAt": { "type": "string", "format": "date-time" }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "enum": [
+              "homepage.generate",
+              "article.generate",
+              "image.generate",
+              "video.generate"
+            ]
+          }
+        },
+        "required": ["operation"]
+      },
+      "then": {
+        "required": [
+          "requiredWorkers",
+          "partitionCount",
+          "capacityPlanDigest"
+        ],
+        "properties": {
+          "semanticSelectionId": { "enum": ["default", "cursor_grok", "cursor_auto"] }
+        }
+      },
+      "else": {
+        "properties": {
+          "semanticSelectionId": { "const": "not_applicable" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "semanticSelectionId": { "enum": ["default", "cursor_grok", "cursor_auto"] }
+        },
+        "required": ["semanticSelectionId"]
+      },
+      "then": {
+        "required": ["semanticPreflightReceipt"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "scale": {"const": "M1000"},
+          "operation": {
+            "enum": [
+              "homepage.generate", "article.generate", "image.generate", "video.generate"
+            ]
+          }
+        },
+        "required": ["scale", "operation"]
+      },
+      "then": {"required": ["m100AlphaAcceptance"]},
+      "else": {"not": {"required": ["m100AlphaAcceptance"]}}
+    },
+    {
+      "if": {"required": ["scaleSourcePool"]},
+      "then": {
+        "required": ["sourcePoolEvidenceRootRef", "sourcePoolSelection"]
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            {"required": ["sourcePoolEvidenceRootRef"]},
+            {"required": ["sourcePoolSelection"]}
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "executionId": {
+            "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(?:homepage|article|image|video)-m(?:100|1000|10000)--"
+          },
+          "operation": {
+            "enum": [
+              "homepage.generate", "article.generate", "image.generate", "video.generate"
+            ]
+          }
+        },
+        "required": ["executionId", "operation"]
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            {"required": ["scaleSourcePool"]},
+            {"required": ["sourcePoolEvidenceRootRef"]},
+            {"required": ["sourcePoolSelection"]}
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "executionId": {
+            "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(?:homepage|article|image|video)-m10000--"
+          },
+          "operation": {
+            "enum": [
+              "homepage.generate", "article.generate", "image.generate", "video.generate"
+            ]
+          }
+        },
+        "required": ["executionId", "operation"]
+      },
+      "then": {
+        "required": [
+          "scaleSourcePool", "sourcePoolEvidenceRootRef", "sourcePoolSelection"
+        ]
+      }
+    }
+  ]
 }

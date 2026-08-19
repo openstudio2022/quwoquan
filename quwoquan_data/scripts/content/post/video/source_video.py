@@ -137,21 +137,28 @@ class SourcedVideoEvidence:
             "original_authorized",
             "replaced_with_licensed_track",
             "no_audio",
+            "unverified",
         }
         if self.audio_rights_status not in allowed_audio:
             issues.append("sourceVideo audioRightsStatus is not publishable")
+        if self.commercial_authorization_status not in {"verified", "unverified"}:
+            issues.append(
+                "sourceVideo commercialAuthorizationStatus is not publishable"
+            )
         allowed_admission = {
+            "research_release",
             "commercial_release",
             "risk_accepted_attribution_only",
         }
         if self.publication_admission not in allowed_admission:
             issues.append("sourceVideo publicationAdmission is not publishable")
         if (
-            self.commercial_authorization_status == "not_verified"
-            and self.publication_admission != "risk_accepted_attribution_only"
+            self.commercial_authorization_status == "unverified"
+            and self.publication_admission
+            not in {"research_release", "risk_accepted_attribution_only"}
         ):
             issues.append(
-                "sourceVideo not_verified authorization requires risk acceptance"
+                "sourceVideo unverified authorization requires research or risk acceptance"
             )
         if (
             self.publication_admission == "risk_accepted_attribution_only"
@@ -160,10 +167,18 @@ class SourcedVideoEvidence:
             issues.append("sourceVideo riskAcceptanceId is required")
         if self.publication_admission == "commercial_release" and (
             self.commercial_authorization_status != "verified"
-            or not self.authorization_proof_url
+            or not str(self.authorization_proof_url or "").startswith("https://")
+            or not str(self.terms_url or "").startswith("https://")
         ):
             issues.append(
-                "sourceVideo commercial release requires verified authorization proof"
+                "sourceVideo commercial release requires verified HTTPS authorization and terms proof"
+            )
+        if (
+            self.audio_rights_status == "unverified"
+            and self.publication_admission != "research_release"
+        ):
+            issues.append(
+                "sourceVideo unverified audio is restricted to research_release"
             )
         return tuple(issues)
 

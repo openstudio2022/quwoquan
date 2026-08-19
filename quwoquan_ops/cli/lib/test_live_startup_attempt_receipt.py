@@ -342,6 +342,72 @@ def load_test_live_startup_attempt(target: str) -> dict[str, Any] | None:
     )
 
 
+def _read_untrusted(target: str) -> dict[str, Any] | None:
+    """Decode the receipt without admitting it. Absent reads as ``None``."""
+    path = test_live_startup_attempt_path(target)
+    try:
+        metadata = path.lstat()
+    except FileNotFoundError:
+        return None
+    if not stat.S_ISREG(metadata.st_mode) or path.is_symlink():
+        raise UnsafeTestLiveStartupReceiptPath(
+            "test-live startup receipt is a symlink or non-regular file"
+        )
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"test-live startup receipt is unreadable: {exc}") from exc
+    if not isinstance(value, dict):
+        raise ValueError(
+            "test-live startup receipt is not a JSON object; "
+            f"inspect and remove {path} manually"
+        )
+    return value
+
+
+def read_stale_test_live_startup_attempt(target: str) -> dict[str, Any] | None:
+    """Return the receipt only when it exists and is inadmissible.
+
+    An absent receipt and an admissible one both read as ``None``: the normal
+    down path owns those, and reclaim must never touch a receipt that still
+    validates. The returned document is untrusted and is only fit for archiving.
+    """
+    value = _read_untrusted(target)
+    if value is None:
+        return None
+    environment = target.removesuffix("-local")
+    try:
+        validate_test_live_startup_attempt(
+            value,
+            expected_environment=environment,
+            expected_target=target,
+        )
+    except ValueError:
+        return value
+    return None
+
+
+def reclaim_stale_test_live_startup_attempt(target: str) -> dict[str, Any]:
+    """Remove one inadmissible receipt and return what was removed.
+
+    Re-checks admissibility immediately before unlinking so a receipt that
+    became valid between audit and apply is never destroyed.
+    """
+    stale = read_stale_test_live_startup_attempt(target)
+    if stale is None:
+        raise ValueError(
+            f"{target} holds no inadmissible test-live startup receipt to reclaim"
+        )
+    path = test_live_startup_attempt_path(target)
+    try:
+        os.unlink(path)
+    except FileNotFoundError as exc:
+        raise ValueError(
+            f"test-live startup receipt vanished before reclaim: {path}"
+        ) from exc
+    return stale
+
+
 def transition_test_live_startup_attempt(
     *,
     environment: str,

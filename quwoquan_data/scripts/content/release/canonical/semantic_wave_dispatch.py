@@ -20,6 +20,10 @@ from content.execution.identity import build_execution_id, parse_execution_id
 from content.execution.planning.semantic_preflight_admission import (
     bind_semantic_preflight_receipt,
 )
+from content.execution.planning.capacity_calibration import (
+    bind_capacity_calibration_source,
+    current_host_class,
+)
 from content.execution.planning.retry_unfinished_scope import (
     load_retry_unfinished_scope,
 )
@@ -311,6 +315,7 @@ def build_semantic_wave_dispatch(
     dispatch_id: str,
     pool_inspection_ref: str,
     semantic_preflight_receipt_ref: str | None,
+    capacity_calibration_receipt_ref: str,
     run_date: str,
     scope: str,
     region_ref: str,
@@ -434,6 +439,20 @@ def build_semantic_wave_dispatch(
             )
         except (OSError, TypeError, ValueError) as exc:
             raise _fail(DISPATCH_INVALID, exc) from exc
+    try:
+        capacity_path, capacity_ref = _output_path(
+            output_root,
+            capacity_calibration_receipt_ref,
+            label="capacityCalibrationReceiptRef",
+        )
+        capacity_calibration = bind_capacity_calibration_source(
+            receipt_path=capacity_path,
+            receipt_ref=capacity_ref,
+            host_class=current_host_class(),
+            provider_tier="cursor_grok",
+        )
+    except (OSError, TypeError, ValueError) as exc:
+        raise _fail(DISPATCH_INVALID, exc) from exc
     ordered_by_carrier = {
         carrier: [
             selected[str(row["candidateId"])]
@@ -582,9 +601,7 @@ def build_semantic_wave_dispatch(
                 selector=_selector(carrier),
                 count=len(chunk),
                 quota=len(chunk),
-                required_workers=required_workers,
-                partition_count=partition_count,
-                capacity_plan_digest=workload_plan_digest,
+                capacity_calibration=capacity_calibration,
                 worker_host_set_binding=None,
                 topic=f"{intent}-{carrier}-wave",
                 source_providers=(),
@@ -656,6 +673,7 @@ def build_semantic_wave_dispatch(
         "sourcePoolBinding": binding,
         "sourcePoolEvidenceRootRef": evidence_ref,
         "semanticSelectionId": "cursor_grok",
+        "capacityCalibration": capacity_calibration,
         "queueBackend": "local_file",
         "poolDeliveryBackend": "reliabletask",
         "activeCarriers": active,

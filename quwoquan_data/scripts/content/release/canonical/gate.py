@@ -193,15 +193,19 @@ def _post_contract_issues(leaf: Path, root: Path, manifest: dict) -> list[str]:
             field: _source_fact(manifest, field)
             for field in _IMAGE_SOURCE_FIELDS
         }
-        for field in ("sourceCollectionId", "creator", "collectionPageUrl", "license"):
+        vertical = str(manifest.get("vertical") or "").strip()
+        if not vertical:
+            issues.append(f"{rel}: image post missing vertical policy owner")
+            return issues
+        required_source_fields = ["sourceCollectionId", "creator", "collectionPageUrl"]
+        for field in required_source_fields:
             value = source_facts[field]
             if value is None:
                 issues.append(f"{rel}: image source contract missing {field}")
-        if source_facts["termsUrl"] is None and source_facts["authorizationProof"] is None:
-            issues.append(
-                f"{rel}: image source contract missing license proof "
-                "(termsUrl or authorizationProof)"
-            )
+        if str(
+            manifest.get("rightsAuditStatus") or ""
+        ) not in {"verified", "unverified", "restricted", "unknown"}:
+            issues.append(f"{rel}: image source contract missing rightsAuditStatus")
         for field, work_value in source_facts.items():
             asset_values = [
                 value

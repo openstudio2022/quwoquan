@@ -29,7 +29,10 @@ from governance.creators.assignment import creator_assignment_from_profile
 from PIL import Image
 from support import execution_manifest_fixture
 from support.execution_manifest_fixture import ExecutionFixtureBuilder
-from support.media_fixture import seed_system_creator_avatar_holding
+from support.media_fixture import (
+    admit_media_body,
+    seed_system_creator_avatar_holding,
+)
 from support.object_transaction_fixtures import (
     OBJECT_REF,
     TRANSACTION_ID,
@@ -155,6 +158,7 @@ def _build_approved_entity_execution(
     entity_asset = entity_root / "assets/cover.png"
     entity_asset.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source_asset, entity_asset)
+    admit_media_body(source_asset.read_bytes())
     source_asset_ref = source_asset.relative_to(execution_root).as_posix()
     creator = creator_assignment_from_profile(
         TemplateRegistry.load().creators["qwq_creator_travel_blogger_001"]
@@ -214,6 +218,7 @@ def _build_approved_entity_execution(
                         "https://commons.wikimedia.org/wiki/File:Cover.png"
                     ),
                     "usageScope": "app_publish",
+                    "distributionDecision": "commercial_allowed",
                     "modelReleaseStatus": "not_required",
                     "rightsAuditStatus": "verified",
                     "rightsAuditIssues": [],
@@ -410,7 +415,8 @@ def test_entity_transaction_projects_legacy_research_asset_to_editorial_scope(
     assert rights["assets"][0]["usageScope"] == "editorial"
     assert rights["assets"][0]["rightsAuditStatus"] == "unverified"
     assert rights["assets"][0]["rightsAuditIssues"] == [
-        "imageRights: missing required field usageScope"
+        "imageRights: missing required field usageScope",
+        "commercial distribution proof incomplete; retained for research",
     ]
 
 

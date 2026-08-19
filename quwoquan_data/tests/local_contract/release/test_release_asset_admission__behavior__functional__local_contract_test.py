@@ -2,14 +2,17 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from content.release.canonical.asset_review_adoption import _binding
+from content.release.canonical.asset_review_adoption import (
+    build_independent_asset_review_binding,
+)
 from content.release.canonical.object_transaction_contract import ObjectTransactionError
 from content.release.canonical.release_admission import (
+    _article_media_mode,
     _article_media_coverage,
+    _object_media_is_admissible,
     build_release_asset_admission,
 )
 from content.source.independent_asset_review_contract import (
@@ -17,11 +20,6 @@ from content.source.independent_asset_review_contract import (
     file_digest,
 )
 from core.source_digest import content_source_revision
-from governance.coverage.distribution import (
-    ProductLifecycleState,
-    ReleaseClass,
-    load_content_distribution_policy,
-)
 
 
 def _digest(seed: str) -> str:
@@ -35,6 +33,19 @@ _ENTITY_CATALOG_DIGEST = _digest("release-admission-entities")
 def _write(path: Path, payload: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload), encoding="utf-8")
+
+
+def _review_output_root(objects_root: Path) -> Path:
+    return objects_root / "_external-output"
+
+
+def _build_test_release_asset_admission(**kwargs):
+    objects_root = kwargs["objects_root"]
+    return build_release_asset_admission(
+        **kwargs,
+        release_class="research",
+        output_root=_review_output_root(objects_root),
+    )
 
 
 def _rights_asset(asset_id: str) -> dict[str, object]:
@@ -51,14 +62,6 @@ def _rights_asset(asset_id: str) -> dict[str, object]:
         "termsUrl": "https://media.example/terms",
         "authorizationProof": "",
     }
-
-
-def _research_policy():
-    return replace(
-        load_content_distribution_policy(),
-        product_lifecycle_state=ProductLifecycleState.RESEARCH,
-        release_class=ReleaseClass.RESEARCH,
-    )
 
 
 def _source_asset_counts(asset_count: int) -> list[dict[str, object]]:
@@ -232,13 +235,18 @@ def _publishable_video_receipt() -> dict[str, object]:
 
 def _bind_video_review(root: Path, receipt: dict[str, object] | None = None) -> Path:
     selected = receipt or _publishable_video_receipt()
-    receipt_ref = Path("asset_reviews/receipts") / f"{selected['reviewId']}.json"
-    receipt_path = root / "posts/video" / receipt_ref
+    receipt_ref = (
+        Path("data/tasks/video/evidence/asset_reviews/receipts")
+        / f"{selected['reviewId']}.json"
+    )
+    receipt_path = _review_output_root(root) / receipt_ref
     _write(receipt_path, selected)
     rights_path = root / "posts/video/rights.json"
     rights = json.loads(rights_path.read_text(encoding="utf-8"))
     rights["assets"][0]["acquisitionReceiptRef"] = selected["acquisitionReceiptRef"]
-    rights["assets"][0]["independentAssetReview"] = _binding(
+    rights["assets"][0][
+        "independentAssetReview"
+    ] = build_independent_asset_review_binding(
         selected,
         receipt_ref=receipt_ref.as_posix(),
         receipt_file_sha256=file_digest(receipt_path),
@@ -362,16 +370,17 @@ def test_research_release_accepts_unverified_assets_for_all_four_carriers(
     tmp_path: Path,
 ) -> None:
     desired = _release_objects(tmp_path)
-    admission = build_release_asset_admission(
+    admission = _build_test_release_asset_admission(
         release_id="research-release",
         objects_root=tmp_path,
         desired=desired,
-        policy=_research_policy(),
     )
 
     assert admission["releaseClass"] == "research"
     assert admission["containsUnverifiedAssets"] is True
-    assert admission["rightsStatusCounts"]["unverified"] == 7
+    # Creator avatars are quality/readability evidence, not content assets;
+    # their source rights never enter release usage-scope counts.
+    assert admission["rightsStatusCounts"]["unverified"] == 6
     assert admission["researchAcceptedCount"] == 4
     assert admission["commercialAcceptedCount"] == 0
     assert {row["carrier"]: row["researchAcceptedCount"] for row in admission["carrierCounts"]} == {
@@ -384,20 +393,39 @@ def test_research_release_accepts_unverified_assets_for_all_four_carriers(
 
 def test_commercial_release_rejects_same_unverified_assets(tmp_path: Path) -> None:
     desired = _release_objects(tmp_path)
-    research = load_content_distribution_policy()
-    commercial = replace(
-        research,
-        product_lifecycle_state=ProductLifecycleState.COMMERCIAL,
-        release_class=ReleaseClass.COMMERCIAL,
-    )
-
     with pytest.raises(ObjectTransactionError, match="non-commercial assets"):
         build_release_asset_admission(
             release_id="commercial-release",
             objects_root=tmp_path,
             desired=desired,
-            policy=commercial,
+            release_class="commercial",
+            output_root=_review_output_root(tmp_path),
         )
+
+
+def test_commercial_release_does_not_filter_author_by_avatar_rights(
+    tmp_path: Path,
+) -> None:
+    _write(
+        tmp_path / "creators/creator/rights_snapshots/avatar.json",
+        {"commercialRights": _rights_asset("avatar-unverified")},
+    )
+    admission = build_release_asset_admission(
+        release_id="commercial-avatar-independent",
+        objects_root=tmp_path,
+        desired={"entities": [], "posts": [], "creators": ["creator"], "tags": []},
+        release_class="commercial",
+        output_root=_review_output_root(tmp_path),
+    )
+
+    assert admission["containsUnverifiedAssets"] is False
+    assert admission["authorizationRequiredAssetIds"] == []
+    assert admission["rightsStatusCounts"] == {
+        "verified": 0,
+        "unverified": 0,
+        "restricted": 0,
+        "unknown": 0,
+    }
 
 
 def test_professional_acquisition_without_frozen_review_is_gate_blocked(
@@ -407,23 +435,21 @@ def test_professional_acquisition_without_frozen_review_is_gate_blocked(
     rights_path = tmp_path / "posts/image/rights.json"
     rights = json.loads(rights_path.read_text(encoding="utf-8"))
     rights["assets"][0]["acquisitionReceiptRef"] = (
-        "data/local/workspace/source-acquisition/image/receipts/"
+        "data/local/workspace/source-acquisition/receipts/"
         + "a" * 64
         + ".json"
     )
     _write(rights_path, rights)
 
     with pytest.raises(ObjectTransactionError, match="review binding is incomplete"):
-        build_release_asset_admission(
+        _build_test_release_asset_admission(
             release_id="acquisition-only-release",
             objects_root=tmp_path,
             desired=desired,
-            policy=_research_policy(),
         )
 
 
 def test_article_media_coverage_reports_target_shortfall_without_blocking() -> None:
-    policy = load_content_distribution_policy()
     illustrated = {
         "carrier": "article",
         "objectRef": "posts/illustrated",
@@ -459,16 +485,10 @@ def test_article_media_coverage_reports_target_shortfall_without_blocking() -> N
             "articleRenderProfile": _article_render_profile(mode="text_only"),
         },
     }
-    coverage = _article_media_coverage(
-        [illustrated] * 9 + [text_only],
-        policy=policy,
-    )
+    coverage = _article_media_coverage([illustrated] * 9 + [text_only])
     assert coverage["illustratedRate"] == 0.9
 
-    below_target = _article_media_coverage(
-        [illustrated] * 8 + [text_only] * 2,
-        policy=policy,
-    )
+    below_target = _article_media_coverage([illustrated] * 8 + [text_only] * 2)
     assert below_target == {
         "articleCount": 10,
         "illustratedCount": 8,
@@ -489,12 +509,31 @@ def test_article_release_rejects_two_cover_assets_despite_two_bindings(
     _write(manifest_path, manifest)
 
     with pytest.raises(ObjectTransactionError, match="non-cover body asset"):
-        build_release_asset_admission(
+        _build_test_release_asset_admission(
             release_id="two-cover-release",
             objects_root=tmp_path,
             desired=desired,
-            policy=_research_policy(),
         )
+
+
+def test_article_cover_and_body_may_use_independently_authorized_sources(
+    tmp_path: Path,
+) -> None:
+    desired = _release_objects(tmp_path)
+    manifest_path = tmp_path / "posts/article/manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["assets"][1]["sourceRef"] = "sources/article-body/source.md"
+    _write(manifest_path, manifest)
+
+    admission = _build_test_release_asset_admission(
+        release_id="mixed-source-article-release",
+        objects_root=tmp_path,
+        desired=desired,
+    )
+
+    assert next(
+        row for row in admission["carrierCounts"] if row["carrier"] == "article"
+    )["researchAcceptedCount"] == 1
 
 
 def test_video_release_requires_independent_publishable_review(
@@ -508,11 +547,10 @@ def test_video_release_requires_independent_publishable_review(
     _write(rights_path, rights)
 
     with pytest.raises(ObjectTransactionError, match="video required media closure"):
-        build_release_asset_admission(
+        _build_test_release_asset_admission(
             release_id="unreviewed-video-release",
             objects_root=tmp_path,
             desired=desired,
-            policy=_research_policy(),
         )
 
 
@@ -536,7 +574,10 @@ def test_video_release_revalidates_motion_evidence(
 ) -> None:
     desired = _release_objects(tmp_path)
     receipt_path = next(
-        (tmp_path / "posts/video/asset_reviews/receipts").glob("*.json")
+        (
+            _review_output_root(tmp_path)
+            / "data/tasks/video/evidence/asset_reviews/receipts"
+        ).glob("*.json")
     )
     receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
     receipt["assetSnapshot"][section][field] = value
@@ -544,11 +585,10 @@ def test_video_release_revalidates_motion_evidence(
     _bind_video_review(tmp_path, receipt)
 
     with pytest.raises(ObjectTransactionError, match=expected):
-        build_release_asset_admission(
+        _build_test_release_asset_admission(
             release_id="invalid-video-evidence-release",
             objects_root=tmp_path,
             desired=desired,
-            policy=_research_policy(),
         )
 
 
@@ -559,7 +599,10 @@ def test_daily_research_release_accepts_truthfully_unranked_video(
 ) -> None:
     desired = _release_objects(tmp_path)
     receipt_path = next(
-        (tmp_path / "posts/video/asset_reviews/receipts").glob("*.json")
+        (
+            _review_output_root(tmp_path)
+            / "data/tasks/video/evidence/asset_reviews/receipts"
+        ).glob("*.json")
     )
     receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
     signals = receipt["assetSnapshot"]["popularitySignals"]
@@ -575,11 +618,10 @@ def test_daily_research_release_accepts_truthfully_unranked_video(
     receipt["receiptDigest"] = canonical_digest(receipt, excluded="receiptDigest")
     _bind_video_review(tmp_path, receipt)
 
-    admission = build_release_asset_admission(
+    admission = _build_test_release_asset_admission(
         release_id="daily-research-release",
         objects_root=tmp_path,
         desired=desired,
-        policy=_research_policy(),
     )
 
     assert next(
@@ -594,11 +636,10 @@ def test_required_carrier_media_cannot_be_inferred_from_rights_only(
     _write(tmp_path / "posts/image/manifest.json", {"contentType": "image", "assets": []})
 
     with pytest.raises(ObjectTransactionError, match="manifest/rights asset closure drift"):
-        build_release_asset_admission(
+        _build_test_release_asset_admission(
             release_id="research-release",
             objects_root=tmp_path,
             desired=desired,
-            policy=_research_policy(),
         )
 
 
@@ -610,9 +651,62 @@ def test_required_carrier_media_rejects_empty_manifest_and_rights(
     _write(tmp_path / "posts/image/rights.json", {"assets": []})
 
     with pytest.raises(ObjectTransactionError, match="image required media closure"):
-        build_release_asset_admission(
+        _build_test_release_asset_admission(
             release_id="research-release",
             objects_root=tmp_path,
             desired=desired,
-            policy=_research_policy(),
         )
+
+
+def test_approved_historical_article_uses_validated_manifest_media_without_new_closure_field() -> None:
+    row = {
+        "objectRef": "posts/article/legacy/1",
+        "reviewAttestationPassed": True,
+        "manifest": {
+            "contentType": "article",
+            "assets": [
+                {
+                    "assetId": "cover-a",
+                    "kind": "image",
+                    "role": "cover",
+                    "sourceRef": "sources/a/source.md",
+                },
+                {
+                    "assetId": "body-b",
+                    "kind": "image",
+                    "role": "detail",
+                    "sourceRef": "sources/b/source.md",
+                },
+            ],
+        },
+    }
+
+    assert _article_media_mode(row) == "illustrated"
+
+
+def test_approved_historical_video_uses_media_review_attestation_without_new_asset_binding() -> None:
+    row = {
+        "objectRef": "posts/video/legacy/1",
+        "carrier": "video",
+        "reviewAttestationPassed": True,
+        "reviewedAssetKinds": {},
+        "manifest": {
+            "assets": [
+                {
+                    "assetId": "video-a",
+                    "kind": "video",
+                    "mimeType": "video/mp4",
+                    "sha256": _digest("video-a"),
+                    "posterAssetId": "poster-a",
+                },
+                {
+                    "assetId": "poster-a",
+                    "kind": "image",
+                    "role": "cover",
+                },
+            ],
+        },
+        "assets": [{"assetId": "video-a"}, {"assetId": "poster-a"}],
+    }
+
+    assert _object_media_is_admissible(row) is True

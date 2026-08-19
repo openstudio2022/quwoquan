@@ -1,10 +1,23 @@
 """Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
+
 from core.runtime_policy import active_runtime_policy
-from content.execution.support import Any, ExecutionContext, ExecutionStateStatus, MANAGED_AGENT_FUTURE_GRACE_SECONDS, MANAGED_AGENT_TIMEOUT_SECONDS, MANAGED_LANE_LIMITS, MAX_MANAGED_INFRA_RETRIES, MAX_REACT_REWINDS, Mapping, Path, ThreadPoolExecutor, _is_homepage_only_execution, _normalize_managed_agent_provider, defaultdict, execution_root, load_execution_state, os, release_root, save_execution_state, store, time, wait
+
 from content.execution.agent.managed_checkpoint import (
     _managed_yield_after_ref_slice,
     _run_managed_checkpoint,
+)
+from content.execution.support import (
+    MAX_MANAGED_INFRA_RETRIES,
+    MAX_REACT_REWINDS,
+    ExecutionContext,
+    ExecutionStateStatus,
+    Mapping,
+    _is_homepage_only_execution,
+    load_execution_state,
+    save_execution_state,
+    store,
+    time,
 )
 
 _AGENT_FUTURE_POLL_TIMEOUT_SECONDS = active_runtime_policy().agent_future_poll_timeout_seconds
@@ -20,9 +33,8 @@ def _reconcile_completed_publish_state(ctx: ExecutionContext) -> bool:
     if "publish" not in set(state.completed or []):
         return True
     if _is_homepage_only_execution(ctx):
-        from content.execution.qualification import finalize_execution_qualification
-
         from content.execution.controller.publish import _publishable_homepage_names
+        from content.execution.planning.qualification import finalize_execution_qualification
 
         try:
             qualification = finalize_execution_qualification(
@@ -42,24 +54,7 @@ def _reconcile_completed_publish_state(ctx: ExecutionContext) -> bool:
             state.next_action = "repair execution source qualification before publish"
             save_execution_state(state)
             return False
-        from core.paths import PUBLISH_ROOT
-        from content.execution.workspace import execution_root, write_publish_ref
-        from content.release.canonical.object_transaction_audit import (
-            validate_canonical_publish,
-        )
-        from content.release.canonical.object_transaction_contract import (
-            refresh_canonical_tag_snapshots,
-        )
-
-        refresh_canonical_tag_snapshots(PUBLISH_ROOT)
-        closure = validate_canonical_publish(PUBLISH_ROOT)
-        if closure["status"] != "passed":
-            state.completed = [stage for stage in (state.completed or []) if stage != "publish"]
-            state.status = ExecutionStateStatus.RUNNING
-            state.failed_objects = [str(issue) for issue in closure["issues"]]
-            state.next_action = "repair canonical publish closure before publish"
-            save_execution_state(state)
-            return False
+        from content.execution.workspace import write_publish_ref
         homepage_refs = _publishable_homepage_refs(ctx)
         write_publish_ref(
             ctx.execution_id,
@@ -91,11 +86,19 @@ def _managed_checkpoint_repair_budget_exhausted(used_attempts: int) -> bool:
 
 def run_managed_controller(ctx: ExecutionContext) -> int:
     """父进程消费全部 Agent checkpoint，直到 release verify 通过或转人工。"""
-    from content.execution.agent.agent_checkpoint import _checkpoint_is_done, _handle_managed_infra_budget_exhausted, _managed_author_failure_refs, _managed_consecutive_no_start_infra_failures
+    from content.execution.agent.agent_checkpoint import (
+        _checkpoint_is_done,
+        _handle_managed_infra_budget_exhausted,
+        _managed_author_failure_refs,
+        _managed_consecutive_no_start_infra_failures,
+    )
     from content.execution.agent.history import last_managed_agent_run
-    from content.execution.recovery.download_unresolved import _download_plan_unresolved_entities, _write_download_availability
     from content.execution.controller.control import _recover_stale_controller_yield
     from content.execution.controller.orchestrator import run_controller
+    from content.execution.recovery.download_unresolved import (
+        _download_plan_unresolved_entities,
+        _write_download_availability,
+    )
     reconcile_failures = 0
     while True:
         code = run_controller(ctx)

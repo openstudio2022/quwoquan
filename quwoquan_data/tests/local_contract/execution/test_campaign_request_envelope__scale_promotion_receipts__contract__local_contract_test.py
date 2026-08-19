@@ -27,6 +27,22 @@ _M100_WORKLOADS = {
 }
 
 
+_M100_WORKLOADS = {
+    "homepage": 100,
+    "article": 100,
+    "image": 100,
+    "video": 10,
+}
+
+
+_M100_WORKLOADS = {
+    "homepage": 100,
+    "article": 100,
+    "image": 100,
+    "video": 10,
+}
+
+
 def _approved_video_promotion() -> dict[str, object]:
     stable: dict[str, object] = {
         "schema": "quwoquan_data.video_scale_promotion",

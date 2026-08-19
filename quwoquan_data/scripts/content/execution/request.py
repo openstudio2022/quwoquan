@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -76,9 +75,7 @@ class RuntimeExecutionRequest:
     selector: TargetSelector
     count: int
     quota: int
-    required_workers: int
-    partition_count: int
-    capacity_plan_digest: str
+    capacity_calibration: Mapping[str, Any]
     topic: str | None
     source_providers: tuple[str, ...]
     target_names: tuple[str, ...]
@@ -98,12 +95,11 @@ class RuntimeExecutionRequest:
             raise ValueError("count must be a positive integer")
         if isinstance(self.quota, bool) or self.quota < 1:
             raise ValueError("quota must be a positive integer")
-        if isinstance(self.required_workers, bool) or self.required_workers < 1:
-            raise ValueError("requiredWorkers must be a positive integer")
-        if self.partition_count not in {16, 32, 64, 128, 256}:
-            raise ValueError("partitionCount must be a governed partition count")
-        if not re.fullmatch(r"sha256:[a-f0-9]{64}", self.capacity_plan_digest):
-            raise ValueError("capacityPlanDigest must be a canonical sha256 digest")
+        from content.execution.planning.capacity_calibration import (
+            assert_capacity_source_binding,
+        )
+
+        assert_capacity_source_binding(self.capacity_calibration)
         if self.worker_host_set_binding is not None:
             from core.schema import assert_valid
 
@@ -198,11 +194,42 @@ class RuntimeExecutionRequest:
             for value in (getattr(args, "target_names", ()) or ())
             if str(value).strip()
         )
-        required_workers = getattr(args, "required_workers", None)
-        partition_count = getattr(args, "partition_count", None)
-        capacity_plan_digest = str(
-            getattr(args, "capacity_plan_digest", "") or ""
+        raw_capacity_receipt = str(
+            getattr(args, "capacity_calibration_receipt", "") or ""
         ).strip()
+        if not raw_capacity_receipt:
+            raise SystemExit(
+                "[task execute] GATE_BLOCK --capacity-calibration-receipt is required"
+            )
+        from content.execution.planning.capacity_calibration import (
+            CapacityCalibrationError,
+            bind_capacity_calibration_source,
+            current_host_class,
+            resolve_capacity_calibration_ref,
+        )
+
+        receipt_ref = raw_capacity_receipt
+        try:
+            receipt_path = resolve_capacity_calibration_ref(receipt_ref)
+        except CapacityCalibrationError as exc:
+            raise SystemExit(
+                f"[task execute] GATE_BLOCK capacity calibration: {exc}"
+            ) from exc
+
+        provider_tier = str(
+            getattr(args, "semantic_selection_id", "") or "default"
+        ).strip()
+        try:
+            capacity_calibration = bind_capacity_calibration_source(
+                receipt_path=receipt_path,
+                receipt_ref=receipt_ref,
+                host_class=current_host_class(),
+                provider_tier=provider_tier,
+            )
+        except CapacityCalibrationError as exc:
+            raise SystemExit(
+                f"[task execute] GATE_BLOCK capacity calibration: {exc}"
+            ) from exc
         raw_host_binding = str(
             getattr(args, "worker_host_set_binding_json", "") or ""
         ).strip()
@@ -216,32 +243,6 @@ class RuntimeExecutionRequest:
                     "[task execute] GATE_BLOCK --worker-host-set-binding-json must be an object"
                 )
             worker_host_set_binding = dict(decoded)
-        if (
-            required_workers is None
-            and partition_count is None
-            and not capacity_plan_digest
-        ):
-            derived = derive_capacity_from_execution(
-                execution_id=str(getattr(args, "execution_id", "") or ""),
-                work_unit_count=quota,
-            )
-            required_workers = derived["requiredWorkers"]
-            partition_count = derived["partitionCount"]
-            capacity_plan_digest = derived["capacityPlanDigest"]
-        if (
-            isinstance(required_workers, bool)
-            or not isinstance(required_workers, int)
-            or required_workers < 1
-            or isinstance(partition_count, bool)
-            or not isinstance(partition_count, int)
-            or partition_count not in {16, 32, 64, 128, 256}
-            or not re.fullmatch(r"sha256:[a-f0-9]{64}", capacity_plan_digest)
-        ):
-            raise SystemExit(
-                "[task execute] GATE_BLOCK --required-workers, --partition-count "
-                "and --capacity-plan-digest must be provided together or omitted "
-                "together so the governed workload topology is derived"
-            )
         pool_id = str(getattr(args, "scale_source_pool_id", "") or "").strip()
         pool_fields = {
             "poolId": pool_id,
@@ -331,9 +332,7 @@ class RuntimeExecutionRequest:
             selector=selector,
             count=count,
             quota=quota,
-            required_workers=required_workers,
-            partition_count=partition_count,
-            capacity_plan_digest=capacity_plan_digest,
+            capacity_calibration=capacity_calibration,
             worker_host_set_binding=worker_host_set_binding,
             topic=topic,
             source_providers=providers,
@@ -355,9 +354,7 @@ class RuntimeExecutionRequest:
                 "selector",
                 "count",
                 "quota",
-                "requiredWorkers",
-                "partitionCount",
-                "capacityPlanDigest",
+                "capacityCalibration",
                 "workerHostSetBinding",
                 "topic",
                 "sourceProviders",
@@ -386,9 +383,9 @@ class RuntimeExecutionRequest:
                 selector=TargetSelector(document.string("selector")),
                 count=document.integer("count"),
                 quota=document.integer("quota"),
-                required_workers=document.integer("requiredWorkers"),
-                partition_count=document.integer("partitionCount"),
-                capacity_plan_digest=document.string("capacityPlanDigest"),
+                capacity_calibration=document.object(
+                    "capacityCalibration"
+                ).to_document(),
                 worker_host_set_binding=(
                     dict(raw["workerHostSetBinding"])
                     if isinstance(raw.get("workerHostSetBinding"), Mapping)
@@ -433,9 +430,7 @@ class RuntimeExecutionRequest:
             "selector": self.selector.value,
             "count": self.count,
             "quota": self.quota,
-            "requiredWorkers": self.required_workers,
-            "partitionCount": self.partition_count,
-            "capacityPlanDigest": self.capacity_plan_digest,
+            "capacityCalibration": dict(self.capacity_calibration),
             "workerHostSetBinding": (
                 dict(self.worker_host_set_binding)
                 if self.worker_host_set_binding is not None

@@ -53,11 +53,11 @@ def validate_release_header(
     if (
         isinstance(value, Mapping)
         and any(field in value for field in _SOURCE_IDENTITY_SET_FIELDS)
-        and value.get("milestone") is None
-        and value.get("targetEnvironment") is None
+        and value.get("selectionScope")
+        not in {"target_environment", "all_publishable", "milestone"}
     ):
         raise ReleaseHeaderError(
-            f"{label} source identity set requires a pool release"
+            f"{label} source identity set requires a pool selection"
         )
     if (
         isinstance(value, Mapping)
@@ -90,9 +90,10 @@ def validate_release_header(
             f"{label} releaseClass must equal productLifecycleState"
         )
     target_environment = document.get("targetEnvironment")
+    selection_scope = document.get("selectionScope")
     milestone = document.get("milestone")
     release_mode = document.get("releaseMode")
-    if target_environment is not None or milestone is not None:
+    if selection_scope is not None:
         if release_mode != release_class.value:
             raise ReleaseHeaderError(
                 f"{label} releaseMode/releaseClass are inconsistent"
@@ -163,6 +164,7 @@ def validate_release_header(
     elif any(
         key in document
         for key in (
+            "selectionScope",
             "releaseMode",
             "poolDigest",
             "counts",
@@ -173,7 +175,7 @@ def validate_release_header(
         )
     ):
         raise ReleaseHeaderError(
-            f"{label} pool selection fields require targetEnvironment or milestone"
+            f"{label} pool selection fields require selectionScope"
         )
 
     authorization_ids = document.get("authorizationRequiredAssetIds")
@@ -213,9 +215,9 @@ def validate_release_header(
             raise ReleaseHeaderError(
                 f"{label} empty baseline cannot carry adoption provenance"
             )
-        if target_environment is not None:
+        if selection_scope is not None:
             raise ReleaseHeaderError(
-                f"{label} empty baseline cannot carry an environment selection"
+                f"{label} empty baseline cannot carry a pool selection"
             )
         if present_identity or present_identity_set:
             raise ReleaseHeaderError(
@@ -256,10 +258,11 @@ def validate_release_header(
                 raise ReleaseHeaderError(
                     f"{label} source identity set is incomplete"
                 )
-            if not (
-                milestone is not None
-                or target_environment is not None
-            ):
+            if selection_scope not in {
+                "target_environment",
+                "all_publishable",
+                "milestone",
+            }:
                 raise ReleaseHeaderError(
                     f"{label} source identity set requires a pool release"
                 )

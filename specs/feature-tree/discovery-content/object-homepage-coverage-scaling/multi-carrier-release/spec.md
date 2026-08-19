@@ -114,7 +114,7 @@
 - 并发上限只约束任一时刻可同时运行的 worker 进程数，不构成 submission、dispatch、对象准入或 promotion 的前置条件。达不到上限、只跑一路或全部串行完成都不改变任何对象的准入与发布结果。
 - 来源发现阶段的 `autoResearchMaxConcurrentWorkers` 与 ReliableTask 交付阶段的 `fleetMaxConcurrentWorkers` 只能由 immutable execution policy 冻结。runtime profile、环境变量、命令行默认值与任何探针观测都不是合法来源。
 - preflight capacity soak 与 workspace smoke 的 `effectiveConcurrency` 只描述探针当时的实际并行度，是诊断观测而不是生产上限；把它投影成上限即为非法来源，必须 fail closed。
-- `local-apple-silicon + cursor_grok` 的容量来源是 create-once receipt `quwoquan_data/control_plane/_shared/capacity_calibration/m100-wave-soak-20260818-v4/receipt.json`（摘要 `sha256:653180ed007d37bd01644f5d19e27b406532cf026a701086a0e06b2beda744f0`）：`autoResearchMaxConcurrentWorkers=8`、`fleetMaxConcurrentWorkers=3`、`objectWallClockSeconds=660`、`completionGraceSeconds=60`。该自包含闭包绑定 100/100 零 429/auth/5xx/timeout/bridge-disconnect 的 `cursor_grok` probe、1.57GB RSS / 1118.5% CPU / 8 bridge 峰值、真实 fleet peak=3 与 19 个逐对象 timing；超出适用范围或任一 evidence ref/digest 漂移即 execution 冻结失败。
+- `local-apple-silicon + cursor_grok` 的容量来源是 create-once receipt `quwoquan_data/control_plane/_shared/capacity_calibration/m100-wave-soak-20260818-v4/receipt.json`（摘要 `sha256:653180ed007d37bd01644f5d19e27b406532cf026a701086a0e06b2beda744f0`）：`autoResearchMaxConcurrentWorkers=8`、`fleetMaxConcurrentWorkers=3`、`objectWallClockSeconds=660`、`completionGraceSeconds=60`。该自包含闭包绑定 100/100 零 429/auth/5xx/timeout/bridge-disconnect 的 `cursor_grok` probe、1.57GB RSS / 1118.5% CPU / 8 bridge 峰值、真实 fleet peak=3 与 20 个逐对象 timing；超出适用范围或任一 evidence ref/digest 漂移即 execution 冻结失败。
 - `execution_state` 中 `managedAgentScheduler` 的 `promptCount` 是单个 managed checkpoint 内语义 Agent prompt 级调度的运行观测。它既不是资源上限，也不是 ReliableTask 的 worker 进程并行度，两个维度不得互相读取或互相推导，该对象也不得以 worker 词元命名任何 prompt 级观测。
 - `approvedQuota`（对象下限）、`targetObjectCount`（本次冻结的工作单元数，也是派生 job 数）与并行上限是三个互不相同的语义，必须在执行策略中各自显式冻结。任一字段不得同时承载其中两个语义，`requiredWorkers` 不得继续由工作单元数或 quota 派生。
 - 规模只改变 wave 数：job 数增长只增加 wave 数，不增加任一时刻同时运行的 worker 进程数。wave 数只由 job 数与冻结的并行上限决定，与 quota 无关。
@@ -374,10 +374,7 @@
 - 尚缺实现：实体锚定判定、最小正文门槛、单实体探测预算、补采重筛、四态聚合和三阶段逐实体对账尚未接入 article target selection。
 - 尚缺验收证据：缺少受治理 provider-state 下拒绝、超时与探测预算耗尽的 api_integration，以及一次真实 execution 的 selection、auto_research、content_plan receipt 对账。
 - 完成判定：`GWT-012` 与 `GWT-013` 的全部结果子句成立，且预筛阈值与探测预算来自 calibration receipt，而不是默认常量或从成稿质量门挪用的数值。
-- 依赖：Data owner 先在可代表主清单冷门实体占比的样本上完成受治理预筛 calibration，再实现四态准入与补采。
-- local_contract 证据：覆盖四态、子原因、归并优先级、补采和两种零合格终态。
-- api_integration 证据：覆盖真实探测状态与三阶段对账。
-- 环境证据：由 `OPEN-001` 承接。
+- 依赖：Data owner 先在可代表主清单冷门实体占比的样本上完成受治理预筛 calibration，再实现四态准入与补采。local_contract 覆盖四态、子原因、归并优先级、补采和两种零合格终态；api_integration 覆盖真实探测状态与三阶段对账；环境消费证据由 `OPEN-001` 承接。
 
 ### OPEN-005 来源发现阶段存活心跳的间隔与过期阈值 calibration
 
@@ -388,7 +385,4 @@
 - 尚缺实现：运行中心跳、最近心跳保留、运行中未按间隔心跳、已终止不会再心跳、进度缺席/不可读/字段缺失的 typed 结果尚未进入统一进度面。
 - 尚缺验收证据：缺少可控时钟 local_contract 和真实进程被强制杀死后的 api_integration，后者必须证明心跳停止、typed 过期与最后心跳事实保留。
 - 完成判定：`GWT-014` 的全部结果子句成立，且心跳间隔与过期阈值来自 calibration receipt，而不是默认常量或从容量上限、单对象 wall-clock 挪用的数值。
-- 依赖：Data owner 先在可代表主清单的样本上标定单实体耗时分布与心跳写入开销，再实现心跳读写面。
-- local_contract 证据：覆盖持续心跳、在场为空和 typed 失败。
-- api_integration 证据：覆盖真实进程终止后的过期判定。
-- 环境证据：由 `OPEN-001` 承接。
+- 依赖：Data owner 先在可代表主清单的样本上标定单实体耗时分布与心跳写入开销，再实现心跳读写面。local_contract 覆盖持续心跳、在场为空和 typed 失败；api_integration 覆盖真实进程终止后的过期判定；环境消费证据由 `OPEN-001` 承接。

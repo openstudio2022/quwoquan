@@ -5,10 +5,17 @@
   "required": [
     "schema",
     "rootExecutionId",
+    "executionMode",
+    "scale",
     "gitBranch",
     "gitCommitSha",
+    "sourceRevision",
     "sourceDigest",
+    "executionBundle",
     "entityCatalogDigest",
+    "semanticSelectionId",
+    "laneExternalInputs",
+    "externalInputsDigest",
     "submissionDigests",
     "executionIds",
     "frozenAt",
@@ -18,10 +25,55 @@
   "properties": {
     "schema": { "const": "quwoquan_data.content_campaign_plan" },
     "rootExecutionId": { "type": "string", "minLength": 1 },
+    "executionMode": { "enum": ["central", "distributed"] },
+    "scale": {"type": "string", "pattern": "^M[1-9][0-9]{0,5}$"},
     "gitBranch": { "type": "string", "minLength": 1 },
     "gitCommitSha": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+    "sourceRevision": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
     "sourceDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "executionBundle": {
+      "type": "object",
+      "required": ["algorithm", "digest", "inputs"],
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {"const": "sha256"},
+        "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "inputs": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+      }
+    },
     "entityCatalogDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "semanticSelectionId": {"enum": ["default", "cursor_grok", "cursor_auto", "not_applicable"]},
+    "semanticPreflightReceipt": {
+      "$ref": "semantic_provider_preflight_receipt_ref.schema.json"
+    },
+    "m100AlphaAcceptance": {
+      "$ref": "m100_alpha_acceptance_binding.schema.json"
+    },
+    "scaleSourcePool": {"$ref": "scale_source_pool_binding.schema.json"},
+    "sourcePoolEvidenceRootRef": {"type": "string", "minLength": 1},
+    "laneSourcePoolSelections": {
+      "type": "object",
+      "required": ["homepage", "article", "image", "video"],
+      "additionalProperties": false,
+      "properties": {
+        "homepage": {"$ref": "scale_source_pool_selection.schema.json"},
+        "article": {"$ref": "scale_source_pool_selection.schema.json"},
+        "image": {"$ref": "scale_source_pool_selection.schema.json"},
+        "video": {"$ref": "scale_source_pool_selection.schema.json"}
+      }
+    },
+    "laneExternalInputs": {
+      "type": "object",
+      "required": ["homepage", "article", "image", "video"],
+      "additionalProperties": false,
+      "properties": {
+        "homepage": { "$ref": "#/$defs/laneExternalInputs" },
+        "article": { "$ref": "#/$defs/laneExternalInputs" },
+        "image": { "$ref": "#/$defs/laneExternalInputs" },
+        "video": { "$ref": "#/$defs/laneExternalInputs" }
+      }
+    },
+    "externalInputsDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
     "submissionDigests": {
       "type": "object",
       "required": ["homepage", "article", "image", "video"],
@@ -44,7 +96,122 @@
         "video": { "type": "string", "minLength": 1 }
       }
     },
+    "reviewedClosureAdoption": {
+      "$ref": "reviewed_closure_adoption_campaign_binding.schema.json"
+    },
+    "distributedRun": {
+      "type": "object",
+      "required": [
+        "campaignRunId",
+        "campaignGeneration",
+        "campaignFencingToken"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "campaignRunId": { "type": "string", "minLength": 1 },
+        "campaignGeneration": { "type": "integer", "minimum": 1 },
+        "campaignFencingToken": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      }
+    },
     "frozenAt": { "type": "string", "format": "date-time" },
     "planDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "scale": {"const": "M1000"},
+          "semanticSelectionId": {"enum": ["default", "cursor_grok", "cursor_auto"]}
+        },
+        "required": ["scale", "semanticSelectionId"]
+      },
+      "then": {"required": ["m100AlphaAcceptance"]},
+      "else": {"not": {"required": ["m100AlphaAcceptance"]}}
+    },
+    {
+      "if": {
+        "properties": {
+          "semanticSelectionId": {"enum": ["default", "cursor_grok", "cursor_auto"]}
+        },
+        "required": ["semanticSelectionId"]
+      },
+      "then": {"required": ["semanticPreflightReceipt"]}
+    },
+    {
+      "if": {
+        "properties": {
+          "executionMode": {"const": "distributed"}
+        },
+        "required": ["executionMode"]
+      },
+      "then": {"required": ["distributedRun"]},
+      "else": {"not": {"required": ["distributedRun"]}}
+    },
+    {
+      "if": {"required": ["scaleSourcePool"]},
+      "then": {
+        "required": ["sourcePoolEvidenceRootRef", "laneSourcePoolSelections"]
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            {"required": ["sourcePoolEvidenceRootRef"]},
+            {"required": ["laneSourcePoolSelections"]}
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "rootExecutionId": {
+            "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-homepage-m(?:100|1000|10000)--"
+          }
+        },
+        "required": ["rootExecutionId"]
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            {"required": ["scaleSourcePool"]},
+            {"required": ["sourcePoolEvidenceRootRef"]},
+            {"required": ["laneSourcePoolSelections"]}
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "rootExecutionId": {
+            "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-homepage-m10000--"
+          }
+        },
+        "required": ["rootExecutionId"]
+      },
+      "then": {
+        "required": [
+          "scaleSourcePool", "sourcePoolEvidenceRootRef", "laneSourcePoolSelections"
+        ]
+      }
+    }
+  ],
+  "$defs": {
+    "laneExternalInputs": {
+      "type": "object",
+      "required": ["executionId", "externalInputRefs", "externalInputsDigest"],
+      "additionalProperties": false,
+      "properties": {
+        "executionId": { "type": "string", "minLength": 1 },
+        "externalInputRefs": {
+          "type": "array",
+          "items": { "$ref": "campaign_external_input_ref.schema.json" }
+        },
+        "externalInputsDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+      }
+    }
   }
 }
