@@ -8,16 +8,13 @@
 /// spec_ref: specs/feature-tree/chat-conversation/message-reliability-foundation/realtime-push-and-offline-sync/spec.md#gwt-002
 library;
 
-import 'dart:async';
-
 import 'package:flutter/foundation.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/runtime/di/chat_message_application_dependencies.dart';
-import 'package:quwoquan_app/runtime/observability/app_observability_ports.dart';
-import 'package:quwoquan_runtime_errors/runtime_errors.dart' show RuntimeFailureBase;
+import 'package:quwoquan_runtime_errors/runtime_errors.dart'
+    show RuntimeFailureBase;
 import 'package:quwoquan_app/service/chat_service/chat/conversation/adapters/conversation_sync_service.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message/application/public/chat_message_media_view_data.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message/application/public/chat_message_timeline.dart';
@@ -120,10 +117,7 @@ final class _FakeExceptionTelemetry extends Fake
 
 /// 记录型 read：只解析恢复链路真实消费的 provider，其余一律拒绝。
 final class _ReconnectReadScope {
-  _ReconnectReadScope({
-    required this.snapshot,
-    required this.controller,
-  });
+  _ReconnectReadScope({required this.snapshot, required this.controller});
 
   final ChatMessageTimelineSnapshot snapshot;
   final _RecordingTimelineController controller;
@@ -138,10 +132,11 @@ final class _ReconnectReadScope {
     if (identical(listenable, localChatSearchSyncProvider)) {
       return searchSync as T;
     }
-    if (listenable == chatMessageTimelineProvider(_conversationId)) {
+    final candidate = listenable as Object;
+    if (candidate == chatMessageTimelineProvider(_conversationId)) {
       return snapshot as T;
     }
-    if (listenable == chatMessageTimelineControllerProvider(_conversationId)) {
+    if (candidate == chatMessageTimelineControllerProvider(_conversationId)) {
       return controller as T;
     }
     if (identical(listenable, exceptionTelemetryPortProvider)) {
@@ -265,11 +260,9 @@ void main() {
     }
     await _drainRecoveryTimers();
 
-    expect(
-      scope.controller.syncFromSeqCalls,
-      [3],
-      reason: '恢复事件必须以端侧已持有的最大 seq 为起点补齐缺口',
-    );
+    expect(scope.controller.syncFromSeqCalls, [
+      3,
+    ], reason: '恢复事件必须以端侧已持有的最大 seq 为起点补齐缺口');
     expect(scope.conversationSync.syncCalls, greaterThan(0));
     expect(scope.searchSync.syncCalls, greaterThan(0));
   });
@@ -370,11 +363,9 @@ void main() {
     }
     await _drainRecoveryTimers();
 
-    expect(
-      scope.controller.syncFromSeqCalls,
-      [3],
-      reason: '后台窗口的消息必须以本地最大 seq 为起点补齐',
-    );
+    expect(scope.controller.syncFromSeqCalls, [
+      3,
+    ], reason: '后台窗口的消息必须以本地最大 seq 为起点补齐');
   });
 
   test('WS 重试预算耗尽降级 LongPoll 时同样触发恢复补洞', () async {
@@ -433,10 +424,8 @@ void main() {
     }
     await _drainRecoveryTimers();
 
-    expect(
-      scope.controller.syncFromSeqCalls,
-      [3],
-      reason: '降级 LongPoll 不承载断连窗口回放，必须由 seq 补洞收敛',
-    );
+    expect(scope.controller.syncFromSeqCalls, [
+      3,
+    ], reason: '降级 LongPoll 不承载断连窗口回放，必须由 seq 补洞收敛');
   });
 }

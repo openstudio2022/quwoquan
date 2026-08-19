@@ -87,8 +87,7 @@ final class StartupPhaseSnapshot {
     if (runAppMs != null) 'runAppMs': runAppMs,
     if (firstFrameMs != null) 'firstFrameMs': firstFrameMs,
     if (welcomeShownMs != null) 'welcomeShownMs': welcomeShownMs,
-    if (welcomeWindowInitMs != null)
-      'welcomeWindowInitMs': welcomeWindowInitMs,
+    if (welcomeWindowInitMs != null) 'welcomeWindowInitMs': welcomeWindowInitMs,
     if (welcomeCompletedMs != null) 'welcomeCompletedMs': welcomeCompletedMs,
     if (shellFirstPaintMs != null) 'shellFirstPaintMs': shellFirstPaintMs,
     if (androidActivityOnCreateMs != null)

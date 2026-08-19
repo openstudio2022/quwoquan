@@ -193,10 +193,7 @@ final class ContentPostViewData {
   String get normalizedTitle => title.trim();
   String get normalizedBody => (body ?? '').trim();
   String get normalizedSummary => summary.trim();
-  String get articlePreviewText {
-    final summary = normalizedSummary;
-    return summary.isNotEmpty ? summary : normalizedBody;
-  }
+  String get articlePreviewText => normalizedSummary;
 
   List<String> get mediaImageUrls => imageUrls
       .map((url) => url.trim())

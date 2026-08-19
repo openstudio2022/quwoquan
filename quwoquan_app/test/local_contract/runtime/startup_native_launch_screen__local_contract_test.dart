@@ -287,14 +287,8 @@ void main() {
       expect(gate, contains('normalWindowFocusReleaseRequested'));
       expect(gate, contains('normalWindowFocusReleased'));
       expect(gate, contains('normalHandoffDispatchPosted'));
-      expect(
-        gate,
-        contains('requestWindowFocusReleaseWhenReady();'),
-      );
-      expect(
-        gate,
-        contains('scheduleFlutterMainHandoffWhenReady();'),
-      );
+      expect(gate, contains('requestWindowFocusReleaseWhenReady();'));
+      expect(gate, contains('scheduleFlutterMainHandoffWhenReady();'));
       expect(
         gate,
         contains(
@@ -310,10 +304,7 @@ void main() {
           'WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE);',
         ),
       );
-      expect(
-        gate,
-        contains('if (!normalWindowFocusReleased'),
-      );
+      expect(gate, contains('if (!normalWindowFocusReleased'));
       expect(
         gate,
         contains(
@@ -520,8 +511,6 @@ void main() {
         scene.indexOf('@objc final class AppSceneDelegate'),
       );
       expect(recoveryScene, isNot(contains('FlutterSceneDelegate')));
-      // Flutter 场景不参与 UIKit state restoration：持久化 activity 会让冷启动
-      // 尝试恢复过期 scene 状态，Debug 直装可能卡死在启动屏。
       final appSceneDelegate = scene.substring(
         scene.indexOf('@objc final class AppSceneDelegate'),
       );
@@ -548,6 +537,22 @@ void main() {
       expect(iosGateProbe, isNot(contains('"uninstall"')));
       expect(iosGateProbe, contains('"normalLaunchVerified"'));
       expect(iosGateProbe, contains('"status": "passed" if not issues'));
+      expect(iosGateProbe, contains('verify_web_cta_with_xcuitest'));
+      expect(iosGateProbe, contains('trustedExactPublicWebURLRequested'));
+      expect(iosGateProbe, contains('safariForegroundObserved'));
+      expect(iosGateProbe, contains('sameAppProcessAfterReturn'));
+      final iosUiTest = _readAppFile('ios/RunnerUITests/RunnerUITests.m');
+      expect(iosUiTest, contains('QWQNativeStartupRecoveryWebUITests'));
+      expect(
+        iosUiTest,
+        contains('testRecoveryWebCTAOpensSafariAndReturnsToSameProcess'),
+      );
+      expect(iosUiTest, contains('com.apple.mobilesafari'));
+      expect(iosUiTest, contains('recovery_web_cta_returned_app_foreground'));
+      expect(ios, contains('qwq.native.startup.recovery.web'));
+      expect(ios, contains('ios_native_recovery_external_open_requested'));
+      expect(ios, contains('ios_native_recovery_external_open_completed'));
+      expect(ios, contains('ios_native_recovery_external_returned'));
       expect(ios, contains('effectiveLaunchManifestDigest'));
       expect(ios, contains('clearFatalMarker(reason: "safe_shell_conflict")'));
       expect(ios, contains('clearFatalMarker(reason: "artifact_mismatch")'));
@@ -931,8 +936,7 @@ void main() {
       // probe 实现单轨在 startup_first_frame/ 包内，入口只做 re-export；
       // 源码断言读取「入口 + 包内全部模块」的拼接文本。
       final probeSources =
-          _appFile('scripts/device/startup_first_frame/__init__.py')
-              .parent
+          _appFile('scripts/device/startup_first_frame/__init__.py').parent
               .listSync()
               .whereType<File>()
               .where((file) => file.path.endsWith('.py'))
@@ -1171,20 +1175,25 @@ void main() {
       expect(gradle, contains('direct-debug'));
       expect(gradle, contains('QWQ_RUNTIME_DART_DEFINES_JSON'));
       expect(gradle, contains('app-debug-preflight'));
-      // 内容激活是服务端运行时事实：构建与原生层不得再携带内容 release 身份。
-      expect(gradle, isNot(contains('QWQ_CONTENT_RELEASE_ID')));
-      expect(gradle, isNot(contains('QWQ_CONTENT_MANIFEST_DIGEST')));
-      expect(gradle, isNot(contains('QWQ_CONTENT_READINESS_RECEIPT_DIGEST')));
-      expect(activity, isNot(contains('contentReadinessReceiptDigest')));
+      expect(gradle, contains('QWQ_CONTENT_RELEASE_ID'));
+      expect(gradle, contains('QWQ_CONTENT_MANIFEST_DIGEST'));
+      expect(gradle, contains('QWQ_CONTENT_READINESS_RECEIPT_DIGEST'));
+      expect(activity, contains('contentReadinessReceiptDigest'));
       final runtimeConfig = _readAppFile(
         'lib/runtime/config/cloud_runtime_config.dart',
       );
-      final runtimeResolver = _readAppFile(
-        'lib/runtime/config/runtime_package_resolver.dart',
+      expect(runtimeConfig, contains('CloudRuntimePackageResolution.resolve'));
+      expect(runtimeConfig, contains('nativeRuntimeDriftKeys'));
+      expect(runtimeConfig, contains(r'NATIVE_RUNTIME_PACKAGE.$key'));
+      expect(runtimeConfig, contains('hydrateFromNativeRuntimePackage('));
+      expect(
+        runtimeConfig,
+        isNot(contains('hydrateFromNativeRuntimePackageForTest')),
       );
-      expect(runtimeConfig, contains('RuntimePackageResolver.resolve'));
-      expect(runtimeResolver, contains(r'NATIVE_RUNTIME_PACKAGE.$key'));
-      expect(runtimeConfig, contains('if (!shouldLoadNativeRuntimePackage)'));
+      expect(
+        runtimeConfig,
+        isNot(contains('_forceNativeRuntimePackageForTest')),
+      );
       expect(gradle, contains('requireCompleteRuntimeDartDefines'));
       expect(gradle, contains('verifyAndroidLocalLauncherContract'));
       expect(gradle, contains('QWQ_CONSUMER_LEASE_ACQUIRED'));

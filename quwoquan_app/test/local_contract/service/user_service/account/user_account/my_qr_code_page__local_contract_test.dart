@@ -2,14 +2,15 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
-import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/application/public/profile_edit_models.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/runtime/transport/links/app_public_content_links.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/presentation/my_qr_card.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/presentation/my_qr_code_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../../../support/service/user_service/persona_management/persona/contact_profile_queries.dart';
+import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
 
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update/spec.md#gwt-004
 
@@ -33,19 +34,16 @@ const _untrustedQrCard = ProfileQrCardData(
   shareText: 'https://evil.example/u/current?qr=fixture',
 );
 
+final _publicLinks = PublicContentLinkBuilder(
+  Uri.parse('https://quwoquan.com'),
+);
+
 Future<void> _ignoreQrShare(
   BuildContext context,
   ProfileQrShareRequest request,
 ) async {}
 
 void main() {
-  setUp(() {
-    CloudRuntimeConfig.hydrateFromNativeRuntimePackage(const <String, String>{
-      'PUBLIC_WEB_BASE_URL': 'https://quwoquan.com',
-    }, enforceNativeLaunchBinding: false);
-  });
-  tearDown(CloudRuntimeConfig.clearNativeRuntimePackageForTest);
-
   test('ProfileQrCard wire只接受自洽公开主页且拒绝过期卡片', () {
     final now = DateTime.utc(2026, 8, 9, 10);
     final card = ProfileQrCardData.fromWire(
@@ -91,6 +89,8 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          ...sealedCloudBoundaryOverrides(),
+          publicContentLinkBuilderProvider.overrideWithValue(_publicLinks),
           profileEditQueryProvider.overrideWith(
             (ref, surface) => ContactProfileEditQueryFake(qrCard: _qrCard),
           ),
@@ -115,6 +115,8 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          ...sealedCloudBoundaryOverrides(),
+          publicContentLinkBuilderProvider.overrideWithValue(_publicLinks),
           profileEditQueryProvider.overrideWith(
             (ref, surface) =>
                 ContactProfileEditQueryFake(qrCard: _untrustedQrCard),
@@ -147,6 +149,8 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          ...sealedCloudBoundaryOverrides(),
+          publicContentLinkBuilderProvider.overrideWithValue(_publicLinks),
           profileEditQueryProvider.overrideWith(
             (ref, surface) => ContactProfileEditQueryFake(qrCard: card),
           ),

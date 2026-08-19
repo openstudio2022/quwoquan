@@ -45,7 +45,16 @@ BASELINE_TOP_LEVEL_FIELDS = {
     "receipts",
     "units",
 }
-BASELINE_GOVERNANCE_FIELDS = {"owner", "reason", "expires_when"}
+BASELINE_GOVERNANCE_REQUIRED_FIELDS = {
+    "owner",
+    "reason",
+    "expires_when",
+    "measure",
+}
+BASELINE_GOVERNANCE_OPTIONAL_FIELDS = {"superseded_measure"}
+BASELINE_GOVERNANCE_FIELDS = (
+    BASELINE_GOVERNANCE_REQUIRED_FIELDS | BASELINE_GOVERNANCE_OPTIONAL_FIELDS
+)
 BASELINE_UNIT_FIELDS = {
     "kind",
     "scope",
@@ -171,12 +180,14 @@ def load_baseline() -> dict:
             f"{cc.BASELINE_PATH}: ruleId 必须是 {RULE_ID}，实测 {document.get('ruleId')!r}"
         )
     governance = document.get("_governance")
+    governance_fields = set(governance) if isinstance(governance, dict) else set()
     if (
         not isinstance(governance, dict)
-        or set(governance) != BASELINE_GOVERNANCE_FIELDS
+        or not BASELINE_GOVERNANCE_REQUIRED_FIELDS.issubset(governance_fields)
+        or not governance_fields.issubset(BASELINE_GOVERNANCE_FIELDS)
     ):
         raise ValueError(f"{cc.BASELINE_PATH}: _governance fields mismatch")
-    for key in BASELINE_GOVERNANCE_FIELDS:
+    for key in governance_fields:
         if not str(governance.get(key) or "").strip():
             raise ValueError(f"{cc.BASELINE_PATH}: _governance.{key} 不得为空")
     policy = document.get("policy") or {}

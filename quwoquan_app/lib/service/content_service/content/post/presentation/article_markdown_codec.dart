@@ -141,11 +141,10 @@ class ArticleMarkdownCodec {
           // 富块原样写回（GWT-003）：编辑器加载不降级、序列化不改写。
           orderedIndex = 0;
           if (node.text.trim().isNotEmpty) {
-            for (final line
-                in _serializeInlineText(
-                  node.text.trim(),
-                  node.spans,
-                ).split('\n')) {
+            for (final line in _serializeInlineText(
+              node.text.trim(),
+              node.spans,
+            ).split('\n')) {
               buffer.writeln('> $line');
             }
             buffer.writeln();
@@ -194,6 +193,7 @@ class ArticleMarkdownCodec {
     Map<String, Object?>? assetManifest,
     MediaAssetManifestResolver assetManifestResolver =
         _articleAssetManifestResolver,
+    String Function(String raw)? mediaUrlResolver,
   }) {
     final parsed = const QwqMarkdownParser().parse(markdown).document;
     final mediaAssetsById = resolveArticleAssetManifestVariants(
@@ -308,12 +308,26 @@ class ArticleMarkdownCodec {
         case QwqMarkdownBlockKind.figure:
           final ref = block.assetRef;
           if (ref != null) {
-            nodes.add(_figureNodeFromAssetRef(ref, block.id, assetsById));
+            nodes.add(
+              _figureNodeFromAssetRef(
+                ref,
+                block.id,
+                assetsById,
+                mediaUrlResolver: mediaUrlResolver,
+              ),
+            );
           }
           break;
         case QwqMarkdownBlockKind.gallery:
           for (final ref in block.assetRefs) {
-            nodes.add(_figureNodeFromAssetRef(ref, block.id, assetsById));
+            nodes.add(
+              _figureNodeFromAssetRef(
+                ref,
+                block.id,
+                assetsById,
+                mediaUrlResolver: mediaUrlResolver,
+              ),
+            );
           }
           break;
         case QwqMarkdownBlockKind.horizontalRule:
@@ -541,10 +555,13 @@ class ArticleMarkdownCodec {
   static ArticleDocumentNode _figureNodeFromAssetRef(
     QwqMarkdownAssetRef ref,
     String blockId,
-    Map<String, String> assetsById,
-  ) {
+    Map<String, String> assetsById, {
+    String Function(String raw)? mediaUrlResolver,
+  }) {
     final assetId = ref.assetId.trim();
-    final resolvedImageUrl = assetsById[assetId] ?? _directMediaUrlFor(assetId);
+    final resolvedImageUrl =
+        assetsById[assetId] ??
+        _directMediaUrlFor(assetId, mediaUrlResolver: mediaUrlResolver);
     return ArticleDocumentNode(
       id: blockId.isNotEmpty ? blockId : assetId,
       type: ArticleDocumentNodeType.figure,
@@ -557,7 +574,14 @@ class ArticleMarkdownCodec {
     );
   }
 
-  static String _directMediaUrlFor(String assetId) {
+  static String _directMediaUrlFor(
+    String assetId, {
+    String Function(String raw)? mediaUrlResolver,
+  }) {
+    final injected = mediaUrlResolver?.call(assetId) ?? '';
+    if (injected.isNotEmpty) {
+      return injected;
+    }
     final candidates = resolveContentMediaUrlCandidates(assetId);
     if (candidates.isEmpty) {
       return '';

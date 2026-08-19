@@ -7,11 +7,15 @@ package local_contract
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"sync"
 	"testing"
 	"time"
 
+	runtimemessaging "quwoquan_service/runtime/messaging"
+	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/services/realtime-gateway/internal/realtime/connection/application"
+	"quwoquan_service/services/realtime-gateway/internal/realtime/connection/infrastructure/redisstore"
 )
 
 // failingConnectionSink 模拟客户端写通道故障：Deliver 恒失败。
@@ -43,6 +47,37 @@ func (sink *failingConnectionSink) Delivers() int {
 	sink.mu.Lock()
 	defer sink.mu.Unlock()
 	return sink.delivers
+}
+
+type closeableEventSubscription struct {
+	events chan runtimemessaging.EphemeralDelivery
+	once   sync.Once
+}
+
+func newCloseableEventSubscription() *closeableEventSubscription {
+	return &closeableEventSubscription{
+		events: make(chan runtimemessaging.EphemeralDelivery),
+	}
+}
+
+func (subscription *closeableEventSubscription) Channel() <-chan runtimemessaging.EphemeralDelivery {
+	return subscription.events
+}
+
+func (subscription *closeableEventSubscription) Close() error {
+	subscription.once.Do(func() { close(subscription.events) })
+	return nil
+}
+
+type closeableEventSource struct {
+	subscription *closeableEventSubscription
+}
+
+func (source *closeableEventSource) SubscribeIdentity(
+	context.Context,
+	application.TrustedIdentity,
+) (runtimemessaging.EphemeralSubscription, error) {
+	return source.subscription, nil
 }
 
 func TestDeliveryFailureTerminatesConnectionFailClosed(t *testing.T) {
@@ -92,5 +127,57 @@ func TestDeliveryFailureTerminatesConnectionFailClosed(t *testing.T) {
 			"deliver attempts=%d want=1（投递失败后不得继续向失效通道推送）",
 			sink.Delivers(),
 		)
+	}
+}
+
+func TestClosedSubscriptionTerminatesConnectionFailClosed(t *testing.T) {
+	t.Parallel()
+	client := rtredis.NewMemoryClient()
+	authority := newTestAccountSecurityAuthority()
+	presence := newTestPresenceProjection(t, client)
+	security := redisstore.NewAccountSecurityStateStore(client, presence)
+	subscription := newCloseableEventSubscription()
+	hub, err := application.NewHub(
+		redisstore.NewLeaseStore(client),
+		presence,
+		&closeableEventSource{subscription: subscription},
+		authority,
+		security,
+		redisstore.NewAccountSecurityRelay(client),
+		"node-subscription-closed",
+		slog.Default(),
+	)
+	if err != nil {
+		t.Fatalf("new hub: %v", err)
+	}
+	identity := application.TrustedIdentity{
+		AccountID: "acct-subscription-closed",
+		PersonaID: "persona-subscription-closed",
+		DeviceID:  "device-subscription-closed",
+	}
+	sink := newFailingConnectionSink()
+	detach, err := hub.Attach(
+		context.Background(),
+		identity,
+		1,
+		"conn-subscription-closed",
+		"websocket",
+		sink,
+	)
+	if err != nil {
+		t.Fatalf("attach connection: %v", err)
+	}
+	t.Cleanup(detach)
+
+	if err := subscription.Close(); err != nil {
+		t.Fatalf("close subscription: %v", err)
+	}
+	select {
+	case reason := <-sink.kicked:
+		if reason != "subscription_closed" {
+			t.Fatalf("terminate reason=%q want=subscription_closed", reason)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("closed subscription did not terminate the connection")
 	}
 }

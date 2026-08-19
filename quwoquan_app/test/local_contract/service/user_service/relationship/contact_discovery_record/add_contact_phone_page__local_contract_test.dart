@@ -18,7 +18,7 @@ import 'package:quwoquan_app/runtime/platform/permissions/app_permission_coordin
 import 'package:quwoquan_app/runtime/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/runtime/platform/platform_providers.dart';
 import 'package:quwoquan_app/service/user_service/relationship/contact_discovery_record/adapters/contact_discovery_remote.dart';
-import 'package:quwoquan_app/service/user_service/relationship/contact_discovery_record/adapters/contact_hash_service.dart';
+import 'package:quwoquan_app/service/user_service/relationship/contact_discovery_record/domain/contact_hash_service.dart';
 import 'package:quwoquan_app/service/user_service/relationship/contact_discovery_record/application/public/contact_discovery_repository.dart';
 import 'package:quwoquan_app/service/user_service/relationship/contact_discovery_record/presentation/phone_contacts_page.dart';
 import 'package:quwoquan_app/service/user_service/relationship/persona_relationship/application/persona_relationship_facets.dart';

@@ -464,7 +464,7 @@ void main() {
           matchesGoldenFile('goldens/login_${scenario.name}.png'),
         );
       }
-    });
+    }, tags: <String>['serial', 'visual']);
   });
 
   group('手机号、协议与验证码交互', () {
@@ -1741,6 +1741,7 @@ List<_GoldenScenario> _goldenScenarios() => <_GoldenScenario>[
     () => LoginFlowState(
       step: LoginStep.phoneEntry,
       flowId: 'g04',
+      otpReadinessState: OtpReadinessState.ready,
       phone: '18013819016',
       maskedPhone: '180****9016',
       consentState: LoginConsentState.accepted,
@@ -1828,6 +1829,7 @@ List<_GoldenScenario> _goldenScenarios() => <_GoldenScenario>[
     () => LoginFlowState(
       step: LoginStep.socialPhoneEntry,
       flowId: 'g15',
+      otpReadinessState: OtpReadinessState.ready,
       provider: 'wechat',
       bindingTicket: 'binding-ticket',
       bindingDeadline: DateTime.now().add(const Duration(minutes: 3)),
@@ -1859,6 +1861,7 @@ List<_GoldenScenario> _goldenScenarios() => <_GoldenScenario>[
     () => LoginFlowState(
       step: LoginStep.phoneEntry,
       flowId: 'g18',
+      otpReadinessState: OtpReadinessState.ready,
       phone: '18013819016',
       maskedPhone: '180****9016',
       consentState: LoginConsentState.accepted,
@@ -1879,6 +1882,7 @@ List<_GoldenScenario> _goldenScenarios() => <_GoldenScenario>[
     () => LoginFlowState(
       step: LoginStep.socialPhoneEntry,
       flowId: 'g20',
+      otpReadinessState: OtpReadinessState.ready,
       provider: 'wechat',
       bindingTicket: 'binding-ticket',
       bindingDeadline: DateTime.now().add(const Duration(minutes: 3)),
@@ -1920,6 +1924,7 @@ LoginFlowState _otpGoldenState({
   return LoginFlowState(
     step: step,
     flowId: flowId,
+    otpReadinessState: OtpReadinessState.ready,
     operation: operation,
     phone: '18013819016',
     maskedPhone: '180****9016',

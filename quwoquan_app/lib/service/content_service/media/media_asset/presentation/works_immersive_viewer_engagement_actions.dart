@@ -840,9 +840,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
               ),
         );
         if (!mounted) return;
-        _setMountedState(
-          () => _wishlistStateByHomepageId[homepageId] = false,
-        );
+        _setMountedState(() => _wishlistStateByHomepageId[homepageId] = false);
       } finally {
         _loadingWishlistHomepageIds.remove(homepageId);
       }
@@ -914,87 +912,12 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
     if (!mounted) {
       return;
     }
-    _setMountedState(
-      () => _wishlistStateByHomepageId[homepageId] = wishlisted,
-    );
+    _setMountedState(() => _wishlistStateByHomepageId[homepageId] = wishlisted);
     if (!wishlisted) {
       AppToast.show(context, ObjectHomepageText.wishlistRemovedFeedback);
       return;
     }
     await _showWishlistIntersectionFeedback(homepageId);
-  }
-
-  /// 回顾内容的溯源锚点：作者主动写入的 gatheringRef（wire 直接可得）。
-  String _recapGatheringRefFor(ContentPostViewData post) {
-    final raw = _effectiveRawPostById(post.id);
-    return raw?['gatheringRef']?.toString().trim() ?? '';
-  }
-
-  /// 种草内容溯源判定：content 锚点社会证明成形级 > 0 才显示
-  /// 「他们从这条内容出发一起去了」；读取失败诚实缺席。
-  void _ensureSeedProvenanceLoaded(ContentPostViewData post) {
-    final postId = post.id.trim();
-    if (postId.isEmpty ||
-        _seedProvenanceByPostId.containsKey(postId) ||
-        !_loadingSeedProvenancePostIds.add(postId)) {
-      return;
-    }
-    unawaited(() async {
-      var formed = false;
-      try {
-        final proof = await ref
-            .read(workBrowserSocialProofReaderProvider)
-            .getGatheringSocialProof(anchorKind: 'content', objectId: postId);
-        formed = proof.formedCount > 0;
-      } catch (error, stackTrace) {
-        unawaited(
-          ref
-              .read(exceptionTelemetryPortProvider)
-              .recordHandledException(
-                source: 'content.works_viewer.load_seed_provenance',
-                error: error,
-                stackTrace: stackTrace,
-              ),
-        );
-      } finally {
-        _loadingSeedProvenancePostIds.remove(postId);
-      }
-      if (!mounted) return;
-      _setMountedState(() => _seedProvenanceByPostId[postId] = formed);
-    }());
-  }
-
-  void _openRecapProvenance(String gatheringRef) {
-    context.push(AppRoutePaths.gatheringDetail(id: gatheringRef));
-  }
-
-  /// 种草溯源点击：经既有按源公开行动读面取第一条成形行动进详情。
-  void _openSeedProvenance(ContentPostViewData post) {
-    unawaited(() async {
-      try {
-        final cards = await ref
-            .read(gatheringQueryReaderProvider)
-            .listBySource(
-              GatheringBySourceListQuery(
-                sourceObjectTypeRef: 'content',
-                sourceObjectId: post.id,
-                limit: 1,
-              ),
-            );
-        if (!mounted || cards.isEmpty) return;
-        _openRecapProvenance(cards.first.gatheringId);
-      } catch (error, stackTrace) {
-        unawaited(
-          ref
-              .read(exceptionTelemetryPortProvider)
-              .recordHandledException(
-                source: 'content.works_viewer.open_seed_provenance',
-                error: error,
-                stackTrace: stackTrace,
-              ),
-        );
-      }
-    }());
   }
 
   /// Aha 时刻（诚实两态）：想去成功后立刻回答「谁也想去」。

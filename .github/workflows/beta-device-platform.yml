@@ -1,5 +1,9 @@
 name: Beta Device Platform
 
+env:
+  PUB_HOSTED_URL: https://pub.flutter-io.cn
+  FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn
+
 on:
   workflow_call:
     inputs:
@@ -66,8 +70,11 @@ permissions:
 jobs:
   device:
     name: Beta ${{ inputs.platform }} device matrix
-    runs-on: [self-hosted, macOS, ARM64, "mobile-${{ inputs.platform }}"]
-    timeout-minutes: ${{ inputs.validation_profile == 'nightly_full' && 120 || (inputs.validation_profile == 'release_candidate' && 90 || 4) }}
+    runs-on: [self-hosted, macOS, ARM64]
+    # PR-light still performs a real package/device pass; a cold checkout alone
+    # can exceed four minutes. Keep every profile bounded while leaving enough
+    # time for exact checkout, lease, native startup and evidence closure.
+    timeout-minutes: ${{ inputs.validation_profile == 'nightly_full' && 120 || ((inputs.validation_profile == 'release_candidate' || inputs.validation_profile == 'manual_full' || inputs.validation_profile == 'mainline_auto_prod') && 90 || 60) }}
     permissions:
       contents: read
       attestations: read
@@ -85,7 +92,6 @@ jobs:
       execution_ended_at: ${{ steps.execution_end.outputs.ended_at }}
       recovery_receipt_base64: ${{ steps.recovery_receipt.outputs.receipt_base64 }}
     env:
-      QWQ_OUTPUT_ROOT: ${{ runner.temp }}/quwoquan-device-matrix/${{ github.run_id }}/${{ github.run_attempt }}/${{ inputs.platform }}/.qwq_output
       PLATFORM_REPO_DIR: ${{ github.workspace }}/.qwq_output/env/repo/local/device-matrix/cache/checkouts/${{ github.run_id }}/${{ github.run_attempt }}/${{ inputs.platform }}
       ALPHA_TEST_AUTH_TOKEN: ${{ secrets.ALPHA_TEST_AUTH_TOKEN }}
       BETA_TEST_AUTH_TOKEN: ${{ secrets.BETA_TEST_AUTH_TOKEN }}
@@ -97,6 +103,8 @@ jobs:
       PROD_ACCOUNT_CLOSURE_PERSONA_ID: ${{ secrets.PROD_ACCOUNT_CLOSURE_PERSONA_ID }}
       VIDEO_PLAYBACK_CANARY_WORK_ID: ${{ vars.VIDEO_PLAYBACK_CANARY_WORK_ID }}
     steps:
+      - name: Initialize runner-local device output root
+        run: echo "QWQ_OUTPUT_ROOT=$RUNNER_TEMP/quwoquan-device-matrix/${{ github.run_id }}/${{ github.run_attempt }}/${{ inputs.platform }}/.qwq_output" >> "$GITHUB_ENV"
       - id: start
         name: Start platform timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
@@ -192,13 +200,31 @@ jobs:
           echo "QWQ_PROD_RELEASE_ARTIFACT_ROOT=$ROOT" >> "$GITHUB_ENV"
       - name: Install Flutter dependencies
         working-directory: ${{ env.PLATFORM_REPO_DIR }}/quwoquan_app
-        run: flutter pub get
+        run: flutter pub get --enforce-lockfile
       - name: Build Android package-only startup matrix
         if: ${{ inputs.platform == 'android' }}
         working-directory: ${{ env.PLATFORM_REPO_DIR }}/quwoquan_app
+        env:
+          MOBILE_MATRIX_ENV_JSON: ${{ inputs.env_json }}
         run: |
+          set -euo pipefail
+          STARTUP_ENVIRONMENTS="$(python3 -c '
+          import json, sys
+          environments = json.loads(sys.argv[1])
+          allowed = {"alpha", "beta", "gamma", "prod"}
+          if not isinstance(environments, list) or not environments:
+              raise SystemExit("GATE_BLOCK: mobile matrix environment list is empty")
+          if any(not isinstance(item, str) or item not in allowed for item in environments):
+              raise SystemExit("GATE_BLOCK: mobile matrix environment list is invalid")
+          print("\n".join(dict.fromkeys(environments)))
+          ' "$MOBILE_MATRIX_ENV_JSON")"
+          MATRIX_ENV_ARGS=()
+          while IFS= read -r environment; do
+            MATRIX_ENV_ARGS+=(--environment "$environment")
+          done <<< "$STARTUP_ENVIRONMENTS"
           python3 scripts/device/build_startup_environment_matrix.py \
             --platform android \
+            "${MATRIX_ENV_ARGS[@]}" \
             --output-root "$QWQ_OUTPUT_ROOT/env/repo/runs/startup-environment-android-build-matrix"
       - name: Verify Android native startup on the leased device
         if: ${{ inputs.platform == 'android' }}

@@ -1,7 +1,11 @@
 backend: mongodb
 role: projection
 collections:
-  rm_discovery_feed: {entity: RecommendationCandidateIndexView, role: projection}
+  rm_discovery_feed:
+    entity: RecommendationCandidateIndexView
+    role: projection
+    writers: [content-service]
+    description: recommendation-service 是唯一存储 owner；content-service 仅作为 specs/feature-tree/discovery-content/feed-orchestration-recommendation/spec.md#open-001 关闭前的受控过渡 projector writer，OPEN-001 关闭时必须同步移除本 writer 声明。
   rm_gathering_candidates:
     entity: RecommendationGatheringCandidateProjection
     role: projection

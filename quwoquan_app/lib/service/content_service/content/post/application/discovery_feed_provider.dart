@@ -54,15 +54,20 @@ void _requireCanonicalPolicyDigest(String? policyDigest) {
   }
 }
 
-bool _isCanonicalInitialEmptyPage(String channelId, DiscoveryFeedPage page) {
+bool _isCanonicalInitialEmptyPage(
+  String channelId,
+  DiscoveryFeedPage page, {
+  required ContentReleaseRequirement releaseRequirement,
+}) {
   if (!page.isCanonicalEmpty) {
     return false;
   }
-  // `no_active_release` 是服务端运行时事实产生的合法空态（DEC-004）：
-  // 任何安装/启动路径都以同一空态呈现，不再按制品内容绑定改判协议违规。
+  final requiresActiveRelease =
+      releaseRequirement == ContentReleaseRequirement.required;
   return switch (page.emptyReason!) {
     ContentFeedEmptyReason.followingEmpty => channelId == 'following',
-    ContentFeedEmptyReason.noActiveRelease => channelId != 'following',
+    ContentFeedEmptyReason.noActiveRelease =>
+      channelId != 'following' && !requiresActiveRelease,
     ContentFeedEmptyReason.noEligibleContent => channelId != 'following',
     ContentFeedEmptyReason.continuationEnd => false,
   };

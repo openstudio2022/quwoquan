@@ -18,7 +18,7 @@ _SCRIPTS_ROOT = next(
 if str(_SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_ROOT))
 
-from _common.paths import APP_ROOT, REPO_ROOT, SCRIPTS_ROOT
+from _common.paths import REPO_ROOT
 
 import re
 
@@ -27,9 +27,11 @@ TARGET = (
     ROOT
     / "quwoquan_app"
     / "lib"
-    / "ui"
+    / "service"
+    / "content_service"
     / "content"
-    / "services"
+    / "post"
+    / "adapters"
     / "post_view_projection.dart"
 )
 

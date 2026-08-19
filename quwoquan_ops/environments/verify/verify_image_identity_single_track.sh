@@ -42,7 +42,11 @@ ruby -ryaml -e '
     fail("deployment owner mismatch: #{owner_name} != #{runtime_name}") unless runtime_name == owner_name
     fail("deployment missing package image identity annotation: #{name}") unless deployment.scan("quwoquan.io/image-version: package-required").length >= 2
     fail("deployment image is not package-bound: #{owner_name}") unless deployment.include?("image: quwoquan/#{owner_name}:package-required")
-    deployment_payload = YAML.safe_load_file(deployment_path, permitted_classes: [Symbol]) || {}
+    deployment_payload = YAML.safe_load(
+      File.read(deployment_path),
+      permitted_classes: [Symbol],
+      filename: deployment_path,
+    ) || {}
     containers = deployment_payload.dig("spec", "template", "spec", "containers")
     fail("deployment containers must be a list: #{name}") unless containers.is_a?(Array)
     container = containers.find { |entry| entry.is_a?(Hash) && entry["name"] == owner_name }
@@ -54,7 +58,11 @@ ruby -ryaml -e '
       fail("deployment IMAGE_VERSION is not sourced from its immutable annotation: #{name}")
     end
 
-    compose = YAML.safe_load_file(compose_path, permitted_classes: [Symbol]) || {}
+    compose = YAML.safe_load(
+      File.read(compose_path),
+      permitted_classes: [Symbol],
+      filename: compose_path,
+    ) || {}
     services = compose["services"]
     fail("compose services must be a map: #{name}") unless services.is_a?(Hash)
     image_key = "QWQ_COMPOSE_#{owner_name.upcase.tr("-", "_")}_IMAGE"

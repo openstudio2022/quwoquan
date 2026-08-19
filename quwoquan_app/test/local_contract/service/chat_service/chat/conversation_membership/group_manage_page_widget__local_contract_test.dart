@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/shared-surface-skill-placement/spec.md#gwt-001
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,9 +9,20 @@ import 'package:quwoquan_app/service/chat_service/chat/conversation/application/
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/chat_conversation_view_data.dart';
 import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart'
     show GroupHome;
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show
+        SkillSurfaceKind,
+        SkillSurfacePlacement,
+        SkillSurfacePlacementPolicy,
+        SkillSurfacePlacementStatus;
+import 'package:quwoquan_app/l10n/copy/assistant_text_constants.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/service/assistant_service/assistant/skill_surface_placement/presentation/assistant_skill_placement_sheet.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation_membership/presentation/group_manage_page.dart';
+import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
+import '../../../../../support/service/assistant_service/assistant/skill_catalog/skill_catalog_typed_double.dart';
+import '../../../../../support/service/assistant_service/assistant/skill_surface_placement/skill_surface_placement_typed_double.dart';
 import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
 import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facets_typed_double.dart';
 import '../../../../../support/service/chat_service/chat/conversation/chat_seed_refs.dart';
@@ -21,18 +33,30 @@ const _unsupportedJoinGovernanceLabels = <String>['二维码进群', '进群需�
 List<Override> _chatTestOverrides({
   required ChatTestFacets facets,
   ChatGroupAdminRepository? groupAdmin,
+  InMemoryAssistantSkillSurfacePlacementFacet? placementFacet,
 }) => [
+  ...sealedCloudBoundaryOverrides(),
   ...chatTestRepositoryOverrides(facets: facets, groupAdmin: groupAdmin),
   currentUserIdProvider.overrideWithValue(chatCurrentUserProfileId()),
+  assistantSkillSurfacePlacementFacetProvider.overrideWithValue(
+    placementFacet ?? _placementFacet(),
+  ),
+  assistantSkillCatalogFacetProvider.overrideWithValue(
+    InMemoryAssistantSkillCatalogFacet(),
+  ),
 ];
 
-Widget _scopedApp({ChatGroupAdminRepository? groupAdmin}) {
+Widget _scopedApp({
+  ChatGroupAdminRepository? groupAdmin,
+  InMemoryAssistantSkillSurfacePlacementFacet? placementFacet,
+}) {
   final facets = ChatTestFacets();
   final resolvedGroupAdmin = groupAdmin ?? facets.groupAdmin;
   return ProviderScope(
     overrides: _chatTestOverrides(
       facets: facets,
       groupAdmin: resolvedGroupAdmin,
+      placementFacet: placementFacet,
     ),
     child: MaterialApp.router(
       routerConfig: GoRouter(
@@ -43,6 +67,12 @@ Widget _scopedApp({ChatGroupAdminRepository? groupAdmin}) {
             builder: (_, state) => GroupManagePage(
               conversationId: state.pathParameters['id'] ?? _testConvId,
               conversationDissolver: resolvedGroupAdmin,
+              assistantSkillPlacementPresenter: (context, request) =>
+                  showAssistantSkillPlacementSheet(
+                    context: context,
+                    surfaceKind: request.surfaceKind,
+                    surfaceId: request.surfaceId,
+                  ),
             ),
           ),
           GoRoute(
@@ -56,6 +86,24 @@ Widget _scopedApp({ChatGroupAdminRepository? groupAdmin}) {
         ],
       ),
     ),
+  );
+}
+
+InMemoryAssistantSkillSurfacePlacementFacet _placementFacet() {
+  return InMemoryAssistantSkillSurfacePlacementFacet(
+    placements: const <SkillSurfacePlacement>[
+      SkillSurfacePlacement(
+        id: 'placement:conversation:fixture_conv_group',
+        surfaceKind: SkillSurfaceKind.conversation,
+        surfaceId: _testConvId,
+        policy: SkillSurfacePlacementPolicy.allSharedEligible,
+        disabledSkillIds: <String>['news_briefing'],
+        status: SkillSurfacePlacementStatus.active,
+        revision: 3,
+        createdAt: '2026-08-01T00:00:00Z',
+        updatedAt: '2026-08-02T00:00:00Z',
+      ),
+    ],
   );
 }
 
@@ -121,6 +169,27 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
 
       expect(find.text(ChatText.groupAdmins), findsOneWidget);
+    });
+
+    testWidgets('群管理员页可达真实共享 Skill Placement 面板', (tester) async {
+      _suppressImageErrors();
+      await tester.pumpWidget(_scopedApp());
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      final entry = find.byKey(
+        const ValueKey<String>('assistant_skill_surface_placement_entry'),
+      );
+      expect(entry, findsOneWidget);
+      await tester.ensureVisible(entry);
+      await tester.tap(entry);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AssistantSkillPlacementSheet), findsOneWidget);
+      expect(
+        find.text(AssistantText.assistantSkillPlacementPolicyAllShared),
+        findsOneWidget,
+      );
     });
 
     testWidgets('群主角色时可见解散群聊按钮', (tester) async {

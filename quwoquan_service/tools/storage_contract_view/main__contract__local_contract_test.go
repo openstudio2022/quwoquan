@@ -33,6 +33,11 @@ tables:
       - name: id
         type: text
         constraints: [PK, NOT_NULL]
+collections:
+  shared_projection:
+    entity: SharedProjection
+    role: projection
+    writers: [content-service]
 `)
 
 	var firstStdout, firstStderr bytes.Buffer
@@ -57,6 +62,9 @@ tables:
 	}
 	if len(document.Tables) != 2 || document.Tables["alpha"].Entity != "Alpha" {
 		t.Fatalf("unexpected tables: %#v", document.Tables)
+	}
+	if writers := document.Collections["shared_projection"].Writers; len(writers) != 1 || writers[0] != "content-service" {
+		t.Fatalf("unexpected collection writers: %#v", writers)
 	}
 
 	var secondStdout, secondStderr bytes.Buffer

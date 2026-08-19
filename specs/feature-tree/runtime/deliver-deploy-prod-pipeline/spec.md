@@ -12,7 +12,7 @@
 
 ### In Scope
 
-- main 后单一受控 promotion 主链、OCI `ReleaseEvidenceManifest` 归档与不可提升预验证
+- `dev1.0 -> main` 单一受控 promotion 主链、`dev1.0` 直接集成、OCI `ReleaseEvidenceManifest` 归档与不可提升预验证
 - prod-hosted ssh-hosted + rootless Podman 单一执行面，modular-monolith-first 工作负载图谱，托管数据面
 - 同一 `prod-hosted` 内 `cluster member × deployment instance × replica` 可重复部署与聚合 CAS
 - Strangler split-ready 拆分与契约不变
@@ -26,17 +26,14 @@
 
 ## 3. Journey / Scenario 贡献
 
-- [`JNY-001 / SCN-004`](../../spec.md#scn-004)
-  - 本能力接收：该 Scenario 进入本能力边界的已授权主体与 canonical 输入。
-  - 本能力处理：以 `alpha-local`、`beta-local`、`gamma` 本地镜像和 `prod-hosted` 为环境边界，由 `stackctl` 与 GitHub Actions 统一完成打包、启动、健康检查、端云验证、灰度发布与回滚。
-  - 本能力输出：直属 Story 组合产生的可观察结果与明确失败终态。
-  - 失败时终态：保留已确认事实，并返回可恢复的 canonical failure。
+- 横切工程能力：不直接拥有 AppRoot Scenario；为所有 Journey 提供同一候选的受控集成、发布、环境验证、灰度与回滚证据。
+- 本能力接收已授权的精确 Git SHA 与 immutable candidate，输出直属 Story 组合的可观察结果；失败时保留已确认事实并返回可恢复的 canonical failure。
 
 ## 4. Story
 
 
 
-- [`daily-merge-release-strategy`](./daily-merge-release-strategy/spec.md)：`main` 是唯一长期发布主干；短期 PR 分支受控、合入即删，退役分支只保留 archive tag/bundle。
+- [`daily-merge-release-strategy`](./daily-merge-release-strategy/spec.md)：仓库只保留 `dev1.0` 与 `main`；`dev1.0` 是唯一集成主干并接受日常直接开发，`main` 是唯一发布主干且只接受 promotion PR。
 - [`gray-release-to-prod`](./gray-release-to-prod/spec.md)：**统一入口**：workflow 与人工命令最终都收敛到 `stackctl deploy --target prod-hosted ...`。
 - [`local-gamma-mirror`](./local-gamma-mirror/spec.md)：gamma-local 是开发与提交前的主验证链，统一本机模拟器/浏览器接入同一组域级入口。
 - [`multi-environment-instance-isolation`](./multi-environment-instance-isolation/spec.md)：beta 云侧本地集成栈始终只允许**一套**，启动新实例前必须先停止旧实例再重启。
@@ -49,9 +46,9 @@
 <a id="req-001"></a>
 ### REQ-001 deliver deploy prod pipeline 能力 SIT
 
-- `main` 入库后自动启动候选 DAG，生成带 canonical candidate digest 的 OCI `ReleaseEvidenceManifest` 并完成 Alpha/Beta/Gamma 阻断验证；push 不得静默执行正式 Prod apply。
+- 合法 `dev1.0 -> main` promotion 入库后自动启动候选 DAG，生成带 canonical candidate digest 的 OCI `ReleaseEvidenceManifest` 并完成 Alpha/Beta/Gamma 阻断验证；`dev1.0` push 只生成集成证据，`main` push 不得静默执行正式 Prod apply。
 - 第一方容器预验证由显式 `stackctl deploy --mode prevalidate` 在独立 namespace 执行，不属于正式 rollout。
-- 正式 promotion 只能由人工 dispatch 绑定可达 main 的精确 Git SHA、显式关闭 dry-run 并通过 production environment approval；同一候选摘要进入 `alpha-local / beta-local / gamma-local` 隔离 fanout，准入聚合严格按 `alpha -> beta -> gamma` 判定，全部通过后才能进入 `prod-hosted(canary -> 5 -> 20 -> 50 -> 100)`。
+- 正式 Prod apply 只能由人工 dispatch 绑定可达 main 的精确 Git SHA、显式关闭 dry-run 并通过 production environment approval；同一候选摘要进入 `alpha-local / beta-local / gamma-local` 隔离 fanout，准入聚合严格按 `alpha -> beta -> gamma` 判定，全部通过后才能进入 `prod-hosted(canary -> 5 -> 20 -> 50 -> 100)`。
 - `stackctl`、workflow、runbook 与环境矩阵口径一致，不再维护第二套自动推进或回滚逻辑。
 - `canary -> 5 -> 20 -> 50 -> 100` 各阶段的健康检查、只读集成探针、SLO gate 与 rollback 可验证；Provider、SFU、真实数据、观测和灾备证据未齐时不得启动正式 apply。
 
@@ -72,6 +69,7 @@
 ### REQ-003 统一验证 profile：`quwoquan_ops/environments/gamma/validation_suites.json` 统一定义 `pr_light / manual_full / nightly_full / release_candidate / mainline_auto_prod`
 
 - **统一验证 profile**：`quwoquan_ops/environments/gamma/validation_suites.json` 统一定义 `pr_light / manual_full / nightly_full / release_candidate / mainline_auto_prod`。
+- `pr_light` 不要求 active content release 或视频 canary，只执行 content-free `assistant + environment-smoke` 双平台基线；`manual_full / nightly_full / release_candidate` 必须继续执行绑定 exact immutable release 与视频 canary 的 `app-core-readback`，不得用 PR-light 结果替代内容体验验收。
 - `nightly_full` 只对 `gamma-local` 的同一 released nonprod candidate 执行 Simulator/Emulator 诊断；不得轮转 Alpha/Beta/Gamma 或把 nightly 诊断提升为正式三环境 Green/Prod 回执。
 - **统一证据归档**：每个 promotion 阶段必须落 `.qwq_output/env/<env>/runs/<run-id>/report.json` 与 `summary.md`；发布输入为 GHCR OCI `ReleaseEvidenceManifest` 的 candidate digest，Actions Artifact 只保留短期失败诊断且不得作为阶段传递。
 - **定时与 Provider 单引用消费**：Nightly schedule 与 Provider producer 只能接收或经
@@ -82,6 +80,8 @@
   mutable tag 与调用方重复声明派生身份。
 - 仓库不定义 `gamma-hosted` 环境；`gamma-local` 的 release-fast 验证是正式主链阻断阶段，云侧真实复验仍由 prod `canary` rollout stage 承接。
 - `03/04/05` 名称与 required-check 语义必须保持稳定。
+- `03. Delivery Gate` 在 hosted runner 上将 Service core 与完整 packaging 作为同一 topology 前置后的并行 sibling。本地默认 `GATE_SERVICE_PHASE=all` 仍按 core-before → packaging → core-after 完整顺序执行；packaging 的 prepare、逐环境 package、contract、isolation 与 isomorphism 必须输出阶段耗时，并保留首个 typed blocker。
+- 原生依赖安装最多两次、每次命令 80 秒且强制终止宽限 10 秒，两次之间仅间隔 10 秒，完整最坏墙钟为 190 秒；耗尽后输出 typed blocker，并要求从当前 attempt 日志修复 runner、镜像源、dpkg 锁或包声明后重跑同一 Job，不得用无界 apt、skip 或 `continue-on-error` 消红。
 - `prod` 灰度是 `prod` 语义下的 rollout stage，不得再引入独立环境枚举。
 - `alpha-local` 阶段必须完成环境包、启动与 `stackctl health --scope full`，并落证据产物。
 - `beta-local` 阶段必须完成 `stackctl up/health/inspect` 与 self-hosted beta 设备矩阵，通过后才能进入 gamma。
@@ -108,7 +108,8 @@
 
 - GIVEN 执行“deliver deploy prod pipeline 能力”所需的身份、输入与上游事实均有效。
 - WHEN 参与者发起“deliver deploy prod pipeline 能力”对应动作。
-- THEN `main` 入库后自动生成可验证 OCI `ReleaseEvidenceManifest` 并执行三个前置环境；只有精确 SHA 的人工 dispatch、显式非 dry-run 与 production approval 同时成立时才能发起正式 Prod promotion。
+- THEN `dev1.0` 直接 push 绑定该精确 SHA 的 `03/04/05` hosted check evidence，但不生成正式 candidate 或 Prod apply；只有具备治理回执的合法 `dev1.0 -> main` promotion 入库后才自动生成可验证 OCI `ReleaseEvidenceManifest` 并执行三个前置环境。
+- THEN promotion 成功后系统仅以 compare-and-swap fast-forward 将 `main` backsync 到 `dev1.0`，分叉或 ref 漂移时停止且不得 force；缺 promotion receipt、可信 `main` ancestry 或 durable Prod approval 时在 candidate eligibility、Prod credential 与 canary 前阻断，正式 Prod apply 还必须由精确 SHA 的人工 dispatch 显式关闭 dry-run。
 - THEN 第一方 prevalidate 不写正式 rollout、ledger 或 receipt。
 - THEN 同一候选在隔离运行面并行执行 Alpha、Beta、Gamma，按 `alpha -> beta -> gamma` 聚合准入后，才执行 `prod-hosted(canary -> 5 -> 20 -> 50 -> 100)`。
 - THEN `stackctl`、workflow、runbook 与环境矩阵口径一致，不再维护第二套自动推进或回滚逻辑。

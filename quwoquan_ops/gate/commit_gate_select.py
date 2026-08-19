@@ -97,7 +97,12 @@ def classify(paths: list[str]) -> dict[str, bool]:
         "has_portal": False,
         "has_contracts": False,
         "has_app_contracts": False,
+        "has_app_dart": False,
         "has_pageflip": False,
+        "has_app_scripts": False,
+        "has_service_scripts": False,
+        "has_ops_scripts": False,
+        "has_data_scripts": False,
     }
     for path in paths:
         if path.startswith("quwoquan_service/"):
@@ -106,16 +111,30 @@ def classify(paths: list[str]) -> dict[str, bool]:
                 "quwoquan_service/contracts/"
             ):
                 flags["has_contracts"] = True
+            if "/tests/" not in path and path.endswith((".py", ".sh")):
+                flags["has_service_scripts"] = True
         if path.startswith("quwoquan_app/"):
             flags["has_app"] = True
+            if path.endswith(".dart"):
+                flags["has_app_dart"] = True
             if "contracts" in path or path.startswith(
                 "quwoquan_app/packages/quwoquan_cloud_contracts/"
             ):
                 flags["has_app_contracts"] = True
+            if "/tests/" not in path and "/test/" not in path and path.endswith((".py", ".sh")):
+                flags["has_app_scripts"] = True
         if path.startswith("quwoquan_data/"):
             flags["has_data"] = True
+            if "/tests/" not in path and path.endswith((".py", ".sh")):
+                flags["has_data_scripts"] = True
         if path.startswith("quwoquan_ops/") or path.startswith("specs/"):
             flags["has_ops"] = True
+        if (
+            path.startswith("quwoquan_ops/")
+            and "/tests/" not in path
+            and path.endswith((".py", ".sh"))
+        ):
+            flags["has_ops_scripts"] = True
         if path.startswith("specs/"):
             flags["has_specs"] = True
         if path.startswith("quwoquan_ops/portal/"):
@@ -126,23 +145,21 @@ def classify(paths: list[str]) -> dict[str, bool]:
 
 
 def static_checks(flags: dict[str, bool]) -> list[str]:
-    checks = [
-        "branch_policy",
-        "feature_tree",
-        "python_script_governance",
-        "entrypoint_script_paths",
-    ]
+    checks = ["branch_policy", "entrypoint_script_paths"]
+    if flags["has_specs"]:
+        checks.append("feature_tree")
+    for scope in ("app", "service", "ops", "data"):
+        if flags[f"has_{scope}_scripts"]:
+            checks.append(f"python_script_governance_{scope}")
     if flags["has_service"] or flags["has_ops"]:
         checks.append("service_architecture")
+    if flags["has_app_contracts"] or flags["has_contracts"]:
+        checks.append("app_generated_manifest")
     if flags["has_app"] or flags["has_app_contracts"]:
-        checks.extend(
-            [
-                "app_generated_manifest",
-                "app_contract_handoff",
-                *SMOKE_STATIC,
-            ]
-        )
-    if flags["has_contracts"] or flags["has_service"]:
+        checks.append("app_contract_handoff")
+    if flags["has_app_dart"]:
+        checks.extend(SMOKE_STATIC)
+    if flags["has_contracts"]:
         checks.extend(["metadata_contract", "commercial_contract"])
     if flags["has_pageflip"]:
         checks.append("pageflip_backward_mainline")
@@ -237,22 +254,143 @@ def select_go_services(paths: list[str]) -> list[str]:
 def select_pytest_paths(paths: list[str]) -> list[str]:
     selected: list[str] = []
     seen: set[str] = set()
+    source_mappings = (
+        (
+            "quwoquan_ops/gate/commit_gate",
+            (
+                "quwoquan_ops/tests/local_contract/ci/"
+                "test_commit_gate_fast_path__local_contract_test.py",
+                "quwoquan_ops/tests/local_contract/gate/"
+                "test_commit_gate_select__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/gate/verify_github_supply_chain.py",
+            (
+                "quwoquan_ops/tests/local_contract/release/"
+                "test_service_supply_chain_provenance__supply_chain__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/ci/provider_conformance/provider_patrol_lib/",
+            (
+                "quwoquan_ops/tests/local_contract/provider/"
+                "test_provider_patrol_runtime_identity__contract__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/cli/commands/dev_session",
+            (
+                "quwoquan_ops/tests/local_contract/stackctl/"
+                "test_stackctl_dev_session_mutable_startup_gate__local_contract_test.py",
+                "quwoquan_ops/tests/local_contract/stackctl/"
+                "test_stackctl_dev_session_resume_compose__local_contract_test.py",
+                "quwoquan_ops/tests/local_contract/stackctl/"
+                "test_stackctl_dev_session_runtime_reuse__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/cli/commands/down_shared.py",
+            (
+                "quwoquan_ops/tests/local_contract/stackctl/"
+                "test_stackctl_mutable_test_live_teardown__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/cli/lib/test_live_startup_attempt_receipt.py",
+            (
+                "quwoquan_ops/tests/local_contract/test_data/"
+                "test_live_startup_attempt_receipt__local_contract_test.py",
+                "quwoquan_ops/tests/local_contract/test_data/"
+                "test_test_live_content_binding__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/cli/lib/web_official_release.py",
+            (
+                "quwoquan_ops/tests/local_contract/release/"
+                "test_web_official_release__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/cli/stackctl.py",
+            (
+                "quwoquan_ops/tests/local_contract/stackctl/"
+                "test_stackctl_test_live_content_binding_wiring__local_contract_test.py",
+                "quwoquan_ops/tests/local_contract/release/"
+                "test_web_official_release__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml",
+            (
+                "quwoquan_ops/tests/local_contract/environment/"
+                "test_environment_package_entrypoints__local_contract_test.py",
+                "quwoquan_ops/tests/local_contract/environment/"
+                "test_local_gamma_service_runtime_bindings__local_contract_test.py",
+                "quwoquan_ops/tests/local_contract/environment/"
+                "test_runtime_topology_package__security__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/environments/gamma/local/Caddyfile",
+            (
+                "quwoquan_ops/tests/local_contract/environment/"
+                "test_local_media_origin_cache_policy__local_contract_test.py",
+                "quwoquan_ops/tests/local_contract/gate/"
+                "test_api_edge_single_track__local_contract_test.py",
+            ),
+        ),
+        ("quwoquan_ops/gate/", ("quwoquan_ops/tests/local_contract/gate",)),
+        (
+            "quwoquan_ops/policies/gates/",
+            ("quwoquan_ops/tests/local_contract/gate",),
+        ),
+        ("quwoquan_ops/ci/", ("quwoquan_ops/tests/local_contract/ci",)),
+        (
+            "quwoquan_ops/environments/",
+            ("quwoquan_ops/tests/local_contract/environment",),
+        ),
+        ("quwoquan_ops/cli/", ("quwoquan_ops/tests/local_contract/stackctl",)),
+        ("quwoquan_data/scripts/core/", ("quwoquan_data/tests/local_contract/core",)),
+        (
+            "quwoquan_data/scripts/content/execution/",
+            ("quwoquan_data/tests/local_contract/execution",),
+        ),
+        (
+            "quwoquan_data/scripts/content/release/",
+            ("quwoquan_data/tests/local_contract/release",),
+        ),
+        (
+            "quwoquan_data/scripts/content/source/",
+            ("quwoquan_data/tests/local_contract/source",),
+        ),
+        (
+            "quwoquan_data/scripts/governance/",
+            ("quwoquan_data/tests/local_contract/governance",),
+        ),
+    )
     for path in paths:
-        for root in ("quwoquan_data/tests/local_contract", "quwoquan_ops/tests/local_contract"):
+        for root in (
+            "quwoquan_data/tests/local_contract",
+            "quwoquan_ops/tests/local_contract",
+        ):
             if path.startswith(root + "/") and path.endswith(".py"):
                 # A staged deletion still shows up as a changed path; handing it to
                 # pytest aborts the whole run with "file or directory not found".
                 if path not in seen and (ROOT / path).exists():
                     seen.add(path)
                     selected.append(path)
-            elif path.startswith(root.split("/tests/")[0] + "/"):
-                # Map source tree touch to corresponding tests dir if present.
-                domain = root
-                if domain not in seen and (ROOT / domain).is_dir():
-                    # Only add whole domain once when non-test source under domain changes.
-                    if "/tests/" not in path:
-                        seen.add(domain)
-                        selected.append(domain)
+        if "/tests/" in path:
+            continue
+        for source_prefix, test_targets in source_mappings:
+            if path.startswith(source_prefix):
+                for test_target in test_targets:
+                    if test_target in seen or not (ROOT / test_target).exists():
+                        continue
+                    seen.add(test_target)
+                    selected.append(test_target)
+                break
     return selected[:80]
 
 

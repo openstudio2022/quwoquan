@@ -123,8 +123,7 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：三笔存量以同一份棘轮基线承载，身份指纹级只减不增。其一，6 个字段（4 个 `fields.yaml`）的可空性无法从约束确定，只能由各 codegen 管线按自己的缺省规则推定——它们都带 `NOT_BLANK` / `DEFAULT_0` / `FK_*`，读者能推断出非空，但推断不是声明；补上 `NOT_NULL` 会把字段从推定可空变成 fail-closed 必填，属于行为变更，须先由 `api_integration` 验证云侧确实总是下发。其二，`application`/`domain`/`adapters` 三层有 90 处以二元 `return nil, nil` 兼作未命中信号，分布在 43 个文件（`infrastructure` 单列不计入）。其三，19 处出站列表带 `omitempty`（10 个文件），空列表会整个消失；单纯删掉 `omitempty` 会让 nil 切片序列化成 `null`，换一种方式违反同一条 `REQ-003`，因此每一处都要连着构造期归一化一起改，逐个 DTO 裁决。
-- 口径修正：`return nil, nil` 早先记为 123 处，那是把 `return nil, nil, err` 一并计入的结果——第三个返回值已经在表达失败，不属于本条判据，误计 33 处。同时基线由「文件 → 计数」升级为「文件 → 函数/字段身份 → 计数」：配额挂在文件上时，同一文件内删一处、在另一个函数里添一处，总数不变，门禁看不见。
+- 影响或价值：仍有三笔存量由同一份身份指纹棘轮承载并保持只减不增。其一，6 个字段的可空性没有显式 `NOT_NULL` 或 `NULLABLE` 声明，必须先由 `api_integration` 证明云侧下发语义。其二，`application`、`domain`、`adapters` 三层有 90 处二元 `return nil, nil` 兼作未命中信号。其三，19 处出站列表带 `omitempty`，必须连同构造期空列表归一化逐个裁决，避免删除标签后把 nil 切片序列化成 `null`。
 - 完成判定：三笔计数归零后删除棘轮基线，`GWT-001` 可在不区分管线的前提下对全部字段成立，门禁转为无 allowlist 硬 BLOCK。
 
 <a id="open-002"></a>
@@ -133,7 +132,7 @@
 - 类型：`capability_gap`
 - 优先级：`P2`
 - 准出影响：`track`
-- 影响或价值：101 处（75 个文件）在 `except` 块内直接 `return None`，分布为 `quwoquan_data` 33、`quwoquan_ops` 31、`quwoquan_service` 7、`quwoquan_app` 4 个文件。全部落在 gate / cli / tool / generator 脚本树，没有用户可见故障路径，因此不与端云运行时同优先级。其中约三分之一是「取到值之后校验失败」——那是 `REQ-004` 禁止的失败伪装成未命中，需要改抛或留证据；其余是真正的「未命中」（配置项不存在、可选文件缺失），`None` 是准确表达。逐处裁决前不宜上门禁：Python 侧没有 Dart 的 `try` 前缀那类可机械判定的命名约定，一刀切会把合法缺席一起判黑，进而逼出 allowlist。
+- 影响或价值：仍有 101 处脚本在 `except` 块内直接 `return None`。其中一部分是校验失败伪装成未命中，需要改抛或留下结构化证据；其余是配置项或可选文件缺失，`None` 是准确表达。逐处裁决前不能用统一规则把合法缺席与失败一起判黑。
 - 完成判定：逐处标注为「未命中」或「失败」，失败者改为抛出或返回显式失败态使 `GWT-004` 在脚本树上成立，此后由门禁按 Dart 侧同构判据硬 BLOCK。
 
 <a id="open-003"></a>
@@ -142,11 +141,11 @@
 - 类型：`capability_gap`
 - 优先级：`P2`
 - 准出影响：`track`
-- 影响或价值：同一字段的可空性目前可由三处独立声明。`fields.yaml` 用 `NOT_NULL` / `NULLABLE`；assistant wire 另用 `schema.yaml` 的 `required` / `default`，其中 `default: ''` 把「缺席」与「空字符串」合并（如 `assistant_run` 的 `traceId`、`completedAt`），端侧无法区分「没有 traceId」与「traceId 为空」；rtc payload 则完全由 `events.yaml` 的 `payload_fields` 与 `client_payload_defaults` 决定，因此同一字段在两条管线可以得到不同的可空性。三者都是契约层的取值声明而非生成器缺陷——生成器忠实执行了各自的声明，`GWT-001` 已按管线分别锁定当前语义。
-- RTC 已核验事实（本轮新增，均未改动生成物）：
+- 影响或价值：仍有同一字段的可空性由三处独立声明。`fields.yaml` 使用 `NOT_NULL` / `NULLABLE`，assistant wire 使用 `schema.yaml` 的 `required` / `default`，rtc payload 使用 `events.yaml` 的 `payload_fields` 与 `client_payload_defaults`。多条管线可能得到不同语义，必须收敛到单一 authoring。
+- RTC 当前契约事实：
   - 生成器读错了实体。`rtc_signal_payload_codegen.go` 用 `ff.Entities["CallSession"]` 的字段定义决定端侧可空性，而真正上 wire 的载荷契约是 `CallEventPayload`；`events.yaml` 的 `payload_fields` 只提供键名列表。所以端侧类型的可空性来自聚合根，不来自载荷契约。
   - 服务端有两道过滤先后作用。`call_orchestrator_events.go` 先按 `payload_fields` 白名单挑键，Go 侧 `CallEventPayload` 的 `omitempty` 再让空值键消失。契约声明为 `NOT_NULL` 的 8 个字段中，`eventId` / `callType` / `initiatorId` / `maxParticipants` 四个在 Go 侧带 `omitempty`。
-  - 实测 envelope 键集合（真实非生产 `api_integration`，取自 Redis pubsub `rt:rtc:persona:<personaID>`，与端侧订阅同一路径）：`call.initiated` 发 `callId,callType,createdAt,initiatorId,maxParticipants`；`call.answered` 只发 `callId,userId`；`participant.joined` 发 `callId,participantCount,role,userId`；`participant.left` 发 `callId,participantCount,userId`；`call.ended` 发 `callId,callType,endReason,endedAt,initiatorId,participantCount`。`call.ringing` 不走 persona pubsub，只追加 durable stream。
+  - Runtime envelope 的键集合来自与端侧订阅同一路径的 Redis pubsub。`call.initiated`、`call.answered`、`participant.joined`、`participant.left` 与 `call.ended` 各自只携带 `payload_fields` 选中的键，`call.ringing` 只追加 durable stream。
   - 结论：契约声明 `NOT_NULL` 的 `status` 与 `eventId` 在上述全部事件上都不出现，`createdAt` 只在 `call.initiated` 出现。把生成物切成 fail-closed 必填会让来电与通话信令全面解析失败。这不是「服务端漏发」——`payload_fields` 本就只挑一部分字段下发，冲突的根源是可空性声明与下发白名单出自两份互不知晓的 authoring。
   - 证据：`quwoquan_service/services/rtc-service/tests/api_integration/rtc/call_session/realtime_payload_nullability_evidence__api_integration_test.go`。它只记录实发键并断言 `callId` 必发，刻意不断言「`NOT_NULL` 必发」——那正是本 OPEN 待裁决的事情。
 - 收敛前置条件：先逐字段裁决该字段在每个事件上是否真的允许缺席，再作为一次同源变更同时落地「codegen 改读 `CallEventPayload`」「服务端去掉不该有的 `omitempty`」「端侧移除 `??` 兜底」。三者分开做任意一步都会打断来电信令。
@@ -155,8 +154,8 @@
 <a id="open-004"></a>
 ### OPEN-004 RTC signal delivery relay 的失败静默退出
 
-- 类型：`defect`
+- 类型：`risk`
 - 优先级：`P2`
 - 准出影响：`track`
-- 影响或价值：`CallSignalDeliveryCoordinator.Run` 一旦 `Deliver` 返回错误就直接 `return`，而 `rtc-service` 的 `api_integration` TestMain 用 `_ = ...Run(...)` 接住了返回值。结果是投递 worker 可以在第一个 tick 静默死亡，此后所有通话信令都不再投递，测试表现为「偶发收不到任何 envelope」而不是一条失败。本轮采集 RTC 证据时实测复现：库里残留上一轮的 outbox 记录足以触发。这是 `REQ-004`「失败必须结构化向上传递」在 Go 侧的一处实例，也说明该 worker 在生产装配里同样需要重启或告警而不是静默退出。
+- 影响或价值：仍存在 `CallSignalDeliveryCoordinator.Run` 在 `Deliver` 返回错误后直接退出、装配方以 `_ =` 丢弃返回值的风险。worker 可能静默停止后续通话信令投递，必须由日志、指标、重启与告警形成可观察恢复链。
 - 完成判定：`GWT-004` 在该 worker 上成立——`Run` 的失败经日志与指标可见，装配处不得以 `_ =` 丢弃，投递中断有告警，并有测试证明单条事件失败不会让整条投递链永久停摆。

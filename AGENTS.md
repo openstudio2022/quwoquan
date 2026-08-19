@@ -95,7 +95,7 @@
 - `.qwq_output/` 只存可删除、可重建的运行输出；删除后仍必须能凭受版本控制真相源重建。
 - 源码树不得保留 `__pycache__/`、`*.pyc`、`*.pyo`、`.pytest_cache/`；缓存重定向到 `.qwq_output/env/repo/local/**`。
 - 每个第一方服务以 `environments/<alpha|beta|gamma|prod>/` 作为环境自治入口，共享定义只存在于服务内 `config/schema.yaml`、`resources/` 与 `deploy/base/`；环境之间禁止继承。环境装配、部署、巡检、修复统一使用 `python3 quwoquan_ops/cli/stackctl.py`。
-- `main` 是唯一长期、本地与远端发布分支；短期 PR 分支只允许使用 `branch_policy.yaml` 声明的前缀，合并后必须自动删除，禁止恢复 `dev1.0` 或其他长期分支。
+- 本地与远端只允许 `dev1.0`、`main` 两个分支：日常开发直接提交并推送到唯一集成真相源 `dev1.0`，唯一 PR 边为 `dev1.0 -> main` promotion；禁止临时分支和第三长期分支。`main -> dev1.0` 只允许 promotion 成功后的系统 fast-forward backsync，Prod source 必须是可达 `main` 的精确 SHA。
 - 脏工作树是常态；禁止回滚、覆盖或清理与当前任务无关的用户改动。
 
 ## Python 脚本治理

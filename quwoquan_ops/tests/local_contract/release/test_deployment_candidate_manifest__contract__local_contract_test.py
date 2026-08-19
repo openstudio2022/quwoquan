@@ -172,7 +172,10 @@ class DeploymentCandidateManifestContractTest(
 
         graph_drift = dict(canonical)
         graph_drift["contractGraphDigest"] = "sha256:" + "9" * 64
-        with self.assertRaisesRegex(ValueError, "ContractGraph"):
+        with self.assertRaisesRegex(
+            ValueError,
+            "package fingerprint release identity drifted",
+        ):
             subject.validate_candidate_manifest(
                 graph_drift,
                 expected_environment="alpha",
@@ -190,6 +193,8 @@ class DeploymentCandidateManifestContractTest(
             rollback_release_attestation=str(self.rollback),
         )
         payload = json.loads(path.read_text(encoding="utf-8"))
+        release_bytes = self.release.read_bytes()
+        rollback_bytes = self.rollback.read_bytes()
         self.contract_graph.write_text(
             json.dumps({"objects": [{"id": "drift"}], "operations": []}) + "\n",
             encoding="utf-8",
@@ -205,6 +210,21 @@ class DeploymentCandidateManifestContractTest(
             purpose="self_verify",
         )
 
+        with self.assertRaisesRegex(
+            ValueError,
+            "candidate release attestation is unreadable",
+        ):
+            subject.validate_candidate_manifest(
+                payload,
+                expected_environment="alpha",
+                expected_target="alpha-local",
+                require_full=True,
+                candidate_root=self.candidate,
+                purpose="currentness",
+            )
+
+        self.release.write_bytes(release_bytes)
+        self.rollback.write_bytes(rollback_bytes)
         with self.assertRaisesRegex(ValueError, "ContractGraph bytes drifted"):
             subject.validate_candidate_manifest(
                 payload,
@@ -215,8 +235,6 @@ class DeploymentCandidateManifestContractTest(
                 purpose="currentness",
             )
 
-        self.release.write_text("{}\n", encoding="utf-8")
-        self.rollback.write_text("{}\n", encoding="utf-8")
         self.contract_graph.write_text(
             json.dumps({"objects": [], "operations": []}) + "\n",
             encoding="utf-8",
@@ -441,6 +459,7 @@ class DeploymentCandidateManifestContractTest(
                 expected_target="alpha-local",
                 require_full=True,
                 candidate_root=self.candidate,
+                purpose="currentness",
             )
 
 

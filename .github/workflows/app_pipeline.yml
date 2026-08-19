@@ -93,9 +93,12 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - id: flutter_version
+        name: Read repository-pinned Flutter toolchain
+        run: echo "value=$(tr -d '[:space:]' < quwoquan_app/.flutter-version)" >> "$GITHUB_OUTPUT"
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
-          channel: stable
+          flutter-version: ${{ steps.flutter_version.outputs.value }}
           cache: true
       - name: Verify source identity and dependencies
         working-directory: quwoquan_app
@@ -147,7 +150,8 @@ jobs:
           QWQ_ANDROID_PROD_GOOGLE_SERVICES_JSON: ${{ secrets.QWQ_ANDROID_PROD_GOOGLE_SERVICES_JSON }}
         run: |
           set -euo pipefail
-          for required in \
+          python3 ../quwoquan_ops/gate/require_ci_inputs.py \
+            --scope release-signing \
             QWQ_ANDROID_RELEASE_KEYSTORE_B64 \
             QWQ_ANDROID_RELEASE_STORE_PASSWORD \
             QWQ_ANDROID_RELEASE_KEY_ALIAS \
@@ -156,9 +160,7 @@ jobs:
             QWQ_ANDROID_ALPHA_GOOGLE_SERVICES_JSON \
             QWQ_ANDROID_BETA_GOOGLE_SERVICES_JSON \
             QWQ_ANDROID_GAMMA_GOOGLE_SERVICES_JSON \
-            QWQ_ANDROID_PROD_GOOGLE_SERVICES_JSON; do
-            test -n "${!required}" || { echo "::error::${required} is required"; exit 2; }
-          done
+            QWQ_ANDROID_PROD_GOOGLE_SERVICES_JSON
           printf '%s' "$QWQ_ANDROID_RELEASE_KEYSTORE_B64" | base64 --decode > "$QWQ_ANDROID_RELEASE_KEYSTORE_PATH"
           cleanup() {
             rm -f android/app/google-services.json "$QWQ_ANDROID_RELEASE_KEYSTORE_PATH"
@@ -166,7 +168,7 @@ jobs:
           trap cleanup EXIT
           BUNDLE_ROOT="$RUNNER_TEMP/app-candidate-evidence"
           mkdir -p "$BUNDLE_ROOT/application-packages" "$BUNDLE_ROOT/payloads"
-          SOURCE_TREE_DIGEST="sha1:$(git rev-parse HEAD^{tree})"
+          SOURCE_TREE_DIGEST="sha1:$(git rev-parse 'HEAD^{tree}')"
           for env_name in "${{ matrix.environment }}"; do
             case "$env_name" in
               alpha) TARGET=alpha-local; FIREBASE_JSON="$QWQ_ANDROID_ALPHA_GOOGLE_SERVICES_JSON" ;;
@@ -310,9 +312,12 @@ jobs:
       - uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d
         with:
           version: 1.3.3
+      - id: flutter_version
+        name: Read repository-pinned Flutter toolchain
+        run: echo "value=$(tr -d '[:space:]' < quwoquan_app/.flutter-version)" >> "$GITHUB_OUTPUT"
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
-          channel: stable
+          flutter-version: ${{ steps.flutter_version.outputs.value }}
           cache: true
       - name: Import canonical iOS signing material
         env:
@@ -322,9 +327,12 @@ jobs:
           QWQ_IOS_EXPORT_OPTIONS_PLIST_B64: ${{ secrets.QWQ_IOS_EXPORT_OPTIONS_PLIST_B64 }}
         run: |
           set -euo pipefail
-          for required in QWQ_IOS_DISTRIBUTION_CERT_P12_B64 QWQ_IOS_DISTRIBUTION_CERT_PASSWORD QWQ_IOS_PROVISIONING_PROFILE_B64 QWQ_IOS_EXPORT_OPTIONS_PLIST_B64; do
-            test -n "${!required}" || { echo "::error::${required} is required"; exit 2; }
-          done
+          python3 quwoquan_ops/gate/require_ci_inputs.py \
+            --scope release-signing \
+            QWQ_IOS_DISTRIBUTION_CERT_P12_B64 \
+            QWQ_IOS_DISTRIBUTION_CERT_PASSWORD \
+            QWQ_IOS_PROVISIONING_PROFILE_B64 \
+            QWQ_IOS_EXPORT_OPTIONS_PLIST_B64
           python3 - <<'PY'
           import base64
           import os
@@ -358,7 +366,7 @@ jobs:
           make -C .. verify-app-identity-state-isolation verify-app-identity
           BUNDLE_ROOT="$RUNNER_TEMP/app-candidate-evidence"
           mkdir -p "$BUNDLE_ROOT/application-packages" "$BUNDLE_ROOT/payloads"
-          SOURCE_TREE_DIGEST="sha1:$(git rev-parse HEAD^{tree})"
+          SOURCE_TREE_DIGEST="sha1:$(git rev-parse 'HEAD^{tree}')"
           for env_name in "${{ matrix.environment }}"; do
             case "$env_name" in
               alpha) TARGET=alpha-local ;;
@@ -475,9 +483,12 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: quwoquan_ops/portal/package-lock.json
+      - id: flutter_version
+        name: Read repository-pinned Flutter toolchain
+        run: echo "value=$(tr -d '[:space:]' < quwoquan_app/.flutter-version)" >> "$GITHUB_OUTPUT"
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
-          channel: stable
+          flutter-version: ${{ steps.flutter_version.outputs.value }}
           cache: true
       - name: Build four immutable Web packages and Prod Ops Portal
         env:
@@ -491,13 +502,16 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$SOURCE_GIT_SHA"
           if [ "${{ matrix.environment }}" = prod ]; then
-            for required in PROD_OPS_OIDC_ISSUER PROD_OPS_OIDC_CLIENT_ID PROD_OPS_OIDC_AUDIENCE PROD_OPS_OIDC_SCOPE; do
-              test -n "${!required}" || { echo "::error::release-signing ${required} is required"; exit 2; }
-            done
+            python3 quwoquan_ops/gate/require_ci_inputs.py \
+              --scope release-signing \
+              PROD_OPS_OIDC_ISSUER \
+              PROD_OPS_OIDC_CLIENT_ID \
+              PROD_OPS_OIDC_AUDIENCE \
+              PROD_OPS_OIDC_SCOPE
           fi
           BUNDLE_ROOT="$RUNNER_TEMP/app-candidate-evidence"
           mkdir -p "$BUNDLE_ROOT/application-packages" "$BUNDLE_ROOT/payloads"
-          SOURCE_TREE_DIGEST="sha1:$(git rev-parse HEAD^{tree})"
+          SOURCE_TREE_DIGEST="sha1:$(git rev-parse 'HEAD^{tree}')"
           for env_name in "${{ matrix.environment }}"; do
             python3 quwoquan_ops/cli/stackctl.py package \
               --env "$env_name" \
@@ -600,9 +614,12 @@ jobs:
       - uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d
         with:
           version: 1.3.3
+      - id: flutter_version
+        name: Read repository-pinned Flutter toolchain
+        run: echo "value=$(tr -d '[:space:]' < quwoquan_app/.flutter-version)" >> "$GITHUB_OUTPUT"
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
-          channel: stable
+          flutter-version: ${{ steps.flutter_version.outputs.value }}
           cache: true
       - name: Build four immutable macOS packages
         working-directory: quwoquan_app
@@ -614,7 +631,7 @@ jobs:
           flutter pub get
           BUNDLE_ROOT="$RUNNER_TEMP/app-candidate-evidence"
           mkdir -p "$BUNDLE_ROOT/application-packages" "$BUNDLE_ROOT/payloads"
-          SOURCE_TREE_DIGEST="sha1:$(git rev-parse HEAD^{tree})"
+          SOURCE_TREE_DIGEST="sha1:$(git rev-parse 'HEAD^{tree}')"
           for env_name in "${{ matrix.environment }}"; do
             export QWQ_APP_RUNTIME_ENV="$env_name"
             DART_DEFINES=()
@@ -693,7 +710,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$SOURCE_GIT_SHA"
-          SOURCE_TREE_DIGEST="sha1:$(git rev-parse HEAD^{tree})"
+          SOURCE_TREE_DIGEST="sha1:$(git rev-parse 'HEAD^{tree}')"
           python3 quwoquan_ops/ci/render_release_application_package.py validate-bundle \
             --bundle-dir "$RUNNER_TEMP/app-candidate-evidence" \
             --source-git-sha "$SOURCE_GIT_SHA" \
@@ -726,9 +743,11 @@ jobs:
           set -euo pipefail
           [[ "$APP_EVIDENCE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
           APP_EVIDENCE_REF="$REGISTRY/$IMAGE_PREFIX/app-candidate-artifact@$APP_EVIDENCE_DIGEST"
-          echo "app_evidence_ref=$APP_EVIDENCE_REF" >> "$GITHUB_OUTPUT"
-          echo "app_evidence_digest=$APP_EVIDENCE_DIGEST" >> "$GITHUB_OUTPUT"
-          echo "source_git_sha=$SOURCE_GIT_SHA" >> "$GITHUB_OUTPUT"
+          {
+            echo "app_evidence_ref=$APP_EVIDENCE_REF"
+            echo "app_evidence_digest=$APP_EVIDENCE_DIGEST"
+            echo "source_git_sha=$SOURCE_GIT_SHA"
+          } >> "$GITHUB_OUTPUT"
           echo "- App OCI evidence: \`$APP_EVIDENCE_REF\`" >> "$GITHUB_STEP_SUMMARY"
       - id: timing
         name: Calculate App candidate machine-path diagnostic

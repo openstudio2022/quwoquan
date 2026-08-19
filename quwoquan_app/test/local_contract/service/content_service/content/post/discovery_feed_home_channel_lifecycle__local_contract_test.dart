@@ -10,22 +10,34 @@ import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/
 import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/discovery_feed_query.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
-import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/post_interaction_state.dart';
-import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/discovery_feed_provider.dart';
-import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show
         AssistantUsePolicy,
         CloudOperationCancellationSignal,
         ContentFeedEmptyReason,
         ContentFeedOutcome;
+import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
+
+List<Override> _boundaryOverrides({
+  required ContentDiscoveryFeedQuery query,
+  required List<HomeChannelConfig> channels,
+  ContentReleaseRequirement releaseRequirement =
+      ContentReleaseRequirement.optional,
+}) {
+  return <Override>[
+    ...sealedCloudBoundaryOverrides(),
+    contentReleaseRequirementProvider.overrideWithValue(releaseRequirement),
+    contentDiscoveryFeedQueryProvider.overrideWithValue(query),
+    homeChannelsProvider.overrideWithValue(channels),
+    postInteractionStateProvider.overrideWith(
+      _NoopPostInteractionStateNotifier.new,
+    ),
+  ];
+}
 
 void main() {
-  setUp(CloudRuntimeConfig.clearNativeRuntimePackageForTest);
-  tearDown(CloudRuntimeConfig.clearNativeRuntimePackageForTest);
-
   test('远端首页频道变更只回收已移除频道并取消请求，不误删 discovery tab', () async {
     final recommend = ContentUIConfig.homeChannels.firstWhere(
       (channel) => channel.id == 'recommend',
@@ -35,13 +47,10 @@ void main() {
     );
     final query = _PendingDiscoveryFeedQuery();
     final container = ProviderContainer(
-      overrides: <Override>[
-        contentDiscoveryFeedQueryProvider.overrideWithValue(query),
-        homeChannelsProvider.overrideWithValue(<HomeChannelConfig>[
-          recommend,
-          travel,
-        ]),
-      ],
+      overrides: _boundaryOverrides(
+        query: query,
+        channels: <HomeChannelConfig>[recommend, travel],
+      ),
     );
     addTearDown(container.dispose);
     final notifier = container.read(discoveryFeedMapProvider.notifier);
@@ -58,10 +67,9 @@ void main() {
       isTrue,
     );
 
-    container.updateOverrides(<Override>[
-      contentDiscoveryFeedQueryProvider.overrideWithValue(query),
-      homeChannelsProvider.overrideWithValue(<HomeChannelConfig>[travel]),
-    ]);
+    container.updateOverrides(
+      _boundaryOverrides(query: query, channels: <HomeChannelConfig>[travel]),
+    );
     await container.pump();
 
     final afterChurn = container.read(discoveryFeedMapProvider);
@@ -79,26 +87,54 @@ void main() {
     );
   });
 
-  test('noActiveRelease 始终是服务确认的 canonicalEmpty', () async {
+  test('release-bound 首页缺 active release 时返回 stillBlocked', () async {
     final recommend = ContentUIConfig.homeChannels.firstWhere(
       (channel) => channel.id == 'recommend',
     );
     final container = ProviderContainer(
-      overrides: <Override>[
-        contentDiscoveryFeedQueryProvider.overrideWithValue(
-          _ImmediateDiscoveryFeedQuery(
-            () async => DiscoveryFeedPage(
-              items: [],
-              outcome: ContentFeedOutcome.empty,
-              emptyReason: ContentFeedEmptyReason.noActiveRelease,
-            ),
+      overrides: _boundaryOverrides(
+        query: _ImmediateDiscoveryFeedQuery(
+          () async => DiscoveryFeedPage(
+            items: [],
+            outcome: ContentFeedOutcome.empty,
+            emptyReason: ContentFeedEmptyReason.noActiveRelease,
           ),
         ),
-        homeChannelsProvider.overrideWithValue(<HomeChannelConfig>[recommend]),
-        postInteractionStateProvider.overrideWith(
-          _NoopPostInteractionStateNotifier.new,
+        channels: <HomeChannelConfig>[recommend],
+        releaseRequirement: ContentReleaseRequirement.required,
+      ),
+    );
+    addTearDown(container.dispose);
+
+    final result = await container
+        .read(discoveryFeedMapProvider.notifier)
+        .load('recommend', force: true);
+
+    expect(result.terminal, DiscoveryFeedLoadTerminal.stillBlocked);
+    expect(
+      container
+          .read(discoveryFeedMapProvider)['recommend']
+          ?.value
+          ?.blockingError,
+      isNotNull,
+    );
+  });
+
+  test('非 release-bound 首页仍接受 noActiveRelease canonicalEmpty', () async {
+    final recommend = ContentUIConfig.homeChannels.firstWhere(
+      (channel) => channel.id == 'recommend',
+    );
+    final container = ProviderContainer(
+      overrides: _boundaryOverrides(
+        query: _ImmediateDiscoveryFeedQuery(
+          () async => DiscoveryFeedPage(
+            items: [],
+            outcome: ContentFeedOutcome.empty,
+            emptyReason: ContentFeedEmptyReason.noActiveRelease,
+          ),
         ),
-      ],
+        channels: <HomeChannelConfig>[recommend],
+      ),
     );
     addTearDown(container.dispose);
 
@@ -113,54 +149,17 @@ void main() {
     );
   });
 
-  test('runtime provider 不可用时快速收敛 typed unavailable 且绑定 generation', () async {
-    final recommend = ContentUIConfig.homeChannels.firstWhere(
-      (channel) => channel.id == 'recommend',
-    );
-    final container = ProviderContainer(
-      overrides: <Override>[
-        homeChannelsProvider.overrideWithValue(<HomeChannelConfig>[recommend]),
-        postInteractionStateProvider.overrideWith(
-          _NoopPostInteractionStateNotifier.new,
-        ),
-      ],
-    );
-    addTearDown(container.dispose);
-
-    final result = await container
-        .read(discoveryFeedMapProvider.notifier)
-        .load('recommend', force: true);
-    final state = container
-        .read(discoveryFeedMapProvider)['recommend']
-        ?.requireValue;
-
-    expect(result.terminal, DiscoveryFeedLoadTerminal.stillBlocked);
-    expect(result.generation, greaterThan(0));
-    expect(
-      (result.failure! as CloudException).runtimeFailure.kind,
-      RuntimeFailureKind.unavailable,
-    );
-    expect(state?.blockingError, isA<CloudException>());
-    expect(state?.items, isEmpty);
-    expect(state?.emptyReason, isNull);
-  });
-
   test('load 失败返回 stillBlocked 并绑定本次 generation', () async {
     final recommend = ContentUIConfig.homeChannels.firstWhere(
       (channel) => channel.id == 'recommend',
     );
     final container = ProviderContainer(
-      overrides: <Override>[
-        contentDiscoveryFeedQueryProvider.overrideWithValue(
-          _ImmediateDiscoveryFeedQuery(
-            () async => throw StateError('service unavailable'),
-          ),
+      overrides: _boundaryOverrides(
+        query: _ImmediateDiscoveryFeedQuery(
+          () async => throw StateError('service unavailable'),
         ),
-        homeChannelsProvider.overrideWithValue(<HomeChannelConfig>[recommend]),
-        postInteractionStateProvider.overrideWith(
-          _NoopPostInteractionStateNotifier.new,
-        ),
-      ],
+        channels: <HomeChannelConfig>[recommend],
+      ),
     );
     addTearDown(container.dispose);
 
@@ -184,25 +183,23 @@ void main() {
     final recommend = ContentUIConfig.homeChannels.firstWhere(
       (channel) => channel.id == 'recommend',
     );
-    final query = _SequencedDiscoveryFeedQuery(
-      <Future<DiscoveryFeedPage> Function()>[
-        () async => throw StateError('service unavailable'),
-        () async => DiscoveryFeedPage(
-          items: <ContentPostViewData>[_recoveredCanonicalPost()],
-          outcome: ContentFeedOutcome.content,
-          feedRequestId: 'feed-request-recovered',
-          policyDigest: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-        ),
-      ],
-    );
+    final query = _SequencedDiscoveryFeedQuery(<
+      Future<DiscoveryFeedPage> Function()
+    >[
+      () async => throw StateError('service unavailable'),
+      () async => DiscoveryFeedPage(
+        items: <ContentPostViewData>[_recoveredCanonicalPost()],
+        outcome: ContentFeedOutcome.content,
+        feedRequestId: 'feed-request-recovered',
+        policyDigest:
+            'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      ),
+    ]);
     final container = ProviderContainer(
-      overrides: <Override>[
-        contentDiscoveryFeedQueryProvider.overrideWithValue(query),
-        homeChannelsProvider.overrideWithValue(<HomeChannelConfig>[recommend]),
-        postInteractionStateProvider.overrideWith(
-          _NoopPostInteractionStateNotifier.new,
-        ),
-      ],
+      overrides: _boundaryOverrides(
+        query: query,
+        channels: <HomeChannelConfig>[recommend],
+      ),
     );
     addTearDown(container.dispose);
     final notifier = container.read(discoveryFeedMapProvider.notifier);

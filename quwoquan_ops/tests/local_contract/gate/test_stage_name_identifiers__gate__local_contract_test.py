@@ -242,13 +242,15 @@ class RepositoryStrictZeroTest(unittest.TestCase):
         ):
             self.assertNotIn(token, source)
 
-    def test_gate_repo_wires_scanner_in_run_service(self) -> None:
+    def test_gate_repo_wires_scanner_in_service_core_path(self) -> None:
         source = GATE_REPO_PATH.read_text(encoding="utf-8")
         self.assertEqual(source.count(GATE_COMMAND), 1)
-        service_segment = source[
-            source.index("\nrun_service() {") : source.index("\nrun_app() {")
+        service_core_segment = source[
+            source.index("\nrun_service_core_before_packaging() {") : source.index(
+                "\nrun_service_packaging() {"
+            )
         ]
-        self.assertIn(GATE_COMMAND, service_segment)
+        self.assertIn(GATE_COMMAND, service_core_segment)
 
 
 if __name__ == "__main__":

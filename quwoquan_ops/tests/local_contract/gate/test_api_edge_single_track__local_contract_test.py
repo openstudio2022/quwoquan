@@ -26,7 +26,6 @@ class ApiEdgeSingleTrackLocalContractTest(unittest.TestCase):
             "assistant-service",
             "chat-service",
             "circle-service",
-            "content-service",
             "entity-service",
             "integration-service",
             "notification-service",
@@ -39,6 +38,11 @@ class ApiEdgeSingleTrackLocalContractTest(unittest.TestCase):
             "user-service",
         ):
             self.assertNotIn(f"reverse_proxy {forbidden_owner}:", caddy)
+        # publicWeb host 的 SEO/transfer 读面由 public-content owner 承接；
+        # 只允许这一条精确映射，业务 API 仍必须唯一进入 api-edge。
+        self.assertEqual(caddy.count("reverse_proxy content-service:18080"), 1)
+        self.assertIn("@public_web_seo", caddy)
+        self.assertIn("rewrite * /public-web{uri}", caddy)
 
     def test_gamma_proxy_readiness_depends_on_the_canonical_edge_only(self) -> None:
         compose = yaml.safe_load(GAMMA_COMPOSE.read_text(encoding="utf-8"))

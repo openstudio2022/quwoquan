@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+import json
 from pathlib import Path
 
 import yaml
@@ -11,6 +13,7 @@ PLATFORM_WORKFLOW = ROOT / ".github/workflows/beta-device-platform.yml"
 DEVICE_EVIDENCE = ROOT / "quwoquan_ops/ci/render_beta_device_evidence.py"
 DEVICE_LEASE = ROOT / "quwoquan_ops/ci/device_runner_lease.py"
 PLATFORM_RUNNER = ROOT / "quwoquan_ops/ci/run_mobile_platform_matrix.sh"
+TIMING_BUDGETS = ROOT / "quwoquan_ops/environments/pr_gate_timing_budgets.json"
 EVIDENCE_DOCKERFILE = ROOT / "quwoquan_ops/ci/app_candidate_evidence.Dockerfile"
 SPEC_REF = "specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-001"
 
@@ -65,6 +68,20 @@ def test_app_pipeline_requires_four_environment_platform_package_set() -> None:
     assert "QWQ_ANDROID_PROD_GOOGLE_SERVICES_JSON" in text
 
 
+def test_app_pipeline_missing_signing_inputs_are_typed_gate_blocks() -> None:
+    text = WORKFLOW.read_text(encoding="utf-8")
+
+    assert text.count("quwoquan_ops/gate/require_ci_inputs.py") == 3
+    assert text.count("../quwoquan_ops/gate/require_ci_inputs.py") == 1
+    assert text.count("--scope release-signing") == 3
+    for required in (
+        "QWQ_ANDROID_RELEASE_KEYSTORE_B64",
+        "QWQ_IOS_DISTRIBUTION_CERT_P12_B64",
+        "PROD_OPS_OIDC_ISSUER",
+    ):
+        assert required in text
+
+
 def test_app_release_evidence_identity_has_no_contract_number_suffix() -> None:
     assert SPEC_REF
     sources = (
@@ -114,7 +131,8 @@ def test_device_matrix_nightly_schedule_selects_full_profile() -> None:
     assert "Inspect and doctor the managed Gamma runtime after soak" in text
     assert text.count("stackctl.py inspect") >= 2
     assert text.count("stackctl.py doctor") >= 2
-    assert "nightly full device matrix exceeded the 7200 second soak budget" in text
+    assert '--budget-profile "$VALIDATION_PROFILE"' in text
+    assert "canonical App device timing status" in text
 
 
 def test_beta_android_and_ios_run_in_parallel_before_one_receipt_aggregation() -> None:
@@ -156,16 +174,36 @@ def test_beta_android_and_ios_run_in_parallel_before_one_receipt_aggregation() -
     }
     assert aggregate_job["name"] == "Aggregate mobile matrix evidence"
     assert aggregate_job["runs-on"] == "ubuntu-latest"
-    assert jobs["beta_stack"]["runs-on"][-1] == "mobile-stack"
-    assert jobs["beta_teardown"]["runs-on"][-1] == "mobile-stack"
+    canonical_mobile_runner = ["self-hosted", "macOS", "ARM64"]
+    assert jobs["beta_stack"]["runs-on"] == canonical_mobile_runner
+    assert jobs["beta_teardown"]["runs-on"] == canonical_mobile_runner
     assert jobs["android_device_matrix"]["uses"] == "./.github/workflows/beta-device-platform.yml"
     assert jobs["ios_device_matrix"]["uses"] == "./.github/workflows/beta-device-platform.yml"
     assert jobs["android_device_matrix"]["needs"] == "beta_stack"
     assert jobs["ios_device_matrix"]["needs"] == "beta_stack"
     assert jobs["android_device_matrix"]["with"]["platform"] == "android"
     assert jobs["ios_device_matrix"]["with"]["platform"] == "ios"
+    for job_name in ("android_device_matrix", "ios_device_matrix"):
+        inputs = jobs[job_name]["with"]
+        assert (
+            inputs["account_closure_disposable_ack"]
+            == "${{ inputs.account_closure_disposable_ack == true }}"
+        )
+        assert (
+            inputs["account_closure_prod_platform"]
+            == "${{ inputs.account_closure_prod_platform || 'ios' }}"
+        )
     assert jobs["beta_teardown"]["needs"][-1] == "mobile_matrix"
-    assert "mobile-${{ inputs.platform }}" in platform_text
+    assert 'runs-on: [self-hosted, macOS, ARM64]' in platform_text
+    assert "PUB_HOSTED_URL: https://pub.flutter-io.cn" in platform_text
+    assert "FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn" in platform_text
+    assert "flutter pub get --enforce-lockfile" in platform_text
+    assert "run: flutter pub get\n" not in platform_text
+    assert "MOBILE_MATRIX_ENV_JSON: ${{ inputs.env_json }}" in platform_text
+    assert 'MATRIX_ENV_ARGS+=(--environment "$environment")' in platform_text
+    assert '"${MATRIX_ENV_ARGS[@]}"' in platform_text
+    assert 'runs-on: [self-hosted, macOS, ARM64, "mobile-${{ inputs.platform }}"]' not in platform_text
+    assert '--runner-label "mobile-${{ inputs.platform }}"' in platform_text
     assert "device_runner_lease.py acquire" in platform_text
     assert "device_runner_lease.py release" in platform_text
     assert "expected-host-digest" in platform_text
@@ -182,6 +220,8 @@ def test_beta_android_and_ios_run_in_parallel_before_one_receipt_aggregation() -
     assert "materialize_evidence_oci.py" in text
     assert "@${{ steps.receipt_bundle.outputs.digest }}" in text
     combined = f"{text}\n{platform_text}\n{lease_text}\n{runner_text}"
+    assert 'export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"' in runner_text
+    assert 'cd "$ROOT"' in runner_text
     assert "actions/upload-artifact@" not in combined
     assert "actions/download-artifact@" not in combined
     assert "rm -rf" not in combined
@@ -191,18 +231,38 @@ def test_beta_android_and_ios_run_in_parallel_before_one_receipt_aggregation() -
     assert "RepoDigests" not in text
     assert "timeout-minutes: 120" not in combined
     assert "timeout-minutes: 30" not in combined
-    assert "20 || 2" in jobs["beta_stack"]["timeout-minutes"]
-    assert aggregate_job["timeout-minutes"] == "1"
+    assert jobs["beta_stack"]["timeout-minutes"] == "20"
+    assert "mainline_auto_prod" in aggregate_job["timeout-minutes"]
+    assert "20" in aggregate_job["timeout-minutes"]
+    assert "|| 2" in aggregate_job["timeout-minutes"]
+    aggregate_checkout = next(
+        step
+        for step in aggregate_job["steps"]
+        if step.get("uses", "").startswith("actions/checkout@")
+    )
+    assert aggregate_checkout["if"] == (
+        "${{ needs.beta_stack.outputs.profile == 'mainline_auto_prod' }}"
+    )
     assert "10 || 1" in jobs["beta_teardown"]["timeout-minutes"]
     platform_payload = yaml.load(platform_text, Loader=yaml.BaseLoader)
     platform_timeout = platform_payload["jobs"]["device"]["timeout-minutes"]
     assert "nightly_full" in platform_timeout
     assert "120" in platform_timeout
     assert "release_candidate" in platform_timeout
+    assert "manual_full" in platform_timeout
+    assert "mainline_auto_prod" in platform_timeout
     assert "90" in platform_timeout
-    assert "|| 4" in platform_timeout
-    assert 'if [ "$VALIDATION_PROFILE" = mainline_auto_prod ]' in text
-    assert 'if [ "$calendar_lead_time_seconds" -gt 480 ]' in text
+    assert "|| 60" in platform_timeout
+    assert re.search(r"\|\|\s+4(?:\D|$)", platform_timeout) is None
+    timing_gate = json.loads(TIMING_BUDGETS.read_text(encoding="utf-8"))["gates"][
+        "05.app_env_device_matrix_pr"
+    ]
+    assert timing_gate["profileHardFailSeconds"]["mainline_auto_prod"] == 480
+    assert timing_gate["profileHardFailSeconds"]["nightly_full"] == 7200
+    assert '--budget-profile "$VALIDATION_PROFILE"' in text
+    assert 'canonical App device timing status=${timing_status}' in text
+    assert '"$calendar_lead_time_seconds" -gt "$profile_hard_fail_seconds"' not in text
+    assert 'if [ "$calendar_lead_time_seconds" -gt 480 ]' not in text
     assert "STACKCTL_AUTO_WIPE_MIGRATION_DRIFT: \"0\"" in text
     assert "stackctl.py up" in text
     assert "--formal-release" in text
@@ -238,7 +298,7 @@ def test_beta_android_and_ios_run_in_parallel_before_one_receipt_aggregation() -
     assert "source-built or destructive Beta formal runtime" not in text
     assert "steps.formal_runtime.outputs.started" in text
     assert "destructiveActions" in DEVICE_EVIDENCE.read_text(encoding="utf-8")
-    assert combined.count("persist-credentials: false") == 9
+    assert combined.count("persist-credentials: false") == 10
     assert "config --local http.https://github.com/.extraheader" not in combined
     checkout_steps = [
         step
@@ -252,7 +312,7 @@ def test_beta_android_and_ios_run_in_parallel_before_one_receipt_aggregation() -
         for step in job.get("steps", [])
         if str(step.get("uses") or "").startswith("actions/checkout@")
     ]
-    assert len(checkout_steps) == 8
+    assert len(checkout_steps) == 9
     assert len(called_checkout_steps) == 1
     assert sum(
         step["with"].get("clean") == "false" for step in checkout_steps

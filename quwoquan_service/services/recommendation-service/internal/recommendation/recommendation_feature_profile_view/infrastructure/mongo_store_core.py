@@ -181,6 +181,18 @@ class MongoFeatureProfileStore(
             [("personaId", ASCENDING), ("occurredAt", DESCENDING), ("_id", DESCENDING)],
             name="idx_recommendation_intersection_persona_profile_latest",
         )
+        self._intersection_gathering_participations.create_index(
+            [("personaId", ASCENDING), ("active", ASCENDING), ("gatheringId", ASCENDING)],
+            name="idx_recommendation_intersection_gathering_participation_persona",
+        )
+        self._intersection_gathering_participations.create_index(
+            [("gatheringId", ASCENDING), ("active", ASCENDING), ("personaId", ASCENDING)],
+            name="idx_recommendation_intersection_gathering_participation_gathering",
+        )
+        self._intersection_gathering_recaps.create_index(
+            [("personaId", ASCENDING), ("active", ASCENDING), ("gatheringId", ASCENDING)],
+            name="idx_recommendation_intersection_gathering_recap_persona",
+        )
         self._intersection_gathering_publications.create_index(
             [("organizerId", ASCENDING), ("occurredAt", DESCENDING)],
             name="idx_recommendation_intersection_publication_organizer",
@@ -192,6 +204,10 @@ class MongoFeatureProfileStore(
         self._intersection_post_authors.create_index(
             [("authorId", ASCENDING), ("active", ASCENDING)],
             name="idx_recommendation_intersection_post_author",
+        )
+        self._intersection_facilitations.create_index(
+            [("occurredAt", DESCENDING)],
+            name="idx_recommendation_intersection_facilitation_occurred",
         )
         self._checkpoints.create_index(
             [("subjectId", ASCENDING), ("appliedAt", DESCENDING)],

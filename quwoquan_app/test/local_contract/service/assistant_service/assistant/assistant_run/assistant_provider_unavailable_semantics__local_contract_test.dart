@@ -11,7 +11,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/runtime/errors/generated/assistant/assistant_errors.g.dart';
-import 'package:quwoquan_app/runtime/errors/ui_error_models.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
@@ -44,9 +43,7 @@ void main() {
     return capturedContext;
   }
 
-  testWidgets('Provider 不可用码收敛为可重试依赖失败并透传 sourceCode', (
-    tester,
-  ) async {
+  testWidgets('Provider 不可用码收敛为可重试依赖失败并透传 sourceCode', (tester) async {
     final context = await pumpContext(tester);
     for (final code in providerUnavailableCodes) {
       final semantic = UiErrorSemanticResolver.resolve(

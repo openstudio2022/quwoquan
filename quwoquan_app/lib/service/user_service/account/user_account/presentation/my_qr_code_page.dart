@@ -8,7 +8,6 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/application/public/profile_edit_models.dart';
-import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
 import 'package:quwoquan_app/design_system/semantics/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
@@ -54,12 +53,9 @@ class _MyQrCodePageState extends ConsumerState<MyQrCodePage> {
   }
 
   void _validateCard(ProfileQrCardData card) {
-    final trustedPublicOrigin = Uri.tryParse(
-      CloudRuntimeConfig.publicWebBaseUrl.trim(),
-    );
-    if (trustedPublicOrigin == null) {
-      throw StateError('PUBLIC_WEB_BASE_URL is invalid');
-    }
+    final trustedPublicOrigin = ref
+        .read(publicContentLinkBuilderProvider)
+        .publicWebOrigin;
     card.requireUsableAt(
       trustedPublicOrigin: trustedPublicOrigin,
       now: (widget.clock ?? DateTime.now)(),

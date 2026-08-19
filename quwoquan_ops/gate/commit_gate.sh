@@ -106,9 +106,10 @@ run_static_check() {
   case "$check" in
     branch_policy) return 0 ;;
     feature_tree) make verify-feature-tree ;;
-    python_script_governance)
+    python_script_governance_app|python_script_governance_service|python_script_governance_ops|python_script_governance_data)
+      local governance_scope="${check#python_script_governance_}"
       python3 -B quwoquan_ops/gate/verify_python_script_governance.py \
-        --scope all --mode check
+        --scope "$governance_scope" --mode check
       ;;
     entrypoint_script_paths)
       python3 -B quwoquan_ops/gate/verify_entrypoint_script_paths.py
@@ -265,6 +266,13 @@ if [[ "${#PYTEST_PATHS[@]}" -gt 0 ]]; then
     set -euo pipefail
     pytest_python="$1"
     shift
+    # Git exports repository-local variables to hooks.  Test fixtures that
+    # create a temporary repository must not inherit the real worktree index
+    # or refs; cwd still points at ROOT, so tests that intentionally inspect
+    # the current repository continue to discover it normally.
+    while IFS= read -r git_local_var; do
+      [[ -n "$git_local_var" ]] && unset "$git_local_var"
+    done < <(git rev-parse --local-env-vars)
     if "$pytest_python" -c "import xdist" >/dev/null 2>&1; then
       "$pytest_python" -m pytest -n 4 -q "$@"
     else

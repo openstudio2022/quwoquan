@@ -12,11 +12,11 @@ env:
   QWQ_OUTPUT_ROOT: ${{ github.workspace }}/.qwq_output
 
 on:
+  push:
+    branches: [dev1.0]
   schedule:
     - cron: '0 18 * * *'
   pull_request:
-    branches:
-      - main
   workflow_dispatch:
     inputs:
       validation_profile:
@@ -62,6 +62,11 @@ on:
         description: 'Prod 一次性注销证据的唯一 Flutter device id'
         required: false
         default: ''
+      allow_disabled_mobile_matrix_debug:
+        description: '仅独立手动调试：明确允许在 self-hosted mobile matrix 未启用时跳过'
+        required: false
+        default: false
+        type: boolean
   workflow_call:
     inputs:
       checkout_ref:
@@ -144,12 +149,26 @@ on:
         value: ${{ jobs.mobile_matrix.outputs.receipt_digest }}
 
 concurrency:
-  group: app-env-device-matrix-beta-stack
+  group: app-env-device-matrix-${{ (inputs.validation_profile == '' && (github.event_name == 'push' || github.event_name == 'pull_request')) && format('pr-light-{0}-{1}', github.event_name, github.ref) || 'shared-runtime' }}
   cancel-in-progress: false
 
 jobs:
+  branch_policy:
+    name: App Matrix — Branch Policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - if: ${{ github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
+        name: Enforce canonical repository branch admission
+        run: python3 quwoquan_ops/gate/verify_git_branch_policy.py
+
   resolve_release_evidence:
     name: Resolve one canonical release evidence reference
+    needs: branch_policy
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -175,6 +194,7 @@ jobs:
           INPUT_PROFILE: ${{ inputs.validation_profile }}
           INPUT_RELEASE_REF: ${{ inputs.release_evidence_ref }}
           INPUT_CHECKOUT_REF: ${{ inputs.checkout_ref }}
+          DEFAULT_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           SCHEDULE_RELEASE_REF: ${{ vars.RELEASED_RELEASE_EVIDENCE_REF }}
         run: |
           set -euo pipefail
@@ -185,7 +205,7 @@ jobs:
             pr_light)
               RELEASE_REF=""
               REQUIRED_STATUS=""
-              CHECKOUT_REF="${INPUT_CHECKOUT_REF:-${{ github.sha }}}"
+              CHECKOUT_REF="${INPUT_CHECKOUT_REF:-$DEFAULT_SOURCE_SHA}"
               ;;
             mainline_auto_prod|release_candidate)
               RELEASE_REF="$INPUT_RELEASE_REF"
@@ -245,9 +265,12 @@ jobs:
   beta_stack:
     name: Prepare one Beta stack prerequisite
     needs: resolve_release_evidence
-    if: ${{ github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
-    runs-on: [self-hosted, macOS, ARM64, mobile-stack]
-    timeout-minutes: ${{ (github.event_name == 'schedule' || inputs.validation_profile == 'manual_full' || inputs.validation_profile == 'nightly_full' || inputs.validation_profile == 'release_candidate') && 20 || 2 }}
+    if: ${{ vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
+    runs-on: [self-hosted, macOS, ARM64]
+    # A cold public-repository checkout has exceeded ten minutes on this
+    # dedicated runner. Keep one bounded 20-minute budget for every profile;
+    # all candidate, device and aggregation assertions remain fail closed.
+    timeout-minutes: 20
     permissions:
       contents: read
       packages: read
@@ -505,8 +528,8 @@ jobs:
       expected_host_digest: ${{ needs.beta_stack.outputs.host_digest }}
       release_evidence_ref: ${{ needs.beta_stack.outputs.release_evidence_ref }}
       event_name: ${{ github.event_name }}
-      account_closure_disposable_ack: ${{ inputs.account_closure_disposable_ack }}
-      account_closure_prod_platform: ${{ inputs.account_closure_prod_platform }}
+      account_closure_disposable_ack: ${{ inputs.account_closure_disposable_ack == true }}
+      account_closure_prod_platform: ${{ inputs.account_closure_prod_platform || 'ios' }}
       account_closure_prod_device_id: ${{ inputs.account_closure_prod_device_id }}
     secrets: inherit
 
@@ -528,8 +551,8 @@ jobs:
       expected_host_digest: ${{ needs.beta_stack.outputs.host_digest }}
       release_evidence_ref: ${{ needs.beta_stack.outputs.release_evidence_ref }}
       event_name: ${{ github.event_name }}
-      account_closure_disposable_ack: ${{ inputs.account_closure_disposable_ack }}
-      account_closure_prod_platform: ${{ inputs.account_closure_prod_platform }}
+      account_closure_disposable_ack: ${{ inputs.account_closure_disposable_ack == true }}
+      account_closure_prod_platform: ${{ inputs.account_closure_prod_platform || 'ios' }}
       account_closure_prod_device_id: ${{ inputs.account_closure_prod_device_id }}
     secrets: inherit
 
@@ -544,7 +567,6 @@ jobs:
       id-token: write
       attestations: write
     env:
-      RECEIPT_PATH: ${{ runner.temp }}/environment-stability-recovery-android.json
       RECEIPT_BASE64: ${{ needs.android_device_matrix.outputs.recovery_receipt_base64 }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -552,6 +574,8 @@ jobs:
           ref: ${{ needs.beta_stack.outputs.source_git_sha }}
           clean: false
           persist-credentials: false
+      - name: Initialize runner-local Android receipt path
+        run: echo "RECEIPT_PATH=$RUNNER_TEMP/environment-stability-recovery-android.json" >> "$GITHUB_ENV"
       - name: Materialize exact Android recovery receipt bytes
         run: |
           python3 - <<'PY'
@@ -584,7 +608,6 @@ jobs:
       id-token: write
       attestations: write
     env:
-      RECEIPT_PATH: ${{ runner.temp }}/environment-stability-recovery-ios.json
       RECEIPT_BASE64: ${{ needs.ios_device_matrix.outputs.recovery_receipt_base64 }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -592,6 +615,8 @@ jobs:
           ref: ${{ needs.beta_stack.outputs.source_git_sha }}
           clean: false
           persist-credentials: false
+      - name: Initialize runner-local iOS receipt path
+        run: echo "RECEIPT_PATH=$RUNNER_TEMP/environment-stability-recovery-ios.json" >> "$GITHUB_ENV"
       - name: Materialize exact iOS recovery receipt bytes
         run: |
           python3 - <<'PY'
@@ -616,9 +641,9 @@ jobs:
   mobile_matrix:
     name: Aggregate mobile matrix evidence
     needs: [beta_stack, android_device_matrix, ios_device_matrix]
-    if: always()
+    if: ${{ always() && vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 1
+    timeout-minutes: ${{ needs.beta_stack.outputs.profile == 'mainline_auto_prod' && 20 || 2 }}
     permissions:
       contents: read
       attestations: read
@@ -636,6 +661,7 @@ jobs:
         name: Start aggregation timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        if: ${{ needs.beta_stack.outputs.profile == 'mainline_auto_prod' }}
         with:
           ref: ${{ needs.beta_stack.outputs.source_git_sha || github.sha }}
           path: .qwq_output/env/repo/local/device-matrix/cache/checkouts/${{ github.run_id }}/${{ github.run_attempt }}/aggregate
@@ -649,6 +675,17 @@ jobs:
         run: |
           echo "android_result=$ANDROID" >> "$GITHUB_OUTPUT"
           echo "ios_result=$IOS" >> "$GITHUB_OUTPUT"
+      - name: Require successful dual-platform job aggregation
+        env:
+          STACK_RESULT: ${{ needs.beta_stack.result }}
+          ANDROID_RESULT: ${{ needs.android_device_matrix.result }}
+          IOS_RESULT: ${{ needs.ios_device_matrix.result }}
+        run: |
+          set -euo pipefail
+          if [ "$STACK_RESULT" != success ] || [ "$ANDROID_RESULT" != success ] || [ "$IOS_RESULT" != success ]; then
+            echo "::error::GATE_BLOCK: device matrix aggregation requires successful stack, Android and iOS jobs"
+            exit 2
+          fi
       - name: Require successful direct-bound dual-platform evidence
         if: ${{ needs.beta_stack.outputs.profile == 'mainline_auto_prod' }}
         env:
@@ -800,7 +837,7 @@ jobs:
     name: Teardown the stack owned by this matrix run
     needs: [beta_stack, android_device_matrix, ios_device_matrix, mobile_matrix]
     if: ${{ always() && (needs.beta_stack.outputs.formal_runtime_started == 'true' || needs.beta_stack.outputs.managed_runtime_started == 'true') }}
-    runs-on: [self-hosted, macOS, ARM64, mobile-stack]
+    runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: ${{ needs.beta_stack.outputs.managed_runtime_started == 'true' && 10 || 1 }}
     permissions:
       contents: read
@@ -880,7 +917,7 @@ jobs:
         name: Render official GitHub DAG timing
         working-directory: ${{ env.SUMMARY_REPO_DIR }}
         env:
-          SELF_HOSTED_ENABLED: ${{ github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
+          SELF_HOSTED_ENABLED: ${{ vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
           VALIDATION_PROFILE: ${{ needs.beta_stack.outputs.profile }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
@@ -901,6 +938,7 @@ jobs:
             --candidate-job "Aggregate mobile matrix evidence" \
             --critical-start run \
             --github-output "$TIMING_OUTPUT"
+          # shellcheck source=/dev/null
           source "$TIMING_OUTPUT"
           cat "$TIMING_OUTPUT" >> "$GITHUB_OUTPUT"
           DURATION_ARGS=(--calendar-lead-time-seconds "$calendar_lead_time_seconds")
@@ -914,6 +952,7 @@ jobs:
           python3 quwoquan_ops/ci/render_ci_timing_summary.py \
             --gate-key 05.app_env_device_matrix_pr \
             --title "05. App Env Device Matrix" \
+            --budget-profile "$VALIDATION_PROFILE" \
             --machine-critical-path-seconds "$machine_critical_path_seconds" \
             --critical-path-source github_run_calendar \
             --run-created-at "$run_created_at" \
@@ -928,14 +967,22 @@ jobs:
             --note "GitHub Jobs API proves explicit Android/iOS jobs share one host-bound stack and execute before one aggregator." \
             --write-json "$QWQ_OUTPUT_ROOT/env/repo/runs/ci-timing/app-env-device-matrix-summary.json" \
             --write-step-summary
-          if [ "$VALIDATION_PROFILE" = mainline_auto_prod ]; then
-            if [ "$calendar_lead_time_seconds" -gt 480 ]; then
-              echo "::error::GATE_BLOCK: Beta stack/device/aggregation calendar path exceeded the 480 second hard budget"
-              exit 2
-            fi
-          fi
-          if [ "$VALIDATION_PROFILE" = nightly_full ] && [ "$calendar_lead_time_seconds" -gt 7200 ]; then
-            echo "::error::GATE_BLOCK: nightly full device matrix exceeded the 7200 second soak budget"
+          timing_status="$(python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ["QWQ_OUTPUT_ROOT"])
+          summary = json.loads(
+              (root / "env/repo/runs/ci-timing/app-env-device-matrix-summary.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          print(str(summary.get("status") or "missing"))
+          PY
+          )"
+          if [[ "$timing_status" == "failed" || "$timing_status" == "historical_incomplete" ]]; then
+            echo "::error::GATE_BLOCK: canonical App device timing status=${timing_status}"
             exit 2
           fi
           if [[ -n "${missing_evidence:-}" ]]; then
@@ -944,8 +991,10 @@ jobs:
           fi
       - id: summary
         name: Block any missing or failed platform
+        if: always()
         env:
-          SELF_HOSTED_ENABLED: ${{ github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
+          SELF_HOSTED_ENABLED: ${{ vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
+          DEBUG_SKIP_REQUESTED: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_disabled_mobile_matrix_debug == true }}
           STACK: ${{ needs.beta_stack.result }}
           ANDROID: ${{ needs.android_device_matrix.result }}
           IOS: ${{ needs.ios_device_matrix.result }}
@@ -957,18 +1006,26 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$SELF_HOSTED_ENABLED" != true ]; then
-            echo "result=success" >> "$GITHUB_OUTPUT"
-            exit 0
+            if [ "$DEBUG_SKIP_REQUESTED" = true ]; then
+              echo "::notice::self-hosted mobile matrix was explicitly skipped for this standalone manual debug run"
+              echo "result=skipped" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "::error::GATE_BLOCK: ENABLE_SELF_HOSTED_MOBILE_MATRIX must equal true for required PR/main device validation"
+            exit 2
           fi
-          args=()
-          if [ "$ALLOW_MISSING" = true ]; then args+=(--allow-missing-platforms); fi
+          if [ "$ALLOW_MISSING" = true ]; then
+            ALLOW_MISSING_ARG=--allow-missing-platforms
+          else
+            ALLOW_MISSING_ARG=
+          fi
           python3 "$SUMMARY_REPO_DIR/quwoquan_ops/ci/device_matrix/check_gate.py" \
             --discover-result "$STACK" \
             --android-result "$ANDROID" \
             --ios-result "$IOS" \
             --has-android true \
             --has-ios true \
-            "${args[@]}"
+            ${ALLOW_MISSING_ARG:+"$ALLOW_MISSING_ARG"}
           test "$AGGREGATE" = success
           if [ "$FORMAL_RUNTIME_STARTED" = true ]; then test "$TEARDOWN" = success; fi
           if [ "$MANAGED_RUNTIME_STARTED" = true ]; then test "$TEARDOWN" = success; fi
@@ -991,17 +1048,21 @@ jobs:
       id-token: write
       attestations: write
     env:
-      IOS_RECEIPT_PATH: ${{ runner.temp }}/environment-stability-recovery-ios.json
       IOS_RECEIPT_BASE64: ${{ needs.ios_device_matrix.outputs.recovery_receipt_base64 }}
-      ANDROID_RECEIPT_PATH: ${{ runner.temp }}/environment-stability-recovery-android.json
       ANDROID_RECEIPT_BASE64: ${{ needs.android_device_matrix.outputs.recovery_receipt_base64 }}
-      RECEIPT_PATH: ${{ runner.temp }}/environment-stability-nightly-full.json
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           ref: ${{ needs.beta_stack.outputs.source_git_sha }}
           clean: false
           persist-credentials: false
+      - name: Initialize runner-local nightly receipt paths
+        run: |
+          {
+            echo "IOS_RECEIPT_PATH=$RUNNER_TEMP/environment-stability-recovery-ios.json"
+            echo "ANDROID_RECEIPT_PATH=$RUNNER_TEMP/environment-stability-recovery-android.json"
+            echo "RECEIPT_PATH=$RUNNER_TEMP/environment-stability-nightly-full.json"
+          } >> "$GITHUB_ENV"
       - name: Materialize exact dual-platform recovery receipt bytes
         run: |
           python3 - <<'PY'

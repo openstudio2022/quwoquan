@@ -153,7 +153,7 @@ type MediaAssetSlice struct {
 	VideoContainer                mediamodel.MediaContainer   `json:"videoContainer,omitempty"`
 	VideoAudioCodec               mediamodel.AudioCodec       `json:"videoAudioCodec,omitempty"`
 	VideoKeyframeIntervalMs       int                         `json:"videoKeyframeIntervalMs,omitempty"`
-	VideoFastStart                bool                        `json:"videoFastStart,omitempty"`
+	VideoFastStart                bool                        `json:"videoFastStart"`
 	VideoPublicSliceKey           string                      `json:"-"`
 	CoverPublicSliceKey           string                      `json:"-"`
 	PreviewTrackVersion           int                         `json:"previewTrackVersion,omitempty"`

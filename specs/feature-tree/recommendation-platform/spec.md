@@ -101,6 +101,6 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`block`
-- 影响或价值：仍缺 `recommendation.ranked_recommendation_window` 在同一候选上的 Alpha、Beta、Gamma 与 Prod 用户验收。真实 Redis/Mongo 的 API integration 只能证明窗口创建和稳定续页，不能替代 content feed 旅程的环境 CaseResult。
+- 影响或价值：尚缺 alpha、beta 与 prod 对同一候选的排序窗口用户验收及环境证据。`recommendation.ranked_recommendation_window` 是由 content-service 消费的 internal service operation，用户验收必须挂在真实 content feed 旅程上；单一环境回执、进程内替身或不同候选的分散结果均不能关闭该缺口。
 - 完成判定：`DOM-001` 的 4 条 THEN 组全部具备子句级 `spec_ref`（`dom-001.t1..t4`）绑定的真实测试证据，且用户验收与四环境证据来自 `ranked_window_feed_journey_probe_ops_env` 同一候选的执行产物。
-- 依赖：`quwoquan_ops/tests/acceptance/user_acceptance/service_ops/recommendation-service/smoke/run_ranked_window_feed_journey_probe.py`、四环境 runtime、Prod 凭据与放量流程。
+- 依赖：alpha、beta 的同候选执行证据，以及需要 prod-hosted 凭据与放量流程的 prod 环境证据。

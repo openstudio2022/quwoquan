@@ -8,6 +8,7 @@
 # - 仅单方发布回顾时不产出（诚实红线：经历交集要求双方都主动沉淀）。
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import hashlib
 import json
 
@@ -564,6 +565,14 @@ def test_facilitation_event_fires_once_on_experienced_transition(
     assert payload["gatheringId"] == gathering
     assert payload["creatorPersonaId"] == creator
     assert payload["seedPostId"] == seed_post
+    receipt = mongo_database["recommendation_intersection_facilitations"].find_one(
+        {"_id": gathering}
+    )
+    assert receipt is not None
+    assert receipt["occurredAt"].replace(tzinfo=timezone.utc) == datetime(
+        2026, 8, 10, 18, 0, tzinfo=timezone.utc
+    )
+    assert "notifiedAt" not in receipt
 
     # 第三名参与者补充回顾：经历级已达成过，占位收据幂等，不再发布。
     _emit_recap_post(
@@ -584,8 +593,6 @@ def test_facilitation_event_fires_once_on_experienced_transition(
 
 
 def _funnel(reader, **filters):
-    from datetime import datetime, timezone
-
     return reader.get_flywheel_funnel(
         window_from=datetime(2026, 8, 1, tzinfo=timezone.utc),
         window_to=datetime(2026, 8, 31, tzinfo=timezone.utc),

@@ -14,6 +14,7 @@ import fcntl
 import hashlib
 import json
 import os
+import plistlib
 import re
 import select
 import signal
@@ -282,6 +283,109 @@ def _terminate_stale_device_runtime(device_id: str, bundle_id: str) -> dict[str,
         "terminatedFrontendServerPids": [],
         "terminatedNativeApp": native.returncode == 0,
     }
+
+
+def _read_installed_runtime_identity(
+    device_id: str,
+    bundle_id: str,
+) -> dict[str, str]:
+    container = subprocess.run(
+        ["xcrun", "simctl", "get_app_container", device_id, bundle_id, "app"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if container.returncode != 0:
+        raise RuntimeError(
+            container.stderr.strip()
+            or container.stdout.strip()
+            or "installed iOS app container is unavailable"
+        )
+    manifest_path = Path(container.stdout.strip()) / "QWQNativeRuntime.plist"
+    try:
+        with manifest_path.open("rb") as source:
+            manifest = plistlib.load(source)
+    except (OSError, plistlib.InvalidFileException) as error:
+        raise RuntimeError(
+            f"installed iOS runtime manifest is unreadable: {error}"
+        ) from error
+    if not isinstance(manifest, dict):
+        raise RuntimeError("installed iOS runtime manifest must be an object")
+    identity = {
+        "environment": str(manifest.get("runtimeEnvironment") or "").strip(),
+        "target": str(manifest.get("launchTarget") or "").strip(),
+        "runtimeConfigDigest": str(
+            manifest.get("runtimeConfigDigest") or ""
+        ).strip(),
+        "effectiveLaunchManifestDigest": str(
+            manifest.get("effectiveLaunchManifestDigest") or ""
+        ).strip(),
+    }
+    if not identity["environment"] or not identity["target"]:
+        raise RuntimeError("installed iOS runtime identity is incomplete")
+    for key in ("runtimeConfigDigest", "effectiveLaunchManifestDigest"):
+        if not re.fullmatch(r"sha256:[0-9a-f]{64}", identity[key]):
+            raise RuntimeError(f"installed iOS {key} is invalid")
+    return identity
+
+
+def _runtime_identity_issues(
+    snapshots: list[dict[str, str]],
+    *,
+    expected_environment: str,
+) -> list[str]:
+    if not snapshots:
+        return ["no installed iOS runtime identity snapshots were captured"]
+    issues: list[str] = []
+    expected_target = f"{expected_environment}-local"
+    baseline = snapshots[0]
+    for index, snapshot in enumerate(snapshots):
+        label = "cold" if index == 0 else f"hot_restart_{index}"
+        if snapshot.get("environment") != expected_environment:
+            issues.append(
+                f"{label}: environment is {snapshot.get('environment')!r}, "
+                f"expected {expected_environment!r}"
+            )
+        if snapshot.get("target") != expected_target:
+            issues.append(
+                f"{label}: target is {snapshot.get('target')!r}, "
+                f"expected {expected_target!r}"
+            )
+        for key in (
+            "environment",
+            "target",
+            "runtimeConfigDigest",
+            "effectiveLaunchManifestDigest",
+        ):
+            if snapshot.get(key) != baseline.get(key):
+                issues.append(
+                    f"{label}: {key} drifted from the cold runtime identity"
+                )
+    return issues
+
+
+def _stop_original_process_group(
+    process: subprocess.Popen[bytes],
+    process_group_id: int,
+    *,
+    attempts: int = 3,
+    wait_seconds: float = 5.0,
+) -> bool:
+    """Stop only the process group created for this Flutter session."""
+
+    if process.poll() is not None:
+        return True
+    for _ in range(attempts):
+        try:
+            os.killpg(process_group_id, signal.SIGINT)
+        except ProcessLookupError:
+            return True
+        try:
+            process.wait(timeout=wait_seconds)
+            return True
+        except subprocess.TimeoutExpired:
+            continue
+    return process.poll() is not None
 
 
 def _count_native_launches_since(raw_log: str, since: dt.datetime) -> int:
@@ -601,9 +705,17 @@ def main(argv: list[str] | None = None) -> int:
         stderr=slave_fd,
         preexec_fn=lambda: _attach_controlling_terminal(slave_fd),
     )
+    process_group_id = os.getpgid(process.pid)
+    if process_group_id != process.pid:
+        raise RuntimeError(
+            "Flutter session did not retain its dedicated process group"
+        )
     os.close(slave_fd)
     output = bytearray()
     hot_restart_triggers: list[str] = []
+    runtime_identity_snapshots: list[dict[str, str]] = []
+    runtime_identity_capture_issues: list[str] = []
+    process_group_stopped = False
     try:
         cold_ready = _wait_for_cold_startup(
             master_fd,
@@ -615,6 +727,15 @@ def main(argv: list[str] | None = None) -> int:
         )
         observed_attempt_ids = set(baseline_attempt_ids)
         if cold_ready and process.poll() is None:
+            try:
+                runtime_identity_snapshots.append(
+                    _read_installed_runtime_identity(
+                        args.device_id,
+                        args.bundle,
+                    )
+                )
+            except RuntimeError as error:
+                runtime_identity_capture_issues.append(f"cold: {error}")
             observed_attempt_ids.update(
                 str(item.get("attemptId") or "")
                 for item in extract_dart_startup_attempts(
@@ -662,7 +783,7 @@ def main(argv: list[str] | None = None) -> int:
                                 trigger = "SIGUSR2_fallback"
                             except OSError:
                                 trigger = "SIGUSR2_fallback_failed"
-                    _wait_for_hot_restart(
+                    hot_safe_ready = _wait_for_hot_restart(
                         master_fd,
                         process,
                         args.device_id,
@@ -675,6 +796,18 @@ def main(argv: list[str] | None = None) -> int:
                         require_safe_terminal=True,
                     )
                     hot_restart_triggers.append(trigger)
+                    if hot_safe_ready:
+                        try:
+                            runtime_identity_snapshots.append(
+                                _read_installed_runtime_identity(
+                                    args.device_id,
+                                    args.bundle,
+                                )
+                            )
+                        except RuntimeError as error:
+                            runtime_identity_capture_issues.append(
+                                f"hot_restart_{len(hot_restart_triggers)}: {error}"
+                            )
                     observed_attempt_ids.update(
                         str(item.get("attemptId") or "")
                         for item in extract_dart_startup_attempts(
@@ -684,19 +817,11 @@ def main(argv: list[str] | None = None) -> int:
                 finally:
                     termios.tcsetattr(master_fd, termios.TCSANOW, terminal_state)
     finally:
-        if process.poll() is None:
-            try:
-                os.write(master_fd, b"\x03")
-            except OSError:
-                pass
-            _pump_pty(master_fd, process, output, timeout_seconds=5)
-        if process.poll() is None:
-            process.terminate()
-        try:
-            process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait(timeout=5)
+        process_group_stopped = _stop_original_process_group(
+            process,
+            process_group_id,
+        )
+        _pump_pty(master_fd, process, output, timeout_seconds=1)
         os.close(master_fd)
 
     flutter_output = output.decode("utf-8", errors="replace")
@@ -719,6 +844,23 @@ def main(argv: list[str] | None = None) -> int:
         baseline_captured_at,
     )
     issues: list[str] = []
+    issues.extend(runtime_identity_capture_issues)
+    issues.extend(
+        _runtime_identity_issues(
+            runtime_identity_snapshots,
+            expected_environment=args.env,
+        )
+    )
+    if len(runtime_identity_snapshots) != args.hot_restart_count + 1:
+        issues.append(
+            "expected runtime identity readback for cold plus "
+            f"{args.hot_restart_count} hot restarts, got "
+            f"{len(runtime_identity_snapshots)}"
+        )
+    if not process_group_stopped:
+        issues.append(
+            "Flutter process group did not exit after scoped SIGINT requests"
+        )
     if cold is None:
         issues.append("cold Dart startup attempt was not observed")
     if len(hot_restarts) != args.hot_restart_count:
@@ -762,8 +904,11 @@ def main(argv: list[str] | None = None) -> int:
         "hotRestartCount": args.hot_restart_count,
         "hotRestartTriggers": hot_restart_triggers,
         "staleRuntimeCleanup": stale_runtime_cleanup,
+        "flutterProcessGroupId": process_group_id,
+        "flutterProcessGroupStoppedBySigint": process_group_stopped,
         "flutterRunExitCode": process.returncode,
         "nativeDidFinishLaunchingCount": native_did_finish_count,
+        "runtimeIdentitySnapshots": runtime_identity_snapshots,
         "safeTerminalBudgetsMs": {
             "reported": SAFE_TERMINAL_HARD_LIMIT_MS,
             "hotNativeReceived": SAFE_TERMINAL_HARD_LIMIT_MS,

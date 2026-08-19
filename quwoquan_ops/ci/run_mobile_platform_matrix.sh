@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$ROOT"
+export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
+
 : "${MOBILE_PLATFORM:?MOBILE_PLATFORM is required}"
 : "${MOBILE_DEVICE_ID:?MOBILE_DEVICE_ID is required}"
 : "${MOBILE_MATRIX_ENV_JSON:?MOBILE_MATRIX_ENV_JSON is required}"
@@ -255,8 +259,10 @@ while IFS= read -r env_name; do
           smoke_target_name=""
           ;;
       esac
-      if [[ -z "$smoke_target_name" || -z "${VIDEO_PLAYBACK_CANARY_WORK_ID:-}" ]]; then
-        [[ -n "$smoke_target_name" ]] && echo "::error::VIDEO_PLAYBACK_CANARY_WORK_ID is required for ${matrix_kind}"
+      if [[ -z "$smoke_target_name" ]]; then
+        matrix_exit_code=2
+      elif [[ "$matrix_kind" == "app-core-readback" && -z "${VIDEO_PLAYBACK_CANARY_WORK_ID:-}" ]]; then
+        echo "::error::VIDEO_PLAYBACK_CANARY_WORK_ID is required for ${matrix_kind}"
         matrix_exit_code=2
       else
         if [[ "$matrix_kind" == "app-core-readback" ]]; then
@@ -274,22 +280,30 @@ while IFS= read -r env_name; do
           smoke_media_video_base_url \
           smoke_media_upload_base_url \
           smoke_rtc_base_url < <(resolve_topology_public_bases "$smoke_target_name")
-        python3 quwoquan_ops/cli/smoke/run_environment_patrol_smoke.py \
-          --env-name "$smoke_env_alias" \
-          --runtime-env "$smoke_runtime_env" \
-          --api-contract-env "$smoke_runtime_env" \
-          --target "$smoke_target" \
-          --gateway-base-url "$smoke_gateway_base_url" \
-          --product-ops-base-url "$smoke_product_ops_base_url" \
-          --media-avatar-base-url "$smoke_media_avatar_base_url" \
-          --media-image-base-url "$smoke_media_image_base_url" \
-          --media-video-base-url "$smoke_media_video_base_url" \
-          --media-upload-base-url "$smoke_media_upload_base_url" \
-          --rtc-media-connection-url "$smoke_rtc_base_url" \
-          --video-playback-canary-work-id "$VIDEO_PLAYBACK_CANARY_WORK_ID" \
-          --platform "$MOBILE_PLATFORM" \
-          --device-id "$MOBILE_DEVICE_ID" \
-          --report "$QWQ_OUTPUT_ROOT/env/${env_name}/runs/device-matrix/${smoke_report_name}-${MOBILE_PLATFORM}.json"
+        run_environment_smoke() {
+          python3 quwoquan_ops/cli/smoke/run_environment_patrol_smoke.py \
+            --env-name "$smoke_env_alias" \
+            --runtime-env "$smoke_runtime_env" \
+            --api-contract-env "$smoke_runtime_env" \
+            --target "$smoke_target" \
+            --gateway-base-url "$smoke_gateway_base_url" \
+            --product-ops-base-url "$smoke_product_ops_base_url" \
+            --media-avatar-base-url "$smoke_media_avatar_base_url" \
+            --media-image-base-url "$smoke_media_image_base_url" \
+            --media-video-base-url "$smoke_media_video_base_url" \
+            --media-upload-base-url "$smoke_media_upload_base_url" \
+            --rtc-media-connection-url "$smoke_rtc_base_url" \
+            "$@" \
+            --platform "$MOBILE_PLATFORM" \
+            --device-id "$MOBILE_DEVICE_ID" \
+            --report "$QWQ_OUTPUT_ROOT/env/${env_name}/runs/device-matrix/${smoke_report_name}-${MOBILE_PLATFORM}.json"
+        }
+        if [[ "$matrix_kind" == "app-core-readback" ]]; then
+          run_environment_smoke \
+            --video-playback-canary-work-id "$VIDEO_PLAYBACK_CANARY_WORK_ID"
+        else
+          run_environment_smoke
+        fi
         matrix_exit_code=$?
       fi
     else

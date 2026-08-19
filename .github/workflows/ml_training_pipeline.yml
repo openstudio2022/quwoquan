@@ -74,12 +74,14 @@ jobs:
           mkdir -p "$CONFIG_ROOT" "$MODEL_CACHE_ROOT"
           cp "$PACKAGE_DIR/config/config.yaml" "$CONFIG_ROOT/recommendation-service.yaml"
           CONFIG_VERSION=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["configVersion"])' "$PACKAGE_DIR/provenance.json")
-          echo "QWQ_COMPOSE_ENV=alpha" >> "$GITHUB_ENV"
-          echo "QWQ_COMPOSE_CONFIG_ROOT=$CONFIG_ROOT" >> "$GITHUB_ENV"
-          echo "QWQ_COMPOSE_MODEL_CACHE_ROOT=$MODEL_CACHE_ROOT" >> "$GITHUB_ENV"
-          echo "QWQ_COMPOSE_RECOMMENDATION_SERVICE_CONFIG_VERSION=$CONFIG_VERSION" >> "$GITHUB_ENV"
-          echo "QWQ_COMPOSE_REC_MODEL_PORT=18090" >> "$GITHUB_ENV"
-          echo "QWQ_COMPOSE_MONGODB_URI=mongodb://mongodb:27017/?directConnection=true" >> "$GITHUB_ENV"
+          {
+            echo "QWQ_COMPOSE_ENV=alpha"
+            echo "QWQ_COMPOSE_CONFIG_ROOT=$CONFIG_ROOT"
+            echo "QWQ_COMPOSE_MODEL_CACHE_ROOT=$MODEL_CACHE_ROOT"
+            echo "QWQ_COMPOSE_RECOMMENDATION_SERVICE_CONFIG_VERSION=$CONFIG_VERSION"
+            echo "QWQ_COMPOSE_REC_MODEL_PORT=18090"
+            echo "QWQ_COMPOSE_MONGODB_URI=mongodb://mongodb:27017/?directConnection=true"
+          } >> "$GITHUB_ENV"
       - name: Start local ML stack
         run: |
           docker compose \
@@ -282,8 +284,10 @@ jobs:
           PROMOTE_RESULT: ${{ needs.promote.result }}
           MONITORING_RESULT: ${{ needs.monitoring.result }}
         run: |
-          echo "## ML Training Pipeline Results" >> "$GITHUB_STEP_SUMMARY"
-          echo "- evaluate: **${EVALUATE_RESULT}**" >> "$GITHUB_STEP_SUMMARY"
-          echo "- promote: **${PROMOTE_RESULT}**" >> "$GITHUB_STEP_SUMMARY"
-          echo "- monitoring: **${MONITORING_RESULT}**" >> "$GITHUB_STEP_SUMMARY"
-          echo "Detailed failures are retained only as 3-day diagnostics; promotion facts remain in the model registry." >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## ML Training Pipeline Results"
+            echo "- evaluate: **${EVALUATE_RESULT}**"
+            echo "- promote: **${PROMOTE_RESULT}**"
+            echo "- monitoring: **${MONITORING_RESULT}**"
+            echo "Detailed failures are retained only as 3-day diagnostics; promotion facts remain in the model registry."
+          } >> "$GITHUB_STEP_SUMMARY"

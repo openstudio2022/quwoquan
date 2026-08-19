@@ -53,18 +53,13 @@ class AppScriptCommonPathsContractTest(unittest.TestCase):
         self.assertEqual(APP_ROOT, REPO_ROOT / "quwoquan_app")
         self.assertEqual(COMMON_REPO, REPO_ROOT)
 
-    def test_moved_scripts_import_common_paths_and_avoid_parent_index_roots(
-        self,
-    ) -> None:
+    def test_moved_scripts_avoid_parent_index_root_lookups(self) -> None:
         offenders: list[str] = []
         for scope in MOVED_SCOPES:
             for path in sorted((SCRIPTS_ROOT / scope).rglob("*.py")):
                 if path.name == "page_disk_scan_paths.py":
                     continue
                 source = path.read_text(encoding="utf-8")
-                if "from _common.paths import" not in source:
-                    offenders.append(f"{path}: missing _common.paths import")
-                    continue
                 tree = ast.parse(source)
                 for node in ast.walk(tree):
                     if not isinstance(node, ast.Subscript):

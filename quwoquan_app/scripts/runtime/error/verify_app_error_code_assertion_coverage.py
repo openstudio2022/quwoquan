@@ -18,7 +18,16 @@ import re
 import sys
 from pathlib import Path
 
-APP_ROOT = Path(__file__).resolve().parents[3]
+_SCRIPTS_ROOT = next(
+    parent
+    for parent in Path(__file__).resolve().parents
+    if parent.name == "scripts" and (parent / "_common" / "paths.py").is_file()
+)
+if str(_SCRIPTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_ROOT))
+
+from _common.paths import APP_ROOT  # noqa: E402
+
 GENERATED_ROOT = APP_ROOT / "lib" / "runtime" / "errors" / "generated"
 TEST_ROOT = APP_ROOT / "test"
 

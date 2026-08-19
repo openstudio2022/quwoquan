@@ -137,4 +137,3 @@ class StackctlDevSessionTestBase(unittest.TestCase):
         )
         self._mutable_receipt_loader.start()
         self.addCleanup(self._mutable_receipt_loader.stop)
-

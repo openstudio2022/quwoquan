@@ -64,6 +64,10 @@ final class _ActiveVideoCandidateSnapshot {
 
 class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
     with WidgetsBindingObserver {
+  void _updateRuntimeState(VoidCallback update) {
+    setState(update);
+  }
+
   /// Soft cap on concurrent ExoPlayer/MediaCodec instances (OEM hard-decode slots).
   static int _activeControllerCount = 0;
   static const int _maxConcurrentControllers =

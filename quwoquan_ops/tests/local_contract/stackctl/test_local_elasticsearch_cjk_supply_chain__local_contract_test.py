@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import subprocess
 import tempfile
 import unittest
@@ -31,6 +32,7 @@ class LocalElasticsearchCjkSupplyChainContractTest(unittest.TestCase):
             "elasticsearch": {
                 "version": "8.13.4",
                 "image": "example/elasticsearch@sha256:" + ("a" * 64),
+                "mediaType": supply.MULTI_ARCH_IMAGE_MEDIA_TYPE,
                 "license": "Elastic-License-2.0",
             },
             "plugins": [
@@ -48,6 +50,35 @@ class LocalElasticsearchCjkSupplyChainContractTest(unittest.TestCase):
             ],
             "supportedArchitectures": ["amd64", "arm64"],
         }
+
+    def test_canonical_base_image_is_one_multi_arch_manifest_identity(self) -> None:
+        build_root = (
+            Path(__file__).resolve().parents[4]
+            / "quwoquan_service/services/product-ops-service/build/elasticsearch"
+        )
+        manifest = supply.load_supply_chain(build_root / "supply-chain.json")
+        dockerfile = (build_root / "Dockerfile").read_text(encoding="utf-8")
+        base_image = re.search(r"^FROM\s+(\S+)$", dockerfile, re.MULTILINE)
+
+        self.assertIsNotNone(base_image)
+        self.assertEqual(base_image.group(1), manifest["elasticsearch"]["image"])
+        self.assertEqual(
+            manifest["elasticsearch"]["mediaType"],
+            supply.MULTI_ARCH_IMAGE_MEDIA_TYPE,
+        )
+        self.assertEqual(
+            set(manifest["supportedArchitectures"]),
+            {"amd64", "arm64"},
+        )
+
+    def test_single_architecture_child_manifest_is_rejected(self) -> None:
+        manifest = self._manifest("a" * 64)
+        manifest["elasticsearch"].pop("mediaType")
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "supply-chain.json"
+            path.write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "identity is incomplete"):
+                supply.load_supply_chain(path)
 
     def test_checksum_tampering_and_missing_plugin_fail_closed(self) -> None:
         content = b"canonical plugin"

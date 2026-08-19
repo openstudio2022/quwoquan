@@ -3,6 +3,8 @@ import 'package:quwoquan_app/service/content_service/content/post/application/pu
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_detail_payload.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/content_read_model_projection.dart';
 import 'package:quwoquan_app/runtime/transport/media/content_media_url.dart';
+import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
+import 'package:quwoquan_app/service/content_service/media/media_asset/application/public/media_asset_manifest_resolver.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/article_detail_view.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/article_document_models.dart';
 import 'package:quwoquan_app/service/content_service/content/post/domain/article_presentation_models.dart';
@@ -25,10 +27,12 @@ final class DefaultPostArticleDetailProjector
 ContentArticleRender projectArticleDetailViewFromPayload(
   ContentPostDetailPayload payload, {
   required String fallbackArticleId,
+  MediaDeliveryResolver? mediaResolver,
 }) {
   return projectArticleDetailView(
     payload.mergedArticleWireMap,
     fallbackArticleId: fallbackArticleId,
+    mediaResolver: mediaResolver,
   );
 }
 
@@ -43,17 +47,31 @@ ContentArticleRender projectArticleDetailViewFromPayload(
 ContentArticleRender projectArticleDetailView(
   Map<String, dynamic> raw, {
   required String fallbackArticleId,
+  MediaDeliveryResolver? mediaResolver,
 }) {
+  String resolveImage(String? raw) {
+    final source = raw?.trim() ?? '';
+    if (source.isEmpty) return '';
+    return mediaResolver
+            ?.tryResolve(source, kind: MediaDeliveryKind.image)
+            ?.url ??
+        resolveContentMediaUrl(source);
+  }
+
+  final articleAssetManifestResolver = MediaAssetManifestResolver(
+    resolveReference:
+        (raw, {gatewayBaseUrl, imageCdnBaseUrl, videoCdnBaseUrl}) =>
+            resolveImage(raw),
+  );
   final dto = contentPostViewDataFromReadModelMap(raw);
   final postTitle = dto.normalizedTitle;
-  final body = dto.normalizedBody;
-  final mediaCoverUrl = resolveContentMediaUrl(dto.mediaCoverUrl);
-  final mediaThumbnailUrl = resolveContentMediaUrl(dto.mediaThumbnailUrl);
-  final primaryImageUrl = resolveContentMediaUrl(dto.primaryImageUrl);
-  final primaryVisualUrl = resolveContentMediaUrl(dto.primaryVisualUrl);
+  final mediaCoverUrl = resolveImage(dto.mediaCoverUrl);
+  final mediaThumbnailUrl = resolveImage(dto.mediaThumbnailUrl);
+  final primaryImageUrl = resolveImage(dto.primaryImageUrl);
+  final primaryVisualUrl = resolveImage(dto.primaryVisualUrl);
   var images = dto.hasImages
       ? dto.mediaImageUrls
-            .map(resolveContentMediaUrl)
+            .map(resolveImage)
             .where((url) => url.isNotEmpty)
             .toList(growable: false)
       : const <String>[];
@@ -78,10 +96,11 @@ ContentArticleRender projectArticleDetailView(
     raw: raw,
     postTitle: postTitle,
     coverImage: coverImage,
+    assetManifestResolver: articleAssetManifestResolver,
+    mediaUrlResolver: resolveImage,
   );
   final pages = _projectArticlePages(
     postTitle: postTitle.trim().isNotEmpty ? postTitle : document.title,
-    body: body,
     coverImage: coverImage,
     document: hasMarkdownDocument ? document : null,
   );
@@ -90,7 +109,6 @@ ContentArticleRender projectArticleDetailView(
   );
 
   return ContentArticleRender(
-    contentHtml: hasMarkdownDocument ? body : '',
     layoutMode: images.length > 1 ? 'carousel' : 'hero',
     images: images,
     contentBlocks: contentBlocks,
@@ -130,12 +148,16 @@ ArticleDocumentData _projectArticleDocument({
   required Map<String, dynamic> raw,
   required String postTitle,
   required String coverImage,
+  required MediaAssetManifestResolver assetManifestResolver,
+  required String Function(String raw) mediaUrlResolver,
 }) {
   final markdown = raw[ArticleDetailWireKeys.articleMarkdown]?.toString() ?? '';
   if (markdown.trim().isNotEmpty) {
     return ArticleMarkdownCodec.parseDocument(
       markdown,
       assetManifest: _articleAssetManifestMap(raw),
+      assetManifestResolver: assetManifestResolver,
+      mediaUrlResolver: mediaUrlResolver,
     );
   }
   final normalizedTitle = postTitle.trim();
@@ -159,7 +181,6 @@ ArticleDocumentData _projectArticleDocument({
 
 List<ArticlePageData> _projectArticlePages({
   required String postTitle,
-  required String body,
   required String coverImage,
   ArticleDocumentData? document,
 }) {

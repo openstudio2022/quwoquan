@@ -81,7 +81,7 @@ void main() {
       expect(composition, isNot(contains('AppDataSourceMode')));
       expect(composition, isNot(contains('ContentReadRepository')));
       expect(composition, isNot(contains('RemoteContentRepository')));
-      expect(discovery, contains('contentDiscoveryFeedQueryProvider'));
+      expect(composition, contains('contentDiscoveryFeedQueryProvider'));
       expect(discovery, isNot(contains('contentReadRepositoryProvider')));
     });
   });

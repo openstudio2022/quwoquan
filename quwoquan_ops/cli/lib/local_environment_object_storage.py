@@ -12,7 +12,12 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from .environment_topology import get_target, load_environment_topology
-from .output_paths import deployment_target_path, deployment_work_root, remove_deployment_tree
+from .output_paths import (
+    deployment_target_path,
+    deployment_work_root,
+    remove_deployment_tree,
+    target_cache_dir,
+)
 from .public_domain_tls import certificate_paths, root_certificate_path
 
 
@@ -30,6 +35,35 @@ class LocalEnvironmentObjectStorage:
     certificate_path: Path
     private_key_path: Path
     root_certificate_path: Path
+
+
+def package_build_object_storage_environment(
+    *,
+    target_name: str,
+    environment_prefix: str = "LOCAL_GAMMA",
+) -> dict[str, str]:
+    """Return non-runtime Compose parsing values owned by object storage.
+
+    Package builds must never materialize credentials or depend on a live local
+    trust root. The paths remain target-scoped placeholders under the managed
+    cache and are consumed only while Compose resolves its build graph.
+    """
+    if not target_name.endswith("-local"):
+        raise ValueError(f"package-build object-storage target must be local: {target_name}")
+    prefix = environment_prefix.rstrip("_")
+    if not prefix:
+        raise ValueError("package-build object-storage environment prefix is required")
+    tls_root = target_cache_dir(target_name) / "package" / "tls"
+    return {
+        f"{prefix}_OBJECT_STORAGE_ENDPOINT": "https://127.0.0.1",
+        f"{prefix}_OBJECT_STORAGE_BUCKET": "package-build-only",
+        f"{prefix}_OBJECT_STORAGE_REGION": "local",
+        f"{prefix}_OBJECT_STORAGE_ACCESS_KEY_ID": "package-build-only",
+        f"{prefix}_OBJECT_STORAGE_ACCESS_KEY_SECRET": "package-build-only",
+        f"{prefix}_OBJECT_STORAGE_CDN_SIGN_KEY": "package-build-only",
+        f"{prefix}_OBJECT_STORAGE_TLS_DIR": str(tls_root.resolve()),
+        f"{prefix}_OBJECT_STORAGE_CA_FILE": str((tls_root / "root.crt").resolve()),
+    }
 
 
 def prepare_local_environment_object_storage(

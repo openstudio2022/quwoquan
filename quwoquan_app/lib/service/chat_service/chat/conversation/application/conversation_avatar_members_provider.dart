@@ -1,4 +1,5 @@
 import "package:quwoquan_cloud_contracts/generated/chat_contracts.dart";
+
 import 'dart:async';
 import 'dart:collection';
 

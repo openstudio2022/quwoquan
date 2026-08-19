@@ -115,6 +115,7 @@ import 'package:quwoquan_app/service/content_service/media/media_asset/presentat
 part 'works_immersive_viewer_controls.dart';
 part 'works_immersive_viewer_canvas.dart';
 part 'works_immersive_viewer_engagement_actions.dart';
+part 'works_immersive_viewer_feed_terminal.dart';
 part 'works_immersive_viewer_intersection_actions.dart';
 part 'works_immersive_viewer_social_actions.dart';
 part 'works_immersive_viewer_video_chrome.dart';

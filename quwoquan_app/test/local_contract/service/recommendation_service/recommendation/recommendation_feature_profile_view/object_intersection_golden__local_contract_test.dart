@@ -1,3 +1,6 @@
+@Tags(<String>['serial', 'visual'])
+library;
+
 import 'package:flutter/cupertino.dart';
 import '../../../../../support/service/recommendation_service/recommendation/recommendation_feature_profile_view/intersection_fixtures.dart';
 import 'package:flutter/services.dart';

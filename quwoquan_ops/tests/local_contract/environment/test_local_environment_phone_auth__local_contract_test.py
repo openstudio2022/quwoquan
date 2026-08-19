@@ -141,7 +141,7 @@ class LocalEnvironmentTestDataAuthContractTest(unittest.TestCase):
         self.assertEqual(len(observed), 2)
         self.assertNotEqual(observed[0], observed[1])
 
-    def test_actor_auth_uses_instance_bound_deterministic_otp_idempotency(self) -> None:
+    def test_actor_auth_uses_distinct_128_bit_otp_session_idempotency(self) -> None:
         instance_scope = hashlib.sha256(b"case-run-123").hexdigest()
         responses = [
             {"challengeId": "challenge-1"},
@@ -155,6 +155,11 @@ class LocalEnvironmentTestDataAuthContractTest(unittest.TestCase):
             },
         ] * 2
         with (
+            mock.patch.object(
+                local_environment_auth.acceptance_sessions.secrets,
+                "token_hex",
+                side_effect=["a" * 32, "b" * 32],
+            ) as token_hex,
             mock.patch.object(
                 local_environment_auth,
                 "_test_data_actor_phone",
@@ -191,15 +196,20 @@ class LocalEnvironmentTestDataAuthContractTest(unittest.TestCase):
         idempotency_keys = [
             call.kwargs["headers"]["Idempotency-Key"] for call in send_calls
         ]
-        self.assertEqual(len(set(idempotency_keys)), 1)
-        expected = hashlib.sha256(
-            (
-                f"gamma-local/{instance_scope}/"
-                "user.acceptance.authenticated_actors/primary/"
-                "user.authentication_challenge.SendOtp/send-otp-000"
-            ).encode("utf-8")
-        ).hexdigest()
-        self.assertEqual(idempotency_keys, [expected, expected])
+        self.assertEqual(len(set(idempotency_keys)), 2)
+        token_hex.assert_has_calls([mock.call(16), mock.call(16)])
+        expected = [
+            hashlib.sha256(
+                (
+                    f"gamma-local/{instance_scope}/"
+                    "user.acceptance.authenticated_actors/primary/"
+                    "user.authentication_challenge.SendOtp/send-otp-000"
+                    f"/session-{nonce}"
+                ).encode("utf-8")
+            ).hexdigest()
+            for nonce in ("a" * 32, "b" * 32)
+        ]
+        self.assertEqual(idempotency_keys, expected)
 
     def test_research_identity_login_uses_the_pre_runtime_subject_and_owner(self) -> None:
         instance_scope = hashlib.sha256(b"research-runtime-proof").hexdigest()

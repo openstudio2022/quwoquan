@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -10,6 +8,7 @@ import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_claim_request/application/public/homepage_claim_request_command_writer.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/homepage_introduction_repository.dart';
 import '../../../../../support/service/entity_service/entity_homepage/homepage/homepage_test_adapter.dart';
+import '../../../../../support/runtime/homepage_source_cards_boundary_overrides.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/content_repository_contract.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
@@ -27,6 +26,10 @@ import 'package:quwoquan_app/runtime/di/app_providers_client_sync.dart'
         homepageWriteTargetReaderProvider;
 import 'package:quwoquan_app/runtime/di/app_providers_content_extras.dart'
     show homepageDetailEntityWishlistStateReaderProvider;
+import 'package:quwoquan_app/runtime/di/app_providers_content_runtime.dart'
+    show contentRuntimeConfigProvider;
+import 'package:quwoquan_app/runtime/di/app_providers_content_runtime_defaults.dart'
+    show buildProductionContentRuntimeConfigDefaults;
 import 'package:quwoquan_app/runtime/di/app_providers_entity_extras.dart'
     show homepageIntroductionRepositoryProvider;
 import 'package:quwoquan_app/runtime/di/app_providers_operations.dart'
@@ -49,6 +52,7 @@ import '../../../../../support/service/content_service/content/content_behavior_
 import '../../../../../support/service/entity_service/entity_homepage/homepage_review/homepage_review_facets_typed_double.dart';
 
 import '../../../../../support/runtime/observability/recording_app_telemetry_recorder.dart';
+import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
 
 const String _homepageId = 'homepage_sight_west_lake';
 
@@ -57,7 +61,6 @@ void main() {
 
   setUp(() {
     AuthGate.resetDebounce();
-    HttpOverrides.global = _NoNetworkHttpOverrides();
     originalOnError = FlutterError.onError;
     FlutterError.onError = (details) {
       final message = details.exceptionAsString();
@@ -70,7 +73,6 @@ void main() {
   });
 
   tearDown(() {
-    HttpOverrides.global = null;
     FlutterError.onError = originalOnError;
   });
 
@@ -121,6 +123,11 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          ...sealedCloudBoundaryOverrides(),
+          ...homepageSourceCardsBoundaryOverrides(),
+          contentRuntimeConfigProvider.overrideWithValue(
+            buildProductionContentRuntimeConfigDefaults(),
+          ),
           authSessionControllerProvider.overrideWith(
             _AuthenticatedEntitySession.new,
           ),
@@ -287,5 +294,3 @@ final class _NoWishlistStateReader implements ContentEntityWishlistStateReader {
     );
   }
 }
-
-final class _NoNetworkHttpOverrides extends HttpOverrides {}

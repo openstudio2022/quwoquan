@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: ae0fd0a3a81ca25ad321276e82c2668626920098032d6fa00232e4637c87fa28
+// ContractGraph SHA256: d68dfe12604d5c5225ba691373427dc83221ebf23391ec8cf7c2432f88b2a76a
 
 part of '../../../chat/chat_operation_contracts.g.dart';
 
@@ -369,6 +369,9 @@ final class ChatListContactsQuery {
 }
 
 final class ChatListConversationAssetsQuery {
+  static const int defaultLimit = 60;
+  static const int maximumLimit = 200;
+
   ChatListConversationAssetsQuery({
     required String conversationId,
     required String kind,
@@ -383,6 +386,12 @@ final class ChatListConversationAssetsQuery {
     }
     if (this.kind.isEmpty) {
       throw ArgumentError.value(this.kind, "kind", 'must not be blank');
+    }
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 200) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 200");
     }
   }
 

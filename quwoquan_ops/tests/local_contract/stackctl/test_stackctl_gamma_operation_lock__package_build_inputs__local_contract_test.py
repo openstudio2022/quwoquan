@@ -121,7 +121,14 @@ class StackctlGammaOperationLockContractTest(
                     "resolve_report_dir",
                     return_value=report_dir,
                 ),
-                mock.patch.object(stackctl, "_gamma_env_from_port_manifest", return_value={}),
+                mock.patch.object(
+                    stackctl,
+                    "_gamma_env_from_port_manifest",
+                    return_value={
+                        "QWQ_COMPOSE_GO_BASE_IMAGE": "golang@sha256:" + "1" * 64,
+                        "QWQ_COMPOSE_ALPINE_BASE_IMAGE": "alpine@sha256:" + "2" * 64,
+                    },
+                ),
                 mock.patch.object(
                     stackctl,
                     "_optional_product_telemetry_environment",
@@ -186,7 +193,14 @@ class StackctlGammaOperationLockContractTest(
 
             with (
                 mock.patch.object(stackctl, "load_environment_topology", return_value={}),
-                mock.patch.object(stackctl, "_gamma_env_from_port_manifest", return_value={}),
+                mock.patch.object(
+                    stackctl,
+                    "_gamma_env_from_port_manifest",
+                    return_value={
+                        "QWQ_COMPOSE_GO_BASE_IMAGE": "golang@sha256:" + "1" * 64,
+                        "QWQ_COMPOSE_ALPINE_BASE_IMAGE": "alpine@sha256:" + "2" * 64,
+                    },
+                ),
                 mock.patch.object(
                     stackctl,
                     "_provider_runtime_launch_environment",
@@ -265,23 +279,20 @@ class StackctlGammaOperationLockContractTest(
             def missing_after_successful_build(
                 argv: list[str],
                 *,
+                cwd: Path | None = None,
                 env: dict[str, str] | None = None,
             ) -> CompletedProcess[str]:
                 if argv[:4] == ["docker", "image", "inspect", "--format"]:
                     return CompletedProcess(argv, 1, "", "No such image")
+                self.assertEqual(cwd, stackctl.ROOT)
                 self.assertIsNotNone(env)
                 self.assertEqual(
                     env["QWQ_RELEASE_CANDIDATE_DIGEST"],  # type: ignore[index]
                     "sha256:" + "a" * 64,
                 )
-                self.assertEqual(
-                    argv,
-                    [
-                        "bash",
-                        "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh",
-                        "--build-only",
-                    ],
-                )
+                self.assertEqual(argv[:3], ["docker", "build", "--tag"])
+                self.assertIn("--file", argv)
+                self.assertIn("--build-arg", argv)
                 return CompletedProcess(
                     argv,
                     0,
@@ -291,7 +302,14 @@ class StackctlGammaOperationLockContractTest(
 
             with (
                 mock.patch.object(stackctl, "load_environment_topology", return_value={}),
-                mock.patch.object(stackctl, "_gamma_env_from_port_manifest", return_value={}),
+                mock.patch.object(
+                    stackctl,
+                    "_gamma_env_from_port_manifest",
+                    return_value={
+                        "QWQ_COMPOSE_GO_BASE_IMAGE": "golang@sha256:" + "1" * 64,
+                        "QWQ_COMPOSE_ALPINE_BASE_IMAGE": "alpine@sha256:" + "2" * 64,
+                    },
+                ),
                 mock.patch.object(
                     stackctl,
                     "_provider_runtime_launch_environment",
@@ -319,7 +337,7 @@ class StackctlGammaOperationLockContractTest(
             ):
                 with self.assertRaisesRegex(
                     RuntimeError,
-                    "build-only stdout tail: prepared artifacts only",
+                    "OCI build stdout tail: prepared artifacts only",
                 ) as raised:
                     stackctl._build_package_bound_local_images(
                         "alpha",
@@ -336,7 +354,7 @@ class StackctlGammaOperationLockContractTest(
                     )
 
         self.assertIn(
-            "build-only stderr tail: unexpected early-success branch",
+            "OCI build stderr tail: unexpected early-success branch",
             str(raised.exception),
         )
 

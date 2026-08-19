@@ -332,6 +332,25 @@ class PackageReuseContractTest(unittest.TestCase):
         self.assertNotIn("specs", roots)
         self.assertNotIn(".github", roots)
 
+    def test_prod_deployment_closure_accepts_only_declared_prod_targets(self) -> None:
+        for target in ("prod-sim", "prod-hosted"):
+            roots = package_reuse.deployment_input_roots(
+                "prod",
+                target,
+                ["content-service", "user-service"],
+            )
+            self.assertIn("quwoquan_app/configs/prod/app_runtime.yaml", roots)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "deployment input closure target/environment mismatch",
+        ):
+            package_reuse.deployment_input_roots(
+                "prod",
+                "gamma-local",
+                ["content-service", "user-service"],
+            )
+
     def test_release_attestations_are_exact_deployment_inputs(self) -> None:
         candidate = self.root / "attestations/candidate.json"
         rollback = self.root / "attestations/rollback.json"

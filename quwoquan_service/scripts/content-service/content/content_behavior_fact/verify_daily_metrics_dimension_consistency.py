@@ -8,15 +8,15 @@ analytics-metric-dictionary/spec.md —— rm_daily_metrics 仅由热写路径
 且「同一指标只能有一个主口径」。
 
 校验规则：
-  A) application/ports 的 DailyMetricDimensions 常量集
+  A) content_behavior_fact/domain/ports 的 DailyMetricDimensions 常量集
      == behavior_service.go 热写 IncrementMetric 消费的维度常量集（无漂移）。
   B) 维度值集 == spec 业务维度 {action, content, author, intersection}。
   C) 'referral' 不得作为 daily-metric 维度（不在 spec 业务维度，曾是漂移源）。
   D) 批聚合死代码 RunAggregation 不得回归（它曾携带 referral，与单一真相源冲突）。
-  E) persistence 只能别名委托 ports.DailyMetricDimensions，不能重新声明第二套闭集。
+  E) persistence 不得重新声明 DailyMetricDimension* 或 DailyMetricDimensions 第二套闭集。
 
 用法：
-  python3 scripts/content-service/content/post/verify_daily_metrics_dimension_consistency.py
+  python3 scripts/content-service/content/content_behavior_fact/verify_daily_metrics_dimension_consistency.py
 """
 from __future__ import annotations
 
@@ -24,14 +24,14 @@ import re
 import sys
 from pathlib import Path
 
-SERVICE_ROOT = Path(__file__).resolve().parents[3]
+SERVICE_ROOT = Path(__file__).resolve().parents[4]
 DAILY_METRICS_GO = (
     SERVICE_ROOT
     / "services"
     / "content-service"
     / "internal"
     / "content"
-    / "post"
+    / "content_behavior_fact"
     / "infrastructure"
     / "persistence"
     / "daily_metrics_store.go"
@@ -42,10 +42,10 @@ PORTS_GO = (
     / "content-service"
     / "internal"
     / "content"
-    / "post"
-    / "application"
+    / "content_behavior_fact"
+    / "domain"
     / "ports"
-    / "ports.go"
+    / "store.go"
 )
 BEHAVIOR_SERVICE_GO = (
     SERVICE_ROOT
@@ -64,7 +64,7 @@ EXPECTED_SPEC_DIMENSIONS = {"action", "content", "author", "intersection"}
 _CONST_RE = re.compile(r'DailyMetricDimension(\w+)\s*=\s*"([^"]+)"')
 _SLICE_RE = re.compile(r"DailyMetricDimensions\s*=\s*\[\]string\{(.*?)\}", re.DOTALL)
 _SLICE_REF_RE = re.compile(r"DailyMetricDimension(\w+)")
-_BEHAVIOR_REF_RE = re.compile(r"ports\.DailyMetricDimension(\w+)")
+_BEHAVIOR_REF_RE = re.compile(r"behaviorports\.DailyMetricDimension(\w+)")
 _RUNAGG_RE = re.compile(r"func\s+\([^)]*\)\s+RunAggregation\b")
 
 
@@ -102,7 +102,7 @@ def main() -> int:
             "behavior_service.go: 未找到 ports.DailyMetricDimension* 引用"
         )
 
-    # A) 单一真相源：store slice 集 == 热写引用集
+    # A) 单一真相源：domain ports slice 集 == 热写引用集
     for n in sorted(slice_names - behavior_names):
         errors.append(
             f"维度 DailyMetricDimension{n} 在 store slice 但热写未消费（漂移）"
@@ -132,10 +132,10 @@ def main() -> int:
             "daily_metrics_store.go: RunAggregation 批聚合死代码回归（与单一真相源冲突）"
         )
 
-    # E) persistence 只能委托 ports，不再维护第二套维度闭集。
-    if "var DailyMetricDimensions = ports.DailyMetricDimensions" not in store_src:
+    # E) persistence 只消费调用方给出的 dimension，不再维护第二套维度闭集。
+    if _CONST_RE.search(store_src) or _SLICE_RE.search(store_src):
         errors.append(
-            "daily_metrics_store.go: DailyMetricDimensions 必须别名 ports.DailyMetricDimensions"
+            "daily_metrics_store.go: persistence 禁止重新声明 DailyMetricDimension* 闭集"
         )
 
     if errors:

@@ -385,7 +385,6 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
   Map<String, Map<String, double>> _proHslSnapshotValues =
       createDefaultHslValues();
 
-
   /// HSL：会话撤回/重做栈
   final List<Map<String, Map<String, double>>> _hslSessionStack = [];
   int _hslSessionCursor = -1;

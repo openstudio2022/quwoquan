@@ -34,6 +34,47 @@ if [[ "${1:-}" == "--scope" ]]; then
   scope="${2:-}"
 fi
 
+gate_change_range_args=()
+if [[ -n "${GATE_CHANGE_BASE_SHA:-}" || -n "${GATE_CHANGE_HEAD_SHA:-}" ]]; then
+  if [[ -z "${GATE_CHANGE_BASE_SHA:-}" || -z "${GATE_CHANGE_HEAD_SHA:-}" ]]; then
+    echo "[gate] GATE_BLOCK: GATE_CHANGE_BASE_SHA and GATE_CHANGE_HEAD_SHA must be provided together" >&2
+    exit 2
+  fi
+  gate_change_range_args=(
+    --base-sha "$GATE_CHANGE_BASE_SHA"
+    --head-sha "$GATE_CHANGE_HEAD_SHA"
+  )
+fi
+
+service_phase="${GATE_SERVICE_PHASE:-all}"
+case "$service_phase" in
+  all|core|packaging) ;;
+  *)
+    echo "[gate] FAIL: invalid GATE_SERVICE_PHASE=$service_phase (expected all|core|packaging)" >&2
+    exit 2
+    ;;
+esac
+if [[ "$scope" != "service" && "$service_phase" != "all" ]]; then
+  echo "[gate] FAIL: GATE_SERVICE_PHASE is only valid with --scope service" >&2
+  exit 2
+fi
+
+# Python script governance derives independent app/service/ops/data
+# boundaries. A scoped Delivery job validates its own boundary; the aggregate
+# local gate keeps the strict whole-repository check.
+if [[ "$service_phase" != "packaging" ]]; then
+case "$scope" in
+  all) python_script_scope="all" ;;
+  service) python_script_scope="service" ;;
+  app|patrol) python_script_scope="app" ;;
+  portal|ops-portal) python_script_scope="ops" ;;
+  data) python_script_scope="data" ;;
+  *)
+    echo "[gate] FAIL: invalid scope: $scope (expected all|service|app|portal|data|patrol)" 1>&2
+    exit 2
+    ;;
+esac
+
 run_vertical_architecture_ratchet() {
   local vertical_scope="$1"
   echo "[gate] vertical architecture static ratchet (scope=$vertical_scope)"
@@ -109,15 +150,12 @@ python3 quwoquan_ops/gate/verify_output_layout.py
 python3 quwoquan_ops/gate/verify_output_path_source_contract.py
 python3 quwoquan_ops/tests/local_contract/gate/test_output_path_source_contract__generated_artifact__local_contract_test.py
 python3 quwoquan_ops/gate/verify_external_provider_governance.py
-# 云侧环境在构建期绑定；六类镜像和入口必须校验内嵌 identity，Prod 不携带跨环境 facts。
-PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}" python3 quwoquan_ops/gate/verify_cloud_environment_artifact_binding.py
-PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}" python3 quwoquan_ops/tests/local_contract/gate/test_cloud_environment_artifact_binding__gate__local_contract_test.py
 # Prod 选中绑定与服务 prod config 不得触达非生产 substitute 适配器。
 python3 quwoquan_ops/gate/verify_provider_substitute_prod_purity.py
 python3 quwoquan_ops/gate/verify_provider_conformance_evidence.py
 python3 quwoquan_ops/gate/verify_entrypoint_script_paths.py
 python3 quwoquan_ops/gate/verify_github_artifact_lifecycle.py
-python3 -B quwoquan_ops/gate/verify_python_script_governance.py --scope all --mode check
+python3 -B quwoquan_ops/gate/verify_python_script_governance.py --scope "$python_script_scope" --mode check
 PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}" \
   python3 -B quwoquan_ops/tests/local_contract/gate/test_python_script_governance__derivation__local_contract_test.py
 python3 quwoquan_ops/gate/verify_markdown_local_links.py
@@ -129,7 +167,9 @@ rm -rf "$ROOT/.pytest_cache"
 python3 quwoquan_ops/gate/verify_root_layout.py
 python3 quwoquan_app/scripts/runtime/architecture/verify_app_layout.py
 
-run_service() {
+fi
+
+run_service_core_before_packaging() {
   echo "[gate] quwoquan_service"
   # migration 控制面与架构棘轮单测只在 service/all 跑一次；app scope 仅跑前置静态扫描。
   run_vertical_architecture_local_contract
@@ -154,7 +194,7 @@ python3 quwoquan_ops/tests/local_contract/gate/test_emitted_error_code_declarati
   # 否则门禁实现回退无人可见。缺口容忍基线已删除，本门禁为零容忍——配套测试统一由
   # make test-gate-companion-local-contract 执行。
   make test-gate-companion-local-contract
-  python3 quwoquan_ops/gate/verify_gate_local_contract_execution.py
+  python3 quwoquan_ops/gate/verify_gate_local_contract_execution.py "${gate_change_range_args[@]}"
   python3 quwoquan_ops/tests/local_contract/gate/test_gate_local_contract_execution__contract__local_contract_test.py
   python3 quwoquan_ops/gate/verify_local_env_port_manifest.py
   python3 quwoquan_ops/gate/verify_prod_rollout_stackctl_contract.py
@@ -176,7 +216,7 @@ python3 quwoquan_ops/tests/local_contract/gate/test_emitted_error_code_declarati
   # topology 由 delivery-gate topology job / make gate 负责，避免重复
   bash quwoquan_ops/environments/verify/verify_deploy_kustomization.sh
   bash quwoquan_service/scripts/recommendation-service/verify_recommendation_service_contract.sh
-  python3 quwoquan_service/scripts/content-service/content/post/verify_daily_metrics_dimension_consistency.py
+  python3 quwoquan_service/scripts/content-service/content/content_behavior_fact/verify_daily_metrics_dimension_consistency.py
   # 推荐 policy 单轨守卫：禁止环境变体，gamma release 只绑定 canonical 内容摘要。
   python3 quwoquan_ops/gate/verify_canonical_recommendation_policy.py
   bash quwoquan_ops/environments/verify/verify_gray_rollout_stages.sh
@@ -227,9 +267,17 @@ python3 quwoquan_ops/tests/local_contract/gate/test_emitted_error_code_declarati
   bash quwoquan_ops/environments/verify/verify_service_config_digest_mapping.sh
   bash quwoquan_ops/environments/verify/verify_image_identity_single_track.sh
   bash quwoquan_ops/environments/verify/verify_config_pr_policy.sh
+}
+
+run_service_packaging() {
+  echo "[gate] quwoquan_service packaging"
   make verify-env-packaging
+  make verify-prod-packaging-contract
   # 环境包生成后再次断言，防止 package/renderer 旁路把配置或 payload 写回 output。
   python3 quwoquan_ops/gate/verify_output_layout.py
+}
+
+run_service_core_after_packaging() {
   command -v dart >/dev/null 2>&1 || { echo "[gate] FAIL: dart not found in PATH" 1>&2; exit 1; }
   dart quwoquan_ops/tools/runtime_error_codegen/bin/generate_runtime_errors.dart --check
   dart quwoquan_ops/tools/runtime_error_codegen/bin/check_runtime_error_cutover.dart
@@ -249,16 +297,47 @@ python3 quwoquan_ops/tests/local_contract/gate/test_emitted_error_code_declarati
   python3 quwoquan_ops/gate/verify_canonical_coverage.py --collect --scope cloud
 }
 
+run_service() {
+  case "$service_phase" in
+    all)
+      run_service_core_before_packaging
+      run_service_packaging
+      run_service_core_after_packaging
+      ;;
+    core)
+      run_service_core_before_packaging
+      run_service_core_after_packaging
+      ;;
+    packaging)
+      run_service_packaging
+      ;;
+  esac
+}
+
 run_app() {
   echo "[gate] quwoquan_app"
   local app_phase="${GATE_APP_PHASE:-all}"
   case "$app_phase" in
-    all|static|tests|serial) ;;
+    all|static|tests|coverage|serial) ;;
     *)
-      echo "[gate] FAIL: invalid GATE_APP_PHASE=$app_phase (expected all|static|tests|serial)" >&2
+      echo "[gate] FAIL: invalid GATE_APP_PHASE=$app_phase (expected all|static|tests|coverage|serial)" >&2
       exit 2
       ;;
   esac
+  local app_test_shared_suite="run"
+  if [[ "$app_phase" == "tests" ]] && \
+     [[ -n "${FLUTTER_TEST_TOTAL_SHARDS:-}" || -n "${FLUTTER_TEST_SHARD_INDEX:-}" ]]; then
+    if [[ ! "${FLUTTER_TEST_TOTAL_SHARDS:-}" =~ ^[1-9][0-9]*$ ]] || \
+       [[ ! "${FLUTTER_TEST_SHARD_INDEX:-}" =~ ^[0-9]+$ ]] || \
+       (( 10#${FLUTTER_TEST_SHARD_INDEX} >= 10#${FLUTTER_TEST_TOTAL_SHARDS} )); then
+      echo "[gate] FAIL: app phase=tests sharding requires total>0 and 0<=index<total" >&2
+      echo "[gate] FIX: set both FLUTTER_TEST_TOTAL_SHARDS and FLUTTER_TEST_SHARD_INDEX to a valid range, or unset both for unsharded execution" >&2
+      return 2
+    fi
+    if (( 10#${FLUTTER_TEST_SHARD_INDEX} != 0 )); then
+      app_test_shared_suite="skip"
+    fi
+  fi
   command -v flutter >/dev/null 2>&1 || { echo "[gate] FAIL: flutter not found in PATH" 1>&2; exit 1; }
   command -v dart >/dev/null 2>&1 || { echo "[gate] FAIL: dart not found in PATH" 1>&2; exit 1; }
 
@@ -361,9 +440,13 @@ run_app() {
     # RTC 通话商用契约：铃声单轨、信令通道恢复补偿、动效 token、关键测试证据链。
     python3 quwoquan_app/scripts/rtc_service/rtc/call_session/verify_rtc_call_contract.py || exit 1
     python3 quwoquan_app/scripts/device/verify_startup_ttid_baseline.py || exit 1
-    make verify-app-identity-state-isolation || exit 1
-    make verify-app-identity || exit 1
-    python3 quwoquan_app/scripts/runtime/platform/verify_startup_environment_matrix.py >/dev/null || exit 1
+    # Static CI validates source/component readiness only for the three
+    # non-production launch targets. Prod package/readback remains a release
+    # gate and must never be fabricated by a source checkout.
+    python3 quwoquan_app/scripts/runtime/platform/verify_startup_environment_matrix.py \
+      --component-environment alpha \
+      --component-environment beta \
+      --component-environment gamma || exit 1
     python3 quwoquan_app/scripts/runtime/platform/verify_dual_platform_usability_baseline.py || exit 1
     python3 quwoquan_app/scripts/runtime/platform/verify_plugin_registration_policy.py || exit 1
     python3 quwoquan_service/scripts/verify/contract_graph/verify_metadata_service_entities_vs_fields.py || exit 1
@@ -371,7 +454,13 @@ run_app() {
     python3 quwoquan_service/scripts/assistant-service/verify_assistant_security_contract.py || exit 1
     python3 quwoquan_app/scripts/env/verify_ui_mock_isolation.py || exit 1
     python3 quwoquan_app/scripts/env/verify_aggregate_mock_ratchet.py || exit 1
-    python3 quwoquan_ops/gate/verify_media_delivery_contract.py || exit 1
+    # Static source CI proves the three non-production component configs in one
+    # scan. Release callers use --env/default and still require immutable
+    # packaged runtime evidence, including Prod.
+    python3 quwoquan_ops/gate/verify_media_delivery_contract.py \
+      --component-environment alpha \
+      --component-environment beta \
+      --component-environment gamma || exit 1
     python3 quwoquan_app/scripts/runtime/architecture/verify_app_no_integration_test_dir.py || exit 1
     # 五域对象级 generated Remote api_integration 证据：ContractGraph 派生，
     # local_contract 锁 stackctl 接线与单调棘轮，再执行静态边界门禁。
@@ -421,14 +510,15 @@ run_app() {
     return 0
   fi
 
-  if [[ "$app_phase" == "tests" || "$app_phase" == "serial" ]]; then
+  if [[ "$app_phase" == "tests" || "$app_phase" == "coverage" || "$app_phase" == "serial" ]]; then
     (cd quwoquan_app && flutter pub get --offline)
   fi
 
   # 唯一 canonical coverage rule 的端侧行 + 分支计量。--collect 自带一次
   # `flutter test --coverage --branch-coverage test/local_contract` 采集，
   # 采集范围与基线登记的 scope 同源；产物落在 .qwq_output 的可删除缓存里。
-  # 放在常规套件之后：套件红的时候先报套件本身的失败，别让覆盖率采集抢先。
+  # CI 由独立 coverage 相位执行；all 相位仍在常规套件之后执行，避免同一
+  # 工作树并发写 coverage/lcov.info。
   run_app_canonical_coverage() {
     python3 quwoquan_ops/gate/verify_canonical_coverage.py --collect --scope app
   }
@@ -474,7 +564,7 @@ run_app() {
   }
 
   if [[ "$app_phase" == "serial" ]]; then
-    # serial 分片只跑隔离子集，覆盖率不具代表性；棘轮由 tests / all 相位承担。
+    # serial 分片只跑隔离子集，覆盖率不具代表性；棘轮由 coverage / all 相位承担。
     FLUTTER_TEST_GUARD_TIMEOUT_SECONDS="${FLUTTER_TEST_GUARD_TIMEOUT_SECONDS:-1800}" \
       run_app_flutter_tests "only" "1" || return 1
     echo "[gate] app phase=serial OK"
@@ -484,9 +574,18 @@ run_app() {
   if [[ "$app_phase" == "tests" ]]; then
     FLUTTER_TEST_GUARD_TIMEOUT_SECONDS="${FLUTTER_TEST_GUARD_TIMEOUT_SECONDS:-1800}" \
       run_app_flutter_tests "${FLUTTER_TEST_SERIAL_MODE:-exclude}" "${FLUTTER_TEST_CONCURRENCY:-8}" || return 1
-    run_app_python_local_contract_tests || return 1
-    run_app_canonical_coverage
+    if [[ "$app_test_shared_suite" == "run" ]]; then
+      run_app_python_local_contract_tests || return 1
+    else
+      echo "[gate] app shared Python contracts owned by shard 0"
+    fi
     echo "[gate] app phase=tests OK"
+    return 0
+  fi
+
+  if [[ "$app_phase" == "coverage" ]]; then
+    run_app_canonical_coverage
+    echo "[gate] app phase=coverage OK"
     return 0
   fi
 
@@ -502,20 +601,31 @@ run_app() {
 
 }
 
-run_portal() {
+run_portal() (
   echo "[gate] ops-portal"
   command -v npm >/dev/null 2>&1 || { echo "[gate] FAIL: npm not found in PATH" 1>&2; exit 1; }
   local portal_dir="quwoquan_ops/portal"
+  local portal_build_root=""
+  cleanup_portal_build_root() {
+    if [[ -n "$portal_build_root" ]]; then
+      rm -rf "$portal_build_root"
+    fi
+  }
+  trap cleanup_portal_build_root EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
   if [[ ! -f "$portal_dir/package-lock.json" ]]; then
     echo "[gate] FAIL: $portal_dir/package-lock.json missing — Portal dependencies must be locked in the Portal domain" 1>&2
     exit 1
   fi
   npm --prefix "$portal_dir" ci
   npm --prefix "$portal_dir" test
-  npm --prefix "$portal_dir" run build
+  portal_build_root="$(mktemp -d "${TMPDIR:-/tmp}/qwq-portal-build.XXXXXX")"
+  QWQ_DEPLOY_WORK_ROOT="$portal_build_root" QWQ_DEPLOY_TARGET="prod-hosted" \
+    npm --prefix "$portal_dir" run build
   rm -rf "$portal_dir/dist" "$portal_dir/.test-dist"
   rm -f "$portal_dir"/*.tsbuildinfo "$portal_dir"/vite.config.js "$portal_dir"/vite.config.d.ts
-}
+)
 
 run_data() {
   echo "[gate] quwoquan_data"

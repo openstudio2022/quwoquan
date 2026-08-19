@@ -21,6 +21,9 @@ ROOT = next(
 USER_SERVICE = ROOT / "quwoquan_service" / "services" / "user-service"
 USER_CONFIG_SCHEMA = USER_SERVICE / "config" / "schema.yaml"
 USER_ENVIRONMENTS = USER_SERVICE / "environments"
+INTEGRATION_ENVIRONMENTS = (
+    ROOT / "quwoquan_service" / "services" / "integration-service" / "environments"
+)
 USER_CMD_API = ROOT / "quwoquan_service" / "services" / "user-service" / "cmd" / "api"
 USER_INTEGRATION = (
     USER_SERVICE
@@ -84,6 +87,7 @@ def verify_config(
     env: str,
     config: Mapping[str, object],
     defaults: Mapping[str, object],
+    integration_config: Mapping[str, object],
 ) -> list[str]:
     failures = [f"{env}: retired login config key {key}" for key in retired_key_paths(config)]
     overrides = config.get("overrides")
@@ -112,17 +116,51 @@ def verify_config(
     if not isinstance(bindings, Mapping):
         failures.append(f"{env}: externalBindings must declare the login capability states")
         return failures
-    sms_binding = bindings.get("identity.sms.otp")
+    if "identity.sms.otp" in bindings:
+        failures.append(
+            f"{env}: identity.sms.otp binding is owned by integration-service"
+        )
+    expected_user_adapters = {
+        "identity.carrier.one_tap": (
+            "ext.auth.carrier_one_tap"
+            if env == "prod"
+            else "ext.auth.carrier_one_tap_protocol_fixture"
+        ),
+        "identity.social.login": (
+            "ext.auth.federated_identity"
+            if env == "prod"
+            else "ext.auth.federated_identity_protocol_fixture"
+        ),
+    }
+    for capability_id, expected_adapter in expected_user_adapters.items():
+        binding = bindings.get(capability_id)
+        if not isinstance(binding, Mapping) or binding.get("state") != "enabled":
+            failures.append(
+                f"{env}: {capability_id} consumer binding must be enabled"
+            )
+            continue
+        if binding.get("adapter") != expected_adapter:
+            failures.append(
+                f"{env}: {capability_id} must use adapter {expected_adapter}"
+            )
+
+    integration_bindings = integration_config.get("externalBindings")
+    if not isinstance(integration_bindings, Mapping):
+        failures.append(
+            f"{env}: integration-service externalBindings must declare identity.sms.otp"
+        )
+        return failures
+    sms_binding = integration_bindings.get("identity.sms.otp")
     if not isinstance(sms_binding, Mapping) or sms_binding.get("state") != "enabled":
         failures.append(
-            f"{env}: identity.sms.otp consumer binding must be enabled"
+            f"{env}: integration-service identity.sms.otp binding must be enabled"
         )
-    optional_state = "enabled" if env == "prod" else "not_required"
-    for capability_id in ("identity.carrier.one_tap", "identity.social.login"):
-        binding = bindings.get(capability_id)
-        if not isinstance(binding, Mapping) or binding.get("state") != optional_state:
+    else:
+        expected_sms_adapter = "ext.sms.aliyun" if env == "prod" else "ext.sms.local_capture"
+        if sms_binding.get("adapter") != expected_sms_adapter:
             failures.append(
-                f"{env}: {capability_id} must be {optional_state} for the selected login profile"
+                f"{env}: integration-service identity.sms.otp must use adapter "
+                f"{expected_sms_adapter}"
             )
     return failures
 
@@ -216,10 +254,23 @@ def main() -> int:
     defaults = schema_defaults(schema)
     for env in ENVIRONMENTS:
         config_path = USER_ENVIRONMENTS / env / "config.yaml"
+        integration_config_path = INTEGRATION_ENVIRONMENTS / env / "config.yaml"
         if not config_path.is_file():
             failures.append(f"{env}: config file missing: {config_path}")
             continue
-        failures.extend(verify_config(env, load_mapping(config_path), defaults))
+        if not integration_config_path.is_file():
+            failures.append(
+                f"{env}: integration config file missing: {integration_config_path}"
+            )
+            continue
+        failures.extend(
+            verify_config(
+                env,
+                load_mapping(config_path),
+                defaults,
+                load_mapping(integration_config_path),
+            )
+        )
     failures.extend(verify_auth_boundary_isolation())
     failures.extend(verify_nonprod_source_isolation())
     if failures:

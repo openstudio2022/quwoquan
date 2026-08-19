@@ -53,8 +53,9 @@ bash quwoquan_ops/gate/gate_repo.sh
 
 ## 分支治理
 
-- 允许的分支与 PR 前缀由 [`quwoquan_ops/policies/branch_policy.yaml`](quwoquan_ops/policies/branch_policy.yaml) 唯一声明，此处不复制清单。当前策略是 `main` 为唯一长期分支，短期 PR 分支按该文件声明的前缀创建、合并后删除。
-- 本地执行 `bash quwoquan_ops/gate/scaffold/install-hooks.sh` 后，`pre-commit` 和 `pre-push` 会阻断非白名单分支；repo gate 也会对本地/远端分支做同样校验。
+- 本地与远端只允许 `dev1.0` 与 `main`：日常开发直接提交并推送到集成真相源 `dev1.0`，发布晋级只走 `dev1.0 -> main` PR；`main -> dev1.0` 只允许 promotion 成功后的系统 fast-forward backsync。
+- Prod 只接受可达 `main` 的精确 SHA；禁止临时分支、第三长期分支或绕过 promotion PR 直接更新 `main`。GitHub 原生保护不可用时，仓内 gate 只阻断 release eligibility，不冒充远端 ref 未被修改。
+- 本地执行 `bash quwoquan_ops/hooks/run_install_hooks.sh` 后，`pre-commit` 和 `pre-push` 会阻断非白名单分支；repo gate 也会对本地/远端分支做同样校验。
 - `pre-commit` 跑 L0 `make commit-gate`（目标 ≤10 分钟，硬顶 15 分钟：并行静态 + 影响面测试）；全量 local_contract 由 CI Delivery Gate 分片承接。
 
-规格入口见 `specs/feature-tree/README.md`。Agent 执行约束见 `AGENTS.md`（分派协议与五段执行契约）与 `.agents/skills/`（工作流技能与 review 派发，三家 harness 共享）。
+规格入口见 `specs/feature-tree/README.md`，Codex/Cursor 执行约束见 `AGENTS.md` 与 `.cursor/commands/*.md`。

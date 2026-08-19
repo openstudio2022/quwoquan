@@ -4,7 +4,9 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+from quwoquan_ops.gate.python_script_governance.inventory import ripgrep_files
 from quwoquan_ops.gate.verify_entrypoint_script_paths import (
     entrypoint_script_path_issues,
 )
@@ -12,6 +14,8 @@ from quwoquan_ops.gate.verify_python_script_governance import (
     derive_report,
     main as governance_main,
 )
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 
 
 class PythonScriptGovernanceDerivationTest(unittest.TestCase):
@@ -34,6 +38,58 @@ class PythonScriptGovernanceDerivationTest(unittest.TestCase):
             str(issue["code"])
             for issue in report["issues"]  # type: ignore[index]
         }
+
+    def test_delivery_gate_routes_python_governance_to_its_requested_scope(
+        self,
+    ) -> None:
+        gate = (
+            REPOSITORY_ROOT / "quwoquan_ops/gate/gate_repo.sh"
+        ).read_text(encoding="utf-8")
+
+        self.assertNotIn(
+            "verify_python_script_governance.py --scope all --mode check",
+            gate,
+        )
+        self.assertIn('service) python_script_scope="service"', gate)
+        self.assertIn('app|patrol) python_script_scope="app"', gate)
+        self.assertIn('portal|ops-portal) python_script_scope="ops"', gate)
+        self.assertIn('data) python_script_scope="data"', gate)
+        self.assertIn('--scope "$python_script_scope" --mode check', gate)
+
+    def test_file_enumeration_falls_back_without_ripgrep(self) -> None:
+        visible = self._write("quwoquan_app/scripts/runtime/visible.py")
+        hidden = self._write("quwoquan_app/.hidden/visible.py")
+        self._write("quwoquan_app/.qwq_output/ignored.py")
+        self._write("quwoquan_app/scripts/runtime/ignored.txt")
+
+        with patch(
+            "quwoquan_ops.gate.python_script_governance.inventory.shutil.which",
+            return_value=None,
+        ):
+            files = ripgrep_files(
+                self.root / "quwoquan_app",
+                include_globs=("*.py",),
+                no_ignore=True,
+            )
+
+        self.assertEqual([hidden, visible], files)
+
+    def test_file_enumeration_fallback_matches_root_level_double_star_glob(
+        self,
+    ) -> None:
+        cache = self._write("quwoquan_app/.ruff_cache/state.py")
+
+        with patch(
+            "quwoquan_ops.gate.python_script_governance.inventory.shutil.which",
+            return_value=None,
+        ):
+            files = ripgrep_files(
+                self.root / "quwoquan_app",
+                include_globs=("**/.ruff_cache/**",),
+                no_ignore=True,
+            )
+
+        self.assertEqual([cache], files)
 
     def test_app_paths_derive_service_object_and_reject_flat_or_milestone_names(
         self,

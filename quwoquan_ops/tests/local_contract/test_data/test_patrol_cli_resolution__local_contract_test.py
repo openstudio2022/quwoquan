@@ -7,7 +7,11 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan")
+REPO_ROOT = next(
+    parent
+    for parent in Path(__file__).resolve().parents
+    if (parent / "quwoquan_ops").is_dir() and (parent / "quwoquan_app").is_dir()
+)
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 

@@ -353,6 +353,45 @@ def test_baseline_schema_rejects_false_green_test_provenance(
         vcr.load_baseline()
 
 
+def test_baseline_schema_rejects_governance_without_measure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    baseline_path = tmp_path / "canonical_coverage_baseline.json"
+    monkeypatch.setattr(vcr, "BASELINE_PATH", baseline_path)
+    unit = _cloud_unit()
+    baseline = _baseline_with(unit, {"statement": _block(13.0)})
+    baseline["_governance"].pop("measure")
+    baseline_path.write_text(json.dumps(baseline, ensure_ascii=False), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="_governance fields mismatch"):
+        vcr.load_baseline()
+
+
+def test_baseline_schema_accepts_nonempty_superseded_measure_only(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    baseline_path = tmp_path / "canonical_coverage_baseline.json"
+    monkeypatch.setattr(vcr, "BASELINE_PATH", baseline_path)
+    unit = _cloud_unit()
+    baseline = _baseline_with(unit, {"statement": _block(13.0)})
+    baseline["_governance"]["superseded_measure"] = "previous executable-line rule"
+    baseline_path.write_text(json.dumps(baseline, ensure_ascii=False), encoding="utf-8")
+    assert vcr.load_baseline()["_governance"]["superseded_measure"]
+
+    baseline["_governance"]["superseded_measure"] = ""
+    baseline_path.write_text(json.dumps(baseline, ensure_ascii=False), encoding="utf-8")
+    with pytest.raises(ValueError, match="superseded_measure 不得为空"):
+        vcr.load_baseline()
+
+    baseline["_governance"].pop("superseded_measure")
+    baseline["_governance"]["unknown_history"] = "not canonical"
+    baseline_path.write_text(json.dumps(baseline, ensure_ascii=False), encoding="utf-8")
+    with pytest.raises(ValueError, match="_governance fields mismatch"):
+        vcr.load_baseline()
+
+
 def test_retired_baseline_path_is_rejected_without_alias_or_dual_read(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

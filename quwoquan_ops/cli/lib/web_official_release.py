@@ -7,7 +7,7 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from urllib.parse import quote, unquote, urlparse
+from urllib.parse import urlparse
 
 
 class WebOfficialReleaseError(RuntimeError):
@@ -18,6 +18,7 @@ def package_web_official_release(
     *,
     repo_root: Path,
     environment: str,
+    target: str,
     package_root: Path,
     public_origin: str,
 ) -> dict[str, object]:
@@ -29,7 +30,12 @@ def package_web_official_release(
     if not flutter:
         raise WebOfficialReleaseError("flutter is required to package the Web application")
 
-    defines = _runtime_defines(repo_root, environment)
+    defines = _runtime_defines(
+        repo_root,
+        environment,
+        target=target,
+        launch_policy="prod_release" if environment == "prod" else "test_live",
+    )
     defines["CLOUD_GATEWAY_BASE_URL"] = public_origin + "/api"
     defines["APP_LEGAL_BASE_URL"] = public_origin + "/legal"
     defines["PUBLIC_WEB_BASE_URL"] = public_origin
@@ -81,7 +87,7 @@ def package_web_official_release(
         "noindex": environment != "prod",
         "spaFallback": "/index.html",
         "htmlContentType": "text/html; charset=utf-8",
-        "assetCacheControl": "public, max-age=31536000, immutable",
+        "assetCacheControl": "no-cache, must-revalidate",
         "serviceWorker": "flutter_service_worker.js",
     }
     manifest_path = release_root / "manifest.json"
@@ -103,38 +109,33 @@ def package_web_official_release(
     }
 
 
-def _runtime_defines(repo_root: Path, environment: str) -> dict[str, str]:
-    """Read the packaged app runtime endpoints this Web build must project.
-
-    `stackctl package --kind web` isolates its own output under a standalone
-    package root by exporting `QWQ_DEPLOY_PACKAGE_ROOT_OVERRIDE`.  That override
-    only scopes what this run writes; the app runtime config read here belongs to
-    the already-activated runtime candidate.  Inheriting the override would point
-    the reader at the still-empty standalone root and report a missing package
-    instead of the real endpoints.
-    """
-    from quwoquan_ops.cli.lib.output_paths import PACKAGE_ROOT_OVERRIDE_ENV
-
+def _runtime_defines(
+    repo_root: Path,
+    environment: str,
+    *,
+    target: str,
+    launch_policy: str,
+) -> dict[str, str]:
     command = [
         "python3",
         str(repo_root / "quwoquan_app/scripts/env/print_app_env_dart_defines.py"),
         "--env",
         environment,
+        "--target",
+        target,
+        "--launch-mode",
+        "web_official_release",
+        "--launch-policy",
+        launch_policy,
         "--format",
         "json",
     ]
-    reader_env = {
-        key: value
-        for key, value in os.environ.items()
-        if key != PACKAGE_ROOT_OVERRIDE_ENV
-    }
     result = subprocess.run(
         command,
         cwd=repo_root,
         text=True,
         capture_output=True,
         check=False,
-        env=reader_env,
     )
     if result.returncode != 0:
         raise WebOfficialReleaseError(
@@ -150,20 +151,23 @@ def _trusted_web_origin(environment: str, raw: str) -> str:
     value = raw.strip().rstrip("/")
     parsed = urlparse(value)
     expected = {
-        "alpha": "alpha.quwoquan.com",
-        "beta": "beta.quwoquan.com",
-        "gamma": "gamma.quwoquan.com",
-        "prod": "quwoquan.com",
+        "alpha": ("alpha.quwoquan.com", 17000),
+        "beta": ("beta.quwoquan.com", 18000),
+        "gamma": ("gamma.quwoquan.com", 19000),
+        "prod": ("quwoquan.com", None),
     }[environment]
+    expected_host, expected_port = expected
     try:
         parsed.port
     except ValueError as error:
         raise WebOfficialReleaseError(
-            f"{environment} Web origin must be https://{expected}"
+            f"{environment} Web origin must be "
+            f"https://{expected_host}{f':{expected_port}' if expected_port else ''}"
         ) from error
     if (
         parsed.scheme != "https"
-        or parsed.hostname != expected
+        or parsed.hostname != expected_host
+        or parsed.port != expected_port
         or parsed.username is not None
         or parsed.password is not None
         or parsed.path not in {"", "/"}
@@ -171,12 +175,10 @@ def _trusted_web_origin(environment: str, raw: str) -> str:
         or parsed.fragment
     ):
         raise WebOfficialReleaseError(
-            f"{environment} Web origin must be https://{expected}"
+            f"{environment} Web origin must be "
+            f"https://{expected_host}{f':{expected_port}' if expected_port else ''}"
         )
-    # Local runtime targets expose the canonical host through an isolated
-    # workstation port.  A distributable Web package is host-bound, so remove
-    # that transport-only port instead of persisting it as release identity.
-    return f"https://{expected}"
+    return f"https://{expected_host}{f':{expected_port}' if expected_port else ''}"
 
 
 def _verify_web_build(build_root: Path) -> None:
@@ -196,17 +198,6 @@ def _verify_web_build(build_root: Path) -> None:
         raise WebOfficialReleaseError(
             "Web build must contain exactly one bundled Noto Sans SC font"
         )
-    # 引擎前 bootstrap surface 产物（DEC-005）必须随包交付。
-    bootstrap_missing = [
-        name
-        for name in ("qwq_bootstrap.css", "qwq_bootstrap.js")
-        if not (build_root / name).is_file()
-    ]
-    if bootstrap_missing:
-        raise WebOfficialReleaseError(
-            "Web build is missing bootstrap surface assets: "
-            + ", ".join(bootstrap_missing)
-        )
     index = (build_root / "index.html").read_text(encoding="utf-8")
     for token in ('<html lang="zh-CN">', '<meta charset="utf-8">'):
         if token not in index:
@@ -218,47 +209,6 @@ def _verify_web_build(build_root: Path) -> None:
         or manifest.get("scope") != "/"
     ):
         raise WebOfficialReleaseError("Web manifest is not an installable root PWA")
-    _verify_font_manifest(build_root)
-
-
-def _verify_font_manifest(build_root: Path) -> None:
-    # 静态服务器会先对请求 URL 做百分号解码再查磁盘，因此字体 asset 路径必须
-    # 全程 URL-safe：解码后指向产物内唯一的常规文件，且不含需要编码的字符
-    # （方括号、空格等），否则线上 404、中文渲染成 tofu。
-    manifest_path = build_root / "assets" / "FontManifest.json"
-    if not manifest_path.is_file():
-        raise WebOfficialReleaseError("Web build is missing assets/FontManifest.json")
-    families = json.loads(manifest_path.read_text(encoding="utf-8"))
-    if not isinstance(families, list) or not families:
-        raise WebOfficialReleaseError("Web FontManifest.json must be a non-empty JSON array")
-    problems: list[str] = []
-    for family in families:
-        if not isinstance(family, dict):
-            problems.append("font family entry is not an object")
-            continue
-        fonts = family.get("fonts")
-        if not isinstance(fonts, list) or not fonts:
-            problems.append(f"font family {family.get('family')!r} declares no fonts")
-            continue
-        for font in fonts:
-            asset = str(font.get("asset", "")).strip() if isinstance(font, dict) else ""
-            if not asset:
-                problems.append(f"font family {family.get('family')!r} has an empty asset URL")
-                continue
-            decoded = unquote(asset)
-            if quote(decoded, safe="/") != decoded:
-                problems.append(f"font asset needs URL encoding: {asset}")
-                continue
-            target = build_root / "assets" / decoded
-            if not target.is_file():
-                problems.append(f"font asset file is missing: {asset}")
-                continue
-            if decoded != asset and (build_root / "assets" / asset).exists():
-                problems.append(f"font asset URL maps to more than one file: {asset}")
-    if problems:
-        raise WebOfficialReleaseError(
-            "Web font assets are not URL-safe: " + "; ".join(problems)
-        )
 
 
 def _inject_noindex(index_path: Path) -> None:

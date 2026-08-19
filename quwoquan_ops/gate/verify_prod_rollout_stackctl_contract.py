@@ -101,6 +101,21 @@ FORBIDDEN_ROLLOUT_TOKENS = (
 
 
 PROD_ENVIRONMENT_JOBS = ("prod_rollout", "prod_soak_acceptance")
+PROD_ROLLOUT_ENVIRONMENT = (
+    "${{ needs.prepare.outputs.dry_run != 'true' && 'production' || "
+    "'release-validation' }}"
+)
+
+
+def _job_environment_name(spec: object) -> str:
+    if not isinstance(spec, dict):
+        return ""
+    environment = spec.get("environment")
+    if isinstance(environment, str):
+        return environment.strip()
+    if isinstance(environment, dict):
+        return str(environment.get("name") or "").strip()
+    return ""
 
 
 def prod_environment_job_issues(path: Path) -> list[str]:
@@ -111,10 +126,13 @@ def prod_environment_job_issues(path: Path) -> list[str]:
         rel = path.name
     document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     jobs = document.get("jobs") or {}
+    environment_names = {
+        name: _job_environment_name(spec) for name, spec in jobs.items()
+    }
     bound = sorted(
         name
-        for name, spec in jobs.items()
-        if isinstance(spec, dict) and spec.get("environment") == "production"
+        for name, environment_name in environment_names.items()
+        if environment_name == "production" or "'production'" in environment_name
     )
     issues: list[str] = []
     for name in bound:
@@ -122,11 +140,16 @@ def prod_environment_job_issues(path: Path) -> list[str]:
             issues.append(
                 f"{rel} job {name} binds environment: production outside the controlled prod transaction"
             )
-    for name in PROD_ENVIRONMENT_JOBS:
-        if name not in bound:
-            issues.append(
-                f"{rel} job {name} must bind environment: production for manual prod admission"
-            )
+    if environment_names.get("prod_rollout") != PROD_ROLLOUT_ENVIRONMENT:
+        issues.append(
+            f"{rel} job prod_rollout must bind the exact dry-run release-validation / "
+            "real-apply production environment expression"
+        )
+    if environment_names.get("prod_soak_acceptance") != "production":
+        issues.append(
+            f"{rel} job prod_soak_acceptance must bind environment: production "
+            "for manual prod admission"
+        )
     return issues
 
 

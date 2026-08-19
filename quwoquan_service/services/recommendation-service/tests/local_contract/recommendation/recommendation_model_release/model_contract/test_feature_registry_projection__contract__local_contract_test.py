@@ -69,3 +69,25 @@ def test_consistency_gate_fails_when_a_matched_edge_scalar_is_not_consumed(
             f"does not consume '{field}'" in issue
             for issue in issues
         ), issues
+
+
+def test_content_owned_recommend_feature_projector_remains_retired(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    verifier = _load_verifier()
+    assert not verifier.RETIRED_CONTENT_OWNED_RECOMMEND_FEATURE_PROJECTOR.exists()
+
+    retired_projector = tmp_path / "recommend_feature.go"
+    retired_projector.write_text("package recommendation\n", encoding="utf-8")
+    monkeypatch.setattr(
+        verifier,
+        "RETIRED_CONTENT_OWNED_RECOMMEND_FEATURE_PROJECTOR",
+        retired_projector,
+    )
+
+    issues = verifier.check_n3_feature_skew_contract()
+    assert (
+        "retired content-owned RecommendFeatureProjector returned to the source tree"
+        in issues
+    )

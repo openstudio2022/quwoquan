@@ -162,7 +162,7 @@ public final class VideoEditingBridgePlugin {
                                   Map<String, Object> payload = new HashMap<>();
                                   payload.put("videoPath", outputFile.getAbsolutePath());
                                   payload.put("coverPath", coverPath);
-                                  payload.put("durationMs", exportResult.durationMs);
+                                  payload.put("durationMs", exportResult.approximateDurationMs);
                                   postSuccess(result, payload);
                                 } catch (Exception error) {
                                   postError(result, EXPORT_FAILED, error.getMessage());

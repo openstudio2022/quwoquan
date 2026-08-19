@@ -110,10 +110,25 @@ CANONICAL_BASELINE_GOVERNANCE = {
     "owner": "runtime-control-plane-foundation",
     "reason": (
         "唯一 canonical coverage baseline；只接受 App、Cloud、Python、Ops "
-        "对象级全量绿采集及其 canonical receipt provenance。"
+        "对象级全量绿采集及其 canonical receipt provenance。App 采集覆盖 "
+        f"{APP_TEST_TARGET} 全部测试，并以 BRDA 明细计算分支。"
     ),
     "expires_when": (
         "覆盖率规则由新的当前规格整体替代并原子硬切时；不得保留旧格式或迁移别名。"
+    ),
+    "measure": (
+        "从 ContractGraph 与 object_path_map 实时派生 App/Cloud object unit，并把 "
+        "App design_system/l10n/runtime 与 Cloud cmd/shared_runtime 五个物理根分别"
+        "归入显式 cross-cutting unit；App 执行 "
+        f"{APP_TEST_TARGET} 下全部 *_test.dart，file covered 是 lcov 出现的归属"
+        "production file 数、file total 是磁盘全部归属 production file 数，line "
+        "按 DA 明细复算 LF/LH，branch 按 (line,block,branch) 去重 BRDA 明细复算"
+        "命中与总数。Go Cloud 对各服务 internal/cmd 及仓库 cmd/runtime/"
+        "internal/platform 生成 atomic coverprofile，并以 block statement weight "
+        "累计 covered/total；Python Cloud 对 internal/cmd 使用受管解释器 trace，"
+        "以 trace._find_executable_linenos 的可执行行集合为 total、正计数交集为"
+        "covered。每个数值必须绑定同次全绿且八轴 current identity 匹配的 "
+        "canonical receipt。"
     ),
 }
 CANONICAL_POLICY = {

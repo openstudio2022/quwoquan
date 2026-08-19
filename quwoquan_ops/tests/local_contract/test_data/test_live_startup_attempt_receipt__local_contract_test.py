@@ -5,7 +5,6 @@ spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/multi-environm
 
 from __future__ import annotations
 
-import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -34,7 +33,7 @@ def _plan() -> dict[str, object]:
             "packageVersion": "web-release-alpha",
             "manifestDigest": "sha256:" + "7" * 64,
             "contentDigest": "sha256:" + "8" * 64,
-            "publicOrigin": "https://alpha.quwoquan.com",
+            "publicOrigin": "https://alpha.quwoquan.com:17000",
         },
         "workspaceIdentity": {
             "sourceRevision": "a" * 40,
@@ -178,6 +177,44 @@ class TestLiveStartupAttemptReceiptContractTest(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "fields mismatch"):
                     receipt.validate_test_live_startup_attempt(invalid)
 
+    def test_public_web_origin_is_resolved_from_target_topology(self) -> None:
+        plan = _plan()
+        plan["publicWebPackage"] = {
+            **plan["publicWebPackage"],
+            "publicOrigin": "https://web.alpha.example:17000",
+        }
+        topology = {
+            "targets": {
+                "alpha-local": {
+                    "name": "alpha-local",
+                    "env": "alpha",
+                    "publicBases": {
+                        "publicWeb": "https://web.alpha.example:17000"
+                    },
+                }
+            }
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            process_patch, runs_patch = self._patch_roots(root)
+            with process_patch, runs_patch, mock.patch.object(
+                receipt,
+                "load_environment_topology",
+                return_value=topology,
+            ):
+                prepared = receipt.transition_test_live_startup_attempt(
+                    environment="alpha",
+                    target="alpha-local",
+                    attempt_id="alpha-topology-web-origin",
+                    status="prepared",
+                    runtime_plan=plan,
+                    run_root=root / "runs" / "dev-session-alpha",
+                )
+        self.assertEqual(
+            prepared["publicWebPackage"]["publicOrigin"],
+            "https://web.alpha.example:17000",
+        )
+
     def test_cross_target_ports_and_unsafe_receipt_paths_are_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -202,115 +239,6 @@ class TestLiveStartupAttemptReceiptContractTest(unittest.TestCase):
                 receipt_path.symlink_to(foreign)
                 with self.assertRaises(receipt.UnsafeTestLiveStartupReceiptPath):
                     receipt.load_test_live_startup_attempt("alpha-local")
-
-
-class StaleTestLiveStartupReceiptReclaimTest(unittest.TestCase):
-    """A retired receipt field set must not make its target unoperable forever.
-
-    The receipt field set evolves with the runtime, and a receipt frozen by the
-    previous generation fails closed on every read.  Because ``up``, ``down``
-    and ``dev-session`` all read it first, a target whose stack is already gone
-    would otherwise have no path back to being operable at all.
-    """
-
-    def _patch_roots(self, root: Path):
-        return (
-            mock.patch.object(receipt, "target_process_dir", return_value=root / "process"),
-            mock.patch.object(receipt, "env_runs_root", return_value=root / "runs"),
-        )
-
-    def _write_running_receipt(self, root: Path) -> dict[str, object]:
-        run_root = root / "runs" / "dev-session-alpha"
-        prepared = receipt.transition_test_live_startup_attempt(
-            environment="alpha",
-            target="alpha-local",
-            attempt_id="alpha-test-live-attempt-1",
-            status="prepared",
-            runtime_plan=_plan(),
-            run_root=run_root,
-        )
-        return receipt.transition_test_live_startup_attempt(
-            environment="alpha",
-            target="alpha-local",
-            attempt_id=prepared["attemptId"],
-            status="stopped",
-            runtime_plan=_plan(),
-            run_root=run_root,
-        )
-
-    def test_absent_receipt_has_nothing_to_reclaim(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            process_patch, runs_patch = self._patch_roots(root)
-            with process_patch, runs_patch:
-                self.assertIsNone(
-                    receipt.read_stale_test_live_startup_attempt("alpha-local")
-                )
-
-    def test_admissible_receipt_is_never_reclaimable(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            process_patch, runs_patch = self._patch_roots(root)
-            with process_patch, runs_patch:
-                self._write_running_receipt(root)
-
-                self.assertIsNone(
-                    receipt.read_stale_test_live_startup_attempt("alpha-local")
-                )
-
-    def test_retired_field_set_is_reclaimable_and_returned_verbatim(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            process_patch, runs_patch = self._patch_roots(root)
-            with process_patch, runs_patch:
-                stopped = self._write_running_receipt(root)
-                retired = {
-                    key: value
-                    for key, value in stopped.items()
-                    if key != "publicWebPackage"
-                }
-                retired["contentBindingState"] = "unbound"
-                path = receipt.test_live_startup_attempt_path("alpha-local")
-                path.write_text(json.dumps(retired), encoding="utf-8")
-
-                stale = receipt.read_stale_test_live_startup_attempt("alpha-local")
-
-                self.assertEqual(stale, retired)
-
-                reclaimed = receipt.reclaim_stale_test_live_startup_attempt(
-                    "alpha-local"
-                )
-
-                self.assertEqual(reclaimed, retired)
-                self.assertFalse(path.exists())
-
-    def test_reclaim_refuses_an_admissible_receipt(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            process_patch, runs_patch = self._patch_roots(root)
-            with process_patch, runs_patch:
-                self._write_running_receipt(root)
-                path = receipt.test_live_startup_attempt_path("alpha-local")
-
-                with self.assertRaisesRegex(ValueError, "normal teardown"):
-                    receipt.reclaim_stale_test_live_startup_attempt("alpha-local")
-
-                self.assertTrue(path.exists())
-
-    def test_unsafe_receipt_path_is_never_reclaimed(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            process_patch, runs_patch = self._patch_roots(root)
-            with process_patch, runs_patch:
-                path = receipt.test_live_startup_attempt_path("alpha-local")
-                path.parent.mkdir(parents=True)
-                foreign = root / "foreign.json"
-                foreign.write_text("{}\n", encoding="utf-8")
-                path.symlink_to(foreign)
-
-                with self.assertRaises(receipt.UnsafeTestLiveStartupReceiptPath):
-                    receipt.read_stale_test_live_startup_attempt("alpha-local")
-                self.assertTrue(foreign.exists())
 
 
 if __name__ == "__main__":

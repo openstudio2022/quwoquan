@@ -85,6 +85,12 @@ List<GoRoute> _chatRoutes(Ref ref) => <GoRoute>[
             child: GroupManagePage(
               conversationId: id,
               conversationDissolver: ref.read(chatGroupAdminRepositoryProvider),
+              assistantSkillPlacementPresenter: (context, request) =>
+                  showAssistantSkillPlacementSheet(
+                    context: context,
+                    surfaceKind: request.surfaceKind,
+                    surfaceId: request.surfaceId,
+                  ),
             ),
           );
         },

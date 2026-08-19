@@ -1005,7 +1005,8 @@ extension _ImageEditorPageProAdjustments on _ImageEditorPageState {
   }
 
   bool get _hasPerspectiveAdjustments =>
-      _perspectiveHorizontal.abs() > 0.001 || _perspectiveVertical.abs() > 0.001;
+      _perspectiveHorizontal.abs() > 0.001 ||
+      _perspectiveVertical.abs() > 0.001;
 
   bool get _isEditingPerspective =>
       _selectedToolIndex == kImageEditorToolPro &&

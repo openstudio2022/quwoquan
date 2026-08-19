@@ -603,12 +603,14 @@ pages:
     route_id: chatManage
     surface_ids: [chatManage]
     experience_owner: chat
-    data_owners: [chat]
-    object_ids: [chat.conversation, chat.conversation_membership]
+    data_owners: [assistant, chat]
+    object_ids: [assistant.skill_surface_placement, chat.conversation, chat.conversation_membership]
     query_slices:
+      - assistant.skill_surface_placement
       - chat.conversation
       - chat.conversation_membership.projection.conversation_member_list_row
-    typed_presentation: [ChatGroupSettingsViewData, ConversationMemberListRow]
+    command_operations: [assistant.skill_surface_placement.PutSkillSurfacePlacement]
+    typed_presentation: [SkillSurfacePlacement, ChatGroupSettingsViewData, ConversationMemberListRow]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.chat.group_manage, lifecycle: [enter, exit, update, failure] }
@@ -1472,19 +1474,21 @@ pages:
     route_id: globalSearchNetworkResults
     surface_ids: [globalSearchNetworkResults]
     experience_owner: search
-    data_owners: [search, content, circle]
+    data_owners: [gateway, search, content, circle]
     object_ids:
       - circle.circle
       - content.post
+      - gateway.persisted_query_execution
       - search.search_feedback_fact
       - search.search_index_view
       - search.search_request_fact
     query_slices:
+      - gateway.persisted_query_execution
       - search.search_index_view.projection.search_response_view
       - content.post.projection.post_read_presentation
     command_operations:
       - search.search_feedback_fact.ReportSearchFeedback
-    typed_presentation: [SearchHit, CanonicalSearchContentHit, ContentPostViewData]
+    typed_presentation: [SearchPageSlice, SearchHit, CanonicalSearchContentHit, ContentPostViewData]
     auth_requirement: optional
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.search.network_results, lifecycle: [enter, exit, query, result_click, failure] }

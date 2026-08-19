@@ -13,7 +13,6 @@ import 'package:quwoquan_app/service/rtc_service/rtc/call_session/presentation/r
 import 'package:quwoquan_app/design_system/forms/settings/settings_inset_form_page.dart';
 import 'package:quwoquan_app/design_system/feedback/skeleton/app_skeleton.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message/application/chat_message_repository.dart';
-import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart' show ConversationAssetPage, ConversationAssetView;
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
@@ -546,7 +545,10 @@ void main() {
 
   // spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/spec.md#sit-001
   group('ChatSettingsPage — 免打扰/置顶真实接线', () {
-    ChatInboxCacheEntry inboxEntry({required bool muted, required bool pinned}) {
+    ChatInboxCacheEntry inboxEntry({
+      required bool muted,
+      required bool pinned,
+    }) {
       return ChatInboxCacheEntry(
         id: 'fixture_conv_group',
         type: 'group',
@@ -614,9 +616,7 @@ void main() {
       await tester.binding.setSurfaceSize(const Size(390, 1400));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       final settingsRepo = _RecordingConversationSettingsRepository();
-      await tester.pumpWidget(
-        _scopedApp(conversation: settingsRepo),
-      );
+      await tester.pumpWidget(_scopedApp(conversation: settingsRepo));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -653,9 +653,7 @@ void main() {
       _suppressImageErrors();
       await tester.binding.setSurfaceSize(const Size(390, 1400));
       addTearDown(() => tester.binding.setSurfaceSize(null));
-      await tester.pumpWidget(
-        _scopedApp(message: _AssetsMessageRepository()),
-      );
+      await tester.pumpWidget(_scopedApp(message: _AssetsMessageRepository()));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -687,9 +685,7 @@ void main() {
       _suppressImageErrors();
       await tester.binding.setSurfaceSize(const Size(390, 1400));
       addTearDown(() => tester.binding.setSurfaceSize(null));
-      await tester.pumpWidget(
-        _scopedApp(message: _AssetsMessageRepository()),
-      );
+      await tester.pumpWidget(_scopedApp(message: _AssetsMessageRepository()));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -764,9 +760,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.byKey(
-          const ValueKey<String>('conversation_message_search_input'),
-        ),
+        find.byKey(const ValueKey<String>('conversation_message_search_input')),
         findsOneWidget,
         reason: '设置页「查找聊天记录」必须打开会话内搜索面板',
       );
@@ -778,9 +772,7 @@ void main() {
       addTearDown(() => tester.binding.setSurfaceSize(null));
       final settingsRepo = _RecordingConversationSettingsRepository()
         ..failNext = true;
-      await tester.pumpWidget(
-        _scopedApp(conversation: settingsRepo),
-      );
+      await tester.pumpWidget(_scopedApp(conversation: settingsRepo));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 

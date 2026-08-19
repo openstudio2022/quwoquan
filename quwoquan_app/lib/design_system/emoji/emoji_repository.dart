@@ -38,7 +38,8 @@ class EmojiRepository {
   }
 
   /// 总使用统计：id -> count
-  Map<String, int> getTotalCounts() => _decodeCounts(_prefs.getString(_keyTotal));
+  Map<String, int> getTotalCounts() =>
+      _decodeCounts(_prefs.getString(_keyTotal));
 
   /// 待上报增量：id -> count
   Map<String, int> getIncrementalForReport() =>

@@ -14,6 +14,43 @@ ROOT = APP.parent
 VERIFIER = APP / "scripts/runtime/architecture/verify_production_release_artifact.py"
 
 
+def _write_prod_runtime_package(deploy_root: Path) -> None:
+    package = deploy_root / "prod-hosted" / "packages" / "app"
+    package.mkdir(parents=True, exist_ok=True)
+    (package / "app_runtime.yaml").write_text(
+        "\n".join(
+            [
+                "schema: app-runtime-config",
+                "runtime:",
+                "  appRuntimeEnv: prod",
+                "  gatewayBaseUrl: https://api.quwoquan.com",
+                "  legalBaseUrl: https://quwoquan.com/legal",
+                "  publicWebBaseUrl: https://quwoquan.com",
+                "  appDownloadBaseUrl: https://cdn.quwoquan.com/download",
+                "  realtimeBaseUrl: wss://api.quwoquan.com",
+                "  mediaAvatarCdnBaseUrl: https://cdn.quwoquan.com/media/avatar",
+                "  mediaImageCdnBaseUrl: https://cdn.quwoquan.com/media/image",
+                "  mediaVideoCdnBaseUrl: https://cdn.quwoquan.com/media/video",
+                "  mediaUploadBaseUrl: https://upload.quwoquan.com",
+                "  rtcMediaConnectionUrl: wss://rtc.quwoquan.com",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (package / "report.json").write_text(
+        json.dumps(
+            {
+                "status": "packaged",
+                "env": "prod",
+                "target": "prod-hosted",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
 class ProductionReleaseArtifactContractTest(unittest.TestCase):
     def test_accepts_clean_production_zip_and_emits_sbom_provenance(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -51,6 +88,8 @@ class ProductionReleaseArtifactContractTest(unittest.TestCase):
     def test_launcher_handoff_digest_must_be_embedded_in_artifact(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
+            deploy_root = root / "deploy"
+            _write_prod_runtime_package(deploy_root)
             handoff = root / "handoff.json"
             generated = subprocess.run(
                 [
@@ -62,8 +101,19 @@ class ProductionReleaseArtifactContractTest(unittest.TestCase):
                     "prod-hosted",
                     "--launch-mode",
                     "release_package",
+                    "--content-release-id",
+                    "local-contract-release",
+                    "--content-manifest-digest",
+                    "sha256:" + "1" * 64,
+                    "--content-readiness-receipt-digest",
+                    "sha256:" + "2" * 64,
                 ],
                 cwd=APP,
+                env={
+                    **os.environ,
+                    "PYTHONDONTWRITEBYTECODE": "1",
+                    "QWQ_DEPLOY_WORK_ROOT": str(deploy_root),
+                },
                 check=True,
                 capture_output=True,
                 text=True,

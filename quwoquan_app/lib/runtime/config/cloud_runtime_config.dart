@@ -1,6 +1,3 @@
-import 'package:quwoquan_app/runtime/errors/generated/ops/ops_event_record_errors.g.dart';
-import 'package:quwoquan_runtime_errors/runtime_errors.dart';
-
 /// compile-time 业务环境配置缺失或非法。
 ///
 /// 该异常只承载脱敏的 define 键集合，不承载 URL、token 或原始异常文本。
@@ -24,6 +21,266 @@ final class CloudRuntimeConfigurationException implements Exception {
   String toString() => '$source: $message';
 }
 
+const Set<String> _cloudRuntimePackageKeys = <String>{
+  'APP_RUNTIME_ENV',
+  'CLOUD_GATEWAY_BASE_URL',
+  'APP_LEGAL_BASE_URL',
+  'PUBLIC_WEB_BASE_URL',
+  'APP_DOWNLOAD_BASE_URL',
+  'REALTIME_CONNECTION_URL',
+  'MEDIA_AVATAR_CDN_BASE_URL',
+  'MEDIA_IMAGE_CDN_BASE_URL',
+  'MEDIA_VIDEO_CDN_BASE_URL',
+  'MEDIA_UPLOAD_BASE_URL',
+  'RTC_MEDIA_CONNECTION_URL',
+  'QWQ_APP_LAUNCH_MODE',
+  'APP_LAUNCH_POLICY',
+  'CONTENT_BINDING_STATE',
+};
+
+const Set<String> _contentBindingKeys = <String>{
+  'contentReleaseId',
+  'contentManifestDigest',
+  'contentReadinessReceiptDigest',
+};
+
+const Set<String> _launchIdentityKeys = <String>{
+  'launchTarget',
+  'effectiveLaunchManifestDigest',
+};
+
+enum CloudRuntimePackageSource { compileTime, native }
+
+/// compile-time 与 native runtime package 的唯一选择和校验语义。
+///
+/// 生产 facade 与 local contract 都调用本对象：测试显式交出两份输入包，因而不会受
+/// 当前 `flutter test` 是否注入 dart-defines 影响，也不需要修改任何生产全局状态。
+final class CloudRuntimePackageResolution {
+  factory CloudRuntimePackageResolution.resolve({
+    required Map<String, String> compiledRuntimePackage,
+    required Map<String, String> nativeRuntimePackage,
+    required bool nativeRuntimePackageHydrated,
+    required bool enforceNativeLaunchBinding,
+  }) {
+    final compiled = Map<String, String>.unmodifiable(<String, String>{
+      for (final key in _cloudRuntimePackageKeys)
+        key: (compiledRuntimePackage[key] ?? '').trim(),
+    });
+    final nativeRuntime = Map<String, String>.unmodifiable(<String, String>{
+      for (final key in _cloudRuntimePackageKeys)
+        if ((nativeRuntimePackage[key] ?? '').trim().isNotEmpty)
+          key: nativeRuntimePackage[key]!.trim(),
+    });
+    final shouldLoadNative = compiled.values.every((value) => value.isEmpty);
+    final selected = shouldLoadNative ? nativeRuntime : compiled;
+    final contentBinding = Map<String, String>.unmodifiable(<String, String>{
+      for (final key in _contentBindingKeys)
+        if ((nativeRuntimePackage[key] ?? '').trim().isNotEmpty)
+          key: nativeRuntimePackage[key]!.trim(),
+    });
+    final launchIdentity = Map<String, String>.unmodifiable(<String, String>{
+      for (final key in _launchIdentityKeys)
+        if ((nativeRuntimePackage[key] ?? '').trim().isNotEmpty)
+          key: nativeRuntimePackage[key]!.trim(),
+    });
+    final driftKeys =
+        shouldLoadNative ||
+            !nativeRuntimePackageHydrated ||
+            !enforceNativeLaunchBinding
+        ? const <String>[]
+        : List<String>.unmodifiable(
+            _cloudRuntimePackageKeys.where(
+              (key) => nativeRuntime[key] != compiled[key],
+            ),
+          );
+    return CloudRuntimePackageResolution._(
+      source: shouldLoadNative
+          ? CloudRuntimePackageSource.native
+          : CloudRuntimePackageSource.compileTime,
+      runtimePackage: selected,
+      contentBinding: contentBinding,
+      launchIdentity: launchIdentity,
+      nativeRuntimePackageHydrated: nativeRuntimePackageHydrated,
+      enforceNativeLaunchBinding: enforceNativeLaunchBinding,
+      nativeRuntimeDriftKeys: driftKeys,
+    );
+  }
+
+  const CloudRuntimePackageResolution._({
+    required this.source,
+    required this.runtimePackage,
+    required this.contentBinding,
+    required this.launchIdentity,
+    required this.nativeRuntimePackageHydrated,
+    required this.enforceNativeLaunchBinding,
+    required this.nativeRuntimeDriftKeys,
+  });
+
+  final CloudRuntimePackageSource source;
+  final Map<String, String> runtimePackage;
+  final Map<String, String> contentBinding;
+  final Map<String, String> launchIdentity;
+  final bool nativeRuntimePackageHydrated;
+  final bool enforceNativeLaunchBinding;
+  final List<String> nativeRuntimeDriftKeys;
+
+  bool get shouldLoadNativeRuntimePackage =>
+      source == CloudRuntimePackageSource.native;
+
+  String valueFor(String key) => runtimePackage[key] ?? '';
+
+  String get appRuntimeEnv => valueFor('APP_RUNTIME_ENV');
+  String get gatewayBaseUrl => valueFor('CLOUD_GATEWAY_BASE_URL');
+  String get realtimeConnectionUrl => valueFor('REALTIME_CONNECTION_URL');
+  String get publicWebBaseUrl => valueFor('PUBLIC_WEB_BASE_URL');
+  String get appDownloadBaseUrl => valueFor('APP_DOWNLOAD_BASE_URL');
+  String get legalBaseUrl => valueFor('APP_LEGAL_BASE_URL');
+  String get mediaAvatarCdnBaseUrl => valueFor('MEDIA_AVATAR_CDN_BASE_URL');
+  String get mediaImageCdnBaseUrl => valueFor('MEDIA_IMAGE_CDN_BASE_URL');
+  String get mediaVideoCdnBaseUrl => valueFor('MEDIA_VIDEO_CDN_BASE_URL');
+  String get mediaUploadBaseUrl => valueFor('MEDIA_UPLOAD_BASE_URL');
+  String get rtcMediaConnectionUrl => valueFor('RTC_MEDIA_CONNECTION_URL');
+  String get launchMode {
+    final value = valueFor('QWQ_APP_LAUNCH_MODE');
+    return value.isEmpty ? 'unknown' : value;
+  }
+
+  String get launchPolicy {
+    final value = valueFor('APP_LAUNCH_POLICY');
+    return value.isEmpty ? 'unknown' : value;
+  }
+
+  String get declaredContentBindingState {
+    final value = valueFor('CONTENT_BINDING_STATE');
+    return value.isEmpty ? 'unknown' : value;
+  }
+
+  String get contentReleaseId => contentBinding['contentReleaseId'] ?? '';
+  String get contentManifestDigest =>
+      contentBinding['contentManifestDigest'] ?? '';
+  String get contentReadinessReceiptDigest =>
+      contentBinding['contentReadinessReceiptDigest'] ?? '';
+  String get launchTarget => launchIdentity['launchTarget'] ?? '';
+  String get effectiveLaunchManifestDigest =>
+      launchIdentity['effectiveLaunchManifestDigest'] ?? '';
+
+  bool get isValidAppRuntimeEnv =>
+      appRuntimeEnv == 'alpha' ||
+      appRuntimeEnv == 'beta' ||
+      appRuntimeEnv == 'gamma' ||
+      appRuntimeEnv == 'prod';
+
+  bool get hasCompleteContentBinding {
+    final digestPattern = RegExp(r'^sha256:[0-9a-f]{64}$');
+    return contentReleaseId.isNotEmpty &&
+        digestPattern.hasMatch(contentManifestDigest) &&
+        digestPattern.hasMatch(contentReadinessReceiptDigest);
+  }
+
+  bool get hasAnyContentBinding =>
+      contentReleaseId.isNotEmpty ||
+      contentManifestDigest.isNotEmpty ||
+      contentReadinessReceiptDigest.isNotEmpty;
+
+  bool get requiresReleaseBoundContent =>
+      declaredContentBindingState == 'bound' ||
+      (enforceNativeLaunchBinding &&
+          launchPolicy == CloudRuntimeConfig.prodReleaseLaunchPolicy);
+
+  List<String> get missingRequiredDefineKeys {
+    final invalid = <String>[];
+    try {
+      CloudRuntimeConfig.validateRuntimePackage(
+        runtimeEnv: appRuntimeEnv,
+        gatewayBaseUrl: gatewayBaseUrl,
+        realtimeConnectionUrl: realtimeConnectionUrl,
+        publicWebBaseUrl: publicWebBaseUrl,
+        appDownloadBaseUrl: appDownloadBaseUrl,
+        legalBaseUrl: legalBaseUrl,
+        mediaAvatarCdnBaseUrl: mediaAvatarCdnBaseUrl,
+        mediaImageCdnBaseUrl: mediaImageCdnBaseUrl,
+        mediaVideoCdnBaseUrl: mediaVideoCdnBaseUrl,
+        mediaUploadBaseUrl: mediaUploadBaseUrl,
+        rtcMediaConnectionUrl: rtcMediaConnectionUrl,
+      );
+    } on CloudRuntimeConfigurationException catch (error) {
+      invalid.addAll(error.invalidKeys);
+    }
+    invalid.addAll(<String>[
+      if (launchPolicy != CloudRuntimeConfig.testLiveLaunchPolicy &&
+          launchPolicy != CloudRuntimeConfig.prodReleaseLaunchPolicy)
+        'APP_LAUNCH_POLICY',
+      if (launchPolicy == CloudRuntimeConfig.testLiveLaunchPolicy &&
+          appRuntimeEnv == 'prod')
+        'APP_LAUNCH_POLICY',
+      if (launchPolicy == CloudRuntimeConfig.prodReleaseLaunchPolicy &&
+          appRuntimeEnv != 'prod')
+        'APP_LAUNCH_POLICY',
+      if (launchPolicy == CloudRuntimeConfig.testLiveLaunchPolicy &&
+          declaredContentBindingState != 'unbound' &&
+          declaredContentBindingState != 'bound')
+        'CONTENT_BINDING_STATE',
+      if (launchPolicy == CloudRuntimeConfig.prodReleaseLaunchPolicy &&
+          declaredContentBindingState != 'bound')
+        'CONTENT_BINDING_STATE',
+      if (declaredContentBindingState == 'unbound' && hasAnyContentBinding)
+        'CONTENT_BINDING_STATE',
+      if (requiresReleaseBoundContent && contentReleaseId.isEmpty)
+        'contentReleaseId',
+      if (requiresReleaseBoundContent && launchTarget != '$appRuntimeEnv-local')
+        'launchTarget',
+      if (requiresReleaseBoundContent &&
+          !RegExp(
+            r'^sha256:[0-9a-f]{64}$',
+          ).hasMatch(effectiveLaunchManifestDigest))
+        'effectiveLaunchManifestDigest',
+      if (requiresReleaseBoundContent &&
+          !RegExp(r'^sha256:[0-9a-f]{64}$').hasMatch(contentManifestDigest))
+        'contentManifestDigest',
+      if (requiresReleaseBoundContent &&
+          !RegExp(
+            r'^sha256:[0-9a-f]{64}$',
+          ).hasMatch(contentReadinessReceiptDigest))
+        'contentReadinessReceiptDigest',
+      for (final key in nativeRuntimeDriftKeys) 'NATIVE_RUNTIME_PACKAGE.$key',
+    ]);
+    return List<String>.unmodifiable(invalid.toSet());
+  }
+
+  Map<String, String> get runtimeDefineSummary {
+    if (shouldLoadNativeRuntimePackage && !nativeRuntimePackageHydrated) {
+      return const <String, String>{
+        'runtimeEnv': 'unknown',
+        'launchMode': 'unknown',
+        'configurationState': 'pending_native',
+        'missingKeys': '',
+      };
+    }
+    final missing = missingRequiredDefineKeys;
+    return <String, String>{
+      'runtimeEnv': appRuntimeEnv.isEmpty ? 'unknown' : appRuntimeEnv,
+      'launchMode': launchMode,
+      'launchPolicy': launchPolicy,
+      'configurationState': missing.isEmpty ? 'complete' : 'invalid',
+      'contentBindingState':
+          declaredContentBindingState == 'unbound' && !hasAnyContentBinding
+          ? 'unbound'
+          : declaredContentBindingState == 'bound' && hasCompleteContentBinding
+          ? 'bound'
+          : 'invalid',
+      if (contentReleaseId.isNotEmpty) 'contentReleaseId': contentReleaseId,
+      if (contentManifestDigest.isNotEmpty)
+        'contentManifestDigest': contentManifestDigest,
+      if (contentReadinessReceiptDigest.isNotEmpty)
+        'contentReadinessReceiptDigest': contentReadinessReceiptDigest,
+      if (launchTarget.isNotEmpty) 'launchTarget': launchTarget,
+      if (effectiveLaunchManifestDigest.isNotEmpty)
+        'effectiveLaunchManifestDigest': effectiveLaunchManifestDigest,
+      'missingKeys': missing.join(','),
+    };
+  }
+}
+
 /// 云侧运行时配置（端云协同时使用）。
 ///
 /// canonical launcher 通过 Dart defines 注入；裸 Flutter Debug 则读取平台构建阶段
@@ -34,17 +291,25 @@ class CloudRuntimeConfig {
   static Map<String, String> _nativeRuntimePackage = const <String, String>{};
   static Map<String, String> _nativeContentBinding = const <String, String>{};
   static Map<String, String> _nativeLaunchIdentity = const <String, String>{};
-  static List<String> _nativeRuntimeDriftKeys = const <String>[];
   static bool _nativeRuntimePackageHydrated = false;
   static bool _enforceNativeLaunchBinding = true;
 
-  static String _runtimeValue(String key, String compiledValue) {
+  static CloudRuntimePackageResolution get _resolution =>
+      CloudRuntimePackageResolution.resolve(
+        compiledRuntimePackage: _compiledRuntimePackage,
+        nativeRuntimePackage: <String, String>{
+          ..._nativeRuntimePackage,
+          ..._nativeContentBinding,
+          ..._nativeLaunchIdentity,
+        },
+        nativeRuntimePackageHydrated: _nativeRuntimePackageHydrated,
+        enforceNativeLaunchBinding: _enforceNativeLaunchBinding,
+      );
+
+  static String _runtimeValue(String key) {
     // 任一 compile-time runtime define 存在时，整包只能来自 compile-time；
     // 缺失键必须 fail-closed，禁止与 native package 拼成第二份混合配置。
-    if (!shouldLoadNativeRuntimePackage) {
-      return compiledValue;
-    }
-    return _nativeRuntimePackage[key] ?? '';
+    return _resolution.valueFor(key);
   }
 
   /// App 运行环境：alpha / beta / gamma / prod。
@@ -54,8 +319,7 @@ class CloudRuntimeConfig {
     'APP_RUNTIME_ENV',
     defaultValue: '',
   );
-  static String get appRuntimeEnv =>
-      _runtimeValue('APP_RUNTIME_ENV', _compiledAppRuntimeEnv);
+  static String get appRuntimeEnv => _runtimeValue('APP_RUNTIME_ENV');
 
   /// Gateway Base URL（例如本机联调网关、或 dev/staging/prod）。
   ///
@@ -64,67 +328,62 @@ class CloudRuntimeConfig {
     'CLOUD_GATEWAY_BASE_URL',
     defaultValue: '',
   );
-  static String get gatewayBaseUrl =>
-      _runtimeValue('CLOUD_GATEWAY_BASE_URL', _compiledGatewayBaseUrl);
+  static String get gatewayBaseUrl => _runtimeValue('CLOUD_GATEWAY_BASE_URL');
 
   static const String _compiledRealtimeConnectionUrl = String.fromEnvironment(
     'REALTIME_CONNECTION_URL',
     defaultValue: '',
   );
   static String get realtimeConnectionUrl =>
-      _runtimeValue('REALTIME_CONNECTION_URL', _compiledRealtimeConnectionUrl);
+      _runtimeValue('REALTIME_CONNECTION_URL');
 
   static const String _compiledPublicWebBaseUrl = String.fromEnvironment(
     'PUBLIC_WEB_BASE_URL',
     defaultValue: '',
   );
-  static String get publicWebBaseUrl =>
-      _runtimeValue('PUBLIC_WEB_BASE_URL', _compiledPublicWebBaseUrl);
+  static String get publicWebBaseUrl => _runtimeValue('PUBLIC_WEB_BASE_URL');
 
   static const String _compiledAppDownloadBaseUrl = String.fromEnvironment(
     'APP_DOWNLOAD_BASE_URL',
     defaultValue: '',
   );
   static String get appDownloadBaseUrl =>
-      _runtimeValue('APP_DOWNLOAD_BASE_URL', _compiledAppDownloadBaseUrl);
+      _runtimeValue('APP_DOWNLOAD_BASE_URL');
 
   static const String _compiledLegalBaseUrl = String.fromEnvironment(
     'APP_LEGAL_BASE_URL',
     defaultValue: '',
   );
-  static String get legalBaseUrl =>
-      _runtimeValue('APP_LEGAL_BASE_URL', _compiledLegalBaseUrl);
+  static String get legalBaseUrl => _runtimeValue('APP_LEGAL_BASE_URL');
 
   /// 头像 CDN Base URL。展示 URL 由服务端返回，App 仅用于环境包审计与 beta 联调报告。
   static const String _compiledMediaAvatarCdnBaseUrl = String.fromEnvironment(
     'MEDIA_AVATAR_CDN_BASE_URL',
     defaultValue: '',
   );
-  static String get mediaAvatarCdnBaseUrl => _runtimeValue(
-    'MEDIA_AVATAR_CDN_BASE_URL',
-    _compiledMediaAvatarCdnBaseUrl,
-  );
+  static String get mediaAvatarCdnBaseUrl =>
+      _runtimeValue('MEDIA_AVATAR_CDN_BASE_URL');
 
   static const String _compiledMediaImageCdnBaseUrl = String.fromEnvironment(
     'MEDIA_IMAGE_CDN_BASE_URL',
     defaultValue: '',
   );
   static String get mediaImageCdnBaseUrl =>
-      _runtimeValue('MEDIA_IMAGE_CDN_BASE_URL', _compiledMediaImageCdnBaseUrl);
+      _runtimeValue('MEDIA_IMAGE_CDN_BASE_URL');
 
   static const String _compiledMediaVideoCdnBaseUrl = String.fromEnvironment(
     'MEDIA_VIDEO_CDN_BASE_URL',
     defaultValue: '',
   );
   static String get mediaVideoCdnBaseUrl =>
-      _runtimeValue('MEDIA_VIDEO_CDN_BASE_URL', _compiledMediaVideoCdnBaseUrl);
+      _runtimeValue('MEDIA_VIDEO_CDN_BASE_URL');
 
   static const String _compiledMediaUploadBaseUrl = String.fromEnvironment(
     'MEDIA_UPLOAD_BASE_URL',
     defaultValue: '',
   );
   static String get mediaUploadBaseUrl =>
-      _runtimeValue('MEDIA_UPLOAD_BASE_URL', _compiledMediaUploadBaseUrl);
+      _runtimeValue('MEDIA_UPLOAD_BASE_URL');
 
   /// 媒体房间连接地址，仅由受控环境包注入平台媒体 adapter。
   ///
@@ -135,7 +394,7 @@ class CloudRuntimeConfig {
     defaultValue: '',
   );
   static String get rtcMediaConnectionUrl =>
-      _runtimeValue('RTC_MEDIA_CONNECTION_URL', _compiledRtcMediaConnectionUrl);
+      _runtimeValue('RTC_MEDIA_CONNECTION_URL');
 
   /// Web 顶部安装提示：移动/Pad 端进入官网平台恢复入口。
   ///
@@ -192,7 +451,7 @@ class CloudRuntimeConfig {
     defaultValue: '',
   );
   static String get launchMode {
-    final value = _runtimeValue('QWQ_APP_LAUNCH_MODE', _compiledLaunchMode);
+    final value = _runtimeValue('QWQ_APP_LAUNCH_MODE');
     return value.isEmpty ? 'unknown' : value;
   }
 
@@ -205,7 +464,7 @@ class CloudRuntimeConfig {
     defaultValue: '',
   );
   static String get launchPolicy {
-    final value = _runtimeValue('APP_LAUNCH_POLICY', _compiledLaunchPolicy);
+    final value = _runtimeValue('APP_LAUNCH_POLICY');
     return value.isEmpty ? 'unknown' : value;
   }
 
@@ -214,10 +473,7 @@ class CloudRuntimeConfig {
     defaultValue: '',
   );
   static String get declaredContentBindingState {
-    final value = _runtimeValue(
-      'CONTENT_BINDING_STATE',
-      _compiledContentBindingState,
-    );
+    final value = _runtimeValue('CONTENT_BINDING_STATE');
     return value.isEmpty ? 'unknown' : value;
   }
 
@@ -236,10 +492,7 @@ class CloudRuntimeConfig {
   );
 
   static bool get isValidAppRuntimeEnv {
-    return appRuntimeEnv == 'alpha' ||
-        appRuntimeEnv == 'beta' ||
-        appRuntimeEnv == 'gamma' ||
-        appRuntimeEnv == 'prod';
+    return _resolution.isValidAppRuntimeEnv;
   }
 
   static bool get isValidRolloutMode {
@@ -252,39 +505,8 @@ class CloudRuntimeConfig {
   /// 只有 runtime 相关 compile-time define 全部为空时才读取 native package。
   /// 部分显式配置必须继续 fail-closed，不能与自动 Alpha handoff 拼接。
   static bool get shouldLoadNativeRuntimePackage {
-    return <String>[
-      _compiledAppRuntimeEnv,
-      _compiledGatewayBaseUrl,
-      _compiledRealtimeConnectionUrl,
-      _compiledPublicWebBaseUrl,
-      _compiledAppDownloadBaseUrl,
-      _compiledLegalBaseUrl,
-      _compiledMediaAvatarCdnBaseUrl,
-      _compiledMediaImageCdnBaseUrl,
-      _compiledMediaVideoCdnBaseUrl,
-      _compiledMediaUploadBaseUrl,
-      _compiledRtcMediaConnectionUrl,
-      _compiledLaunchPolicy,
-      _compiledContentBindingState,
-    ].every((value) => value.isEmpty);
+    return _resolution.shouldLoadNativeRuntimePackage;
   }
-
-  static const Set<String> _nativeRuntimeAllowedKeys = <String>{
-    'APP_RUNTIME_ENV',
-    'CLOUD_GATEWAY_BASE_URL',
-    'APP_LEGAL_BASE_URL',
-    'PUBLIC_WEB_BASE_URL',
-    'APP_DOWNLOAD_BASE_URL',
-    'REALTIME_CONNECTION_URL',
-    'MEDIA_AVATAR_CDN_BASE_URL',
-    'MEDIA_IMAGE_CDN_BASE_URL',
-    'MEDIA_VIDEO_CDN_BASE_URL',
-    'MEDIA_UPLOAD_BASE_URL',
-    'RTC_MEDIA_CONNECTION_URL',
-    'QWQ_APP_LAUNCH_MODE',
-    'APP_LAUNCH_POLICY',
-    'CONTENT_BINDING_STATE',
-  };
 
   static Map<String, String> get _compiledRuntimePackage => <String, String>{
     'APP_RUNTIME_ENV': _compiledAppRuntimeEnv,
@@ -307,230 +529,63 @@ class CloudRuntimeConfig {
     Map<String, String> values, {
     bool enforceNativeLaunchBinding = true,
   }) {
-    const contentBindingKeys = <String>{
-      'contentReleaseId',
-      'contentManifestDigest',
-      'contentReadinessReceiptDigest',
-    };
-    const launchIdentityKeys = <String>{
-      'launchTarget',
-      'effectiveLaunchManifestDigest',
-    };
     _nativeLaunchIdentity = Map<String, String>.unmodifiable(<String, String>{
       for (final entry in values.entries)
-        if (launchIdentityKeys.contains(entry.key) &&
+        if (_launchIdentityKeys.contains(entry.key) &&
             entry.value.trim().isNotEmpty)
           entry.key: entry.value.trim(),
     });
     _nativeContentBinding = Map<String, String>.unmodifiable(<String, String>{
       for (final entry in values.entries)
-        if (contentBindingKeys.contains(entry.key) &&
+        if (_contentBindingKeys.contains(entry.key) &&
             entry.value.trim().isNotEmpty)
           entry.key: entry.value.trim(),
     });
     _nativeRuntimePackage = Map<String, String>.unmodifiable(<String, String>{
       for (final entry in values.entries)
-        if (_nativeRuntimeAllowedKeys.contains(entry.key) &&
+        if (_cloudRuntimePackageKeys.contains(entry.key) &&
             entry.value.trim().isNotEmpty)
           entry.key: entry.value.trim(),
     });
     _nativeRuntimePackageHydrated = true;
     _enforceNativeLaunchBinding = enforceNativeLaunchBinding;
-    _nativeRuntimeDriftKeys =
-        shouldLoadNativeRuntimePackage || !enforceNativeLaunchBinding
-        ? const <String>[]
-        : List<String>.unmodifiable(
-            _nativeRuntimeAllowedKeys.where(
-              (key) =>
-                  _nativeRuntimePackage[key] != _compiledRuntimePackage[key],
-            ),
-          );
   }
 
   static void clearNativeRuntimePackageForTest() {
     _nativeRuntimePackage = const <String, String>{};
     _nativeContentBinding = const <String, String>{};
     _nativeLaunchIdentity = const <String, String>{};
-    _nativeRuntimeDriftKeys = const <String>[];
     _nativeRuntimePackageHydrated = false;
     _enforceNativeLaunchBinding = true;
   }
 
-  static String get contentReleaseId =>
-      _nativeContentBinding['contentReleaseId'] ?? '';
+  static String get contentReleaseId => _resolution.contentReleaseId;
 
-  static String get contentManifestDigest =>
-      _nativeContentBinding['contentManifestDigest'] ?? '';
+  static String get contentManifestDigest => _resolution.contentManifestDigest;
 
   static String get contentReadinessReceiptDigest =>
-      _nativeContentBinding['contentReadinessReceiptDigest'] ?? '';
+      _resolution.contentReadinessReceiptDigest;
 
-  static String get launchTarget => _nativeLaunchIdentity['launchTarget'] ?? '';
+  static String get launchTarget => _resolution.launchTarget;
 
   static String get effectiveLaunchManifestDigest =>
-      _nativeLaunchIdentity['effectiveLaunchManifestDigest'] ?? '';
+      _resolution.effectiveLaunchManifestDigest;
 
   static bool get hasCompleteContentBinding {
-    final digestPattern = RegExp(r'^sha256:[0-9a-f]{64}$');
-    return contentReleaseId.isNotEmpty &&
-        digestPattern.hasMatch(contentManifestDigest) &&
-        digestPattern.hasMatch(contentReadinessReceiptDigest);
+    return _resolution.hasCompleteContentBinding;
   }
 
-  static bool get _hasAnyContentBinding =>
-      contentReleaseId.isNotEmpty ||
-      contentManifestDigest.isNotEmpty ||
-      contentReadinessReceiptDigest.isNotEmpty;
-
   static bool get requiresReleaseBoundContent =>
-      declaredContentBindingState == 'bound' ||
-      (_enforceNativeLaunchBinding && launchPolicy == prodReleaseLaunchPolicy);
-
-  /// 裸 `flutter run` 没有显式内容绑定时不能静默请求 Remote。
-  ///
-  /// canonical launcher 的 `ui-only` 仍可进入安全 Shell，并由服务端
-  /// `no_active_release` 表达无内容；direct Debug 则先进入 metadata 驱动的
-  /// 开发配置恢复，避免把启动方式错误伪装成普通服务不可用。
-  static bool get blocksRemoteForDirectUnboundLaunch =>
-      _enforceNativeLaunchBinding &&
-      launchMode == 'direct_flutter_run' &&
-      launchPolicy == testLiveLaunchPolicy &&
-      declaredContentBindingState == 'unbound' &&
-      !_hasAnyContentBinding;
+      _resolution.requiresReleaseBoundContent;
 
   /// 返回有效 runtime package 中缺失或非法的键，不包含任何 endpoint 值。
   static List<String> get missingRequiredDefineKeys {
-    final invalid = <String>[
-      if (!isValidAppRuntimeEnv) 'APP_RUNTIME_ENV',
-      if (!_isValidHttpsBaseUrl(gatewayBaseUrl)) 'CLOUD_GATEWAY_BASE_URL',
-      if (!_isValidSecureWebSocketUrl(realtimeConnectionUrl))
-        'REALTIME_CONNECTION_URL',
-      if (!_isValidHttpsBaseUrl(publicWebBaseUrl)) 'PUBLIC_WEB_BASE_URL',
-      if (!_isValidHttpsBaseUrl(appDownloadBaseUrl)) 'APP_DOWNLOAD_BASE_URL',
-      if (!_isValidHttpsBaseUrl(legalBaseUrl)) 'APP_LEGAL_BASE_URL',
-      if (!_isValidHttpsBaseUrl(mediaAvatarCdnBaseUrl))
-        'MEDIA_AVATAR_CDN_BASE_URL',
-      if (!_isValidHttpsBaseUrl(mediaImageCdnBaseUrl))
-        'MEDIA_IMAGE_CDN_BASE_URL',
-      if (!_isValidHttpsBaseUrl(mediaVideoCdnBaseUrl))
-        'MEDIA_VIDEO_CDN_BASE_URL',
-      if (!_isValidHttpsBaseUrl(mediaUploadBaseUrl)) 'MEDIA_UPLOAD_BASE_URL',
-      if (!_isValidSecureWebSocketUrl(rtcMediaConnectionUrl))
-        'RTC_MEDIA_CONNECTION_URL',
-      if (launchPolicy != testLiveLaunchPolicy &&
-          launchPolicy != prodReleaseLaunchPolicy)
-        'APP_LAUNCH_POLICY',
-      if (launchPolicy == testLiveLaunchPolicy && appRuntimeEnv == 'prod')
-        'APP_LAUNCH_POLICY',
-      if (launchPolicy == prodReleaseLaunchPolicy && appRuntimeEnv != 'prod')
-        'APP_LAUNCH_POLICY',
-      if (launchPolicy == testLiveLaunchPolicy &&
-          declaredContentBindingState != 'unbound' &&
-          declaredContentBindingState != 'bound')
-        'CONTENT_BINDING_STATE',
-      if (launchPolicy == prodReleaseLaunchPolicy &&
-          declaredContentBindingState != 'bound')
-        'CONTENT_BINDING_STATE',
-      if (declaredContentBindingState == 'unbound' && _hasAnyContentBinding)
-        'CONTENT_BINDING_STATE',
-      if (blocksRemoteForDirectUnboundLaunch) 'CONTENT_BINDING_STATE',
-      if (requiresReleaseBoundContent && contentReleaseId.isEmpty)
-        'contentReleaseId',
-      if (requiresReleaseBoundContent && launchTarget != '$appRuntimeEnv-local')
-        'launchTarget',
-      if (requiresReleaseBoundContent &&
-          !RegExp(r'^sha256:[0-9a-f]{64}$')
-              .hasMatch(effectiveLaunchManifestDigest))
-        'effectiveLaunchManifestDigest',
-      if (requiresReleaseBoundContent &&
-          !RegExp(r'^sha256:[0-9a-f]{64}$').hasMatch(contentManifestDigest))
-        'contentManifestDigest',
-      if (requiresReleaseBoundContent &&
-          !RegExp(r'^sha256:[0-9a-f]{64}$')
-              .hasMatch(contentReadinessReceiptDigest))
-        'contentReadinessReceiptDigest',
-      for (final key in _nativeRuntimeDriftKeys) 'NATIVE_RUNTIME_PACKAGE.$key',
-    ];
-    return List<String>.unmodifiable(invalid);
-  }
-
-  /// 业务请求发出前的 runtime availability 快照。
-  ///
-  /// 返回 null 表示当前 package 已可用于 Remote；非 null 是现有启动配置错误码
-  /// 对应的 typed unavailable，调用方必须直接失败，不能等待网络 deadline 或伪造空结果。
-  static RuntimeFailure? runtimeAvailabilityFailure() {
-    final configurationState =
-        shouldLoadNativeRuntimePackage && !_nativeRuntimePackageHydrated
-        ? 'pending_native'
-        : missingRequiredDefineKeys.isEmpty
-        ? 'complete'
-        : 'invalid';
-    if (configurationState == 'complete') {
-      return null;
-    }
-    return RuntimeFailure(
-      code: OpsEventRecordErrorCode.startupConfigurationInvalid.code,
-      semanticReason: OpsEventRecordErrorCode.startupConfigurationInvalid.name,
-      origin: RuntimeFailureOrigin.localClient,
-      kind: RuntimeFailureKind.unavailable,
-      nature: RuntimeFailureNature.transient,
-      location: const RuntimeFailureLocation(
-        businessObject: 'runtime.configuration',
-        functionModule: 'cloud_runtime_config',
-      ),
-      context: RuntimeFailureContext(
-        attributes: <RuntimeContextAttribute>[
-          RuntimeContextAttribute(
-            key: 'configurationState',
-            value: configurationState,
-          ),
-          if (configurationState == 'invalid')
-            RuntimeContextAttribute(
-              key: 'invalidDefineKeys',
-              value: missingRequiredDefineKeys.join(','),
-            ),
-        ],
-      ),
-      recovery: const RuntimeRecoveryDirective(
-        action: 'retry',
-        disruptionLevel: 'fullPage',
-      ),
-    );
+    return _resolution.missingRequiredDefineKeys;
   }
 
   /// 只用于启动证据的环境摘要；绝不返回 URL。
   static Map<String, String> get runtimeDefineSummary {
-    if (shouldLoadNativeRuntimePackage && !_nativeRuntimePackageHydrated) {
-      return const <String, String>{
-        'runtimeEnv': 'unknown',
-        'launchMode': 'unknown',
-        'configurationState': 'pending_native',
-        'missingKeys': '',
-      };
-    }
-    return <String, String>{
-      'runtimeEnv': appRuntimeEnv.isEmpty ? 'unknown' : appRuntimeEnv,
-      'launchMode': launchMode,
-      'launchPolicy': launchPolicy,
-      'configurationState': missingRequiredDefineKeys.isEmpty
-          ? 'complete'
-          : 'invalid',
-      'contentBindingState':
-          declaredContentBindingState == 'unbound' && !_hasAnyContentBinding
-          ? 'unbound'
-          : declaredContentBindingState == 'bound' && hasCompleteContentBinding
-          ? 'bound'
-          : 'invalid',
-      if (contentReleaseId.isNotEmpty) 'contentReleaseId': contentReleaseId,
-      if (contentManifestDigest.isNotEmpty)
-        'contentManifestDigest': contentManifestDigest,
-      if (contentReadinessReceiptDigest.isNotEmpty)
-        'contentReadinessReceiptDigest': contentReadinessReceiptDigest,
-      if (launchTarget.isNotEmpty) 'launchTarget': launchTarget,
-      if (effectiveLaunchManifestDigest.isNotEmpty)
-        'effectiveLaunchManifestDigest': effectiveLaunchManifestDigest,
-      'missingKeys': missingRequiredDefineKeys.join(','),
-    };
+    return _resolution.runtimeDefineSummary;
   }
 
   /// 正式启动必须获得同一环境包的网关与四类媒体 authority。

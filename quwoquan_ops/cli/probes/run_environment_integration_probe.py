@@ -61,6 +61,7 @@ DEFAULT_REPORT = (
     / "integration-probe"
     / "report.json"
 )
+DEFAULT_ENVIRONMENT_SEARCH_QUERY = "西湖"
 
 
 def utc_now() -> str:
@@ -430,13 +431,14 @@ def build_checks(
     )
     search_canaries = _release_search_canaries(args)
     release_samples = _release_samples(args)
+    search_limit = 20 if search_canaries else 1
     homepage_query = next(
         (
             item["query"]
             for item in search_canaries
             if item["kind"] == "homepage"
         ),
-        "quwoquan",
+        DEFAULT_ENVIRONMENT_SEARCH_QUERY,
     )
     checks: list[dict[str, Any]] = [
         {
@@ -474,7 +476,7 @@ def build_checks(
     for canary in search_canaries or [
         {
             "kind": "generic",
-            "query": "quwoquan",
+            "query": DEFAULT_ENVIRONMENT_SEARCH_QUERY,
             "expectedObjectType": "",
             "expectedObjectId": "",
         }
@@ -489,7 +491,11 @@ def build_checks(
                     "X-Session-Id": "stackctl-environment-probe",
                 },
                 "body": json.dumps(
-                    {"query": canary["query"], "mode": "result", "limit": 20},
+                    {
+                        "query": canary["query"],
+                        "mode": "result",
+                        "limit": search_limit,
+                    },
                     ensure_ascii=False,
                 ).encode("utf-8"),
                 "expected_statuses": [200],

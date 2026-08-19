@@ -11,9 +11,10 @@ import 'package:quwoquan_app/l10n/copy/gathering_text_constants.dart';
 import 'package:quwoquan_app/runtime/auth/auth_gate.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/runtime/di/recommendation_presentation_slots.dart'
-    show gatheringRecommendationSlots;
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/presentation/my_gatherings_entry_card.dart';
+
+typedef GatheringIntersectionInboxBuilder =
+    Widget Function({required bool isDark});
 
 /// 线下行动与发现（底栏「行动」tab）。
 ///
@@ -23,7 +24,12 @@ import 'package:quwoquan_app/service/circle_service/circle_management/gathering/
 /// 游客可浏览页面与兴趣配对；「我的交集/我的行动/发起行动」等账号态动作
 /// 才触发登录（关闭回本页安全态，成功进入目标路由）。
 class GatheringActionsDiscoveryPage extends ConsumerWidget {
-  const GatheringActionsDiscoveryPage({super.key});
+  const GatheringActionsDiscoveryPage({
+    super.key,
+    required this.buildIntersectionInbox,
+  });
+
+  final GatheringIntersectionInboxBuilder buildIntersectionInbox;
 
   static const Key pageKey = ValueKey<String>('gathering-actions-discovery');
 
@@ -81,7 +87,7 @@ class GatheringActionsDiscoveryPage extends ConsumerWidget {
             ),
             if (isAuthenticated) ...[
               SizedBox(height: AppSpacing.intraGroupSm),
-              gatheringRecommendationSlots.buildMyIntersection(isDark: isDark),
+              buildIntersectionInbox(isDark: isDark),
               MyGatheringsEntryCard(isDark: isDark),
             ] else ...[
               SizedBox(height: AppSpacing.intraGroupSm),

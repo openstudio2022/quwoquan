@@ -50,6 +50,7 @@ __pycache__/
 # Java (if any)
 *.class
 *.jar
+!quwoquan_app/vendor/commercial_auth/qq/android/open_sdk_3.5.19_r9483ffc7_lite.jar
 *.war
 *.ear
 target/

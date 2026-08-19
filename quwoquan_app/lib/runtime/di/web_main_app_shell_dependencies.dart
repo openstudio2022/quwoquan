@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_content_runtime.dart';
+import 'package:quwoquan_app/runtime/di/recommendation_presentation_slots.dart';
 import 'package:quwoquan_app/runtime/shell/actions/global_surface_actions.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/runtime/shell/web_main_app_shell.dart';
@@ -78,6 +79,9 @@ final webMainAppShellDependenciesProvider =
         buildFeaturedChannel: ({required onExitToRecommend}) =>
             HomeFeaturedImmersivePage(onExitToHome: onExitToRecommend),
         buildChat: () => const ChatPage(),
+        buildActionsDiscovery: () => GatheringActionsDiscoveryPage(
+          buildIntersectionInbox: buildGatheringIntersectionInboxSlot,
+        ),
         buildProfile: () => const MyProfilePage(),
         buildActionsDiscovery: () => const GatheringActionsDiscoveryPage(),
         openCreate: (context, intent) {

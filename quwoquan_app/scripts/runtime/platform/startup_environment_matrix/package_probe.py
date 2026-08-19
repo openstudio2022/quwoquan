@@ -24,11 +24,16 @@ def _run(*argv: str, env: dict[str, str] | None = None) -> subprocess.CompletedP
 
 
 def _runtime_defines(environment: str) -> dict[str, str]:
+    target = RUNTIME_TARGETS[environment]
     result = _run(
         "python3",
         "scripts/env/print_app_env_dart_defines.py",
         "--env",
         environment,
+        "--target",
+        target,
+        "--launch-policy",
+        "test_live",
         "--format",
         "json",
     )

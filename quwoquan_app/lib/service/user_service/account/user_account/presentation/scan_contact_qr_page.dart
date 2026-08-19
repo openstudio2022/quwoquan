@@ -15,7 +15,6 @@ import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
-import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
@@ -131,12 +130,13 @@ class _ScanContactQrPageState extends ConsumerState<ScanContactQrPage>
     if (!_isCurrentAttempt(attempt)) {
       return;
     }
-    final trustedPublicOrigin = Uri.tryParse(
-      CloudRuntimeConfig.publicWebBaseUrl.trim(),
+    final trustedPublicOrigin = ref
+        .read(publicContentLinkBuilderProvider)
+        .publicWebOrigin;
+    final parsed = QrPayloadParser.parse(
+      raw,
+      trustedPublicOrigin: trustedPublicOrigin,
     );
-    final parsed = trustedPublicOrigin == null
-        ? null
-        : QrPayloadParser.parse(raw, trustedPublicOrigin: trustedPublicOrigin);
     if (parsed == null || !parsed.isValid) {
       if (_isCurrentAttempt(attempt)) {
         AppToast.show(context, ContactText.scanQrInvalidCode);

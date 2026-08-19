@@ -126,6 +126,35 @@ export QWQ_APP_LAUNCH_POLICY=test_live
 
 cd "$APP_DIR"
 
+parse_flutter_device_id() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -d|--device-id)
+        echo "${2:-}"
+        return 0
+        ;;
+      --device-id=*)
+        echo "${1#*=}"
+        return 0
+        ;;
+    esac
+    shift
+  done
+  return 0
+}
+
+for argument in "$@"; do
+  case "$argument" in
+    -t|--target|--target=*)
+      echo "[run] GATE_BLOCK: raw Flutter entrypoint overrides are forbidden; use launcher --target before Flutter arguments."
+      exit 2
+      ;;
+  esac
+done
+
+export QWQ_RUN_DEVICE_ID="$(parse_flutter_device_id "$@")"
+DEVICE_ID="$QWQ_RUN_DEVICE_ID"
+
 if [[ "$ENSURE_RUNTIME" == "1" ]]; then
   echo "[run] GATE_BLOCK: --ensure-runtime requires an explicit frozen candidate identity; the App launcher cannot infer or mutate it." >&2
   exit 2
@@ -274,49 +303,6 @@ if ! flutter pub get --offline; then
   exit 1
 fi
 
-PODFILE_LOCK="$APP_DIR/ios/Podfile.lock"
-PODS_MANIFEST_LOCK="$APP_DIR/ios/Pods/Manifest.lock"
-if [[ ! -f "$PODS_MANIFEST_LOCK" ]]; then
-  echo "[run] FAIL: missing $PODS_MANIFEST_LOCK."
-  echo "[run] iOS dependencies must be pre-vendored locally; do not rely on implicit CocoaPods downloads at launch time."
-  exit 1
-fi
-
-if ! cmp -s "$PODFILE_LOCK" "$PODS_MANIFEST_LOCK"; then
-  echo "[run] FAIL: CocoaPods lock drift detected between Podfile.lock and Pods/Manifest.lock."
-  echo "[run] Resolve pod changes explicitly before launching; alpha startup must not repair dependencies over the network."
-  exit 1
-fi
-
-parse_flutter_device_id() {
-  while [[ $# -gt 0 ]]; do
-    case "$1" in
-      -d|--device-id)
-        echo "${2:-}"
-        return 0
-        ;;
-      --device-id=*)
-        echo "${1#*=}"
-        return 0
-        ;;
-    esac
-    shift
-  done
-  return 0
-}
-
-for argument in "$@"; do
-  case "$argument" in
-    -t|--target|--target=*)
-      echo "[run] GATE_BLOCK: raw Flutter entrypoint overrides are forbidden; use launcher --target before Flutter arguments."
-      exit 2
-      ;;
-  esac
-done
-
-export QWQ_RUN_DEVICE_ID="$(parse_flutter_device_id "$@")"
-DEVICE_ID="$QWQ_RUN_DEVICE_ID"
-
 if [[ -z "$DEVICE_ID" ]]; then
   echo "[run] GATE_BLOCK: pass -d/--device-id so runtime ports and the consumer lease bind to one device."
   exit 2
@@ -332,7 +318,7 @@ device = find_device(device_id, include_desktop=False)
 if device is None:
     raise SystemExit(
         f"GATE_BLOCK: Flutter device {device_id!r} is not currently connected; "
-        "boot or attach an iOS/Android device before runtime preflight."
+        "boot or attach an iOS/Android device after runtime preflight."
     )
 platform = str(device.get("targetPlatform") or "").strip().lower()
 if platform != "ios" and not platform.startswith("android"):
@@ -342,7 +328,7 @@ if platform != "ios" and not platform.startswith("android"):
     )
 PY
 then
-  echo "[run] GATE_BLOCK: a connected iOS/Android device is required before runtime preflight." >&2
+  echo "[run] GATE_BLOCK: a connected iOS/Android device is required after runtime preflight." >&2
   exit 2
 fi
 
@@ -511,6 +497,22 @@ PY
     exit 2
   }
   eval "$DEVICE_EXPORTS"
+fi
+
+if [[ "${QWQ_RUN_DEVICE_KIND:-}" == ios-* ]]; then
+  PODFILE_LOCK="$APP_DIR/ios/Podfile.lock"
+  PODS_MANIFEST_LOCK="$APP_DIR/ios/Pods/Manifest.lock"
+  if [[ ! -f "$PODS_MANIFEST_LOCK" ]]; then
+    echo "[run] FAIL: missing $PODS_MANIFEST_LOCK."
+    echo "[run] iOS dependencies must be pre-vendored locally; do not rely on implicit CocoaPods downloads at launch time."
+    exit 1
+  fi
+
+  if ! cmp -s "$PODFILE_LOCK" "$PODS_MANIFEST_LOCK"; then
+    echo "[run] FAIL: CocoaPods lock drift detected between Podfile.lock and Pods/Manifest.lock."
+    echo "[run] Resolve pod changes explicitly before launching; alpha startup must not repair dependencies over the network."
+    exit 1
+  fi
 fi
 
 if [[ "${QWQ_RUN_DEVICE_KIND:-}" == "ios-simulator" \

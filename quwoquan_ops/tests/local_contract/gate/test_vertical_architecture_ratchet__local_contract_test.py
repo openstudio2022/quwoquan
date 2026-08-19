@@ -636,9 +636,17 @@ class VerticalArchitectureRatchetTest(unittest.TestCase):
     def test_gate_scopes_run_static_and_heavy_checks_once(self) -> None:
         gate = GATE_REPO_PATH.read_text(encoding="utf-8")
         makefile = MAKEFILE_PATH.read_text(encoding="utf-8")
+        core_before_start = gate.index("\nrun_service_core_before_packaging()")
+        packaging_start = gate.index("\nrun_service_packaging()", core_before_start)
+        core_after_start = gate.index(
+            "\nrun_service_core_after_packaging()", packaging_start
+        )
         service_start = gate.index("\nrun_service()")
         app_start = gate.index("\nrun_app()", service_start)
         portal_start = gate.index("\nrun_portal()", app_start)
+        core_before_block = gate[core_before_start:packaging_start]
+        packaging_block = gate[packaging_start:core_after_start]
+        core_after_block = gate[core_after_start:service_start]
         service_block = gate[service_start:app_start]
         app_block = gate[app_start:portal_start]
         gate_target_start = makefile.index("\ngate:\n")
@@ -651,7 +659,25 @@ class VerticalArchitectureRatchetTest(unittest.TestCase):
             gate.count("make test-vertical-architecture-ratchet-local-contract"),
             1,
         )
-        self.assertIn("run_vertical_architecture_local_contract", service_block)
+        self.assertEqual(
+            core_before_block.count("run_vertical_architecture_local_contract"),
+            1,
+        )
+        self.assertNotIn(
+            "run_vertical_architecture_local_contract", packaging_block
+        )
+        self.assertNotIn(
+            "run_vertical_architecture_local_contract", core_after_block
+        )
+        self.assertRegex(
+            service_block,
+            r"core\)\s+run_service_core_before_packaging\s+"
+            r"run_service_core_after_packaging\s+;;",
+        )
+        self.assertRegex(
+            service_block,
+            r"packaging\)\s+run_service_packaging\s+;;",
+        )
         self.assertNotIn("run_vertical_architecture_local_contract", app_block)
         self.assertIn("gate_repo.sh", top_gate)
         self.assertNotIn(LOCAL_CONTRACT_TARGET, top_gate)

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:developer' as developer;
 import 'dart:typed_data';
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -7,6 +6,7 @@ import 'package:file/file.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/runtime/platform/trusted_http_file_service.dart';
 import 'package:quwoquan_app/runtime/transport/media/avatar_image_url.dart';
 import 'package:quwoquan_app/runtime/transport/media/cdn_media_url_processor.dart';
@@ -197,12 +197,12 @@ class _AppImageCacheManager extends CacheManager with ImageCacheManager {
   void _scheduleDiskByteBudgetEnforcement() {
     unawaited(
       enforceDiskByteBudget().catchError((Object error, StackTrace stackTrace) {
-        developer.log(
-          'image disk cache budget enforcement failed '
-          '(${error.runtimeType})',
-          name: 'AppImageCacheController',
-          error: error,
-          stackTrace: stackTrace,
+        unawaited(
+          AppExceptionTelemetryService.instance.recordHandledException(
+            source: 'runtime.media.image_cache.disk_budget',
+            error: error,
+            stackTrace: stackTrace,
+          ),
         );
       }),
     );
@@ -281,10 +281,13 @@ class AppImageCacheController {
       );
       try {
         await _avatarImageCacheManager.removeFile(processed);
-      } catch (error) {
-        developer.log(
-          'avatar cache eviction failed (${error.runtimeType})',
-          name: 'AppImageCacheController',
+      } catch (error, stackTrace) {
+        unawaited(
+          AppExceptionTelemetryService.instance.recordHandledException(
+            source: 'runtime.media.image_cache.avatar_evict',
+            error: error,
+            stackTrace: stackTrace,
+          ),
         );
       }
       PaintingBinding.instance.imageCache.evict(
@@ -358,11 +361,12 @@ class AppImageCacheController {
     try {
       await preloadAvatar(imageUrl, size: size, endpointConfig: endpointConfig);
     } catch (error, stackTrace) {
-      developer.log(
-        'avatar cache warm-up failed',
-        name: 'runtime.media.imageCache',
-        error: error,
-        stackTrace: stackTrace,
+      unawaited(
+        AppExceptionTelemetryService.instance.recordHandledException(
+          source: 'runtime.media.image_cache.avatar_warmup',
+          error: error,
+          stackTrace: stackTrace,
+        ),
       );
     }
   }

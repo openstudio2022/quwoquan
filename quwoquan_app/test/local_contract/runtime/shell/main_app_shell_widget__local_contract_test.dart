@@ -133,10 +133,12 @@ List<Override> _shellTestOverrides({
       const EmptyAppMessageQueryDouble(),
     ),
     greetingRepositoryProvider.overrideWithValue(alphaGreetingRepository()),
-    authorImpactQueryProvider(AppUiSurfaces.profileHome)
-        .overrideWithValue(const MockUserProfileRepository()),
-    profileQueryProvider(AppUiSurfaces.profileHome)
-        .overrideWithValue(const MockUserProfileRepository()),
+    authorImpactQueryProvider(
+      AppUiSurfaces.profileHome,
+    ).overrideWithValue(const UserProfileObjectTypedDouble()),
+    profileQueryProvider(
+      AppUiSurfaces.profileHome,
+    ).overrideWithValue(const UserProfileObjectTypedDouble()),
     intersectionRepositoryProvider.overrideWithValue(
       const _EmptyIntersectionRepository(),
     ),

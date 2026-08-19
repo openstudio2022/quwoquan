@@ -4,7 +4,7 @@ configs:
   type: string
   scope: workload
   reload: restart
-  rollout: replace
+  rollout: progressive
   sensitive: true
 - key: sys.content-service.accountSecurityAuthority.baseUrl
   type: string

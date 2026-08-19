@@ -30,11 +30,19 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
         self,
         *,
         gate_block: bool,
+        connected_device: bool = True,
     ) -> tuple[subprocess.CompletedProcess[str], str, str]:
         with tempfile.TemporaryDirectory() as temporary_dir:
             temp_root = Path(temporary_dir)
             flutter_log = temp_root / "flutter.log"
             stackctl_log = temp_root / "stackctl.log"
+            device_payload = (
+                '[{"id":"policy-android","name":"Policy Android",'
+                '"targetPlatform":"android-arm64","emulator":true,'
+                '"ephemeral":false,"isSupported":true}]'
+                if connected_device
+                else "[]"
+            )
             fake_flutter = temp_root / "flutter"
             fake_flutter.write_text(
                 "#!/usr/bin/env bash\n"
@@ -42,9 +50,7 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
                 f"printf '%s\\n' \"$*\" >> {shlex.quote(str(flutter_log))}\n"
                 "if [[ \"$*\" == \"pub get --offline\" ]]; then exit 0; fi\n"
                 "if [[ \"$*\" == \"devices --machine\" ]]; then\n"
-                "  echo '[{\"id\":\"policy-ios\",\"name\":\"Policy iPhone\","
-                "\"targetPlatform\":\"ios\",\"emulator\":true,"
-                "\"ephemeral\":false,\"isSupported\":true}]'\n"
+                f"  printf '%s\\n' {shlex.quote(device_payload)}\n"
                 "  exit 0\n"
                 "fi\n"
                 "if [[ \"${1:-}\" == \"run\" ]]; then exit 0; fi\n"
@@ -101,7 +107,7 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
                     "--mode",
                     "ui-only",
                     "-d",
-                    "policy-ios",
+                    "policy-android",
                 ],
                 cwd=ROOT,
                 env=environment,
@@ -128,7 +134,7 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
             result.stderr,
         )
         self.assertIn(
-            "WARN: runtime consumer lease is unavailable",
+            "WARN: Android transport preparation is unavailable",
             result.stderr,
         )
         self.assertIn("run --no-pub", flutter_log)
@@ -161,14 +167,12 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
         self.assertIn("consumer-lease release", script)
         self.assertIn('if [[ -z "$DEVICE_ID" ]]', script)
         self.assertIn("pass -d/--device-id", script)
-        self.assertIn('--package-name "$QWQ_DEBUG_APP_ID"', script)
-        self.assertIn("from quwoquan_ops.cli.lib.app_identity import application_id_for", script)
-        self.assertIn('"$RUNTIME_STACKCTL_PYTHON" -c', script)
+        self.assertIn("--package-name com.quwoquan.quwoquan_app", script)
         self.assertIn("--ports \"$QWQ_ANDROID_LOCAL_PORTS\"", script)
         self.assertIn('export QWQ_ENVIRONMENT="${REQUESTED_ENVIRONMENT:-alpha}"', script)
         self.assertIn('export QWQ_APP_RUNTIME_ENV="$QWQ_ENVIRONMENT"', script)
         self.assertIn(
-            'QWQ_LAUNCH_TARGET="${REQUESTED_TARGET:-${QWQ_APP_RUNTIME_ENV}-local}"',
+            'export QWQ_LAUNCH_TARGET="${REQUESTED_TARGET:-${QWQ_APP_RUNTIME_ENV}-local}"',
             script,
         )
         self.assertIn(
@@ -180,7 +184,7 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
             script,
         )
         self.assertIn("--platform ios-simulator", script)
-        self.assertIn('--bundle-id "$QWQ_DEBUG_APP_ID"', script)
+        self.assertIn("--bundle-id com.example.quwoquanApp", script)
         self.assertIn("QWQ_CONSUMER_LEASE_ID", script)
         self.assertIn("QWQ_ANDROID_REVERSE_RECEIPT_DIGEST", script)
         self.assertIn("QWQ_ANDROID_REVERSE_OWNED_PORTS", script)
@@ -198,64 +202,39 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
             script.index("flutter run \\\n"),
         )
 
-    def test_launcher_rejects_unknown_or_nonmobile_device_before_runtime_preflight(
+    def test_launcher_rejects_unknown_or_nonmobile_device_after_runtime_preflight(
         self,
     ) -> None:
         script = APP_RUN.read_text(encoding="utf-8")
-        device_guard = "a connected iOS/Android device is required before runtime preflight"
+        device_guard = "a connected iOS/Android device is required after runtime preflight"
         self.assertIn("Flutter device {device_id!r} is not currently connected", script)
         self.assertIn("unsupported platform {platform!r}", script)
         self.assertIn(device_guard, script)
-        # 设备守卫必须先于任何设备绑定动作（trust/lease/flutter run）。
-        # 环境级 content preflight 不依赖设备，允许先行。
         self.assertLess(
+            script.index(
+                'app-debug-preflight --purpose "$PREFLIGHT_PURPOSE"'
+            ),
             script.index(device_guard),
-            script.index("consumer-lease acquire"),
         )
-        self.assertLess(
-            script.index(device_guard),
-            script.index("flutter run \\\n"),
-        )
+        self.assertLess(script.index(device_guard), script.index("flutter run \\\n"))
 
-    def test_launcher_blocks_unknown_device_before_runtime_preflight_or_flutter_run(
+    def test_launcher_blocks_unknown_device_after_runtime_preflight_before_flutter_run(
         self,
     ) -> None:
-        with tempfile.TemporaryDirectory() as temporary_dir:
-            fake_flutter = Path(temporary_dir) / "flutter"
-            fake_flutter.write_text(
-                "#!/usr/bin/env bash\n"
-                "if [[ \"$*\" == \"pub get --offline\" ]]; then exit 0; fi\n"
-                "if [[ \"$*\" == \"devices --machine\" ]]; then echo '[]'; exit 0; fi\n"
-                "echo \"unexpected fake flutter invocation: $*\" >&2\n"
-                "exit 97\n",
-                encoding="utf-8",
-            )
-            fake_flutter.chmod(0o755)
-            environment = os.environ.copy()
-            environment["PATH"] = f"{temporary_dir}{os.pathsep}{environment['PATH']}"
-            result = subprocess.run(
-                ["bash", str(APP_RUN), "--env", "alpha", "-d", "offline-device"],
-                cwd=ROOT,
-                env=environment,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
+        result, flutter_log, stackctl_log = self._run_launcher_with_preflight_policy(
+            gate_block=False,
+            connected_device=False,
+        )
 
         self.assertEqual(result.returncode, 2)
-        # 未知设备的启动必须在 flutter run 之前被阻断。环境级 content
-        # preflight 先于设备解析执行：环境未运行时先撞 preflight
-        # GATE_BLOCK，环境在跑时到达设备守卫；两者都不得进入 flutter run。
-        blocked_by_device_guard = (
-            "a connected iOS/Android device is required" in result.stderr
-        )
-        blocked_by_preflight = '"status": "gate_block"' in result.stderr
-        self.assertTrue(
-            blocked_by_device_guard or blocked_by_preflight,
+        self.assertIn(
+            "a connected iOS/Android device is required after runtime preflight",
             result.stderr,
         )
-        self.assertNotIn("validating full Debug runtime", result.stdout)
-        self.assertNotIn("flutter run", result.stdout)
+        self.assertIn("app-debug-preflight --purpose runtime", stackctl_log)
+        self.assertIn("pub get --offline", flutter_log)
+        self.assertIn("devices --machine", flutter_log)
+        self.assertNotIn("run --no-pub", flutter_log)
 
     def test_android_gradle_requires_canonical_transport_receipts(self) -> None:
         script = ANDROID_APP_BUILD.read_text(encoding="utf-8")
@@ -274,7 +253,7 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
         self.assertIn('if (appLaunchPolicy == "prod_release")', launcher_gate)
         self.assertIn('if (leaseAcquired != "1")', launcher_gate)
         self.assertIn("test_live transport lease is unavailable", launcher_gate)
-        self.assertNotIn("contentReadinessReceiptDigest", launcher_gate)
+        self.assertIn("contentReadinessReceiptDigest.matches", launcher_gate)
 
     def test_build_grace_blocks_without_adb_probe(self) -> None:
         with tempfile.TemporaryDirectory() as output_root, patch.dict(

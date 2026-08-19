@@ -132,7 +132,8 @@ def test_pr_workflows_use_lock_bound_shared_dependency_caches() -> None:
 
     assert "lookup-only: ${{ github.event_name == 'pull_request' }}" in recommendation
     assert "cache-dependency-path: quwoquan_ops/portal/package-lock.json" in delivery
-    assert "flutter-version: ${{ steps.flutter_version.outputs.value }}" in delivery
+    assert "python3 quwoquan_ops/ci/setup_flutter_sdk.py resolve" in delivery
+    assert "subosito/flutter-action@" not in delivery
     assert "quwoquan_app/.flutter-version" in delivery
 
 

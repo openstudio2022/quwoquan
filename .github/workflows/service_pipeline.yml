@@ -100,9 +100,11 @@ jobs:
             echo "::error::GATE_BLOCK: Service Pipeline requires exact source/base Git SHAs"
             exit 2
           fi
-          echo "source_git_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
-          echo "base_sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
-          echo "producer_workflow_run_id=${GITHUB_RUN_ID}" >> "$GITHUB_OUTPUT"
+          {
+            echo "source_git_sha=$SOURCE_SHA"
+            echo "base_sha=$BASE_SHA"
+            echo "producer_workflow_run_id=${GITHUB_RUN_ID}"
+          } >> "$GITHUB_OUTPUT"
       - name: Login GHCR for canonical prior evidence discovery
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
         with:
@@ -327,9 +329,11 @@ jobs:
             echo "::error::GATE_BLOCK: registry returned no immutable image digest"
             exit 2
           fi
-          echo "subject_name=$SUBJECT_NAME" >> "$GITHUB_OUTPUT"
-          echo "subject_digest=$DIGEST" >> "$GITHUB_OUTPUT"
-          echo "exact_ref=$SUBJECT_NAME@$DIGEST" >> "$GITHUB_OUTPUT"
+          {
+            echo "subject_name=$SUBJECT_NAME"
+            echo "subject_digest=$DIGEST"
+            echo "exact_ref=$SUBJECT_NAME@$DIGEST"
+          } >> "$GITHUB_OUTPUT"
       - name: Extract structured BuildKit SPDX SBOM
         if: ${{ matrix.action == 'build' }}
         run: |

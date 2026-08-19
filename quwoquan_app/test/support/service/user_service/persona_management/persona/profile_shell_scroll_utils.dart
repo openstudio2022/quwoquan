@@ -4,6 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 const _inlinePrimaryTabsKey = ValueKey<String>(
   'profile-shell-primary-tabs-inline',
 );
+const _pinnedPrimaryTabsKey = ValueKey<String>(
+  'profile-shell-primary-tabs-pinned',
+);
 
 /// 摘要区（连接卡 + 影响力卡 + 四列统计）变高后，一级 Tab 不再保证首屏内；
 /// 交互前先把 ObjectPageShell 滚到一级 Tab 可见（lazy sliver 需滚动才构建），
@@ -64,10 +67,25 @@ Future<void> revealProfileSummaryWidget(
 /// 滚动至一级 Tab 可点后点击指定 label 的 Tab。
 Future<void> tapProfilePrimaryTab(WidgetTester tester, String label) async {
   await revealProfilePrimaryTabs(tester);
-  final tab = find.descendant(
+  final inlineTab = find.descendant(
     of: find.byKey(_inlinePrimaryTabsKey),
     matching: find.text(label),
   );
-  await tester.tap(tab.first, warnIfMissed: false);
+  await tester.ensureVisible(inlineTab.first);
+  await tester.pump();
+  final pinnedTab = find.descendant(
+    of: find.byKey(_pinnedPrimaryTabsKey),
+    matching: find.text(label),
+  );
+  final visibleInlineTab = inlineTab.hitTestable();
+  final visibleTab = visibleInlineTab.evaluate().isNotEmpty
+      ? visibleInlineTab
+      : pinnedTab.hitTestable();
+  expect(
+    visibleTab,
+    findsOneWidget,
+    reason: 'profile primary tab must be hit-testable before tapping: $label',
+  );
+  await tester.tap(visibleTab);
   await tester.pump();
 }

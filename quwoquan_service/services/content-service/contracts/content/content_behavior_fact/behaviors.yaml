@@ -644,7 +644,7 @@ behavior_events:
 
     '
 - type: assistant_interest
-  description: 小艺对话中浮现的兴趣标签回流（对话兴趣 → 推荐特征，不绑定具体 post）
+  description: 小艺对话中浮现的兴趣标签行为事实（不绑定具体 post）
   trigger: assistant_turn_emerged_tags
   batch: true
   batch_route: POST /content/behaviors
@@ -657,7 +657,9 @@ behavior_events:
 
     payload 只带 tagRefs（路径制标签），不绑定 contentId；
 
-    经 ProcessBatch → RecommendFeatureProjector 进 rm_recommend_feature 的 tagInteraction。
+    通过 Content ProcessBatch 更新当前会话 HotPath tag weights，并发布
+    ContentBehaviorRecorded typed fact；当前 Recommendation 持久化 consumer
+    对无 targetId 的事件不写 rm_recommend_feature，不得把成功接收解释为长期画像已更新。
 
     '
 - type: onboarding_interest
@@ -679,11 +681,10 @@ behavior_events:
     interestTags 统一定义）合成上报。payload 只带唯一不可变发布身份 taxonomyReleaseId
     与 tagRefs（路径制标签），不绑定 contentId（与
 
-    assistant_interest 同为 contentId 豁免事件）；经 ProcessBatch → HotPath
-
-    tag weights + RecommendFeatureProjector 进 rm_recommend_feature 先验，
-
-    首刷 TagRecall 立即可用；跳过者维持 hot/explore+UCB 保底。独立 action
+    assistant_interest 同为 contentId 豁免事件）；经 ProcessBatch 更新当前会话
+    HotPath tag weights，并发布 ContentBehaviorRecorded typed fact；当前
+    Recommendation 持久化 consumer 对无 targetId 的事件不写 rm_recommend_feature。
+    首刷 TagRecall 只依赖同一会话 HotPath；跳过者维持 hot/explore+UCB 保底。独立 action
 
     使 onboarding 转化漏斗可与对话兴趣回流分开归因。该确认型事件只走
     ConfirmedOnboardingInterestWriter，不生成尽力 tracker 入队入口。

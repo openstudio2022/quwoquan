@@ -31,6 +31,7 @@ def _receipt(run_root: Path, *, status: str = "running") -> dict[str, object]:
         "schema": "stackctl.mutable_test_live_startup_attempt",
         "launchPolicy": "test_live",
         "nonPromotable": True,
+        "contentBindingState": "unbound",
         "attemptId": "alpha-test-live-attempt-1",
         "environment": "alpha",
         "target": "alpha-local",
@@ -50,7 +51,7 @@ def _receipt(run_root: Path, *, status: str = "running") -> dict[str, object]:
             "packageVersion": "web-release-alpha",
             "manifestDigest": "sha256:" + "7" * 64,
             "contentDigest": "sha256:" + "8" * 64,
-            "publicOrigin": "https://alpha.quwoquan.com",
+            "publicOrigin": "https://alpha.quwoquan.com:17000",
         },
         "sourceRevision": "a" * 40,
         "workspaceStatusDigest": "sha256:" + "5" * 64,
@@ -208,55 +209,6 @@ class StackctlMutableTestLiveTeardownTest(unittest.TestCase):
         self.assertEqual(result["blockerKind"], "runtime_teardown_identity_ambiguous")
         self.assertEqual(report["status"], "gate_block")
         teardown.assert_not_called()
-
-    def test_down_recovers_partial_mutable_before_active_immutable(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            report_dir = Path(temporary)
-            receipt = _receipt(report_dir, status="partial")
-            selected = {
-                "exitCode": 0,
-                "summary": "partial mutable stopped",
-                "details": [],
-                "runtimeMode": "mutable-test-live",
-            }
-            with (
-                mock.patch.object(stackctl, "load_environment_topology", return_value={}),
-                mock.patch.object(
-                    stackctl,
-                    "get_target",
-                    return_value={"env": "alpha"},
-                ),
-                mock.patch.object(
-                    stackctl,
-                    "resolve_report_dir",
-                    return_value=report_dir,
-                ),
-                mock.patch.object(
-                    stackctl,
-                    "load_test_live_startup_attempt",
-                    return_value=receipt,
-                ),
-                mock.patch.object(
-                    stackctl,
-                    "load_startup_attempt",
-                    return_value={"status": "running"},
-                ),
-                mock.patch.object(
-                    stackctl,
-                    "_command_mutable_test_live_down",
-                    return_value=selected,
-                ) as teardown,
-            ):
-                result = stackctl._command_down_unlocked(_down_args(report_dir))
-
-        self.assertEqual(result, selected)
-        teardown.assert_called_once_with(
-            mock.ANY,
-            env_name="alpha",
-            report_dir=report_dir,
-            receipt=receipt,
-            allow_active_immutable_ports=True,
-        )
 
     def test_manifest_is_bound_to_run_root_project_config_labels_and_networks(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

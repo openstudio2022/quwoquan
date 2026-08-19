@@ -392,6 +392,21 @@ def _mapping_entries(value: object) -> Iterable[tuple[str, dict[str, object]]]:
                 yield name.strip(), entry
 
 
+def _declared_writers(config: dict[str, object]) -> tuple[str, ...]:
+    raw_writers = config.get("writers") or []
+    if not isinstance(raw_writers, list):
+        return ()
+    return tuple(
+        sorted(
+            {
+                writer.strip()
+                for writer in raw_writers
+                if isinstance(writer, str) and writer.strip()
+            }
+        )
+    )
+
+
 def _declared_key_prefix(key: str) -> str:
     marker = key.find("{")
     return key if marker < 0 else key[:marker]
@@ -404,27 +419,29 @@ def load_storage_owners(root: Path) -> dict[tuple[str, str], list[StorageOwner]]
         document = load_storage_contract_view(path)
         service = _service_name(path, services_root)
         relative = path.relative_to(root).as_posix()
-        for kind, field in (
-            ("collection", "collections"),
-            ("table", "tables"),
-        ):
-            for name in _mapping_names(document.get(field)):
-                owners.setdefault((kind, name), []).append(
-                    StorageOwner(kind, name, service, relative)
+        for name, config in _mapping_entries(document.get("collections")):
+            owners.setdefault(("collection", name), []).append(
+                StorageOwner(
+                    "collection",
+                    name,
+                    service,
+                    relative,
+                    _declared_writers(config),
                 )
+            )
+        for name in _mapping_names(document.get("tables")):
+            owners.setdefault(("table", name), []).append(
+                StorageOwner("table", name, service, relative)
+            )
         for name, config in _mapping_entries(document.get("streams")):
-            raw_writers = config.get("writers") or []
-            writers = tuple(
-                sorted(
-                    {
-                        writer.strip()
-                        for writer in raw_writers
-                        if isinstance(writer, str) and writer.strip()
-                    }
-                )
-            ) if isinstance(raw_writers, list) else ()
             owners.setdefault(("stream", name), []).append(
-                StorageOwner("stream", name, service, relative, writers)
+                StorageOwner(
+                    "stream",
+                    name,
+                    service,
+                    relative,
+                    _declared_writers(config),
+                )
             )
         redis_cache = document.get("redis_cache") or []
         if isinstance(redis_cache, list):
@@ -515,7 +532,7 @@ def collect_storage_governance_issues(root: Path) -> list[str]:
         owner_services = sorted({owner.service for owner in declared})
         if reference.kind == "stream" and reference.access == "read":
             continue
-        if reference.kind == "stream" and reference.access == "write":
+        if reference.kind in {"collection", "stream"}:
             allowed_writers = {
                 writer
                 for owner in declared

@@ -1,7 +1,7 @@
 .PHONY: gate build test test-all-services test-unit test-contract test-contract-local test-integration test-runtime-api-integration test-chat-ready-index-alpha-beta lint service-contract-view verify-metadata verify-actor-persona-vocabulary verify-openapi verify-contract-graph verify-contract-graph-commercial verify-contract-graph-single-track verify-observability-catalog verify-assistant-service-errors verify-assistant-runtime-enums verify-shared-contract-enums verify-storage-keyset-single-track verify-circle-service-errors verify-content-service-codegen verify-entity-service-codegen verify-integration-service-codegen verify-external-provider-bindings verify-external-provider-governance verify-ddd-cqrs-baseline verify-codegen-contract-graph-source verify-go-single-module verify-service-layering verify-production-wiring-purity verify-api-edge-rate-limit-single-track verify-append-only-fact-command-admission verify-content-architecture verify-redis-routes codegen-redis-routes codegen codegen-openapi codegen-contract-graph codegen-observability-catalog codegen-app codegen-ops-portal codegen-control-plane-runtime codegen-assistant-service-errors codegen-assistant-runtime-enums codegen-assistant-reader-descriptors codegen-external-provider-bindings codegen-content-service codegen-circle-service codegen-entity-service codegen-notification-service codegen-rtc-service codegen-realtime-gateway codegen-integration-service codegen-product-ops-service codegen-platform-ops-service codegen-user-service codegen-chat-service codegen-chat-domain-events codegen-rec-model-python codegen-rec-policy codegen-storage dev dev-down dev-redis dev-redis-down dev-reliable-task-local dev-reliable-task-local-down clean verify-ml-features verify-ml-model-quality verify-ml-e2e verify-ml-e2e-live verify-ml-guardrail verify-ml-drift verify-ml-tests verify-rec-policy-advisor verify-content-flywheel-tests verify-content-flywheel-loop verify-operation-privacy-redaction codegen-operation-privacy
 .PHONY: verify-assistant-citation-destinations codegen-assistant-citation-destinations
 .PHONY: verify-storage-index-governance
-.PHONY: verify-graphql-read-rest-command-single-track verify-graphql-read-rest-command-zero
+.PHONY: verify-graphql-read-rest-command-single-track verify-graphql-read-rest-command-structural-zero verify-graphql-read-rest-command-migration-ratchet verify-graphql-read-rest-command-zero
 .PHONY: verify-graphql-read-registry codegen-graphql-read-registry verify-graphql-app-client codegen-graphql-app-client
 .PHONY: verify-link-templates-go codegen-link-templates-go
 .PHONY: verify-api-edge-errors codegen-api-edge-errors
@@ -25,6 +25,8 @@ ML_DRIFT_OUT ?=
 FLYWHEEL_REQUIRE_CLOSED ?= false
 FLYWHEEL_OUT ?=
 GRAPHQL_READ_REGISTRY_EXAMPLE_CANDIDATE_DIGEST ?= sha256:1111111111111111111111111111111111111111111111111111111111111111
+GRAPHQL_MIGRATION_BASE_SHA ?= $(shell git -C "$(REPO_ROOT)" merge-base HEAD origin/main 2>/dev/null || git -C "$(REPO_ROOT)" rev-parse HEAD)
+GRAPHQL_MIGRATION_CANDIDATE_SHA ?=
 DOMAIN_MODEL_BASELINE_RECEIPT ?=
 DOMAIN_MODEL_BASELINE_GRAPH ?=
 DOMAIN_MODEL_CURRENT_GRAPH ?= generated/contract_graph.json
@@ -115,7 +117,7 @@ verify-ddd-cqrs-baseline:
 	go test ./internal/metadata/load ./internal/metadata/graph ./internal/metadata/validate
 	go test ./services/content-service/internal/trust_safety/report/domain/... ./services/content-service/internal/trust_safety/report/application
 
-verify-metadata: service-contract-view verify-actor-persona-vocabulary verify-codegen-contract-graph-source verify-contract-graph-single-track verify-observability-catalog verify-api-edge-errors verify-assistant-service-errors verify-assistant-runtime-enums verify-assistant-tool-catalog verify-assistant-citation-destinations verify-link-templates-go verify-shared-contract-enums verify-storage-keyset-single-track verify-storage-index-governance verify-circle-service-errors verify-content-service-codegen verify-entity-service-codegen verify-integration-service-codegen verify-external-provider-bindings verify-external-provider-governance verify-graphql-read-registry
+verify-metadata: service-contract-view verify-actor-persona-vocabulary verify-codegen-contract-graph-source verify-contract-graph-single-track verify-observability-catalog verify-api-edge-errors verify-assistant-service-errors verify-assistant-runtime-enums verify-assistant-tool-catalog verify-assistant-citation-destinations verify-link-templates-go verify-shared-contract-enums verify-storage-keyset-single-track verify-storage-index-governance verify-circle-service-errors verify-content-service-codegen verify-entity-service-codegen verify-integration-service-codegen verify-external-provider-bindings verify-external-provider-governance verify-graphql-read-registry verify-graphql-read-rest-command-structural-zero verify-graphql-read-rest-command-migration-ratchet
 	@$(MAKE) verify-contract-graph-commercial
 	go run ./tools/verify_metadata/ "$(CONTRACT_VIEW)"
 
@@ -193,6 +195,25 @@ verify-openapi: service-contract-view
 verify-graphql-read-rest-command-single-track:
 	PYTHONDONTWRITEBYTECODE=1 python3 scripts/verify/structure/verify_graphql_read_rest_command_single_track.py --service-root "$(CURDIR)"
 
+# Source-only gate: structural violations are strict-zero.  Existing App/public
+# REST reads are migration obligations and are governed by the immutable-SHA
+# identity ratchet below, not converted into structural exceptions.
+verify-graphql-read-rest-command-structural-zero:
+	PYTHONDONTWRITEBYTECODE=1 python3 scripts/verify/structure/verify_graphql_read_rest_command_single_track.py --service-root "$(CURDIR)" --require-structural-zero --summary-only
+
+verify-graphql-read-rest-command-migration-ratchet:
+	@test -n "$(GRAPHQL_MIGRATION_BASE_SHA)" || { echo "GRAPHQL_MIGRATION_BASE_SHA is required" >&2; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 python3 scripts/verify/structure/verify_graphql_read_rest_command_single_track.py \
+		--service-root "$(CURDIR)" \
+		--migration-base-sha "$(GRAPHQL_MIGRATION_BASE_SHA)" \
+		$(if $(strip $(GRAPHQL_MIGRATION_CANDIDATE_SHA)),--migration-candidate-sha "$(GRAPHQL_MIGRATION_CANDIDATE_SHA)",) \
+		--require-no-migration-growth \
+		--summary-only
+
+# Release-cutover predicate only.  It intentionally stays outside
+# verify-metadata: a release caller must compose it with hosted GraphQL
+# readiness and the canonical minimum-build/zero-call compatibility window.
+# Source-only CI cannot fabricate those lifecycle inputs.
 verify-graphql-read-rest-command-zero:
 	PYTHONDONTWRITEBYTECODE=1 python3 scripts/verify/structure/verify_graphql_read_rest_command_single_track.py --service-root "$(CURDIR)" --require-zero
 
@@ -228,7 +249,7 @@ verify-contract-graph: verify-openapi
 	go run ./tools/qwq_contract check --metadata-dir "$(CONTRACT_VIEW)" --repo-root "$(REPO_ROOT)" --profile baseline --input generated/contract_graph.json
 	go run ./tools/qwq_contract coverage --metadata-dir "$(CONTRACT_VIEW)" --repo-root "$(REPO_ROOT)"
 
-verify-contract-graph-commercial: verify-openapi verify-graphql-read-rest-command-zero
+verify-contract-graph-commercial: verify-openapi
 	go run ./tools/qwq_contract validate --metadata-dir "$(CONTRACT_VIEW)" --repo-root "$(REPO_ROOT)" --profile commercial
 	go run ./tools/qwq_contract check --metadata-dir "$(CONTRACT_VIEW)" --repo-root "$(REPO_ROOT)" --profile commercial --input generated/contract_graph.json
 	go run ./tools/qwq_contract coverage --metadata-dir "$(CONTRACT_VIEW)" --repo-root "$(REPO_ROOT)"

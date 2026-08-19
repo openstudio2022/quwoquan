@@ -3,15 +3,17 @@
 R-ID02 框架级 response_body 一致性门禁。
 
 校验链路（单一真相源 = services/*/contracts/**/operations.yaml 的
-api_routes[].response_body）：
-  1. operation 的 response_body_kind ∈ {object, page, ack}；
-  2. kind ∈ {object, page} 时 response_body 必填，且必须指向某 projection 的 read_model
-     （或 client_projection.dart_class）；若该 projection 绑定 App Dart 类型，类型文件必须存在且定义对应 class；
-  3. kind == ack 时禁止声明 response_body；
-  4. 若 App CloudOperationContract 已填充 responseBody / responseBodyKind，则必须与
-     metadata 一致。Legacy *_api_metadata.g.dart response maps 已退役。
+api_routes[].response_entity / response_body_kind）：
+  1. App-exposed operation 的 response_body_kind ∈ {object, page, ack, upgrade}；
+  2. kind ∈ {object, page} 时 response_entity 必填，且必须指向 typed DTO 或
+     projection read_model；若 projection 绑定 App Dart 类型，类型文件必须存在且定义对应 class；
+  3. kind ∈ {ack, upgrade} 时禁止声明 legacy response_body；
+  4. App CloudOperationContract 的 responseEntity / responseBody /
+     responseBodyKind 必须与 metadata 一致。Legacy *_api_metadata.g.dart
+     response maps 已退役。
 
-任何漂移 FAIL，确保 response_body 是被 projection 与 App 契约真实消费的活字段。
+任何漂移 FAIL，确保 generated decoder 实际消费的 response_entity 是活字段；
+response_body 只保留为 page item 的描述性注记，不再与 envelope/entity 双轨争夺类型身份。
 """
 # spec_ref: specs/feature-tree/runtime/runtime-client-foundation/metadata-driven-client-data-contract/spec.md#gwt-001
 from __future__ import annotations
@@ -51,7 +53,7 @@ OPERATION_CONTRACTS = (
     / "operation_contracts.g.dart"
 )
 
-VALID_KINDS = {"object", "page", "ack"}
+VALID_KINDS = {"object", "page", "ack", "upgrade"}
 
 
 def domain_contract_roots() -> dict[str, list[Path]]:
@@ -68,9 +70,26 @@ def domain_contract_roots() -> dict[str, list[Path]]:
 
 
 def collect_projection_index() -> dict[str, tuple[str, str, str]]:
-    """全契约 read_model/dart_class -> App Dart binding，支持显式跨域读模型。"""
+    """全契约 response model -> App Dart binding，支持 projection 与 typed DTO。"""
     index: dict[str, tuple[str, str, str]] = {}
     for contract_roots in domain_contract_roots().values():
+        field_paths = sorted(
+            path
+            for contract_root in contract_roots
+            for path in contract_root.rglob("fields.yaml")
+        )
+        for path in field_paths:
+            data = yaml.safe_load(path.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                continue
+            types = data.get("types")
+            if not isinstance(types, dict):
+                continue
+            for type_name in types:
+                name = str(type_name or "").strip()
+                if name:
+                    index.setdefault(name, ("", "", ""))
+
         projection_paths = sorted(
             path
             for contract_root in contract_roots
@@ -113,7 +132,7 @@ def collect_projection_index() -> dict[str, tuple[str, str, str]]:
 
 
 def collect_response_decls() -> dict[str, dict[str, dict[str, str]]]:
-    """domain -> {operation -> {body, kind}}（仅含声明了任一字段的 operation）。"""
+    """domain -> {operation -> {entity, body, kind}}。"""
     by_domain: dict[str, dict[str, dict[str, str]]] = {}
     for domain, contract_roots in domain_contract_roots().items():
         bucket = by_domain.setdefault(domain, {})
@@ -133,11 +152,18 @@ def collect_response_decls() -> dict[str, dict[str, dict[str, str]]]:
                 if not isinstance(route, dict):
                     continue
                 op = str(route.get("operation") or "").strip()
+                entity = str(route.get("response_entity") or "").strip()
                 body = str(route.get("response_body") or "").strip()
                 kind = str(route.get("response_body_kind") or "").strip()
+                # An entity-only route predates the canonical response-body
+                # declaration and is governed by the migration gate. This
+                # verifier owns only routes that declare body semantics; once
+                # kind/body is present, parity below is strict even when the
+                # entity has no generated Dart class.
                 if not op or (not body and not kind):
                     continue
                 bucket[op] = {
+                    "entity": entity,
                     "body": body,
                     "kind": kind,
                     "source": str(path.relative_to(ROOT)),
@@ -148,7 +174,7 @@ def collect_response_decls() -> dict[str, dict[str, dict[str, str]]]:
 def parse_app_response_contracts(
     dart_path: Path,
 ) -> dict[str, dict[str, dict[str, str]]]:
-    """domain -> {localOperationId -> {body, kind}} for non-empty App fields."""
+    """domain -> {localOperationId -> {entity, body, kind}} for App fields."""
 
     text = dart_path.read_text(encoding="utf-8")
     by_domain: dict[str, dict[str, dict[str, str]]] = {}
@@ -160,15 +186,18 @@ def parse_app_response_contracts(
         body = match.group("body")
         domain_match = re.search(r'domain: "([^"]+)"', body)
         local_match = re.search(r'localOperationId: "([^"]+)"', body)
+        response_entity = re.search(r'responseEntity: "([^"]*)"', body)
         response_body = re.search(r'responseBody: "([^"]*)"', body)
         response_kind = re.search(r'responseBodyKind: "([^"]*)"', body)
         if not domain_match or not local_match:
             continue
         kind = response_kind.group(1) if response_kind else ""
+        entity = response_entity.group(1) if response_entity else ""
         model = response_body.group(1) if response_body else ""
-        if not kind and not model:
+        if not kind and not entity and not model:
             continue
         by_domain.setdefault(domain_match.group(1), {})[local_match.group(1)] = {
+            "entity": entity,
             "body": model,
             "kind": kind,
         }
@@ -192,8 +221,11 @@ def main() -> int:
     for domain, ops in sorted(decls_by_domain.items()):
         app_ops = app_by_domain.get(domain, {})
         for op, decl in sorted(ops.items()):
+            app_decl = app_ops.get(op)
+            if app_decl is None:
+                continue
             checked_ops += 1
-            body, kind = decl["body"], decl["kind"]
+            entity, body, kind = decl["entity"], decl["body"], decl["kind"]
             src = decl["source"]
 
             if kind not in VALID_KINDS:
@@ -202,28 +234,49 @@ def main() -> int:
                 )
                 continue
 
-            if kind == "ack":
+            if kind in {"ack", "upgrade"}:
                 if body:
                     errors.append(
-                        f"{domain}.{op}: kind=ack must not declare response_body "
+                        f"{domain}.{op}: kind={kind} must not declare response_body "
                         f"(got {body!r})"
                     )
-                continue
-
-            if not body:
+            elif not entity:
                 errors.append(
-                    f"{domain}.{op}: kind={kind} requires response_body read model "
+                    f"{domain}.{op}: kind={kind} requires response_entity typed model "
                     f"reference ({src})"
                 )
                 continue
-            resolved = projection_index.get(body)
-            if resolved is None:
+            if entity:
+                resolved = projection_index.get(entity)
+            else:
+                resolved = None
+            if entity and resolved is None:
                 errors.append(
-                    f"{domain}.{op}: response_body {body!r} is not a known "
-                    "projection read_model/dart_class"
+                    f"{domain}.{op}: response_entity {entity!r} is not a known "
+                    "typed DTO/projection read_model"
                 )
                 continue
+            if resolved is None:
+                resolved = ("", "", "")
             dart_class, output_path, external_path = resolved
+            allowed_app_entities = {entity}
+            if dart_class:
+                allowed_app_entities.add(dart_class)
+            if app_decl["kind"] != kind:
+                errors.append(
+                    f"{domain}.{op}: response_body_kind metadata={kind!r} "
+                    f"app={app_decl['kind']!r}"
+                )
+            if app_decl["entity"] not in allowed_app_entities:
+                errors.append(
+                    f"{domain}.{op}: response_entity metadata={entity!r}/"
+                    f"{dart_class!r} app={app_decl['entity']!r}"
+                )
+            if app_decl["body"] != body:
+                errors.append(
+                    f"{domain}.{op}: response_body metadata={body!r} "
+                    f"app={app_decl['body']!r}"
+                )
             if not dart_class:
                 continue
             if output_path or external_path:
@@ -251,20 +304,6 @@ def main() -> int:
                         f"class {dart_class}"
                     )
 
-            app_decl = app_ops.get(op)
-            if app_decl is None:
-                continue
-            if app_decl["kind"] and app_decl["kind"] != kind:
-                errors.append(
-                    f"{domain}.{op}: response_body_kind metadata={kind!r} "
-                    f"app={app_decl['kind']!r}"
-                )
-            if app_decl["body"] and app_decl["body"] not in {body, dart_class}:
-                errors.append(
-                    f"{domain}.{op}: response_body metadata={body!r}/"
-                    f"{dart_class!r} app={app_decl['body']!r}"
-                )
-
     if checked_ops == 0:
         errors.append(
             "zero response_body operations were checked; canonical service "
@@ -279,8 +318,8 @@ def main() -> int:
 
     print(
         "verify_metadata_response_body_vs_codegen_app: OK "
-        f"({checked_ops} response_body operations cross-checked "
-        "metadata↔App contracts↔projection)"
+        f"({checked_ops} App response operations cross-checked "
+        "metadata↔App contracts↔typed model)"
     )
     return 0
 

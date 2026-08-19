@@ -29,8 +29,22 @@ env:
   QWQ_OUTPUT_ROOT: ${{ github.workspace }}/.qwq_output
 
 jobs:
+  branch-policy:
+    name: Recommendation — Branch Policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+      - if: ${{ github.event_name == 'pull_request' }}
+        name: Enforce the reviewed pull-request edge
+        run: python3 quwoquan_ops/gate/verify_git_branch_policy.py
+
   content-service-api-integration:
     name: "content-service api_integration (testcontainers)"
+    needs: branch-policy
     runs-on: ubuntu-latest
     timeout-minutes: 40
     defaults:
@@ -53,16 +67,19 @@ jobs:
           # Pull-request cache scopes are isolated by GitHub. They may restore
           # the default-branch cache, but must not create a new per-PR copy.
           lookup-only: ${{ github.event_name == 'pull_request' }}
+      - name: Install canonical media processor
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Run content-service api_integration
         run: |
           go test ./services/content-service/tests/api_integration/content/post/ -count=1 -timeout 30m -v 2>&1 | tee api_integration.log
       - name: Assert recommendation-critical tests executed
         run: |
-          # 防回归：premium 事件链与 behavior 契约必须真实执行（不是被 skip）。
+          # Content 只证明 typed behavior facts；Recommendation 的投影门在下方 job。
           for required in \
-            TestPremiumPoolEventChainServesAndEjectsPremiumFeed \
-            TestBehaviorBatchAssistantInterestProjectsTagInteraction \
-            TestBehaviorBatchSevenStateImpressionExcludesVisibleCountsClick \
+            TestBehaviorBatchAssistantInterestAllowsEmptyContentID \
+            TestBehaviorBatchPersistsCanonicalFunnelStates \
             TestBehaviorBatchRejectsLike \
             TestCommentStore_AuthoritativeCountsNoCache; do
             if ! grep -q "PASS: ${required}" api_integration.log; then
@@ -81,13 +98,13 @@ jobs:
 
   recommendation-service-api-integration:
     name: "recommendation-service api_integration (pytest)"
+    needs: branch-policy
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
       run:
         working-directory: quwoquan_service/services/recommendation-service
     env:
-      QWQ_TEST_MONGO_URI: mongodb://127.0.0.1:27017/?directConnection=true
       PYTHONDONTWRITEBYTECODE: "1"
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -96,27 +113,10 @@ jobs:
           python-version: "3.11"
       - name: Install redis-server binary
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends redis-server
+          bash "$GITHUB_WORKSPACE/quwoquan_ops/ci/run_bounded_apt_install.sh" redis-server
           sudo systemctl stop redis-server || true
       - name: Start MongoDB replica set
-        run: |
-          docker run -d --name qwq-rec-mongo -p 27017:27017 mongo:7-jammy \
-            --replSet rs0 --bind_ip_all
-          for _ in $(seq 1 60); do
-            if docker exec qwq-rec-mongo mongosh --quiet --eval 'db.runCommand({ping:1}).ok' >/dev/null 2>&1; then
-              break
-            fi
-            sleep 1
-          done
-          docker exec qwq-rec-mongo mongosh --quiet --eval \
-            'rs.initiate({_id:"rs0",members:[{_id:0,host:"127.0.0.1:27017"}]})'
-          for _ in $(seq 1 60); do
-            if docker exec qwq-rec-mongo mongosh --quiet --eval 'db.hello().isWritablePrimary' | grep -q true; then
-              break
-            fi
-            sleep 1
-          done
+        run: bash "$GITHUB_WORKSPACE/quwoquan_ops/ci/run_recommendation_test_mongodb.sh"
       - name: Install Python dependencies
         run: |
           pip install \
@@ -133,6 +133,8 @@ jobs:
             test_ranked_window_create_and_continue_over_real_redis_and_mongo \
             test_ranked_window_rejects_unauthorized_conflict_and_missing_window \
             test_ranked_window_closes_and_erases_windows_for_closed_subject \
+            test_premium_pool_stream_projects_mongo_admission_before_ack \
+            test_flywheel_funnel_multi_dimension_honest_counts \
             test_metrics_exposes_http_series; do
             if ! grep -E "${required}.* PASSED" rec_api_integration.log >/dev/null; then
               echo "required api_integration test ${required} did not pass"

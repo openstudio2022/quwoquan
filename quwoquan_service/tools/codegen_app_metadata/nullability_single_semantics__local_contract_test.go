@@ -8,7 +8,7 @@ import (
 
 // 锁定「必填缺失即解码失败」与「可缺字段保留缺席」这两条已经成立的行为。
 //
-// 生成器内确实存在 `(json['x'] ?? '').toString()` 这类补值表达式，但它位于
+// 生成器内确实存在 `(json['x'] ?? ”).toString()` 这类补值表达式，但它位于
 // assistantWireEmitJsonValidation 之后，对必填字段是不可达的防御分支而不是伪造成功。
 // 这个区别只由 validation 是否覆盖该字段决定，一旦哪次改动让 validation 漏掉某个
 // 类型，同一段补值就会立刻从死代码变成静默塌陷，且生成物看不出差别。所以把两侧
@@ -94,7 +94,7 @@ func TestAssistantWireNullableScalarsKeepAbsenceDistinctFromEmpty(t *testing.T) 
 // 的 NOT_NULL / NULLABLE —— 这是第三套字段 authoring（见 spec OPEN-003）。
 //
 // 在它收敛之前，至少要钉死这条：**没有 default 的字段必须保留缺席**。一旦哪次改动
-// 让无 default 的 String 落到 `as String? ?? ''`，端侧就再也分不清「网关没发这个键」
+// 让无 default 的 String 落到 `as String? ?? ”`，端侧就再也分不清「网关没发这个键」
 // 和「网关发了空串」，而 rtc 的字段大多是 sessionId / reason 这类，空串和没有的处置
 // 完全不同。
 func TestRtcPayloadWithoutDefaultKeepsAbsence(t *testing.T) {

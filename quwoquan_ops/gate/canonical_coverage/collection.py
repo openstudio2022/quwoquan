@@ -38,6 +38,11 @@ from .constants import (
     _display,
     _tail,
 )
+from .app_runtime import (
+    canonical_app_coverage_environment,
+    guarded_app_coverage_command,
+    serial_app_test_files,
+)
 from .parsing import merge_lcov_records, parse_lcov_records, render_lcov
 from .provenance import (
     _canonical_json_digest,
@@ -49,10 +54,16 @@ from .receipts import _write_artifact_receipt, _write_json_atomic, _write_text_a
 from .units import _collection_target_language, go_collection_targets
 
 
-def _run(command: Sequence[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
+def _run(
+    command: Sequence[str],
+    *,
+    cwd: Path,
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         list(command),
         cwd=cwd,
+        env=env,
         text=True,
         capture_output=True,
         check=False,
@@ -159,30 +170,52 @@ def _run_app_shard(destination: Path, test_files: Sequence[str]) -> str:
     产不出 lcov（例如该片自己被 OOM 杀掉）不是「红测试」而是采集失败，必须以
     `CoverageError` 阻断：把它当成红测试会让 receipt 记下一份不完整的产物。
     """
-    completed = cc._run(
-        [
-            "flutter",
-            "test",
-            "--coverage",
-            "--branch-coverage",
-            f"--coverage-path={destination}",
-            "--reporter=compact",
-            *test_files,
-        ],
-        cwd=cc.APP_ROOT,
-    )
-    if not destination.is_file():
-        raise CoverageError(
-            f"flutter test 未产出 lcov: {_display(destination)}"
-            f"（exit={completed.returncode}）\n"
-            f"{_tail(completed.stdout)}{_tail(completed.stderr)}"
-        )
-    if completed.returncode != 0:
-        return (
-            f"exit={completed.returncode}\n"
-            f"{_tail(completed.stdout)}{_tail(completed.stderr)}"
-        )
-    return ""
+    serial_files = serial_app_test_files(test_files)
+    phases = [("nonserial", tuple(test_files), False)]
+    if serial_files:
+        phases.append(("serial", serial_files, True))
+
+    merged: dict[str, dict] = {}
+    failures: list[str] = []
+    phase_paths: list[Path] = []
+    try:
+        for phase_name, phase_files, serial_phase in phases:
+            phase_path = destination.with_name(
+                f"{destination.name}.{phase_name}.tmp"
+            )
+            phase_paths.append(phase_path)
+            phase_path.unlink(missing_ok=True)
+            completed = cc._run(
+                guarded_app_coverage_command(
+                    phase_path,
+                    phase_files,
+                    serial_phase=serial_phase,
+                ),
+                cwd=cc.APP_ROOT,
+                env=canonical_app_coverage_environment(),
+            )
+            if not phase_path.is_file():
+                raise CoverageError(
+                    f"flutter test {phase_name} phase 未产出 lcov: "
+                    f"{_display(phase_path)}（exit={completed.returncode}）\n"
+                    f"{_tail(completed.stdout)}{_tail(completed.stderr)}"
+                )
+            merge_lcov_records(
+                merged,
+                parse_lcov_records(
+                    phase_path.read_text(encoding="utf-8", errors="replace")
+                ),
+            )
+            if completed.returncode != 0:
+                failures.append(
+                    f"{phase_name} phase exit={completed.returncode}\n"
+                    f"{_tail(completed.stdout)}{_tail(completed.stderr)}"
+                )
+        _write_text_atomic(destination, render_lcov(merged))
+    finally:
+        for phase_path in phase_paths:
+            phase_path.unlink(missing_ok=True)
+    return "\n".join(failures)
 
 
 def collect_app(

@@ -795,7 +795,7 @@ class MongoIntersectionWriteOps:
             {
                 "$setOnInsert": {
                     "_id": gathering,
-                    "notifiedAt": occurred_at.astimezone(timezone.utc),
+                    "occurredAt": occurred_at.astimezone(timezone.utc),
                     # 促成时刻冻结的创作者名单（漏斗比例③的分母事实）；
                     # 旧收据缺该字段归 unclassified，不回填臆造。
                     "creatorPersonaIds": sorted(

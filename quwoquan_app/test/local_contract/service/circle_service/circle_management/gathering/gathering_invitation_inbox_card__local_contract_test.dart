@@ -1,7 +1,6 @@
 // spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-006
 // spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-008
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -200,10 +199,7 @@ void main() {
     expect(port.lastDecline?.expectedGatheringVersion, 7);
     expect(port.lastDecline?.expectedParticipationVersion, 1);
     expect(resolved.calls, 1);
-    expect(
-      find.text(GatheringText.invitationDeclinedFeedback),
-      findsOneWidget,
-    );
+    expect(find.text(GatheringText.invitationDeclinedFeedback), findsOneWidget);
     // 排空 toast 自动消失 timer，避免测试结束时仍有 pending timer。
     await tester.pump(const Duration(seconds: 4));
   });

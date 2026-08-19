@@ -32,6 +32,10 @@ import subprocess
 from pathlib import Path
 from typing import Any, Mapping
 
+from quwoquan_ops.cli.lib.local_environment_object_storage import (
+    package_build_object_storage_environment,
+)
+
 # 与 stackctl.ROOT 同源同值(仓库根);仅用于函数默认参数,
 # 函数体内仍统一经 `_stackctl.ROOT` 访问。
 _REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -155,21 +159,10 @@ def _build_package_bound_local_images(
             "QWQ_WORKLOAD": "full",
             "QWQ_PRODUCT_TELEMETRY_AVAILABLE": "1",
             "QWQ_RELEASE_CANDIDATE_DIGEST": candidate_digest,
-            # Compose parses storage/provider variables while building, but no
-            # build step may contact or persist them into an image.
-            "LOCAL_GAMMA_OBJECT_STORAGE_ENDPOINT": "https://127.0.0.1",
-            "LOCAL_GAMMA_OBJECT_STORAGE_BUCKET": "package-build-only",
-            "LOCAL_GAMMA_OBJECT_STORAGE_REGION": "local",
-            "LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_ID": "package-build-only",
-            "LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_SECRET": "package-build-only",
-            "LOCAL_GAMMA_OBJECT_STORAGE_CDN_SIGN_KEY": "package-build-only",
-            "LOCAL_GAMMA_OBJECT_STORAGE_TLS_DIR": str(
-                (_stackctl.target_cache_dir(target_name) / "package" / "tls").resolve()
-            ),
-            "LOCAL_GAMMA_OBJECT_STORAGE_CA_FILE": str(
-                (_stackctl.target_cache_dir(target_name) / "package" / "tls" / "root.crt").resolve()
-            ),
         }
+    )
+    environment.update(
+        package_build_object_storage_environment(target_name=target_name)
     )
     _stackctl._sync_object_storage_binding_aliases(environment, prefix="LOCAL_GAMMA")
     _stackctl._bind_package_provider_reference_environment(

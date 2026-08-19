@@ -2,12 +2,12 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/generated/article_detail_wire_keys.g.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/content_read_model_projection.dart';
 import 'package:quwoquan_app/runtime/transport/media/avatar_image_url.dart';
 import 'package:quwoquan_app/runtime/transport/media/content_media_url.dart';
+import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/article_detail_view.dart';
 import 'package:quwoquan_app/service/content_service/content/post/domain/article_presentation_models.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/article_presentation_values.dart';
@@ -25,15 +25,12 @@ import 'package:quwoquan_app/service/content_service/content/post/adapters/post_
 /// - 单轨拒旧键：likesCount/commentsCount/savesCount 不得被解析为计数。
 /// - 自包含 inline fixtures（不依赖 lib 端 mock data 类），契约数据由本文件就地构造。
 void main() {
-  setUpAll(() {
-    CloudRuntimeConfig.hydrateFromNativeRuntimePackage(const <String, String>{
-      'MEDIA_AVATAR_CDN_BASE_URL': 'https://cdn.example.test/media/avatar',
-      'MEDIA_IMAGE_CDN_BASE_URL': 'https://cdn.example.test/media/image',
-      'MEDIA_VIDEO_CDN_BASE_URL': 'https://cdn.example.test/media/video',
-    }, enforceNativeLaunchBinding: false);
-  });
-
-  tearDownAll(CloudRuntimeConfig.clearNativeRuntimePackageForTest);
+  final mediaEndpoints = MediaEndpointConfig(
+    avatarBaseUrl: 'https://cdn.example.test/media/avatar',
+    imageBaseUrl: 'https://cdn.example.test/media/image',
+    videoBaseUrl: 'https://cdn.example.test/media/video',
+    attachmentBaseUrl: 'https://cdn.example.test/media/image',
+  );
 
   const Map<String, dynamic> minPhoto = {
     'postId': 'ph1',
@@ -91,14 +88,27 @@ void main() {
     return ContentSurfaceViewMapper.fromDto(
       ContentPostViewData.fromWire(contentPostProjectionFromReadModelMap(raw)),
       wire: raw,
+      mediaResolver: MediaDeliveryResolver(mediaEndpoints),
     );
   }
 
-  String resolvedAvatar(String raw) => resolveAvatarImageUrl(raw);
+  String resolvedAvatar(String raw) =>
+      resolveAvatarImageUrl(raw, endpointConfig: mediaEndpoints);
 
-  String resolvedMedia(String raw) => resolveContentMediaUrl(raw);
+  String resolvedMedia(String raw) =>
+      resolveContentMediaUrl(raw, endpointConfig: mediaEndpoints);
 
-  String resolvedVideo(String raw) => resolveContentVideoUrl(raw);
+  String resolvedVideo(String raw) =>
+      resolveContentVideoUrl(raw, endpointConfig: mediaEndpoints);
+
+  ContentArticleRender articleView(
+    Map<String, dynamic> raw, {
+    required String fallbackArticleId,
+  }) => projectArticleDetailView(
+    raw,
+    fallbackArticleId: fallbackArticleId,
+    mediaResolver: MediaDeliveryResolver(mediaEndpoints),
+  );
 
   // ─────────────────────────────────────────────────────────────────────────
   // ContentSurfaceViewMapper.fromDto — 公共字段
@@ -275,20 +285,21 @@ void main() {
   // ─────────────────────────────────────────────────────────────────────────
   group('projectArticleDetailView → ContentArticleRender 输出结构契约', () {
     test('返回 ContentArticleRender 强类型实例', () {
-      final r = projectArticleDetailView(minArticle, fallbackArticleId: 'fb1');
+      final r = articleView(minArticle, fallbackArticleId: 'fb1');
       expect(r, isA<ContentArticleRender>());
     });
 
-    test('有 markdown 时 contentHtml 才承载正文 HTML 回退', () {
+    test('有 markdown 时正文仍只来自 document，不写入旧 contentHtml', () {
       final raw = Map<String, dynamic>.from(minArticle)
         ..['articleMarkdown'] =
             '---\ntitle: Markdown 标题\n---\n\n# Markdown 标题\n\n正文第一段。\n';
-      final r = projectArticleDetailView(raw, fallbackArticleId: 'fb1');
-      expect(r.contentHtml, equals('这是文章内容，包含多段落...'));
+      final r = articleView(raw, fallbackArticleId: 'fb1');
+      expect(r.document.body, contains('正文第一段'));
+      expect(r.contentHtml, isEmpty);
     });
 
     test('无 markdown 时 contentHtml 为空，不再借壳 body', () {
-      final r = projectArticleDetailView(minArticle, fallbackArticleId: 'fb1');
+      final r = articleView(minArticle, fallbackArticleId: 'fb1');
       expect(r.contentHtml, isEmpty);
     });
 
@@ -296,18 +307,18 @@ void main() {
       final raw = Map<String, dynamic>.from(minArticle)
         ..['isOfficial'] = true
         ..['badge'] = 'VIP';
-      final r = projectArticleDetailView(raw, fallbackArticleId: 'fb1');
+      final r = articleView(raw, fallbackArticleId: 'fb1');
       expect(r.isOfficial, isTrue);
       expect(r.badge, equals('VIP'));
     });
 
     test('单图时 layoutMode 为 hero', () {
-      final r = projectArticleDetailView(minArticle, fallbackArticleId: 'fb1');
+      final r = articleView(minArticle, fallbackArticleId: 'fb1');
       expect(r.layoutMode, equals('hero'));
     });
 
     test('images 非空（article 至少回退 [coverUrl]）', () {
-      final r = projectArticleDetailView(minArticle, fallbackArticleId: 'fb1');
+      final r = articleView(minArticle, fallbackArticleId: 'fb1');
       expect(r.images, isNotEmpty);
       expect(
         r.images.first,
@@ -316,7 +327,7 @@ void main() {
     });
 
     test('无 markdown 时文章视为空文档（不再有 body/blocks/cards 竞争源）', () {
-      final r = projectArticleDetailView(minArticle, fallbackArticleId: 'fb1');
+      final r = articleView(minArticle, fallbackArticleId: 'fb1');
       expect(r.documentSource, ArticleDetailDocumentSource.empty);
       expect(r.contentBlocks, isEmpty);
       expect(r.pages.single.body, isEmpty);
@@ -357,10 +368,7 @@ void main() {
           ],
         };
 
-        final r = projectArticleDetailView(
-          raw,
-          fallbackArticleId: 'fb_manifest',
-        );
+        final r = articleView(raw, fallbackArticleId: 'fb_manifest');
         final imageNodes = r.document.nodes
             .where((node) => node.isFigure)
             .toList();
@@ -399,7 +407,7 @@ void main() {
             'media/image/s/test/article/direct/v1/fig1.jpg\n'
             ':::\n';
 
-      final r = projectArticleDetailView(raw, fallbackArticleId: 'fb_direct');
+      final r = articleView(raw, fallbackArticleId: 'fb_direct');
       final figures = r.document.nodes
           .where((node) => node.isFigure)
           .toList(growable: false);
@@ -430,7 +438,7 @@ void main() {
           'template': 'journal',
           'fontPreset': 'clean',
         };
-      final r = projectArticleDetailView(raw, fallbackArticleId: 'fb_document');
+      final r = articleView(raw, fallbackArticleId: 'fb_document');
       expect(r.document.title, equals('连续文档标题'));
       expect(r.documentSource, ArticleDetailDocumentSource.markdown);
       expect(r.contentBlocks, isNotEmpty);
@@ -502,10 +510,7 @@ void main() {
           'fontPreset': 'clean',
         };
 
-      final r = projectArticleDetailView(
-        raw,
-        fallbackArticleId: 'data_article',
-      );
+      final r = articleView(raw, fallbackArticleId: 'data_article');
 
       expect(r.documentSource, ArticleDetailDocumentSource.markdown);
       expect(r.document.title, equals('成都出发峨眉山周末自驾周末短途（夏季）'));

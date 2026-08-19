@@ -23,8 +23,6 @@ import 'package:quwoquan_app/service/user_service/persona_management/persona/app
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/l10n/copy/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
-import 'package:quwoquan_app/runtime/di/app_providers_app_state.dart'
-    show currentUserIdProvider;
 import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/runtime/errors/domain_error_code.dart';
 import 'package:quwoquan_app/runtime/errors/generated/circle/circle_errors.g.dart';
@@ -535,7 +533,9 @@ void main() {
       await _pumpShell(tester);
 
       expect(find.byType(ObjectStatsRow), findsOneWidget);
-      final statsRow = tester.widget<ObjectStatsRow>(find.byType(ObjectStatsRow));
+      final statsRow = tester.widget<ObjectStatsRow>(
+        find.byType(ObjectStatsRow),
+      );
       expect(statsRow.items.length, lessThan(4));
       expect(find.byType(CircleHeader), findsOneWidget);
       expect(find.textContaining('你认识的人'), findsNothing);

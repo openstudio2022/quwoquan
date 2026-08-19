@@ -3,11 +3,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
+import 'package:quwoquan_app/runtime/di/app_providers_chat_search.dart'
+    show activePersonaContextProvider;
+import 'package:quwoquan_app/runtime/di/gathering_dependencies.dart'
+    show gatheringQueryReaderProvider;
 import 'package:quwoquan_app/runtime/di/navigation/app_router_gathering_routes.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/route_unavailable_state.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/gathering_board_route_host.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/presentation/gathering_route_hosts.dart';
+import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
+import '../../../support/runtime/cloud_boundary_test_scope.dart';
 
 void main() {
   group('Gathering app shell routes', () {
@@ -58,7 +64,20 @@ void main() {
 Future<void> _pumpRoute(WidgetTester tester, String location) async {
   final container = ProviderContainer(
     overrides: [
+      ...sealedCloudBoundaryOverrides(),
       authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
+      activePersonaContextProvider.overrideWith(
+        (_) async => ActivePersonaContextViewData.fallback(
+          personaId: 'persona-1',
+          ownerUserId: 'owner-1',
+          displayName: '测试用户',
+          avatarUrl: '',
+          personaSnapshotVersion: 0,
+        ),
+      ),
+      gatheringQueryReaderProvider.overrideWith(
+        (_) => throw StateError('GatheringQueryReader unavailable'),
+      ),
     ],
   );
   final router = GoRouter(
@@ -83,7 +102,7 @@ Future<void> _pumpRoute(WidgetTester tester, String location) async {
       child: CupertinoApp.router(routerConfig: router),
     ),
   );
-  await tester.pump();
+  await tester.pumpAndSettle();
 
   expect(
     router.routeInformationProvider.value.uri.path,

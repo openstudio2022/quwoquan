@@ -32,7 +32,7 @@ extension _VideoPlayerWidgetControllerRuntime on _VideoPlayerWidgetState {
       if (_acquireControllerSlot()) {
         final slotLeaseId = _controllerSlotLeaseId;
         if (mounted && generation == _videoInitGeneration) {
-          setState(() {
+          _updateRuntimeState(() {
             _isDeferredWaitingForSlot = false;
           });
           await _initializeVideoWithHeldSlot(generation, slotLeaseId);
@@ -200,7 +200,7 @@ extension _VideoPlayerWidgetControllerRuntime on _VideoPlayerWidgetState {
             candidateSnapshot: candidateSnapshot,
             source: source.label,
           );
-          setState(() {
+          _updateRuntimeState(() {
             _isInitialized = true;
             _hasError = false;
             _isDeferredWaitingForSlot = false;
@@ -394,7 +394,7 @@ extension _VideoPlayerWidgetControllerRuntime on _VideoPlayerWidgetState {
     }
     if (canFallbackToProgressive) {
       _forceProgressiveForCurrentDelivery = true;
-      setState(() {
+      _updateRuntimeState(() {
         _isInitialized = false;
         _hasError = false;
         _playbackFailure = null;
@@ -421,7 +421,7 @@ extension _VideoPlayerWidgetControllerRuntime on _VideoPlayerWidgetState {
         statusCode: failure.runtimeFailure.transportStatus,
       );
     }
-    setState(() {
+    _updateRuntimeState(() {
       _isDeferredWaitingForSlot = false;
       _hasError = true;
       _isInitialized = false;

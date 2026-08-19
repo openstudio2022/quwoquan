@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import tempfile
 from pathlib import Path
 
 import yaml
@@ -9,6 +10,36 @@ from quwoquan_ops.gate import verify_prod_rollout_stackctl_contract as gate
 
 
 ROOT = Path(__file__).resolve().parents[4]
+
+
+def _write_prod_environment_workflow(path: Path, jobs: dict[str, object]) -> None:
+    path.write_text(yaml.safe_dump({"jobs": jobs}), encoding="utf-8")
+
+
+def test_prod_environment_binding_distinguishes_dry_run_from_real_apply() -> None:
+    assert gate.prod_environment_job_issues(
+        ROOT / ".github/workflows/deploy-prod-auto.yml"
+    ) == []
+
+
+def test_prod_environment_binding_rejects_unprotected_or_unauthorized_jobs() -> None:
+    with tempfile.TemporaryDirectory() as temporary:
+        workflow = Path(temporary) / "deploy-prod-auto.yml"
+        _write_prod_environment_workflow(
+            workflow,
+            {
+                "prod_rollout": {"environment": "release-validation"},
+                "prod_soak_acceptance": {"environment": "production"},
+                "unreviewed": {
+                    "environment": {"name": "${{ true && 'production' || 'dev' }}"}
+                },
+            },
+        )
+
+        issues = gate.prod_environment_job_issues(workflow)
+
+    assert any("unreviewed" in issue for issue in issues)
+    assert any("exact dry-run release-validation" in issue for issue in issues)
 
 
 def test_mainline_image_build_uses_governed_context_and_base_images() -> None:

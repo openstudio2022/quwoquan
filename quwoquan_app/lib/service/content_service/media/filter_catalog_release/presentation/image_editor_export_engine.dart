@@ -314,19 +314,17 @@ class ImageEditorExportEngine {
             continue;
           }
           final i = (y * width + x) * 4;
-          pixels[i] =
-              (pixels[i] + (adjusted[i] - pixels[i]) * weight).round().clamp(
-                0,
-                255,
-              );
-          pixels[i + 1] =
-              (pixels[i + 1] + (adjusted[i + 1] - pixels[i + 1]) * weight)
-                  .round()
-                  .clamp(0, 255);
-          pixels[i + 2] =
-              (pixels[i + 2] + (adjusted[i + 2] - pixels[i + 2]) * weight)
-                  .round()
-                  .clamp(0, 255);
+          pixels[i] = (pixels[i] + (adjusted[i] - pixels[i]) * weight)
+              .round()
+              .clamp(0, 255);
+          pixels[i +
+              1] = (pixels[i + 1] + (adjusted[i + 1] - pixels[i + 1]) * weight)
+              .round()
+              .clamp(0, 255);
+          pixels[i +
+              2] = (pixels[i + 2] + (adjusted[i + 2] - pixels[i + 2]) * weight)
+              .round()
+              .clamp(0, 255);
         }
       }
     }
@@ -426,11 +424,19 @@ class ImageEditorExportEngine {
       final b = pixels[i + 2].toDouble();
       final a = pixels[i + 3].toDouble();
       pixels[i] =
-          (matrix[0] * r + matrix[1] * g + matrix[2] * b + matrix[3] * a + matrix[4])
+          (matrix[0] * r +
+                  matrix[1] * g +
+                  matrix[2] * b +
+                  matrix[3] * a +
+                  matrix[4])
               .round()
               .clamp(0, 255);
       pixels[i + 1] =
-          (matrix[5] * r + matrix[6] * g + matrix[7] * b + matrix[8] * a + matrix[9])
+          (matrix[5] * r +
+                  matrix[6] * g +
+                  matrix[7] * b +
+                  matrix[8] * a +
+                  matrix[9])
               .round()
               .clamp(0, 255);
       pixels[i + 2] =
@@ -538,8 +544,7 @@ class ImageEditorExportEngine {
         final shadowWeight = 1 - _smoothstep(0.15, 0.55, l);
         var scale = 1.0;
         if (detail.highlights.abs() > 0.001) {
-          scale +=
-              detail.highlights / 100 * kTonalMaxAdjust * highlightWeight;
+          scale += detail.highlights / 100 * kTonalMaxAdjust * highlightWeight;
         }
         if (detail.shadows.abs() > 0.001) {
           scale += detail.shadows / 100 * kTonalMaxAdjust * shadowWeight;
@@ -615,11 +620,7 @@ class ImageEditorExportEngine {
         final dx = x - centerX;
         final dy = y - centerY;
         final distance = math.sqrt(dx * dx + dy * dy) / maxDistance;
-        final falloff = _smoothstep(
-          kVignetteInnerRadius,
-          1.0,
-          distance,
-        );
+        final falloff = _smoothstep(kVignetteInnerRadius, 1.0, distance);
         if (falloff <= 0) {
           continue;
         }
@@ -632,7 +633,8 @@ class ImageEditorExportEngine {
       var scale = gain[p];
       var offset = 0.0;
       if (hasGrain) {
-        offset = _hashNoise(p % width, p ~/ width, detail.grainSeed) *
+        offset =
+            _hashNoise(p % width, p ~/ width, detail.grainSeed) *
             grainAmplitude;
       }
       if (scale == 1.0 && offset == 0.0) {
@@ -683,9 +685,7 @@ class ImageEditorExportEngine {
         hue = 60 * (((r - g) / delta) + 4);
       }
       if (hue < 0) hue += 360;
-      final skinWeight = (hue >= 15 && hue <= 50)
-          ? kVibranceSkinProtect
-          : 1.0;
+      final skinWeight = (hue >= 15 && hue <= 50) ? kVibranceSkinProtect : 1.0;
       // 增益随已饱和程度衰减：s→1 时增益→0（不削顶），s→0 时不动灰阶。
       final gain = k * (1 - saturation) * skinWeight;
       final nextSaturation = (saturation + gain * saturation).clamp(0.0, 1.0);
@@ -759,9 +759,9 @@ class ImageEditorExportEngine {
       for (var p = 0, i = c; p < count; p++, i += 4) {
         final edge = (luma[p] - blurLuma[p]).abs();
         // 边缘权重：平坦区 1 → 边缘 0（smoothstep 反向）。
-        final t = ((edge - kDenoiseEdgeLow) /
-                (kDenoiseEdgeHigh - kDenoiseEdgeLow))
-            .clamp(0.0, 1.0);
+        final t =
+            ((edge - kDenoiseEdgeLow) / (kDenoiseEdgeHigh - kDenoiseEdgeLow))
+                .clamp(0.0, 1.0);
         final edgeWeight = 1 - t * t * (3 - 2 * t);
         final mix = amount * edgeWeight;
         if (mix <= 0) {
@@ -792,7 +792,8 @@ class ImageEditorExportEngine {
   ///
   /// 与 `_temperatureMatrix`（R/B ±0.18）、`_tintMatrix`（G ∓0.12）的正向
   /// 定义互逆：吸管点选与灰世界自动共用同一反解，预览/烘焙同源。
-  static ({double temperature, double tint}) resolveWhiteBalanceFromNeutralSample({
+  static ({double temperature, double tint})
+  resolveWhiteBalanceFromNeutralSample({
     required double red,
     required double green,
     required double blue,
@@ -853,8 +854,8 @@ class ImageEditorExportEngine {
         result[y * width + x] = sum / window;
         final outgoing = (y - radius).clamp(0, height - 1);
         final incoming = (y + radius + 1).clamp(0, height - 1);
-        sum += horizontal[incoming * width + x] -
-            horizontal[outgoing * width + x];
+        sum +=
+            horizontal[incoming * width + x] - horizontal[outgoing * width + x];
       }
     }
     return result;
@@ -939,7 +940,8 @@ class ImageEditorExportEngine {
         hueDelta += weight * band.hueShift / 100 * kHslMaxHueShiftDegrees;
         saturationScale *=
             1 + weight * band.saturation / 100 * kHslMaxSaturationScale;
-        luminanceAmount += weight * band.luminance / 100 * kHslMaxLuminanceShift;
+        luminanceAmount +=
+            weight * band.luminance / 100 * kHslMaxLuminanceShift;
       }
       if (!touched) {
         continue;

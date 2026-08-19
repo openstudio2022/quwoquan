@@ -246,23 +246,24 @@ List<ContentPostViewData> _stableFollowingArticles() {
     _stableFollowingArticlePost(
       id: 'web-dev',
       title: '给新同事的 Web 工程工具清单',
-      body: '从构建、调试到部署，把最容易漏掉的环节集中整理成一页。',
+      summary: '从构建、调试到部署，把最容易漏掉的环节集中整理成一页。',
       coverUrl:
           'media/image/s/archived-image/post/fixture_article_001/v1/cover.png',
     ),
     _stableFollowingArticlePost(
       id: 'ritual_plain',
       title: '晨间复盘的十分钟礼记',
-      body: '把前一天的情绪、节奏和待办留在固定版式里，早晨更容易进入状态。',
+      summary: '把前一天的情绪、节奏和待办留在固定版式里，早晨更容易进入状态。',
     ),
     _stableFollowingArticlePost(
-      id: 'diffuse_cover_body_only',
-      body: '把路线、风向和停留时间直接写进正文里，让临场决定也能保持连贯。',
-      coverUrl: 'media/image/s/archived-image/post/fixture_article_001/v1/image-2.png',
+      id: 'diffuse_cover_summary_only',
+      summary: '把路线、风向和停留时间直接写进正文里，让临场决定也能保持连贯。',
+      coverUrl:
+          'media/image/s/archived-image/post/fixture_article_001/v1/image-2.png',
     ),
     _stableFollowingArticlePost(
-      id: 'journal_plain_body_only',
-      body: '没有标题也没有封面，仍然可以用正文首句承接整张卡片的信息层级。',
+      id: 'journal_plain_summary_only',
+      summary: '没有标题也没有封面，仍然可以用摘要承接整张卡片的信息层级。',
     ),
   ];
 }
@@ -270,7 +271,7 @@ List<ContentPostViewData> _stableFollowingArticles() {
 ContentPostViewData _stableFollowingArticlePost({
   required String id,
   String title = '',
-  required String body,
+  required String summary,
   String coverUrl = '',
 }) {
   return contentPostViewDataFromReadModelMap(<String, dynamic>{
@@ -282,16 +283,16 @@ ContentPostViewData _stableFollowingArticlePost({
     'authorId': 'fixture_user_current',
     'displayName': '测试作者',
     'title': title,
-    'body': body,
+    'summary': summary,
     'coverUrl': coverUrl,
     'imageUrl': coverUrl,
     'mediaCoverUrl': coverUrl,
     'createdAt': '2026-05-01T08:00:00Z',
     'articleTemplate': id == 'ritual_plain'
         ? 'ritual'
-        : id == 'diffuse_cover_body_only'
+        : id == 'diffuse_cover_summary_only'
         ? 'diffuse'
-        : id == 'journal_plain_body_only'
+        : id == 'journal_plain_summary_only'
         ? 'journal'
         : 'tech',
   });
@@ -735,14 +736,14 @@ void main() {
       final textOnlyCard = find.byKey(
         const ValueKey<String>('following-article-card-ritual_plain'),
       );
-      final bodyOnlyCoverCard = find.byKey(
+      final summaryOnlyCoverCard = find.byKey(
         const ValueKey<String>(
-          'following-article-card-diffuse_cover_body_only',
+          'following-article-card-diffuse_cover_summary_only',
         ),
       );
-      final bodyOnlyTextCard = find.byKey(
+      final summaryOnlyTextCard = find.byKey(
         const ValueKey<String>(
-          'following-article-card-journal_plain_body_only',
+          'following-article-card-journal_plain_summary_only',
         ),
       );
 
@@ -786,22 +787,22 @@ void main() {
         findsNothing,
       );
 
-      await _scrollUntilFinderVisible(tester, scrollable, bodyOnlyCoverCard);
+      await _scrollUntilFinderVisible(tester, scrollable, summaryOnlyCoverCard);
       await tester.pumpAndSettle();
-      expect(bodyOnlyCoverCard, findsOneWidget);
+      expect(summaryOnlyCoverCard, findsOneWidget);
       expect(
         find.descendant(
-          of: bodyOnlyCoverCard,
+          of: summaryOnlyCoverCard,
           matching: find.textContaining('弥散'),
         ),
         findsOneWidget,
       );
       expect(
         find.descendant(
-          of: bodyOnlyCoverCard,
+          of: summaryOnlyCoverCard,
           matching: find.byKey(
             const ValueKey<String>(
-              'following-article-thumbnail-diffuse_cover_body_only',
+              'following-article-thumbnail-diffuse_cover_summary_only',
             ),
           ),
         ),
@@ -809,28 +810,28 @@ void main() {
       );
       expect(
         find.descendant(
-          of: bodyOnlyCoverCard,
+          of: summaryOnlyCoverCard,
           matching: find.textContaining('把路线、风向和停留时间直接写进正文里'),
         ),
         findsOneWidget,
       );
 
-      await _scrollUntilFinderVisible(tester, scrollable, bodyOnlyTextCard);
+      await _scrollUntilFinderVisible(tester, scrollable, summaryOnlyTextCard);
       await tester.pumpAndSettle();
-      expect(bodyOnlyTextCard, findsOneWidget);
+      expect(summaryOnlyTextCard, findsOneWidget);
       expect(
         find.descendant(
-          of: bodyOnlyTextCard,
+          of: summaryOnlyTextCard,
           matching: find.textContaining('手帐'),
         ),
         findsOneWidget,
       );
       expect(
         find.descendant(
-          of: bodyOnlyTextCard,
+          of: summaryOnlyTextCard,
           matching: find.byKey(
             const ValueKey<String>(
-              'following-article-thumbnail-journal_plain_body_only',
+              'following-article-thumbnail-journal_plain_summary_only',
             ),
           ),
         ),
@@ -838,7 +839,7 @@ void main() {
       );
       expect(
         find.descendant(
-          of: bodyOnlyTextCard,
+          of: summaryOnlyTextCard,
           matching: find.textContaining('没有标题也没有封面'),
         ),
         findsOneWidget,

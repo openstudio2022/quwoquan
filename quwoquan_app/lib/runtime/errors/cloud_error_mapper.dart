@@ -19,7 +19,7 @@ class CloudErrorMapper {
   }) {
     return fromDecodedStatusCode(
       statusCode,
-      body: _decodeJsonBody(body),
+      body: _tryDecodeJsonBody(body),
       requestPath: requestPath,
       retryAfter: retryAfter,
     );
@@ -38,7 +38,7 @@ class CloudErrorMapper {
   }) {
     final code = _readCodeFromDecoded(body);
     final domainErrorCode = DomainErrorCodeRegistry.fromCode(code);
-    final runtimeResponse = _readRuntimeErrorResponseFromDecoded(
+    final runtimeResponse = _tryReadRuntimeErrorResponseFromDecoded(
       body,
       transportStatus: statusCode,
     );
@@ -321,7 +321,7 @@ class CloudErrorMapper {
   }) {
     return runtimeFailureFromDecodedStatusCode(
       statusCode,
-      body: _decodeJsonBody(body),
+      body: _tryDecodeJsonBody(body),
       requestPath: requestPath,
     );
   }
@@ -331,7 +331,7 @@ class CloudErrorMapper {
     Object? body,
     String? requestPath,
   }) {
-    final parsedResponse = _readRuntimeErrorResponseFromDecoded(
+    final parsedResponse = _tryReadRuntimeErrorResponseFromDecoded(
       body,
       transportStatus: statusCode,
     );
@@ -392,7 +392,7 @@ class CloudErrorMapper {
     return null;
   }
 
-  static RuntimeErrorResponse? _readRuntimeErrorResponseFromDecoded(
+  static RuntimeErrorResponse? _tryReadRuntimeErrorResponseFromDecoded(
     Object? body, {
     int? transportStatus,
   }) {
@@ -412,13 +412,13 @@ class CloudErrorMapper {
   }
 
   static String? parsedUserMessage(String? body) {
-    return _parsedUserMessageFromDecoded(_decodeJsonBody(body));
+    return _parsedUserMessageFromDecoded(_tryDecodeJsonBody(body));
   }
 
   static String? _parsedUserMessageFromDecoded(Object? body) {
     return _parsedUserMessageFromDecodedBody(
       body,
-      _readRuntimeErrorResponseFromDecoded(body),
+      _tryReadRuntimeErrorResponseFromDecoded(body),
     );
   }
 
@@ -441,7 +441,7 @@ class CloudErrorMapper {
   }
 }
 
-Object? _decodeJsonBody(String? body) {
+Object? _tryDecodeJsonBody(String? body) {
   if (body == null || body.isEmpty) return null;
   try {
     return jsonDecode(body);

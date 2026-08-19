@@ -110,11 +110,10 @@
 ## 7. 开放事项
 
 <a id="open-001"></a>
-### OPEN-001 生产搜索 DeepLink 与非空语料闭环
+### OPEN-001 全栈搜索真实投影与语料闭环
 
-- 类型：`capability_gap`
+- 类型：`external_blocker`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：仍缺各 owner 生产投影的 canonical `Document.DeepLink` 与 article/image/video 非空搜索语料。缺 DeepLink 时 owner hit 无法形成契约要求的 action，测试 fixture 自带链接不得替代生产投影；缺 canonical release 导入时 ES 无法证明多载体查询。
-- 完成判定：`GWT-003.t5` 的全栈冒烟 CaseResult 证明各 owner 投影按 `link_templates.yaml` 生成 DeepLink，user 投影 contracts-first 提供 `userHandle`，canonical release 导入后 ES 的 article/image/video、entity homepage 与 user profile 均有非空命中；同一 runner 同时覆盖 `GWT-003.t1/t2/t4/t5` 并返回 passed。
-- 依赖：owner 投影事件与 DeepLink codegen、canonical release 导入、SearchPage 与真实 search-service handler。
+- 影响或价值：尚缺全部 owner 生产投影的 canonical `Document.DeepLink`，缺失时 owner hit 的 `action` 为空且 api-edge 必须按 `fields.yaml` 的 `action NOT_NULL` fail-closed。`user.profile` 投影还缺 contracts-first 的 `userHandle`。canonical release 的 source identity 与 pool admission 未闭合时，ES 也缺少 article、image、video 的真实语料。测试 fixture 自带 DeepLink 或非 canonical URL 不得替代真实 owner 投影与 release 导入。
+- 完成判定：`GWT-003.t5` 的全栈冒烟 CaseResult 半区满足——各 owner 投影补齐 canonical DeepLink（user 侧 contracts-first 加 `userHandle`）并 backfill 重放、api-edge 集成测试 owner 替身与真实 search-service handler 同源化、数据迁移收口后 canonical release 导入使 ES `content.post`（article/image/video）、`entity.homepage`、`user.profile` doc count > 0，执行冒烟 runner（覆盖 `GWT-003.t1`、`GWT-003.t2`、`GWT-003.t4`、`GWT-003.t5`），`status=passed` 且非空命中，归档 `.qwq_output/env/repo/runs/search-fullstack-smoke/`。
