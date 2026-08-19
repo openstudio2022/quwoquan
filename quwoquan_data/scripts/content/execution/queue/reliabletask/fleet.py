@@ -14,6 +14,10 @@ from core.io import read_json, write_json
 from core.paths import OUTPUT_ROOT, PUBLISH_ROOT, REPO_ROOT
 from core.python_environment import resolve_data_agent_python
 from core.schema import assert_valid
+from governance.coverage.distribution import (
+    ProductLifecycleState,
+    load_content_distribution_policy,
+)
 
 from content.execution.queue.backend import load_execution_queue_backend
 from content.execution.queue.core import _load_jobs
@@ -257,6 +261,11 @@ def build_fleet_request(
         "partitionCount": job_set_envelope["partitionCount"],
         "partitionAlgorithm": job_set_envelope["partitionAlgorithm"],
         "checkpointPolicy": job_set_envelope["checkpointPolicy"],
+        "requireCommercial": (
+            stage is QueueJobStage.PUBLISH
+            and load_content_distribution_policy().product_lifecycle_state
+            is ProductLifecycleState.COMMERCIAL
+        ),
         "recoverDeadTasks": recover_dead_tasks,
         "objectTimeoutMilliseconds": object_timeout_seconds * 1000,
         "globalRequiredQuota": global_required_quota,

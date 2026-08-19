@@ -49,7 +49,7 @@ if TYPE_CHECKING:
 
 
 CAMPAIGN_CARRIERS = ("homepage", "article", "image", "video")
-LaneRunner = Callable[[list[str], Path, dict[str, str], Path, float], int]
+LaneRunner = Callable[[list[str], Path, dict[str, str], Path, float | None], int]
 PhaseResultCallback = Callable[[str, tuple[int, str | None]], None]
 _LANE_SLICE_YIELD_CODE = 10
 _LANE_PROCESS_SAMPLE_SECONDS = 5.0
@@ -189,7 +189,7 @@ def _default_lane_runner(
     cwd: Path,
     env: dict[str, str],
     log_path: Path,
-    timeout_seconds: float,
+    timeout_seconds: float | None,
     *,
     run_session: CampaignRunSession,
     workspace: CampaignLaneWorkspace,
@@ -200,11 +200,15 @@ def _default_lane_runner(
     slice_count = 0
     max_rss_bytes = 0
     last_execution_heartbeat_at: str | None = None
+
+    def remaining_seconds(elapsed: float) -> float | None:
+        return None if timeout_seconds is None else timeout_seconds - elapsed
+
     with log_path.open("w", encoding="utf-8") as log:
         while True:
             elapsed = time.monotonic() - started
-            remaining = timeout_seconds - elapsed
-            if remaining <= 0:
+            remaining = remaining_seconds(elapsed)
+            if remaining is not None and remaining <= 0:
                 raise subprocess.TimeoutExpired(command, timeout_seconds)
             proc = subprocess.Popen(
                 command,
@@ -235,13 +239,17 @@ def _default_lane_runner(
             try:
                 while True:
                     elapsed = time.monotonic() - started
-                    remaining = timeout_seconds - elapsed
-                    if remaining <= 0:
+                    remaining = remaining_seconds(elapsed)
+                    if remaining is not None and remaining <= 0:
                         raise subprocess.TimeoutExpired(command, timeout_seconds)
                     try:
                         code = int(
                             proc.wait(
-                                timeout=min(_LANE_PROCESS_SAMPLE_SECONDS, remaining)
+                                timeout=(
+                                    _LANE_PROCESS_SAMPLE_SECONDS
+                                    if remaining is None
+                                    else min(_LANE_PROCESS_SAMPLE_SECONDS, remaining)
+                                )
                             )
                         )
                         break
@@ -342,14 +350,14 @@ def _default_lane_runner(
             log.flush()
 
 
-def _run_lane(
+def run_lane(
     workspace: CampaignLaneWorkspace,
     submission: dict[str, Any],
     *,
     stage: str,
     runtime: CampaignRuntimePaths,
     root_execution_id: str,
-    timeout_seconds: float,
+    timeout_seconds: float | None,
     lane_runner: LaneRunner | None,
     run_session: CampaignRunSession,
     observer_binary_binding: ReliableTaskObserverBinaryBinding | None,
@@ -522,8 +530,7 @@ def run_phase(
     stage: str,
     runtime: CampaignRuntimePaths,
     root_execution_id: str,
-    timeout_seconds: float,
-    worker_count: int,
+    timeout_seconds: float | None,
     lane_runner: LaneRunner | None = None,
     run_session: CampaignRunSession,
     observer_binary_binding: ReliableTaskObserverBinaryBinding | None = None,
@@ -531,19 +538,25 @@ def run_phase(
     carriers: tuple[str, ...] | None = None,
     on_result: PhaseResultCallback | None = None,
 ) -> dict[str, tuple[int, str | None]]:
-    selected = CAMPAIGN_CARRIERS if carriers is None else carriers
+    selected = (
+        tuple(carrier for carrier in CAMPAIGN_CARRIERS if carrier in submissions)
+        if carriers is None
+        else carriers
+    )
     unknown = [carrier for carrier in selected if carrier not in CAMPAIGN_CARRIERS]
     if unknown:
         raise ValueError(f"campaign phase carriers are invalid: {', '.join(unknown)}")
     results: dict[str, tuple[int, str | None]] = {}
     if not selected:
         return results
-    pool = ThreadPoolExecutor(max_workers=max(1, min(worker_count, len(selected))))
+    # 每个活跃 workload 都是独立可调度的执行体，不存在一个静态 worker 上限来
+    # 决定几条车道可以同时在跑：本阶段选中的车道数就是并发面（DEC-002）。
+    pool = ThreadPoolExecutor(max_workers=len(selected))
     futures = {}
     try:
         futures = {
             pool.submit(
-                _run_lane,
+                run_lane,
                 workspaces[carrier],
                 submissions[carrier],
                 stage=stage,
@@ -580,5 +593,6 @@ __all__ = [
     "CAMPAIGN_CARRIERS",
     "LaneRunner",
     "PhaseResultCallback",
+    "run_lane",
     "run_phase",
 ]

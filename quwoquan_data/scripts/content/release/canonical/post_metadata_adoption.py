@@ -25,6 +25,7 @@ from content.release.canonical.object_transaction_contract import (
     PACKAGE_SCHEMA,
     _closure_digest,
     _copy_tree,
+    _document_tree_digest,
     _read_json,
     _review_binding,
     _safe_id,
@@ -167,7 +168,9 @@ def apply_post_metadata_adoption(
         dry_run_attestation_sha256=str(audit["dryRunAttestationSha256"]),
     )
     target_root = publish_root / "posts" / str(prepared["targetObjectRef"])
-    if _tree_digest(target_root) != _tree_digest(package_root / "object"):
+    if _document_tree_digest(target_root) != _document_tree_digest(
+        package_root / "object"
+    ):
         raise PostMetadataAdoptionError(
             "DATA.POOL.METADATA_ADOPTION_READBACK_DRIFT"
         )

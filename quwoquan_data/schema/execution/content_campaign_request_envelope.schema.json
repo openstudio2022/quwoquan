@@ -218,9 +218,6 @@
         "receiptDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
       }
     },
-    "m100AlphaAcceptance": {
-      "$ref": "m100_alpha_acceptance_binding.schema.json"
-    },
     "allowedStage": { "const": "submit-only" },
     "operatorPrompt": { "type": "string", "minLength": 1 },
     "requestDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
@@ -234,30 +231,6 @@
       },
       "then": {
         "required": ["semanticPreflightReceipt"]
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "scale": { "enum": ["M1000", "M10000"] },
-          "vertical": { "const": "travel" }
-        },
-        "required": ["scale", "vertical"]
-      },
-      "then": {
-        "required": ["researchScalePromotion"]
-      }
-    },
-    {
-      "if": {
-        "properties": {"scale": {"const": "M1000"}},
-        "required": ["scale"]
-      },
-      "then": {
-        "required": ["m100AlphaAcceptance"]
-      },
-      "else": {
-        "not": {"required": ["m100AlphaAcceptance"]}
       }
     },
     {

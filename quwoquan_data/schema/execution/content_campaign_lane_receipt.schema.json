@@ -108,6 +108,28 @@
           }
         }
       }
+    },
+    "reviewQualifiedCount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "publish 阶段回执携带的评审合格对象数，必须等于同回执的 qualifiedCount；finalizedCount 与 publishDiscards 之和必须等于它，否则判为对象结局漂移。"
+    },
+    "publishDiscards": {
+      "type": "array",
+      "description": "评审已合格但在发布阶段被 typed 排除的对象。与 discards 不同：discards 是评审阶段的排除口径。",
+      "items": {
+        "type": "object",
+        "required": ["objectRef", "issues"],
+        "additionalProperties": false,
+        "properties": {
+          "objectRef": { "type": "string", "minLength": 1 },
+          "issues": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
     }
   },
   "allOf": [
@@ -143,6 +165,16 @@
               "required": [
                 "campaignFencingToken"
               ]
+            },
+            {
+              "required": [
+                "reviewQualifiedCount"
+              ]
+            },
+            {
+              "required": [
+                "publishDiscards"
+              ]
             }
           ]
         },
@@ -161,7 +193,9 @@
         "required": [
           "campaignRunId",
           "campaignGeneration",
-          "campaignFencingToken"
+          "campaignFencingToken",
+          "reviewQualifiedCount",
+          "publishDiscards"
         ],
         "oneOf": [
           {

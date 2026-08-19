@@ -69,12 +69,229 @@ def resolve_frozen_selection(
     return selection
 
 
+EXTERNAL_MEDIA_CARRIERS: tuple[str, ...] = ("image", "video")
+
+
 def predecessor_target_names_without_target_set(
     retry_of: str | None,
 ) -> tuple[str, ...] | None:
     return submission_only_predecessor_target_names(
         retry_of
     ) or terminal_campaign_predecessor_target_names(retry_of)
+
+
+def _external_media_scope_block(retry_of: str, detail: str) -> SystemExit:
+    return SystemExit(
+        f"[task execute] GATE_BLOCK retryOf={retry_of}: "
+        f"EXTERNAL_MEDIA_RETRY_SCOPE_INVALID {detail}"
+    )
+
+
+def frozen_campaign_retry_request(
+    retry_of: str,
+    *,
+    carrier: str,
+    campaign_envelope: str | None,
+    campaign_root_execution_id: str | None,
+) -> dict[str, Any]:
+    """Load the exact campaign request this retry lane was frozen against."""
+    from content.execution.campaign import request_envelope_io
+    from content.execution.campaign import submission as campaign_submission
+
+    envelope_ref = str(campaign_envelope or "").strip()
+    if envelope_ref:
+        try:
+            payload = request_envelope_io.load_campaign_envelope(Path(envelope_ref))
+        except (OSError, TypeError, ValueError) as exc:
+            raise _external_media_scope_block(retry_of, str(exc)) from exc
+    else:
+        root_execution_id = str(campaign_root_execution_id or "").strip()
+        if not root_execution_id:
+            raise _external_media_scope_block(
+                retry_of,
+                "campaign lane retry requires --campaign-envelope or "
+                "--campaign-root-execution-id",
+            )
+        try:
+            submissions = campaign_submission.load_submissions(root_execution_id)
+        except (OSError, TypeError, ValueError) as exc:
+            raise _external_media_scope_block(retry_of, str(exc)) from exc
+        payload = submissions.get(carrier)
+    if not isinstance(payload, dict):
+        raise _external_media_scope_block(
+            retry_of, f"{carrier} campaign request is missing"
+        )
+    return payload
+
+
+def _frozen_campaign_target_names(
+    request: dict[str, Any],
+    retry_of: str,
+    *,
+    execution_id: str,
+    carrier: str,
+    block: Callable[[str, str], SystemExit],
+) -> tuple[str, ...]:
+    if (
+        str(request.get("executionId") or "") != execution_id
+        or str(request.get("carrier") or "") != carrier
+        or str(request.get("retryOf") or "") != retry_of
+    ):
+        raise block(retry_of, "campaign request lane identity drift")
+    names = request.get("targetNames")
+    if not isinstance(names, list) or any(
+        not isinstance(name, str) or not name.strip() for name in names
+    ):
+        raise block(retry_of, "campaign request targetNames are invalid")
+    resolved = tuple(names)
+    if len(set(resolved)) != len(resolved):
+        raise block(retry_of, "campaign request targetNames repeat an entity")
+    return resolved
+
+
+def external_media_retry_target_names(
+    retry_of: str,
+    *,
+    execution_id: str,
+    carrier: str,
+    requested_target_names: tuple[str, ...],
+    campaign_envelope: str | None,
+    campaign_root_execution_id: str | None,
+) -> tuple[str, ...]:
+    """Scope an image/video retry to its own frozen campaign request.
+
+    An external-media lane carries its work in `externalInputRefs`, so its
+    `targetNames` is legitimately empty and the predecessor frozen target set
+    holds no entity rows to inherit.  Reading the predecessor here would invent
+    targets the lane never requested.
+    """
+    request = frozen_campaign_retry_request(
+        retry_of,
+        carrier=carrier,
+        campaign_envelope=campaign_envelope,
+        campaign_root_execution_id=campaign_root_execution_id,
+    )
+    return external_media_retry_scope_names(
+        request,
+        retry_of,
+        execution_id=execution_id,
+        carrier=carrier,
+        requested_target_names=requested_target_names,
+    )
+
+
+def external_media_retry_scope_names(
+    request: dict[str, Any],
+    retry_of: str,
+    *,
+    execution_id: str,
+    carrier: str,
+    requested_target_names: tuple[str, ...],
+) -> tuple[str, ...]:
+    if carrier not in EXTERNAL_MEDIA_CARRIERS:
+        raise _external_media_scope_block(
+            retry_of, f"{carrier} is not an external-media carrier"
+        )
+    names = _frozen_campaign_target_names(
+        request,
+        retry_of,
+        execution_id=execution_id,
+        carrier=carrier,
+        block=_external_media_scope_block,
+    )
+    refs = request.get("externalInputRefs")
+    if not isinstance(refs, list) or not refs:
+        raise _external_media_scope_block(
+            retry_of, "campaign request externalInputRefs are missing"
+        )
+    if requested_target_names and requested_target_names != names:
+        raise _external_media_scope_block(
+            retry_of, "--target must match the frozen campaign targetNames exactly"
+        )
+    return names
+
+
+def _reconciled_scope_block(retry_of: str, detail: str) -> SystemExit:
+    return SystemExit(
+        f"[task execute] GATE_BLOCK retryOf={retry_of}: "
+        f"RECONCILED_CAMPAIGN_RETRY_SCOPE_INVALID {detail}"
+    )
+
+
+def reconciled_campaign_retry_target_names(
+    retry_of: str,
+    *,
+    execution_id: str,
+    carrier: str,
+    count: int,
+    quota: int,
+    requested_target_names: tuple[str, ...],
+    campaign_envelope: str | None,
+    campaign_root_execution_id: str | None = None,
+) -> tuple[str, ...]:
+    """Scope a reconciled-campaign retry to the exact frozen envelope subset."""
+    request = frozen_campaign_retry_request(
+        retry_of,
+        carrier=carrier,
+        campaign_envelope=campaign_envelope,
+        campaign_root_execution_id=campaign_root_execution_id,
+    )
+    return reconciled_campaign_retry_scope_names(
+        request,
+        retry_of,
+        execution_id=execution_id,
+        carrier=carrier,
+        count=count,
+        quota=quota,
+        requested_target_names=requested_target_names,
+    )
+
+
+def reconciled_campaign_retry_scope_names(
+    request: dict[str, Any],
+    retry_of: str,
+    *,
+    execution_id: str,
+    carrier: str,
+    count: int,
+    quota: int,
+    requested_target_names: tuple[str, ...],
+) -> tuple[str, ...]:
+    reconciliation = request.get("predecessorReconciliation")
+    if not isinstance(reconciliation, dict):
+        raise _reconciled_scope_block(
+            retry_of, "campaign request declares no predecessorReconciliation"
+        )
+    if not str(
+        reconciliation.get("predecessorRootExecutionId") or ""
+    ).strip() or not str(reconciliation.get("receiptDigest") or "").strip():
+        raise _reconciled_scope_block(
+            retry_of, "predecessorReconciliation reference is incomplete"
+        )
+    names = _frozen_campaign_target_names(
+        request,
+        retry_of,
+        execution_id=execution_id,
+        carrier=carrier,
+        block=_reconciled_scope_block,
+    )
+    if not names:
+        raise _reconciled_scope_block(
+            retry_of, "reconciled campaign retry requires an exact entity subset"
+        )
+    if request.get("count") != count or request.get("quota") != quota:
+        raise _reconciled_scope_block(
+            retry_of, "--count/--quota must match the frozen campaign request"
+        )
+    if len(names) > count:
+        raise _reconciled_scope_block(
+            retry_of, f"reconciled entity pool {len(names)} exceeds --count {count}"
+        )
+    if requested_target_names and requested_target_names != names:
+        raise _reconciled_scope_block(
+            retry_of, "--target must match the frozen campaign targetNames exactly"
+        )
+    return names
 
 
 def retry_target_names(
@@ -94,11 +311,11 @@ def retry_target_names(
     except FileNotFoundError as exc:
         reconciled_names = predecessor_target_names_without_target_set(retry_of)
         if reconciled_names is not None:
-            if not quota <= len(reconciled_names) <= count:
+            if len(reconciled_names) > count:
                 raise SystemExit(
                     f"[task execute] GATE_BLOCK retryOf={retry_of}: "
-                    f"reconciled candidate pool {len(reconciled_names)} must stay "
-                    f"inside [--quota {quota}, --count {count}]"
+                    f"reconciled entity pool {len(reconciled_names)} exceeds "
+                    f"--count {count}"
                 ) from exc
             if requested_target_names and requested_target_names != reconciled_names:
                 raise SystemExit(
@@ -137,11 +354,12 @@ def retry_target_names(
             f"[task execute] GATE_BLOCK retryOf={retry_of}: "
             "previous frozen target names are invalid"
         )
-    if not quota <= len(inherited_names) <= count:
+    # --count bounds the entity pool while --quota counts approved objects, so a
+    # multi-object carrier legitimately runs quota > entities.
+    if len(inherited_names) > count:
         raise SystemExit(
             f"[task execute] GATE_BLOCK retryOf={retry_of}: "
-            f"inherited candidate pool {len(inherited_names)} must stay inside "
-            f"[--quota {quota}, --count {count}]"
+            f"inherited entity pool {len(inherited_names)} exceeds --count {count}"
         )
     if requested_target_names and requested_target_names != inherited_names:
         raise SystemExit(
@@ -376,6 +594,36 @@ def handle_execute(
             publish_root=PUBLISH_ROOT,
         )
     requested_target_names = tuple(getattr(args, "target_names", ()) or ())
+    carrier = identity.content_type.value
+    campaign_envelope_ref = (
+        str(getattr(args, "campaign_envelope", "") or "").strip() or None
+    )
+    campaign_root_ref = (
+        str(getattr(args, "campaign_root_execution_id", "") or "").strip() or None
+    )
+    campaign_retry_request: dict[str, Any] | None = None
+    if (
+        retry_of
+        and not execution_exists
+        and rewrite_binding is None
+        and unfinished_scope is None
+        and (campaign_envelope_ref or carrier in EXTERNAL_MEDIA_CARRIERS)
+        and (campaign_envelope_ref or campaign_root_ref)
+    ):
+        campaign_retry_request = frozen_campaign_retry_request(
+            retry_of,
+            carrier=carrier,
+            campaign_envelope=campaign_envelope_ref,
+            campaign_root_execution_id=campaign_root_ref,
+        )
+    retry_external_media_scope = (
+        campaign_retry_request is not None and carrier in EXTERNAL_MEDIA_CARRIERS
+    )
+    reconciled_campaign_retry_scope = (
+        campaign_retry_request is not None
+        and not retry_external_media_scope
+        and isinstance(campaign_retry_request.get("predecessorReconciliation"), dict)
+    )
     if rewrite_binding is not None:
         if identity.content_type.value == "homepage":
             raise SystemExit(
@@ -401,6 +649,26 @@ def handle_execute(
                 load_frozen_target_set=owner.load_frozen_target_set,
             )
         )
+    elif retry_external_media_scope:
+        target_names = external_media_retry_scope_names(
+            campaign_retry_request or {},
+            retry_of or "",
+            execution_id=execution_id,
+            carrier=identity.content_type.value,
+            requested_target_names=requested_target_names,
+        )
+        inherited_targets = ()
+    elif reconciled_campaign_retry_scope:
+        target_names = reconciled_campaign_retry_scope_names(
+            campaign_retry_request or {},
+            retry_of or "",
+            execution_id=execution_id,
+            carrier=identity.content_type.value,
+            count=count,
+            quota=quota,
+            requested_target_names=requested_target_names,
+        )
+        inherited_targets = ()
     else:
         if unfinished_scope is not None:
             if count != len(unfinished_scope.target_names) or quota != count:
@@ -437,6 +705,7 @@ def handle_execute(
     submission_only_predecessor = bool(
         retry_of
         and not execution_exists
+        and campaign_retry_request is None
         and not inherited_targets
         and predecessor_target_names_without_target_set(retry_of) is not None
     )
@@ -475,6 +744,7 @@ def handle_execute(
             target_names=target_names,
             inherited_targets=inherited_targets,
             retry_submission_only_predecessor=submission_only_predecessor,
+            retry_external_media_scope=retry_external_media_scope,
             topic=getattr(args, "topic", None),
             source_providers=tuple(getattr(args, "source_providers", ()) or ()),
             vertical=identity.vertical,

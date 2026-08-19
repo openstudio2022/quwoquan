@@ -10,6 +10,7 @@ def validate_per_target_quotas(
     per_target_articles: int,
     per_target_images: int,
     per_target_videos: int,
+    commercial_closure: bool,
     separated_research: bool,
     required_article_intents: list[str],
 ) -> list[str]:
@@ -24,7 +25,7 @@ def validate_per_target_quotas(
                     f"{target}: entityArticlesPerTarget ceiling {per_target_articles} "
                     f"but packet has {len(articles)}"
                 )
-            elif len(articles) < per_target_articles:
+            elif len(articles) < per_target_articles and not commercial_closure:
                 issues.append(
                     f"{target}: entityArticlesPerTarget quota {per_target_articles} "
                     f"but packet has {len(articles)}"
@@ -47,6 +48,7 @@ def validate_per_target_quotas(
             )
         if (
             not separated_research
+            and not commercial_closure
             and required_article_intents
             and per_target_articles == len(required_article_intents)
         ):

@@ -8,6 +8,7 @@ from core.io import read_json
 from core.paths import execution_root, release_root
 from core.release_layout import payload_file
 from content.release.canonical.integrity import release_integrity_issues
+from governance.coverage.license import rights_proof_required
 
 _ROOT_ALLOWED = {"release_manifest.json", "evidence_index.json", "entities", "posts"}
 _OBJECT_ALLOWED = {
@@ -197,12 +198,24 @@ def _post_contract_issues(leaf: Path, root: Path, manifest: dict) -> list[str]:
         if not vertical:
             issues.append(f"{rel}: image post missing vertical policy owner")
             return issues
+        require_rights_proof = rights_proof_required(vertical)
         required_source_fields = ["sourceCollectionId", "creator", "collectionPageUrl"]
+        if require_rights_proof:
+            required_source_fields.append("license")
         for field in required_source_fields:
             value = source_facts[field]
             if value is None:
                 issues.append(f"{rel}: image source contract missing {field}")
-        if str(
+        if (
+            require_rights_proof
+            and source_facts["termsUrl"] is None
+            and source_facts["authorizationProof"] is None
+        ):
+            issues.append(
+                f"{rel}: image source contract missing license proof "
+                "(termsUrl or authorizationProof)"
+            )
+        if not require_rights_proof and str(
             manifest.get("rightsAuditStatus") or ""
         ) not in {"verified", "unverified", "restricted", "unknown"}:
             issues.append(f"{rel}: image source contract missing rightsAuditStatus")
@@ -235,20 +248,26 @@ def _post_contract_issues(leaf: Path, root: Path, manifest: dict) -> list[str]:
         ]
         if not video_assets:
             issues.append(f"{rel}: video work must contain a kind=video asset")
+        assets_by_id = {
+            str(asset.get("assetId") or "").strip(): asset
+            for asset in assets
+            if isinstance(asset, dict) and str(asset.get("assetId") or "").strip()
+        }
         for asset in video_assets:
             asset_id = str(asset.get("assetId") or asset.get("fileName") or "<unknown>").strip()
-            has_video_ref = any(
-                str(asset.get(field) or "").strip()
-                for field in ("cdnUrl", "objectKey", "videoUrl", "videoAssetId")
-            )
-            if not has_video_ref:
-                issues.append(f"{rel}: video asset {asset_id} missing videoUrl/objectKey/cdnUrl")
-            has_cover_ref = any(
-                str(asset.get(field) or "").strip()
-                for field in ("thumbnailUrl", "coverUrl")
-            )
-            if not has_cover_ref:
-                issues.append(f"{rel}: video asset {asset_id} missing thumbnailUrl or coverUrl")
+            if not str(asset.get("objectKey") or "").strip():
+                issues.append(f"{rel}: video asset {asset_id} missing CAS objectKey")
+            poster_id = str(asset.get("posterAssetId") or "").strip()
+            poster = assets_by_id.get(poster_id)
+            if (
+                not poster_id
+                or not isinstance(poster, dict)
+                or str(poster.get("kind") or "").strip() != "image"
+                or str(poster.get("role") or "").strip() != "cover"
+            ):
+                issues.append(
+                    f"{rel}: video asset {asset_id} posterAssetId must resolve to an image cover asset"
+                )
     else:
         if not article_path.is_file():
             issues.append(f"{rel}: article work missing article.md")
@@ -260,12 +279,21 @@ def _post_contract_issues(leaf: Path, root: Path, manifest: dict) -> list[str]:
         if not isinstance(asset, dict):
             issues.append(f"{rel}: manifest asset must be an object")
             continue
+        for field in ("cdnUrl", "thumbnailUrl", "coverUrl", "videoUrl"):
+            if str(asset.get(field) or "").strip():
+                issues.append(f"{rel}: canonical asset must not contain environment URL field {field}")
         caption = asset.get("caption", "")
         if is_image and (not isinstance(caption, str) or len(caption) > 300):
             issues.append(f"{rel}: image asset caption must be a string with at most 300 characters")
         file_name = str(asset.get("fileName") or "")
-        if not file_name or not (leaf / "assets" / file_name).is_file():
-            issues.append(f"{rel}: asset file missing: assets/{file_name or '<empty>'}")
+        relative_file = Path(file_name)
+        if relative_file.is_absolute() or ".." in relative_file.parts:
+            issues.append(f"{rel}: unsafe asset file path: {file_name or '<empty>'}")
+            continue
+        direct = leaf / relative_file
+        nested = leaf / "assets" / relative_file
+        if not file_name or (not direct.is_file() and not nested.is_file()):
+            issues.append(f"{rel}: asset file missing: {file_name or '<empty>'}")
     return issues
 
 

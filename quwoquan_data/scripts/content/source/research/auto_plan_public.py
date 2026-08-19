@@ -157,6 +157,7 @@ def write_auto_research_plans(
     entity_type: str,
     force: bool = False,
     lanes: set[str] | None = None,
+    max_workers: int | None = None,
     progress_callback: Callable[[dict[str, Any]], None] | None = None,
     external_input_context: Any | None = None,
 ) -> dict[str, Any]:
@@ -180,7 +181,9 @@ def write_auto_research_plans(
     from core.runtime_policy import active_runtime_policy
 
     runtime_policy = active_runtime_policy()
-    workers = len(entity_ids)
+    # 并发上限只来自调用方冻结的 calibration；缺省退化为逐实体一线程，运行时策略
+    # 不再持有静态 worker 数（见 DEC-002 单轨容量）。
+    workers = max_workers or len(entity_ids)
 
     def emit_progress(
         status: str,
@@ -267,7 +270,7 @@ def write_auto_research_plans(
         results: dict[str, dict[str, Any]] = {}
         completed_entity_ids: list[str] = []
         base_report = _read_existing_auto_research_report(execution_id)
-        executor = ThreadPoolExecutor(max_workers=len(entity_ids))
+        executor = ThreadPoolExecutor(max_workers=min(workers, len(entity_ids)))
         futures = {}
         shutdown_wait = True
         try:

@@ -6,11 +6,11 @@ import fcntl
 import hashlib
 import json
 import subprocess
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 from core import paths
 from core.io import read_json, write_json
@@ -25,8 +25,10 @@ from content.execution.campaign.external_inputs import (
     external_inputs_digest,
     verify_external_input_refs,
 )
-from content.execution.campaign.m100_alpha_acceptance import (
-    validate_m100_alpha_acceptance_binding,
+from content.execution.campaign.lane import (
+    CAMPAIGN_CARRIERS,
+    normalize_active_carriers,
+    normalize_workloads,
 )
 from content.execution.campaign.scale import execution_campaign_scale
 from content.execution.closure.adoption_campaign_contract import (
@@ -166,6 +168,82 @@ def _assert_no_cross_campaign_collision(
             )
 
 
+class _FrozenWorkload(NamedTuple):
+    workload_mode: str
+    active_carriers: tuple[str, ...]
+    workloads: dict[str, int]
+
+
+def _frozen_workload(
+    campaign_envelope: Mapping[str, Any] | None,
+    *,
+    carrier: str,
+    quota: int,
+    active_carriers: Iterable[str] | None,
+    workloads: Mapping[str, int] | None,
+    workload_mode: str,
+) -> _FrozenWorkload:
+    """Resolve the one active workload this submission is allowed to join.
+
+    An immutable campaign envelope already froze the workload, so it is the only
+    authority once present; a CLI-supplied workload may then only reproduce it
+    byte-for-byte.  Without an envelope the caller states the workload directly,
+    and an unstated carrier subset means the complete canonical preset, which is
+    the same rule ``freeze_campaign_request_envelopes`` applies.
+    """
+
+    if campaign_envelope is not None:
+        frozen = _FrozenWorkload(
+            str(campaign_envelope["workloadMode"]),
+            normalize_active_carriers(campaign_envelope["activeCarriers"]),
+            normalize_workloads(
+                campaign_envelope["workloads"],
+                active_carriers=normalize_active_carriers(
+                    campaign_envelope["activeCarriers"]
+                ),
+            ),
+        )
+        requested = (
+            None
+            if active_carriers is None
+            else normalize_active_carriers(active_carriers)
+        )
+        if (
+            (requested is not None and requested != frozen.active_carriers)
+            or (
+                workloads is not None
+                and normalize_workloads(
+                    workloads,
+                    active_carriers=frozen.active_carriers,
+                )
+                != frozen.workloads
+            )
+            or workload_mode not in {"explicit", frozen.workload_mode}
+        ):
+            raise ValueError(
+                "GATE_BLOCK DATA.CAMPAIGN.EXTERNAL_INPUT_IDENTITY_DRIFT: "
+                "CLI active workload differs from the immutable campaign envelope"
+            )
+    else:
+        if workload_mode not in {"explicit", "milestone_preset"}:
+            raise ValueError(f"unsupported campaign workload mode: {workload_mode}")
+        active = normalize_active_carriers(active_carriers or CAMPAIGN_CARRIERS)
+        if workload_mode == "milestone_preset" and active != CAMPAIGN_CARRIERS:
+            raise ValueError("milestone preset must expand all campaign carriers")
+        frozen = _FrozenWorkload(
+            workload_mode,
+            active,
+            (
+                {selected: quota for selected in active}
+                if workloads is None
+                else normalize_workloads(workloads, active_carriers=active)
+            ),
+        )
+    if carrier not in frozen.active_carriers:
+        raise ValueError(f"campaign submission carrier {carrier} is not active")
+    return frozen
+
+
 def write_submission(
     *,
     root_execution_id: str,
@@ -179,15 +257,42 @@ def write_submission(
     semantic_selection_id: str | None = None,
     semantic_preflight_receipt: Path | None = None,
     semantic_preflight_output_root: Path | None = None,
+    active_carriers: Iterable[str] | None = None,
+    workloads: Mapping[str, int] | None = None,
+    workload_mode: str = "explicit",
+    retry_unfinished_refs: Iterable[str] = (),
 ) -> Path:
     source_repo = (repo_root or paths.REPO_ROOT).resolve()
     campaigns_dir = root or campaigns_root()
     root_identity = parse_execution_id(root_execution_id)
-    if root_identity.content_type.value != "homepage":
-        raise ValueError("campaign root must use the homepage execution identity")
     identity = parse_execution_id(execution_id)
     if identity.vertical != root_identity.vertical:
         raise ValueError("campaign lanes must use the same vertical")
+    frozen_workload = _frozen_workload(
+        campaign_envelope,
+        carrier=identity.content_type.value,
+        quota=request.quota,
+        active_carriers=active_carriers,
+        workloads=workloads,
+        workload_mode=workload_mode,
+    )
+    if root_identity.content_type.value != frozen_workload.active_carriers[0]:
+        raise ValueError(
+            "campaign root must use the first active carrier execution identity"
+        )
+    if frozen_workload.workloads[identity.content_type.value] != request.quota:
+        raise ValueError(
+            "campaign lane quota must equal its frozen active workload quota"
+        )
+    unfinished_refs = [str(ref).strip() for ref in retry_unfinished_refs]
+    if any(not ref for ref in unfinished_refs) or len(set(unfinished_refs)) != len(
+        unfinished_refs
+    ):
+        raise ValueError(
+            "campaign retryUnfinishedRefs must be unique non-empty object refs"
+        )
+    if unfinished_refs and not retry_of:
+        raise ValueError("campaign retryUnfinishedRefs require a retryOf predecessor")
     scale = execution_campaign_scale(identity.execution_id, quota=request.quota)
     root_scale = execution_campaign_scale(
         root_identity.execution_id,
@@ -249,6 +354,9 @@ def write_submission(
         )
         expected_envelope = {
             "scale": scale,
+            "workloadMode": frozen_workload.workload_mode,
+            "activeCarriers": list(frozen_workload.active_carriers),
+            "workloads": frozen_workload.workloads,
             "rootExecutionId": root_identity.execution_id,
             "executionId": identity.execution_id,
             "operation": _OPERATIONS[identity.content_type.value],
@@ -288,7 +396,6 @@ def write_submission(
             "executionBundle": execution_bundle,
             "entityCatalogDigest": catalog_digest,
             "predecessorReconciliation": envelope.get("predecessorReconciliation"),
-            "m100AlphaAcceptance": envelope.get("m100AlphaAcceptance"),
         }
         drift = [
             key
@@ -394,12 +501,6 @@ def write_submission(
                     "GATE_BLOCK DATA.CAMPAIGN.SUBMISSION_RECONCILIATION_DRIFT: "
                     "predecessor receipt lineage/target/scope binding drift"
                 )
-        alpha_acceptance = envelope.get("m100AlphaAcceptance")
-        if alpha_acceptance is not None:
-            validate_m100_alpha_acceptance_binding(
-                alpha_acceptance,
-                output_root=(semantic_preflight_output_root or paths.OUTPUT_ROOT),
-            )
     else:
         external_refs = []
         frozen_semantic_selection_id = (
@@ -439,6 +540,9 @@ def write_submission(
     stable: dict[str, Any] = {
         "schema": SUBMISSION_SCHEMA,
         "scale": scale,
+        "workloadMode": frozen_workload.workload_mode,
+        "activeCarriers": list(frozen_workload.active_carriers),
+        "workloads": frozen_workload.workloads,
         "rootExecutionId": root_identity.execution_id,
         "executionId": identity.execution_id,
         "operation": _OPERATIONS[identity.content_type.value],
@@ -459,6 +563,7 @@ def write_submission(
         "sourceProviders": list(request.source_providers),
         "semanticSelectionId": frozen_semantic_selection_id,
         "retryOf": retry_of,
+        "retryUnfinishedRefs": unfinished_refs,
         "gitBranch": _git_branch(source_repo),
         "gitCommitSha": _git_commit(source_repo),
         "sourceRevision": source_revision,
@@ -474,8 +579,6 @@ def write_submission(
         stable["sourcePoolSelection"] = dict(request.source_pool_selection or {})
     if semantic_preflight_binding is not None:
         stable["semanticPreflightReceipt"] = dict(semantic_preflight_binding)
-    if campaign_envelope is not None and campaign_envelope.get("m100AlphaAcceptance") is not None:
-        stable["m100AlphaAcceptance"] = dict(campaign_envelope["m100AlphaAcceptance"])
     if (
         campaign_envelope is not None
         and campaign_envelope.get("predecessorReconciliation") is not None

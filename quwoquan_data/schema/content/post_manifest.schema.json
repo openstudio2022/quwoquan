@@ -15,7 +15,8 @@
     },
     "semanticMention": {
       "type": "object",
-      "required": ["mentionId", "kind", "surface", "location", "rangeStart", "rangeEnd", "status"],
+      "description": "语义指称。仅 location=body 的指称落在正文字符流上，因此只有它必须携带 rangeStart/rangeEnd；manifest 指称由 entityRefs/tagRefs 派生，没有可指的正文区间。",
+      "required": ["mentionId", "kind", "surface", "location", "status"],
       "properties": {
         "mentionId": { "type": "string" },
         "kind": { "type": "string", "enum": ["entity", "tag"] },
@@ -26,7 +27,12 @@
         "status": { "type": "string", "enum": ["published", "pending_review", "rejected", "offline"] },
         "candidateId": { "type": ["string", "null"] },
         "targetRef": { "type": ["string", "null"] }
-      }
+      },
+      "if": {
+        "properties": { "location": { "const": "body" } },
+        "required": ["location"]
+      },
+      "then": { "required": ["rangeStart", "rangeEnd"] }
     },
     "sourceAttribution": {
       "type": "object",

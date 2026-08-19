@@ -16,6 +16,9 @@ def load_schema(command: str, schema_name: str) -> dict:
     return _load_schema_path(schema_path, stack=())
 
 
+_EXTERNAL_DEFS_KEY = "__external__"
+
+
 def _load_schema_path(schema_path: Path, *, stack: tuple[Path, ...]) -> dict:
     resolved_path = schema_path.resolve()
     schema_root = SCHEMA_ROOT.resolve()
@@ -30,30 +33,62 @@ def _load_schema_path(schema_path: Path, *, stack: tuple[Path, ...]) -> dict:
         payload = json.load(handle)
     if not isinstance(payload, dict):
         raise ValueError(f"Schema must be an object: {resolved_path}")
-    return _resolve_external_refs(payload, current_path=resolved_path, stack=(*stack, resolved_path))
+    carried: dict[str, Any] = {}
+    resolved = _resolve_external_refs(
+        payload,
+        current_path=resolved_path,
+        stack=(*stack, resolved_path),
+        carried=carried,
+    )
+    if carried:
+        declared = resolved.get("$defs")
+        defs = dict(declared) if isinstance(declared, dict) else {}
+        defs[_EXTERNAL_DEFS_KEY] = {**(defs.get(_EXTERNAL_DEFS_KEY) or {}), **carried}
+        resolved = {**resolved, "$defs": defs}
+    return resolved
 
 
-def _resolve_external_refs(value: Any, *, current_path: Path, stack: tuple[Path, ...]) -> Any:
+def _resolve_external_refs(
+    value: Any,
+    *,
+    current_path: Path,
+    stack: tuple[Path, ...],
+    carried: dict[str, Any],
+) -> Any:
     """Inline same-schema-root external refs before strict local validation.
 
     The data contracts intentionally split reusable definitions such as
     ``gate_verdict.schema.json`` into their own files. The lightweight runtime
     validator remains fail-closed, but must resolve those local contract refs
     rather than treating a valid schema as unsupported.
+
+    A pointer into another file lands a subtree whose own ``#/`` pointers were
+    written against *that* file, so inlining it verbatim would silently rebind
+    them to whatever the importing document happens to define under the same
+    name — a definition drift the fail-closed validator could not see. The whole
+    referenced document therefore travels with the subtree under
+    ``$defs/__external__``, and its local pointers are rebased onto that carried
+    copy, so a shared definition means the same thing in every importer.
     """
     if isinstance(value, list):
         return [
-            _resolve_external_refs(item, current_path=current_path, stack=stack)
+            _resolve_external_refs(item, current_path=current_path, stack=stack, carried=carried)
             for item in value
         ]
     if not isinstance(value, dict):
         return value
     ref = value.get("$ref")
-    if isinstance(ref, str) and not ref.startswith("#/"):
+    if isinstance(ref, str) and not ref.startswith("#"):
         file_ref, separator, pointer = ref.partition("#")
         if not file_ref:
             raise ValueError(f"Unsupported schema ref: {ref!r}")
-        referenced = _load_schema_path(current_path.parent / file_ref, stack=stack)
+        referenced_path = (current_path.parent / file_ref).resolve()
+        namespace = _external_namespace(referenced_path)
+        referenced = _rebase_local_refs(
+            _load_schema_path(referenced_path, stack=stack),
+            prefix=f"/$defs/{_EXTERNAL_DEFS_KEY}/{namespace}",
+        )
+        carried[namespace] = referenced
         target: Any = referenced
         if separator and pointer:
             for raw_part in pointer.lstrip("/").split("/"):
@@ -63,13 +98,39 @@ def _resolve_external_refs(value: Any, *, current_path: Path, stack: tuple[Path,
                     raise ValueError(f"Cannot resolve schema ref {ref!r} from {current_path}") from exc
         if not isinstance(target, dict):
             raise ValueError(f"Schema ref does not point to an object: {ref!r}")
-        siblings = {key: item for key, item in value.items() if key != "$ref"}
-        merged = {**target, **siblings}
-        return _resolve_external_refs(merged, current_path=current_path, stack=stack)
+        siblings = {
+            key: _resolve_external_refs(
+                item, current_path=current_path, stack=stack, carried=carried
+            )
+            for key, item in value.items()
+            if key != "$ref"
+        }
+        return {**target, **siblings}
     return {
-        key: _resolve_external_refs(item, current_path=current_path, stack=stack)
+        key: _resolve_external_refs(item, current_path=current_path, stack=stack, carried=carried)
         for key, item in value.items()
     }
+
+
+def _external_namespace(referenced_path: Path) -> str:
+    relative = referenced_path.relative_to(SCHEMA_ROOT.resolve())
+    return str(relative.with_suffix("").with_suffix("")).replace("/", "__")
+
+
+def _rebase_local_refs(value: Any, *, prefix: str) -> Any:
+    """Point a carried document's local refs at its carried copy."""
+
+    if isinstance(value, list):
+        return [_rebase_local_refs(item, prefix=prefix) for item in value]
+    if not isinstance(value, dict):
+        return value
+    rebased = {
+        key: _rebase_local_refs(item, prefix=prefix) for key, item in value.items()
+    }
+    ref = rebased.get("$ref")
+    if isinstance(ref, str) and ref.startswith("#"):
+        rebased["$ref"] = "#" + prefix + ref[1:]
+    return rebased
 
 
 def validate_result(result: dict, command: str, schema_name: str) -> list[str]:

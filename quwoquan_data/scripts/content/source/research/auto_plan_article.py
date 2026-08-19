@@ -29,6 +29,7 @@ from content.source.research.article_frontier_profile import (
 from content.source.research.article_source_unit_catalog import (
     ARTICLE_SOURCE_POLICY_REVISION,
 )
+from content.source.source_unit_attribution import registered_attribution_kind
 from content.source.research.source_quality import (
     _article_base_candidate_limit,
     _evidence_reason,
@@ -100,10 +101,10 @@ def _bind_external_article_source_identity(
     return _bind_article_source_identity(projected)
 
 
-def _registry_bound_article_base_source(
+def _registry_bound_article_source(
     source: dict[str, Any],
 ) -> dict[str, Any] | None:
-    """Bind a bespoke article base source to its registry admission and attribution.
+    """Bind a bespoke article source to its registry admission and attribution.
 
     Sources minted outside ``discover_article_source_frontier`` used to reach the
     source unit with no ``articleSiteId``, ``sourceKind`` or ``sourceAttribution``.
@@ -124,12 +125,28 @@ def _registry_bound_article_base_source(
     )
     profile = site.get("siteCrawlProfile")
     profile = profile if isinstance(profile, dict) else {}
-    bound["sourceAttribution"] = public_article_source_attribution(
-        platform=str(bound.get("platform") or site.get("platform") or ""),
-        canonical_url=url,
-        terms_url=str(profile.get("termsUrl") or site.get("termsUrl") or ""),
-        captured_at=now_iso(),
-    )
+    if not str(bound.get("publishMediaMode") or "").strip():
+        has_same_source_images = str(
+            bound.get("imageEvidenceMode") or ""
+        ).strip() == "same_source" and bool(bound.get("imageUrls"))
+        bound["publishMediaMode"] = (
+            "illustrated" if has_same_source_images else "text_only"
+        )
+    if (
+        registered_attribution_kind(
+            bound,
+            resolved_source_kind=str(bound.get("sourceKind") or ""),
+        )
+        is None
+    ):
+        # 百科站有登记的 attribution 映射，来源单元写盘时自行解析；其余公开站点没有
+        # 映射，attribution 必须在这里由同一条注册表记录铸出，否则交付期无从归属。
+        bound["sourceAttribution"] = public_article_source_attribution(
+            platform=str(bound.get("platform") or site.get("platform") or ""),
+            canonical_url=url,
+            terms_url=str(profile.get("termsUrl") or site.get("termsUrl") or ""),
+            captured_at=now_iso(),
+        )
     return bound
 
 
@@ -193,9 +210,12 @@ def write_article_lane(
                 entity_aliases=entity_aliases,
                 limit=_article_base_candidate_limit(required_article_bases),
             ):
+                bound_source = _registry_bound_article_source(source)
+                if bound_source is None:
+                    continue
                 accepted = _accept_source(
                     report,
-                    source,
+                    bound_source,
                     entity_id=entity_id,
                     lane="article",
                     vertical=vertical,
@@ -203,16 +223,20 @@ def write_article_lane(
                 )
                 if accepted:
                     article_sources.append(accepted)
-            accepted = _accept_source(
-                report,
-                _qunar_review_support_source(entity_id),
-                entity_id=entity_id,
-                lane="article",
-                vertical=vertical,
-                entity_aliases=entity_aliases,
+            review_support = _registry_bound_article_source(
+                _qunar_review_support_source(entity_id)
             )
-            if accepted:
-                article_sources.append(accepted)
+            if review_support is not None:
+                accepted = _accept_source(
+                    report,
+                    review_support,
+                    entity_id=entity_id,
+                    lane="article",
+                    vertical=vertical,
+                    entity_aliases=entity_aliases,
+                )
+                if accepted:
+                    article_sources.append(accepted)
         for related_index, related_title in enumerate(related_wiki_titles, start=1):
             related_url = _wiki_url("zh.wikipedia.org", related_title)
             if not related_url:
@@ -223,8 +247,7 @@ def write_article_lane(
                 entity_id=entity_id,
                 limit=2,
             )
-            accepted = _accept_source(
-                report,
+            related_source = _registry_bound_article_source(
                 _source(
                     source_id=f"article_related_encyclopedia_support_{related_index}",
                     platform="维基百科",
@@ -239,7 +262,13 @@ def write_article_lane(
                     source_role="supporting",
                     images=_image_window(related_images, 0, count=2),
                     image_evidence_mode="same_source" if related_images else "",
-                ),
+                )
+            )
+            if related_source is None:
+                continue
+            accepted = _accept_source(
+                report,
+                related_source,
                 entity_id=entity_id,
                 lane="article",
                 vertical=vertical,
@@ -249,7 +278,7 @@ def write_article_lane(
                 article_sources.append(accepted)
         if voyage_url:
             voyage_images = voyage_page_images
-            voyage_source = _registry_bound_article_base_source(
+            voyage_source = _registry_bound_article_source(
                 _source(
                     source_id="article_wikivoyage_base",
                     platform="维基导游",
@@ -284,7 +313,7 @@ def write_article_lane(
             platform = _external_platform(link)
             category = _external_article_category(link, platform)
             source_role = "base" if category in ARTICLE_BASE_SOURCE_CATEGORIES else "supporting"
-            external_source = _bind_external_article_source_identity(
+            external_source = _registry_bound_article_source(
                 _source(
                     source_id=(
                         f"article_external_base_{index}"
@@ -321,8 +350,7 @@ def write_article_lane(
                 continue
             category = str(known.get("category") or "travelogue").strip()
             source_role = "base" if category in ARTICLE_BASE_SOURCE_CATEGORIES else "supporting"
-            accepted = _accept_source(
-                report,
+            known_source = _registry_bound_article_source(
                 _source(
                     source_id=known["source_id"] or f"article_registry_base_{index}",
                     platform=known["platform"] or "垂类专业站",
@@ -340,7 +368,13 @@ def write_article_lane(
                     images=[],
                     image_evidence_mode="",
                     fetchable_override=bool(known.get("fetchable")),
-                ),
+                )
+            )
+            if known_source is None:
+                continue
+            accepted = _accept_source(
+                report,
+                known_source,
                 entity_id=entity_id,
                 lane="article",
                 vertical=vertical,

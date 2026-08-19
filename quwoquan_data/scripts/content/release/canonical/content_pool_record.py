@@ -18,6 +18,7 @@ from content.release.canonical.object_transaction_contract import (
     _read_json,
     _safe_rel,
     _write_json,
+    is_canonical_document,
 )
 from content.release.canonical.pool_source_attribution import (
     source_attribution_complete,
@@ -54,12 +55,19 @@ def pool_payload_digest(object_root: Path) -> str:
     receives them must agree on one digest.  The closure over media is kept by
     ``asset.refs.json``, which carries every asset's own sha256 and is itself
     digested here.
+
+    A rights snapshot is the same shape of body: it lives beside the object in the
+    package, is bound by digest from ``evidence/rights.json``, and canonical
+    publish never receives it.  So the rule is the file kind rather than one
+    directory name: only the documents the tree can hold are digested.
     """
 
     rows = []
     for path in _files(object_root):
         relative = path.relative_to(object_root)
         if relative.parts and relative.parts[0] in {"_pool", "assets"}:
+            continue
+        if not is_canonical_document(relative):
             continue
         rows.append(
             {

@@ -174,7 +174,7 @@ def _video_source_qualifier(
     if context is not None and context.has_kind(
         PROFESSIONAL_VIDEO_ACQUISITION_KIND
     ):
-        from content.source.professional_video_receipt import (
+        from content.source.professional_video_spec_index import (
             acquired_video_specs_for_entity,
         )
 
@@ -272,7 +272,7 @@ def _video_source_qualification_binding(
             qualifier=lambda target: _video_source_qualifier(execution_id, target)
         )
 
-    from content.source.professional_video_receipt import (
+    from content.source.professional_video_spec_index import (
         build_acquired_video_spec_index,
     )
 

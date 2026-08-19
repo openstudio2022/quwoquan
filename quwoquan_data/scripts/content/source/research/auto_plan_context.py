@@ -143,7 +143,7 @@ def build_external_media_plan_context(
     )
     professional_video_index = None
     if video_receipt_refs:
-        from content.source.professional_video_receipt import (
+        from content.source.professional_video_spec_index import (
             build_acquired_video_spec_index,
         )
 

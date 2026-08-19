@@ -251,6 +251,7 @@ def _require_phase_args(args: argparse.Namespace) -> None:
             for name in (
                 "handoff_ref",
                 "semantic_preflight_receipt",
+                "capacity_calibration_receipt",
                 "homepage_image_input",
                 "image_input",
                 "video_input",
@@ -279,7 +280,11 @@ def _require_phase_args(args: argparse.Namespace) -> None:
                 )
             )
         return
-    required_inputs = ["handoff_ref", "semantic_preflight_receipt"]
+    required_inputs = [
+        "handoff_ref",
+        "semantic_preflight_receipt",
+        "capacity_calibration_receipt",
+    ]
     if "homepage" in active:
         required_inputs.append("homepage_image_input")
     if "image" in active:
@@ -417,6 +422,9 @@ def _handle_envelopes(args: argparse.Namespace) -> None:
         sequence=int(args.sequence),
         semantic_selection_id=str(args.semantic_selection_id),
         semantic_preflight_receipt=preflight,
+        capacity_calibration_receipt=Path(
+            str(args.capacity_calibration_receipt)
+        ).expanduser(),
         predecessor_execution_ids_by_carrier=_retry_predecessors(args),
         predecessor_reconciliation_receipt=(
             Path(str(args.predecessor_reconciliation_receipt))
@@ -498,6 +506,7 @@ def register_prepare_campaign_parser(sub: argparse._SubParsersAction) -> None:
     parser.add_argument("--campaign-retry-of")
     parser.add_argument("--handoff-ref")
     parser.add_argument("--semantic-preflight-receipt")
+    parser.add_argument("--capacity-calibration-receipt")
     parser.add_argument("--predecessor-reconciliation-receipt")
     parser.add_argument("--promotion-receipt")
     parser.add_argument("--scale-source-pool")

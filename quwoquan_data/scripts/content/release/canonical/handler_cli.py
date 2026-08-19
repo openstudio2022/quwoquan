@@ -234,6 +234,18 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     object_transaction_rollback.set_defaults(
         handler=owner.handle_object_transaction_rollback
     )
+    object_transaction_replay = object_transaction_actions.add_parser(
+        "replay-package",
+        help="用显式内容库持仓精确重放一笔已评审的对象事务包",
+    )
+    object_transaction_replay.add_argument("--replay-id", required=True)
+    object_transaction_replay.add_argument("--source-package-root", required=True)
+    object_transaction_replay.add_argument("--media-library-root", required=True)
+    object_transaction_replay.add_argument("--output-root")
+    object_transaction_replay.add_argument("--publish-root")
+    object_transaction_replay.set_defaults(
+        handler=owner.handle_object_transaction_replay_package
+    )
 
     identity_incident = commands.add_parser(
         "identity-incident",

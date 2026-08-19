@@ -147,7 +147,9 @@
       "type": "string", "pattern": "^sha256:[0-9a-f]{64}$"
     },
     "articleCommercialAdmission": {"const": "commercial_release"},
-    "publishMediaMode": {"enum": ["illustrated", "text_only"]},
+    "publishMediaMode": {
+      "enum": ["illustrated", "text_only", "attributed_external_video"]
+    },
     "sourceRole": {"type": "string", "minLength": 1},
     "imageEvidenceMode": {"type": "string"},
     "researchLane": {"enum": ["homepage", "article", "image", "video"]},
@@ -180,7 +182,8 @@
         "policyRevision": {"const": "article-source-registry-v1"},
         "sourceUseMode": {"const": "factual_reference_only"},
         "rightsMode": {"const": "factual_reference_only"},
-        "articleCommercialAdmission": {"const": "commercial_release"}
+        "articleCommercialAdmission": {"const": "commercial_release"},
+        "publishMediaMode": {"enum": ["illustrated", "text_only"]}
       }
     },
     {

@@ -153,6 +153,21 @@ def is_canonical_document(relative: Path) -> bool:
     return relative.suffix.casefold() in CANONICAL_DOCUMENT_SUFFIXES
 
 
+def object_lineage(manifest_path: str) -> str:
+    """The object a canonical manifest path belongs to, version stripped.
+
+    Canonical objects are versioned in place (``posts/<carrier>/<topic>/<title>/2``)
+    and a successor coexists with the version it supersedes, so identity questions
+    asked per manifest path would read one object's own next version as a second
+    object holding the same content.
+    """
+
+    parts = [part for part in manifest_path.split("/") if part]
+    if len(parts) >= 3 and parts[-1] == "manifest.json" and parts[-2].isdigit():
+        return "/".join(parts[:-2])
+    return "/".join(parts[:-1]) if parts[-1:] == ["manifest.json"] else manifest_path
+
+
 def canonical_destination(value: str, *, label: str) -> Path:
     """Return the canonical publish path ``value`` names, or refuse it.
 
@@ -190,8 +205,8 @@ def _copy_tree(source: Path, target: Path) -> None:
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(path, destination)
 
-def _tree_digest(root: Path) -> str:
-    rows = [
+def _tree_rows(root: Path) -> list[dict[str, Any]]:
+    return [
         {
             "path": path.relative_to(root).as_posix(),
             "sha256": _digest_file(path),
@@ -199,7 +214,31 @@ def _tree_digest(root: Path) -> str:
         }
         for path in _files(root)
     ]
-    return _digest_bytes(_json_bytes(rows))
+
+
+def _tree_digest(root: Path) -> str:
+    return _digest_bytes(_json_bytes(_tree_rows(root)))
+
+
+def _document_tree_digest(root: Path) -> str:
+    """Digest only the files canonical publish can hold.
+
+    A transaction package carries both the documents describing an object and the
+    bodies those documents point at, and applying it puts the bodies in the
+    content library rather than the tree. The two trees are therefore only ever
+    equal on their document projection, so a readback that compares whole trees
+    would read a correct apply as drift.
+    """
+
+    return _digest_bytes(
+        _json_bytes(
+            [
+                row
+                for row in _tree_rows(root)
+                if is_canonical_document(Path(str(row["path"])))
+            ]
+        )
+    )
 
 def _tag_exists(ref: str) -> bool:
     root = Path(os.environ.get("QWQ_TAGS_ROOT") or CONTROL_PLANE_TAXONOMY_ROOT)
@@ -451,11 +490,26 @@ def _closure_digest(
     closure: Mapping[str, Any],
     cas_rows: list[dict[str, Any]],
     review: Mapping[str, Any],
+    metadata_adoption: Mapping[str, Any] | None = None,
 ) -> str:
+    """Digest everything an object's identity may not silently change.
+
+    An adopted successor differs from a freshly authored object only by the
+    adoption receipt that authorizes it, so that binding has to be inside the
+    digest: otherwise a v2 could be re-pointed at a different source review and
+    still present the same closure digest. Objects with no adoption keep their
+    digest input shape unchanged, so already-sealed digests stay reproducible.
+    """
+
     _admit_object_storage_budget(
         object_root,
         object_kind=object_kind,
         object_ref=object_ref,
+    )
+    adoption = (
+        {"metadataAdoption": dict(metadata_adoption)}
+        if metadata_adoption is not None
+        else {}
     )
     return _digest_bytes(
         _json_bytes(
@@ -493,6 +547,7 @@ def _closure_digest(
                 },
                 "cas": sorted(cas_rows, key=lambda row: row["objectKey"]),
                 "review": dict(review),
+                **adoption,
             }
         )
     )

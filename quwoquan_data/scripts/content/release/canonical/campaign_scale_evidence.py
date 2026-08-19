@@ -54,6 +54,7 @@ from content.release.canonical.release_header import validate_release_header
 from content.release.canonical.resource_soak_evidence import (
     write_resource_soak_evidence,
 )
+from core.paths import campaign_scale_evidence_root
 from core.release_layout import payload_digest, payload_file
 
 
@@ -67,6 +68,8 @@ def write_campaign_scale_evidence(
     tasks_root: Path,
     release_root: Path,
     output_root: Path,
+    target_scale: str = "M100",
+    predecessor_promotion_path: Path | None = None,
 ) -> tuple[dict[str, Any], Path]:
     """Derive the sole promotion evidence from frozen canonical truth sources."""
 
@@ -123,6 +126,28 @@ def write_campaign_scale_evidence(
     current_execution_ids = [str(plan["executionIds"][carrier]) for carrier in CARRIERS]
     if set(header.get("executionIds") or []) != set(current_execution_ids):
         raise CampaignScaleEvidenceError("release executionIds differ from exact campaign lanes")
+    (
+        scale,
+        predecessor_promotion,
+        predecessor_counts,
+        predecessor_carried_execution_ids,
+        release_execution_ids,
+        predecessor_refs,
+    ) = scale_context(
+        target_scale=target_scale,
+        predecessor_promotion_path=predecessor_promotion_path,
+        plan=plan,
+        header=header,
+        release_root=release_root,
+        output_root=output_root,
+    )
+    source_pool_fields = campaign_source_pool_fields(
+        plan=plan,
+        campaign_plan_path=campaign_plan_path,
+        target_scale=scale,
+        predecessor_promotion_path=predecessor_promotion_path,
+        output_root=output_root,
+    )
     carrier_admission = {
         str(row.get("carrier")): row
         for row in admission.get("carrierCounts") or []
@@ -171,8 +196,13 @@ def write_campaign_scale_evidence(
             raise CampaignScaleEvidenceError(f"{carrier} publish closure count drift")
         refs_by_lane[carrier] = refs
         admission_row = carrier_admission[carrier]
-        if int(admission_row.get("objectCount") or 0) != len(refs):
-            raise CampaignScaleEvidenceError(f"{carrier} release object count drift")
+        carried_count = int(predecessor_counts[carrier])
+        total_count = int(admission_row.get("objectCount") or 0)
+        accepted_total = int(admission_row.get("researchAcceptedCount") or 0)
+        if set(refs) & predecessor_refs[carrier] or accepted_total != total_count:
+            raise CampaignScaleEvidenceError(
+                f"{carrier} rolling-wave/release cohort closure drift"
+            )
         calibration_ref = min(refs)
         try:
             semantic_calibration = build_scale_semantic_calibration(
@@ -183,9 +213,7 @@ def write_campaign_scale_evidence(
                 ),
                 object_root=tasks_root / execution_id / calibration_ref,
                 published_refs=refs,
-                accepted_object_count=int(
-                    admission_row.get("researchAcceptedCount") or 0
-                ),
+                accepted_object_count=len(refs),
                 output_root=output_root,
             )
         except ScaleSemanticPromotionError as exc:
@@ -208,9 +236,10 @@ def write_campaign_scale_evidence(
                 ),
                 "executionPublishSha256": _file_sha256(publish_path),
                 "finalizedCount": len(refs),
-                "researchAcceptedCount": int(
-                    admission_row.get("researchAcceptedCount") or 0
-                ),
+                "researchAcceptedCount": len(refs),
+                "predecessorCarriedCount": carried_count,
+                "newFinalizedCount": len(refs),
+                "totalUniqueFinalizedCount": total_count,
                 "semanticCalibration": semantic_calibration,
             }
         )
@@ -262,6 +291,7 @@ def write_campaign_scale_evidence(
         "evidenceId": evidence_id,
         "rootExecutionId": plan["rootExecutionId"],
         "status": "passed" if passed else "failed",
+        "targetScale": scale,
         "releaseId": release_id,
         "manifestDigest": manifest_digest,
         "sourceRevision": source_revision,
@@ -276,6 +306,14 @@ def write_campaign_scale_evidence(
             label="release asset admission",
         ),
         "releaseAssetAdmissionSha256": _file_sha256(admission_path),
+        **(
+            {"predecessorPromotion": predecessor_promotion}
+            if predecessor_promotion is not None
+            else {}
+        ),
+        "predecessorCarriedExecutionIds": predecessor_carried_execution_ids,
+        "releaseExecutionIds": release_execution_ids,
+        **source_pool_fields,
         "lanes": lane_rows,
         "duplicateAssetCount": duplicate_asset_count,
         "crossLaneWriteCount": cross_lane_write_count,
@@ -358,6 +396,7 @@ def load_campaign_scale_evidence(
         != campaign.get("releaseAssetAdmissionSha256")
     ):
         raise CampaignScaleEvidenceError("campaign immutable source digest drift")
+    release_source_digests = header.get("sourceDigests")
     if (
         header.get("releaseId") != release_id
         or admission.get("releaseId") != release_id
@@ -393,6 +432,10 @@ def load_campaign_scale_evidence(
         campaign=campaign,
         plan=plan,
         admission=admission,
+        target_scale=target_scale,
+        predecessor_counts=predecessor_counts,
+        predecessor_refs=predecessor_refs,
+        release_refs=release_refs_by_carrier(release),
         output_root=output_root,
     )
     duplicate_publish_refs = sum(

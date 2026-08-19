@@ -109,7 +109,7 @@ def _sourced_videos(
             continue
         if (
             lifecycle is ProductLifecycleState.RESEARCH
-            and evidence.publication_admission != "research_release"
+            and evidence.effective_publication_admission != "research_release"
         ):
             reject("sourced_video_release_class_mismatch")
             continue
@@ -118,7 +118,7 @@ def _sourced_videos(
             and lifecycle is not ProductLifecycleState.RESEARCH
             and not (
                 evidence.commercial_authorization_status == "verified"
-                and evidence.publication_admission == "commercial_release"
+                and evidence.effective_publication_admission == "commercial_release"
             )
         ):
             reject("sourced_video_rights_not_verified")

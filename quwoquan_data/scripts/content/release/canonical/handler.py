@@ -45,6 +45,9 @@ from content.release.canonical.lifecycle_exit import (
 )
 from content.release.canonical.object_transaction_contract import ObjectTransactionError
 from content.release.canonical.object_transaction_lock import canonical_publish_lock
+from content.release.canonical.object_transaction_replay import (
+    replay_object_transaction_package,
+)
 from content.release.canonical.release_identity_incident import (
     record_release_identity_incident,
 )
@@ -149,6 +152,24 @@ def handle_object_transaction_rollback(args: argparse.Namespace) -> None:
     except (FileNotFoundError, OSError, ObjectTransactionError, ValueError) as exc:
         raise SystemExit(
             f"[release object-transaction rollback] GATE_BLOCK {exc}"
+        ) from exc
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+
+
+def handle_object_transaction_replay_package(args: argparse.Namespace) -> None:
+    """Replay one reviewed package whose media bodies live in a content library."""
+
+    try:
+        report = replay_object_transaction_package(
+            replay_id=str(args.replay_id),
+            source_package_root=Path(args.source_package_root),
+            media_library_root=Path(args.media_library_root),
+            output_root=Path(args.output_root or OUTPUT_ROOT).resolve(),
+            publish_root=Path(args.publish_root or PUBLISH_ROOT).resolve(),
+        )
+    except (FileNotFoundError, OSError, ObjectTransactionError, ValueError) as exc:
+        raise SystemExit(
+            f"[release object-transaction replay-package] GATE_BLOCK {exc}"
         ) from exc
     print(json.dumps(report, ensure_ascii=False, indent=2))
 

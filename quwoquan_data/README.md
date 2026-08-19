@@ -79,8 +79,8 @@ Data 离线流水线使用 `scripts/core/data_issue.py` 与
 # 任务门面
 python3 quwoquan_data/scripts/cli.py task execute --help
 
-# 环境与凭证
-python3 quwoquan_data/scripts/cli.py task preflight --json
+# Semantic Provider 准入（不探测 Mongo、Redis 或四环境）
+python3 quwoquan_data/scripts/cli.py task preflight --profile semantic --soak --workspace-smoke --json
 
 # 结构与发布门禁
 python3 quwoquan_data/scripts/cli.py verify content-execution-layout
@@ -97,9 +97,23 @@ python3 quwoquan_data/scripts/cli.py release lifecycle-exit --help
 python3 quwoquan_data/scripts/cli.py release acceptance-lease --help
 python3 quwoquan_data/scripts/cli.py governance taxonomy --help
 
-# 全量 Data gate
+# 全量 Data gate（唯一静态组合入口）
 python3 quwoquan_data/scripts/cli.py verify all
 ```
+
+### Verify 三类入口
+
+1. **static all**：`python3 quwoquan_data/scripts/cli.py verify all` 是唯一静态 gate 组合，不要新增平行 `verify-*` Make/脚本入口。
+2. **on-demand**：需要具体 release、execution 或环境参数时，使用显式子命令（如 `verify release-lifecycle`、`verify execution-readiness`、`verify publish-purity`）。
+3. **runtime library**：`scripts/verify/*.py` 与领域模块供 CLI/gate import；直接 `python3 .../verify_*.py` 只供本地调试，不算正式入口。
+
+`scripts/` 保持 `cli.py` / `core/` / `content/` / `governance/` / `verify/` 闭集；稳定脚本名用语义描述，禁止阶段编号、批次编号和数字分片名。
+
+`task preflight --profile semantic` 只证明 managed Python、Provider 凭证与网络、
+真实 startup、容量 soak 和四个隔离 workspace；它不读取 Mongo、Redis、
+ReliableTask 或 alpha/beta/gamma/prod 状态。author/reviewer 调用在 execution 内写入
+create-once `semantic_tasks` journal，冻结 prompt 摘要、source identity、workspace、
+model 与 maxAttempts；队列或环境不可用不得撤销已完成的语义结果。
 
 Cursor SDK 凭证默认只从仓外、权限为 `0600` 的
 `~/.config/quwoquan/cursor_api_key` 动态读取；`QWQ_CURSOR_API_KEY_FILE`

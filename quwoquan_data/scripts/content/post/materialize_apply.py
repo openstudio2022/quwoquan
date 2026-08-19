@@ -376,10 +376,16 @@ def materialize_posts(
             # 溯源：内容来自哪个 execution，供 trace/hydrate 与推荐归因消费。
             "executionId": execution_id,
         }
+        # 文章底稿来源单元的真相源是 writing_pack.baseSourceRef，compose 载荷只在
+        # 未冻结 pack 的旧执行里携带它，故这里以 pack 为准回填。
         attribution = source_unit_attribution(
             execution_id,
             content_type,
-            compose_payload=compose_payload,
+            compose_payload=(
+                {**compose_payload, "baseSourceRef": writing_pack["baseSourceRef"]}
+                if writing_pack.get("baseSourceRef")
+                else compose_payload
+            ),
             assets=assets,
         )
         if attribution is not None:

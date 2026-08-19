@@ -10,6 +10,7 @@ from content.execution.support import (
     DataIssueStage,
     DataRecoveryAction,
     ExecutionContext,
+    article_commercial_closure_enabled,
     data_issue,
     image_count_is_hard_quota,
     minimum_publishable_images_per_target,
@@ -27,6 +28,7 @@ class ContentPlanContract:
     article_lane_enabled: bool
     image_lane_enabled: bool
     video_lane_enabled: bool
+    commercial_closure: bool
 
 
 def resolve_content_plan_contract(
@@ -75,12 +77,15 @@ def resolve_content_plan_contract(
             message="content quotas are empty; auto content_plan skipped",
         )
         return None, (issue,)
+    commercial_closure = article_commercial_closure_enabled(active_spec)
     return (
         ContentPlanContract(
             articles_per_target=articles,
             images_per_target=images,
             videos_per_target=videos,
-            minimum_articles=articles,
+            minimum_articles=(
+                1 if commercial_closure and articles > 0 else articles
+            ),
             minimum_images=(
                 images
                 if image_count_is_hard_quota(active_spec)
@@ -90,6 +95,7 @@ def resolve_content_plan_contract(
             article_lane_enabled=article_lane_enabled,
             image_lane_enabled=image_lane_enabled,
             video_lane_enabled=video_lane_enabled,
+            commercial_closure=commercial_closure,
         ),
         (),
     )

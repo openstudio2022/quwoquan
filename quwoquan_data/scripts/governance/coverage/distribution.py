@@ -52,6 +52,8 @@ class DistributionDecision(StrEnum):
 @dataclass(frozen=True, slots=True)
 class ContentDistributionPolicy:
     policy_id: str
+    product_lifecycle_state: ProductLifecycleState
+    release_class: ReleaseClass
     image_generation_allowed: bool
     video_generation_allowed: bool
     illustrated_rate_target: float
@@ -72,6 +74,8 @@ class ContentDistributionPolicy:
     video_popularity_non_blocking: bool
 
     def __post_init__(self) -> None:
+        if self.release_class.value != self.product_lifecycle_state.value:
+            raise ValueError("releaseClass must equal productLifecycleState")
         if not self.image_provider_priority or self.image_provider_priority[0] != "pinterest":
             raise ValueError("research image provider priority must start with pinterest")
         if self.image_generation_allowed or self.video_generation_allowed:
@@ -149,6 +153,8 @@ def load_content_distribution_policy(
     acquisition = raw["acquisition"]
     if any(bool(value) for value in acquisition.values()):
         raise ValueError("content acquisition bypass controls must remain disabled")
+    lifecycle = ProductLifecycleState(str(raw["productLifecycleState"]))
+    release_class = ReleaseClass(str(raw["releaseClass"]))
     media_generation = raw["mediaGeneration"]
     research_discovery = raw["researchDiscovery"]
     article_media = raw["articleMedia"]
@@ -157,6 +163,8 @@ def load_content_distribution_policy(
     video_popularity = research_discovery["videoPopularity"]
     return ContentDistributionPolicy(
         policy_id=str(raw["policyId"]),
+        product_lifecycle_state=lifecycle,
+        release_class=release_class,
         image_generation_allowed=bool(media_generation["imageAllowed"]),
         video_generation_allowed=bool(media_generation["videoAllowed"]),
         illustrated_rate_target=float(article_media["illustratedRateTarget"]),

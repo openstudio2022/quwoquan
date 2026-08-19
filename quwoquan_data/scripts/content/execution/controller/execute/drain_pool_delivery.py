@@ -168,30 +168,28 @@ def drain_pool_delivery(
     )
     dispatch = dispatch_reliabletask_checkpoint(ctx, ExecutionStage.PUBLISH)
     if dispatch is None:
-        from core.runtime_policy import active_runtime_policy
-
         from content.execution.queue.reliabletask.publish_reconciliation import (
             reconcile_frozen_publish_recovery,
         )
 
-        report = reconcile_frozen_publish_recovery(
-            normalized,
-            workers=ctx.max_workers,
-            completion_grace_seconds=(
-                active_runtime_policy().managed_future_grace_seconds
-            ),
-        )
+        report = reconcile_frozen_publish_recovery(normalized)
         if report is None:
             raise ValueError(
                 "pool delivery execution has no current ReliableTask receipt"
             )
         completed = int(report.succeeded)
-        issue_codes = sorted(
-            {
-                str(outcome.failure_code or _DELIVERY_ONLY_INVALID)
-                for outcome in report.outcomes
-                if outcome.status != "succeeded"
-            }
+        # 通过的回执已经用 canonical 受理口径闭合，没有需要投影的失败归因；
+        # 只有未通过的回执才把每个 job 的 typed failure code 带出来。
+        issue_codes = (
+            []
+            if report.passed
+            else sorted(
+                {
+                    str(outcome.failure_code or _DELIVERY_ONLY_INVALID)
+                    for outcome in report.outcomes
+                    if outcome.status != "succeeded"
+                }
+            )
         )
         return _result(
             executionId=normalized,

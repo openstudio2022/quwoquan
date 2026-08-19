@@ -72,13 +72,13 @@ def _prompt_cursor_agent(
         agent.close()
 
 
-def _close_cursor_client(
-    client_context: Any,
-    *,
-    workspace: Path,
-    terminate_bridges: bool,
-) -> None:
-    """Close the public client and reap any managed-local bridge it leaves behind."""
+def _close_cursor_client(client_context: Any) -> None:
+    """Close the public client and nothing else.
+
+    Reaping bridges here would kill siblings that share this workspace, so
+    workspace-scoped termination stays where it is an explicit recovery step:
+    before a retry relaunch, never as a side effect of a normal close.
+    """
     try:
         client_context.__exit__(None, None, None)
     except Exception as exc:  # noqa: BLE001
@@ -86,9 +86,6 @@ def _close_cursor_client(
             f"[cursor-agent] client close failed: {type(exc).__name__}",
             file=sys.stderr,
         )
-    finally:
-        if terminate_bridges:
-            _terminate_workspace_cursor_bridges(workspace)
 
 
 def _default_managed_agent_runner(ctx: ExecutionContext, prompt: str):
@@ -374,11 +371,7 @@ def _default_managed_agent_runner(ctx: ExecutionContext, prompt: str):
             request_bridge_retry = retryable
         finally:
             if client_context is not None:
-                _close_cursor_client(
-                    client_context,
-                    workspace=workspace,
-                    terminate_bridges=_managed_uses_serial_local_cursor(ctx),
-                )
+                _close_cursor_client(client_context)
 
         if result is not None:
             break

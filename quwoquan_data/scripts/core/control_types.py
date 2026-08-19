@@ -57,16 +57,6 @@ class ExecutionPhase(StrEnum):
     FULL = "full"
 
 
-class RolloutMilestone(StrEnum):
-    BASELINE = "baseline"
-    CANARY = "canary"
-    M1 = "m1"
-    M2 = "m2"
-    M3 = "m3"
-    H10K = "h10k"
-    LAUNCH = "launch"
-
-
 class DeploymentEnvironment(StrEnum):
     ALPHA = "alpha"
     BETA = "beta"
@@ -239,10 +229,17 @@ class AgentRunStatus(StrEnum):
 
 
 class ManagedAgentCheckpointStatus(StrEnum):
-    """Lifecycle state of the persisted checkpoint record."""
+    """Lifecycle state of the persisted checkpoint record.
+
+    ``PARTIAL`` and ``BLOCKED`` name a run that reached its own end with a
+    shortfall: the checkpoint is complete as a record, so downstream stages read
+    the excluded refs from it instead of inferring exclusion from absence.
+    """
 
     COMPLETED = "completed"
     INTERRUPTED = "interrupted"
+    PARTIAL = "partial"
+    BLOCKED = "blocked"
 
 
 class AgentFailureKind(StrEnum):
@@ -313,27 +310,7 @@ class PostStage(StrEnum):
     REVIEW = "review"
 
 
-EXECUTION_MILESTONES = (
-    RolloutMilestone.CANARY,
-    RolloutMilestone.M1,
-    RolloutMilestone.M2,
-    RolloutMilestone.M3,
-    RolloutMilestone.H10K,
-)
-MILESTONE_ORDER = EXECUTION_MILESTONES
-MILESTONE_PREDECESSOR = {
-    RolloutMilestone.CANARY: None,
-    RolloutMilestone.M1: RolloutMilestone.CANARY,
-    RolloutMilestone.M2: RolloutMilestone.M1,
-    RolloutMilestone.M3: RolloutMilestone.M2,
-    RolloutMilestone.H10K: RolloutMilestone.M3,
-}
-
-
 __all__ = [
-    "EXECUTION_MILESTONES",
-    "MILESTONE_ORDER",
-    "MILESTONE_PREDECESSOR",
     "AgentFailureKind",
     "AgentProvider",
     "AgentRunStatus",
@@ -364,7 +341,6 @@ __all__ = [
     "ReviewOverride",
     "ReviewPublishState",
     "ReplacementPolicy",
-    "RolloutMilestone",
     "RuntimeEnvironment",
     "SelectionPolicy",
     "SourcePolicyRevision",

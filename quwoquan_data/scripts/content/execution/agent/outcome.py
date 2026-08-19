@@ -90,6 +90,8 @@ class AgentRunOutcome:
     run_id: str = ""
     capacity_receipt_ref: str = ""
     capacity_receipt_digest: str = ""
+    invocation_attempt_ref: str = ""
+    invocation_attempt_digest: str = ""
     duration_ms: int = 0
     completion_mode: str = ""
     stdout_tail: str = ""
@@ -127,6 +129,8 @@ class AgentRunOutcome:
             "run_id",
             "capacity_receipt_ref",
             "capacity_receipt_digest",
+            "invocation_attempt_ref",
+            "invocation_attempt_digest",
             "completion_mode",
             "stdout_tail",
             "stderr_tail",
@@ -242,10 +246,30 @@ class AgentRunOutcome:
             capacity_receipt_digest=str(receipt_digest).strip(),
         )
 
+    def with_invocation_attempt(
+        self,
+        *,
+        attempt_ref: str,
+        attempt_digest: str,
+    ) -> "AgentRunOutcome":
+        """Bind the journaled attempt record this outcome was written into.
+
+        The retry scope re-reads the attempt file by this digest to decide which
+        author refs exhausted their attempts, so an outcome that claims an
+        attempt without naming it would leave that decision unanchored.
+        """
+        if not str(attempt_ref or "").strip() or not str(attempt_digest or "").strip():
+            raise ValueError("invocation attempt ref and digest are required")
+        return replace(
+            self,
+            invocation_attempt_ref=str(attempt_ref).strip(),
+            invocation_attempt_digest=str(attempt_digest).strip(),
+        )
+
     def with_checkpoint_gate_failure(self, *, message: str) -> "AgentRunOutcome":
         if not self.succeeded:
             raise ValueError("only a finished agent outcome can fail a checkpoint gate")
-        return AgentRunOutcome.failed(
+        gated = AgentRunOutcome.failed(
             AgentFailureKind.CHECKPOINT_GATE,
             message=message,
             provider=self.provider,
@@ -261,6 +285,12 @@ class AgentRunOutcome:
             stderr_tail=self.stderr_tail,
             capacity_receipt_ref=self.capacity_receipt_ref,
             capacity_receipt_digest=self.capacity_receipt_digest,
+        )
+        if not self.invocation_attempt_ref:
+            return gated
+        return gated.with_invocation_attempt(
+            attempt_ref=self.invocation_attempt_ref,
+            attempt_digest=self.invocation_attempt_digest,
         )
 
     def issue(self, *, ref: str = "", lane: DataIssueLane = DataIssueLane.ALL) -> DataIssue | None:
@@ -304,6 +334,8 @@ class AgentRunOutcome:
             "runId": self.run_id or None,
             "capacityReceiptRef": self.capacity_receipt_ref or None,
             "capacityReceiptDigest": self.capacity_receipt_digest or None,
+            "invocationAttemptRef": self.invocation_attempt_ref or None,
+            "invocationAttemptDigest": self.invocation_attempt_digest or None,
             "durationMs": self.duration_ms,
             "completionMode": self.completion_mode or None,
             "stdoutTail": self.stdout_tail or None,
@@ -365,6 +397,14 @@ class AgentRunOutcome:
             capacity_receipt_digest=_optional_text(
                 doc.value("capacityReceiptDigest"),
                 field_name="capacityReceiptDigest",
+            ),
+            invocation_attempt_ref=_optional_text(
+                doc.value("invocationAttemptRef"),
+                field_name="invocationAttemptRef",
+            ),
+            invocation_attempt_digest=_optional_text(
+                doc.value("invocationAttemptDigest"),
+                field_name="invocationAttemptDigest",
             ),
             duration_ms=duration_ms,
             completion_mode=_optional_text(doc.value("completionMode"), field_name="completionMode"),

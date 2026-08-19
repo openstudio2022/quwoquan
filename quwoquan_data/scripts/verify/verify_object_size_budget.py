@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import sys
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
 
@@ -37,6 +38,7 @@ class ObjectClosure:
     budget_bytes: int
     document_bytes: int
     media_bytes: int
+    largest_asset_bytes: int = 0
 
     @property
     def closure_bytes(self) -> int:
@@ -47,10 +49,26 @@ class ObjectClosure:
         return max(self.closure_bytes - self.budget_bytes, 0)
 
 
+class ObjectBudgetVerdict(StrEnum):
+    """Why one object is refused, kept separable because the remedies differ."""
+
+    WITHIN_BUDGET = "within_budget"
+    CLOSURE_OVER_BUDGET = "closure_over_budget"
+    SINGLE_ASSET_OVER_BUDGET = "single_asset_over_budget"
+
+
 def _object_budget_bytes(carrier: str) -> int:
     if carrier == "video":
         return VIDEO_OBJECT_BUDGET_BYTES
     return DEFAULT_OBJECT_BUDGET_BYTES
+
+
+def object_carrier(object_kind: str, object_ref: str) -> str:
+    """Name the carrier that owns the budget for one object reference."""
+    if object_kind == "entities":
+        return "entity"
+    head = str(object_ref or "").strip("/").split("/")[0]
+    return head
 
 
 def _asset_refs_path(object_root: Path) -> Path | None:
@@ -67,16 +85,18 @@ def _asset_refs_path(object_root: Path) -> Path | None:
     return present[0]
 
 
-def _referenced_media_bytes(object_root: Path) -> tuple[int, list[str]]:
+def _referenced_media_bytes(object_root: Path) -> tuple[int, int, list[str]]:
     """Sum the distinct media bodies one object references, resolved in the library.
 
     Publish carries the reference, the library carries the body, so the cost of
     an object is measured where the bytes actually are. A reference the library
-    cannot honour is an unresolved closure, not zero bytes.
+    cannot honour is an unresolved closure, not zero bytes. The largest single
+    body travels with the total because one oversized asset and too many assets
+    hand the operator two different next steps.
     """
     refs_path = _asset_refs_path(object_root)
     if refs_path is None:
-        return 0, []
+        return 0, 0, []
     document = json.loads(refs_path.read_text(encoding="utf-8"))
     if not isinstance(document, dict):
         raise TypeError(f"asset refs document must be an object: {refs_path}")
@@ -97,7 +117,7 @@ def _referenced_media_bytes(object_root: Path) -> tuple[int, list[str]]:
             issues.append(f"referenced media entry is missing: {object_key}")
             continue
         distinct[sha256] = entry.stat().st_size
-    return sum(distinct.values()), issues
+    return sum(distinct.values()), max(distinct.values(), default=0), issues
 
 
 def _document_bytes(object_root: Path) -> int:
@@ -106,6 +126,45 @@ def _document_bytes(object_root: Path) -> int:
         if path.is_file():
             total += path.stat().st_size
     return total
+
+
+def object_closure(
+    object_root: Path,
+    *,
+    ref: str,
+    carrier: str,
+) -> tuple[ObjectClosure, list[str]]:
+    """Measure the logical byte closure of one object before it is sealed."""
+    media_bytes, largest_asset_bytes, issues = _referenced_media_bytes(object_root)
+    closure = ObjectClosure(
+        ref=ref,
+        carrier=carrier,
+        budget_bytes=_object_budget_bytes(carrier),
+        document_bytes=_document_bytes(object_root),
+        media_bytes=media_bytes,
+        largest_asset_bytes=largest_asset_bytes,
+    )
+    return closure, issues
+
+
+def budget_verdict(closure: ObjectClosure) -> ObjectBudgetVerdict:
+    """Decide whether one object may be sealed, and if not, on which cause."""
+    if closure.largest_asset_bytes > closure.budget_bytes:
+        return ObjectBudgetVerdict.SINGLE_ASSET_OVER_BUDGET
+    if closure.over_budget_bytes > 0:
+        return ObjectBudgetVerdict.CLOSURE_OVER_BUDGET
+    return ObjectBudgetVerdict.WITHIN_BUDGET
+
+
+def describe_closure(closure: ObjectClosure) -> str:
+    """Render one closure measurement for an operator-facing refusal."""
+    return (
+        f"{closure.ref} carrier={closure.carrier} "
+        f"closure={closure.closure_bytes / MEBIBYTE:.2f}MiB "
+        f"largestAsset={closure.largest_asset_bytes / MEBIBYTE:.2f}MiB "
+        f"budget={closure.budget_bytes // MEBIBYTE}MiB "
+        f"over={closure.over_budget_bytes / MEBIBYTE:.2f}MiB"
+    )
 
 
 def object_closures(
@@ -124,18 +183,13 @@ def object_closures(
             if not object_root.is_dir():
                 continue
             relative = object_root.relative_to(kind_root)
-            carrier = relative.parts[0] if kind == "posts" else "entity"
-            media_bytes, media_issues = _referenced_media_bytes(object_root)
-            issues.extend(media_issues)
-            closures.append(
-                ObjectClosure(
-                    ref=f"{kind}/{relative.as_posix()}",
-                    carrier=carrier,
-                    budget_bytes=_object_budget_bytes(carrier),
-                    document_bytes=_document_bytes(object_root),
-                    media_bytes=media_bytes,
-                )
+            closure, media_issues = object_closure(
+                object_root,
+                ref=f"{kind}/{relative.as_posix()}",
+                carrier=object_carrier(kind, relative.as_posix()),
             )
+            issues.extend(media_issues)
+            closures.append(closure)
     return closures, issues
 
 
@@ -152,11 +206,8 @@ def main() -> int:
             print(f"  - closure_unresolved: {issue}")
         for row in violations:
             print(
-                f"  - GATE_BLOCK DATA.OBJECT.SIZE_BUDGET_EXCEEDED: {row.ref} "
-                f"carrier={row.carrier} "
-                f"closure={row.closure_bytes / MEBIBYTE:.2f}MiB "
-                f"budget={row.budget_bytes // MEBIBYTE}MiB "
-                f"over={row.over_budget_bytes / MEBIBYTE:.2f}MiB"
+                f"  - GATE_BLOCK DATA.OBJECT.SIZE_BUDGET_EXCEEDED: "
+                f"cause={budget_verdict(row)} {describe_closure(row)}"
             )
         return 1
     largest = max((row.closure_bytes for row in closures), default=0)

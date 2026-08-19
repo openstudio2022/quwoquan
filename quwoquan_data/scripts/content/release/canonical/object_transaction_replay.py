@@ -24,6 +24,7 @@ from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
     _copy_tree,
     _digest_file,
+    _document_tree_digest,
     _read_json,
     _safe_id,
     _safe_rel,
@@ -203,7 +204,9 @@ def replay_object_transaction_package(
             transaction_id=transaction_id,
             dry_run_attestation_sha256=str(audit["dryRunAttestationSha256"]),
         )
-    if _tree_digest(canonical_object) != _tree_digest(package_root / "object"):
+    if _document_tree_digest(canonical_object) != _document_tree_digest(
+        package_root / "object"
+    ):
         raise ObjectTransactionError("DATA.POOL.REPLAY_READBACK_DRIFT")
     pool_record_repaired = False
     if target["objectKind"] == "posts":

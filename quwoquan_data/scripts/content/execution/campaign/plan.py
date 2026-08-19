@@ -367,8 +367,19 @@ def freeze_plan(
     }
     if len(capacity_calibrations) != 1:
         raise ValueError("campaign lanes disagree on the capacity calibration")
-    capacity_calibration = dict(first_submission["capacityCalibration"])
-    assert_capacity_source_binding(capacity_calibration)
+    # 只有真正要跑受治理工作的 campaign 才有容量事实：reviewed-closure adoption 不
+    # 作者、不派发 fleet，只重发已审对象，绑一份 calibration 会让它声称一个从未
+    # 发生过的并发与批次预算。
+    raw_capacity_calibration = first_submission.get("capacityCalibration")
+    capacity_calibration: dict[str, Any] | None = None
+    if raw_capacity_calibration is not None:
+        capacity_calibration = dict(raw_capacity_calibration)
+        assert_capacity_source_binding(capacity_calibration)
+    elif first_submission.get(CAMPAIGN_ADOPTION_FIELD) is None:
+        raise ValueError(
+            "GATE_BLOCK DATA.CAPACITY.CALIBRATION_REQUIRED: campaign plan "
+            "requires a governed capacity calibration binding"
+        )
     scales = {str(row.get("scale") or "") for row in submissions.values()}
     regions = {str(row.get("regionRef") or "") for row in submissions.values()}
     semantic_selections = {
@@ -494,7 +505,6 @@ def freeze_plan(
         "executionBundle": dict(submissions[active[0]]["executionBundle"]),
         "entityCatalogDigest": next(iter(catalog_digests)),
         "semanticSelectionId": next(iter(semantic_selections)),
-        "capacityCalibration": capacity_calibration,
         "laneExternalInputs": lane_external_inputs,
         "externalInputsDigest": aggregate_external_digest,
         "submissionDigests": {
@@ -517,6 +527,8 @@ def freeze_plan(
             "campaignGeneration": int(distributed_run["campaignGeneration"]),
             "campaignFencingToken": str(distributed_run["campaignFencingToken"]),
         }
+    if capacity_calibration is not None:
+        stable["capacityCalibration"] = capacity_calibration
     semantic_preflight = submissions[active[0]].get("semanticPreflightReceipt")
     if semantic_preflight is not None:
         stable["semanticPreflightReceipt"] = dict(semantic_preflight)

@@ -91,6 +91,9 @@
         }
       }
     },
+    "selectionScope": {
+      "enum": ["target_environment", "all_publishable", "milestone"]
+    },
     "targetEnvironment": {"enum": ["alpha", "beta", "gamma", "prod"]},
     "milestone": {"enum": ["M100", "M1000", "M10000"]},
     "milestoneTargets": {
@@ -196,16 +199,17 @@
     {
       "if": {"required": ["targetEnvironment"]},
       "then": {
-        "required": ["releaseMode", "poolDigest", "counts", "contents", "authors", "buildResult"],
-        "not": {"required": ["milestone"]}
+        "required": ["selectionScope", "releaseMode", "poolDigest", "counts", "contents", "authors", "buildResult"],
+        "not": {"required": ["milestone"]},
+        "properties": {"selectionScope": {"const": "target_environment"}}
       }
     },
     {
       "if": {"required": ["milestone"]},
       "then": {
         "required": [
-          "milestoneTargets", "releaseMode", "poolDigest", "counts",
-          "contents", "authors", "buildResult", "sourceIdentities",
+          "selectionScope", "milestoneTargets", "releaseMode", "poolDigest",
+          "counts", "contents", "authors", "buildResult", "sourceIdentities",
           "sourceIdentitySetDigest"
         ],
         "not": {
@@ -217,6 +221,7 @@
           ]
         },
         "properties": {
+          "selectionScope": {"const": "milestone"},
           "releaseClass": {"const": "research"},
           "productLifecycleState": {"const": "research"},
           "releaseMode": {"const": "research"}
@@ -258,12 +263,6 @@
               "homepage": {"const": 100}, "article": {"const": 100},
               "image": {"const": 100}, "video": {"const": 10}
             }
-          },
-          "counts": {
-            "properties": {
-              "article": {"const": 100}, "image": {"const": 100},
-              "video": {"const": 10}, "total": {"const": 210}
-            }
           }
         }
       }
@@ -276,12 +275,6 @@
             "properties": {
               "homepage": {"const": 1000}, "article": {"const": 1000},
               "image": {"const": 1000}, "video": {"const": 100}
-            }
-          },
-          "counts": {
-            "properties": {
-              "article": {"const": 1000}, "image": {"const": 1000},
-              "video": {"const": 100}, "total": {"const": 2100}
             }
           }
         }
@@ -296,25 +289,12 @@
               "homepage": {"const": 10000}, "article": {"const": 10000},
               "image": {"const": 10000}, "video": {"const": 1000}
             }
-          },
-          "counts": {
-            "properties": {
-              "article": {"const": 10000}, "image": {"const": 10000},
-              "video": {"const": 1000}, "total": {"const": 21000}
-            }
           }
         }
       }
     },
     {
-      "if": {
-        "not": {
-          "anyOf": [
-            {"required": ["targetEnvironment"]},
-            {"required": ["milestone"]}
-          ]
-        }
-      },
+      "if": {"not": {"required": ["selectionScope"]}},
       "then": {
         "not": {
           "anyOf": [
@@ -322,6 +302,21 @@
             {"required": ["counts"]}, {"required": ["contents"]},
             {"required": ["authors"]}, {"required": ["buildResult"]},
             {"required": ["milestoneTargets"]}
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"selectionScope": {"const": "all_publishable"}},
+        "required": ["selectionScope"]
+      },
+      "then": {
+        "required": ["releaseMode", "poolDigest", "counts", "contents", "authors", "buildResult"],
+        "not": {
+          "anyOf": [
+            {"required": ["targetEnvironment"]},
+            {"required": ["milestone"]}
           ]
         }
       }

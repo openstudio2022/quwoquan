@@ -108,6 +108,7 @@ policy:
     videoTranscodeTimeoutSeconds: 300
     mediawikiFallbackRetries: 2
     mediawikiWikitextMaxRetries: 2
+    mediawikiInterRequestDelaySeconds: 0.3
     queueLeaseTtlSeconds: 1800
     queueHeartbeatSeconds: 60
     queueMaxAttempts: 2

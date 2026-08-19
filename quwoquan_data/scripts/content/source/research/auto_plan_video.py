@@ -7,7 +7,7 @@ from typing import Any
 
 from core.data_issue import DataIssueCode, DataRecoveryAction
 
-from content.source.professional_video_receipt import (
+from content.source.professional_video_spec_index import (
     acquired_video_specs_for_entity,
 )
 from content.source.research import network_io

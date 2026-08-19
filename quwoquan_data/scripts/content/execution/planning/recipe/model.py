@@ -152,6 +152,19 @@ def _runtime_preflight_argv(
     )
 
 
+def _requires_runtime_preflight(*, campaign_bound: bool, stage: str) -> bool:
+    """Decide whether this stage still owes a live runtime preflight.
+
+    A campaign lane proves provider reachability once, at `review-only`, and the
+    following `run` stage may only publish what that review receipt already
+    qualified.  Re-probing the network there would make publish depend on a
+    second, unrelated liveness fact that the frozen receipt does not cover.
+    """
+    if stage == "plan-only":
+        return False
+    return not (campaign_bound and stage == "run")
+
+
 def _retry_target_names(
     retry_of: str | None,
     *,
@@ -533,9 +546,10 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
     if stage == "readiness-only":
         _readiness(recipe, execution_id, invoke)
         return
-    rc = invoke(_runtime_preflight_argv(execution_id, semantic_selection_id))
-    if rc != 0:
-        raise SystemExit(f"[task execute] task preflight rc={rc}")
+    if _requires_runtime_preflight(campaign_bound=campaign_bound, stage=stage):
+        rc = invoke(_runtime_preflight_argv(execution_id, semantic_selection_id))
+        if rc != 0:
+            raise SystemExit(f"[task execute] task preflight rc={rc}")
     from content.execution.planning.recipe.checkpoint import execute_recipe_stage
 
     execute_recipe_stage(

@@ -109,6 +109,10 @@ def maybe_write_copy_ready_receipt(
             "reviewReceiptRef": _output_ref(review_path, output_root=output_root),
             "publishReceiptRef": _output_ref(publish_path, output_root=output_root),
         }
+    if tuple(lane_rows) != tuple(active):
+        raise ValueError(
+            "content copy ready receipt lanes must cover exactly the active carriers"
+        )
     path = copy_ready_receipt_path(root_execution_id, root=campaigns_root)
     existing = read_json(path) if path.is_file() else None
     payload = {

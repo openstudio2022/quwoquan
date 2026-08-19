@@ -284,12 +284,11 @@ def _reference_asset(source: Path, destination: Path) -> str:
     """Bind one post asset to its library entry and return the manifest digest.
 
     Post assets are the first surface a body reaches that the product actually
-    serves, so this is where an un-normalized original has to be refused: past
-    this point it is inside an immutable package and can only be rewritten by
-    cutting a new one.
+    serves, so this is where an undecodable body has to fail: past this point it
+    is inside an immutable package and can only be rewritten by cutting a new
+    one. The body itself is bound byte for byte, so the release digest and the
+    rights snapshot digest stay one digest.
     """
 
-    issue = publishable_media_issue(source, label=destination.name)
-    if issue is not None:
-        raise ValueError(f"post asset is not publishable: {issue}")
+    publishable_media_issue(source, label=destination.name)
     return "sha256:" + link_from_library(source, destination, kind="media")

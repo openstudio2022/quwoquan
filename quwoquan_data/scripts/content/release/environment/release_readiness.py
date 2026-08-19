@@ -272,34 +272,28 @@ def write_environment_release_readiness(
     )
     if post_report.get("passed") is not True or verified_post_ids != post_ids:
         raise EnvironmentReleaseReadinessError("post verification drifts from imported postIds")
-    if readiness_phase in {"research", "commercial"}:
-        search_queries = post_report.get("searchQueries")
-        if not isinstance(search_queries, list):
-            raise EnvironmentReleaseReadinessError(
-                "post verification lacks searchQueries"
-            )
-        searchable_post_ids = sorted(
-            str(row.get("targetId") or "")
-            for row in search_queries
-            if isinstance(row, Mapping) and row.get("targetType") == "post"
+    search_queries = post_report.get("searchQueries")
+    if not isinstance(search_queries, list):
+        raise EnvironmentReleaseReadinessError("post verification lacks searchQueries")
+    searchable_post_ids = sorted(
+        str(row.get("targetId") or "")
+        for row in search_queries
+        if isinstance(row, Mapping) and row.get("targetType") == "post"
+    )
+    searchable_author_ids = sorted(
+        str(row.get("targetId") or "")
+        for row in search_queries
+        if isinstance(row, Mapping) and row.get("targetType") == "author"
+    )
+    expected_author_ids = sorted(
+        str(row.get("personaId") or "")
+        for row in post_report.get("creators") or []
+        if isinstance(row, Mapping)
+    )
+    if searchable_post_ids != post_ids or searchable_author_ids != expected_author_ids:
+        raise EnvironmentReleaseReadinessError(
+            "Search projection does not exactly match imported Posts and Personas"
         )
-        searchable_author_ids = sorted(
-            str(row.get("targetId") or "")
-            for row in search_queries
-            if isinstance(row, Mapping) and row.get("targetType") == "author"
-        )
-        expected_author_ids = sorted(
-            str(row.get("personaId") or "")
-            for row in post_report.get("creators") or []
-            if isinstance(row, Mapping)
-        )
-        if (
-            searchable_post_ids != post_ids
-            or searchable_author_ids != expected_author_ids
-        ):
-            raise EnvironmentReleaseReadinessError(
-                "Search projection does not exactly match imported Posts and Personas"
-            )
     if post_report.get("readinessPhase") != readiness_phase:
         raise EnvironmentReleaseReadinessError(
             "post verification readinessPhase drift"
@@ -342,7 +336,10 @@ def write_environment_release_readiness(
         "typed_video",
         "homepage_recommend",
     }
-    if readiness_phase in {"research", "commercial"}:
+    # App 视频书唯一消费 premium_stream 池：consumer/research/commercial 三个
+    # 非 import 阶段都必须携带并证明 premium_stream 读回（对齐 environment-
+    # topology-and-packaging spec；typed_video 绿不代表视频书绿）。
+    if readiness_phase in {"research", "consumer", "commercial"}:
         required_query_names.add("premium_stream")
     if set(queries_by_name) != required_query_names:
         raise EnvironmentReleaseReadinessError(
@@ -390,14 +387,17 @@ def write_environment_release_readiness(
         raise EnvironmentReleaseReadinessError(
             "identity=work&type=video does not prove a release-bound video postId"
         )
-    if readiness_phase in {"research", "commercial"} and (
+    if readiness_phase in {"research", "consumer", "commercial"} and (
         not premium_ids or not premium_ids.issubset(release_post_ids)
     ):
         raise EnvironmentReleaseReadinessError(
             "premium_stream does not prove a release-bound postId"
         )
     premium_playable_video_ids = premium_ids & video_ids & verified_playable_video_ids
-    if readiness_phase in {"research", "commercial"} and not premium_playable_video_ids:
+    if (
+        readiness_phase in {"research", "consumer", "commercial"}
+        and not premium_playable_video_ids
+    ):
         raise EnvironmentReleaseReadinessError(
             "premium_stream does not expose a release-bound video with a playable media probe"
         )

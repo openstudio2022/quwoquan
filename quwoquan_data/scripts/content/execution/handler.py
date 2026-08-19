@@ -46,6 +46,9 @@ from content.execution.controller.execute.review_image_supported_api_input impor
 from content.execution.controller.execute.author_image_supported_api_input import (
     register_author_image_supported_api_input_parser,
 )
+from content.execution.controller.execute.video_acquisition_agent_input import (
+    register_video_acquisition_agent_input_parsers,
+)
 from content.execution.execution_supersession import (
     register_supersede_execution_parser,
 )
@@ -82,6 +85,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     register_review_asset_parser(commands)
     register_review_image_supported_api_input_parser(commands)
     register_author_image_supported_api_input_parser(commands)
+    register_video_acquisition_agent_input_parsers(commands)
     register_reconcile_stale_parser(commands)
     register_reconcile_failed_campaign_parser(commands)
     register_reconcile_submissions_parser(commands)

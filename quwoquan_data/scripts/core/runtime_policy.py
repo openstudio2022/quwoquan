@@ -101,6 +101,7 @@ class RuntimePolicy:
     video_transcode_timeout_seconds: int
     mediawiki_fallback_retries: int
     mediawiki_wikitext_max_retries: int
+    mediawiki_inter_request_delay_seconds: float
     queue_lease_ttl_seconds: int
     queue_heartbeat_seconds: int
     queue_max_attempts: int
@@ -411,6 +412,7 @@ def load_runtime_policy(profile_id: str) -> RuntimePolicy:
         ),
         mediawiki_fallback_retries=_positive_int(budgets.get("mediawikiFallbackRetries"), label="budgets.mediawikiFallbackRetries"),
         mediawiki_wikitext_max_retries=_positive_int(budgets.get("mediawikiWikitextMaxRetries"), label="budgets.mediawikiWikitextMaxRetries"),
+        mediawiki_inter_request_delay_seconds=_non_negative_float(budgets.get("mediawikiInterRequestDelaySeconds"), label="budgets.mediawikiInterRequestDelaySeconds"),
         queue_lease_ttl_seconds=_positive_int(budgets.get("queueLeaseTtlSeconds"), label="budgets.queueLeaseTtlSeconds"),
         queue_heartbeat_seconds=_positive_int(budgets.get("queueHeartbeatSeconds"), label="budgets.queueHeartbeatSeconds"),
         queue_max_attempts=_positive_int(budgets.get("queueMaxAttempts"), label="budgets.queueMaxAttempts"),

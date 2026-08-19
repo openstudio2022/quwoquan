@@ -20,6 +20,7 @@
     "partitionCount",
     "partitionAlgorithm",
     "checkpointPolicy",
+    "requireCommercial",
     "recoverDeadTasks",
     "objectTimeoutMilliseconds",
     "globalRequiredQuota",
@@ -120,6 +121,10 @@
     },
     "checkpointPolicy": {
       "$ref": "#/$defs/checkpointPolicy"
+    },
+    "requireCommercial": {
+      "type": "boolean",
+      "description": "商业化生命周期的 publish 批次必须在配额未达标时由 worker fail closed；非商业化恒为 false。"
     },
     "recoverDeadTasks": {
       "type": "boolean"

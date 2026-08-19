@@ -348,8 +348,6 @@ def write_source_unit(
         "category": source_category or platform or "web",
         "platform": platform or "web",
         "sourceUseMode": source_use_mode,
-        "publishMediaMode": publish_media_mode,
-        "sourceRole": source_role,
         "imageEvidenceMode": image_evidence_mode,
         "researchLane": research_lane,
         # P3 三类解耦：来源页是否含内联视频（文章类含视频则放弃，不强行图文化视频内容）。
@@ -398,6 +396,12 @@ def write_source_unit(
         )
         if attribution is not None:
             manifest["sourceAttribution"] = attribution
+    # 未声明发布媒体形态或来源角色的单元（例如只做事实底稿的 homepage 主源）不写这两个
+    # 键：空串不是它们枚举之外的第三种取值，落成空串只会让写盘撞契约。
+    if str(publish_media_mode or "").strip():
+        manifest["publishMediaMode"] = str(publish_media_mode).strip()
+    if str(source_role or "").strip():
+        manifest["sourceRole"] = str(source_role).strip()
     article_site_id = str(source_payload.get("articleSiteId") or "").strip()
     article_profile_digest = str(
         source_payload.get("sourceDiscoveryProfileDigest") or ""

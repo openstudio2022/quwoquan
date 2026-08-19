@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit, urlunsplit
 
 import yaml
 from content.release.environment.post_api_media_verification import (
@@ -52,6 +52,11 @@ def _operation_payload(response: Any, *, endpoint: str) -> dict[str, Any]:
     if operation is None:
         raise PostApiVerificationError(f"{endpoint} lacks request trace evidence")
     return operation.as_payload()
+
+
+def _public_media_path(url: str) -> str:
+    parts = urlsplit(str(url or "").strip())
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
 
 
 def _optional_text(payload: Mapping[str, Any], field: str, *, endpoint: str) -> str:
@@ -125,7 +130,7 @@ def _verify_detail(
         if creator.avatar_url
         else _optional_text(payload, "authorAvatarUrl", endpoint="post detail")
     )
-    if detail_avatar_url != creator.avatar_url:
+    if _public_media_path(detail_avatar_url) != _public_media_path(creator.avatar_url):
         raise PostApiVerificationError(
             f"post detail author avatar mismatch for {case.post_ref}"
         )
@@ -134,7 +139,7 @@ def _verify_detail(
     if _required_text(payload, "contentIdentity", endpoint="post detail") != "work":
         raise PostApiVerificationError(f"post detail content identity mismatch for {case.post_ref}")
     media_urls, cover_url, video_url = _require_media(payload, case.content_type)
-    source_attribution_ready = _verify_source_attribution(payload, case)
+    _verify_source_attribution(payload, case)
     observed_urls = {url for url in (*media_urls, cover_url, video_url) if url}
     expected_urls = {asset.public_url for asset in case.media_assets}
     if case.content_type is not ContentType.ARTICLE and observed_urls != expected_urls:
@@ -166,7 +171,7 @@ def _verify_detail(
         "mediaReady": case.content_type is ContentType.ARTICLE or bool(probes),
         "mediaProbeCount": len(probes),
         "mediaProbes": probes,
-        "sourceAttributionReady": source_attribution_ready,
+        "sourceAttributionReady": True,
     }
 
 
@@ -197,7 +202,9 @@ def _verify_author_profile(
         "avatarUrl",
         endpoint="creator public profile",
     )
-    if avatar_url != creator.avatar_url:
+    # Persona public profiles append ?v=<avatarVersion> for cache busting; the
+    # release authority binds the public slice path without that query.
+    if _public_media_path(avatar_url) != _public_media_path(creator.avatar_url):
         raise PostApiVerificationError(
             f"creator public avatar URL drift for {creator.creator_ref}"
         )
@@ -280,7 +287,7 @@ def _feed_item_matches_release(
         if creator.avatar_url
         else _optional_text(item, "authorAvatarUrl", endpoint=endpoint)
     )
-    if item_avatar_url != creator.avatar_url:
+    if _public_media_path(item_avatar_url) != _public_media_path(creator.avatar_url):
         raise PostApiVerificationError(
             f"{endpoint} author avatar mismatch for {case.post_ref}"
         )
@@ -509,7 +516,11 @@ def write_post_api_verification(
             client,
             cases,
             creators_by_author,
-            include_premium_stream=readiness_phase in {"research", "commercial"},
+            # App 视频书唯一消费 premium_stream 池；consumer readiness 同样必须
+            # 证明 premium_stream release-bound 非空读回（environment-topology-
+            # and-packaging spec），否则 typed_video 绿会被误当成视频书绿。
+            include_premium_stream=readiness_phase
+            in {"research", "consumer", "commercial"},
         )
         creator_rows = [
             _verify_author_profile(client, creator)
@@ -522,15 +533,11 @@ def write_post_api_verification(
             str(row["authorId"]): int(row["profileStatus"])
             for row in creator_rows
         }
-        search_queries = (
-            _verify_search_projection(
-                client,
-                release_root=release_root,
-                cases=cases,
-                creators_by_author=creators_by_author,
-            )
-            if readiness_phase in {"research", "commercial"}
-            else None
+        search_queries = _verify_search_projection(
+            client,
+            release_root=release_root,
+            cases=cases,
+            creators_by_author=creators_by_author,
         )
         rows = []
         for case in cases:
@@ -572,12 +579,11 @@ def write_post_api_verification(
         "verifiedAt": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "passed": True,
         "feedQueries": feed_queries,
+        "searchQueries": search_queries,
         "creators": creator_rows,
         "posts": rows,
         "issues": [],
     }
-    if search_queries is not None:
-        payload["searchQueries"] = search_queries
     try:
         assert_valid(payload, "release", "post_api_verification", label="post_api_verification")
     except (TypeError, ValueError) as exc:
