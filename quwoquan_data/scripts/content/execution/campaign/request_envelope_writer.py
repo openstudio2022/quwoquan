@@ -29,8 +29,8 @@ from content.execution.campaign.scale import (
 )
 from content.execution.identity import parse_execution_id
 from content.execution.model_contract import DEFAULT_SEMANTIC_SELECTION_ID
-from content.execution.planning.capacity_policy import (
-    derive_workload_capacity_fields,
+from content.execution.planning.capacity_calibration import (
+    assert_capacity_source_binding,
 )
 
 
@@ -243,19 +243,26 @@ def _assert_one_handoff_identity(
 def _assert_workload_plans(
     payloads: Mapping[str, Mapping[str, Any]],
 ) -> None:
+    """Hold every carrier of one campaign on a single capacity source.
+
+    `DEC-002` moved partition count and `capacityPlanDigest` to the execution
+    freeze, so the envelope no longer carries them. What the envelope must still
+    guarantee is that all carriers were admitted against the same receipt and
+    that no host slice was pre-bound here.
+    """
+    bindings = set()
     for payload in payloads.values():
-        work_unit_count = int(payload["quota"])
-        expected = derive_workload_capacity_fields(
-            target_scale=str(payload["scale"]),
-            carrier=str(payload["carrier"]),
-            work_unit_count=work_unit_count,
+        binding = payload.get("capacityCalibration")
+        if not isinstance(binding, Mapping):
+            raise ValueError("campaign envelope capacity calibration is missing")
+        assert_capacity_source_binding(binding)
+        bindings.add(
+            json.dumps(dict(binding), sort_keys=True, separators=(",", ":"))
         )
-        if any(
-            payload.get(key) != value
-            for key, value in expected.items()
-            if key != "workerHostSetBinding"
-        ) or payload.get("workerHostSetBinding") is not None:
-            raise ValueError("campaign workload plan drift")
+        if payload.get("workerHostSetBinding") is not None:
+            raise ValueError("campaign envelope must not pre-bind a worker host set")
+    if len(bindings) > 1:
+        raise ValueError("campaign carriers disagree on the capacity calibration")
 
 
 def _assert_one_scale_source_pool(

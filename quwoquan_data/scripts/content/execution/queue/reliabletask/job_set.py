@@ -224,9 +224,6 @@ def _load(
                 )
             ):
                 raise ValueError("ReliableTask expectedTasks/jobSetDigest mismatch")
-            workers = payload.get("requiredWorkers")
-            if isinstance(workers, bool) or not isinstance(workers, int):
-                raise TypeError("ReliableTask requiredWorkers is invalid")
             partitions = partition_count(len(expected_tasks))
             if _normalize_tasks(
                 execution_id, stage, expected_tasks,
@@ -270,12 +267,48 @@ def _load(
     return rows
 
 
+def frozen_capacity_policy(execution_id: str) -> dict[str, Any]:
+    """Read the capacity facts a job set carries from the frozen execution spec.
+
+    `DEC-002` keeps the work-unit count, the capacity plan digest and the
+    calibration binding on one truth source. The job set copies them from the
+    frozen spec instead of accepting them from its caller, so no dispatch path
+    can hand the fleet a ceiling the execution never froze.
+    """
+    from content.execution import store
+
+    policy = (store.load_spec(execution_id) or {}).get("executionPolicy")
+    if not isinstance(policy, Mapping):
+        raise ValueError(
+            f"ReliableTask job set requires a frozen executionPolicy: {execution_id}"
+        )
+    target_object_count = policy.get("targetObjectCount")
+    if (
+        isinstance(target_object_count, bool)
+        or not isinstance(target_object_count, int)
+        or target_object_count < 1
+    ):
+        raise ValueError("ReliableTask job set targetObjectCount is invalid")
+    capacity_plan_digest = str(policy.get("capacityPlanDigest") or "").strip()
+    if not re.fullmatch(r"sha256:[0-9a-f]{64}", capacity_plan_digest):
+        raise ValueError("ReliableTask job set capacityPlanDigest is invalid")
+    calibration = policy.get("capacityCalibration")
+    if not isinstance(calibration, Mapping):
+        raise ValueError("ReliableTask job set capacityCalibration is missing")
+    from content.execution.planning.capacity_policy import frozen_capacity_calibration
+
+    return {
+        "targetObjectCount": target_object_count,
+        "capacityPlanDigest": capacity_plan_digest,
+        "capacityCalibration": frozen_capacity_calibration(calibration),
+    }
+
+
 def freeze_job_set(
     execution_id: str,
     stage: str,
     *,
     expected_tasks: Sequence[Mapping[str, Any]],
-    required_workers: int,
 ) -> dict[str, Any]:
     from content.execution.queue.backend import load_execution_queue_backend
     from content.execution.queue.core import _queue_lock
@@ -336,7 +369,7 @@ def freeze_job_set(
             "executionManifestDigest": backend["executionManifestDigest"],
             "sourceDigest": backend["sourceDigest"],
             "targetSetDigest": backend["targetSetDigest"],
-            "requiredWorkers": required_workers,
+            **frozen_capacity_policy(normalized),
             "partitionCount": partitions,
             "partitionAlgorithm": PARTITION_ALGORITHM,
             "checkpointPolicy": checkpoint_policy_document(),

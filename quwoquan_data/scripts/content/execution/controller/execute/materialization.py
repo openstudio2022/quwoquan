@@ -396,9 +396,7 @@ def ensure_execution_spec(
             limit=int(selection.get("limit")),
             quota=int(selection["approvedQuota"]),
             oversample_factor=active_runtime_policy().oversample_factor,
-            required_workers=int(selection["requiredWorkers"]),
-            partition_count=int(selection["partitionCount"]),
-            capacity_plan_digest=str(selection["capacityPlanDigest"]),
+            capacity_calibration=dict(selection["capacityCalibration"]),
             worker_host_set_binding=(
                 dict(selection["workerHostSetBinding"])
                 if isinstance(selection.get("workerHostSetBinding"), dict)

@@ -303,6 +303,7 @@ class ExecutionStateStatus(StrEnum):
     WAITING_AGENT = "waiting_agent"
     REPAIRING = "repairing"
     MANUAL_REQUIRED = "manual_required"
+    INTERRUPTED = "interrupted"
     SUCCEEDED = "succeeded"
 
 

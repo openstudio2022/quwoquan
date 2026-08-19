@@ -165,7 +165,6 @@ def drain_pool_delivery(
         entity_ids=targets,
         spec=frozen_spec,
         managed=False,
-        max_workers=frozen_spec.execution_policy.required_workers,
     )
     dispatch = dispatch_reliabletask_checkpoint(ctx, ExecutionStage.PUBLISH)
     if dispatch is None:

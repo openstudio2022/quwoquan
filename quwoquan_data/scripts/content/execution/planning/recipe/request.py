@@ -47,9 +47,7 @@ def resolve_frozen_selection(
             "intentLabel": intent,
             "limit": request.count,
             "approvedQuota": request.quota,
-            "requiredWorkers": request.required_workers,
-            "partitionCount": request.partition_count,
-            "capacityPlanDigest": request.capacity_plan_digest,
+            "capacityCalibration": dict(request.capacity_calibration),
             "workerHostSetBinding": (
                 dict(request.worker_host_set_binding)
                 if request.worker_host_set_binding is not None
@@ -484,9 +482,9 @@ def handle_execute(
             intent=identity.intent,
             count=count,
             quota=quota,
-            required_workers=getattr(args, "required_workers", None),
-            partition_count=getattr(args, "partition_count", None),
-            capacity_plan_digest=getattr(args, "capacity_plan_digest", None),
+            capacity_calibration_receipt=getattr(
+                args, "capacity_calibration_receipt", None
+            ),
             scale_source_pool_id=getattr(args, "scale_source_pool_id", None),
             scale_source_pool_target_scale=getattr(
                 args, "scale_source_pool_target_scale", None

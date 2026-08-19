@@ -9,8 +9,10 @@ import content.execution.campaign.request_envelope as envelopes
 from content.execution.campaign import (
     m100_alpha_acceptance,
     request_envelope_build,
+    request_envelope_writer,
 )
 from content.execution.campaign.external_inputs import content_source_revision
+from core.source_digest import SourceDefinitionSnapshot
 from content.release.canonical.research_scale_capacity import throughput_basis_digest
 from core.io import write_json
 from core.paths import research_scale_promotions_root
@@ -53,23 +55,13 @@ def _patch_envelope_deps(monkeypatch) -> None:
         "_git_commit",
         lambda _repo: "0123456789abcdef0123456789abcdef01234567",
     )
-    monkeypatch.setattr(
-        envelopes,
-        "current_source_digest",
-        lambda repo_root=None: type(
-            "Digest",
-            (),
-            {
-                "to_document": staticmethod(
-                    lambda: {
-                        "algorithm": "sha256",
-                        "digest": "sha256:" + ("a" * 64),
-                        "inputs": ["quwoquan_data/scripts"],
-                    }
-                )
-            },
-        )(),
-    )
+    frozen_snapshot = SourceDefinitionSnapshot(digest="sha256:" + ("a" * 64))
+    for module in (envelopes, request_envelope_build):
+        monkeypatch.setattr(
+            module,
+            "current_source_definition_snapshot",
+            lambda repo_root=None: frozen_snapshot,
+        )
     monkeypatch.setattr(
         request_envelope_build,
         "entity_catalog_digest",

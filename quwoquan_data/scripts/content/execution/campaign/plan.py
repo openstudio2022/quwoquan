@@ -43,6 +43,9 @@ from content.execution.closure.adoption_campaign_contract import (
     validate_adoption_target_identity,
     validate_campaign_adoption_binding,
 )
+from content.execution.planning.capacity_calibration import (
+    assert_capacity_source_binding,
+)
 from content.execution.planning.semantic_preflight_admission import (
     bind_semantic_preflight_receipt,
     validate_semantic_preflight_binding_at,
@@ -353,6 +356,19 @@ def freeze_plan(
         )
         for row in submissions.values()
     }
+    capacity_calibrations = {
+        json.dumps(
+            row.get("capacityCalibration"),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        for row in submissions.values()
+    }
+    if len(capacity_calibrations) != 1:
+        raise ValueError("campaign lanes disagree on the capacity calibration")
+    capacity_calibration = dict(first_submission["capacityCalibration"])
+    assert_capacity_source_binding(capacity_calibration)
     scales = {str(row.get("scale") or "") for row in submissions.values()}
     regions = {str(row.get("regionRef") or "") for row in submissions.values()}
     semantic_selections = {
@@ -478,6 +494,7 @@ def freeze_plan(
         "executionBundle": dict(submissions[active[0]]["executionBundle"]),
         "entityCatalogDigest": next(iter(catalog_digests)),
         "semanticSelectionId": next(iter(semantic_selections)),
+        "capacityCalibration": capacity_calibration,
         "laneExternalInputs": lane_external_inputs,
         "externalInputsDigest": aggregate_external_digest,
         "submissionDigests": {

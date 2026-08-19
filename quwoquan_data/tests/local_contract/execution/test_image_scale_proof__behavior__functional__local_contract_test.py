@@ -30,6 +30,9 @@ from core.paths import STAGE_DOWNLOAD  # noqa: E402
 from content.source.source_unit import resolve_entity_object_dir  # noqa: E402
 from content.execution import store  # noqa: E402
 from content.execution.planning.selection import build_execution_spec  # noqa: E402
+from support.capacity_calibration_fixture import (  # noqa: E402
+    synthetic_capacity_source_binding,
+)
 from content.source.image_scale_proof import (  # noqa: E402
     build_open_license_scale_proof,
     write_open_license_scale_proof,
@@ -71,9 +74,7 @@ def _make_task(
         video_works_per_target=0,
         approved_quota=len(targets),
         oversample_factor=1.0,
-        required_workers=1,
-        partition_count=16,
-        capacity_plan_digest="sha256:" + "1" * 64,
+        capacity_calibration=synthetic_capacity_source_binding(),
         target_entity_count=len(targets),
     )
     spec["content"]["research"]["imageCountPolicy"] = image_count_policy
@@ -152,9 +153,7 @@ def _make_homepage_task(name: str, targets: list[str]) -> str:
         video_works_per_target=0,
         approved_quota=len(targets),
         oversample_factor=1.0,
-        required_workers=1,
-        partition_count=16,
-        capacity_plan_digest="sha256:" + "1" * 64,
+        capacity_calibration=synthetic_capacity_source_binding(),
         target_entity_count=len(targets),
     )
     spec["status"] = "active"
@@ -348,9 +347,7 @@ def test_scale_proof_reads_each_target_from_its_declared_entity_type():
         target_entity_count=2,
         approved_quota=2,
         oversample_factor=1.0,
-        required_workers=1,
-        partition_count=16,
-        capacity_plan_digest="sha256:" + "1" * 64,
+        capacity_calibration=synthetic_capacity_source_binding(),
     )
     spec["status"] = "active"
     store.save_spec(spec)

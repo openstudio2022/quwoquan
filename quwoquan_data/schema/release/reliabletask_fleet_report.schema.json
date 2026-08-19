@@ -34,6 +34,8 @@
     "finalizedObjectCount",
     "idempotencyKey",
     "fleetPeakConcurrentWorkers",
+    "fleetWaveCount",
+    "fleetBatchDeadlineEpochSeconds",
     "taskOutcomes",
     "executionCreatedAt",
     "fleetStartedAt",
@@ -177,12 +179,12 @@
     "fleetWaveCount": {
       "type": "integer",
       "minimum": 1,
-      "description": "job 数与冻结并行上限决定的 wave 数。规模增长只增加 wave 数，不增加同时运行的进程数。携带即按本约束校验；尚未进入顶层 required，因为其唯一合法来源是 OPEN-003 待冻结的 calibration receipt，随该 OPEN 关闭同批提为 required。"
+      "description": "job 数与冻结并行上限决定的 wave 数。规模增长只增加 wave 数，不增加同时运行的进程数。按 DEC-002/DEC-003 与 requiredWorkers 的退役同批成为必填：唯一合法来源是 executionPolicy 冻结的 calibration 绑定，随该 OPEN 关闭同批提为 required。"
     },
     "fleetBatchDeadlineEpochSeconds": {
       "type": "integer",
       "minimum": 1,
-      "description": "executionPolicy 冻结的批次绝对截止，绝对纪元秒。与执行策略中的冻结值相同，进程重启与 lease 续租都不得改写。携带即按本约束校验；尚未进入顶层 required，因为其唯一合法来源是 OPEN-003 待冻结的 calibration receipt，随该 OPEN 关闭同批提为 required。"
+      "description": "executionPolicy 冻结的批次绝对截止，绝对纪元秒。与执行策略中的冻结值相同，进程重启与 lease 续租都不得改写。按 DEC-002/DEC-003 与 requiredWorkers 的退役同批成为必填：唯一合法来源是 executionPolicy 冻结的 calibration 绑定，随该 OPEN 关闭同批提为 required。"
     },
     "taskOutcomes": {
       "type": "array",

@@ -55,6 +55,40 @@
       "minLength": 1,
       "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
     },
+    "sourceBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "冻结之前的容量来源绑定：只声明选中了哪份 receipt 与其取值，不含冻结时刻、wave 数与批次绝对截止。请求与派发清单只能携带本形态；三个冻结项由 execution 冻结时一次算定。",
+      "required": [
+        "calibrationId",
+        "calibrationReceiptRef",
+        "calibrationReceiptDigest",
+        "applicability",
+        "frozenCapacity"
+      ],
+      "properties": {
+        "calibrationId": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "calibrationReceiptRef": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+        },
+        "calibrationReceiptDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "applicability": {
+          "$ref": "capacity_calibration_values.schema.json#/$defs/applicabilityScope"
+        },
+        "frozenCapacity": {
+          "$ref": "capacity_calibration_values.schema.json#/$defs/frozenCapacity"
+        }
+      }
+    },
     "executionPolicyBinding": {
       "type": "object",
       "additionalProperties": false,

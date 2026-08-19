@@ -57,11 +57,8 @@
     "selector": { "type": "string", "minLength": 1 },
     "quota": { "type": "integer", "minimum": 1 },
     "count": { "type": "integer", "minimum": 1 },
-    "requiredWorkers": { "type": "integer", "minimum": 1 },
-    "partitionCount": { "enum": [16, 32, 64, 128, 256] },
-    "capacityPlanDigest": {
-      "type": "string",
-      "pattern": "^sha256:[a-f0-9]{64}$"
+    "capacityCalibration": {
+      "$ref": "governed_capacity_calibration_receipt.schema.json#/$defs/sourceBinding"
     },
     "workerHostSetBinding": {
       "oneOf": [
@@ -158,9 +155,7 @@
       },
       "then": {
         "required": [
-          "requiredWorkers",
-          "partitionCount",
-          "capacityPlanDigest"
+          "capacityCalibration"
         ],
         "properties": {
           "semanticSelectionId": { "enum": ["default", "cursor_grok", "cursor_auto"] }

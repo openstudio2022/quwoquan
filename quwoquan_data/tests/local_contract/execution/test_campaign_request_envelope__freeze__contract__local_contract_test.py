@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -10,66 +11,16 @@ import content.execution.campaign.request_envelope as envelopes
 import pytest
 from content.execution.campaign.scale import CampaignScaleError, resolve_campaign_scale
 from content.execution.scale import promotion as scale_promotion
-from core.io import write_json
+from core.io import read_json, write_json
 from core.runtime_policy import active_runtime_policy
+from content.execution.campaign import request_envelope_build
+from support.campaign_request_envelope_fixture import (
+    _expected_count,
+    _patch_envelope_deps,
+    _wave_targets,
+)
 from support.semantic_preflight_fixture import ready_semantic_preflight
 
-
-def _patch_envelope_deps(monkeypatch) -> None:
-    monkeypatch.setattr(
-        envelopes,
-        "_require_stable_source_inputs",
-        lambda *_args, **_kwargs: None,
-    )
-    monkeypatch.setattr(envelopes, "_git_branch", lambda _repo: "dev1.0")
-    monkeypatch.setattr(
-        envelopes,
-        "_git_commit",
-        lambda _repo: "0123456789abcdef0123456789abcdef01234567",
-    )
-    monkeypatch.setattr(
-        envelopes,
-        "current_source_digest",
-        lambda repo_root=None: type(
-            "Digest",
-            (),
-            {
-                "to_document": staticmethod(
-                    lambda: {
-                        "algorithm": "sha256",
-                        "digest": "sha256:" + ("a" * 64),
-                        "inputs": ["quwoquan_data/scripts"],
-                    }
-                )
-            },
-        )(),
-    )
-    monkeypatch.setattr(
-        envelopes,
-        "entity_catalog_digest",
-        lambda _ref: "sha256:" + ("b" * 64),
-    )
-    monkeypatch.setattr(
-        envelopes,
-        "freeze_carrier_pre_acquisition_inputs",
-        lambda *_args, **_kwargs: (
-            [],
-            {
-                "handoffId": "local-contract",
-                "handoffRevision": 1,
-                "handoffRef": (
-                    "data/local/workspace/content-pre-acquisition-handoffs/"
-                    "local-contract/revision-001.json"
-                ),
-                "handoffDigest": "sha256:" + "9" * 64,
-                "handoffFileDigest": "sha256:" + "8" * 64,
-            },
-        ),
-    )
-
-
-def _expected_count(quota: int) -> int:
-    return math.ceil(quota * active_runtime_policy().oversample_factor)
 
 
 def test_campaign_source_freeze_allows_dirty_tree_when_content_digest_is_stable(
@@ -432,6 +383,7 @@ def test_campaign_request_envelope_freeze__contract__local_contract_test(
         repo_root=repo,
         output_root=tmp_path,
         day="20260731",
+        target_names=_wave_targets("freeze"),
     )
     assert set(first) == {"homepage", "article", "image", "video"}
     homepage = first["homepage"]
@@ -441,7 +393,7 @@ def test_campaign_request_envelope_freeze__contract__local_contract_test(
     assert '"quota": 100' in payload
     assert f'"count": {_expected_count(100)}' in payload
     assert '"vertical": "travel"' in payload
-    assert "travel/M100/homepage.json" in homepage.as_posix()
+    assert "travel/M100/china/sequence-001/homepage.json" in homepage.as_posix()
     video_payload = envelopes.read_json(first["video"])
     assert video_payload["quota"] == 10
     assert video_payload["count"] == _expected_count(10)
@@ -452,6 +404,7 @@ def test_campaign_request_envelope_freeze__contract__local_contract_test(
         repo_root=repo,
         output_root=tmp_path,
         day="20260731",
+        target_names=_wave_targets("freeze"),
     )
     assert second["homepage"] == homepage
 
@@ -547,8 +500,13 @@ def test_campaign_envelope_keeps_object_quota_above_unique_entity_scope(
 
     assert envelope["quota"] == 15
     assert len(envelope["targetNames"]) == 8
-    assert envelope["requiredWorkers"] == 15
     assert envelope["count"] == _expected_count(15)
+    # DEC-002 起对象配额不再被复制成 worker 数：信封只携带工作单元口径
+    # （quota/count）与选中的 calibration 来源绑定。
+    assert "requiredWorkers" not in envelope
+    assert envelope["capacityCalibration"]["frozenCapacity"][
+        "fleetMaxConcurrentWorkers"
+    ] == 2
 
 
 def test_campaign_envelope_freeze_rejects_cross_lane_handoff_drift(
@@ -574,7 +532,7 @@ def test_campaign_envelope_freeze_rejects_cross_lane_handoff_drift(
         )
 
     monkeypatch.setattr(
-        envelopes,
+        request_envelope_build,
         "freeze_carrier_pre_acquisition_inputs",
         bind,
     )
@@ -586,6 +544,7 @@ def test_campaign_envelope_freeze_rejects_cross_lane_handoff_drift(
             repo_root=repo,
             output_root=tmp_path,
             day="20260731",
+            target_names=_wave_targets("handoff"),
         )
     assert not tuple(tmp_path.rglob("*.json"))
 
@@ -596,7 +555,7 @@ def test_campaign_envelope_freeze_records_expired_probe_as_nonblocking_observati
 ) -> None:
     repo = Path(__file__).resolve().parents[4]
     _patch_envelope_deps(monkeypatch)
-    predecessor = "20260805--travel-image-m3--china--scale-001"
+    predecessor = "20260805--travel-image-workload-image-3--china--scale-001"
 
     with pytest.raises(ValueError, match="sequence=1 forbids"):
         envelopes.build_envelope(
@@ -607,16 +566,6 @@ def test_campaign_envelope_freeze_records_expired_probe_as_nonblocking_observati
             day="20260805",
             predecessor_execution_id=predecessor,
         )
-    with pytest.raises(ValueError, match="sequence>1 requires"):
-        envelopes.build_envelope(
-            scale="M3",
-            carrier="image",
-            region_ref="china",
-            repo_root=repo,
-            day="20260805",
-            sequence=2,
-        )
-
     retry = envelopes.build_envelope(
         scale="M3",
         carrier="image",
@@ -630,11 +579,10 @@ def test_campaign_envelope_freeze_records_expired_probe_as_nonblocking_observati
     assert retry["retryOf"] == predecessor
     assert retry["semanticSelectionId"] == "default"
     assert retry["executionId"] == (
-        "20260805--travel-image-m3--china--scale-002"
+        "20260805--travel-image-workload-image-3--china--scale-002"
     )
-    assert retry["rootExecutionId"] == (
-        "20260805--travel-homepage-m3--china--scale-002"
-    )
+    # 显式工作量只激活被请求的载体，因此根执行就是它自己。
+    assert retry["rootExecutionId"] == retry["executionId"]
     preflight_root = tmp_path / "semantic-output"
     preflight_path, _binding = ready_semantic_preflight(
         "cursor_grok",

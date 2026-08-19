@@ -7,6 +7,7 @@ import subprocess
 import time
 from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 from core.control_types import QueueBackend, QueueJobStage, QueueJobState
 from core.io import read_json, write_json
@@ -140,7 +141,6 @@ def build_fleet_request(
     execution_id: str,
     stage: QueueJobStage,
     *,
-    required_workers: int,
     host_scope_id: str | None = None,
 ) -> dict[str, object]:
     recover_dead_tasks = _has_audited_remote_recovery(execution_id, stage)
@@ -170,17 +170,23 @@ def build_fleet_request(
     job_set_envelope = select_or_freeze_job_set_attempt(
         execution_id,
         stage.value,
-        required_workers=required_workers,
         active_tasks=active_documents,
     )
     frozen_tasks = job_set_envelope.get("expectedTasks")
     if not isinstance(frozen_tasks, list):
         raise TypeError("ReliableTask frozen expectedTasks is invalid")
-    request_jobs, worker_host_binding, request_workers = select_worker_host_slice(
+    # 三个事实分属三处：工作单元数在 targetObjectCount，进程并行上限在
+    # calibration 的 frozenCapacity，批次绝对截止在同一 calibration 冻结时算定。
+    # 主机切片的默认 worker 数只能取并行上限，不得取工作单元数。
+    calibration = job_set_envelope["capacityCalibration"]
+    fleet_max_concurrent_workers = int(
+        calibration["frozenCapacity"]["fleetMaxConcurrentWorkers"]
+    )
+    request_jobs, worker_host_binding, _host_slice_workers = select_worker_host_slice(
         frozen_tasks,
         job_set_envelope.get("workerHostSetBinding"),
         host_scope_id=host_scope_id,
-        default_workers=int(job_set_envelope["requiredWorkers"]),
+        default_workers=fleet_max_concurrent_workers,
     )
     # ``partitionCount`` is the hash topology of the whole frozen job set, so
     # every consumer derives it from ``jobs``.  A host slice that dropped frozen
@@ -240,7 +246,14 @@ def build_fleet_request(
         "jobSetEnvelopeDigest": job_set_envelope["envelopeDigest"],
         "jobSetDigest": job_set_envelope["jobSetDigest"],
         "actualTaskDigest": actual_task_digest,
-        "requiredWorkers": request_workers,
+        "capacityPlanDigest": job_set_envelope["capacityPlanDigest"],
+        "calibrationReceiptDigest": calibration["calibrationReceiptDigest"],
+        "targetObjectCount": job_set_envelope["targetObjectCount"],
+        "fleetMaxConcurrentWorkers": fleet_max_concurrent_workers,
+        "fleetWaveCount": int(calibration["waveCount"]),
+        "fleetBatchDeadlineEpochSeconds": int(
+            calibration["fleetBatchDeadlineEpochSeconds"]
+        ),
         "partitionCount": job_set_envelope["partitionCount"],
         "partitionAlgorithm": job_set_envelope["partitionAlgorithm"],
         "checkpointPolicy": job_set_envelope["checkpointPolicy"],
@@ -326,19 +339,26 @@ def _fleet_agent_python() -> Path:
 
 
 def fleet_batch_timeout_seconds(
+    request: Mapping[str, Any],
     *,
-    job_count: int,
-    workers: int,
-    object_timeout_seconds: int,
-    completion_grace_seconds: int,
+    now_epoch_seconds: int,
 ) -> int:
-    """Derive one bounded fleet deadline from immutable object budgets."""
-    if job_count < 1 or workers < 1:
-        raise ValueError("ReliableTask fleet job_count and workers must be positive")
-    if object_timeout_seconds < 1 or completion_grace_seconds < 1:
-        raise ValueError("ReliableTask fleet time budgets must be positive")
-    waves = (job_count + workers - 1) // workers
-    return waves * object_timeout_seconds + completion_grace_seconds
+    """Project the batch budget from the frozen absolute deadline.
+
+    `DEC-003` retired the per-run relative budget: a restarted process must not
+    be able to re-derive `wave 数 × 单对象上限 + 宽限` and thereby renew the
+    batch. The only legal projection is `max(0, deadline - now)`, and a spent
+    window fails closed instead of starting another wave.
+    """
+    from content.execution.planning.capacity_calibration import remaining_batch_seconds
+
+    remaining = remaining_batch_seconds(request, now_epoch_seconds=now_epoch_seconds)
+    if remaining < 1:
+        raise ValueError(
+            "ReliableTask fleet batch deadline is spent"
+            f"（fleetBatchDeadlineEpochSeconds={request.get('fleetBatchDeadlineEpochSeconds')}）"
+        )
+    return remaining
 
 
 def _terminate_fleet_process(process: subprocess.Popen[object]) -> None:
@@ -414,29 +434,20 @@ def _run_reliabletask_host(
     execution_id: str,
     stage: QueueJobStage,
     *,
-    workers: int,
-    completion_grace_seconds: int,
     host_scope_id: str | None = None,
 ) -> ReliableTaskFleetReport:
-    if workers < 1:
-        raise ValueError("ReliableTask workers 必须为正整数")
-    if completion_grace_seconds < 1:
-        raise ValueError("ReliableTask completion grace 必须为正整数")
     transport = resolve_reliabletask_fleet_transport()
     request = build_fleet_request(
         execution_id,
         stage,
-        required_workers=workers,
         host_scope_id=host_scope_id,
     )
     object_timeout_milliseconds = request["objectTimeoutMilliseconds"]
     if not isinstance(object_timeout_milliseconds, int):
         raise TypeError("ReliableTask fleet request object timeout is invalid")
     batch_timeout_seconds = fleet_batch_timeout_seconds(
-        job_count=len(request["jobs"]),
-        workers=int(request["requiredWorkers"]),
-        object_timeout_seconds=object_timeout_milliseconds // 1000,
-        completion_grace_seconds=completion_grace_seconds,
+        request,
+        now_epoch_seconds=int(time.time()),
     )
     evidence_dir = attempt_evidence_dir(execution_id, {
         "stage": stage.value,
@@ -492,7 +503,7 @@ def _run_reliabletask_host(
         "QWQ_DATA_FLEET_WORK_DIR": str(REPO_ROOT / "quwoquan_data"),
         "QWQ_DATA_FLEET_PUBLISH_ROOT": str(PUBLISH_ROOT),
         "QWQ_DATA_FLEET_EVIDENCE_ROOT": str(OUTPUT_ROOT),
-        "QWQ_DATA_FLEET_WORKERS": str(request["requiredWorkers"]),
+        "QWQ_DATA_FLEET_WORKERS": str(request["fleetMaxConcurrentWorkers"]),
         "QWQ_DATA_FLEET_BATCH_TIMEOUT_MS": str(batch_timeout_seconds * 1000),
     }
     from core.runtime_policy import active_runtime_policy
@@ -591,20 +602,17 @@ def _run_reliabletask_host(
 def run_reliabletask_fleet(
     execution_id: str,
     stage: QueueJobStage,
-    *,
-    workers: int,
-    completion_grace_seconds: int,
 ) -> ReliableTaskFleetReport:
+    """Run one fleet stage under the capacity the execution already froze.
+
+    `DEC-002` makes the frozen `executionPolicy` the only capacity authority, so
+    no caller may hand the fleet a worker ceiling or a time budget here.
+    """
     from content.execution.queue.reliabletask.fleet_multi_host import (
         run_multi_host_fleet,
     )
 
-    return run_multi_host_fleet(
-        execution_id,
-        stage,
-        workers=workers,
-        completion_grace_seconds=completion_grace_seconds,
-    )
+    return run_multi_host_fleet(execution_id, stage)
 
 
 __all__ = [

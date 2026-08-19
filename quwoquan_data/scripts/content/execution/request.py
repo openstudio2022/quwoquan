@@ -44,13 +44,15 @@ def derive_capacity_from_execution(
     *,
     execution_id: str,
     work_unit_count: int,
+    capacity_calibration: Mapping[str, Any],
+    frozen_at_epoch_seconds: int,
 ) -> dict[str, Any]:
-    """Derive the governed capacity triple for one single-execution request.
+    """Derive the governed capacity fields for one single-execution request.
 
     The campaign envelope already derives this topology from its frozen
-    work-unit count. A single execution carries the same decision, so it must
-    read the same truth source instead of asking the caller to hand-author a
-    digest that no document would back.
+    work-unit count and its selected calibration receipt. A single execution
+    carries the same decision, so it must read the same truth source instead of
+    asking the caller to hand-author a digest that no document would back.
     """
     from content.execution.identity import parse_execution_id
     from content.execution.planning.capacity_policy import (
@@ -65,6 +67,8 @@ def derive_capacity_from_execution(
         target_scale=identity.phase.value,
         carrier=identity.content_type.value,
         work_unit_count=work_unit_count,
+        capacity_calibration=capacity_calibration,
+        frozen_at_epoch_seconds=frozen_at_epoch_seconds,
     )
 
 

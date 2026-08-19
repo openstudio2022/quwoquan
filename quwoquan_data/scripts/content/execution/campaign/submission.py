@@ -258,9 +258,7 @@ def write_submission(
             "selector": request.selector.value,
             "quota": request.quota,
             "count": request.count,
-            "requiredWorkers": request.required_workers,
-            "partitionCount": request.partition_count,
-            "capacityPlanDigest": request.capacity_plan_digest,
+            "capacityCalibration": dict(request.capacity_calibration),
             "workerHostSetBinding": (
                 dict(request.worker_host_set_binding)
                 if request.worker_host_set_binding is not None

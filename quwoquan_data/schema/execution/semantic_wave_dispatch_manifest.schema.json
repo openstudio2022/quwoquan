@@ -8,7 +8,7 @@
     "schema", "dispatchId", "milestone", "workloadMode", "workloadTargets",
     "poolInspectionRef",
     "poolInspectionFileSha256", "waveInputDigest", "sourcePoolBinding",
-    "sourcePoolEvidenceRootRef", "semanticSelectionId",
+    "sourcePoolEvidenceRootRef", "semanticSelectionId", "capacityCalibration",
     "queueBackend", "poolDeliveryBackend",
     "activeCarriers", "slots", "manifestDigest"
   ],
@@ -32,6 +32,9 @@
     "sourcePoolBinding": {"$ref": "scale_source_pool_binding.schema.json"},
     "sourcePoolEvidenceRootRef": {"$ref": "#/$defs/safeRef"},
     "semanticSelectionId": {"const": "cursor_grok"},
+    "capacityCalibration": {
+      "$ref": "governed_capacity_calibration_receipt.schema.json#/$defs/sourceBinding"
+    },
     "semanticPreflightReceipt": {
       "$ref": "semantic_provider_preflight_receipt_ref.schema.json"
     },
@@ -105,7 +108,7 @@
       "additionalProperties": false,
       "required": [
         "familyRef", "regionRef", "selector", "count", "quota",
-        "requiredWorkers", "partitionCount", "capacityPlanDigest",
+        "capacityCalibration",
         "workerHostSetBinding", "topic", "sourceProviders", "targetNames",
         "scaleSourcePool", "sourcePoolEvidenceRootRef", "sourcePoolSelection"
       ],
@@ -115,9 +118,9 @@
         "selector": {"enum": ["all", "source-ready-priority"]},
         "count": {"type": "integer", "minimum": 1, "maximum": 12},
         "quota": {"type": "integer", "minimum": 1, "maximum": 12},
-        "requiredWorkers": {"type": "integer", "minimum": 1},
-        "partitionCount": {"enum": [16, 32, 64, 128, 256]},
-        "capacityPlanDigest": {"$ref": "#/$defs/sha256"},
+        "capacityCalibration": {
+          "$ref": "governed_capacity_calibration_receipt.schema.json#/$defs/sourceBinding"
+        },
         "workerHostSetBinding": {"type": "null"},
         "topic": {"type": "string", "minLength": 1},
         "sourceProviders": {"type": "array", "maxItems": 0},

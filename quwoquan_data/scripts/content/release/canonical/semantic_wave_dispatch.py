@@ -28,7 +28,6 @@ from content.execution.planning.retry_unfinished_scope import (
     load_retry_unfinished_scope,
 )
 from content.execution.request import RuntimeExecutionRequest
-from content.execution.queue.partition import partition_count as workload_partition_count
 from content.release.canonical.object_transaction_contract import _read_json
 from content.release.canonical.semantic_wave_dispatch_command import (
     task_execute_argv,
@@ -582,19 +581,9 @@ def build_semantic_wave_dispatch(
                 raise _fail(DISPATCH_INVALID, "wave contains an already published object")
             seen_candidates.update(candidate_ids)
             seen_objects.update(object_refs)
-            required_workers = len(chunk)
-            # 分区数只由工作单元数决定。这里 required_workers 恰好等于 len(chunk)，
-            # 但把它当作分区输入会让「一个 slot 起几个 worker」这种容量决定重新
-            # 渗进拓扑，而 Service 侧按 len(Jobs) 校验，两者一旦分家就是 fleet 拒收。
-            partition_count = workload_partition_count(len(chunk))
-            workload_plan_digest = _digest(
-                {
-                    "schema": "quwoquan_data.semantic_slot_workload_plan",
-                    "dispatchId": dispatch_id,
-                    "slotId": slot_id,
-                    "candidateIds": candidate_ids,
-                }
-            )
+            # 一个 slot 只声明工作单元（chunk）与容量校准来源；分区数与
+            # capacityPlanDigest 由冻结 execution spec 时按 DEC-002 派生，
+            # dispatch 不得先行给出第二份容量事实。
             request = RuntimeExecutionRequest(
                 family_ref=_FAMILIES[carrier],
                 region_ref=region_ref,

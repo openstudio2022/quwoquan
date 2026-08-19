@@ -241,8 +241,6 @@ def _dispatch_fleet(
     stage: ExecutionStage,
     queue_stage: QueueJobStage,
 ) -> ReliableTaskDispatchResult:
-    from core.runtime_policy import active_runtime_policy
-
     from content.execution.queue.reliabletask.fleet import run_reliabletask_fleet
 
     # The worker may finish between dispatch_reliabletask_checkpoint's first
@@ -308,18 +306,12 @@ def _dispatch_fleet(
             issues=blocking,
             discarded=discarded,
         )
-    policy = active_runtime_policy()
     expected_job_ids = frozenset(
         job.job_id
         for job in active_jobs
     )
     try:
-        report = run_reliabletask_fleet(
-            ctx.execution_id,
-            queue_stage,
-            workers=ctx.max_workers,
-            completion_grace_seconds=policy.managed_future_grace_seconds,
-        )
+        report = run_reliabletask_fleet(ctx.execution_id, queue_stage)
     except (OSError, RuntimeError, ValueError) as exc:
         # A fleet invocation may finish the final object and then observe an
         # empty pending set while preparing its durable receipt. Re-read the

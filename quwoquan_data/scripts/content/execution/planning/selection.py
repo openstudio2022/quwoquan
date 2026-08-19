@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import time
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,7 +18,7 @@ from core.runtime_policy import active_runtime_policy
 
 from content.execution import store, validate_execution_id
 from content.execution.contracts import ExecutionStateTransition
-from content.execution.identity import SelectionPolicy
+from content.execution.identity import SelectionPolicy, parse_execution_id
 from content.execution.planning.capacity_policy import execution_capacity_policy_fields
 from content.execution.planning.selection_discovery import coverage_target_from_selection
 from content.execution.planning.selection_materialization import write_selected_task
@@ -36,9 +37,7 @@ class SelectionRequest:
     limit: int
     quota: int
     oversample_factor: float
-    required_workers: int
-    partition_count: int
-    capacity_plan_digest: str
+    capacity_calibration: Mapping[str, Any]
     region: str
     category: str
     name: str
@@ -140,9 +139,8 @@ def build_execution_spec(
     video_works_per_target: int,
     approved_quota: int,
     oversample_factor: float,
-    required_workers: int,
-    partition_count: int,
-    capacity_plan_digest: str,
+    capacity_calibration: Mapping[str, Any],
+    frozen_at_epoch_seconds: int | None = None,
     worker_host_set_binding: Mapping[str, Any] | None = None,
     scale_source_pool: Mapping[str, Any] | None = None,
     source_pool_evidence_root_ref: str | None = None,
@@ -189,12 +187,6 @@ def build_execution_spec(
         or oversample_factor < 1
     ):
         raise ValueError("oversampleFactor must be a number >= 1")
-    capacity_fields = execution_capacity_policy_fields(
-        required_workers=required_workers,
-        partition_count=partition_count,
-        capacity_plan_digest=capacity_plan_digest,
-        worker_host_set_binding=worker_host_set_binding,
-    )
     source_pool_fields = source_pool_policy_fields(
         binding=scale_source_pool,
         evidence_root_ref=source_pool_evidence_root_ref,
@@ -235,6 +227,20 @@ def build_execution_spec(
         len(media_work_units)
         if media_work_units
         else target_entity_count * objects_per_target
+    )
+    # 容量在此处一次冻结：工作单元数只能是本执行的对象数，两个并行上限只能
+    # 来自选中的 calibration receipt，分区数与 capacityPlanDigest 由二者派生。
+    capacity_fields = execution_capacity_policy_fields(
+        target_scale=parse_execution_id(validated_execution_id).phase.value,
+        carrier=carriers[0],
+        work_unit_count=target_object_count,
+        capacity_calibration=capacity_calibration,
+        frozen_at_epoch_seconds=(
+            int(time.time())
+            if frozen_at_epoch_seconds is None
+            else int(frozen_at_epoch_seconds)
+        ),
+        worker_host_set_binding=worker_host_set_binding,
     )
     selected_entity_types = sorted(
         {
@@ -422,9 +428,7 @@ def create_execution_selection(request: SelectionRequest) -> tuple[dict[str, Any
         target_entity_count=len(targets),
         approved_quota=approved_quota,
         oversample_factor=float(request.oversample_factor),
-        required_workers=request.required_workers,
-        partition_count=request.partition_count,
-        capacity_plan_digest=request.capacity_plan_digest,
+        capacity_calibration=request.capacity_calibration,
         worker_host_set_binding=request.worker_host_set_binding,
         scale_source_pool=request.scale_source_pool,
         source_pool_evidence_root_ref=request.source_pool_evidence_root_ref,

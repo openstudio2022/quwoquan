@@ -17,10 +17,17 @@ def _checkpoint_is_done(ctx: ExecutionContext, stage: str) -> tuple[bool, list[s
     return checker(ctx) if checker else (False, [f"unsupported managed checkpoint {stage}"])
 
 def _managed_author_ref(prompt: str) -> str:
+    """Read the content ref out of either declared author prompt grammar.
+
+    `prompts/*/checkpoint_author_*.task.md` writes the ref as a bare line, while
+    `prompts/video/video_author.task.md` writes it as a backticked list item. Both
+    are authored templates, so both are the contract; anything else yields no ref
+    and the caller drops the prompt instead of guessing an identity.
+    """
     for line in prompt.splitlines():
-        prefix = "内容 ref:"
-        if line.startswith(prefix):
-            return line[len(prefix):].strip()
+        managed = re.match(r"^\s*(?:-\s*)?内容 ref:\s*(.+?)\s*$", line)
+        if managed:
+            return managed.group(1).strip().strip("`").strip()
         task_ref = re.match(r"^\s*-\s*ref:\s*`([^`]+)`", line)
         if task_ref:
             return task_ref.group(1).strip()

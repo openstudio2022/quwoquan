@@ -24,6 +24,7 @@ from content.execution.identity import build_execution_id
 from content.execution.request import RuntimeExecutionRequest
 from core.control_types import TargetSelector
 from core.io import read_json
+from support.capacity_calibration_fixture import synthetic_capacity_source_binding
 from support.semantic_preflight_fixture import ready_semantic_preflight
 
 ROOT_ID = "20260728--travel-homepage-workload-homepage-1--china--scale-001"
@@ -440,9 +441,7 @@ def _request(
         ),
         count=count,
         quota=quota,
-        required_workers=1,
-        partition_count=16,
-        capacity_plan_digest="sha256:" + "6" * 64,
+        capacity_calibration=synthetic_capacity_source_binding(),
         topic=None,
         source_providers=(),
         target_names=(),

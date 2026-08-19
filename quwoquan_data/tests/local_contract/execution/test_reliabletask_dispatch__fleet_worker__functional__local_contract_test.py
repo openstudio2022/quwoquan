@@ -6,6 +6,8 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 
 DATA_ROOT = next(
     parent
@@ -31,9 +33,11 @@ from content.execution.queue.reliabletask.report import (  # noqa: E402
     ReliableTaskFleetOutcome,
     ReliableTaskFleetReport,
 )
+from content.execution.queue.reliabletask import author as reliabletask_author  # noqa: E402
 from content.execution.queue.reliabletask.author import (  # noqa: E402
     _recover_completed_author_outcome,
 )
+from content.execution.production_contracts import sha256_file  # noqa: E402
 from content.execution.workspace import execution_root  # noqa: E402
 from content.execution.planning.recipe.model import _runtime_preflight_argv  # noqa: E402
 from content.templates.registry import TemplateRegistry  # noqa: E402
@@ -126,8 +130,8 @@ def test_local_controller_delegates_declared_job_to_service_fleet(monkeypatch) -
         ),
     )
 
-    def run_fleet(execution_id, stage, *, workers, completion_grace_seconds):
-        observed.append((execution_id, stage.value, workers, completion_grace_seconds))
+    def run_fleet(execution_id, stage):
+        observed.append((execution_id, stage.value))
         delivered["qualified"] = 1
         leased = _read_job(EXECUTION_ID, job.job_id)
         _write_job(
@@ -163,7 +167,7 @@ def test_local_controller_delegates_declared_job_to_service_fleet(monkeypatch) -
     assert result.status is ReliableTaskDispatchStatus.COMPLETED
     assert result.attempted_count == 1
     assert result.completed_count == 1
-    assert observed and observed[0][:3] == (EXECUTION_ID, "author", ctx.max_workers)
+    assert observed and observed[0] == (EXECUTION_ID, "author")
     assert _read_job(EXECUTION_ID, job.job_id).state is QueueJobState.SUCCEEDED
     assert not hasattr(reliabletask_dispatch, "_dispatch_embedded")
     assert (
@@ -348,10 +352,8 @@ def test_reliabletask_resume_accepts_receipt_for_only_remaining_jobs__reliabilit
         )
     )
 
-    def run_fleet(_execution_id, _stage, *, workers, completion_grace_seconds):
+    def run_fleet(_execution_id, _stage):
         assert _execution_id == execution_id
-        assert workers == ctx.max_workers
-        assert completion_grace_seconds > 0
         _write_job(
             _read_job(execution_id, jobs[1].job_id).with_timing(
                 QueueTimelineEvent.SUCCEEDED,
@@ -422,9 +424,7 @@ def test_reliabletask_fleet__waits_for_nonterminal_remote_jobs__reliability__loc
         },
     )
 
-    def run_fleet(_execution_id, _stage, *, workers, completion_grace_seconds):
-        assert workers == ctx.max_workers
-        assert completion_grace_seconds > 0
+    def run_fleet(_execution_id, _stage):
         return ReliableTaskFleetReport(
             total=1,
             succeeded=0,
@@ -479,9 +479,7 @@ def test_reliabletask_fleet__projects_terminal_worker_failure__reliability__loca
         },
     )
 
-    def run_fleet(_execution_id, _stage, *, workers, completion_grace_seconds):
-        assert workers == ctx.max_workers
-        assert completion_grace_seconds > 0
+    def run_fleet(_execution_id, _stage):
         return ReliableTaskFleetReport(
             total=1,
             succeeded=0,
@@ -556,9 +554,7 @@ def test_reliabletask_late_remote_dead_preserves_verified_local_success(
         },
     )
 
-    def run_fleet(_execution_id, _stage, *, workers, completion_grace_seconds):
-        assert workers == ctx.max_workers
-        assert completion_grace_seconds > 0
+    def run_fleet(_execution_id, _stage):
         stored = _read_job(EXECUTION_ID, job.job_id)
         _write_job(
             stored.with_timing(
@@ -632,9 +628,7 @@ def test_failed_commercial_batch_does_not_block_nonempty_publish_closure(
         },
     )
 
-    def run_fleet(_execution_id, _stage, *, workers, completion_grace_seconds):
-        assert workers == ctx.max_workers
-        assert completion_grace_seconds > 0
+    def run_fleet(_execution_id, _stage):
         stored = _read_job(EXECUTION_ID, job.job_id)
         _write_job(
             stored.with_timing(
@@ -675,19 +669,22 @@ def test_failed_commercial_batch_does_not_block_nonempty_publish_closure(
     shutil.rmtree(execution_root(EXECUTION_ID), ignore_errors=True)
 
 
-def test_reliabletask_fleet__derives_batch_deadline_from_object_waves__contract__local_contract() -> None:
-    jobs = 100
-    workers = 3
-    object_timeout_seconds = 1200
-    completion_grace_seconds = 15
-    expected_waves = (jobs + workers - 1) // workers
+def test_reliabletask_fleet__projects_batch_budget_from_frozen_deadline__contract__local_contract() -> None:
+    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/design.md#dec-003"""
+    deadline = 1_786_001_200
+    request = {"fleetBatchDeadlineEpochSeconds": deadline}
 
     assert fleet_batch_timeout_seconds(
-        job_count=jobs,
-        workers=workers,
-        object_timeout_seconds=object_timeout_seconds,
-        completion_grace_seconds=completion_grace_seconds,
-    ) == expected_waves * object_timeout_seconds + completion_grace_seconds
+        request,
+        now_epoch_seconds=deadline - 900,
+    ) == 900
+    # 重启后重新拉起不得为批次续期：预算只能是同一个绝对截止的剩余投影。
+    assert fleet_batch_timeout_seconds(
+        request,
+        now_epoch_seconds=deadline - 60,
+    ) == 60
+    with pytest.raises(ValueError, match="batch deadline is spent"):
+        fleet_batch_timeout_seconds(request, now_epoch_seconds=deadline)
 
 
 def test_reliabletask_author__recovers_completed_provenance_bound_output_after_timeout__(
@@ -699,7 +696,18 @@ def test_reliabletask_author__recovers_completed_provenance_bound_output_after_t
     execution_id = "20260728--travel-article-golden--test-region-a--pilot-001"
     ref = "测试实体甲__article_source_1"
     ctx = SimpleNamespace(execution_id=execution_id, model="gpt-5.6-sol")
-    job = SimpleNamespace(ref=ref)
+    content_object_dir = "3.objects/" + ref
+    draft_path = (
+        execution_root(execution_id) / content_object_dir / "4.draft" / "draft.article.md"
+    )
+    draft_path.parent.mkdir(parents=True, exist_ok=True)
+    draft_path.write_text("# 测试文章\n\n正文。\n", encoding="utf-8")
+    job = SimpleNamespace(
+        ref=ref,
+        execution_id=execution_id,
+        content_object_dir=content_object_dir,
+        carrier=ContentType.ARTICLE,
+    )
     meta = {
         "executionId": execution_id,
         "objectRef": ref,
@@ -711,7 +719,7 @@ def test_reliabletask_author__recovers_completed_provenance_bound_output_after_t
         "promptSha256": "sha256:" + "1" * 64,
         "writingPackSha256": "sha256:" + "2" * 64,
         "sourceBundleSha256": "sha256:" + "3" * 64,
-        "draftSha256": "sha256:" + "4" * 64,
+        "draftSha256": sha256_file(draft_path),
     }
     monkeypatch.setattr(
         agent_checkpoint,
@@ -719,6 +727,8 @@ def test_reliabletask_author__recovers_completed_provenance_bound_output_after_t
         lambda *_args, **_kwargs: [],
     )
     monkeypatch.setattr(draft_io, "read_draft_meta", lambda *_args: meta)
+    # 静默采样只为排除半写文件，这里把采样间隔压到 0 以免本地契约测试等待整个观测窗口。
+    monkeypatch.setattr(reliabletask_author, "_DURABLE_OUTPUT_SETTLE_SECONDS", 0.0)
     failed = AgentRunOutcome.failed(
         AgentFailureKind.FUTURE_TIMEOUT,
         provider=AgentProvider.CURSOR_SDK,
@@ -744,3 +754,17 @@ def test_reliabletask_author__recovers_completed_provenance_bound_output_after_t
     assert recovered.succeeded
     assert recovered.run_id == "author_run_1"
     assert recovered.completion_mode == "durable_output_recovery"
+
+    # 半写的耐久输出不得被当作已完成：摘要不符即拒绝领取。
+    draft_path.write_text("# 测试文章\n\n正文续写。\n", encoding="utf-8")
+    assert (
+        _recover_completed_author_outcome(
+            ctx,
+            job,
+            checkpoint="post_author",
+            prompt="- ref: `" + ref + "`",
+            outcome=failed,
+        )
+        is None
+    )
+    shutil.rmtree(execution_root(execution_id), ignore_errors=True)

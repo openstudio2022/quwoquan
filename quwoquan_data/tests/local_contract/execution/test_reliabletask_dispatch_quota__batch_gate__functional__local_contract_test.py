@@ -112,7 +112,7 @@ def _settle(jobs, succeeded: int, delivered: dict[str, int] | None = None, final
     ``finalized`` 是本轮真正落盘的达标对象数，可以与账本成功数不同。
     """
 
-    def run_fleet(_execution_id, _stage, *, workers, completion_grace_seconds):
+    def run_fleet(_execution_id, _stage):
         if delivered is not None:
             delivered["qualified"] = finalized
         outcomes = []
@@ -377,7 +377,7 @@ def _settle_publish(
     passed: bool,
     finalized_object_count: int,
 ):
-    def run_fleet(_execution_id, _stage, *, workers, completion_grace_seconds):
+    def run_fleet(_execution_id, _stage):
         outcomes = []
         for index, job in enumerate(jobs):
             if index < succeeded:

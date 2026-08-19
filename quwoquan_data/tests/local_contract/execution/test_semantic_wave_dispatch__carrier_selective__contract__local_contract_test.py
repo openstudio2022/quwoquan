@@ -24,6 +24,7 @@ from content.source.research.scale_source_pool_runtime import (
 )
 from core.io import write_json
 from core.schema import assert_valid
+from support.capacity_calibration_fixture import write_synthetic_capacity_receipt
 from support.semantic_preflight_fixture import ready_semantic_preflight
 
 IDENTITY = {
@@ -167,10 +168,16 @@ def _kwargs(
     inspection: Path,
     preflight: Path,
 ) -> dict[str, object]:
+    capacity_ref = "data/local/tests/capacity/wave-capacity.json"
+    write_synthetic_capacity_receipt(
+        output / capacity_ref,
+        provider_tier="cursor_grok",
+    )
     return {
         "dispatch_id": "m100-current-wave-001",
         "pool_inspection_ref": inspection.relative_to(output).as_posix(),
         "semantic_preflight_receipt_ref": preflight.relative_to(output).as_posix(),
+        "capacity_calibration_receipt_ref": capacity_ref,
         "run_date": "20260811",
         "scope": "china",
         "region_ref": "china",
@@ -217,8 +224,16 @@ def test_three_active_carriers_dispatch_without_video_or_campaign(
     ]
     assert len(candidate_ids) == 48 == len(set(candidate_ids))
     assert all(slot["candidateIds"] for slot in manifest["slots"])
+    # 一个 slot 只声明工作单元与容量校准来源：DEC-002 之后 requiredWorkers 退役，
+    # 并行上限只由 receipt 的 frozenCapacity 承载，与 slot 的候选数无关。
     assert all(
-        slot["taskRequest"]["requiredWorkers"] == len(slot["candidateIds"])
+        slot["taskRequest"]["quota"] == len(slot["candidateIds"])
+        for slot in manifest["slots"]
+    )
+    assert all(
+        "requiredWorkers" not in slot["taskRequest"]
+        and slot["taskRequest"]["capacityCalibration"]
+        == manifest["capacityCalibration"]
         for slot in manifest["slots"]
     )
 
@@ -269,6 +284,11 @@ def test_explicit_workload_inspection_and_dispatch_preserve_independent_quotas(
     )
     plan_ref = "data/source-pools/homepage-image-workload.json"
     write_json(output / plan_ref, plan)
+    capacity_ref = "data/local/tests/capacity/workload-capacity.json"
+    write_synthetic_capacity_receipt(
+        output / capacity_ref,
+        provider_tier="cursor_grok",
+    )
     source_input, source_candidates = load_source_ready_input(
         output_root=output,
         publish_root=publish,
@@ -296,6 +316,7 @@ def test_explicit_workload_inspection_and_dispatch_preserve_independent_quotas(
         dispatch_id="homepage-image-workload-001",
         pool_inspection_ref=inspection_path.relative_to(output).as_posix(),
         semantic_preflight_receipt_ref=None,
+        capacity_calibration_receipt_ref=capacity_ref,
         run_date="20260814",
         scope="china",
         region_ref="china",

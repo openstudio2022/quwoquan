@@ -294,6 +294,20 @@ def assert_capacity_source_binding(binding: Mapping[str, Any]) -> None:
         )
 
 
+def assert_execution_policy_capacity_binding(binding: Mapping[str, Any]) -> None:
+    """Admit one frozen executionPolicy binding: values plus freeze instant."""
+    schema = load_schema(
+        "execution",
+        "governed_capacity_calibration_receipt",
+    )["$defs"]["executionPolicyBinding"]
+    issues = validate_strict(dict(binding), schema)
+    if issues:
+        raise CapacityCalibrationError(
+            "execution policy capacity binding is invalid:\n  - "
+            + "\n  - ".join(issues[:20])
+        )
+
+
 def bind_capacity_calibration_source(
     *,
     receipt_path: Path,
@@ -540,6 +554,7 @@ __all__ = [
     "CapacityCalibrationError",
     "assert_calibration_applies",
     "assert_capacity_source_binding",
+    "assert_execution_policy_capacity_binding",
     "bind_capacity_calibration_source",
     "calibration_wave_count",
     "current_host_class",
