@@ -61,9 +61,6 @@ def _parser(contract: dict[str, Any]) -> argparse.ArgumentParser:
     parser.add_argument("--reverse-actual-ports", default="")
     parser.add_argument("--reverse-receipt-digest", default="")
     parser.add_argument("--consumer-lease-id", default="")
-    parser.add_argument("--content-release-id", default="")
-    parser.add_argument("--content-manifest-digest", default="")
-    parser.add_argument("--content-readiness-receipt-digest", default="")
     return parser
 
 
@@ -134,18 +131,9 @@ def build_handoff(
     effective_schema = contract["schemas"]["app_effective_launch_manifest"]
     handoff_schema = contract["schemas"]["app_launcher_handoff"]
     entrypoint = effective_schema["fields"]["entrypoint"]["const"]
-    content_release_id = args.content_release_id.strip()
-    content_manifest_digest = args.content_manifest_digest.strip()
-    content_readiness_digest = args.content_readiness_receipt_digest.strip()
-    content_binding_state = (
-        "bound"
-        if all((content_release_id, content_manifest_digest, content_readiness_digest))
-        else "unbound"
-    )
     defines = {
         **defines,
         "APP_LAUNCH_POLICY": args.launch_policy,
-        "CONTENT_BINDING_STATE": content_binding_state,
     }
     defines_digest = dart_defines_digest(defines, contract)
     config_digest = (
@@ -185,12 +173,8 @@ def build_handoff(
         "entrypoint": entrypoint,
         "launchMode": args.launch_mode,
         "launchPolicy": args.launch_policy,
-        "contentBindingState": content_binding_state,
         "dartDefinesDigest": defines_digest,
         "runtimeConfigDigest": config_digest,
-        "contentReleaseId": content_release_id,
-        "contentManifestDigest": content_manifest_digest,
-        "contentReadinessReceiptDigest": content_readiness_digest,
         "recoveryBaseUrl": defines["CLOUD_GATEWAY_BASE_URL"],
         "publicWebBaseUrl": defines["PUBLIC_WEB_BASE_URL"],
         "appDownloadBaseUrl": defines["APP_DOWNLOAD_BASE_URL"],

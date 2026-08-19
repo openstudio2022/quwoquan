@@ -101,12 +101,6 @@ class ProductionReleaseArtifactContractTest(unittest.TestCase):
                     "prod-hosted",
                     "--launch-mode",
                     "release_package",
-                    "--content-release-id",
-                    "local-contract-release",
-                    "--content-manifest-digest",
-                    "sha256:" + "1" * 64,
-                    "--content-readiness-receipt-digest",
-                    "sha256:" + "2" * 64,
                 ],
                 cwd=APP,
                 env={

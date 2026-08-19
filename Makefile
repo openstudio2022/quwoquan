@@ -423,10 +423,19 @@ verify-article-contract-purity:
 	@python3 quwoquan_app/scripts/content_service/content/post/verify_article_contract_purity.py
 
 verify-app-env-package:
-	@python3 quwoquan_ops/cli/stackctl.py --output-format json package --env alpha >/dev/null
-	@python3 quwoquan_ops/cli/stackctl.py --output-format json package --env beta >/dev/null
-	@python3 quwoquan_ops/cli/stackctl.py --output-format json package --env gamma >/dev/null
-	@python3 quwoquan_ops/cli/stackctl.py --output-format json package --env prod >/dev/null
+	@deploy_work_root="$$(mktemp -d "$${TMPDIR:-/tmp}/quwoquan-deploy.XXXXXX")"; \
+	set -eu; \
+	trap 'python3 quwoquan_ops/gate/cleanup_deployment_test_workspace.py "$$deploy_work_root"' EXIT; \
+	python3 quwoquan_ops/gate/prepare_environment_packaging_contract_inputs.py "$$deploy_work_root"; \
+	export QWQ_GRAPHQL_READ_REGISTRY_SIGNING_KEY_ID="packaging-contract"; \
+	export QWQ_GRAPHQL_READ_REGISTRY_SIGNING_PRIVATE_KEY_FILE="$$deploy_work_root/graphql-signing-private.pem"; \
+	export QWQ_GRAPHQL_READ_REGISTRY_TRUSTED_PUBLIC_KEYS_FILE="$$deploy_work_root/graphql-trusted-public-keys.json"; \
+	for env_name in alpha beta gamma prod; do \
+		env QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/cli/stackctl.py \
+			--output-format json package --env "$$env_name" \
+			--release-attestation "$$deploy_work_root/candidate-release.json" \
+			--rollback-release-attestation "$$deploy_work_root/rollback-release.json" >/dev/null; \
+	done
 
 verify-service-env-package:
 	@if [ -z "$(SERVICE)" ]; then \
