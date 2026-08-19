@@ -103,6 +103,7 @@ def _build_aggregate_release(
     reviewed_closure_adoption: Mapping[str, Any] | None = None,
     adoption_output_root: Path | None = None,
     target_environment: str | None = None,
+    all_publishable: bool = False,
     milestone: str | None = None,
     release_class: str,
     pool_wide: bool = False,
@@ -122,14 +123,21 @@ def _build_aggregate_release(
             raise ObjectTransactionError(
                 "pool release cannot be combined with reviewed-closure adoption"
             )
-        if (target_environment is None) == (milestone is None):
+        if sum(
+            (
+                target_environment is not None,
+                all_publishable,
+                milestone is not None,
+            )
+        ) != 1:
             raise ObjectTransactionError(
                 "DATA.RELEASE.SELECTION_INVALID: pool release requires exactly one "
-                "target environment or milestone"
+                "target environment, all-publishable, or milestone scope"
             )
         pool_preparation = prepare_pool_release(
             publish_root=publish_root,
             target_environment=target_environment,
+            all_publishable=all_publishable,
             milestone=milestone,
             release_class=release_class,
         )
@@ -395,6 +403,11 @@ def _build_aggregate_release(
             release_class=release_mode,
             product_lifecycle_state=release_mode,
             reviewed_closure_adoption=reviewed_closure_adoption,
+            selection_scope=(
+                environment_selection.selection_scope
+                if environment_selection is not None
+                else None
+            ),
             target_environment=(
                 environment_selection.environment
                 if environment_selection is not None
@@ -572,10 +585,11 @@ def build_pool_release(
     release_root: Path,
     release_id: str,
     target_environment: str | None = None,
+    all_publishable: bool = False,
     milestone: str | None = None,
     release_class: str,
 ) -> dict[str, Any]:
-    """Build one immutable environment release from the whole admitted pool."""
+    """Build one immutable pool release under one explicit selection scope."""
 
     with canonical_release_identity_guard(
         output_root=release_output_root(release_root),
@@ -589,6 +603,7 @@ def build_pool_release(
             source_revision="",
             entity_catalog_digest="",
             target_environment=target_environment,
+            all_publishable=all_publishable,
             milestone=milestone,
             release_class=release_class,
             pool_wide=True,

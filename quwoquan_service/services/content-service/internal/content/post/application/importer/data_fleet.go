@@ -28,26 +28,94 @@ const (
 // FleetRequest binds every author/publish task to one frozen release execution.
 // It is part of the Post importer application boundary; the worker command only
 // supplies process and infrastructure composition.
+// TargetObjectCount, FleetMaxConcurrentWorkers and RequiredQuota carry three
+// different facts and none of them may stand in for another: the frozen
+// work-unit count, the process concurrency ceiling, and the object floor this
+// batch must reach. FleetWaveCount is the only value derived from two of them,
+// and FleetBatchDeadlineEpochSeconds is absolute so no restart can widen it.
 type FleetRequest struct {
-	Schema                  string                                   `json:"schema"`
-	ExecutionID             string                                   `json:"executionId"`
-	CampaignScale           string                                   `json:"campaignScale"`
-	ScaleClass              string                                   `json:"scaleClass"`
-	ExecutionEnvelopeDigest string                                   `json:"executionEnvelopeDigest"`
-	JobSetEnvelopeDigest    string                                   `json:"jobSetEnvelopeDigest"`
-	JobSetDigest            string                                   `json:"jobSetDigest"`
-	ActualTaskDigest        string                                   `json:"actualTaskDigest"`
-	RequiredWorkers         int                                      `json:"requiredWorkers"`
-	PartitionCount          int                                      `json:"partitionCount"`
-	PartitionAlgorithm      string                                   `json:"partitionAlgorithm"`
-	CheckpointPolicy        DataContentCheckpointPolicy              `json:"checkpointPolicy"`
-	RecoverDeadTasks        *bool                                    `json:"recoverDeadTasks"`
-	ObjectTimeoutMS         int                                      `json:"objectTimeoutMilliseconds"`
-	GlobalRequiredQuota     int                                      `json:"globalRequiredQuota"`
-	RequiredQuota           int                                      `json:"requiredQuota"`
-	CampaignBinding         *reliabletask.DataContentCampaignBinding `json:"campaignBinding,omitempty"`
-	WorkerHostBinding       *WorkerHostBinding                       `json:"workerHostBinding,omitempty"`
-	Jobs                    []reliabletask.DataContentJob            `json:"jobs"`
+	Schema                         string                                   `json:"schema"`
+	ExecutionID                    string                                   `json:"executionId"`
+	CampaignScale                  string                                   `json:"campaignScale"`
+	ScaleClass                     string                                   `json:"scaleClass"`
+	ExecutionEnvelopeDigest        string                                   `json:"executionEnvelopeDigest"`
+	JobSetEnvelopeDigest           string                                   `json:"jobSetEnvelopeDigest"`
+	JobSetDigest                   string                                   `json:"jobSetDigest"`
+	ActualTaskDigest               string                                   `json:"actualTaskDigest"`
+	CapacityPlanDigest             string                                   `json:"capacityPlanDigest"`
+	CalibrationReceiptDigest       string                                   `json:"calibrationReceiptDigest"`
+	TargetObjectCount              int                                      `json:"targetObjectCount"`
+	FleetMaxConcurrentWorkers      int                                      `json:"fleetMaxConcurrentWorkers"`
+	FleetWaveCount                 int                                      `json:"fleetWaveCount"`
+	FleetBatchDeadlineEpochSeconds int64                                    `json:"fleetBatchDeadlineEpochSeconds"`
+	PartitionCount                 int                                      `json:"partitionCount"`
+	PartitionAlgorithm             string                                   `json:"partitionAlgorithm"`
+	CheckpointPolicy               DataContentCheckpointPolicy              `json:"checkpointPolicy"`
+	RecoverDeadTasks               *bool                                    `json:"recoverDeadTasks"`
+	ObjectTimeoutMS                int                                      `json:"objectTimeoutMilliseconds"`
+	GlobalRequiredQuota            int                                      `json:"globalRequiredQuota"`
+	RequiredQuota                  int                                      `json:"requiredQuota"`
+	CampaignBinding                *reliabletask.DataContentCampaignBinding `json:"campaignBinding,omitempty"`
+	WorkerHostBinding              *WorkerHostBinding                       `json:"workerHostBinding,omitempty"`
+	Jobs                           []FleetRequestJob                        `json:"jobs"`
+}
+
+// FleetRequestJob is one frozen work unit exactly as
+// quwoquan_data/schema/execution/data_content_fleet_request.schema.json declares
+// it under jobs.items, which is closed with additionalProperties:false. The
+// envelope digests, campaign binding and worker fence a running task also needs
+// are owned by the request, not by the job, so they live on
+// reliabletask.DataContentJob and are bound by ExecutionJobs.
+type FleetRequestJob struct {
+	EntityRef      string `json:"entityRef"`
+	Carrier        string `json:"carrier"`
+	SourceRevision string `json:"sourceRevision"`
+	IdempotencyKey string `json:"idempotencyKey"`
+	JobID          string `json:"jobId"`
+	ExecutionID    string `json:"executionId"`
+	Ref            string `json:"ref"`
+	Stage          string `json:"stage"`
+	PartitionKey   string `json:"partitionKey"`
+	MaxAttempts    int    `json:"maxAttempts"`
+}
+
+// ExecutionJobs binds every frozen work unit to the request-level identity the
+// runtime needs. It is a projection, not a second stored truth: a job cannot
+// carry its own envelope digests, campaign binding or worker fence, so those
+// can only come from the one request that froze them.
+func (r FleetRequest) ExecutionJobs() []reliabletask.DataContentJob {
+	jobs := make([]reliabletask.DataContentJob, 0, len(r.Jobs))
+	for _, job := range r.Jobs {
+		bound := reliabletask.DataContentJob{
+			EntityRef:               job.EntityRef,
+			Carrier:                 job.Carrier,
+			SourceRevision:          job.SourceRevision,
+			JobID:                   job.JobID,
+			ExecutionID:             job.ExecutionID,
+			Ref:                     job.Ref,
+			Stage:                   job.Stage,
+			PartitionKey:            job.PartitionKey,
+			IdempotencyKey:          job.IdempotencyKey,
+			MaxAttempts:             job.MaxAttempts,
+			ExecutionEnvelopeDigest: r.ExecutionEnvelopeDigest,
+			JobSetEnvelopeDigest:    r.JobSetEnvelopeDigest,
+			JobSetDigest:            r.JobSetDigest,
+			ActualTaskDigest:        r.ActualTaskDigest,
+		}
+		if r.CampaignBinding != nil {
+			bound.Campaign = *r.CampaignBinding
+		}
+		if r.WorkerHostBinding != nil {
+			bound.WorkerFence = &reliabletask.DataContentWorkerFence{
+				HostSetDigest: r.WorkerHostBinding.HostSetDigest,
+				Generation:    r.WorkerHostBinding.Generation,
+				FencingToken:  r.WorkerHostBinding.FencingToken,
+				HostScopeID:   r.WorkerHostBinding.HostScopeID,
+			}
+		}
+		jobs = append(jobs, bound)
+	}
+	return jobs
 }
 
 type WorkerHostTransportBinding struct {
@@ -99,8 +167,8 @@ const (
 // Data implements in
 // quwoquan_data/scripts/content/execution/queue/partition.py#partition_count.
 // Partitions isolate queue and checkpoint state, so the frozen work-unit count
-// is the only admitted input; requiredWorkers and any per-worker resource ratio
-// are deliberately absent.
+// is the only admitted input; the concurrency ceiling and any per-worker
+// resource ratio are deliberately absent.
 func dataContentPartitionCount(workUnitCount int) int {
 	requested := workUnitCount
 	if requested < dataContentMinPartitionCount {
@@ -140,6 +208,53 @@ func (p DataContentCheckpointPolicy) validate() error {
 	return nil
 }
 
+// validateFrozenCapacity keeps the three capacity semantics separate and fails
+// closed on any missing one. None of them may be defaulted from another, and in
+// particular the retired "worker count equals work-unit count" derivation must
+// not reappear: scale only raises the wave count, never the number of processes
+// running at the same time. The concurrency ceiling may legitimately exceed the
+// work units still left in this attempt, because it is frozen once per
+// execution while a replenishment round refreezes a smaller job set.
+func (r FleetRequest) validateFrozenCapacity() error {
+	if r.TargetObjectCount < 1 || r.TargetObjectCount < len(r.Jobs) {
+		return fmt.Errorf(
+			"fleet request targetObjectCount=%d must be positive and cover its %d frozen work units",
+			r.TargetObjectCount,
+			len(r.Jobs),
+		)
+	}
+	if r.FleetMaxConcurrentWorkers < 1 {
+		return fmt.Errorf(
+			"fleet request fleetMaxConcurrentWorkers=%d must be a positive frozen ceiling",
+			r.FleetMaxConcurrentWorkers,
+		)
+	}
+	expectedWaveCount := (r.TargetObjectCount + r.FleetMaxConcurrentWorkers - 1) /
+		r.FleetMaxConcurrentWorkers
+	if r.FleetWaveCount != expectedWaveCount {
+		return fmt.Errorf(
+			"fleet request fleetWaveCount=%d does not match the %d work units at a ceiling of %d; want %d",
+			r.FleetWaveCount,
+			r.TargetObjectCount,
+			r.FleetMaxConcurrentWorkers,
+			expectedWaveCount,
+		)
+	}
+	if r.FleetBatchDeadlineEpochSeconds < 1 {
+		return fmt.Errorf(
+			"fleet request fleetBatchDeadlineEpochSeconds=%d must be a frozen absolute epoch second",
+			r.FleetBatchDeadlineEpochSeconds,
+		)
+	}
+	if !reliabletask.ValidSHA256Digest(r.CapacityPlanDigest) {
+		return errors.New("fleet request capacityPlanDigest must be sha256")
+	}
+	if !reliabletask.ValidSHA256Digest(r.CalibrationReceiptDigest) {
+		return errors.New("fleet request calibrationReceiptDigest must be sha256")
+	}
+	return nil
+}
+
 // FleetConfig holds the runtime configuration required to execute a frozen
 // content release. Secrets remain source-owned runtime values and are never
 // persisted by this application service.
@@ -153,8 +268,6 @@ type FleetConfig struct {
 	WorkDir         string
 	PublishRoot     string
 	EvidenceRoot    string
-	Workers         int
-	BatchTimeout    time.Duration
 	LeaseTTL        time.Duration
 	PendingMinIdle  time.Duration
 }
@@ -198,6 +311,8 @@ func ReadFleetRequest(path string) (FleetRequest, error) {
 	request.JobSetEnvelopeDigest = strings.TrimSpace(request.JobSetEnvelopeDigest)
 	request.JobSetDigest = strings.TrimSpace(request.JobSetDigest)
 	request.ActualTaskDigest = strings.TrimSpace(request.ActualTaskDigest)
+	request.CapacityPlanDigest = strings.TrimSpace(request.CapacityPlanDigest)
+	request.CalibrationReceiptDigest = strings.TrimSpace(request.CalibrationReceiptDigest)
 	request.PartitionAlgorithm = strings.TrimSpace(request.PartitionAlgorithm)
 	if request.ExecutionID == "" || request.RecoverDeadTasks == nil ||
 		request.ObjectTimeoutMS < 1 || len(request.Jobs) == 0 {
@@ -217,17 +332,17 @@ func ReadFleetRequest(path string) (FleetRequest, error) {
 			"fleet request requires scaleClass and execution/job-set digests",
 		)
 	}
-	if request.RequiredWorkers < 1 {
-		return FleetRequest{}, errors.New("fleet request requiredWorkers must be positive")
+	if err := request.validateFrozenCapacity(); err != nil {
+		return FleetRequest{}, err
 	}
-	expectedPartitionCount := dataContentPartitionCount(len(request.Jobs))
+	expectedPartitionCount := dataContentPartitionCount(request.TargetObjectCount)
 	if request.PartitionCount != expectedPartitionCount ||
 		request.PartitionAlgorithm != dataContentPartitionAlgorithm {
 		return FleetRequest{}, fmt.Errorf(
 			"fleet request partitionCount=%d partitionAlgorithm=%q does not match the %d frozen work units; want partitionCount=%d partitionAlgorithm=%q",
 			request.PartitionCount,
 			request.PartitionAlgorithm,
-			len(request.Jobs),
+			request.TargetObjectCount,
 			expectedPartitionCount,
 			dataContentPartitionAlgorithm,
 		)
@@ -257,7 +372,7 @@ func ReadFleetRequest(path string) (FleetRequest, error) {
 		if strings.TrimSpace(binding.HostSetID) == "" ||
 			binding.Generation < 1 ||
 			strings.TrimSpace(binding.HostScopeID) == "" ||
-			binding.WorkerCount != request.RequiredWorkers ||
+			binding.WorkerCount != request.FleetMaxConcurrentWorkers ||
 			!reliabletask.ValidSHA256Digest(binding.FencingToken) ||
 			!reliabletask.ValidSHA256Digest(binding.HostSetDigest) ||
 			!reliabletask.ValidSHA256Digest(binding.Transport.MongoTransportDigest) ||
@@ -284,43 +399,8 @@ func ReadFleetRequest(path string) (FleetRequest, error) {
 		}
 	}
 	jobIDs := make(map[string]struct{}, len(request.Jobs))
-	for index := range request.Jobs {
-		job := &request.Jobs[index]
-		if !job.Campaign.IsEmpty() {
-			return FleetRequest{}, fmt.Errorf(
-				"fleet job %q cannot override campaign binding",
-				job.JobID,
-			)
-		}
-		if strings.TrimSpace(job.ExecutionEnvelopeDigest) != "" {
-			return FleetRequest{}, fmt.Errorf(
-				"fleet job %q cannot override execution envelope digest",
-				job.JobID,
-			)
-		}
-		if strings.TrimSpace(job.JobSetEnvelopeDigest) != "" ||
-			strings.TrimSpace(job.JobSetDigest) != "" ||
-			strings.TrimSpace(job.ActualTaskDigest) != "" {
-			return FleetRequest{}, fmt.Errorf(
-				"fleet job %q cannot override frozen job-set digests",
-				job.JobID,
-			)
-		}
-		job.ExecutionEnvelopeDigest = request.ExecutionEnvelopeDigest
-		job.JobSetEnvelopeDigest = request.JobSetEnvelopeDigest
-		job.JobSetDigest = request.JobSetDigest
-		job.ActualTaskDigest = request.ActualTaskDigest
-		if request.WorkerHostBinding != nil {
-			job.WorkerFence = &reliabletask.DataContentWorkerFence{
-				HostSetDigest: request.WorkerHostBinding.HostSetDigest,
-				Generation:    request.WorkerHostBinding.Generation,
-				FencingToken:  request.WorkerHostBinding.FencingToken,
-				HostScopeID:   request.WorkerHostBinding.HostScopeID,
-			}
-		}
-		if request.CampaignBinding != nil {
-			job.Campaign = *request.CampaignBinding
-		}
+	executionJobs := request.ExecutionJobs()
+	for _, job := range executionJobs {
 		if strings.TrimSpace(job.ExecutionID) != request.ExecutionID {
 			return FleetRequest{}, fmt.Errorf(
 				"fleet job %q execution binding mismatch",
@@ -368,7 +448,7 @@ func ReadFleetRequest(path string) (FleetRequest, error) {
 	if _, err := request.Stage(); err != nil {
 		return FleetRequest{}, err
 	}
-	actualTaskDigest, err := reliabletask.DataContentTaskDigest(request.Jobs)
+	actualTaskDigest, err := reliabletask.DataContentTaskDigest(executionJobs)
 	if err != nil {
 		return FleetRequest{}, err
 	}
@@ -475,7 +555,6 @@ func LoadFleetConfig(
 		WorkDir:         workDir,
 		PublishRoot:     publishRoot,
 		EvidenceRoot:    evidenceRoot,
-		Workers:         1,
 		LeaseTTL:        30 * time.Minute,
 		PendingMinIdle:  time.Second,
 	}
@@ -485,16 +564,6 @@ func LoadFleetConfig(
 	if value, ok := provider.GetString("QWQ_DATA_FLEET_REDIS_PASSWORD"); ok {
 		cfg.RedisPassword = value
 	}
-	if value, ok := provider.GetInt("QWQ_DATA_FLEET_WORKERS"); ok {
-		cfg.Workers = value
-	}
-	batchTimeout, ok := provider.GetDurationMs("QWQ_DATA_FLEET_BATCH_TIMEOUT_MS")
-	if !ok || batchTimeout <= 0 {
-		return FleetConfig{}, errors.New(
-			"runtime config QWQ_DATA_FLEET_BATCH_TIMEOUT_MS is required and must be positive",
-		)
-	}
-	cfg.BatchTimeout = batchTimeout
 	if value, ok := provider.GetDurationMs("QWQ_DATA_FLEET_LEASE_TTL_MS"); ok {
 		cfg.LeaseTTL = value
 	}
@@ -502,11 +571,6 @@ func LoadFleetConfig(
 		"QWQ_DATA_FLEET_PENDING_MIN_IDLE_MS",
 	); ok {
 		cfg.PendingMinIdle = value
-	}
-	if cfg.Workers < 1 || cfg.Workers > 4096 {
-		return FleetConfig{}, errors.New(
-			"QWQ_DATA_FLEET_WORKERS must be between 1 and 4096",
-		)
 	}
 	return cfg, nil
 }
@@ -600,7 +664,7 @@ func SelectExecutionTasks(
 		}
 	}
 	selected := make([]reliabletask.ReliableAsyncTask, 0, len(request.Jobs))
-	for _, job := range request.Jobs {
+	for _, job := range request.ExecutionJobs() {
 		jobID := strings.TrimSpace(job.JobID)
 		expectedKey, err := job.ValidateIdentity()
 		if err != nil {
@@ -644,7 +708,7 @@ func SelectFenceTargets(
 	request FleetRequest,
 ) ([]reliabletask.ReliableAsyncTask, error) {
 	wanted := make(map[string]reliabletask.DataContentJob, len(request.Jobs))
-	for _, job := range request.Jobs {
+	for _, job := range request.ExecutionJobs() {
 		key, err := job.ValidateIdentity()
 		if err != nil {
 			return nil, err

@@ -282,7 +282,9 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
           dependencies: widget.dependencies,
         );
       case MainTabDestination.actions:
-        return const _WebDesktopFrame(child: GatheringActionsDiscoveryPage());
+        return _WebDesktopFrame(
+          child: widget.dependencies.buildActionsDiscovery(),
+        );
       case MainTabDestination.create:
         return _WebCreateWorkspace(
           activeTabId: _createTabId,

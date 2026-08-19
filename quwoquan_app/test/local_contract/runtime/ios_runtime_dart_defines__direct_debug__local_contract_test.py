@@ -162,7 +162,7 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
                 _write_preflight_python(Path(temporary_directory))
             )
             _install_direct_handoff(env, "beta")
-            env["CONFIGURATION"] = "Debug-alpha"
+            env["CONFIGURATION"] = "Debug-beta"
             env["PLATFORM_NAME"] = "iphoneos"
             result = subprocess.run(
                 ["bash", str(SCRIPT)],
@@ -176,6 +176,42 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
         self.assertEqual(values["APP_RUNTIME_ENV"], "beta")
         self.assertEqual(values["QWQ_APP_LAUNCH_MODE"], "direct_flutter_run")
         self.assertIn("canonical beta-local handoff", result.stderr)
+
+    def test_direct_debug_rejects_mismatched_flavor_without_mutation(self) -> None:
+        env = dict(os.environ)
+        for key in (
+            "QWQ_APP_RUNTIME_ENV",
+            "QWQ_APP_LAUNCH_MODE",
+            "QWQ_LAUNCH_TARGET",
+            "QWQ_DART_DEFINES_DIGEST",
+            "QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST",
+            "QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST",
+            "DART_DEFINES",
+        ):
+            env.pop(key, None)
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            env["QWQ_IOS_STACKCTL_PYTHON"] = str(
+                _write_preflight_python(Path(temporary_directory))
+            )
+            _install_direct_handoff(env, "beta")
+            env["QWQ_ENVIRONMENT"] = "beta"
+            env["CONFIGURATION"] = "Debug-alpha"
+            env["PLATFORM_NAME"] = "iphonesimulator"
+            env["PRODUCT_BUNDLE_IDENTIFIER"] = "com.example.quwoquanApp.alpha.debug"
+            result = subprocess.run(
+                ["bash", str(SCRIPT)],
+                cwd=APP_DIR,
+                env=env,
+                check=False,
+                capture_output=True,
+                text=True,
+                errors="replace",
+            )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("configuration Debug-alpha does not match environment=beta", result.stderr)
+        self.assertFalse((APP_DIR / "ios/Flutter/QWQEnvironment.xcconfig").exists())
+        self.assertFalse((APP_DIR / "scripts/ios/write_environment_xcconfig.sh").exists())
 
     def test_release_without_canonical_launcher_fails_closed(self) -> None:
         env = dict(os.environ)
@@ -263,12 +299,12 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
                 "QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST",
             ):
                 env.pop(key, None)
-            env["CONFIGURATION"] = "Debug-alpha"
             env["PLATFORM_NAME"] = "iphoneos"
             env["QWQ_IOS_STACKCTL_PYTHON"] = str(
                 _write_preflight_python(Path(temporary_directory))
             )
             _install_direct_handoff(env, "alpha")
+            env["CONFIGURATION"] = "Debug-alpha"
             env["FLUTTER_ROOT"] = str(flutter_root)
             result = subprocess.run(
                 ["bash", str(BUILD_WRAPPER)],

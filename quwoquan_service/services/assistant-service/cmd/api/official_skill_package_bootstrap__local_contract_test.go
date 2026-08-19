@@ -311,6 +311,40 @@ func TestOfficialSkillPackageBootstrapRejectsAmbiguousPublications(t *testing.T)
 	}
 }
 
+func TestOfficialSkillPackageBootstrapUsesBuildBoundCommandIdentity(t *testing.T) {
+	t.Parallel()
+	assetRoot := t.TempDir()
+	publicKey := writeSignedPublication(t, assetRoot, "bootstrap-e", bootstrapTestKeyID)
+	store := newBootstrapMemoryStore()
+	service := newBootstrapService(t, store, assetRoot, map[string]ed25519.PublicKey{
+		bootstrapTestKeyID: publicKey,
+	})
+
+	if err := bootstrapOfficialSkillPackage(
+		t.Context(), service, store, assetRoot,
+	); err != nil {
+		t.Fatalf("bootstrap official package: %v", err)
+	}
+	var releaseDigest string
+	for _, release := range store.releases {
+		releaseDigest = release.ReleaseDigest
+	}
+	if releaseDigest == "" {
+		t.Fatal("bootstrap did not stage the release")
+	}
+	wantStage := "official-bootstrap-bootstrap-e:stage"
+	if _, found := store.stageCmds[wantStage]; !found {
+		t.Fatalf("stage command is not build-bound: %#v", store.stageCmds)
+	}
+	wantActivate := "official-bootstrap-bootstrap-e:activate"
+	if _, found := store.commandRcps[wantActivate]; !found {
+		t.Fatalf("activation command is not build-bound: %#v", store.commandRcps)
+	}
+	if !strings.Contains(wantStage, "bootstrap-e") || releaseDigest == "" {
+		t.Fatalf("bootstrap command/release identity is incomplete: %s %s", wantStage, releaseDigest)
+	}
+}
+
 func TestOfficialSkillPackageBootstrapRejectsUntrustedSignature(t *testing.T) {
 	t.Parallel()
 	assetRoot := t.TempDir()

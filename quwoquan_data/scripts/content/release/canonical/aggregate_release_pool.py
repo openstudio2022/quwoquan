@@ -30,6 +30,7 @@ from content.release.canonical.environment_release_selection import (
     PoolExclusion,
     discover_pool_candidates,
     pool_candidate_digest,
+    select_all_publishable_release_posts,
     select_environment_release_posts,
     select_milestone_release_posts,
 )
@@ -215,12 +216,20 @@ def prepare_pool_release(
     *,
     publish_root: Path,
     target_environment: str | None = None,
+    all_publishable: bool = False,
     milestone: str | None = None,
     release_class: str,
 ) -> PoolReleasePreparation:
-    if (target_environment is None) == (milestone is None):
+    if sum(
+        (
+            target_environment is not None,
+            all_publishable,
+            milestone is not None,
+        )
+    ) != 1:
         raise ObjectTransactionError(
-            "DATA.RELEASE.SELECTION_INVALID: choose targetEnvironment or milestone"
+            "DATA.RELEASE.SELECTION_INVALID: choose targetEnvironment, "
+            "allPublishable, or milestone"
         )
     normalized_release_class = str(release_class or "").strip()
     if normalized_release_class not in {"research", "commercial"}:
@@ -278,12 +287,18 @@ def prepare_pool_release(
         tuple[set[str], list[str], list[str], list[dict[str, object]]],
     ] = {}
     while True:
-        if milestone is None:
-            assert target_environment is not None
+        if target_environment is not None:
             environment_selection = select_environment_release_posts(
                 publish_root=publish_root,
                 post_refs=candidate_refs,
                 environment=target_environment,
+                release_class=normalized_release_class,
+                strict_admission=True,
+            )
+        elif all_publishable:
+            environment_selection = select_all_publishable_release_posts(
+                publish_root=publish_root,
+                post_refs=candidate_refs,
                 release_class=normalized_release_class,
                 strict_admission=True,
             )
@@ -404,7 +419,8 @@ def prepare_pool_release(
     if not post_refs and not standalone_entity_refs:
         raise ObjectTransactionError(
             "DATA.RELEASE.NO_ELIGIBLE_CONTENT: "
-            f"selection={target_environment or milestone} excluded={len(excluded)}"
+            f"selection={target_environment or milestone or 'all_publishable'} "
+            f"excluded={len(excluded)}"
         )
     post_entity_refs = {
         ref

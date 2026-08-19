@@ -32,7 +32,10 @@ from content.release.environment.topology import (  # noqa: E402
 from content.release.model import DeploymentEnvironment, ReleaseKind  # noqa: E402
 from core.io import read_json, write_json  # noqa: E402
 from core.release_layout import payload_digest  # noqa: E402
-from core.source_digest import SourceDigest, content_source_revision  # noqa: E402
+from core.source_digest import (  # noqa: E402
+    SourceDefinitionSnapshot,
+    content_source_revision,
+)
 
 _LIFECYCLE_EXIT_REF = (
     "env/gamma/runs/release-lifecycle-exit/"
@@ -44,7 +47,7 @@ _SOURCE_REVISION = content_source_revision(
     source_digest=_SOURCE_DIGEST,
     entity_catalog_digest=_ENTITY_CATALOG_DIGEST,
 )
-_SOURCE_DIGEST_DOCUMENT = SourceDigest(_SOURCE_DIGEST).to_document()
+_SOURCE_DIGEST_DOCUMENT = SourceDefinitionSnapshot(_SOURCE_DIGEST).to_document()
 
 
 def _release(root: Path, *, research: bool = False) -> Path:
@@ -184,6 +187,7 @@ def _dependencies(
         sync_media=lambda **_kwargs: None,
         write_applied_ref=lambda **_kwargs: None,
         assert_target_action_allowed=lambda **_kwargs: None,
+        assert_environment_release_policy=lambda **_kwargs: None,
         resolve_environment_release_target=lambda _env: target,
         require_environment_readiness=_require,
         run_tag_importer=lambda **_kwargs: Path("unused"),
@@ -268,6 +272,16 @@ def test_ship_verify__research_writes_typed_isolation_blocker_before_post_api(
         observed=observed,
         research=True,
     )
+    original_writer = dependencies.write_research_isolation_verification
+
+    def _write_isolation(**kwargs: object) -> Path:
+        observed["runtime_proof_path"] = kwargs.get("runtime_proof_path")
+        return original_writer(**kwargs)
+
+    dependencies = replace(
+        dependencies,
+        write_research_isolation_verification=_write_isolation,
+    )
 
     with pytest.raises(
         SystemExit,
@@ -294,4 +308,9 @@ def test_ship_verify__research_writes_typed_isolation_blocker_before_post_api(
     assert (
         receipt["blocker"]["code"]
         == "DATA.RESEARCH.IDENTITY_ADAPTER_UNAVAILABLE"
+    )
+    assert observed["runtime_proof_path"] == (
+        tmp_path
+        / "env/gamma/runs/data-release/release-a/research-verify-a/"
+        "research-isolation-runtime-proof.json"
     )

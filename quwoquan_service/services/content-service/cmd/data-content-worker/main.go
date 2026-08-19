@@ -16,7 +16,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -168,7 +167,14 @@ func run() error {
 		syscall.SIGTERM,
 	)
 	defer stop()
-	ctx, cancel := context.WithTimeout(parent, cfg.BatchTimeout)
+	remainingBatchTime, err := reliabletask.RemainingDataContentFleetBatchDuration(
+		request.FleetBatchDeadlineEpochSeconds,
+		time.Now(),
+	)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(parent, remainingBatchTime)
 	defer cancel()
 
 	client, err := mongo.Connect(options.Client().ApplyURI(cfg.MongoURI))
@@ -257,7 +263,8 @@ func run() error {
 		}
 	}
 	startedAt := time.Now().UTC()
-	for _, job := range request.Jobs {
+	executionJobs := request.ExecutionJobs()
+	for _, job := range executionJobs {
 		if _, err := fleet.Declare(ctx, job); err != nil {
 			return fmt.Errorf("declare data content job %s: %w", job.JobID, err)
 		}
@@ -279,7 +286,7 @@ func run() error {
 		}
 	}
 	if *request.RecoverDeadTasks {
-		if _, err := fleet.RecoverAuditedDeadJobs(ctx, request.Jobs); err != nil {
+		if _, err := fleet.RecoverAuditedDeadJobs(ctx, executionJobs); err != nil {
 			return fmt.Errorf("recover audited dead data content jobs: %w", err)
 		}
 		if _, err := fleet.ReconcileReadyIndex(ctx, len(request.Jobs)); err != nil {
@@ -303,21 +310,20 @@ func run() error {
 			cfg.DataScriptsRoot,
 		),
 	}
-	tasks, runErr := runWorkers(
+	concurrency := &reliabletask.DataContentConcurrencyObserver{}
+	tasks, runErr := importer.RunDataContentWorkers(
 		ctx,
 		request,
 		fleet,
-		executor,
-		cfg.Workers,
-		request.ObjectTimeout(),
+		concurrency.Observe(executor),
 	)
 	completedAt := time.Now().UTC()
 	stage, stageErr := request.Stage()
 	if stageErr != nil {
 		return stageErr
 	}
-	idempotencyKeys := make([]string, 0, len(request.Jobs))
-	for _, job := range request.Jobs {
+	idempotencyKeys := make([]string, 0, len(executionJobs))
+	for _, job := range executionJobs {
 		key, keyErr := job.ValidateIdentity()
 		if keyErr != nil {
 			return keyErr
@@ -343,7 +349,7 @@ func run() error {
 	finalizedObjectCount, finalizedErr := reliabletask.CountFinalizedDataContentObjects(
 		cfg.EvidenceRoot,
 		request.ExecutionID,
-		request.Jobs,
+		executionJobs,
 	)
 	if finalizedErr != nil {
 		return fmt.Errorf("count finalized data content objects: %w", finalizedErr)
@@ -357,6 +363,7 @@ func run() error {
 		max(0, len(request.Jobs)-len(tasks)),
 		request.RequiredQuota,
 		finalizedObjectCount,
+		concurrency.Peak(),
 	)
 	actualTaskDigest, actualDigestErr := reliabletask.DataContentAsyncTaskDigest(tasks)
 	if actualDigestErr != nil {
@@ -369,6 +376,8 @@ func run() error {
 		request.JobSetEnvelopeDigest,
 		request.JobSetDigest,
 		actualTaskDigest,
+		request.FleetWaveCount,
+		request.FleetBatchDeadlineEpochSeconds,
 	)
 	if err != nil {
 		return err
@@ -450,154 +459,6 @@ func discardExecution(executionID string) error {
 		result.TasksDeleted,
 		result.OutboxesDeleted,
 	)
-	return nil
-}
-
-func runWorkers(
-	ctx context.Context,
-	request importer.FleetRequest,
-	fleet reliabletask.DataContentFleet,
-	executor reliabletask.DataContentExecutor,
-	workers int,
-	objectTimeout time.Duration,
-) ([]reliabletask.ReliableAsyncTask, error) {
-	if objectTimeout <= 0 {
-		return nil, errors.New("data content object timeout must be positive")
-	}
-	workerCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	checkpointStore, ok := fleet.Store.(reliabletask.DataContentCheckpointStore)
-	if !ok {
-		return nil, errors.New("data content fleet requires durable checkpoint store")
-	}
-	checkpointEpoch := time.Now().UTC()
-	checkpointTracker := reliabletask.NewDataContentCheckpointTracker(checkpointEpoch)
-	errorsCh := make(chan error, workers)
-	var group sync.WaitGroup
-	for index := 0; index < workers; index++ {
-		group.Add(1)
-		go func(workerIndex int) {
-			defer group.Done()
-			localFleet := fleet
-			localFleet.WorkerID = fmt.Sprintf("%s-%04d", fleet.WorkerID, workerIndex)
-			for workerCtx.Err() == nil {
-				objectCtx, cancelObject := context.WithTimeout(
-					workerCtx,
-					objectTimeout,
-				)
-				processed, err := localFleet.ProcessOneContent(
-					objectCtx,
-					executor,
-				)
-				cancelObject()
-				if err != nil {
-					select {
-					case errorsCh <- err:
-					default:
-					}
-					return
-				}
-				if !processed {
-					time.Sleep(25 * time.Millisecond)
-				}
-			}
-		}(index)
-	}
-	defer func() {
-		cancel()
-		group.Wait()
-	}()
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
-	for {
-		executionTasks, err := loadExecutionTasks(
-			ctx,
-			fleet.Store,
-			request.ExecutionID,
-		)
-		if err != nil {
-			return nil, err
-		}
-		tasks, err := importer.SelectExecutionTasks(executionTasks, request)
-		if err != nil {
-			return nil, err
-		}
-		terminal := 0
-		for _, task := range tasks {
-			if task.Status == reliabletask.TaskStatusSucceeded ||
-				task.Status == reliabletask.TaskStatusDead {
-				terminal++
-			}
-		}
-		allTerminal := len(tasks) == len(request.Jobs) && terminal == len(tasks)
-		if err := flushDuePartitionCheckpoints(
-			ctx,
-			checkpointStore,
-			checkpointTracker,
-			request,
-			tasks,
-			time.Now().UTC(),
-			allTerminal,
-		); err != nil {
-			return tasks, err
-		}
-		if allTerminal {
-			return tasks, nil
-		}
-		select {
-		case err := <-errorsCh:
-			return tasks, fmt.Errorf("data content worker: %w", err)
-		case <-ctx.Done():
-			return tasks, ctx.Err()
-		case <-ticker.C:
-			if _, err := fleet.Dispatch(ctx, len(request.Jobs)); err != nil {
-				return tasks, err
-			}
-			if _, err := fleet.ReconcileReadyIndex(
-				ctx,
-				len(request.Jobs),
-			); err != nil {
-				return tasks, err
-			}
-		}
-	}
-}
-
-func flushDuePartitionCheckpoints(
-	ctx context.Context,
-	store reliabletask.DataContentCheckpointStore,
-	tracker *reliabletask.DataContentCheckpointTracker,
-	request importer.FleetRequest,
-	tasks []reliabletask.ReliableAsyncTask,
-	now time.Time,
-	force bool,
-) error {
-	stage, err := request.Stage()
-	if err != nil {
-		return err
-	}
-	due, err := tracker.Due(
-		request.ExecutionID,
-		stage,
-		request.JobSetDigest,
-		tasks,
-		request.CheckpointPolicy.EveryFinalizedObjects,
-		time.Duration(request.CheckpointPolicy.EverySeconds)*time.Second,
-		now,
-		force,
-	)
-	if err != nil {
-		return err
-	}
-	for _, checkpoint := range due {
-		if err := store.FlushDataContentPartitionCheckpoint(
-			ctx,
-			checkpoint,
-		); err != nil {
-			return fmt.Errorf("flush data content partition checkpoint: %w", err)
-		}
-		tracker.Commit(checkpoint)
-	}
 	return nil
 }
 

@@ -29,12 +29,12 @@ from content.release.canonical.reviewed_closure_aggregate import (
 from content.release.model import DataSourceOwner
 from core.release_layout import (
     attestation_root,
-    object_closure_digest,
+    objects_merkle,
     payload_digest,
     payload_file,
 )
 from core.schema import assert_valid
-from core.source_digest import FrozenSourceDigest, SourceDigest
+from core.source_digest import SourceDefinitionSnapshot
 
 
 def reuse_existing_aggregate_release(
@@ -47,9 +47,9 @@ def reuse_existing_aggregate_release(
     source_digest: str | None,
     entity_catalog_digest: str | None,
     source_digest_documents: list[dict[str, object]],
-    source_digests: tuple[SourceDigest | FrozenSourceDigest, ...],
+    source_digests: tuple[SourceDefinitionSnapshot, ...],
     desired: dict[str, list[str]],
-    distribution_policy: Any,
+    release_class: str,
     reviewed_closure_adoption: Mapping[str, Any] | None,
     adoption_output_root: Path | None,
     reviewed_selection: ReviewedClosureSelection | None,
@@ -98,7 +98,7 @@ def reuse_existing_aggregate_release(
             release_id=release_id,
             objects_root=payload_file(final_root, "objects"),
             desired=desired,
-            policy=distribution_policy,
+            release_class=release_class,
         )
         assert_valid(
             expected_asset_admission,
@@ -109,7 +109,7 @@ def reuse_existing_aggregate_release(
         if asset_admission != expected_asset_admission:
             raise ObjectTransactionError("existing release asset admission drifted")
 
-        selected_merkle = object_closure_digest(final_root)
+        selected_merkle = objects_merkle(final_root)
         header = _read_json(payload_file(final_root, "release.json"))
         validate_release_header(header, label=f"release_header:{release_id}")
         expected_header = release_header_document(
@@ -121,11 +121,14 @@ def reuse_existing_aggregate_release(
             source_digest_documents=source_digest_documents,
             asset_admission=asset_admission,
             canonical_merkle=selected_merkle,
-            release_class=distribution_policy.release_class.value,
-            product_lifecycle_state=(
-                distribution_policy.product_lifecycle_state.value
-            ),
+            release_class=release_class,
+            product_lifecycle_state=release_class,
             reviewed_closure_adoption=reviewed_closure_adoption,
+            selection_scope=(
+                environment_selection.selection_scope
+                if environment_selection is not None
+                else None
+            ),
             target_environment=(
                 environment_selection.environment
                 if environment_selection is not None
@@ -186,7 +189,7 @@ def reuse_existing_aggregate_release(
                 raise ObjectTransactionError(
                     "existing reviewed closure media manifest drifted"
                 )
-            if selected_merkle != object_closure_digest(
+            if selected_merkle != objects_merkle(
                 reviewed_selection.source_release_root
             ):
                 raise ObjectTransactionError(
@@ -256,7 +259,7 @@ def reuse_existing_aggregate_release(
             tag_count=len(tag_refs),
             payload_sha256=payload_digest(final_root),
             recorded_at=typed_attestation.recorded_at,
-            distribution_policy=distribution_policy,
+            release_class=release_class,
             source_identities=source_identities,
             source_identity_set_digest=source_identity_set_digest,
         )
@@ -280,6 +283,7 @@ def reuse_existing_aggregate_release(
     }
     if environment_selection is not None:
         result.update({
+            "selectionScope": environment_selection.selection_scope,
             "releaseMode": environment_selection.release_mode,
             "poolDigest": environment_selection.pool_digest,
             "poolEligibleCount": environment_selection.eligible_count,

@@ -11,7 +11,12 @@
     "jobSetEnvelopeDigest",
     "jobSetDigest",
     "actualTaskDigest",
-    "requiredWorkers",
+    "capacityPlanDigest",
+    "calibrationReceiptDigest",
+    "targetObjectCount",
+    "fleetMaxConcurrentWorkers",
+    "fleetWaveCount",
+    "fleetBatchDeadlineEpochSeconds",
     "partitionCount",
     "partitionAlgorithm",
     "checkpointPolicy",
@@ -22,26 +27,26 @@
     "jobs"
   ],
   "additionalProperties": false,
-  "$comment": "The allOf bands below are the single declared source of truth for the ReliableTask partition topology. partitionCount is the smallest governed power of two covering the frozen work-unit count, floored at 16 and capped at 256. jobs carries that exact frozen work-unit set, so its length is the only admitted input. Implementations: quwoquan_data/scripts/content/execution/queue/partition.py#partition_count and quwoquan_service/services/content-service/internal/content/post/application/importer/data_fleet.go#dataContentPartitionCount; both are pinned to these bands by local_contract tests.",
+  "$comment": "The allOf bands below are the single declared source of truth for the ReliableTask partition topology. partitionCount is the smallest governed power of two covering the frozen work-unit count, floored at 16 and capped at 256. targetObjectCount is that frozen work-unit count, so it is the only admitted input; jobs carries the same set and its length must agree with it. Implementations: quwoquan_data/scripts/content/execution/queue/partition.py#partition_count and quwoquan_service/services/content-service/internal/content/post/application/importer/data_fleet.go#dataContentPartitionCount; both are pinned to these bands by local_contract tests.",
   "allOf": [
     {
-      "if": {"required": ["jobs"], "properties": {"jobs": {"minItems": 1, "maxItems": 16}}},
+      "if": {"required": ["targetObjectCount"], "properties": {"targetObjectCount": {"minimum": 1, "maximum": 16}}},
       "then": {"properties": {"partitionCount": {"const": 16}}}
     },
     {
-      "if": {"required": ["jobs"], "properties": {"jobs": {"minItems": 17, "maxItems": 32}}},
+      "if": {"required": ["targetObjectCount"], "properties": {"targetObjectCount": {"minimum": 17, "maximum": 32}}},
       "then": {"properties": {"partitionCount": {"const": 32}}}
     },
     {
-      "if": {"required": ["jobs"], "properties": {"jobs": {"minItems": 33, "maxItems": 64}}},
+      "if": {"required": ["targetObjectCount"], "properties": {"targetObjectCount": {"minimum": 33, "maximum": 64}}},
       "then": {"properties": {"partitionCount": {"const": 64}}}
     },
     {
-      "if": {"required": ["jobs"], "properties": {"jobs": {"minItems": 65, "maxItems": 128}}},
+      "if": {"required": ["targetObjectCount"], "properties": {"targetObjectCount": {"minimum": 65, "maximum": 128}}},
       "then": {"properties": {"partitionCount": {"const": 128}}}
     },
     {
-      "if": {"required": ["jobs"], "properties": {"jobs": {"minItems": 129}}},
+      "if": {"required": ["targetObjectCount"], "properties": {"targetObjectCount": {"minimum": 129}}},
       "then": {"properties": {"partitionCount": {"const": 256}}}
     }
   ],
@@ -76,12 +81,38 @@
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
     },
-    "requiredWorkers": {
+    "capacityPlanDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "冻结 job set 所依据的容量计划摘要，与 reliabletask_job_set_envelope 的同名字段一致。"
+    },
+    "calibrationReceiptDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "并行上限与批次截止的唯一合法来源，即 create-once capacity calibration receipt 的摘要。runtime profile、环境变量、命令行默认值与探针观测都不是合法来源。"
+    },
+    "targetObjectCount": {
       "type": "integer",
-      "minimum": 1
+      "minimum": 1,
+      "description": "本次冻结的工作单元数，也是派生 job 数与分区拓扑的唯一输入。它不承载对象下限（requiredQuota）也不承载并行上限（fleetMaxConcurrentWorkers）。"
+    },
+    "fleetMaxConcurrentWorkers": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "交付阶段任一时刻可同时运行的 worker 进程上限，只能由 immutable execution policy 冻结。规模增长只增加 wave 数，不增加该上限；它不得由工作单元数或 quota 派生。"
+    },
+    "fleetWaveCount": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "ceil(targetObjectCount / fleetMaxConcurrentWorkers)，与 quota 无关。冻结值与运行回执必须一致。"
+    },
+    "fleetBatchDeadlineEpochSeconds": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "批次时间预算的绝对纪元秒。进程重启、lease 续租与子进程重建只能注入 max(0, 本值 - 当前时间)，不得重新注入完整批次预算；需要更多时间只能由新的 retryOf 冻结新的绝对截止。"
     },
     "partitionCount": {
-      "description": "Hash topology of the frozen job set, derived by the governed bands in this schema's allOf. Partitions isolate queue and checkpoint state; they are not worker capacity, so requiredWorkers and any per-worker resource ratio must never appear in this derivation.",
+      "description": "Hash topology of the frozen job set, derived by the governed bands in this schema's allOf. Partitions isolate queue and checkpoint state; they are not worker capacity, so fleetMaxConcurrentWorkers and any per-worker resource ratio must never appear in this derivation.",
       "enum": [16, 32, 64, 128, 256]
     },
     "partitionAlgorithm": {

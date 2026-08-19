@@ -3,44 +3,92 @@ package reliabletask
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
 
 const dataContentResultSchema = "quwoquan.data_content_object_result"
 
+// data_content_worker_response.schema.json 只声明这三个验收类；canonical 验收统一
+// 走 canonical_pool，调用方自造的类别必须 fail closed。
 const (
-	DataContentAcceptanceCommercialCanonical = "commercial_canonical"
-	DataContentAcceptanceStageCompleted      = "stage_completed"
-	DataContentAcceptanceContractFixture     = "contract_fixture"
+	DataContentAcceptanceCanonicalPool   = "canonical_pool"
+	DataContentAcceptanceStageCompleted  = "stage_completed"
+	DataContentAcceptanceContractFixture = "contract_fixture"
 )
 
 var dataContentPayloadFields = map[string]struct{}{
-	"schema":         {},
-	"jobId":          {},
-	"executionId":    {},
-	"ref":            {},
-	"stage":          {},
-	"partitionKey":   {},
-	"entityRef":      {},
-	"carrier":        {},
-	"sourceRevision": {},
-	"idempotencyKey": {},
+	"schema":                      {},
+	"jobId":                       {},
+	"executionId":                 {},
+	"ref":                         {},
+	"stage":                       {},
+	"partitionKey":                {},
+	"entityRef":                   {},
+	"carrier":                     {},
+	"sourceRevision":              {},
+	"idempotencyKey":              {},
+	"jobSetEnvelopeDigest":        {},
+	"jobSetDigest":                {},
+	"actualTaskDigest":            {},
+	"maxAttempts":                 {},
+	"workerHostSetDigest":         {},
+	"workerHostGeneration":        {},
+	"workerFencingToken":          {},
+	"workerHostScopeId":           {},
+	"executionEnvelopeDigest":     {},
+	"campaignRootExecutionId":     {},
+	"campaignRunId":               {},
+	"campaignGeneration":          {},
+	"campaignFencingToken":        {},
+	"campaignPlanDigest":          {},
+	"campaignSourceRevision":      {},
+	"campaignSourceDigest":        {},
+	"campaignEntityCatalogDigest": {},
+}
+
+// dataContentCampaignPayloadFields are written as one closed set by
+// DataContentCampaignBinding.payload, so a worker may only observe all of them
+// or none of them.
+var dataContentCampaignPayloadFields = []string{
+	"executionEnvelopeDigest",
+	"campaignRootExecutionId",
+	"campaignRunId",
+	"campaignGeneration",
+	"campaignFencingToken",
+	"campaignPlanDigest",
+	"campaignSourceRevision",
+	"campaignSourceDigest",
+	"campaignEntityCatalogDigest",
 }
 
 // DataContentWorkItem is the single-track worker input decoded from object_job.
 type DataContentWorkItem struct {
-	RuntimeTaskID  string `json:"runtimeTaskId"`
-	LeaseToken     string `json:"leaseToken"`
-	JobID          string `json:"jobId"`
-	ExecutionID    string `json:"executionId"`
-	Ref            string `json:"ref"`
-	Stage          string `json:"stage"`
-	PartitionKey   string `json:"partitionKey"`
-	EntityRef      string `json:"entityRef"`
-	Carrier        string `json:"carrier"`
-	SourceRevision string `json:"sourceRevision"`
-	IdempotencyKey string `json:"idempotencyKey"`
+	RuntimeTaskID        string `json:"runtimeTaskId"`
+	LeaseToken           string `json:"leaseToken"`
+	JobID                string `json:"jobId"`
+	ExecutionID          string `json:"executionId"`
+	Ref                  string `json:"ref"`
+	Stage                string `json:"stage"`
+	PartitionKey         string `json:"partitionKey"`
+	EntityRef            string `json:"entityRef"`
+	Carrier              string `json:"carrier"`
+	SourceRevision       string `json:"sourceRevision"`
+	IdempotencyKey       string `json:"idempotencyKey"`
+	JobSetEnvelopeDigest string `json:"jobSetEnvelopeDigest"`
+	JobSetDigest         string `json:"jobSetDigest"`
+	ActualTaskDigest     string `json:"actualTaskDigest"`
+	MaxAttempts          int    `json:"maxAttempts"`
+	WorkerHostSetDigest  string `json:"workerHostSetDigest,omitempty"`
+	WorkerHostGeneration int    `json:"workerHostGeneration,omitempty"`
+	WorkerFencingToken   string `json:"workerFencingToken,omitempty"`
+	WorkerHostScopeID    string `json:"workerHostScopeId,omitempty"`
+	// ExecutionEnvelopeDigest and Campaign are present only for a campaign-owned
+	// execution. A standalone dispatch carries neither, and a partial binding is
+	// rejected rather than silently narrowed to a standalone one.
+	ExecutionEnvelopeDigest string                     `json:"executionEnvelopeDigest,omitempty"`
+	Campaign                DataContentCampaignBinding `json:"campaignBinding,omitempty"`
 }
 
 func DecodeDataContentWorkItem(task ReliableAsyncTask) (DataContentWorkItem, error) {
@@ -63,30 +111,122 @@ func DecodeDataContentWorkItem(task ReliableAsyncTask) (DataContentWorkItem, err
 			"reliabletask data worker payload schema is invalid",
 		)
 	}
+	hostFieldCount := 0
+	for _, field := range []string{
+		"workerHostSetDigest", "workerHostGeneration",
+		"workerFencingToken", "workerHostScopeId",
+	} {
+		if strings.TrimSpace(task.Payload[field]) != "" {
+			hostFieldCount++
+		}
+	}
+	if hostFieldCount != 0 && hostFieldCount != 4 {
+		return DataContentWorkItem{}, fmt.Errorf(
+			"reliabletask data worker host fence is incomplete",
+		)
+	}
+	hostGeneration := 0
+	if hostFieldCount == 4 {
+		var err error
+		hostGeneration, err = strconv.Atoi(
+			strings.TrimSpace(task.Payload["workerHostGeneration"]),
+		)
+		if err != nil || hostGeneration < 1 {
+			return DataContentWorkItem{}, fmt.Errorf(
+				"reliabletask data worker host generation is invalid",
+			)
+		}
+	}
+	campaignFieldCount := 0
+	for _, field := range dataContentCampaignPayloadFields {
+		if strings.TrimSpace(task.Payload[field]) != "" {
+			campaignFieldCount++
+		}
+	}
+	if campaignFieldCount != 0 &&
+		campaignFieldCount != len(dataContentCampaignPayloadFields) {
+		return DataContentWorkItem{}, fmt.Errorf(
+			"reliabletask data worker campaign binding is incomplete",
+		)
+	}
+	campaign := DataContentCampaignBinding{}
+	if campaignFieldCount == len(dataContentCampaignPayloadFields) {
+		generation, err := strconv.Atoi(
+			strings.TrimSpace(task.Payload["campaignGeneration"]),
+		)
+		if err != nil || generation < 1 {
+			return DataContentWorkItem{}, fmt.Errorf(
+				"reliabletask data worker campaign generation is invalid",
+			)
+		}
+		campaign = DataContentCampaignBinding{
+			RootExecutionID:     strings.TrimSpace(task.Payload["campaignRootExecutionId"]),
+			RunID:               strings.TrimSpace(task.Payload["campaignRunId"]),
+			Generation:          generation,
+			FencingToken:        strings.TrimSpace(task.Payload["campaignFencingToken"]),
+			PlanDigest:          strings.TrimSpace(task.Payload["campaignPlanDigest"]),
+			SourceRevision:      strings.TrimSpace(task.Payload["campaignSourceRevision"]),
+			SourceDigest:        strings.TrimSpace(task.Payload["campaignSourceDigest"]),
+			EntityCatalogDigest: strings.TrimSpace(task.Payload["campaignEntityCatalogDigest"]),
+		}
+	}
+	maxAttempts, err := strconv.Atoi(strings.TrimSpace(task.Payload["maxAttempts"]))
+	if err != nil || maxAttempts < 1 {
+		return DataContentWorkItem{}, fmt.Errorf(
+			"reliabletask data worker maxAttempts is invalid",
+		)
+	}
 	item := DataContentWorkItem{
-		RuntimeTaskID:  strings.TrimSpace(task.TaskID),
-		LeaseToken:     strings.TrimSpace(task.LeaseToken),
-		JobID:          strings.TrimSpace(task.Payload["jobId"]),
-		ExecutionID:    strings.TrimSpace(task.Payload["executionId"]),
-		Ref:            strings.TrimSpace(task.Payload["ref"]),
-		Stage:          strings.TrimSpace(task.Payload["stage"]),
-		PartitionKey:   strings.TrimSpace(task.Payload["partitionKey"]),
-		EntityRef:      strings.TrimSpace(task.Payload["entityRef"]),
-		Carrier:        strings.TrimSpace(task.Payload["carrier"]),
-		SourceRevision: strings.TrimSpace(task.Payload["sourceRevision"]),
-		IdempotencyKey: strings.TrimSpace(task.Payload["idempotencyKey"]),
+		RuntimeTaskID:        strings.TrimSpace(task.TaskID),
+		LeaseToken:           strings.TrimSpace(task.LeaseToken),
+		JobID:                strings.TrimSpace(task.Payload["jobId"]),
+		ExecutionID:          strings.TrimSpace(task.Payload["executionId"]),
+		Ref:                  strings.TrimSpace(task.Payload["ref"]),
+		Stage:                strings.TrimSpace(task.Payload["stage"]),
+		PartitionKey:         strings.TrimSpace(task.Payload["partitionKey"]),
+		EntityRef:            strings.TrimSpace(task.Payload["entityRef"]),
+		Carrier:              strings.TrimSpace(task.Payload["carrier"]),
+		SourceRevision:       strings.TrimSpace(task.Payload["sourceRevision"]),
+		IdempotencyKey:       strings.TrimSpace(task.Payload["idempotencyKey"]),
+		JobSetEnvelopeDigest: strings.TrimSpace(task.Payload["jobSetEnvelopeDigest"]),
+		JobSetDigest:         strings.TrimSpace(task.Payload["jobSetDigest"]),
+		ActualTaskDigest:     strings.TrimSpace(task.Payload["actualTaskDigest"]),
+		MaxAttempts:          maxAttempts,
+		WorkerHostSetDigest:  strings.TrimSpace(task.Payload["workerHostSetDigest"]),
+		WorkerHostGeneration: hostGeneration,
+		WorkerFencingToken:   strings.TrimSpace(task.Payload["workerFencingToken"]),
+		WorkerHostScopeID:    strings.TrimSpace(task.Payload["workerHostScopeId"]),
+		ExecutionEnvelopeDigest: strings.TrimSpace(
+			task.Payload["executionEnvelopeDigest"],
+		),
+		Campaign: campaign,
 	}
 	job := DataContentJob{
-		EntityRef:      item.EntityRef,
-		Carrier:        item.Carrier,
-		SourceRevision: item.SourceRevision,
-		JobID:          item.JobID,
-		ExecutionID:    item.ExecutionID,
-		Ref:            item.Ref,
-		Stage:          item.Stage,
-		PartitionKey:   item.PartitionKey,
+		EntityRef:               item.EntityRef,
+		Carrier:                 item.Carrier,
+		SourceRevision:          item.SourceRevision,
+		JobID:                   item.JobID,
+		ExecutionID:             item.ExecutionID,
+		Ref:                     item.Ref,
+		Stage:                   item.Stage,
+		PartitionKey:            item.PartitionKey,
+		IdempotencyKey:          item.IdempotencyKey,
+		JobSetEnvelopeDigest:    item.JobSetEnvelopeDigest,
+		JobSetDigest:            item.JobSetDigest,
+		ActualTaskDigest:        item.ActualTaskDigest,
+		MaxAttempts:             item.MaxAttempts,
+		ExecutionEnvelopeDigest: item.ExecutionEnvelopeDigest,
+		Campaign:                item.Campaign,
 	}
-	expectedKey, err := job.IdempotencyKey()
+	if hostFieldCount == 4 {
+		job.WorkerFence = &DataContentWorkerFence{
+			HostSetDigest: item.WorkerHostSetDigest,
+			Generation:    item.WorkerHostGeneration,
+			FencingToken:  item.WorkerFencingToken,
+			HostScopeID:   item.WorkerHostScopeID,
+		}
+	}
+	expectedKey, err := job.ValidateIdentity()
 	if err != nil {
 		return DataContentWorkItem{}, err
 	}
@@ -115,6 +255,7 @@ type DataContentExecutionResult struct {
 	CanonicalObjectRef    string    `json:"canonicalObjectRef,omitempty"`
 	CanonicalObjectSHA256 string    `json:"canonicalObjectSha256,omitempty"`
 	ObjectTransactionID   string    `json:"objectTransactionId,omitempty"`
+	PoolDeliveryIntentID  string    `json:"poolDeliveryIntentId,omitempty"`
 	ResultEnvelopeRef     string    `json:"resultEnvelopeRef"`
 	AcceptanceClass       string    `json:"acceptanceClass"`
 	CompletedAt           time.Time `json:"completedAt"`
@@ -137,10 +278,10 @@ func (r DataContentExecutionResult) validate(item DataContentWorkItem) error {
 		}
 	}
 	switch r.AcceptanceClass {
-	case DataContentAcceptanceCommercialCanonical:
+	case DataContentAcceptanceCanonicalPool:
 		if item.Stage != "publish" {
 			return fmt.Errorf(
-				"reliabletask commercial data result requires publish stage",
+				"reliabletask canonical data result requires publish stage",
 			)
 		}
 		for _, field := range []struct {
@@ -149,17 +290,23 @@ func (r DataContentExecutionResult) validate(item DataContentWorkItem) error {
 		}{
 			{name: "canonicalObjectRef", value: r.CanonicalObjectRef},
 			{name: "objectTransactionId", value: r.ObjectTransactionID},
+			{name: "poolDeliveryIntentId", value: r.PoolDeliveryIntentID},
 		} {
 			if strings.TrimSpace(field.value) == "" {
 				return fmt.Errorf(
-					"reliabletask commercial data result requires %s",
+					"reliabletask canonical data result requires %s",
 					field.name,
 				)
 			}
 		}
 		if !validDataContentSHA256(r.CanonicalObjectSHA256) {
 			return fmt.Errorf(
-				"reliabletask commercial data result requires canonicalObjectSha256",
+				"reliabletask canonical data result requires canonicalObjectSha256",
+			)
+		}
+		if !validDataContentSHA256(r.PoolDeliveryIntentID) {
+			return fmt.Errorf(
+				"reliabletask canonical data result requires valid poolDeliveryIntentId",
 			)
 		}
 	case DataContentAcceptanceStageCompleted:
@@ -184,7 +331,7 @@ func (r DataContentExecutionResult) validate(item DataContentWorkItem) error {
 func (r DataContentExecutionResult) document() map[string]string {
 	status := "contract_fixture"
 	switch r.AcceptanceClass {
-	case DataContentAcceptanceCommercialCanonical:
+	case DataContentAcceptanceCanonicalPool:
 		status = "accepted"
 	case DataContentAcceptanceStageCompleted:
 		status = "stage_completed"
@@ -197,6 +344,7 @@ func (r DataContentExecutionResult) document() map[string]string {
 		"canonicalObjectRef":    strings.TrimSpace(r.CanonicalObjectRef),
 		"canonicalObjectSha256": strings.TrimSpace(r.CanonicalObjectSHA256),
 		"objectTransactionId":   strings.TrimSpace(r.ObjectTransactionID),
+		"poolDeliveryIntentId":  strings.TrimSpace(r.PoolDeliveryIntentID),
 		"resultEnvelopeRef":     strings.TrimSpace(r.ResultEnvelopeRef),
 		"acceptanceClass":       strings.TrimSpace(r.AcceptanceClass),
 		"completedAt":           r.CompletedAt.UTC().Format(time.RFC3339Nano),
@@ -241,10 +389,10 @@ func (f DataContentFleet) ProcessOneContent(
 		if err := result.validate(item); err != nil {
 			return err
 		}
-		if result.AcceptanceClass == DataContentAcceptanceCommercialCanonical &&
+		if result.AcceptanceClass == DataContentAcceptanceCanonicalPool &&
 			f.ResultVerifier == nil {
 			return fmt.Errorf(
-				"reliabletask commercial data result requires evidence verifier",
+				"reliabletask canonical data result requires evidence verifier",
 			)
 		}
 		if f.ResultVerifier != nil {

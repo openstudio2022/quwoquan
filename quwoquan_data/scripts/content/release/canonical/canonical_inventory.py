@@ -40,7 +40,7 @@ from content.release.canonical.object_transaction_contract import (
 from content.release.canonical.object_transaction_lock import (
     canonical_publish_serialized,
 )
-from core.paths import publish_lock_path
+from core.paths import canonical_publish_sidecar_root
 
 INVENTORY_SCHEMA = "quwoquan_data.canonical_publish_inventory"
 INVENTORY_ALGORITHM = "sha256-path-blob-xor-accumulator-v2"
@@ -48,8 +48,7 @@ _EMPTY_ACCUMULATOR = bytes(hashlib.sha256().digest_size)
 
 
 def canonical_inventory_path(publish_root: Path) -> Path:
-    lock_path = publish_lock_path(publish_root)
-    return lock_path.with_name(f"{lock_path.stem}.inventory.sqlite3")
+    return canonical_publish_sidecar_root(publish_root) / "inventory.sqlite3"
 
 
 def _sha256(data: bytes) -> str:

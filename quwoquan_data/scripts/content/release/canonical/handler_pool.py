@@ -58,6 +58,7 @@ def handle_pool_release_build(args: argparse.Namespace) -> None:
                 if getattr(args, "target_environment", None) is not None
                 else None
             ),
+            all_publishable=bool(getattr(args, "all_publishable", False)),
             milestone=(
                 str(args.milestone)
                 if getattr(args, "milestone", None) is not None
@@ -201,6 +202,9 @@ def handle_pool_dispatch(args: argparse.Namespace) -> None:
                 str(args.semantic_preflight_receipt)
                 if args.semantic_preflight_receipt
                 else None
+            ),
+            capacity_calibration_receipt_ref=str(
+                args.capacity_calibration_receipt
             ),
             run_date=str(args.run_date),
             scope=str(args.scope),

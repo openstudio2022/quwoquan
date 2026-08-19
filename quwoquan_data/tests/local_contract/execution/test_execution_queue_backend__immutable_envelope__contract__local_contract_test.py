@@ -195,11 +195,11 @@ def _declared_partition_bands() -> tuple[tuple[int, int | None, int], ...]:
     schema = load_schema("execution", "data_content_fleet_request")
     bands: list[tuple[int, int | None, int]] = []
     for branch in schema.get("allOf") or ():
-        rule = branch["if"]["properties"]["jobs"]
+        rule = branch["if"]["properties"]["targetObjectCount"]
         bands.append(
             (
-                int(rule["minItems"]),
-                int(rule["maxItems"]) if "maxItems" in rule else None,
+                int(rule["minimum"]),
+                int(rule["maximum"]) if "maximum" in rule else None,
                 int(branch["then"]["properties"]["partitionCount"]["const"]),
             )
         )
@@ -262,9 +262,15 @@ def _fleet_request_document(work_unit_count: int, partitions: int) -> dict[str, 
         "jobSetEnvelopeDigest": "sha256:" + "d" * 64,
         "jobSetDigest": "sha256:" + "c" * 64,
         "actualTaskDigest": "sha256:" + "b" * 64,
-        # requiredWorkers carries the approved quota; it must never reach the
-        # partition topology, which is why it is deliberately off-band here.
-        "requiredWorkers": work_unit_count,
+        "capacityPlanDigest": "sha256:" + "8" * 64,
+        "calibrationReceiptDigest": "sha256:" + "9" * 64,
+        "targetObjectCount": work_unit_count,
+        # The concurrency ceiling is frozen by the execution policy and is
+        # deliberately off-band here: partitions isolate queue state, so no
+        # worker count may reach the partition topology.
+        "fleetMaxConcurrentWorkers": min(work_unit_count, 8),
+        "fleetWaveCount": -(-work_unit_count // min(work_unit_count, 8)),
+        "fleetBatchDeadlineEpochSeconds": 1_893_456_000,
         "partitionCount": partitions,
         "partitionAlgorithm": "sha256_carrier_object_ref_mod_v1",
         "checkpointPolicy": checkpoint_policy_document(),

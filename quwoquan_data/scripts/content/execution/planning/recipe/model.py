@@ -481,6 +481,7 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
                 and not bool(
                     getattr(args, "retry_submission_only_predecessor", False)
                 )
+                and not bool(getattr(args, "retry_external_media_scope", False))
             ),
             inherited_targets=tuple(getattr(args, "inherited_targets", ()) or ()),
         )
@@ -496,6 +497,10 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
         target_set_ref=TARGET_SET_REF,
         target_set_digest=frozen_target_set_digest(execution_id),
         retry_of=manifest_retry_of,
+        allow_campaign_retry_scope=bool(
+            getattr(args, "retry_submission_only_predecessor", False)
+            or getattr(args, "retry_external_media_scope", False)
+        ),
         semantic_selection_id=semantic_selection_id,
         semantic_preflight_binding=semantic_preflight_binding,
     )

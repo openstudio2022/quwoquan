@@ -60,9 +60,14 @@ def _submission(
     source_pool_evidence_root_ref: str,
     source_pool_selection: dict[str, object],
 ) -> dict[str, object]:
+    active_carriers = list(EXECUTION_IDS)
+    workloads = {active: 100 for active in active_carriers}
     stable: dict[str, object] = {
         "schema": "quwoquan_data.content_execution_submission",
         "scale": "M100",
+        "workloadMode": "milestone_preset",
+        "activeCarriers": active_carriers,
+        "workloads": workloads,
         "rootExecutionId": ROOT_ID,
         "executionId": EXECUTION_IDS[carrier],
         "operation": f"{carrier}.generate",
@@ -93,6 +98,11 @@ def _submission(
             "algorithm": "sha256",
             "digest": SOURCE_DIGEST,
             "inputs": ["quwoquan_data/schema"],
+        },
+        "executionBundle": {
+            "algorithm": "sha256",
+            "digest": "sha256:" + "f" * 64,
+            "inputs": ["quwoquan_data/scripts"],
         },
         "entityCatalogDigest": CATALOG_DIGEST,
         "externalInputRefs": refs,
@@ -134,6 +144,9 @@ def _scale_source_pool(
     binding = {
         "poolId": pool["poolId"],
         "targetScale": pool["targetScale"],
+        "workloadMode": "milestone_preset",
+        "activeCarriers": list(EXECUTION_IDS),
+        "workloadTargets": {carrier: 100 for carrier in EXECUTION_IDS},
         "sourceRevision": SOURCE_REVISION,
         "sourceDigest": SOURCE_DIGEST,
         "entityCatalogDigest": CATALOG_DIGEST,
@@ -190,10 +203,18 @@ def _frozen_documents(
         "rootExecutionId": ROOT_ID,
         "executionMode": "central",
         "scale": "M100",
+        "workloadMode": "milestone_preset",
+        "activeCarriers": list(EXECUTION_IDS),
+        "workloads": {carrier: 100 for carrier in EXECUTION_IDS},
         "gitBranch": "dev1.0",
         "gitCommitSha": "c" * 40,
         "sourceRevision": SOURCE_REVISION,
         "sourceDigest": SOURCE_DIGEST,
+        "executionBundle": {
+            "algorithm": "sha256",
+            "digest": "sha256:" + "f" * 64,
+            "inputs": ["quwoquan_data/scripts"],
+        },
         "entityCatalogDigest": CATALOG_DIGEST,
         "semanticSelectionId": "default",
         "semanticPreflightReceipt": semantic_preflight_binding,
@@ -240,6 +261,7 @@ def _capsule(
             source_revision=SOURCE_REVISION,
             source_digest=SOURCE_DIGEST,
             entity_catalog_digest=CATALOG_DIGEST,
+            library_root=capsule_path.parent / "content_library",
         )
         lane_payload[carrier] = {
             "rootRef": root_ref,

@@ -83,22 +83,7 @@ func TestDataContentFilesystemEvidenceVerifierBindsAppliedTransactionAndCanonica
 		EvidenceRoot: evidenceRoot,
 	}
 	if err := verifier.VerifyDataContentResult(context.Background(), item, result); err != nil {
-		t.Fatalf("valid canonical-pool evidence was rejected: %v", err)
-	}
-	for _, skipped := range []string{
-		DataContentAcceptanceStageCompleted,
-		DataContentAcceptanceContractFixture,
-	} {
-		unverified := result
-		unverified.AcceptanceClass = skipped
-		unverified.ResultEnvelopeRef = "../escaping.json"
-		if err := verifier.VerifyDataContentResult(
-			context.Background(),
-			item,
-			unverified,
-		); err != nil {
-			t.Fatalf("%s must not require canonical evidence: %v", skipped, err)
-		}
+		t.Fatalf("valid canonical pool evidence was rejected: %v", err)
 	}
 
 	if err := os.WriteFile(

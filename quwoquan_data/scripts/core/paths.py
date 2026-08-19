@@ -13,7 +13,6 @@ from __future__ import annotations
 import hashlib
 import os
 import re
-import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -54,6 +53,7 @@ CONTENT_CAMPAIGN_WORKSPACES_ROOT = DATA_CACHE_ROOT / "content-campaign-workspace
 CONTENT_CAMPAIGN_CAPSULES_ROOT = (
     CONTENT_CAMPAIGN_WORKSPACES_ROOT / "content-addressed-capsules"
 )
+CANONICAL_PUBLISH_SIDECAR_ROOT = DATA_CACHE_ROOT / "canonical-publish"
 RESEARCH_SCALE_WORKSPACE_ROOT = DATA_WORKSPACE_ROOT / "research-scale"
 CAMPAIGN_SCALE_EVIDENCE_ROOT = (
     RESEARCH_SCALE_WORKSPACE_ROOT / "campaign-evidence"
@@ -104,6 +104,9 @@ CAMPAIGN_SCALE_EVIDENCE_OUTPUT_REF = CAMPAIGN_SCALE_EVIDENCE_ROOT.relative_to(
     OUTPUT_ROOT
 ).as_posix()
 RESEARCH_SCALE_PROMOTIONS_OUTPUT_REF = RESEARCH_SCALE_PROMOTIONS_ROOT.relative_to(
+    OUTPUT_ROOT
+).as_posix()
+CANONICAL_PUBLISH_SIDECAR_OUTPUT_REF = CANONICAL_PUBLISH_SIDECAR_ROOT.relative_to(
     OUTPUT_ROOT
 ).as_posix()
 
@@ -356,19 +359,31 @@ def execution_lock_path(execution_id: str) -> Path:
     return execution_root(execution_id) / ".lock"
 
 
-def publish_lock_path(publish_root: Path | None = None) -> Path:
-    """Return one process lock shared by every clone of the same publish root.
+def canonical_publish_sidecar_root(publish_root: Path | None = None) -> Path:
+    """Return the governed disposable sidecar directory for one publish root.
 
-    The lock cannot live in an execution output root because detached campaign
-    lanes use different output roots. It also cannot live inside canonical
-    ``publish/`` because that tree is audited and version controlled. A stable
-    digest of the resolved publish root gives all clones the same external
-    fence without adding a second publish artifact.
+    The process fence and the inventory index are derived state: both are
+    rebuilt from the canonical tree whenever they are absent. They still cannot
+    live inside canonical ``publish/`` (that tree is audited and version
+    controlled) nor inside one execution work package (lanes of the same
+    campaign are separate executions publishing to one tree), so they belong in
+    the disposable cache under the governed output root. Anywhere outside
+    ``.qwq_output`` — the system temporary directory in particular — they are
+    exempt from the output budget, invisible to ``release gc``, outside the
+    pytest isolation root, and free to accumulate across repositories and
+    sessions. A stable digest of the resolved publish root keeps every clone of
+    the same tree on one fence and one index.
     """
 
     resolved_root = (publish_root or PUBLISH_ROOT).resolve()
     digest = hashlib.sha256(str(resolved_root).encode("utf-8")).hexdigest()
-    return Path(tempfile.gettempdir()) / f"qwq-canonical-publish-{digest[:20]}.lock"
+    return OUTPUT_ROOT / CANONICAL_PUBLISH_SIDECAR_OUTPUT_REF / digest[:20]
+
+
+def publish_lock_path(publish_root: Path | None = None) -> Path:
+    """Return one process lock shared by every clone of the same publish root."""
+
+    return canonical_publish_sidecar_root(publish_root) / "publish.lock"
 
 
 # ─── publish 单一主线（已去版本化）───────────────────────────────

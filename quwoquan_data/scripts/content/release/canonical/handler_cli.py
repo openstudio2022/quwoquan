@@ -43,6 +43,11 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
         choices=("alpha", "beta", "gamma", "prod"),
     )
     selection.add_argument(
+        "--all-publishable",
+        action="store_true",
+        help="冻结当前全部 publishable 对象的环境无关日常 release",
+    )
+    selection.add_argument(
         "--milestone", choices=("M100", "M1000", "M10000")
     )
     pool_build.add_argument(
@@ -110,6 +115,11 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     pool_dispatch.add_argument(
         "--semantic-preflight-receipt",
         help="可选 preflight 观测 receipt；不参与 dispatch 准入",
+    )
+    pool_dispatch.add_argument(
+        "--capacity-calibration-receipt",
+        required=True,
+        help="受治理 M100 soak 产出的 capacity calibration receipt",
     )
     pool_dispatch.add_argument("--run-date", required=True)
     pool_dispatch.add_argument("--scope", required=True)

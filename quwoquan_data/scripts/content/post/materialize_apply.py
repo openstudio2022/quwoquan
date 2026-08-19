@@ -349,9 +349,7 @@ def materialize_posts(
             ],
             "template": template,
             "carrier": "image" if is_image else compose_payload.get("carrier", "article"),
-            "generator": compose_payload.get(
-                "generator", ContentGenerator.AGENT.value
-            ),
+            "generator": ContentGenerator.AGENT.value,
             "generatorModel": compose_payload.get("generatorModel"),
             "citedSourceRefs": [
                 _relativize_ref(r, execution_id)

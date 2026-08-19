@@ -1,6 +1,7 @@
 """Canonical reset is allowed only after a matching empty-baseline receipt."""
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -13,9 +14,16 @@ if str(SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from content.release.canonical import reset  # noqa: E402
+from content.release.canonical.canonical_inventory import (  # noqa: E402
+    apply_inventory_delta,
+    canonical_inventory_path,
+    load_or_bootstrap_inventory,
+    write_inventory,
+)
 
 
 BASELINE_ID = "20260725--travel-content--empty--test-001"
+PUBLISHED_REF = "posts/article/攻略/峨眉山/1/manifest.json"
 
 
 def _write_json(path: Path, payload: dict[str, object]) -> None:
@@ -72,6 +80,58 @@ def test_release_reset_canonical__clears_only_canonical_output_after_baseline_re
 
     assert removed == ("creators", "entities", "tags")
     assert list(publish_root.iterdir()) == []
+
+
+def _publish_one_object(publish_root: Path) -> None:
+    """Publish one object in the exact order an object transaction applies it."""
+    publish_root.mkdir(parents=True, exist_ok=True)
+    inventory = load_or_bootstrap_inventory(publish_root)
+    payload = json.dumps({"schema": "quwoquan_data.post_object"}).encode("utf-8")
+    destination = publish_root / PUBLISHED_REF
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(payload)
+    pending = apply_inventory_delta(
+        inventory,
+        [
+            {
+                "destination": PUBLISHED_REF,
+                "operation": "create",
+                "sha256": "sha256:" + hashlib.sha256(payload).hexdigest(),
+                "bytes": len(payload),
+            }
+        ],
+        publish_root=publish_root,
+    )
+    write_inventory(publish_root, pending)
+
+
+def test_release_reset_canonical__drops_the_inventory_sidecar_with_the_tree__functional__local_contract(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    release_root = tmp_path / "data/releases"
+    publish_root = tmp_path / "publish"
+    _baseline(release_root)
+    _receipt(tmp_path, "alpha")
+    monkeypatch.setattr(reset, "active_runtime_processes", lambda: [])
+    _publish_one_object(publish_root)
+    assert load_or_bootstrap_inventory(publish_root)["stats"]["fileCount"] == 1
+
+    reset.reset_canonical_publish(
+        empty_baseline_release=BASELINE_ID,
+        environments=("alpha",),
+        publish_root=publish_root,
+        release_root=release_root,
+        output_root=tmp_path,
+    )
+
+    assert not canonical_inventory_path(publish_root).exists()
+    cold = load_or_bootstrap_inventory(publish_root)
+    assert (cold["revision"], cold["stats"]["fileCount"]) == (0, 0)
+    # A retained sidecar would still hold this objectRef and fail the next wave
+    # with `canonical inventory create CAS drift`.
+    _publish_one_object(publish_root)
+    assert load_or_bootstrap_inventory(publish_root)["stats"]["fileCount"] == 1
 
 
 def test_release_reset_canonical__blocks_without_every_baseline_receipt__functional__local_contract(

@@ -51,23 +51,28 @@ def test_geo_content_trinity_legacy_golden_cannot_bypass_current_release_gates(
         assert isinstance(source, dict)
         digest = str(source.get("digest") or "")
         by_source_digest.setdefault(digest, []).append(manifest)
-    source_digest, selected = next(
-        (digest, rows)
-        for digest, rows in sorted(by_source_digest.items())
-        if {str(row.get("contentType") or "homepage") for row in rows}
-        == {"homepage", "article", "image", "video"}
+    carriers = {
+        str(manifest.get("contentType") or "homepage") for manifest in manifests
+    }
+    assert carriers == {"homepage", "article", "image", "video"}
+    assert len(by_source_digest) > 1, (
+        "legacy evidence must exercise cross-source-identity reuse"
     )
+    source_digest = sorted(by_source_digest)[0]
     execution_ids = sorted(
         {
             str(manifest.get("executionId") or "")
-            for manifest in selected
+            for manifest in manifests
             if str(manifest.get("executionId") or "")
         }
     )
 
     with pytest.raises(
         ObjectTransactionError,
-        match="(lacks a valid frozen sourceDigest|article media (closure|coverage))",
+        match=(
+            "(requires one frozen sourceDigest|lacks a valid frozen sourceDigest|"
+            "article media (closure|coverage))"
+        ),
     ):
         build_aggregate_release(
             publish_root=PUBLISH,

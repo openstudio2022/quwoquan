@@ -13,7 +13,7 @@ RUNTIME_PYTHON="$(bash "$STACKCTL_PYTHON_RESOLVER")" || {
   exit 2
 }
 EXISTING_RUNTIME_ENV="$(
-  python3 - "${DART_DEFINES:-}" <<'PY'
+  "$RUNTIME_PYTHON" - "${DART_DEFINES:-}" <<'PY'
 import base64
 import sys
 
@@ -28,7 +28,7 @@ for encoded in filter(None, sys.argv[1].strip().split(",")):
 PY
 )"
 EXISTING_LAUNCH_MODE="$(
-  python3 - "${DART_DEFINES:-}" <<'PY'
+  "$RUNTIME_PYTHON" - "${DART_DEFINES:-}" <<'PY'
 import base64
 import sys
 
@@ -43,7 +43,7 @@ for encoded in filter(None, sys.argv[1].strip().split(",")):
 PY
 )"
 EXISTING_LAUNCH_POLICY="$(
-  python3 - "${DART_DEFINES:-}" <<'PY'
+  "$RUNTIME_PYTHON" - "${DART_DEFINES:-}" <<'PY'
 import base64
 import sys
 
@@ -219,6 +219,13 @@ if [[ -z "$LAUNCH_MODE" \
    && -z "${QWQ_DART_DEFINES_DIGEST:-}" \
    && -z "${QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST:-}" \
    && -z "${QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST:-}" ]]; then
+  case "$DIRECT_ENVIRONMENT" in
+    alpha|beta|gamma) ;;
+    *)
+      echo "[ios-dart-defines] GATE_BLOCK: direct Debug flavor must be alpha|beta|gamma." >&2
+      exit 2
+      ;;
+  esac
   if [[ -n "${QWQ_ENVIRONMENT:-}" \
      && -n "$EXISTING_RUNTIME_ENV" \
      && "$QWQ_ENVIRONMENT" != "$EXISTING_RUNTIME_ENV" ]]; then
@@ -404,11 +411,6 @@ if [[ -n "${PRODUCT_BUNDLE_IDENTIFIER:-}" ]]; then
       exit 2
       ;;
   esac
-  QWQ_EXPECTED_CONFIGURATION_NAME="$QWQ_EXPECTED_CONFIGURATION_PREFIX-$ENV_NAME"
-  if [[ "${CONFIGURATION:-}" != "$QWQ_EXPECTED_CONFIGURATION_NAME" ]]; then
-    echo "[ios-dart-defines] GATE_BLOCK: Xcode configuration ${CONFIGURATION:-<missing>} does not match environment=$ENV_NAME buildMode=$QWQ_EXPECTED_BUILD_MODE; select flavor $ENV_NAME before rebuilding." >&2
-    exit 2
-  fi
   QWQ_EXPECTED_BUNDLE_ID="$(
     PYTHONPATH="$APP_DIR/..${PYTHONPATH:+:$PYTHONPATH}" PYTHONDONTWRITEBYTECODE=1 \
       "$RUNTIME_PYTHON" -c "from quwoquan_ops.cli.lib.app_identity import application_id_for; import sys; print(application_id_for('ios', sys.argv[1], sys.argv[2]))" \
@@ -417,6 +419,11 @@ if [[ -n "${PRODUCT_BUNDLE_IDENTIFIER:-}" ]]; then
     echo "[ios-dart-defines] GATE_BLOCK: failed to derive the expected bundle id for environment=$ENV_NAME buildMode=$QWQ_EXPECTED_BUILD_MODE." >&2
     exit 2
   }
+  QWQ_EXPECTED_CONFIGURATION_NAME="$QWQ_EXPECTED_CONFIGURATION_PREFIX-$ENV_NAME"
+  if [[ "${CONFIGURATION:-}" != "$QWQ_EXPECTED_CONFIGURATION_NAME" ]]; then
+    echo "[ios-dart-defines] GATE_BLOCK: Xcode configuration ${CONFIGURATION:-<missing>} does not match environment=$ENV_NAME buildMode=$QWQ_EXPECTED_BUILD_MODE; select flavor $ENV_NAME before rebuilding." >&2
+    exit 2
+  fi
   if [[ "$PRODUCT_BUNDLE_IDENTIFIER" != "$QWQ_EXPECTED_BUNDLE_ID" ]]; then
     echo "[ios-dart-defines] GATE_BLOCK: resolved bundle id $PRODUCT_BUNDLE_IDENTIFIER does not match $QWQ_EXPECTED_BUNDLE_ID for environment=$ENV_NAME; generated flavor identity is stale." >&2
     exit 2
@@ -441,7 +448,7 @@ else
   )"
 fi
 
-python3 - \
+"$RUNTIME_PYTHON" - \
   "$RUNTIME_DEFINES_JSON" \
   "${DART_DEFINES:-}" \
   "$APP_DIR" <<'PY'

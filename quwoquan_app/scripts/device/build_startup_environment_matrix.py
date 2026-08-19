@@ -157,6 +157,7 @@ def main() -> int:
         for platform in platforms:
             command = _build_command(platform, handoff)
             process_env = dict(os.environ)
+            process_env["QWQ_ENVIRONMENT"] = environment
             process_env["QWQ_APP_RUNTIME_ENV"] = environment
             process_env["QWQ_LAUNCH_TARGET"] = str(handoff["target"])
             process_env["QWQ_APP_BUILD_CONTEXT"] = "package-only"

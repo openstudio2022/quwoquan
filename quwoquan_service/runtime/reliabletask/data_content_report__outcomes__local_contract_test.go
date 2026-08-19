@@ -2,6 +2,7 @@ package reliabletask
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -33,6 +34,7 @@ func TestDataContentFleetReportCarriesOneOutcomePerFrozenJob(t *testing.T) {
 		0,
 		1,
 		0,
+		1,
 	)
 	if len(report.TaskOutcomes) != 2 {
 		t.Fatalf("task outcomes=%d want=2", len(report.TaskOutcomes))
@@ -48,7 +50,125 @@ func TestDataContentFleetReportCarriesOneOutcomePerFrozenJob(t *testing.T) {
 	}
 }
 
-// dataQuotaPublishTasks 造一批 publish 任务：前 accepted 个是商用可接受终态，
+func TestDataContentFleetReportBindsExactAttemptDigests(t *testing.T) {
+	report := BuildDataContentFleetReport(
+		dataQuotaPublishTasks(1, 1, time.Now().UTC()),
+		time.Now().Add(-time.Second),
+		time.Now().Add(-time.Second),
+		time.Now(),
+		0,
+		0,
+		1,
+		1,
+		1,
+	)
+	envelopeDigest := "sha256:" + strings.Repeat("a", 64)
+	taskDigest := "sha256:" + strings.Repeat("b", 64)
+	const frozenWaveCount = 2
+	const frozenDeadline = int64(1_893_456_000)
+	bound, err := BindDataContentFleetReport(
+		report,
+		"20260808--travel-image-m1--china--scale-001",
+		"publish",
+		envelopeDigest,
+		taskDigest,
+		taskDigest,
+		frozenWaveCount,
+		frozenDeadline,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bound.JobSetEnvelopeDigest != envelopeDigest ||
+		bound.JobSetDigest != taskDigest ||
+		bound.ActualTaskDigest != taskDigest ||
+		bound.FleetWaveCount != frozenWaveCount ||
+		bound.FleetBatchDeadlineEpochSeconds != frozenDeadline {
+		t.Fatalf("report attempt binding drift: %#v", bound)
+	}
+	if _, err := BindDataContentFleetReport(
+		report, "execution", "publish", envelopeDigest, taskDigest,
+		"sha256:invalid", frozenWaveCount, frozenDeadline,
+	); err == nil {
+		t.Fatal("invalid actualTaskDigest was accepted")
+	}
+}
+
+// spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-011.t1
+func TestDataContentFleetReportRequiresFrozenWaveCountAndDeadline(t *testing.T) {
+	report := BuildDataContentFleetReport(
+		dataQuotaPublishTasks(1, 1, time.Now().UTC()),
+		time.Now().Add(-time.Second),
+		time.Now().Add(-time.Second),
+		time.Now(),
+		0,
+		0,
+		1,
+		1,
+		1,
+	)
+	digest := "sha256:" + strings.Repeat("b", 64)
+	for _, test := range []struct {
+		name      string
+		waveCount int
+		deadline  int64
+	}{
+		{name: "missing wave count", waveCount: 0, deadline: 1_893_456_000},
+		{name: "negative wave count", waveCount: -1, deadline: 1_893_456_000},
+		{name: "missing absolute deadline", waveCount: 2, deadline: 0},
+		{name: "negative absolute deadline", waveCount: 2, deadline: -1},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := BindDataContentFleetReport(
+				report,
+				"20260808--travel-image-m1--china--scale-001",
+				"publish",
+				digest,
+				digest,
+				digest,
+				test.waveCount,
+				test.deadline,
+			); err == nil {
+				t.Fatal("report bound without its frozen capacity identity")
+			}
+		})
+	}
+}
+
+func TestDataContentFleetReportSeparatesSuccessFromAutomaticRecovery(t *testing.T) {
+	completedAt := time.Now().UTC()
+	tasks := []ReliableAsyncTask{
+		{TaskID: "first", Status: TaskStatusSucceeded, Attempts: 1, Payload: map[string]string{"jobId": "first"}},
+		{TaskID: "recovered", Status: TaskStatusSucceeded, Attempts: 2, Payload: map[string]string{"jobId": "recovered"}},
+		{TaskID: "dead", Status: TaskStatusDead, Attempts: 3, Payload: map[string]string{"jobId": "dead"}},
+	}
+	report := BuildDataContentFleetReport(
+		tasks,
+		completedAt.Add(-2*time.Second),
+		completedAt.Add(-time.Second),
+		completedAt,
+		0, 0, 1, 0, 1,
+	)
+	if report.RecoveryEligibleCount != 2 || report.AutomaticRecoveredCount != 1 || report.AutomaticRecoveryRate != 0.5 {
+		t.Fatalf("recovery metrics drift: %#v", report)
+	}
+	if report.AutomaticRecoveryStatus != "MEASURED" || report.FirstAttemptSuccessRate != 1.0/3.0 {
+		t.Fatalf("recovery status drift: %#v", report)
+	}
+
+	notExercised := BuildDataContentFleetReport(
+		tasks[:1],
+		completedAt.Add(-2*time.Second),
+		completedAt.Add(-time.Second),
+		completedAt,
+		0, 0, 1, 0, 1,
+	)
+	if notExercised.AutomaticRecoveryStatus != "NOT_EXERCISED" || notExercised.AutomaticRecoveryRate != 0 {
+		t.Fatalf("unexercised recovery must not be reported as success: %#v", notExercised)
+	}
+}
+
+// dataQuotaPublishTasks 造一批 publish 任务：前 accepted 个进入 canonical pool 终态，
 // 其余是被丢弃的 dead 对象，用来表达"过采 + 配额"的批次形态。
 func dataQuotaPublishTasks(total int, accepted int, completed time.Time) []ReliableAsyncTask {
 	tasks := make([]ReliableAsyncTask, 0, total)
@@ -72,8 +192,9 @@ func dataQuotaPublishTasks(total int, accepted int, completed time.Time) []Relia
 				CanonicalObjectRef:    job.Ref,
 				CanonicalObjectSHA256: "sha256:" + fmt.Sprintf("%064d", index+1),
 				ObjectTransactionID:   fmt.Sprintf("txn-object-%03d", index),
+				PoolDeliveryIntentID:  "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 				ResultEnvelopeRef:     "result_envelope.json",
-				AcceptanceClass:       DataContentAcceptanceCommercialCanonical,
+				AcceptanceClass:       DataContentAcceptanceCanonicalPool,
 				CompletedAt:           completed,
 			}.document()
 		}
@@ -95,6 +216,7 @@ func TestDataContentFleetReportPassesPublishQuotaWithoutFullBatchSuccess(t *test
 		0,
 		7,
 		73,
+		2,
 	)
 
 	if !report.Passed {
@@ -103,12 +225,45 @@ func TestDataContentFleetReportPassesPublishQuotaWithoutFullBatchSuccess(t *test
 	if report.AcceptedContentThroughputStatus != "MEASURED" {
 		t.Fatalf("accepted throughput status=%q want=MEASURED", report.AcceptedContentThroughputStatus)
 	}
-	if report.CommercialAcceptedCount != 8 ||
+	if report.ResearchAcceptedCount != 8 ||
+		report.CommercialAcceptedCount != 0 ||
 		report.Succeeded != 8 ||
 		report.Total != 10 ||
 		report.RequiredQuota != 7 ||
 		report.FinalizedObjectCount != 73 {
 		t.Fatalf("quota report drift: %#v", report)
+	}
+}
+
+func TestDataContentFleetReportCountsOnlyCanonicalPoolTowardResearchEligibility(t *testing.T) {
+	started := time.Now().UTC().Add(-time.Hour)
+	completed := time.Now().UTC()
+	build := func(acceptanceClass string) DataContentFleetReport {
+		tasks := dataQuotaPublishTasks(1, 1, completed)
+		tasks[0].Result["acceptanceClass"] = acceptanceClass
+		return BuildDataContentFleetReport(tasks, started, started, completed, 0, 0, 1, 1, 1)
+	}
+
+	accepted := build(DataContentAcceptanceCanonicalPool)
+	if !accepted.Passed ||
+		accepted.ResearchAcceptedCount != 1 ||
+		accepted.CommercialAcceptedCount != 0 {
+		t.Fatalf("canonical pool result did not satisfy research eligibility: %#v", accepted)
+	}
+
+	// data_content_worker_response.schema.json declares no acceptance class that
+	// means commercial acceptance, so nothing else may reach the accepted count.
+	for _, acceptanceClass := range []string{
+		DataContentAcceptanceContractFixture,
+		"commercial_canonical",
+		"research_canonical",
+	} {
+		report := build(acceptanceClass)
+		if report.Passed ||
+			report.ResearchAcceptedCount != 0 ||
+			report.CommercialAcceptedCount != 0 {
+			t.Fatalf("acceptanceClass=%q was counted as accepted: %#v", acceptanceClass, report)
+		}
 	}
 }
 
@@ -125,6 +280,7 @@ func TestDataContentFleetReportBlocksPublishBatchBelowQuota(t *testing.T) {
 		0,
 		7,
 		5,
+		2,
 	)
 
 	if report.Passed {
@@ -138,12 +294,12 @@ func TestDataContentFleetReportBlocksPublishBatchBelowQuota(t *testing.T) {
 	}
 }
 
-func TestDataContentFleetReportAcceptsIdempotentFinalizedObjectsTowardQuota(t *testing.T) {
+func TestDataContentFleetReportRejectsUnacceptedFinalizedObjectsTowardQuota(t *testing.T) {
 	started := time.Now().UTC().Add(-time.Hour)
 	completed := time.Now().UTC()
 
-	// Resume after objects already sit in canonical publish: jobs may be dead
-	// while finalizedObjectCount still meets the commercial quota.
+	// Reviewed/finalized work-package files are not a canonical transaction
+	// result and cannot absorb dead publish jobs.
 	report := BuildDataContentFleetReport(
 		dataQuotaPublishTasks(5, 0, completed),
 		started,
@@ -153,14 +309,15 @@ func TestDataContentFleetReportAcceptsIdempotentFinalizedObjectsTowardQuota(t *t
 		0,
 		3,
 		5,
+		2,
 	)
 
-	if !report.Passed {
-		t.Fatalf("idempotent finalized objects must meet publish quota: %#v", report)
+	if report.Passed {
+		t.Fatalf("unaccepted finalized objects must not meet publish quota: %#v", report)
 	}
-	if report.AcceptedContentThroughputStatus != "MEASURED" {
+	if report.AcceptedContentThroughputStatus != "GATE_BLOCK_INCOMPLETE_COMMERCIAL_BATCH" {
 		t.Fatalf(
-			"accepted throughput status=%q want=MEASURED",
+			"accepted throughput status=%q want=GATE_BLOCK_INCOMPLETE_COMMERCIAL_BATCH",
 			report.AcceptedContentThroughputStatus,
 		)
 	}
@@ -174,10 +331,10 @@ func TestDataContentFleetReportGatesPublishQuotaOnDuplicateAndMissingObjects(t *
 	completed := time.Now().UTC()
 
 	duplicated := BuildDataContentFleetReport(
-		dataQuotaPublishTasks(10, 8, completed), started, started, completed, 1, 0, 7, 8,
+		dataQuotaPublishTasks(10, 8, completed), started, started, completed, 1, 0, 7, 8, 2,
 	)
 	missing := BuildDataContentFleetReport(
-		dataQuotaPublishTasks(10, 8, completed), started, started, completed, 0, 1, 7, 8,
+		dataQuotaPublishTasks(10, 8, completed), started, started, completed, 0, 1, 7, 8, 2,
 	)
 
 	if duplicated.Passed || missing.Passed {
@@ -213,8 +370,8 @@ func TestDataContentFleetReportAppliesQuotaToAuthorBatch(t *testing.T) {
 		return tasks
 	}
 
-	met := BuildDataContentFleetReport(authorTasks(10, 8), started, started, completed, 0, 0, 7, 8)
-	unmet := BuildDataContentFleetReport(authorTasks(10, 5), started, started, completed, 0, 0, 7, 5)
+	met := BuildDataContentFleetReport(authorTasks(10, 8), started, started, completed, 0, 0, 7, 8, 2)
+	unmet := BuildDataContentFleetReport(authorTasks(10, 5), started, started, completed, 0, 0, 7, 5, 2)
 
 	if !met.Passed {
 		t.Fatalf("author quota was met but the batch was blocked: %#v", met)
@@ -244,6 +401,7 @@ func TestDataContentFleetReportSeparatesEndToEndFromFleetWallClock(t *testing.T)
 		0,
 		8,
 		8,
+		2,
 	)
 
 	if report.FleetWallClockMilliseconds != int64(time.Hour/time.Millisecond) ||

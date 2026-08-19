@@ -1,6 +1,6 @@
 {
   "generator": "app-only-emitter",
-  "contractGraphSha256": "ae0fd0a3a81ca25ad321276e82c2668626920098032d6fa00232e4637c87fa28",
+  "contractGraphSha256": "eab7bbe5dbad77c257c1961e19f412ff062138059e8600ad30b724958341e7a8",
   "bindings": [
     {
       "generatedPath": "lib/service/assistant_service/assistant/assistant_run/domain/generated/aggregation_state.g.dart",

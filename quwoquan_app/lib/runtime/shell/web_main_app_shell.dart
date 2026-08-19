@@ -21,7 +21,6 @@ import 'package:quwoquan_app/design_system/providers/theme_provider.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_app_state.dart';
 import 'package:quwoquan_app/runtime/shell/actions/global_surface_actions.dart';
 import 'package:quwoquan_app/runtime/shell/interest_match/interest_match_page.dart';
-import 'package:quwoquan_app/service/circle_service/circle_management/gathering/presentation/gathering_actions_discovery_page.dart';
 import 'package:quwoquan_app/runtime/shell/welcome/welcome_appearance.dart';
 import 'package:quwoquan_app/runtime/shell/welcome/welcome_flower_mark.dart';
 
@@ -74,6 +73,7 @@ class WebMainAppShellDependencies {
     required this.buildFeaturedChannel,
     required this.buildChat,
     required this.buildProfile,
+    required this.buildActionsDiscovery,
     required this.openCreate,
     required this.openStartGathering,
     required this.openStartGroupChat,
@@ -84,6 +84,7 @@ class WebMainAppShellDependencies {
   final WebMainAppShellFeaturedChannelBuilder buildFeaturedChannel;
   final WebMainAppShellPageBuilder buildChat;
   final WebMainAppShellPageBuilder buildProfile;
+  final WebMainAppShellPageBuilder buildActionsDiscovery;
   final WebMainAppShellCreateAction openCreate;
   final WebMainAppShellAccountAction openStartGathering;
   final WebMainAppShellAccountAction openStartGroupChat;

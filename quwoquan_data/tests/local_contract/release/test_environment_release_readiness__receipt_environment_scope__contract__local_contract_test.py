@@ -24,7 +24,7 @@ from core.release_layout import objects_merkle, payload_digest
 from core.schema import assert_valid
 from core.source_digest import (
     content_source_revision,
-    current_source_digest,
+    current_source_definition_snapshot,
 )
 from verify.release_environment_readiness import (
     environment_release_readiness_issues,
@@ -42,7 +42,7 @@ POSTS = (
     ("image/test-a", "post-image-a", "image"),
     ("video/test-a", "post-video-a", "video"),
 )
-SOURCE_DIGEST = current_source_digest()
+SOURCE_DIGEST = current_source_definition_snapshot()
 ENTITY_CATALOG_DIGEST = "sha256:" + "f" * 64
 SOURCE_REVISION = content_source_revision(
     source_digest=SOURCE_DIGEST.digest,

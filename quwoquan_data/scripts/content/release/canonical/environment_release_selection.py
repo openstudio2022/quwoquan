@@ -71,6 +71,7 @@ class EnvironmentReleaseSelection:
     eligible_count: int
     counts: dict[str, int]
     excluded: tuple[PoolExclusion, ...]
+    selection_scope: str
     milestone: str | None = None
     milestone_targets: Mapping[str, int] | None = None
 
@@ -131,6 +132,10 @@ def _candidate(
     else:
         raise ObjectTransactionError(
             f"DATA.POOL.POST_NOT_ADMITTED: postRef={post_ref} admission=<missing>"
+        )
+    if str(manifest.get("generator") or "").strip() != "agent":
+        raise ObjectTransactionError(
+            f"DATA.POOL.GENERATOR_PROVENANCE_INVALID: postRef={post_ref}"
         )
     manifest_version = manifest.get("version") or version_value
     if (
@@ -504,6 +509,52 @@ def select_environment_release_posts(
         excluded=tuple(
             sorted(excluded, key=lambda row: (row.gate, row.code, row.post_ref))
         ),
+        selection_scope="target_environment",
+    )
+
+
+def select_all_publishable_release_posts(
+    *,
+    publish_root: Path,
+    post_refs: Sequence[str],
+    release_class: str,
+    strict_admission: bool = True,
+) -> EnvironmentReleaseSelection:
+    """Select every publishable object without environment or milestone identity."""
+
+    release_mode = str(release_class or "").strip()
+    if release_mode not in {"research", "commercial"}:
+        raise ObjectTransactionError(
+            f"DATA.RELEASE.CLASS_INVALID: {release_mode!r}"
+        )
+    candidates, excluded = discover_pool_candidates(
+        publish_root=publish_root,
+        post_refs=post_refs,
+        strict_admission=strict_admission,
+    )
+    latest, version_exclusions = _latest_versions(
+        candidates,
+        release_mode=release_mode,
+    )
+    excluded.extend(version_exclusions)
+    selected = _stable_balanced_order(latest)
+    counts = {
+        content_type: sum(row.content_type == content_type for row in selected)
+        for content_type in _CONTENT_TYPES
+    }
+    counts["total"] = len(selected)
+    return EnvironmentReleaseSelection(
+        environment=None,
+        release_mode=release_mode,
+        post_refs=tuple(row.post_ref for row in selected),
+        candidates=tuple(selected),
+        pool_digest=_pool_digest(candidates),
+        eligible_count=len(latest),
+        counts=counts,
+        excluded=tuple(
+            sorted(excluded, key=lambda row: (row.gate, row.code, row.post_ref))
+        ),
+        selection_scope="all_publishable",
     )
 
 
@@ -589,6 +640,7 @@ def select_milestone_release_posts(
         excluded=tuple(
             sorted(excluded, key=lambda row: (row.gate, row.code, row.post_ref))
         ),
+        selection_scope="milestone",
         milestone=milestone_name,
         milestone_targets=dict(targets),
     )
@@ -602,6 +654,7 @@ __all__ = [
     "discover_pool_candidates",
     "pool_candidate_digest",
     "pool_delivery_issue",
+    "select_all_publishable_release_posts",
     "select_environment_release_posts",
     "select_milestone_release_posts",
     "source_attribution_complete",

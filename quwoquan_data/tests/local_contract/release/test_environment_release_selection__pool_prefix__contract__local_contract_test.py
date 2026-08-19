@@ -74,6 +74,7 @@ def _post(
     usage_scope: str = "research",
     variant_purpose: str = "original",
     status: str = "active",
+    generator: str = "agent",
     entity_refs: list[str] | None = None,
 ) -> str:
     post_ref = f"{content_type}/{work}/{version}"
@@ -102,6 +103,7 @@ def _post(
             "sourceDigest": source_digest.to_document(),
             "sourceIdentity": source_identity,
             "contentType": content_type,
+            "generator": generator,
             "authorId": author_id,
             "entityRefs": list(entity_refs or []),
             "variantPurpose": variant_purpose,
@@ -223,6 +225,32 @@ def test_environment_release_selection__nested_balanced_prefix_and_versions__loc
     assert {
         row.code for row in commercial.excluded
     } == {"DATA.POOL.COMMERCIAL_RIGHTS_REQUIRED"}
+
+
+def test_all_publishable_selection__excludes_internal_image_generator_from_delivery_wire__local_contract(
+    tmp_path: Path,
+) -> None:
+    publish_root = tmp_path / "publish"
+    post_ref = _post(
+        publish_root,
+        content_type="image",
+        work="legacy-image-evidence-pack",
+        version=1,
+        author_id="author-image",
+        generator="image_evidence_pack",
+    )
+
+    selection = subject.select_all_publishable_release_posts(
+        publish_root=publish_root,
+        post_refs=[post_ref],
+        release_class="research",
+        strict_admission=False,
+    )
+
+    assert selection.post_refs == ()
+    assert [row.code for row in selection.excluded] == [
+        "DATA.POOL.GENERATOR_PROVENANCE_INVALID"
+    ]
 
 
 def test_environment_release_selection__legacy_requires_explicit_admission__local_contract(

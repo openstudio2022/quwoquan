@@ -49,6 +49,7 @@ def release_header_document(
     release_class: str,
     product_lifecycle_state: str,
     reviewed_closure_adoption: Mapping[str, Any] | None,
+    selection_scope: str | None = None,
     target_environment: str | None = None,
     release_mode: str | None = None,
     pool_digest: str | None = None,
@@ -115,6 +116,7 @@ def release_header_document(
     if pool_digest is not None:
         document.update(
             {
+                "selectionScope": selection_scope,
                 "releaseMode": release_mode,
                 "poolDigest": pool_digest,
                 "counts": dict(counts or {}),

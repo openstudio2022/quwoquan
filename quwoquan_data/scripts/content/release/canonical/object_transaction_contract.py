@@ -10,6 +10,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from content.execution.closure.publish_outcome import (
+    OBJECT_ASSET_OVER_BUDGET,
+    OBJECT_CLOSURE_OVER_BUDGET,
+    TypedPublishExclusion,
+)
 from content.release.canonical.object_transaction_bindings import (
     collect_object_keys,
     verify_entity_manifest_asset_binding,
@@ -69,6 +74,17 @@ def assert_environment_neutral(root: Path) -> None:
 
 class ObjectTransactionError(RuntimeError):
     """对象发布事务的输入、闭包或原子切换失败。"""
+
+
+class ObjectStorageBudgetExceeded(ObjectTransactionError, TypedPublishExclusion):
+    """对象闭包超出单对象存储预算，整对象 blocked。
+
+    发布侧不裁剪资产、不丢弃正文已引用的图、不生成降级衍生体：前两者会在正文里
+    留下悬挂引用，后者需要尚未冻结的重编码参数。对象因此整体不出包。
+    """
+
+    def __init__(self, issue_code: str, message: str) -> None:
+        TypedPublishExclusion.__init__(self, issue_code, message)
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -383,6 +399,48 @@ def _rights_binding(
     }
 
 
+def _admit_object_storage_budget(object_root: Path, *, object_kind: str, object_ref: str) -> None:
+    """Refuse to seal a closure that does not fit the single-object storage budget.
+
+    This is the one boundary both carriers must cross to obtain an
+    ``objectClosureDigest``, so binding admission here is what makes "a new
+    carrier forgot to call it" structurally impossible rather than a convention.
+    The measurement and the per-carrier budget numbers stay owned by the gate
+    that also scans canonical publish, so admission and that gate cannot reach
+    different conclusions about the same object.
+    """
+
+    from verify.verify_object_size_budget import (
+        ObjectBudgetVerdict,
+        budget_verdict,
+        describe_closure,
+        object_carrier,
+        object_closure,
+    )
+
+    closure, issues = object_closure(
+        object_root,
+        ref=f"{object_kind}/{object_ref}",
+        carrier=object_carrier(object_kind, object_ref),
+    )
+    if issues:
+        raise ObjectTransactionError(
+            "object closure could not be measured: " + "; ".join(sorted(issues))
+        )
+    verdict = budget_verdict(closure)
+    if verdict is ObjectBudgetVerdict.WITHIN_BUDGET:
+        return
+    code = (
+        OBJECT_ASSET_OVER_BUDGET
+        if verdict is ObjectBudgetVerdict.SINGLE_ASSET_OVER_BUDGET
+        else OBJECT_CLOSURE_OVER_BUDGET
+    )
+    raise ObjectStorageBudgetExceeded(
+        code,
+        f"{code}: object exceeds its storage budget: {describe_closure(closure)}",
+    )
+
+
 def _closure_digest(
     *,
     object_root: Path,
@@ -394,6 +452,11 @@ def _closure_digest(
     cas_rows: list[dict[str, Any]],
     review: Mapping[str, Any],
 ) -> str:
+    _admit_object_storage_budget(
+        object_root,
+        object_kind=object_kind,
+        object_ref=object_ref,
+    )
     return _digest_bytes(
         _json_bytes(
             {

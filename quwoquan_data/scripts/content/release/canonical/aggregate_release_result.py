@@ -35,6 +35,7 @@ def aggregate_release_result(
     if environment_selection is not None:
         result.update(
             {
+                "selectionScope": environment_selection.selection_scope,
                 "releaseMode": environment_selection.release_mode,
                 "poolDigest": environment_selection.pool_digest,
                 "poolEligibleCount": environment_selection.eligible_count,

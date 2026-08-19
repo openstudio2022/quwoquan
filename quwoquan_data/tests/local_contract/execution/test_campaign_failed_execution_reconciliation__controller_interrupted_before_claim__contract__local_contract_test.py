@@ -76,6 +76,9 @@ def _write_boundary(
         stable = {
             "schema": "quwoquan_data.content_execution_submission",
             "scale": "M1",
+            "workloadMode": "explicit",
+            "activeCarriers": list(CARRIERS),
+            "workloads": {item: 1 for item in CARRIERS},
             "rootExecutionId": ROOT_ID,
             "executionId": execution_ids[carrier],
             "operation": f"{carrier}.generate",
@@ -95,6 +98,11 @@ def _write_boundary(
             "gitCommitSha": "d" * 40,
             "sourceRevision": source_revision,
             "sourceDigest": source_document,
+            "executionBundle": {
+                "algorithm": "sha256",
+                "digest": "sha256:" + "e" * 64,
+                "inputs": ["quwoquan_data/scripts"],
+            },
             "entityCatalogDigest": CATALOG_DIGEST,
             "externalInputRefs": [],
             "externalInputsDigest": empty_external,
@@ -120,10 +128,18 @@ def _write_boundary(
         "rootExecutionId": ROOT_ID,
         "executionMode": "distributed",
         "scale": "M1",
+        "workloadMode": "explicit",
+        "activeCarriers": list(CARRIERS),
+        "workloads": {carrier: 1 for carrier in CARRIERS},
         "gitBranch": "dev1.0",
         "gitCommitSha": "d" * 40,
         "sourceRevision": source_revision,
         "sourceDigest": SOURCE_DIGEST,
+        "executionBundle": {
+            "algorithm": "sha256",
+            "digest": "sha256:" + "e" * 64,
+            "inputs": ["quwoquan_data/scripts"],
+        },
         "entityCatalogDigest": CATALOG_DIGEST,
         "semanticSelectionId": "default",
         "semanticPreflightReceipt": preflight_binding,
@@ -177,7 +193,7 @@ def _write_boundary(
     monkeypatch.setattr(controller_contract, "_pid_alive", lambda _pid: False)
     monkeypatch.setattr(
         reconciliation,
-        "current_source_digest",
+        "current_source_definition_snapshot",
         lambda **_kwargs: SimpleNamespace(
             to_document=lambda: {
                 "algorithm": "sha256",

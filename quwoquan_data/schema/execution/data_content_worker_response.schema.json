@@ -29,9 +29,13 @@
           "pattern": "^sha256:[0-9a-f]{64}$"
         },
         "objectTransactionId": {"type": "string", "minLength": 1},
+        "poolDeliveryIntentId": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
         "resultEnvelopeRef": {"type": "string", "minLength": 1},
         "acceptanceClass": {
-          "enum": ["stage_completed", "commercial_canonical", "contract_fixture"]
+          "enum": ["stage_completed", "canonical_pool", "contract_fixture"]
         },
         "completedAt": {"type": "string", "format": "date-time"}
       },
@@ -39,14 +43,15 @@
         {
           "if": {
             "properties": {
-              "acceptanceClass": {"const": "commercial_canonical"}
+              "acceptanceClass": {"const": "canonical_pool"}
             }
           },
           "then": {
             "required": [
               "canonicalObjectRef",
               "canonicalObjectSha256",
-              "objectTransactionId"
+              "objectTransactionId",
+              "poolDeliveryIntentId"
             ]
           }
         }

@@ -42,6 +42,15 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
             Path(self.runtime_directory.name)
         )
 
+    def test_xcode_build_phase_reuses_resolved_python_for_every_python_step(
+        self,
+    ) -> None:
+        source = SCRIPT.read_text(encoding="utf-8")
+
+        self.assertNotIn("python3", source)
+        self.assertIn('"$RUNTIME_PYTHON" -c', source)
+        self.assertGreaterEqual(source.count('"$RUNTIME_PYTHON" -'), 5)
+
     def test_xcode_stackctl_python_resolver_skips_incompatible_path_python(
         self,
     ) -> None:
@@ -373,6 +382,7 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
     def test_invalid_environment_fails_before_flutter_build(self) -> None:
         env = dict(os.environ)
         env["QWQ_APP_RUNTIME_ENV"] = "staging"
+        env["QWQ_ENVIRONMENT"] = ""
         result = subprocess.run(
             ["bash", str(SCRIPT)],
             cwd=APP_DIR,

@@ -10,7 +10,7 @@ def task_execute_argv(
     execution_id: str,
     carrier: str,
     request: RuntimeExecutionRequest,
-    semantic_receipt_ref: str,
+    semantic_receipt_ref: str | None,
     retry_of: str | None = None,
     retry_unfinished_refs: tuple[str, ...] = (),
 ) -> list[str]:
@@ -39,8 +39,6 @@ def task_execute_argv(
         ),
         "--semantic-selection-id",
         "cursor_grok",
-        "--semantic-preflight-receipt",
-        semantic_receipt_ref,
         "--scale-source-pool-id",
         str(binding["poolId"]),
         "--scale-source-pool-target-scale",
@@ -66,6 +64,8 @@ def task_execute_argv(
         "--topic",
         str(request.topic),
     ]
+    if semantic_receipt_ref:
+        argv.extend(("--semantic-preflight-receipt", semantic_receipt_ref))
     if retry_of:
         argv[6:6] = ["--retry-of", retry_of]
         retry_scope_argv = [

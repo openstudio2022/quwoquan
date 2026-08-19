@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from argparse import Namespace
+from argparse import ArgumentParser, Namespace
 from pathlib import Path
 
 import pytest
@@ -10,6 +10,30 @@ from content.execution.campaign import prepare as prepare_campaign
 from content.execution.campaign.lane import CAMPAIGN_CARRIERS
 from core.io import write_json
 from support.capacity_calibration_fixture import synthetic_capacity_source_binding
+
+
+def test_prepare_campaign_defaults_new_campaigns_to_cursor_grok() -> None:
+    parser = ArgumentParser()
+    commands = parser.add_subparsers(dest="command", required=True)
+    prepare_campaign.register_prepare_campaign_parser(commands)
+
+    args = parser.parse_args(
+        [
+            "prepare-campaign",
+            "--phase",
+            "handoff",
+            "--workload",
+            "image=1",
+            "--region-ref",
+            "china",
+            "--run-date",
+            "20260814",
+            "--sequence",
+            "1",
+        ]
+    )
+
+    assert args.semantic_selection_id == "cursor_grok"
 
 
 def _args(tmp_path: Path) -> Namespace:
@@ -50,6 +74,9 @@ def _fake_envelopes(tmp_path: Path) -> dict[str, Path]:
             path,
             {
                 "scale": "M3",
+                "workloadMode": "explicit",
+                "activeCarriers": list(CAMPAIGN_CARRIERS),
+                "workloads": {selected: 3 for selected in CAMPAIGN_CARRIERS},
                 "rootExecutionId": (
                     "20260806--travel-homepage-m3--china--scale-002"
                 ),

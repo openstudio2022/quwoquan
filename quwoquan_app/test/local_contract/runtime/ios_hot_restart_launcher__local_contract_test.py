@@ -12,6 +12,7 @@ sys.path.insert(0, str(APP_DIR / "scripts/device"))
 
 from verify_flutter_run_defines import validate_flutter_run_defines
 from verify_ios_hot_restart import (
+    _attempt_evidence_issues,
     _count_native_launches_since,
     _terminate_stale_device_runtime,
     cold_startup_terminal_observed,
@@ -39,6 +40,79 @@ def complete_defines(environment: str = "alpha") -> dict[str, str]:
 
 
 class IosHotRestartLauncherContractTest(unittest.TestCase):
+    def test_only_cold_native_receipt_can_use_an_explicit_uat_allowance(
+        self,
+    ) -> None:
+        attempt = {
+            "launchMode": "direct_flutter_run",
+            "bootstrapFailure": False,
+            "canonicalTerminal": "routerShell",
+            "configurationState": "complete",
+            "missingDefineKeys": "",
+            "terminalEventCount": 1,
+            "reportedSafeTerminalMs": 3949,
+            "nativeReceivedSafeTerminalMs": 6210,
+        }
+
+        default_issues = _attempt_evidence_issues(
+            "cold",
+            attempt,
+            expected_launch_surface="direct_flutter_run",
+            is_cold=True,
+        )
+        self.assertEqual(
+            default_issues,
+            [
+                "cold: nativeReceivedSafeTerminalMs is missing or exceeds "
+                "6000ms"
+            ],
+        )
+        self.assertEqual(
+            _attempt_evidence_issues(
+                "cold",
+                attempt,
+                expected_launch_surface="direct_flutter_run",
+                is_cold=True,
+                max_cold_native_safe_terminal_ms=12000,
+            ),
+            [],
+        )
+
+        cold_reported_slow = {**attempt, "reportedSafeTerminalMs": 6210}
+        self.assertIn(
+            "cold: reportedSafeTerminalMs is missing or exceeds 6000ms",
+            _attempt_evidence_issues(
+                "cold",
+                cold_reported_slow,
+                expected_launch_surface="direct_flutter_run",
+                is_cold=True,
+                max_cold_native_safe_terminal_ms=12000,
+            ),
+        )
+
+        hot_slow = {
+            **attempt,
+            "reportedSafeTerminalMs": 6210,
+            "nativeReceivedSafeTerminalMs": 6210,
+        }
+        hot_issues = _attempt_evidence_issues(
+            "hot_restart_1",
+            hot_slow,
+            expected_launch_surface="direct_flutter_run",
+            is_cold=False,
+            max_cold_native_safe_terminal_ms=12000,
+        )
+        self.assertIn(
+            "hot_restart_1: reportedSafeTerminalMs is missing or exceeds "
+            "6000ms",
+            hot_issues,
+        )
+        self.assertIn(
+            "hot_restart_1: nativeReceivedSafeTerminalMs is missing or exceeds "
+            "6000ms",
+            hot_issues,
+        )
+
     def test_complete_define_package_passes_before_flutter(self) -> None:
         self.assertEqual(
             validate_flutter_run_defines(

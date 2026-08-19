@@ -46,12 +46,11 @@ class ExecutionPolicy:
     scale_source_pool: Mapping[str, Any] | None = None
     source_pool_evidence_root_ref: str | None = None
     source_pool_selection: Mapping[str, Any] | None = None
-    article_commercial_closure: bool = False
 
     def __post_init__(self) -> None:
-        if not 1 <= self.approved_quota <= self.target_entity_count:
+        if self.approved_quota < 1:
             raise ValueError(
-                "executionPolicy.approvedQuota must be between 1 and targetEntityCount"
+                "executionPolicy.approvedQuota must be positive"
             )
         if self.oversample_factor < 1:
             raise ValueError("executionPolicy oversampleFactor is invalid")
@@ -123,9 +122,6 @@ class ExecutionPolicy:
         factor = payload.get("oversampleFactor")
         if isinstance(factor, bool) or not isinstance(factor, (int, float)):
             raise ValueError("executionPolicy.oversampleFactor must be a number")
-        article = payload.get("articleCommercialClosure", False)
-        if not isinstance(article, bool):
-            raise ValueError("executionPolicy.articleCommercialClosure must be boolean")
         return cls(
             selection_policy=SelectionPolicy(_string(payload, "selectionPolicy")),
             target_entity_count=_integer(payload, "targetEntityCount"),
@@ -154,7 +150,6 @@ class ExecutionPolicy:
                 if isinstance(payload.get("sourcePoolSelection"), Mapping)
                 else None
             ),
-            article_commercial_closure=article,
         )
 
     def to_dict(self) -> dict[str, object]:
@@ -169,7 +164,6 @@ class ExecutionPolicy:
             "capacityCalibration": dict(self.capacity_calibration),
             "executionBranch": self.execution_branch,
             "gitCommitSha": self.git_commit_sha,
-            "articleCommercialClosure": self.article_commercial_closure,
         }
         if self.scale_source_pool is not None:
             result.update(

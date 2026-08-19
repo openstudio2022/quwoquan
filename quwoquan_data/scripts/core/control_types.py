@@ -11,6 +11,22 @@ class ContentType(StrEnum):
     VIDEO = "video"
 
 
+class ContentGenerator(StrEnum):
+    """Canonical provenance state at the content generation boundary."""
+
+    AGENT = "agent"
+    IMAGE_EVIDENCE_PACK = "image_evidence_pack"
+    PENDING = "pending"
+
+
+def expected_content_generator(content_type: ContentType) -> ContentGenerator:
+    """Return the only valid publication generator for one carrier."""
+
+    if content_type is ContentType.IMAGE:
+        return ContentGenerator.IMAGE_EVIDENCE_PACK
+    return ContentGenerator.AGENT
+
+
 class ExecutionSpecStatus(StrEnum):
     DRAFT = "draft"
     ACTIVE = "active"
@@ -25,11 +41,20 @@ class ImageAssetStrategy(StrEnum):
     LICENSED_PROVIDER_PUBLISH = "licensed_provider_publish"
     AI_GENERATED_ORIGINAL = "ai_generated_original"
     REFERENCE_ONLY_NO_IMAGE_RELEASE = "reference_only_no_image_release"
+    ATTRIBUTION_AUDITED_PUBLISH = "attribution_audited_publish"
 
 
 class ImageCountPolicy(StrEnum):
     SCORE_BONUS = "score_bonus"
     HARD_QUOTA = "hard_quota"
+
+
+class ExecutionPhase(StrEnum):
+    """Generic runtime scale marker; product campaigns are never static types."""
+
+    PILOT = "pilot"
+    SCALE = "scale"
+    FULL = "full"
 
 
 class RolloutMilestone(StrEnum):
@@ -56,8 +81,10 @@ class ReleaseRunKind(StrEnum):
 
 
 class ReleaseRunStatus(StrEnum):
+    PREPARED = "prepared"
     COMPLETED = "completed"
     DRY_RUN = "dry_run"
+    FAILED = "failed"
 
 
 class ContentImportStatus(StrEnum):
@@ -168,6 +195,14 @@ class SelectionPolicy(StrEnum):
     FROZEN = "frozen"
 
 
+class TargetSelector(StrEnum):
+    """Explicit ordering policy for one frozen execution target set."""
+
+    ALL = "all"
+    PRIORITY = "priority"
+    SOURCE_READY_PRIORITY = "source-ready-priority"
+
+
 class ReplacementPolicy(StrEnum):
     FORBIDDEN = "forbidden"
 
@@ -185,6 +220,7 @@ class RuntimeEnvironment(StrEnum):
 
 class AgentProvider(StrEnum):
     CURSOR_SDK = "cursor_sdk"
+    CODEX_SDK = "codex_sdk"
 
 
 class AgentRunStatus(StrEnum):

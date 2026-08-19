@@ -2,7 +2,6 @@ package application
 
 import (
 	"context"
-	"reflect"
 	"time"
 )
 
@@ -36,7 +35,7 @@ func NewSmsOtpDeliveryReadinessQueryFacade(
 func (facade *SmsOtpDeliveryReadinessQueryFacade) GetSmsOtpDeliveryReadiness(
 	ctx context.Context,
 ) SmsOtpDeliveryReadiness {
-	if facade == nil || isNilReadinessPort(facade.provider) || isNilReadinessPort(facade.relay) {
+	if facade == nil || isNilDependency(facade.provider) || isNilDependency(facade.relay) {
 		return unavailableSmsOtpDeliveryReadiness()
 	}
 	probeCtx, cancel := context.WithTimeout(ctx, 700*time.Millisecond)
@@ -54,18 +53,5 @@ func unavailableSmsOtpDeliveryReadiness() SmsOtpDeliveryReadiness {
 	return SmsOtpDeliveryReadiness{
 		Availability:      "temporarily_unavailable",
 		RetryAfterSeconds: smsOtpReadinessRetryAfterSeconds,
-	}
-}
-
-func isNilReadinessPort(value any) bool {
-	if value == nil {
-		return true
-	}
-	reflected := reflect.ValueOf(value)
-	switch reflected.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
-		return reflected.IsNil()
-	default:
-		return false
 	}
 }

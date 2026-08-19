@@ -4,6 +4,11 @@
   "type": "object",
   "required": [
     "schema",
+    "executionId",
+    "stage",
+    "jobSetEnvelopeDigest",
+    "jobSetDigest",
+    "actualTaskDigest",
     "passed",
     "backend",
     "total",
@@ -16,13 +21,19 @@
     "fleetAcceptedThroughputPerHour",
     "endToEndAcceptedThroughputPerHour",
     "acceptedContentThroughputStatus",
+    "recoveryEligibleCount",
+    "automaticRecoveredCount",
+    "manualRecoveredCount",
+    "automaticRecoveryStatus",
     "automaticRecoveryRate",
+    "firstAttemptSuccessRate",
     "finalizedWithinStageBudgetRate",
     "duplicatePublishCount",
     "missingObjectCount",
     "requiredQuota",
     "finalizedObjectCount",
     "idempotencyKey",
+    "fleetPeakConcurrentWorkers",
     "taskOutcomes",
     "executionCreatedAt",
     "fleetStartedAt",
@@ -33,6 +44,20 @@
   ],
   "additionalProperties": false,
   "properties": {
+    "executionId": {"type": "string", "minLength": 1},
+    "stage": {"enum": ["author", "publish"]},
+    "jobSetEnvelopeDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "jobSetDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "actualTaskDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
     "passed": {
       "type": "boolean"
     },
@@ -56,6 +81,10 @@
       "minimum": 0
     },
     "objectTransactionResultCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "researchAcceptedCount": {
       "type": "integer",
       "minimum": 0
     },
@@ -87,6 +116,11 @@
       "minimum": 0,
       "maximum": 1
     },
+    "recoveryEligibleCount": {"type": "integer", "minimum": 0},
+    "automaticRecoveredCount": {"type": "integer", "minimum": 0},
+    "manualRecoveredCount": {"type": "integer", "minimum": 0},
+    "automaticRecoveryStatus": {"enum": ["MEASURED", "NOT_EXERCISED"]},
+    "firstAttemptSuccessRate": {"type": "number", "minimum": 0, "maximum": 1},
     "finalizedWithinStageBudgetRate": {
       "type": "number",
       "minimum": 0,
@@ -135,6 +169,21 @@
     "idempotencyKey": {
       "const": "executionId+entity+carrier+sourceRevision+stage"
     },
+    "fleetPeakConcurrentWorkers": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "本次交付阶段实测的同时运行 worker 进程峰值。只作观测：不得超过 executionPolicy 冻结的 fleetMaxConcurrentWorkers，也不得被回写成新的上限。"
+    },
+    "fleetWaveCount": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "job 数与冻结并行上限决定的 wave 数。规模增长只增加 wave 数，不增加同时运行的进程数。携带即按本约束校验；尚未进入顶层 required，因为其唯一合法来源是 OPEN-003 待冻结的 calibration receipt，随该 OPEN 关闭同批提为 required。"
+    },
+    "fleetBatchDeadlineEpochSeconds": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "executionPolicy 冻结的批次绝对截止，绝对纪元秒。与执行策略中的冻结值相同，进程重启与 lease 续租都不得改写。携带即按本约束校验；尚未进入顶层 required，因为其唯一合法来源是 OPEN-003 待冻结的 calibration receipt，随该 OPEN 关闭同批提为 required。"
+    },
     "taskOutcomes": {
       "type": "array",
       "items": {
@@ -178,5 +227,26 @@
     "schema": {
       "const": "quwoquan.reliabletask_fleet_report"
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"recoveryEligibleCount": {"const": 0}},
+        "required": ["recoveryEligibleCount"]
+      },
+      "then": {
+        "properties": {
+          "automaticRecoveredCount": {"const": 0},
+          "manualRecoveredCount": {"const": 0},
+          "automaticRecoveryStatus": {"const": "NOT_EXERCISED"},
+          "automaticRecoveryRate": {"const": 0}
+        }
+      },
+      "else": {
+        "properties": {
+          "automaticRecoveryStatus": {"const": "MEASURED"}
+        }
+      }
+    }
+  ]
 }

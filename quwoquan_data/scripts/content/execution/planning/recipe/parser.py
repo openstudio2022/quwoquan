@@ -182,7 +182,7 @@ def register_recipe_parser(
     parser.add_argument(
         "--submission-timeout-seconds",
         type=int,
-        help="campaign-run/campaign-freeze 等待四份 submission 的有限超时；默认取 runtime policy",
+        help="campaign-run/campaign-freeze 等待全部 active workload submission 的有限超时；默认取 runtime policy",
     )
     from content.execution.controller.dag import STAGE_NAMES
 

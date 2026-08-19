@@ -19,6 +19,14 @@ from support.campaign_request_envelope_fixture import (
 from support.capacity_calibration_fixture import synthetic_capacity_source_binding
 
 
+_M100_WORKLOADS = {
+    "homepage": 100,
+    "article": 100,
+    "image": 100,
+    "video": 10,
+}
+
+
 def _approved_video_promotion() -> dict[str, object]:
     stable: dict[str, object] = {
         "schema": "quwoquan_data.video_scale_promotion",
@@ -223,6 +231,9 @@ def test_video_scale_promotion_writes_immutable_m100_receipt(
         predecessor_envelope={
             "schema": "quwoquan_data.content_campaign_request_envelope",
             "scale": "M100",
+            "workloadMode": "milestone_preset",
+            "activeCarriers": list(_M100_WORKLOADS),
+            "workloads": dict(_M100_WORKLOADS),
             "carrier": "video",
             "operation": "video.generate",
             "vertical": "travel",
@@ -236,6 +247,9 @@ def test_video_scale_promotion_writes_immutable_m100_receipt(
             "scaleSourcePool": {
                 "poolId": "pool-local-contract",
                 "targetScale": "M100",
+                "workloadMode": "milestone_preset",
+                "activeCarriers": list(_M100_WORKLOADS),
+                "workloadTargets": dict(_M100_WORKLOADS),
                 "sourceRevision": content_source_revision(
                     source_digest=str(approved["sourceDigest"]["digest"]),
                     entity_catalog_digest=str(approved["entityCatalogDigest"]),
@@ -265,6 +279,11 @@ def test_video_scale_promotion_writes_immutable_m100_receipt(
             "gitBranch": approved["gitBranch"],
             "gitCommitSha": approved["gitCommitSha"],
             "sourceDigest": approved["sourceDigest"],
+            "executionBundle": {
+                "algorithm": "sha256",
+                "digest": "sha256:" + "e" * 64,
+                "inputs": ["quwoquan_data/scripts"],
+            },
             "sourceRevision": content_source_revision(
                 source_digest=str(approved["sourceDigest"]["digest"]),
                 entity_catalog_digest=str(approved["entityCatalogDigest"]),
@@ -301,6 +320,9 @@ def test_video_scale_promotion_writes_immutable_m100_receipt(
             predecessor_envelope={
                 "schema": "quwoquan_data.content_campaign_request_envelope",
                 "scale": "M100",
+                "workloadMode": "milestone_preset",
+                "activeCarriers": list(_M100_WORKLOADS),
+                "workloads": dict(_M100_WORKLOADS),
                 "carrier": "video",
                 "operation": "video.generate",
                 "vertical": "travel",
@@ -314,6 +336,9 @@ def test_video_scale_promotion_writes_immutable_m100_receipt(
                 "scaleSourcePool": {
                     "poolId": "pool-local-contract",
                     "targetScale": "M100",
+                    "workloadMode": "milestone_preset",
+                    "activeCarriers": list(_M100_WORKLOADS),
+                    "workloadTargets": dict(_M100_WORKLOADS),
                     "sourceRevision": content_source_revision(
                         source_digest=str(approved["sourceDigest"]["digest"]),
                         entity_catalog_digest=str(approved["entityCatalogDigest"]),
@@ -343,6 +368,11 @@ def test_video_scale_promotion_writes_immutable_m100_receipt(
                 "gitBranch": approved["gitBranch"],
                 "gitCommitSha": approved["gitCommitSha"],
                 "sourceDigest": approved["sourceDigest"],
+                "executionBundle": {
+                    "algorithm": "sha256",
+                    "digest": "sha256:" + "e" * 64,
+                    "inputs": ["quwoquan_data/scripts"],
+                },
                 "sourceRevision": content_source_revision(
                     source_digest=str(approved["sourceDigest"]["digest"]),
                     entity_catalog_digest=str(
