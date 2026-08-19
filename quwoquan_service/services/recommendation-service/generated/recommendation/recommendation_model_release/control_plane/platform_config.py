@@ -2129,7 +2129,7 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "list"
     },
     {
-      "default": 1,
+      "default": 0,
       "key": "sys.content-service.redis.general.db",
       "reload": "restart",
       "rollout": "progressive",
@@ -2227,7 +2227,7 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "list"
     },
     {
-      "default": 2,
+      "default": 0,
       "key": "sys.content-service.redis.realtime.db",
       "reload": "restart",
       "rollout": "progressive",
@@ -2407,7 +2407,7 @@ _PLATFORM_CONFIG_JSON = r'''{
     {
       "key": "sys.content-service.research_identity.attestation_key_base64",
       "reload": "restart",
-      "rollout": "replace",
+      "rollout": "progressive",
       "scope": "workload",
       "sensitive": true,
       "type": "string"
@@ -2596,7 +2596,7 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "list"
     },
     {
-      "default": 1,
+      "default": 0,
       "key": "sys.entity-service.redis.general.db",
       "reload": "restart",
       "rollout": "progressive",
@@ -3016,7 +3016,7 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "list"
     },
     {
-      "default": 1,
+      "default": 0,
       "key": "sys.integration-service.redis.general.db",
       "reload": "restart",
       "rollout": "progressive",
@@ -3852,7 +3852,7 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "list"
     },
     {
-      "default": 1,
+      "default": 0,
       "key": "sys.product-ops-service.redis.general.db",
       "reload": "restart",
       "rollout": "progressive",
@@ -4171,7 +4171,7 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "list"
     },
     {
-      "default": 1,
+      "default": 0,
       "key": "sys.recommendation-service.redis.general.db",
       "reload": "restart",
       "rollout": "progressive",
@@ -4436,7 +4436,7 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "string"
     },
     {
-      "default": 3,
+      "default": 0,
       "key": "sys.rtc-service.redis.general.db",
       "reload": "restart",
       "rollout": "progressive",
@@ -4463,7 +4463,7 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "string"
     },
     {
-      "default": 4,
+      "default": 0,
       "key": "sys.rtc-service.redis.realtime.db",
       "reload": "restart",
       "rollout": "progressive",
@@ -4639,7 +4639,7 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "list"
     },
     {
-      "default": 1,
+      "default": 0,
       "key": "sys.search-service.redis.general.db",
       "reload": "restart",
       "rollout": "progressive",
@@ -4844,7 +4844,7 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "list"
     },
     {
-      "default": 1,
+      "default": 0,
       "key": "sys.tag-service.redis.general.db",
       "reload": "restart",
       "rollout": "progressive",

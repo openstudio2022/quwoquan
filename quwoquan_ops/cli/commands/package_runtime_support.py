@@ -8,7 +8,6 @@ only orchestration so both files remain within the governed line budget.
 from __future__ import annotations
 
 import json
-import os
 import re
 import sys
 from pathlib import Path
@@ -47,27 +46,18 @@ def _build_official_skill_package_publication(
     package_environment: dict[str, str],
     output_root: Path | None = None,
 ) -> dict[str, Any]:
-    """Build the signed official Skill publication into assistant packaging."""
-    import shutil
-    import subprocess
+    """Build the signed official Skill publication into assistant packaging.
 
-    from quwoquan_ops.cli.lib.local_assistant_skill_package_keys import (
-        KEY_ID,
-        prepare_local_assistant_skill_package_keys,
-    )
-    from quwoquan_ops.cli.lib.local_assistant_skill_package_publication import (
-        _private_key_base64,
-        _source_digest,
-    )
-
-    keys = prepare_local_assistant_skill_package_keys(env_name, target_name)
-    source_root = (
-        package_source_root
-        / "quwoquan_service/services/assistant-service/resources/skill_packages/official"
-    )
-    source_digest = _source_digest(source_root)
-    build_id = "local-" + source_digest.removeprefix("sha256:")[:16]
+    The immutable candidate and the mutable dev session share one builder, so a
+    packaged candidate always carries the ``release.json`` and
+    ``trusted_public_keys.json`` that ``stackctl up`` reads back as the Skill
+    trust root. A second local build here would sign the same assets without
+    that material and leave immutable up unable to establish trust.
+    """
     from quwoquan_ops.cli import stackctl as _stackctl
+    from quwoquan_ops.cli.lib.assistant_skill_package_artifact import (
+        build_official_skill_package_publication,
+    )
 
     if output_root is None:
         output_root = (
@@ -76,60 +66,18 @@ def _build_official_skill_package_publication(
             )
             / "skill-packages"
         )
-    if output_root.exists():
-        shutil.rmtree(output_root)
-    source_revision = str(
-        package_environment.get("QWQ_PACKAGE_SOURCE_REVISION") or ""
-    ).strip() or ("0" * 40)
-    command = [
-        "go",
-        "run",
-        "./services/assistant-service/cmd/skill-package-build",
-        "--source-root",
-        "services/assistant-service/resources/skill_packages/official",
-        "--output-root",
-        str(output_root),
-        "--package-version",
-        "1.0.0",
-        "--build-id",
-        build_id,
-        "--source-repository",
-        "quwoquan",
-        "--source-revision",
-        source_revision,
-        "--built-at",
-        "2026-01-01T00:00:00Z",
-        "--key-id",
-        KEY_ID,
-        "--command-id",
-        f"official-bootstrap-{build_id}",
-        "--expected-revision",
-        "0",
-        "--activated-by",
-        f"service:local-managed-bootstrap:{target_name}",
-    ]
-    result = subprocess.run(
-        command,
-        cwd=str(package_source_root / "quwoquan_service"),
-        env={
-            **os.environ,
-            **package_environment,
-            "ASSISTANT_SKILL_PACKAGE_SIGNING_PRIVATE_KEY_BASE64": _private_key_base64(
-                keys.private_key_path,
-                keys.public_keys_json,
-            ),
-        },
-        text=True,
-        capture_output=True,
-        check=False,
+    environment = dict(package_environment)
+    if not str(environment.get("QWQ_PACKAGE_SOURCE_REVISION") or "").strip():
+        environment["QWQ_PACKAGE_SOURCE_REVISION"] = "0" * 40
+    step = build_official_skill_package_publication(
+        env_name,
+        target_name,
+        package_source_root=package_source_root,
+        package_environment=environment,
+        output_root=output_root,
     )
-    return {
-        "name": "assistant-skill-package-publication",
-        "argv": [item for item in command if "PRIVATE" not in item],
-        "exitCode": result.returncode,
-        "stdout": result.stdout,
-        "stderr": result.stderr,
-    }
+    step["argv"] = [item for item in step["argv"] if "PRIVATE" not in item]
+    return step
 
 
 def _validate_runtime_package_identity_readback(
@@ -215,6 +163,25 @@ def _run_runtime_compile_preflight(
                 "^$",
                 "./services/.../cmd/...",
                 "./control-plane/.../cmd/...",
+            ],
+            source_root / "quwoquan_service",
+        ),
+        (
+            # The composition root lives outside services/ and control-plane/,
+            # so the glob above never reaches it; packaging an image whose only
+            # entrypoint does not compile is exactly what this step forbids.
+            # Compiled as a test binary like its sibling above rather than built:
+            # `go build` stamps VCS provenance, which needs a git-capable
+            # environment that packaging deliberately does not hand to its steps,
+            # and the package's provenance is bound from the source revision
+            # anyway.
+            "compile-entrypoint:service-core",
+            [
+                "go",
+                "test",
+                "-run",
+                "^$",
+                "./cmd/service-core",
             ],
             source_root / "quwoquan_service",
         ),

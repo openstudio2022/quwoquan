@@ -51,6 +51,7 @@ type FleetRequest struct {
 	PartitionCount                 int                                      `json:"partitionCount"`
 	PartitionAlgorithm             string                                   `json:"partitionAlgorithm"`
 	CheckpointPolicy               DataContentCheckpointPolicy              `json:"checkpointPolicy"`
+	RequireCommercial              bool                                     `json:"requireCommercial"`
 	RecoverDeadTasks               *bool                                    `json:"recoverDeadTasks"`
 	ObjectTimeoutMS                int                                      `json:"objectTimeoutMilliseconds"`
 	GlobalRequiredQuota            int                                      `json:"globalRequiredQuota"`

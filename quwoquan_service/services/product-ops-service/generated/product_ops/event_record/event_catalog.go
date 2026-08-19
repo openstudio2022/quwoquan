@@ -35,6 +35,8 @@ type EventRecordInput struct {
 	AttemptIndex            *int     `json:"attemptIndex,omitempty"`
 	AudioUnderrunCount      *int     `json:"audioUnderrunCount,omitempty"`
 	BackgroundRetryTerminal *string  `json:"backgroundRetryTerminal,omitempty"`
+	BuildMode               *string  `json:"buildMode,omitempty"`
+	BuildNumber             *string  `json:"buildNumber,omitempty"`
 	CacheAgeBucket          *string  `json:"cacheAgeBucket,omitempty"`
 	CacheClass              *string  `json:"cacheClass,omitempty"`
 	CacheSizeBytes          *int     `json:"cacheSizeBytes,omitempty"`
@@ -48,6 +50,7 @@ type EventRecordInput struct {
 	ChatSource              *string  `json:"chatSource,omitempty"`
 	ConnectTimeMS           *int     `json:"connectTimeMs,omitempty"`
 	ConsentState            *string  `json:"consentState,omitempty"`
+	ContentIDentityOutcome  *string  `json:"contentIdentityOutcome,omitempty"`
 	ContentType             *string  `json:"contentType,omitempty"`
 	CopyKey                 *string  `json:"copyKey,omitempty"`
 	CorrelationHash         *string  `json:"correlationHash,omitempty"`
@@ -61,6 +64,7 @@ type EventRecordInput struct {
 	DigestMatch             *bool    `json:"digestMatch,omitempty"`
 	DisconnectReason        *string  `json:"disconnectReason,omitempty"`
 	DismissPolicy           *string  `json:"dismissPolicy,omitempty"`
+	DistributionClass       *string  `json:"distributionClass,omitempty"`
 	DroppedFrames           *int     `json:"droppedFrames,omitempty"`
 	DurationMismatch        *bool    `json:"durationMismatch,omitempty"`
 	DurationMS              *int     `json:"durationMs,omitempty"`
@@ -81,6 +85,8 @@ type EventRecordInput struct {
 	JankThresholdMS         *int     `json:"jankThresholdMs,omitempty"`
 	JankyFrames             *int     `json:"jankyFrames,omitempty"`
 	Journey                 *string  `json:"journey,omitempty"`
+	LaunchManifestDigest    *string  `json:"launchManifestDigest,omitempty"`
+	LaunchProvenance        *string  `json:"launchProvenance,omitempty"`
 	LimitValue              *int     `json:"limitValue,omitempty"`
 	MediaConnected          *bool    `json:"mediaConnected,omitempty"`
 	MemberCountBucket       *string  `json:"memberCountBucket,omitempty"`
@@ -154,6 +160,12 @@ func (input EventRecordInput) ExtensionValues() map[string]any {
 	if input.BackgroundRetryTerminal != nil {
 		out["backgroundRetryTerminal"] = *input.BackgroundRetryTerminal
 	}
+	if input.BuildMode != nil {
+		out["buildMode"] = *input.BuildMode
+	}
+	if input.BuildNumber != nil {
+		out["buildNumber"] = *input.BuildNumber
+	}
 	if input.CacheAgeBucket != nil {
 		out["cacheAgeBucket"] = *input.CacheAgeBucket
 	}
@@ -193,6 +205,9 @@ func (input EventRecordInput) ExtensionValues() map[string]any {
 	if input.ConsentState != nil {
 		out["consentState"] = *input.ConsentState
 	}
+	if input.ContentIDentityOutcome != nil {
+		out["contentIdentityOutcome"] = *input.ContentIDentityOutcome
+	}
 	if input.ContentType != nil {
 		out["contentType"] = *input.ContentType
 	}
@@ -231,6 +246,9 @@ func (input EventRecordInput) ExtensionValues() map[string]any {
 	}
 	if input.DismissPolicy != nil {
 		out["dismissPolicy"] = *input.DismissPolicy
+	}
+	if input.DistributionClass != nil {
+		out["distributionClass"] = *input.DistributionClass
 	}
 	if input.DroppedFrames != nil {
 		out["droppedFrames"] = *input.DroppedFrames
@@ -291,6 +309,12 @@ func (input EventRecordInput) ExtensionValues() map[string]any {
 	}
 	if input.Journey != nil {
 		out["journey"] = *input.Journey
+	}
+	if input.LaunchManifestDigest != nil {
+		out["launchManifestDigest"] = *input.LaunchManifestDigest
+	}
+	if input.LaunchProvenance != nil {
+		out["launchProvenance"] = *input.LaunchProvenance
 	}
 	if input.LimitValue != nil {
 		out["limitValue"] = *input.LimitValue
@@ -474,6 +498,8 @@ var EventExtensionFields = map[string]EventExtensionDefinition{
 	"attemptIndex":            {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"audioUnderrunCount":      {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"backgroundRetryTerminal": {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"not_applicable": {}, "retry_scheduled": {}, "retry_exhausted": {}, "published": {}, "pending_review": {}, "rejected": {}, "cancelled": {}}},
+	"buildMode":               {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"debug": {}, "profile": {}, "release": {}}},
+	"buildNumber":             {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 32, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"cacheAgeBucket":          {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"not_applicable": {}, "under_1h": {}, "one_to_24h": {}, "over_24h": {}}},
 	"cacheClass":              {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 32, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"cacheSizeBytes":          {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
@@ -487,6 +513,7 @@ var EventExtensionFields = map[string]EventExtensionDefinition{
 	"chatSource":              {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"contacts": {}, "group": {}, "circle": {}, "roster": {}, "composer": {}, "conversation": {}, "settings": {}}},
 	"connectTimeMs":           {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"consentState":            {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 32, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
+	"contentIdentityOutcome":  {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"bound": {}, "absent": {}, "protocol_failure": {}, "unavailable": {}}},
 	"contentType":             {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"micro": {}, "article": {}, "image": {}, "video": {}, "unknown": {}}},
 	"copyKey":                 {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 128, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"correlationHash":         {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 64, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
@@ -500,6 +527,7 @@ var EventExtensionFields = map[string]EventExtensionDefinition{
 	"digestMatch":             {Type: "bool", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"disconnectReason":        {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 128, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"dismissPolicy":           {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 64, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
+	"distributionClass":       {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"dev_direct": {}, "simulator": {}, "registered_device": {}, "store": {}, "official_web": {}, "hosted_web": {}}},
 	"droppedFrames":           {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"durationMismatch":        {Type: "bool", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"durationMs":              {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
@@ -520,6 +548,8 @@ var EventExtensionFields = map[string]EventExtensionDefinition{
 	"jankThresholdMs":         {Type: "int", Minimum: func(v int) *int { return &v }(1), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"jankyFrames":             {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"journey":                 {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 128, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
+	"launchManifestDigest":    {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 80, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
+	"launchProvenance":        {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 64, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"limitValue":              {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"mediaConnected":          {Type: "bool", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"memberCountBucket":       {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"zero": {}, "one": {}, "two_to_five": {}, "six_to_fifty": {}, "fifty_one_to_five_hundred": {}, "five_hundred_one_to_one_thousand": {}}},
@@ -587,7 +617,7 @@ var EventCatalog = map[string]EventCatalogDefinition{
 	"app_frame_jank_outcome":       {EventType: "app_frame_jank_outcome", LogType: "event", RequiredExtensions: map[string]struct{}{"sampledFrames": {}, "jankyFrames": {}, "worstFrameMs": {}, "worstBuildFrameMs": {}, "worstRasterFrameMs": {}, "jankThresholdMs": {}, "result": {}}, OptionalExtensions: map[string]struct{}{"surfaceId": {}, "channelId": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
 	"home_feed_resource_snapshot":  {EventType: "home_feed_resource_snapshot", LogType: "event", RequiredExtensions: map[string]struct{}{"resourceKind": {}, "currentValue": {}, "result": {}}, OptionalExtensions: map[string]struct{}{"resourceProfile": {}, "limitValue": {}, "queuedValue": {}, "inflightValue": {}, "cacheSizeBytes": {}, "surfaceId": {}, "channelId": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
 	"home_feed_cache_read_outcome": {EventType: "home_feed_cache_read_outcome", LogType: "event", RequiredExtensions: map[string]struct{}{"cacheSource": {}, "cacheClass": {}, "result": {}}, OptionalExtensions: map[string]struct{}{"surfaceId": {}, "channelId": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
-	"app_startup":                  {EventType: "app_startup", LogType: "event", RequiredExtensions: map[string]struct{}{"tClickToFirstFrameMs": {}, "tFirstFrameToShellMs": {}, "tShellToContentMs": {}, "tClickToContentMs": {}, "hasError": {}}, OptionalExtensions: map[string]struct{}{}, NormalSampleRate: 1, SlowThresholdMS: 3000, InternalPriority: "critical"},
+	"app_startup":                  {EventType: "app_startup", LogType: "event", RequiredExtensions: map[string]struct{}{"tClickToFirstFrameMs": {}, "tFirstFrameToShellMs": {}, "tShellToContentMs": {}, "tClickToContentMs": {}, "hasError": {}}, OptionalExtensions: map[string]struct{}{"environment": {}, "buildMode": {}, "distributionClass": {}, "launchProvenance": {}, "buildNumber": {}, "launchManifestDigest": {}, "terminalState": {}, "contentIdentityOutcome": {}}, NormalSampleRate: 1, SlowThresholdMS: 3000, InternalPriority: "critical"},
 	"runtime_exception":            {EventType: "runtime_exception", LogType: "error", RequiredExtensions: map[string]struct{}{"errorCode": {}}, OptionalExtensions: map[string]struct{}{"operationId": {}, "httpStatus": {}, "callStack": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "error"},
 	"product_action":               {EventType: "product_action", LogType: "event", RequiredExtensions: map[string]struct{}{"journey": {}, "action": {}}, OptionalExtensions: map[string]struct{}{"surfaceId": {}, "objectType": {}, "objectId": {}, "reasonId": {}, "targetType": {}, "targetId": {}, "environment": {}, "durationMs": {}, "result": {}, "failReasonCode": {}, "recoveryAction": {}, "requestId": {}, "traceId": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
 	"login_funnel":                 {EventType: "login_funnel", LogType: "event", RequiredExtensions: map[string]struct{}{"action": {}, "flowId": {}, "step": {}, "result": {}}, OptionalExtensions: map[string]struct{}{"entryMode": {}, "fromStep": {}, "toStep": {}, "provider": {}, "otpPurpose": {}, "consentState": {}, "durationMs": {}, "attemptIndex": {}, "countdownBucket": {}, "motionReduced": {}, "dismissPolicy": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},

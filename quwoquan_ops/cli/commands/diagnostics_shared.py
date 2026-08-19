@@ -317,30 +317,29 @@ def _full_scope_health_checks(
                 "url": f"{str(public_bases['api']).rstrip('/')}/config/app",
             }
         )
+        # 全量探针只能打 contract_graph 里 anonymous_policy=allow 的路由:
+        # /chat/contacts 与 /content/intersections* 均为 auth_mode=required 的
+        # private 路由,匿名探针必然 401,不能作为健康信号。
+        # Ranked feeds require sessionId; bare /content/feed is
+        # CONTENT.USER.invalid_argument.
+        beta_feed_smoke = (
+            f"{str(public_bases['api']).rstrip('/')}/content/feed?limit=1"
+            "&sessionId=stackctl-beta-route-smoke"
+        )
         checks.extend(
             [
                 {
                     "name": "content-feed",
                     "scope": "full",
-                    "url": f"{str(public_bases['api']).rstrip('/')}/content/feed",
-                },
-                {
-                    "name": "chat-contacts",
-                    "scope": "full",
-                    "url": f"{str(public_bases['api']).rstrip('/')}/chat/contacts",
+                    "url": beta_feed_smoke,
                 },
                 {
                     "name": "notification-service-health",
                     "scope": "full",
                     "url": f"http://127.0.0.1:{notification_port}/healthz",
-                },
-                {
-                    "name": "feed-intersections",
-                    "scope": "full",
-                    "url": (
-                        f"{str(public_bases['api']).rstrip('/')}"
-                        "/content/feed/intersections?limit=4&channel=recommend"
-                    ),
+                    # 与 service 域探针同源:service-core 的虚拟 HTTP 路由按 Host
+                    # 头分发合并模块,缺该头会被投递到错误模块。
+                    "headers": {"Host": "notification-service"},
                 },
             ]
         )

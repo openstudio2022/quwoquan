@@ -691,6 +691,7 @@ def write_candidate_manifest(
         expected_target=target_name,
         require_full=True,
         candidate_root=candidate_root,
+        purpose="currentness",
     )
     path = _atomic_write_candidate_file(
         candidate_root,
@@ -710,7 +711,7 @@ def validate_candidate_manifest(
     expected_target: str,
     require_full: bool,
     candidate_root: Path | None = None,
-    purpose: str = "currentness",
+    purpose: str = "self_verify",
     currentness_timeout_seconds: float = 120.0,
 ) -> dict[str, Any]:
     if candidate_root is None:
@@ -830,6 +831,10 @@ def validate_candidate_manifest(
             raise ValueError(
                 f"deployment candidate {label} attestationRef is invalid"
             )
+        if purpose == "currentness":
+            current = _release_binding(attestation_ref, label=label)
+            if current != binding:
+                raise ValueError(f"{label} release attestation bytes drifted")
     expected_classification = release_input_classification(release)
     if payload.get("releaseInputClassification") != expected_classification:
         raise ValueError("deployment candidate release input classification drifted")
@@ -866,12 +871,6 @@ def validate_candidate_manifest(
         or fingerprint.get("graphqlReadRegistry") != graphql_read_registry
     ):
         raise ValueError("package fingerprint release identity drifted")
-    if purpose == "currentness":
-        for label in ("candidate", "rollback"):
-            binding = release[label]
-            current = _release_binding(binding["attestationRef"], label=label)
-            if current != binding:
-                raise ValueError(f"{label} release attestation bytes drifted")
     return payload
 
 

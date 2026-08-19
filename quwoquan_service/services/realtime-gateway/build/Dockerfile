@@ -9,6 +9,7 @@ ARG QWQ_ARTIFACT_CONFIG_DIGEST
 
 FROM --platform=${BUILDPLATFORM} ${GO_BASE_IMAGE} AS builder
 ARG GO_BUILD_FLAGS
+ARG QWQ_PROVIDER_BINDING_MANIFEST_DIGEST
 ARG TARGETOS
 ARG TARGETARCH
 ARG GOPROXY=https://goproxy.cn,direct
@@ -22,8 +23,11 @@ RUN --mount=type=cache,id=quwoquan-go-mod,target=/go/pkg/mod \
 COPY . .
 RUN --mount=type=cache,id=quwoquan-go-build,target=/root/.cache/go-build \
     --mount=type=cache,id=quwoquan-go-mod,target=/go/pkg/mod \
-    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
-    go build ${GO_BUILD_FLAGS} -o /realtime-gateway ./services/realtime-gateway/cmd/api/
+    --mount=type=bind,from=qwq_provider_bindings,source=.,target=/run/qwq-provider-bindings,ro \
+    test -n "${QWQ_PROVIDER_BINDING_MANIFEST_DIGEST}" \
+    && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
+    go build -overlay=/run/qwq-provider-bindings/go.overlay.json ${GO_BUILD_FLAGS} \
+    -o /realtime-gateway ./services/realtime-gateway/cmd/api/
 
 FROM ${ALPINE_BASE_IMAGE}
 ARG QWQ_ARTIFACT_ENVIRONMENT

@@ -405,6 +405,22 @@ func run() error {
 			report.RequiredQuota,
 		)
 	}
+	if request.RequireCommercial && !report.Passed {
+		return fmt.Errorf(
+			"commercial ReliableTask gate blocked: accepted=%d/quota=%d "+
+				"succeeded=%d/total=%d publishTasks=%d finalizedObjects=%d "+
+				"duplicatePublish=%d missingObjects=%d status=%s",
+			report.CommercialAcceptedCount,
+			report.RequiredQuota,
+			report.Succeeded,
+			report.Total,
+			report.PublishTaskCount,
+			report.FinalizedObjectCount,
+			report.DuplicatePublishCount,
+			report.MissingObjectCount,
+			report.AcceptedContentThroughputStatus,
+		)
+	}
 	return nil
 }
 

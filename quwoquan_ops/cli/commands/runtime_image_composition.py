@@ -96,6 +96,41 @@ def compose_config_version_environment_key(service: str) -> str:
     return "QWQ_COMPOSE_" + service.upper().replace("-", "_") + "_CONFIG_VERSION"
 
 
+def packaged_service_build_image_ref(
+    env_name: str,
+    service: str,
+    *,
+    binding_manifest_digest: str,
+    candidate_digest: str = "",
+) -> str:
+    """Derive the one build tag a packaged first-party image carries.
+
+    The tag folds in the Provider binding manifest digest because the image
+    compiles that single-environment binding into its binary: rebinding must
+    mint a new image identity rather than reuse the source-digest tag. ``up``
+    reads the packaged manifest back through this same derivation, so producer
+    and consumer cannot drift into two tag vocabularies.
+    """
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    if re.fullmatch(r"sha256:[0-9a-f]{64}", binding_manifest_digest) is None:
+        raise ValueError("runtime image Provider binding manifest digest is unavailable")
+    if service == _stackctl.SERVICE_CORE_WORKLOAD and candidate_digest:
+        if re.fullmatch(r"sha256:[0-9a-f]{64}", candidate_digest) is None:
+            raise ValueError("service-core candidate digest is invalid")
+        base_ref = (
+            "localhost/quwoquan_service_core:"
+            + candidate_digest.removeprefix("sha256:")
+        )
+    else:
+        base_ref = _stackctl._packaged_service_source_image_ref(env_name, service)
+    repository, _, base_tag = base_ref.rpartition(":")
+    build_tag = hashlib.sha256(
+        (service + "\x00" + base_tag + "\x00" + binding_manifest_digest).encode("utf-8")
+    ).hexdigest()
+    return repository + ":" + build_tag
+
+
 def _bind_gamma_build_service_image_refs(
     env_name: str,
     environment: dict[str, str],
@@ -109,30 +144,14 @@ def _bind_gamma_build_service_image_refs(
     binding_manifest_digest = str(
         environment.get("QWQ_PROVIDER_BINDING_MANIFEST_DIGEST") or ""
     ).strip()
-    if re.fullmatch(r"sha256:[0-9a-f]{64}", binding_manifest_digest) is None:
-        raise ValueError("runtime image Provider binding manifest digest is unavailable")
     refs: dict[str, str] = {}
     for service, local_key in _stackctl.GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS:
-        if service == _stackctl.SERVICE_CORE_WORKLOAD and candidate_digest:
-            if re.fullmatch(r"sha256:[0-9a-f]{64}", candidate_digest) is None:
-                raise ValueError("service-core candidate digest is invalid")
-            base_ref = (
-                "localhost/quwoquan_service_core:"
-                + candidate_digest.removeprefix("sha256:")
-            )
-        else:
-            base_ref = _stackctl._packaged_service_source_image_ref(env_name, service)
-        repository, _, base_tag = base_ref.rpartition(":")
-        build_tag = hashlib.sha256(
-            (
-                service
-                + "\x00"
-                + base_tag
-                + "\x00"
-                + binding_manifest_digest
-            ).encode("utf-8")
-        ).hexdigest()
-        ref = repository + ":" + build_tag
+        ref = packaged_service_build_image_ref(
+            env_name,
+            service,
+            binding_manifest_digest=binding_manifest_digest,
+            candidate_digest=candidate_digest,
+        )
         refs[service] = ref
         environment[local_key] = ref
         environment[_stackctl.compose_image_environment_key(service)] = ref
@@ -553,6 +572,16 @@ def _load_package_bound_local_image_composition(
     expected_services = first_party_services | set(provider_images)
     if not isinstance(images, dict) or set(images) != expected_services:
         raise ValueError("package OCI image manifest service set mismatch")
+    from quwoquan_ops.cli.lib.deployment_candidate_manifest.provider_binding_overlay import (
+        load_provider_binding_overlay,
+    )
+
+    binding_manifest_digest = str(
+        load_provider_binding_overlay(
+            env_name, target_name, candidate_root
+        ).get("bindingManifestDigest")
+        or ""
+    )
     first_party_runtime_refs: dict[str, str] = {}
     normalized_images: dict[str, dict[str, str]] = {}
     for service in sorted(expected_services):
@@ -570,11 +599,11 @@ def _load_package_bound_local_image_composition(
         build_ref = str(descriptor.get("ref") or "")
         image_digest = str(descriptor.get("imageDigest") or "")
         if service in first_party_services:
-            expected_build_ref = (
-                "localhost/quwoquan_service_core:"
-                + baseline_id.removeprefix("sha256:")
-                if service == _stackctl.SERVICE_CORE_WORKLOAD
-                else _stackctl._packaged_service_source_image_ref(env_name, service)
+            expected_build_ref = packaged_service_build_image_ref(
+                env_name,
+                service,
+                binding_manifest_digest=binding_manifest_digest,
+                candidate_digest=baseline_id,
             )
             if build_ref != expected_build_ref:
                 raise ValueError(f"package OCI build ref mismatch: {service}")

@@ -3285,7 +3285,7 @@ export const platformConfig = {
       "default": null,
       "scope": "workload",
       "reload": "restart",
-      "rollout": "replace",
+      "rollout": "progressive",
       "risk_level": "",
       "ui_editable": false,
       "sensitive": true

@@ -65,10 +65,8 @@ func bootstrapOfficialSkillPackage(
 		// candidate 更迭后的受控升级:以当前指针 revision 做 CAS。
 		expectedRevision = activation.Revision
 	}
-	stageCommandID := publication.CommandID + ":" +
-		publication.Release.ReleaseDigest + ":stage"
-	activationCommandID := publication.CommandID + ":" +
-		publication.Release.ReleaseDigest + ":activate"
+	stageCommandID := publication.CommandID + ":stage"
+	activationCommandID := publication.CommandID + ":activate"
 	staged, err := service.Stage(
 		ctx,
 		stageCommandID,
