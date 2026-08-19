@@ -199,6 +199,7 @@ def _post(
             "sourceDigest": source_digest.to_document(),
             "sourceIdentity": source_identity,
             "contentType": carrier,
+            "generator": "agent",
             "authorId": "author-a",
             "status": "active",
             "entityRefs": [f"/entity/地点/景区/{entity_name}"],

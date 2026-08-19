@@ -20,6 +20,7 @@ import 'package:quwoquan_app/service/user_service/persona_management/persona/pre
 
 import '../../../support/runtime/patrol/patrol_test_support.dart';
 
+import '../../../support/runtime/patrol/patrol_app_content_screenshot.dart';
 import '../../../support/runtime/patrol/patrol_core_readback_support.dart';
 import '../../../support/runtime/patrol/patrol_environment_harness.dart';
 

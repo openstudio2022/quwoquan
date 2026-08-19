@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 from pathlib import Path
@@ -18,7 +19,12 @@ class StackctlGammaOperationLockContractTest(
     StackctlGammaOperationLockContractTestBase
 ):
     def test_gamma_build_binds_all_compose_service_images_to_package_provenance(self) -> None:
-        environment: dict[str, str] = {}
+        # The build tag closes over the compiled Provider binding, so the
+        # candidate's binding manifest digest is a build input, not optional.
+        binding_manifest_digest = "sha256:" + "9" * 64
+        environment: dict[str, str] = {
+            "QWQ_PROVIDER_BINDING_MANIFEST_DIGEST": binding_manifest_digest,
+        }
         with (
             mock.patch.object(
                 stackctl,
@@ -38,9 +44,14 @@ class StackctlGammaOperationLockContractTest(
         for service, environment_key in (
             stackctl.GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS
         ):
-            expected = (
-                self._packaged_service_source_ref(service, "a" * 64)
-            )
+            source_ref = self._packaged_service_source_ref(service, "a" * 64)
+            repository, _, source_tag = source_ref.rpartition(":")
+            build_tag = hashlib.sha256(
+                "\x00".join(
+                    (service, source_tag, binding_manifest_digest)
+                ).encode("utf-8")
+            ).hexdigest()
+            expected = repository + ":" + build_tag
             self.assertEqual(environment[environment_key], expected)
             self.assertEqual(
                 environment[

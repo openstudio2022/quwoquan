@@ -7,6 +7,7 @@ from pathlib import Path
 import content.execution.campaign.request_envelope as envelopes
 import pytest
 from content.execution.campaign.external_inputs import content_source_revision
+from core.source_digest import SourceDefinitionSnapshot
 from core.io import read_json, write_json
 from support.campaign_request_envelope_fixture import (
     _expected_count,
@@ -228,11 +229,9 @@ def test_campaign_retry_envelopes_bind_submission_reconciliation_targets(
                 source_digest="sha256:" + "d" * 64,
                 entity_catalog_digest="sha256:" + "b" * 64,
             ),
-            "sourceDigest": {
-                "algorithm": "sha256",
-                "digest": "sha256:" + "d" * 64,
-                "inputs": ["quwoquan_data/scripts"],
-            },
+            "sourceDigest": SourceDefinitionSnapshot(
+                digest="sha256:" + "d" * 64
+            ).to_document(),
             "entityCatalogDigest": "sha256:" + "b" * 64,
         },
         "observedSourceIdentity": {
@@ -240,11 +239,9 @@ def test_campaign_retry_envelopes_bind_submission_reconciliation_targets(
                 source_digest="sha256:" + "c" * 64,
                 entity_catalog_digest="sha256:" + "b" * 64,
             ),
-            "sourceDigest": {
-                "algorithm": "sha256",
-                "digest": "sha256:" + "c" * 64,
-                "inputs": ["quwoquan_data/scripts"],
-            },
+            "sourceDigest": SourceDefinitionSnapshot(
+                digest="sha256:" + "c" * 64
+            ).to_document(),
             "entityCatalogDigest": "sha256:" + "b" * 64,
         },
         "submissions": {
@@ -310,11 +307,9 @@ def test_campaign_retry_envelopes_bind_submission_reconciliation_targets(
             source_digest="sha256:" + "a" * 64,
             entity_catalog_digest="sha256:" + "b" * 64,
         ),
-        "sourceDigest": {
-            "algorithm": "sha256",
-            "digest": "sha256:" + "a" * 64,
-            "inputs": ["quwoquan_data/control_plane"],
-        },
+        "sourceDigest": SourceDefinitionSnapshot(
+            digest="sha256:" + "a" * 64
+        ).to_document(),
         "entityCatalogDigest": "sha256:" + "b" * 64,
     }
     receipt["originalSourceIdentity"] = current_identity

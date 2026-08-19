@@ -526,14 +526,11 @@ def test_post_api_verification__binds_releaseimport_posts__contract__local_contr
     assert payload["readinessPhase"] == readiness_phase
     assert queries["typed_video"]["query"] == "identity=work&type=video&limit=2"
     assert queries["typed_video"]["matchedPostIds"] == ["post-video-a"]
-    if readiness_phase == "commercial":
-        assert queries["premium_stream"]["matchedPostIds"] == ["post-video-a"]
-        assert len(payload["searchQueries"]) == len(POSTS) + len(CREATORS)
-        assert len(search_bodies) == len(POSTS) + len(CREATORS)
-    else:
-        assert "premium_stream" not in queries
-        assert "searchQueries" not in payload
-        assert search_bodies == []
+    # App 视频书唯一消费 premium_stream：consumer 与 commercial 都必须携带
+    # premium_stream release-bound 读回证据（typed_video 绿不代表视频书绿）。
+    assert queries["premium_stream"]["matchedPostIds"] == ["post-video-a"]
+    assert len(payload["searchQueries"]) == len(POSTS) + len(CREATORS)
+    assert len(search_bodies) == len(POSTS) + len(CREATORS)
     assert payload["guestActorHash"] == "sha256:" + "a" * 64
     assert payload["guestLogin"]["pageId"] == "user.login.anonymous"
     assert {request["pageId"] for row in queries.values() for request in row["requests"]} == {
@@ -605,16 +602,46 @@ def test_feed_item_match__accepts_canonical_projection_subset__local_contract() 
     assert matched == "post-article-a"
 
 
-def test_author_profile__rejects_avatar_version_query__local_contract() -> None:
+@pytest.mark.parametrize(
+    ("served_url_suffix", "served_path", "expected_error"),
+    [
+        ("?v=1", None, "creator avatar authority is incomplete"),
+        ("?v=9", None, "creator avatar authority is incomplete"),
+        ("", None, "creator avatar authority is incomplete"),
+        ("?v=1", "/media/avatar/s/asset/other-avatar/v1/source.jpg", "creator public avatar URL drift"),
+    ],
+)
+def test_author_profile__binds_avatar_path_not_cache_busting_query__local_contract(
+    served_url_suffix: str,
+    served_path: str | None,
+    expected_error: str,
+) -> None:
+    """The persona public profile appends ``?v=<avatarVersion>``; the release binds a path.
+
+    user-service publishes that cache-busting query on every persona avatar URL, so
+    demanding byte equality against the release-bound public slice would make every
+    environment's creator profile look like drift.  Tolerating the query is not
+    tolerating a different body: a served path that is not the bound slice is still
+    drift, which is what the last case pins.
+
+    A tolerated URL is proven by the verification getting far enough to complain about
+    the avatar authority instead, which is the next check after the URL comparison.
+    """
+
     canonical_url = (
         "https://media.test/media/avatar/s/asset/creator-avatar-1/v1/source.jpg"
     )
+    served = canonical_url if served_path is None else f"https://media.test{served_path}"
     creator = SimpleNamespace(
         persona_id="author-profile-1",
         creator_ref="creator-1",
+        author_id="creator-article-a",
         display_name="内容作者 1",
         avatar_url=canonical_url,
         avatar_asset_id="creator-avatar-1",
+        avatar_bytes=None,
+        avatar_sha256=None,
+        avatar_mime_type=None,
     )
     client = SimpleNamespace(
         get_json=lambda *_args, **_kwargs: PublicApiResponse(
@@ -622,16 +649,13 @@ def test_author_profile__rejects_avatar_version_query__local_contract() -> None:
             payload={
                 "personaId": creator.persona_id,
                 "displayName": creator.display_name,
-                "avatarUrl": f"{canonical_url}?v=1",
+                "avatarUrl": f"{served}{served_url_suffix}",
             },
             operation=_operation("user/author-profile-1", "user.profile", status=200),
         )
     )
 
-    with pytest.raises(
-        subject.PostApiVerificationError,
-        match="creator public avatar URL drift",
-    ):
+    with pytest.raises(subject.PostApiVerificationError, match=expected_error):
         subject._verify_author_profile(client, creator)
 
 

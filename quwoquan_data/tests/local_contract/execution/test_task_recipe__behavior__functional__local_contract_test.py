@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
-import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -792,7 +790,15 @@ def test_existing_homepage_retry_does_not_reopen_predecessor_evidence(
     )
 
 
-def test_plan_only_checks_workspace_before_creating_a_work_package(monkeypatch) -> None:
+def test_plan_only_checks_workspace_before_creating_a_work_package(
+    monkeypatch, tmp_path: Path
+) -> None:
+    from core import paths as core_paths
+    from support.capacity_calibration_fixture import write_synthetic_capacity_receipt
+
+    monkeypatch.setattr(core_paths, "OUTPUT_ROOT", tmp_path)
+    receipt_ref = "data/local/tests/capacity/capacity.json"
+    write_synthetic_capacity_receipt(tmp_path / receipt_ref)
     args = argparse.Namespace(
         execution_id=EXECUTION_ID,
         retry_of=None,
@@ -801,9 +807,8 @@ def test_plan_only_checks_workspace_before_creating_a_work_package(monkeypatch) 
         selector="source-ready-priority",
         count=1,
         quota=1,
-        required_workers=1,
-        partition_count=16,
-        capacity_plan_digest="sha256:" + "1" * 64,
+        capacity_calibration_receipt=receipt_ref,
+        semantic_selection_id="default",
         topic=None,
         source_providers=(),
         stage="plan-only",
@@ -906,34 +911,7 @@ def test_execute_rejects_an_unpaired_recovery_request() -> None:
         raise AssertionError("unpaired recovery request must fail")
 
 
-def test_task_facade_exposes_only_durable_commands() -> None:
-    result = subprocess.run(
-        [sys.executable, str(SCRIPTS_ROOT / "cli.py"), "task", "--help"],
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    assert result.returncode == 0, result.stderr
-    choices = re.search(r"^  \{([^}]+)\}$", result.stdout, flags=re.MULTILINE)
-    assert choices is not None
-    assert choices.group(1).split(",") == [
-            "preflight",
-            "prepare-campaign",
-            "execute",
-            "drain-pool-delivery",
-            "discard",
-        "supersede-execution",
-        "plan-images",
-            "probe-images",
-            "acquire-images",
-            "prepare-image-supported-api-input",
-            "prepare-video-manual-input",
-            "acquire-videos",
-        "review-asset",
-        "reconcile-stale",
-        "reconcile-failed-campaign",
-        "reconcile-submissions",
-        "runtime-evidence",
-    ]
+# `task` 门面的完整子命令闭包由 test_cli_environment__behavior__functional 断言，
+# 这里不再保留第二份同样的字面清单：两份清单意味着同一契约两处记录。
 
 

@@ -147,6 +147,8 @@ def _candidate(carrier: str, index: int, *, provider: str) -> dict[str, object]:
     if carrier in {"homepage", "article"}:
         candidate["sourceReadyEvidenceRootRef"] = "."
         candidate["sourceAttribution"] = _source_attribution(carrier, index)
+    if carrier == "article":
+        candidate["publishMediaMode"] = "illustrated"
     if carrier == "video":
         candidate.update(
             {

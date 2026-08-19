@@ -22,6 +22,7 @@ from content.execution.campaign.workspace import (
 from content.release.canonical.campaign_release_contract import CampaignReleaseRoots
 from content.release.canonical.campaign_release_publish import validate_lane_publish
 from core.io import read_json, write_json
+from support.capacity_calibration_fixture import synthetic_capacity_source_binding
 from support.semantic_preflight_fixture import ready_semantic_preflight
 
 CARRIERS = ("homepage", "article", "image", "video")
@@ -120,6 +121,7 @@ def _fixture(tmp_path: Path) -> tuple[CampaignRuntimePaths, Path, Path]:
         "workloadMode": "milestone_preset",
         "activeCarriers": list(CARRIERS),
         "workloads": WORKLOADS,
+        "capacityCalibration": synthetic_capacity_source_binding(),
         "gitBranch": "dev1.0",
         "gitCommitSha": "a" * 40,
         "sourceRevision": "sha256:" + "b" * 64,

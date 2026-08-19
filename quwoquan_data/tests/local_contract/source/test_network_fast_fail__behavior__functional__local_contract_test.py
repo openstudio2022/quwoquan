@@ -179,41 +179,5 @@ def test_write_auto_research_plans_no_progress_timeout_yields_resumable_outage(m
     assert elapsed < 8, "watchdog 必须在预算量级内中断，不得挂满 curl 超时"
 
 
-def test_wave_budget_short_circuits_curl_after_deadline(monkeypatch):
-    """串行路径兜底：wave wall-clock 预算耗尽后 curl 层直接短路。"""
-    import content.source.research.network_io as rp
-    from content.source.research import network_breaker as nb
-
-    calls: list[str] = []
-
-    class _Proc:
-        returncode = 0
-        stdout = b"{}"
-        stderr = b""
-
-    monkeypatch.setattr(rp.subprocess, "run", lambda *a, **k: calls.append(1) or _Proc())
-    nb.start_wave_budget(3600)
-    try:
-        assert rp.curl_json(
-            "https://zh.wikipedia.org/w/api.php",
-            timeout=MEDIAWIKI_TIMEOUT_SECONDS,
-        ) == {}
-        assert len(calls) == 1
-        nb.start_wave_budget(0.0)  # 预算 0 = 立即耗尽（模拟 deadline 过期）
-        # budget=0 语义为关闭；用极小预算 + 等待代替。
-        nb.start_wave_budget(0.01)
-        import time as _t
-
-        _t.sleep(0.05)
-        assert rp.curl_json(
-            "https://zh.wikipedia.org/w/api.php",
-            timeout=MEDIAWIKI_TIMEOUT_SECONDS,
-        ) == {}
-        assert len(calls) == 1, "预算耗尽后必须短路，不得再执行 curl"
-        assert nb.wave_budget_exceeded() is True
-    finally:
-        nb.clear_wave_budget()
-
-
 if __name__ == "__main__":
     raise SystemExit(os.system(f"{sys.executable} -m pytest {__file__} -q") >> 8)

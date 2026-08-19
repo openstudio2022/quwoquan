@@ -19,8 +19,8 @@ from content.source.source_unit import (
 )
 from core.io import write_json
 from core.paths import execution_root
-from support.execution_manifest_fixture import ExecutionFixtureBuilder
 
+from support.execution_manifest_fixture import ExecutionFixtureBuilder
 
 TASK = "20260711--travel-homepage-download-gate--test-region-b--pilot-001"
 VIDEO_TASK = "20260711--travel-video-download-gate--test-region-b--pilot-001"

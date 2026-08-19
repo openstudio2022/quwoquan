@@ -43,10 +43,15 @@ def _manifest() -> dict:
             "treeDigest": TREE_DIGEST,
             "repository": "owner/repo",
         },
-        "images": {
-            "gateway": {
-                "ref": "ghcr.io/owner/repo/gateway@" + SERVICE_DIGEST,
-                "digest": SERVICE_DIGEST,
+        "environmentArtifacts": {
+            "beta": {
+                "environment": "beta",
+                "images": {
+                    "gateway": {
+                        "ref": "ghcr.io/owner/repo/gateway@" + SERVICE_DIGEST,
+                        "digest": SERVICE_DIGEST,
+                    }
+                },
             }
         },
     }

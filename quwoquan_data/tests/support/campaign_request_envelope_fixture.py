@@ -289,9 +289,18 @@ def _research_m100_receipt(path: Path, *, source_digest: str | None = None) -> P
                     "rate": 1.0,
                 },
                 "illustratedRate": {
+                    "statistical": True,
+                    "nonBlocking": True,
                     "numerator": 90,
                     "denominator": 100,
                     "rate": 0.9,
+                },
+                "textOnlyRate": {
+                    "statistical": True,
+                    "nonBlocking": True,
+                    "numerator": 10,
+                    "denominator": 100,
+                    "rate": 0.1,
                 },
                 "videoPopularity": {
                     "statistical": True,
@@ -332,6 +341,7 @@ def _research_m100_receipt(path: Path, *, source_digest: str | None = None) -> P
                             "ineligibleReason": "",
                         }
                     ],
+                    "observationIssues": [],
                 },
                 "automaticRecoveryRate": {
                     "statistical": True,
@@ -363,6 +373,8 @@ def _research_m100_receipt(path: Path, *, source_digest: str | None = None) -> P
                 ],
             },
             "professionalImageSourceMix": {
+                "statistical": True,
+                "nonBlocking": True,
                 "acceptedImageAssetCount": 100,
                 "originalAssetClosureCount": 100,
                 "pinterestAcceptedAssetCount": 60,
@@ -382,6 +394,7 @@ def _research_m100_receipt(path: Path, *, source_digest: str | None = None) -> P
                     "pinterestTuchongAtLeastHalf": True,
                     "providerAboveSeventyPercent": [],
                 },
+                "observationIssues": [],
             },
             "duplicateAssetCount": 0,
             "crossLaneWriteCount": 0,

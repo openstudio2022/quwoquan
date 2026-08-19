@@ -274,7 +274,9 @@ def test_terminal_reconciliation_accepts_digest_valid_pre_hard_cut_evidence_only
     )
 
     assert receipt["decision"] == "abandoned"
-    assert receipt["retryPolicy"] == "new_four_lane_execution_with_retryOf"
+    # Retry re-freezes the lanes the campaign actually declared active, which is not
+    # always four, so the policy is named for the active workload rather than a lane count.
+    assert receipt["retryPolicy"] == "active_workload_execution_with_retryOf"
     assert set(receipt["submissions"]) == set(CARRIERS)
 
 

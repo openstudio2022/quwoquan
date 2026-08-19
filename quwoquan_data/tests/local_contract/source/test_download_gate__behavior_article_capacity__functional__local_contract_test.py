@@ -40,6 +40,10 @@ from core.paths import (
     execution_entity_object_dir,
     execution_root,
 )
+from support.article_source_registry_fixture import (
+    ARTICLE_SOURCE_UNIT_IDENTITY,
+    article_source_registry_binding,
+)
 from support.download_gate_fixture import (
     ARTICLE_TASK,
     _clean_execution_root,
@@ -84,6 +88,12 @@ def test_article_capacity_requires_quality_receipts_not_rejects_cache_or_manual_
             url=f"https://example.com/{source_id}",
             title=f"{entity}游记{ordinal}",
             target_ref=f"/entity/地点/景区/{entity}",
+            publish_media_mode="text_only",
+            **ARTICLE_SOURCE_UNIT_IDENTITY,
+            source=article_source_registry_binding(
+                platform="旅行平台",
+                url=f"https://example.com/{source_id}",
+            ),
         )
     manual_unit = next(
         unit
@@ -258,6 +268,11 @@ def _write_article_capacity_source_with_two_images(
         images=images,
         execution_id=ARTICLE_TASK,
         build_variants=False,
+        **ARTICLE_SOURCE_UNIT_IDENTITY,
+        source=article_source_registry_binding(
+            platform="旅行平台",
+            url=f"https://example.com/{entity}/article",
+        ),
     )
 
 

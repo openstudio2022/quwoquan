@@ -589,10 +589,16 @@ class StackctlProviderReadinessContractTest(unittest.TestCase):
                         release_manifest,
                         f"sha256:{'4' * 64}",
                         {
-                            "images": {
-                                "content-service": {
-                                    "repository": "ghcr.io/quwoquan/content-service",
-                                    "transportRef": "ghcr.io/quwoquan/content-service:release-test",
+                            "environmentArtifacts": {
+                                "prod": {
+                                    "images": {
+                                        "content-service": {
+                                            "repository": "ghcr.io/quwoquan/content-service",
+                                            "transportRef": (
+                                                "ghcr.io/quwoquan/content-service:release-test"
+                                            ),
+                                        }
+                                    }
                                 }
                             }
                         },

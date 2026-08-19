@@ -19,10 +19,18 @@ from content.execution.queue.reliabletask import jobs as reliable_jobs
 from content.execution.queue.reliabletask.attempt import (
     select_or_freeze_job_set_attempt,
 )
+from content.execution.planning.capacity_policy import (
+    workload_plan_digest,
+    workload_plan_document,
+)
 from content.execution.runtime_contract import canonical_sha256
 from core.control_types import QueueBackend, QueueJobStage
 from core.io import read_json, write_json
 from core.schema import assert_valid, load_schema
+from support.capacity_calibration_fixture import (
+    synthetic_capacity_execution_binding,
+    synthetic_capacity_source_binding,
+)
 
 EXECUTION_ID = "20260805--travel-image-m100--china--scale-101"
 M3_EXECUTION_ID = "20260805--travel-image-m3--china--scale-102"
@@ -60,9 +68,25 @@ def _spec(
     *,
     approved_quota: int = 100,
     backend: QueueBackend = QueueBackend.RELIABLE_TASK,
+    target_object_count: int = 1,
 ) -> dict[str, object]:
     return {
-        "executionPolicy": {"approvedQuota": approved_quota},
+        "executionPolicy": {
+            "approvedQuota": approved_quota,
+            # DEC-002：job set 的容量事实只从冻结的 executionPolicy 读取。
+            "targetObjectCount": target_object_count,
+            "capacityPlanDigest": workload_plan_digest(
+                workload_plan_document(
+                    target_scale="M100",
+                    carrier="image",
+                    work_unit_count=target_object_count,
+                    capacity_calibration=synthetic_capacity_source_binding(),
+                )
+            ),
+            "capacityCalibration": synthetic_capacity_execution_binding(
+                work_unit_count=target_object_count,
+            ),
+        },
         "queuePolicy": {
             "backend": backend.value,
             "reliableTask": {
@@ -274,6 +298,7 @@ def _fleet_request_document(work_unit_count: int, partitions: int) -> dict[str, 
         "partitionCount": partitions,
         "partitionAlgorithm": "sha256_carrier_object_ref_mod_v1",
         "checkpointPolicy": checkpoint_policy_document(),
+        "requireCommercial": False,
         "recoverDeadTasks": False,
         "objectTimeoutMilliseconds": 120000,
         "globalRequiredQuota": work_unit_count,
@@ -377,13 +402,11 @@ def test_reliabletask_stage_job_set_is_create_once_and_queue_mirror_independent(
     first = queue_backend.freeze_reliabletask_job_set(
         EXECUTION_ID,
         "author",
-        required_workers=1,
         expected_tasks=[task],
     )
     repeated = queue_backend.freeze_reliabletask_job_set(
         EXECUTION_ID,
         "author",
-        required_workers=1,
         expected_tasks=[task],
     )
 
@@ -393,26 +416,40 @@ def test_reliabletask_stage_job_set_is_create_once_and_queue_mirror_independent(
         "partitionKey": partition_key("image", "杭州西湖_image", 16),
     }
     assert first["expectedTasks"] == [expected_task]
-    assert first["requiredWorkers"] == 1
+    assert first["targetObjectCount"] == 1
+    assert first["capacityCalibration"] == synthetic_capacity_execution_binding(
+        work_unit_count=1,
+    )
+    assert "requiredWorkers" not in first
     assert first["partitionCount"] == 16
     assert first["checkpointPolicy"]["resume"] == "strictly_after_cursor"
     assert first["jobSetDigest"].startswith("sha256:")
     loaded = queue_backend.load_reliabletask_job_set_envelopes(EXECUTION_ID)
     assert loaded == (first,)
 
+    # 同一 jobSetDigest 只覆盖 expectedTasks 与主机/投递绑定；容量事实来自 spec，
+    # 所以 spec 漂移必须在同一路径上以 collision 失败，而不是静默改写既有 attempt。
+    monkeypatch.setattr(
+        queue_backend.store,
+        "load_spec",
+        lambda _execution_id: _spec(target_object_count=5),
+    )
     with pytest.raises(ValueError, match="job-set attempt collision"):
         queue_backend.freeze_reliabletask_job_set(
             EXECUTION_ID,
             "author",
-            required_workers=5,
             expected_tasks=[task],
         )
+    monkeypatch.setattr(
+        queue_backend.store,
+        "load_spec",
+        lambda _execution_id: _spec(),
+    )
 
     changed_revision = "sha256:" + "8" * 64
     second = queue_backend.freeze_reliabletask_job_set(
         EXECUTION_ID,
         "author",
-        required_workers=1,
         expected_tasks=[{
             **task,
             "sourceRevision": changed_revision,
@@ -488,14 +525,12 @@ def test_attempt_selector_dispatches_one_revision_set_per_fleet_request(
         EXECUTION_ID,
         "author",
         active_tasks=[first_task],
-        required_workers=1,
     )
     repair_task = task("8")
     second = select_or_freeze_job_set_attempt(
         EXECUTION_ID,
         "author",
         active_tasks=[first_task, repair_task],
-        required_workers=1,
     )
 
     assert first["attemptOrdinal"] == 1
@@ -507,13 +542,11 @@ def test_attempt_selector_dispatches_one_revision_set_per_fleet_request(
         EXECUTION_ID,
         "author",
         active_tasks=[first_task, repair_task],
-        required_workers=1,
     ) == second
     assert select_or_freeze_job_set_attempt(
         EXECUTION_ID,
         "author",
         active_tasks=[first_task],
-        required_workers=1,
     ) == first
 
 
@@ -566,14 +599,12 @@ def test_attempt_selector_refreezes_same_tasks_for_new_host_generation(
         EXECUTION_ID,
         "author",
         active_tasks=[task],
-        required_workers=1,
     )
     spec["executionPolicy"]["workerHostSetBinding"] = binding(2)
     second = select_or_freeze_job_set_attempt(
         EXECUTION_ID,
         "author",
         active_tasks=[task],
-        required_workers=1,
     )
     assert second["attemptOrdinal"] == 2
     assert second["workerHostSetBinding"]["generation"] == 2

@@ -7,6 +7,7 @@ from core import paths
 from core.control_types import TargetSelector
 from content.execution import workspace
 from content.execution.planning.recipe.model import RuntimeExecutionRequest
+from support.capacity_calibration_fixture import synthetic_capacity_source_binding
 from verify import verify_runtime_input_ownership
 
 
@@ -94,9 +95,7 @@ def test_runtime_input_gate_uses_the_typed_execution_request_contract(tmp_path, 
         selector=TargetSelector.SOURCE_READY_PRIORITY,
         count=1,
         quota=1,
-        required_workers=1,
-        partition_count=16,
-        capacity_plan_digest="sha256:" + "1" * 64,
+        capacity_calibration=synthetic_capacity_source_binding(),
         topic=None,
         source_providers=(),
         target_names=("测试实体甲",),

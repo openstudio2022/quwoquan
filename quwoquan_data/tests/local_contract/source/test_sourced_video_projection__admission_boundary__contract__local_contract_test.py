@@ -162,11 +162,11 @@ def test_unverified_authorization_cannot_claim_commercial_release() -> None:
     )
 
     assert (
-        "sourceVideo unverified authorization requires research or risk acceptance"
+        "sourceVideo unverified authorization requires research_allowed"
         in issues
     )
     assert (
-        "sourceVideo commercial release requires verified HTTPS authorization and terms proof"
+        "sourceVideo commercial_allowed requires verified HTTPS authorization and terms proof"
         in issues
     )
 
@@ -188,7 +188,7 @@ def test_commercial_release_requires_https_authorization_and_terms(
     issues = _issues(_commercial_payload(**overrides))
 
     assert (
-        "sourceVideo commercial release requires verified HTTPS authorization and terms proof"
+        "sourceVideo commercial_allowed requires verified HTTPS authorization and terms proof"
         in issues
     )
 

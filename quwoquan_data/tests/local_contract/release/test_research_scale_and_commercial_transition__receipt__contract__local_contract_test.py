@@ -243,6 +243,7 @@ def _research_release(output_root: Path, *, article_count: int = 100) -> Path:
                 SourceDefinitionSnapshot(_SOURCE_DIGEST).to_document()
             ],
             "milestone": "M100",
+            "selectionScope": "milestone",
             "milestoneTargets": {
                 "homepage": 100,
                 "article": 100,

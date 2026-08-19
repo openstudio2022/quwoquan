@@ -44,6 +44,9 @@ from support.campaign_scale_evidence_fixture import (
     _write_semantic_pair,
     _write_sol_calibration_runs,
 )
+from support.capacity_calibration_fixture import (
+    synthetic_capacity_source_binding,
+)
 from support.semantic_preflight_fixture import ready_semantic_preflight
 
 
@@ -67,6 +70,8 @@ def _sample_measurements(
             "pgid": 100,
             "processIdentityDigest": "sha256:" + "1" * 64,
             "rssBytes": controller_rss,
+            "cpuPercent": 12.5,
+            "isCursorSdkBridge": False,
             "openFdCount": 60 + index,
         }
     ]
@@ -82,6 +87,8 @@ def _sample_measurements(
                 "pgid": 100 + offset,
                 "processIdentityDigest": "sha256:" + str(offset + 1) * 64,
                 "rssBytes": video_rss if carrier == "video" else non_video_rss,
+                "cpuPercent": 8.0,
+                "isCursorSdkBridge": False,
                 "openFdCount": 10,
             }
         )
@@ -128,6 +135,12 @@ def _sample_measurements(
         "totalRssBytes": sum(int(row["rssBytes"]) for row in processes),
         "temporaryWorkspaceBytes": temporary_bytes,
         "terminalResidualBytes": terminal_bytes,
+        "hostCpuPercent": round(
+            sum(float(row["cpuPercent"]) for row in processes), 3
+        ),
+        "cursorBridgeProcessCount": sum(
+            1 for row in processes if row["isCursorSdkBridge"] is True
+        ),
         "openFdCount": sum(int(row["openFdCount"]) for row in processes),
         "queueDepth": queue_depth,
         "oldestReadyAgeSeconds": 300 if queue_depth else 0,
@@ -394,6 +407,7 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
         "entityCatalogDigest": CATALOG_DIGEST,
         "semanticSelectionId": "default",
         "semanticPreflightReceipt": terra_preflight_binding,
+        "capacityCalibration": synthetic_capacity_source_binding(),
         "scaleSourcePool": pool_binding,
         "sourcePoolEvidenceRootRef": pool_evidence_ref,
         "laneSourcePoolSelections": pool_selections,
@@ -734,6 +748,7 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
             "sourceDigests": [SOURCE_DIGEST_DOCUMENT],
             "sourceIdentities": source_identities,
             "sourceIdentitySetDigest": source_identity_set_digest,
+            "selectionScope": "milestone",
             "milestone": "M100",
             "milestoneTargets": {
                 "homepage": 100,

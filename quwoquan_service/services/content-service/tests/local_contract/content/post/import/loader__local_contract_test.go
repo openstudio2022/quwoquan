@@ -790,9 +790,9 @@ func TestLoadReleaseMediaAssetsRejectsPrivateCASAndAcceptsCanonicalPublicSlice(t
 			"payload/objects/posts/image/画报/杭州西湖/1/rights_snapshots/a.json",
 		),
 		`{
-			"assetId":"杭州西湖_cover_三潭印月",
+			"assetId":"杭州西湖_cover_三潭印月石塔_28_36eb11bd",
 			"manifestAsset":{
-				"assetId":"杭州西湖_cover_三潭印月",
+				"assetId":"杭州西湖_cover_三潭印月石塔_28_36eb11bd",
 				"sha256":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 			}
 		}`,
@@ -802,12 +802,12 @@ func TestLoadReleaseMediaAssetsRejectsPrivateCASAndAcceptsCanonicalPublicSlice(t
 		"releaseId":"release-a",
 		"sourceOwner":"qwq_data",
 		"assets":[{
-			"assetId":"杭州西湖_cover_三潭印月",
+			"assetId":"杭州西湖_cover_三潭印月石塔_28_36eb11bd",
 			"kind":"image",
 			"version":1,
 			"contentType":"image/jpeg",
 			"publicSliceKey":"` + runtimemedia.BuildContentMediaPublicSliceKey(
-		"image", "杭州西湖_cover_三潭印月", 1, "image/jpeg",
+		"image", "杭州西湖_cover_三潭印月石塔_28_36eb11bd", 1, "image/jpeg",
 	) + `",
 			"sha256":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 			"bytes":12,
@@ -822,7 +822,7 @@ func TestLoadReleaseMediaAssetsRejectsPrivateCASAndAcceptsCanonicalPublicSlice(t
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(assets) != 1 || strings.Contains(assets["杭州西湖_cover_三潭印月"].PublicSliceKey, "objects/") {
+	if len(assets) != 1 || strings.Contains(assets["杭州西湖_cover_三潭印月石塔_28_36eb11bd"].PublicSliceKey, "objects/") {
 		t.Fatalf("release media authority not loaded: %+v", assets)
 	}
 	if _, err := LoadReleaseMediaAssets(releaseRoot, "release-b"); err == nil {

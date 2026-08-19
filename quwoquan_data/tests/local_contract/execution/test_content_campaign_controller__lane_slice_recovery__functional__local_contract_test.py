@@ -12,6 +12,7 @@ from content.execution.campaign import orchestrator as campaign_orchestrator
 from content.execution.campaign import plan as campaign_plan
 from content.execution.campaign.workspace import CampaignRuntimePaths
 from core.io import write_json
+from support.capacity_calibration_fixture import synthetic_capacity_source_binding
 from support.campaign_lanes_fixture import (  # noqa: F401
     CARRIERS,
     ROOT_ID,
@@ -107,9 +108,7 @@ def test_campaign_lane_argv_binds_audited_stage_recovery() -> None:
         "selector": "named-targets",
         "quota": 1,
         "count": 1,
-        "requiredWorkers": 1,
-        "partitionCount": 16,
-        "capacityPlanDigest": "sha256:" + "1" * 64,
+        "capacityCalibration": synthetic_capacity_source_binding(),
         "semanticSelectionId": "cursor_auto",
         "targetNames": ["都江堰"],
     }
@@ -493,9 +492,7 @@ def test_lane_without_deadline_does_not_report_monitor_timeout_as_campaign_timeo
             "selector": "source-ready-priority",
             "quota": 15,
             "count": 27,
-            "requiredWorkers": 27,
-            "partitionCount": 32,
-            "capacityPlanDigest": "sha256:" + "6" * 64,
+            "capacityCalibration": synthetic_capacity_source_binding(),
         },
         stage="review-only",
         runtime=runtime,
@@ -625,9 +622,7 @@ def test_failed_lane_prefers_typed_terminal_cause_over_truncated_log_tail(
             "selector": "source-ready-priority",
                 "quota": 1,
                 "count": 1,
-                "requiredWorkers": 1,
-                "partitionCount": 16,
-                "capacityPlanDigest": "sha256:" + "6" * 64,
+                "capacityCalibration": synthetic_capacity_source_binding(),
         },
         stage="review-only",
         runtime=runtime,

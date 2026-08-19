@@ -739,17 +739,38 @@ class StackctlDevSessionResumeComposeTest(StackctlDevSessionTestBase):
             )
 
         self.assertEqual(result["exitCode"], 0)
-        self.assertEqual(len(executions), 5)
-        self.assertEqual(timeouts, [90.0, 3600.0, 3600.0, 3600.0, 3600.0])
+        self.assertEqual(len(executions), 7)
+        self.assertEqual(timeouts, [90.0, *([3600.0] * 6)])
         for command in executions:
             self.assertEqual(command[:5], ["docker", "compose", "-p", "quwoquan_alpha_test_live", "-f"])
             self.assertNotIn("package", command)
             self.assertNotIn("candidate", " ".join(command))
         self.assertEqual(executions[0][-2:], ["config", "--quiet"])
-        self.assertEqual(executions[1][-4:], ["up", "--build", "-d", "product-ops-service"])
-        self.assertEqual(executions[2][-1:], ["build"])
-        self.assertEqual(executions[3][-3:], ["up", "-d", "--no-deps"])
-        self.assertEqual(executions[4][-3:], ["up", "-d", "--remove-orphans"])
+        # The policy owner is brought up in three staged steps before the
+        # project-wide build, because Recommendation refuses a full runtime
+        # until Product Ops has published the run-bound policy facts.
+        self.assertEqual(
+            executions[1][-9:],
+            [
+                "up",
+                "-d",
+                "--wait",
+                "--wait-timeout",
+                "45",
+                "postgres",
+                "mongodb",
+                "redis",
+                "elasticsearch",
+            ],
+        )
+        self.assertEqual(executions[2][-3:], ["up", "--no-deps", "mongo-init"])
+        self.assertEqual(
+            executions[3][-5:],
+            ["up", "--build", "-d", "--no-deps", "product-ops-service"],
+        )
+        self.assertEqual(executions[4][-1:], ["build"])
+        self.assertEqual(executions[5][-3:], ["up", "-d", "--no-deps"])
+        self.assertEqual(executions[6][-3:], ["up", "-d", "--remove-orphans"])
         self.assertEqual(
             [row["status"] for row in receipt_transitions],
             ["prepared", "partial", "running"],

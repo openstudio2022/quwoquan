@@ -12,11 +12,29 @@ import json
 import hashlib
 import unittest
 from contextlib import ExitStack
+from functools import lru_cache
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Any
 from unittest import mock
 
 from quwoquan_ops.cli.lib import deployment_candidate_manifest as subject
+from quwoquan_ops.cli.lib.deployment_candidate_manifest import provider_binding_overlay
+
+
+@lru_cache(maxsize=1)
+def _compiled_provider_bindings() -> dict[str, Any]:
+    """Compile the Provider binding capsule once for the whole test process.
+
+    Compilation reads the immutable capsule, so every candidate in this fixture
+    would get identical bytes; doing it per test would add seconds per case.
+    """
+
+    return provider_binding_overlay.compile_single_environment_bindings(
+        environment="alpha",
+        target="alpha-local",
+        source_root=subject.ROOT,
+    )
 
 
 class DeploymentCandidateManifestContractBase(unittest.TestCase):
@@ -250,6 +268,18 @@ class DeploymentCandidateManifestContractBase(unittest.TestCase):
             "alpha-local",
             source_root=subject.ROOT,
         )
+        self.patches.enter_context(
+            mock.patch.object(
+                provider_binding_overlay,
+                "compile_single_environment_bindings",
+                return_value=_compiled_provider_bindings(),
+            )
+        )
+        self.provider_binding_overlay = subject.materialize_provider_binding_overlay(
+            "alpha",
+            "alpha-local",
+            source_root=subject.ROOT,
+        )
         self.provider_images = {}
         for index, workload in enumerate(self.provider_runtime["workloads"], start=4):
             role = str(workload["role"])
@@ -302,6 +332,9 @@ class DeploymentCandidateManifestContractBase(unittest.TestCase):
                     ),
                     "providerRuntimeDigest": self.provider_runtime[
                         "runtimeCompositionDigest"
+                    ],
+                    "providerBindingManifestDigest": self.provider_binding_overlay[
+                        "bindingManifestDigest"
                     ],
                     "providerImageRefs": provider_refs,
                 }

@@ -441,7 +441,12 @@ def test_parallel_auto_research_persists_incremental_report_on_interrupt(monkeyp
     assert progress["completedCount"] == 1
 
 
-def test_commercial_article_rejects_legacy_qunar_and_related_encyclopedia_bases():
+def test_commercial_article_plans_only_registry_admitted_sources():
+    """文章载体的商用准入逐站由来源注册表裁定，不再由全局 closure 开关一刀切。
+
+    注册表接纳的站点（去哪儿攻略、中文维基）进计划并带上冻结的绑定身份；
+    注册表不接纳的 URL 根本不进计划，因为它的归属在交付期无从解析。
+    """
     import content.source.research.auto_plan_article as article_mod
     import content.source.research.auto_plan_writer as research_mod
 
@@ -489,7 +494,7 @@ def test_commercial_article_rejects_legacy_qunar_and_related_encyclopedia_bases(
         limit: int = 4,
     ):
         assert entity_id == entity
-        return [
+        admitted = [
             _source(
                 source_id=f"article_qunar_base_{index}",
                 platform="去哪儿攻略",
@@ -503,6 +508,19 @@ def test_commercial_article_rejects_legacy_qunar_and_related_encyclopedia_bases(
                 image_evidence_mode="same_source",
             )
             for index in range(1, 5)
+        ]
+        return admitted + [
+            _source(
+                source_id="article_unregistered_base",
+                platform="未登记游记站",
+                url="https://unregistered.example.test/youji/1",
+                category="travelogue",
+                discovery_provider="test",
+                match_confidence=0.95,
+                source_role="base",
+                images=[good_image],
+                image_evidence_mode="same_source",
+            )
         ]
 
     try:
@@ -549,13 +567,20 @@ def test_commercial_article_rejects_legacy_qunar_and_related_encyclopedia_bases(
         for name, value in article_originals.items():
             setattr(article_mod, name, value)
 
-    assert report["articleCommercialClosure"] is True
-    assert any("article base sources=0" in issue for issue in report["issues"])
-    candidate_ids = {
-        str(row.get("source_id") or "") for row in report["candidates"]
-    }
-    assert not any(source_id.startswith("article_qunar_base_") for source_id in candidate_ids)
-    assert not any("related_encyclopedia" in source_id for source_id in candidate_ids)
+    plan = (
+        resolve_entity_object_dir(task, entity, etype_hint="地点/景区")
+        / "1.download"
+        / "article_source_plan.json"
+    )
+    planned = read_json(plan)["payload"]["sources"]
+    planned_ids = {str(row.get("source_id") or "") for row in planned}
+    assert any(source_id.startswith("article_qunar_base_") for source_id in planned_ids)
+    assert "article_unregistered_base" not in planned_ids
+    for row in planned:
+        assert row["articleSiteId"], row["source_id"]
+        assert row["articleCommercialAdmission"] == "commercial_release"
+        assert row["policyRevision"] == "article-source-registry-v1"
+        assert row["extractor"] in {"qunar_html", "ctrip_sight_html", "wikipedia_api"}
 
 def test_homepage_only_auto_research_runs_media_but_skips_article_discovery():
     import content.source.research.auto_plan_writer as research_mod

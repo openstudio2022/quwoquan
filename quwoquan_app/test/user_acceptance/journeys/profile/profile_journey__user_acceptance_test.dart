@@ -33,6 +33,7 @@ import 'package:quwoquan_app/service/recommendation_service/recommendation/recom
 import 'package:quwoquan_app/l10n/copy/app_concept_constants.dart';
 import 'package:quwoquan_app/l10n/copy/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
+import '../../../support/runtime/patrol/patrol_app_content_screenshot.dart';
 import '../../../support/runtime/patrol/patrol_test_support.dart';
 import 'package:quwoquan_app/l10n/copy/gathering_text_constants.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/presentation/my_gatherings_entry_card.dart';

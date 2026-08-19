@@ -22,6 +22,7 @@ for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
 import json
 import tempfile
 
+import pytest
 import yaml
 
 from governance.coverage.coverage_merge import (  # noqa: E402
@@ -248,18 +249,34 @@ def test_wiki_category_members_keeps_ns0_pages_and_ns14_subcats():
     assert subcats == ["Category:杭州园林"]
 
 
-def test_wiki_api_with_retry_backs_off_on_empty_response(monkeypatch):
-    """限流返回空体时必须退避重试，不得静默空产。"""
-    import governance.coverage.discovery as mod
+def test_wiki_api_with_retry_backs_off_on_typed_fetch_failure(monkeypatch):
+    """限流是带类型的抓取失败，必须退避重试；空对象是主机的真实答复，不得重试。
 
-    responses = iter([{}, {}, {"query": {"categorymembers": []}}])
+    传输层已把非 JSON 限流体判为 NetworkFetchError，因此 `{}` 只可能来自主机
+    本身说“没有”。把它当作失败重试会把真空分类误判成限流并凭空多打请求。
+    """
+    import governance.coverage.discovery as mod
+    from content.source.research.network_io import NetworkFetchError
+
+    def _throttled() -> NetworkFetchError:
+        return NetworkFetchError(
+            "https://zh.wikipedia.org/w/api.php",
+            status_code=429,
+            returncode=0,
+            reason="response body is not JSON",
+        )
+
+    responses = iter([_throttled(), _throttled(), {"query": {"categorymembers": []}}])
     calls = {"n": 0}
 
     class _Bridge:
         @staticmethod
         def wiki_api(host, params):
             calls["n"] += 1
-            return next(responses)
+            outcome = next(responses)
+            if isinstance(outcome, NetworkFetchError):
+                raise outcome
+            return outcome
 
     sleeps: list[float] = []
     monkeypatch.setattr(mod.time, "sleep", sleeps.append)
@@ -267,6 +284,46 @@ def test_wiki_api_with_retry_backs_off_on_empty_response(monkeypatch):
     assert calls["n"] == 3
     assert sleeps == [5.0, 10.0], "指数退避"
     assert data == {"query": {"categorymembers": []}}
+
+    class _EmptyBridge:
+        calls = 0
+
+        @classmethod
+        def wiki_api(cls, host, params):
+            cls.calls += 1
+            return {}
+
+    sleeps.clear()
+    assert (
+        mod._wiki_api_with_retry(
+            _EmptyBridge(), "zh.wikipedia.org", {}, retries=3, backoff_seconds=5.0
+        )
+        == {}
+    )
+    assert _EmptyBridge.calls == 1
+    assert sleeps == []
+
+
+def test_wiki_api_with_retry_raises_when_the_budget_is_exhausted(monkeypatch):
+    """退避耗尽后必须留在失败态，由调用方把该分类记入缺口。"""
+    import governance.coverage.discovery as mod
+    from content.source.research.network_io import NetworkFetchError
+
+    class _Bridge:
+        @staticmethod
+        def wiki_api(host, params):
+            raise NetworkFetchError(
+                "https://zh.wikipedia.org/w/api.php",
+                status_code=429,
+                returncode=0,
+                reason="response body is not JSON",
+            )
+
+    monkeypatch.setattr(mod.time, "sleep", lambda _seconds: None)
+    with pytest.raises(NetworkFetchError):
+        mod._wiki_api_with_retry(
+            _Bridge(), "zh.wikipedia.org", {}, retries=2, backoff_seconds=1.0
+        )
 
 
 def test_overpass_query_distinguishes_empty_result_from_failure(monkeypatch):

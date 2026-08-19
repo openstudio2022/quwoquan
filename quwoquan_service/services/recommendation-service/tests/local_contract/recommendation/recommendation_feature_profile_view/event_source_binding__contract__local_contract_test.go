@@ -38,15 +38,19 @@ func TestRecommendationFeatureProjectionDeclaresActualStreamInputs(t *testing.T)
 		"circle.circle_membership.CircleMembershipRequested", "circle.circle_membership.CircleMembershipJoined",
 		"circle.circle_membership.CircleMembershipApproved", "circle.circle_membership.CircleMembershipLeft",
 		"circle.circle_membership.CircleMembershipRoleChanged", "circle.circle_membership.CircleMembershipRejected",
+		"circle.gathering.GatheringParticipationChanged", "circle.gathering.GatheringPublished",
 		"content.post.PostPublished", "content.post.PostUpdated", "content.post.PostSettingsUpdated",
 		"content.post.PostPromotedToWork", "content.post.PostDeleted",
 		"content.post.PostPrivacyRedacted", "content.post.PostPurged",
+		"search.recommendation_signal_fact.SearchRecommendationSignalPublished",
 	}
 	wantConsumers := [][3]string{
 		{"ProjectRecommendationFeatureBehavior", "ContentBehaviorConsumer", "processOnce"},
 		{"ProjectRecommendationTagFeedback", "TagFeedbackConsumer", "processOnce"},
 		{"ProjectRecommendationPersonaRelationship", "PersonaRelationshipConsumer", "processOnce"},
 		{"ProjectRecommendationCircleMembership", "CircleMembershipConsumer", "processOnce"},
+		{"ProjectRecommendationGatheringParticipation", "GatheringParticipationConsumer", "processOnce"},
+		{"ProjectRecommendationGatheringPublication", "GatheringPublicationConsumer", "processOnce"},
 		{"ProjectRecommendationPostLifecycle", "PostLifecycleConsumer", "processOnce"},
 	}
 	gotConsumers := make([][3]string, 0, len(document.Lifecycle.EventConsumers))

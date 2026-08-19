@@ -14,7 +14,10 @@ from content.release.canonical.content_pool_record import latest_pool_record
 from content.release.canonical.environment_release_selection import (
     select_all_publishable_release_posts,
 )
-from content.release.canonical.object_transaction_contract import _tree_digest
+from content.release.canonical.object_transaction_contract import (
+    _tree_digest,
+    is_canonical_document,
+)
 from content.release.canonical.object_transaction_delta import load_transaction_delta
 from content.release.canonical.post_metadata_adoption import (
     PostMetadataAdoptionError,
@@ -24,6 +27,7 @@ from content.release.canonical.post_metadata_adoption import (
 from core.article_package import compute_asset_manifest_sha256
 from core.io import read_json
 
+from support.media_fixture import admit_media_body
 from support.post_object_transaction_fixture import (
     POST_REF,
     _admit_packaged_creator,
@@ -196,6 +200,32 @@ def _source_reviewed_package(tmp_path: Path) -> tuple[Path, Path, Path, str]:
     )
     _admit_packaged_creator(package, publish)
     return execution, package, publish, versioned_ref
+
+
+def _materialize_canonical_predecessor(package: Path, destination: Path) -> None:
+    """Put v1 where an applied transaction would have left it.
+
+    A transaction splits its package: documents become canonical files and every
+    body it carries goes to the content library, so a predecessor staged by copying
+    the whole packaged object would make publish own bytes no transaction could
+    have put there.
+    """
+
+    source_object = package / "object"
+    for source in sorted(source_object.rglob("*")):
+        if not source.is_file():
+            continue
+        relative = source.relative_to(source_object)
+        if not is_canonical_document(relative):
+            admit_media_body(source.read_bytes())
+            continue
+        target = destination / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+    for row in read_json(package / "object_transaction_package.json")["closure"][
+        "casRefs"
+    ]:
+        admit_media_body((package / row["sourceRef"]).read_bytes())
 
 
 def _without_allowed_manifest_changes(document: dict[str, object]) -> dict[str, object]:
@@ -395,15 +425,11 @@ def test_metadata_adoption_uses_existing_audit_apply_and_rollback_without_touchi
     execution, source_package, publish, versioned_ref = _source_reviewed_package(
         tmp_path
     )
+    _materialize_canonical_predecessor(
+        source_package,
+        publish / "posts" / versioned_ref,
+    )
     source_canonical = publish / "posts" / versioned_ref
-    shutil.copytree(source_package / "object", source_canonical)
-    for row in read_json(source_package / "object_transaction_package.json")["closure"][
-        "casRefs"
-    ]:
-        source = source_package / row["sourceRef"]
-        target = publish / row["objectKey"]
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, target)
     source_digest = _tree_digest(source_canonical)
     output_root = tmp_path / "output"
 

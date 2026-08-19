@@ -30,6 +30,10 @@ from core.paths import (
     execution_entity_object_dir,
     execution_root,
 )
+from support.article_source_registry_fixture import (
+    ARTICLE_SOURCE_UNIT_IDENTITY,
+    article_source_registry_binding,
+)
 from support.download_gate_fixture import (
     TASK,
     _attach_image,
@@ -90,10 +94,17 @@ def test_gate_download_blocks_missing_homepage_lane_text_unit():
         quality={"sourceId": "article_base_1", "quality": "A-story", "score": 8},
         platform="去哪儿攻略",
         source_category="travelogue",
+        source_role="base",
         research_lane="article",
         url="https://example.com/a1",
         title="西塘古镇游记",
         target_ref="/entity/地点/景区/西塘古镇",
+        publish_media_mode="illustrated",
+        **ARTICLE_SOURCE_UNIT_IDENTITY,
+        source=article_source_registry_binding(
+            platform="去哪儿攻略",
+            url="https://example.com/a1",
+        ),
     )
     _attach_image(entity_dir / "1.download/sources/01.article_base_1", "xitang_a1")
     write_source_unit(
@@ -104,10 +115,17 @@ def test_gate_download_blocks_missing_homepage_lane_text_unit():
         quality={"sourceId": "article_base_2", "quality": "A-story", "score": 8},
         platform="马蜂窝",
         source_category="travelogue",
+        source_role="base",
         research_lane="article",
         url="https://example.com/a2",
         title="西塘古镇攻略",
         target_ref="/entity/地点/景区/西塘古镇",
+        publish_media_mode="illustrated",
+        **ARTICLE_SOURCE_UNIT_IDENTITY,
+        source=article_source_registry_binding(
+            platform="马蜂窝",
+            url="https://example.com/a2",
+        ),
     )
     _attach_image(entity_dir / "1.download/sources/02.article_base_2", "xitang_a2")
 
@@ -149,10 +167,17 @@ def test_gate_download_ignores_disabled_image_lane_but_blocks_source_shortfall(m
         quality={"sourceId": "article_base_1", "quality": "A-story", "score": 8},
         platform="马蜂窝",
         source_category="travelogue",
+        source_role="base",
         research_lane="article",
         url="https://example.com/a1",
         title="软图景区攻略",
         target_ref="/entity/地点/景区/软图景区",
+        publish_media_mode="text_only",
+        **ARTICLE_SOURCE_UNIT_IDENTITY,
+        source=article_source_registry_binding(
+            platform="马蜂窝",
+            url="https://example.com/a1",
+        ),
     )
     write_json(
         execution_root(TASK)
@@ -260,12 +285,19 @@ def test_gate_download_records_unverified_rights_without_blocking_travel(monkeyp
         quality={"sourceId": "article_base_1", "quality": "A-story", "score": 8},
         platform="马蜂窝",
         source_category="travelogue",
+        source_role="base",
         research_lane="article",
         url="https://example.com/a1",
         title="权利风险景区攻略",
         target_ref="/entity/地点/景区/权利风险景区",
         images=[{"bytes": jpeg_bytes(seed=1), "url": "https://example.com/risky.jpg"}],
         build_variants=False,
+        publish_media_mode="illustrated",
+        **ARTICLE_SOURCE_UNIT_IDENTITY,
+        source=article_source_registry_binding(
+            platform="马蜂窝",
+            url="https://example.com/a1",
+        ),
     )
 
     issues = gate_download(TASK)
@@ -329,10 +361,17 @@ def test_gate_download_blocks_homepage_source_without_base_draft_facts():
         quality={"sourceId": "article_base_1", "quality": "B-fact", "score": 5},
         platform="去哪儿攻略",
         source_category="travelogue",
+        source_role="base",
         research_lane="article",
         url="https://example.com/a1",
         title="织金洞景区攻略",
         target_ref="/entity/地点/景区/织金洞景区",
+        publish_media_mode="text_only",
+        **ARTICLE_SOURCE_UNIT_IDENTITY,
+        source=article_source_registry_binding(
+            platform="去哪儿攻略",
+            url="https://example.com/a1",
+        ),
     )
 
     issues = gate_download(TASK)

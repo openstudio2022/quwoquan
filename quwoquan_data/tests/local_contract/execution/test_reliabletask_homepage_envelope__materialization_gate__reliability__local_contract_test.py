@@ -333,7 +333,7 @@ def test_failed_independent_review_becomes_homepage_author_repair(
 ) -> None:
     from content.execution.controller import (
         homepage_author_finalization,
-        homepage_review_stage,
+        stage_download_build,
     )
     from content.homepage import homepage_review
 
@@ -368,7 +368,7 @@ def test_failed_independent_review_becomes_homepage_author_repair(
         ),
     )
 
-    homepage_review_stage.write_homepage_independent_review_repairs(ctx)
+    stage_download_build._write_homepage_independent_review_repairs(ctx)
 
     assert captured["ref"] == "/entity/地点/景区/测试实体甲"
     assert captured["materialization_messages"] == (

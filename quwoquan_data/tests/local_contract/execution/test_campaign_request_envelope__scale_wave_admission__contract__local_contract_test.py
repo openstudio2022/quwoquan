@@ -7,8 +7,12 @@ from pathlib import Path
 import content.execution.campaign.request_envelope as envelopes
 import pytest
 from content.release.canonical.research_scale_capacity import throughput_basis_digest
+from content.release.canonical.research_scale_promotion_acceptance import (
+    acceptance_binding_fields,
+)
 from core.io import read_json, write_json
 from core.paths import research_scale_promotions_root
+from support.m100_alpha_acceptance_fixture import unproven_acceptance_binding
 from support.campaign_request_envelope_fixture import (
     _expected_count,
     _patch_envelope_deps,
@@ -97,6 +101,15 @@ def _research_m1000_receipt(path: Path) -> Path:
         }
         for row in document["professionalImageSourceMix"]["providerAssetCounts"]
     ]
+    # M1000 promotion 的 schema 要求携带 M100 alpha 验收绑定。本用例只消费 M1000
+    # 的规模谱系与承载计数；验收证据本身由 release 域的 acceptance 用例校验，所以
+    # 这里只需要一份形状完整的绑定。
+    acceptance = unproven_acceptance_binding(
+        promotion_receipt_ref="data/promotions/research-m100.json",
+        readiness_receipt_ref="data/releases/research-release-1/readiness.json",
+        app_uat_receipt_ref="data/releases/research-release-1/app-uat.json",
+    )
+    document.update(acceptance_binding_fields(acceptance, {}))
     m1000_path = (
         research_scale_promotions_root(output_root=path)
         / "research-release-m1000-1"
@@ -195,7 +208,13 @@ def test_m100_and_m1000_are_create_once_current_waves_without_campaign_wide_pool
             == second_payload["quota"]
             == m1000_targets[carrier]
         )
-        assert first_payload["capacityPlanDigest"] == second_payload["capacityPlanDigest"]
+        # DEC-002：capacityPlanDigest 只在 execution freeze 落地，信封只保证两个
+        # wave 是同一份 calibration receipt admitted 出来的。
+        assert "capacityPlanDigest" not in first_payload
+        assert (
+            first_payload["capacityCalibration"]
+            == second_payload["capacityCalibration"]
+        )
         assert first_payload["executionId"] != second_payload["executionId"]
         assert first_payload["requestDigest"] != second_payload["requestDigest"]
         assert "wallClockBudgetSeconds" not in second_payload
@@ -224,8 +243,11 @@ def test_selected_carriers_get_independent_workload_plans_without_host_binding(
     assert set(payloads) == {"homepage", "video"}
     for payload in payloads.values():
         assert payload["workerHostSetBinding"] is None
-        assert payload["requiredWorkers"] == payload["quota"]
-        assert payload["partitionCount"] >= 1
+        # DEC-002：并发上限与分区数由 execution freeze 从 calibration receipt 推导，
+        # 信封只携带被 admit 的 calibration 来源。
+        assert "requiredWorkers" not in payload
+        assert "partitionCount" not in payload
+        assert payload["capacityCalibration"]["calibrationReceiptDigest"]
 
 
 def test_travel_image_m1000_dispatch_does_not_require_predecessor_or_alpha(

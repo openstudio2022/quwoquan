@@ -215,6 +215,7 @@ def build_package(
                         "https://commons.wikimedia.org/w/index.php?"
                         "title=File:Example.jpg&oldid=1"
                     ),
+                    "distributionDecision": "commercial_allowed",
                     "modelReleaseStatus": "not_required",
                     "rightsAuditStatus": "verified",
                     "rightsAuditIssues": [],

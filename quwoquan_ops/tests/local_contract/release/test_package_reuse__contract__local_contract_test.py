@@ -35,6 +35,17 @@ class PackageReuseContractTest(unittest.TestCase):
                 "quwoquan_service/services/user-service/source.txt",
                 "user-source\n",
             ),
+            # Packaging derives the Provider endpoint closure from the capsule
+            # instead of a hard-coded list, and refuses an empty one, so the
+            # fixture workspace has to carry one endpoint workload.
+            (
+                "quwoquan_ops/external/sms-provider-substitute/contract/endpoints.yaml",
+                "endpoints: []\n",
+            ),
+            (
+                "quwoquan_ops/external/sms-provider-substitute/deploy/compose.yaml",
+                "services: {}\n",
+            ),
         ):
             path = self.root / relative
             path.parent.mkdir(parents=True, exist_ok=True)

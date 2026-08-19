@@ -296,6 +296,7 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
                 "creatorProfileId": creator_ref,
                 "authorId": creator_ref,
                 "reviewDecision": "approved",
+                "generator": "agent",
                 "entityRefs": [f"/entity/{entity_ref}"],
                 "sourceAttribution": (
                     _commercial_source_attribution(content_type)

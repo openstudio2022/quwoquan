@@ -386,7 +386,12 @@ def test_safety_entity_and_access_failures_block_before_download(
     assert by_id["passed"]["distributionDecision"] == "research_allowed"
     assert by_id["passed"]["planImageSpec"] is not None
     assert by_id["watermark"]["failureCode"] == "DATA.SOURCE.WATERMARK_BLOCKED"
-    assert by_id["mismatch"]["failureCode"] == "DATA.SOURCE.ENTITY_MISMATCH"
+    # An observed entity that contradicts the frozen discovery candidate is caught
+    # at binding, before any safety evidence is read: the plan is the earlier
+    # authority on which entity this asset was ever allowed to be about.
+    assert (
+        by_id["mismatch"]["failureCode"] == "DATA.SOURCE.DISCOVERY_BINDING_FAILED"
+    )
     assert by_id["evidence-mismatch"]["failureCode"] == "DATA.SOURCE.ENTITY_MISMATCH"
     assert (
         by_id["access-blocked"]["failureCode"] == "DATA.SOURCE.ACCESS_CONTROL_BLOCKED"
@@ -442,13 +447,22 @@ def test_downloaded_thumbnail_is_retained_but_not_accepted(tmp_path: Path) -> No
         ),
     )
     root = tmp_path / "acquisition"
-    receipt, path = acquisition.acquire_professional_images(
-        manifest_path,
-        handoff_ref=tmp_path / "handoff.json",
-        manual_root=manual,
-        output_root=root,
-    )
+    # A batch where nothing reached admission is not a success, but the evidence of
+    # why survives: the receipt is written before the typed failure is raised, and
+    # the failure names it, so the retained thumbnail stays auditable.
+    with pytest.raises(acquisition.ProfessionalImageAcquisitionError) as blocked:
+        acquisition.acquire_professional_images(
+            manifest_path,
+            handoff_ref=tmp_path / "handoff.json",
+            manual_root=manual,
+            output_root=root,
+        )
 
+    assert blocked.value.code == "DATA.SOURCE.ACQUISITION_NO_SUCCESS"
+    receipt = acquisition.load_professional_image_acquisition_receipt(
+        blocked.value.receipt_ref,
+        root=root,
+    )
     row = receipt["assets"][0]
     assert receipt["downloadedAssetCount"] == 1
     assert receipt["acceptedAssetCount"] == 0
@@ -456,13 +470,6 @@ def test_downloaded_thumbnail_is_retained_but_not_accepted(tmp_path: Path) -> No
     assert row["distributionDecision"] == "blocked"
     assert row["failureCode"] == "DATA.SOURCE.IMAGE_QUALITY_BLOCKED"
     assert row["planImageSpec"] is None
-    assert (
-        acquisition.load_professional_image_acquisition_receipt(
-            path.relative_to(root).as_posix(),
-            root=root,
-        )
-        == receipt
-    )
 
 
 def test_acquisition_rejects_discovery_candidate_drift_before_download(

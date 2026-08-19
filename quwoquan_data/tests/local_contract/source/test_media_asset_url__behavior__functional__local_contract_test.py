@@ -13,6 +13,7 @@ SCRIPTS_ROOT = DATA_ROOT / "scripts"
 if str(SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_ROOT))
 
+from core.content_library import MEDIA_KIND, admit_library_bytes  # noqa: E402
 from core.io import read_json, write_json  # noqa: E402
 from core.media_asset_url import (  # noqa: E402
     IMAGE_VARIANT_POLICY_VERSION,
@@ -28,6 +29,14 @@ from core.release_media_binding import bind_release_object_media_assets  # noqa:
 
 
 def _seed_canonical() -> tuple[Path, str, str]:
+    """Seed one canonical post whose body the content library owns.
+
+    A canonical object names its media body by digest instead of carrying it, so
+    packaging resolves the bytes from the library. The body is still written under
+    the canonical root as well, because create-once and byte-identity assertions
+    read it back from there.
+    """
+
     root = Path(tempfile.mkdtemp(prefix="media_asset_url_"))
     payload = b"canonical-cas-asset"
     digest = hashlib.sha256(payload).hexdigest()
@@ -35,6 +44,7 @@ def _seed_canonical() -> tuple[Path, str, str]:
     physical = root / object_key
     physical.parent.mkdir(parents=True)
     physical.write_bytes(payload)
+    admit_library_bytes(payload, kind=MEDIA_KIND)
     post_ref = "posts/article/攻略/毕棚沟攻略/1"
     post = root / post_ref
     write_json(
@@ -136,15 +146,23 @@ def test_cas_key_and_hash_contract() -> None:
     assert sha256_file(canonical / object_key) == "sha256:" + object_key.split("/")[-1].split(".")[0]
 
 
-def test_public_slice_is_kind_scoped_and_accepts_historical_unicode_asset_identity() -> None:
+def test_public_slice_is_kind_scoped_and_derives_ascii_from_canonical_asset_identity() -> None:
+    """A non-ASCII assetId keeps its role and sequence readable in the URL path.
+
+    The display text cannot enter a URL path, but the role and execution sequence
+    of a canonical post assetId already are ASCII, so only the parts that are not
+    get hashed. An identity that is not a canonical post assetId yields no slice
+    key at all: there is nothing to derive a stable, collision-free segment from.
+    """
+
     image_key = build_public_media_slice_key(
-        asset_id="杭州西湖_cover_三潭印月",
+        asset_id="杭州西湖_cover_三潭印月_1_a1b2c3d4",
         kind="image",
         version=1,
         content_type="image/jpeg",
     )
     video_key = build_public_media_slice_key(
-        asset_id="杭州西湖_video_北山街",
+        asset_id="杭州西湖_detail_北山街骑行_2_b2c3d4e5",
         kind="video",
         version=1,
         content_type="video/mp4",
@@ -155,16 +173,18 @@ def test_public_slice_is_kind_scoped_and_accepts_historical_unicode_asset_identi
         version=1,
         content_type="image/png",
     )
-    assert image_key.startswith("media/image/s/asset/unicode-")
-    assert video_key.startswith("media/video/s/asset/unicode-")
+    assert image_key.startswith("media/image/s/asset/cover-1-")
+    assert image_key.endswith("/v1/source.jpg")
+    assert video_key.startswith("media/video/s/asset/detail-2-")
     assert avatar_key == "media/avatar/s/asset/creator_avatar_001/v1/source.png"
     assert len({image_key, video_key, avatar_key}) == 3
-    assert not build_public_media_slice_key(
-        asset_id="bad identity",
-        kind="image",
-        version=1,
-        content_type="image/jpeg",
-    )
+    for refused in ("bad identity", "杭州西湖_cover_三潭印月"):
+        assert not build_public_media_slice_key(
+            asset_id=refused,
+            kind="image",
+            version=1,
+            content_type="image/jpeg",
+        )
 
 
 def test_release_manifest_unifies_avatar_image_video_identity_and_rights() -> None:
@@ -187,6 +207,7 @@ def test_release_manifest_unifies_avatar_image_video_identity_and_rights() -> No
         physical = canonical / object_key
         physical.parent.mkdir(parents=True, exist_ok=True)
         physical.write_bytes(payload)
+        admit_library_bytes(payload, kind=MEDIA_KIND)
         root = canonical / object_kind / object_ref
         write_json(
             root / "asset.refs.json",

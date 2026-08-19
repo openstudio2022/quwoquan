@@ -60,8 +60,12 @@ from core.paths import (  # noqa: E402
     execution_entity_object_dir,
     execution_root,
 )
-from core.source_digest import current_source_digest  # noqa: E402
+from core.source_digest import current_source_definition_snapshot  # noqa: E402
 from governance.creators.assignment import creator_assignment_from_profile  # noqa: E402
+from support.article_source_registry_fixture import (  # noqa: E402
+    ARTICLE_SOURCE_UNIT_IDENTITY,
+    article_source_registry_binding,
+)
 from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
 from support.media_fixture import seed_system_creator_avatar_holding  # noqa: E402
 
@@ -73,10 +77,10 @@ ANGLE = "攻略"
 def _freeze_source_digest_during_one_test(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    frozen = current_source_digest()
+    frozen = current_source_definition_snapshot()
     monkeypatch.setattr(
         execution_workspace,
-        "current_source_digest",
+        "current_source_definition_snapshot",
         lambda: frozen,
     )
 
@@ -195,10 +199,17 @@ def _materialize() -> tuple[Path, list[Path]]:
         title="都江堰来源",
         target_ref="/entity/地点/景区/都江堰",
         execution_id=EXECUTION_ID,
-        source_use_mode="factual_reference_only",
         research_lane="article",
         publish_media_mode="text_only",
-        source={"sourceAttribution": _source_attribution()},
+        source_role="base",
+        **ARTICLE_SOURCE_UNIT_IDENTITY,
+        source={
+            **article_source_registry_binding(
+                platform="Curated Research",
+                url="https://example.com/dujiangyan",
+            ),
+            "sourceAttribution": _source_attribution(),
+        },
     )
     source_ref = str(source_manifest["sourceRef"])
     # 同一 (type,angle,title) 两篇（ref 排序 a<b → 1,2），另一标题一篇。

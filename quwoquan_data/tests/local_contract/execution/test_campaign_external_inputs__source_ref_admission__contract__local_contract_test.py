@@ -17,6 +17,7 @@ from content.execution.campaign.external_inputs import (
 )
 from core.io import write_json
 from core.source_digest import ExecutionBundleIdentity, SourceDefinitionSnapshot
+from support.capacity_calibration_fixture import synthetic_capacity_source_binding
 from support.campaign_external_inputs_fixture import (  # noqa: F401
     CATALOG_DIGEST,
     SOURCE_DIGEST,

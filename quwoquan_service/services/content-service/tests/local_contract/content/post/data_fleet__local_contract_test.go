@@ -182,6 +182,7 @@ func TestDataFleetReadRequestAcceptsBoundAuthorAndPublishJobs(t *testing.T) {
 		"partitionCount":            16,
 		"partitionAlgorithm":        "sha256_carrier_object_ref_mod_v1",
 		"checkpointPolicy":          testCheckpointPolicy(),
+		"requireCommercial":         true,
 		"recoverDeadTasks":          false,
 		"objectTimeoutMilliseconds": 120000,
 		"globalRequiredQuota":       1,
@@ -216,7 +217,8 @@ func TestDataFleetReadRequestAcceptsBoundAuthorAndPublishJobs(t *testing.T) {
 		t.Fatal(err)
 	}
 	executionJobs := decoded.ExecutionJobs()
-	if decoded.RecoverDeadTasks == nil ||
+	if !decoded.RequireCommercial ||
+		decoded.RecoverDeadTasks == nil ||
 		*decoded.RecoverDeadTasks ||
 		decoded.ObjectTimeout().Milliseconds() != 120000 ||
 		decoded.RequiredQuota != 1 ||

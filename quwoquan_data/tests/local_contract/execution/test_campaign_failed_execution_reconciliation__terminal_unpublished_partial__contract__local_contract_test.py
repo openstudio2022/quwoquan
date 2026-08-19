@@ -311,10 +311,12 @@ def test_terminal_unpublished_shortfall_allows_carrier_retry_with_new_target(
     assert receipt["errorCode"] == (
         "DATA.CAMPAIGN.TERMINAL_UNPUBLISHED_RETRYABLE_SHORTFALL"
     )
-    assert path.parent.name == "terminal-unpublished-retryable-shortfall"
-    assert path.stem == receipt["observedSourceIdentity"]["sourceRevision"].split(
-        ":", 1
-    )[1]
+    # A campaign has exactly one create-once reconciliation receipt, so the reason
+    # and the observed identity are fields inside it rather than path segments:
+    # deriving the path from either would let one campaign hold two verdicts.
+    assert path.parent.name == "reconciliation"
+    assert path.name == "submission-only-abandonment.json"
+    assert receipt["observedSourceIdentity"]["sourceRevision"].startswith("sha256:")
     assert predecessors == {"article": execution_ids["article"]}
     assert targets == ("乐山大佛",)
     assert loaded == receipt

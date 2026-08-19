@@ -23,6 +23,7 @@ from core.source_digest import (
     SourceDefinitionSnapshot,
     content_source_revision,
 )
+from support.capacity_calibration_fixture import synthetic_capacity_source_binding
 
 SOURCE_A = "sha256:" + "a" * 64
 SOURCE_B = "sha256:" + "b" * 64
@@ -403,6 +404,20 @@ def test_envelopes_bind_handoff_and_derive_article_no_acquisition(
             else [{"kind": "professional_image_acquisition"}]
         ),
     )
+    # Every envelope now freezes a governed capacity source; this test is about
+    # handoff identity, so it binds the synthetic calibration rather than the
+    # governed M100 receipt.
+    capacity_ref = Path("data/local/tests/capacity/local-contract-capacity.json")
+    monkeypatch.setattr(
+        envelope_build,
+        "resolve_capacity_calibration_ref",
+        lambda ref: Path(ref),
+    )
+    monkeypatch.setattr(
+        envelope_build,
+        "bind_capacity_calibration_source",
+        lambda **_kwargs: synthetic_capacity_source_binding(),
+    )
 
     wave_targets = ("测试实体",)
     homepage = envelopes.build_envelope(
@@ -415,6 +430,7 @@ def test_envelopes_bind_handoff_and_derive_article_no_acquisition(
         workloads={"homepage": 1},
         pre_acquisition_handoff=handoff_path,
         pre_acquisition_handoff_output_root=output_root,
+        capacity_calibration_receipt=capacity_ref,
         external_input_refs=[{"kind": "professional_image_acquisition"}],
     )
     article = envelopes.build_envelope(
@@ -427,6 +443,7 @@ def test_envelopes_bind_handoff_and_derive_article_no_acquisition(
         workloads={"article": 1},
         pre_acquisition_handoff=handoff_path,
         pre_acquisition_handoff_output_root=output_root,
+        capacity_calibration_receipt=capacity_ref,
     )
 
     assert homepage["preAcquisitionHandoff"]["handoffId"] == (
@@ -452,6 +469,7 @@ def test_envelopes_bind_handoff_and_derive_article_no_acquisition(
             workloads={"article": 1},
             pre_acquisition_handoff=handoff_path,
             pre_acquisition_handoff_output_root=output_root,
+            capacity_calibration_receipt=capacity_ref,
         )
 
 

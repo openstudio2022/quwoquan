@@ -36,8 +36,20 @@ func TestRecommendationCandidateProjectionDeclaresProductionConsumers(t *testing
 		{Name: "ProjectRecommendationCandidateGatheringLifecycle", Facet: "GatheringLifecycleConsumer", Method: "processOnce"},
 	}
 	if !reflect.DeepEqual(object.SourceEvents, wantEvents) ||
-		!reflect.DeepEqual(object.EventConsumers, wantConsumers) || len(operations) != 0 {
-		t.Fatalf("candidate event binding drifted: object=%+v operations=%+v", object, operations)
+		!reflect.DeepEqual(object.EventConsumers, wantConsumers) {
+		t.Fatalf("candidate event binding drifted: object=%+v", object)
+	}
+	// operations 不自撰事件事实：入口只能绑定 object.lifecycle.event_consumers
+	// 已声明的 handler。五个上游消费者共用一个投影指标，object/kind/phase
+	// 唯一约束下只允许声明主 handler 这一条遥测入口。
+	declared := make(map[consumerBinding]bool, len(object.EventConsumers))
+	for _, consumer := range object.EventConsumers {
+		declared[consumer] = true
+	}
+	for _, entrypoint := range operations {
+		if !declared[entrypoint] {
+			t.Fatalf("runtime entrypoint %+v is not a declared lifecycle consumer", entrypoint)
+		}
 	}
 }
 

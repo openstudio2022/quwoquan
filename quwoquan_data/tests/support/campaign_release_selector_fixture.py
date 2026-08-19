@@ -9,6 +9,7 @@ from content.release.canonical.campaign_release import CampaignReleaseRoots
 from core.runtime_policy import runtime_profile_digest
 from core.schema import assert_valid
 from core.source_digest import ExecutionBundleIdentity, SourceDefinitionSnapshot
+from support.capacity_calibration_fixture import synthetic_capacity_source_binding
 from support.semantic_preflight_fixture import ready_semantic_preflight
 
 
@@ -114,7 +115,7 @@ def _source_attribution(carrier: str) -> dict[str, object]:
         "attributionText": f"fixture {carrier} attribution",
         "rightsBasis": "fixture licensed source",
         "commercialAuthorizationStatus": "verified",
-        "distributionDecision": "research_allowed",
+        "publicationAdmission": "research_release",
         "watermarkStatus": "absent",
         "audioRightsStatus": "no_audio",
         "modelReleaseStatus": "not_applicable",
@@ -347,9 +348,7 @@ def _fixture(
             "selector": "auto",
             "quota": exact_workloads[carrier],
             "count": exact_workloads[carrier],
-            "requiredWorkers": 1,
-            "partitionCount": 16,
-            "capacityPlanDigest": "sha256:" + "6" * 64,
+            "capacityCalibration": synthetic_capacity_source_binding(),
             "workerHostSetBinding": None,
             "topic": None,
             "targetNames": ["测试实体"],
@@ -360,6 +359,7 @@ def _fixture(
             "sourcePoolEvidenceRootRef": pool_evidence_ref,
             "sourcePoolSelection": pool_selections[carrier],
             "retryOf": retry_of,
+            "retryUnfinishedRefs": [],
             "gitBranch": "dev1.0",
             "gitCommitSha": "d" * 40,
             "sourceRevision": source_revision,
@@ -407,6 +407,7 @@ def _fixture(
         "entityCatalogDigest": CATALOG_DIGEST,
         "semanticSelectionId": "default",
         "semanticPreflightReceipt": semantic_preflight_binding,
+        "capacityCalibration": synthetic_capacity_source_binding(),
         "scaleSourcePool": pool_binding,
         "sourcePoolEvidenceRootRef": pool_evidence_ref,
         "laneSourcePoolSelections": pool_selections,

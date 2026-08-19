@@ -393,7 +393,6 @@ def prepare(
     fleet_request = build_fleet_request(
         EXECUTION_ID,
         QueueJobStage.PUBLISH,
-        required_workers=2,
     )
     request_jobs = fleet_request.get("jobs")
     if not isinstance(request_jobs, list) or len(request_jobs) != 1:

@@ -150,6 +150,24 @@ SOURCE_TEXT = (
     + "\n"
 )
 
+SOURCE_ATTRIBUTION = {
+    "isOriginal": False,
+    "originalCreatorName": "内部整理",
+    "platform": "curated",
+    "sourcePostUrl": "https://example.com/sanxingdui",
+    "originalAssetUrl": "https://example.com/sanxingdui/cover.jpg",
+    "attributionText": "内部整理 / curated",
+    "rightsBasis": "internal curated licensed adaptation",
+    "commercialAuthorizationStatus": "unverified",
+    "publicationAdmission": "research_release",
+    "watermarkStatus": "absent",
+    "audioRightsStatus": "no_audio",
+    "modelReleaseStatus": "not_required",
+    "propertyReleaseStatus": "not_required",
+    "collectedAt": "2026-08-05T00:00:00Z",
+    "takedownPolicy": "remove on substantiated request",
+}
+
 # 第 6 段（不足）的轻改版本：成品对底稿做去语病/语气适配的"轻改"，使留存率落在
 # [55%,99.5%]（既非脱稿从零另写，也非整篇零加工逐字照搬）。其余段落保留底稿骨架。
 _REWORDED_DRAWBACK = (
@@ -243,6 +261,9 @@ def _seed_sources() -> str:
         title="sample",
         target_ref=f"/entity/地点/博物馆/{ENTITY}",
         relevance=f"{ENTITY} 的参观与展陈体验",
+        # 内部整理来源没有站点注册表条目，只能自带 attribution：文章车道的可交付
+        # 来源单元要么显式携带 attribution，要么由注册表解析，二者缺一即 fail-closed。
+        source={"sourceAttribution": SOURCE_ATTRIBUTION},
         images=[{"sourcePath": str(path), "caption": f"{ENTITY} 图{k}", "relevance": f"{ENTITY} 图{k}"} for k, path in enumerate(image_paths)],
     )
     return str(base_manifest["sourceRef"])
