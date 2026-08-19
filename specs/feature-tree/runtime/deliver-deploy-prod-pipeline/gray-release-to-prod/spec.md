@@ -51,7 +51,9 @@
 - dry-run 不写 hosted ledger，只允许完成 `canary` 只读校验并明确报告 `5/20/50/100` 未执行，不得生成正式发布回执。
 - 生产晋级与恢复只比较 `fromCandidateDigest/toCandidateDigest`；镜像 transport tag 与配置包路径/摘要只用于实际装配。
 - workflow 创建后达到 1500 秒时不得开始下一 rollout stage；整个主链超过 1800 秒即失败，600 秒以上必须标记 `released_over_soft_budget`。
-- production approval 分段计时只接受绑定当前 repository、workflow run、head SHA 与 `production` environment 的 durable review event；Deployment/Deployment Status 的 `pending/queued/in_progress` 不得被解释为 reviewer 请求或批准时刻。
+- production approval 分段计时只接受绑定当前 repository、workflow run、head SHA、candidate digest 与 `production` environment 的 durable review event；Deployment/Deployment Status 的 `pending/queued/in_progress` 不得被解释为 reviewer 请求或批准时刻。
+- 当前私有仓套餐不支持原生 required reviewers 时，唯一替代路径是受控 GitHub App/webhook 接收官方事件并写入独立 hosted append-only approval authority。接收面必须验证 GitHub webhook 签名、delivery ID 幂等、event/action 闭集、installation/repository/environment/run/head SHA/candidate/reviewer 绑定与 request→approved 顺序；workflow 只消费 hosted exact-byte readback。
+- 外部 approval authority 不得声明或暗示原生 branch protection/environment protection 已启用；回执必须显式 `nativeProtection=false` 与 `enforcement=external_hosted_ledger`。缺 webhook、签名、request 或 approved 任一事实时保持 `historical_incomplete + GATE_BLOCK`。
 
 ## 4. 契约引用
 
@@ -67,6 +69,7 @@
 - WHEN 参与者执行“灰度发布到生产”对应的公开行为。
 - THEN **统一入口**：workflow 与人工命令最终都收敛到 `stackctl deploy --target prod-hosted ...`。
 - AND 受控正式发布只申请一次 production approval、只物化一次 canonical evidence，并在同一事务 job 内依次执行 `canary、5、20、50、100`。
+- AND 当前套餐下 request/approved 由验签 GitHub webhook 写入 hosted append-only authority，workflow exact-byte 回读同一 candidate；该事实明确不冒充原生 protection。
 - AND dry-run 只读且不会伪造 `5/20/50/100` ledger；正式 apply 的失败会产生绑定候选摘要的 rollback 回执。
 - AND 失败时返回 canonical failure，且不产生伪成功事实。
 
@@ -103,9 +106,9 @@
 - 类型：`external_blocker`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：GitHub Deployment、Deployment Status 与 Actions review-history 的当前只读响应没有同时给出 required-reviewer 请求和批准的明确事件时间；用 `queued/in_progress` 或 Prod job `started_at` 替代会把 runner/concurrency queue 误算成审批，造成 timing 假绿。
-- 完成判定：`GWT-001` 的“只申请一次 production approval”分项可被真实证据裁定——hosted release ledger 持久化显式 production review request/approved 事件及接收时间，并严格绑定 repository、workflow run、head SHA、environment 和 reviewer decision；`CiTimingSummary` 能据此生成 approvalRequestedAt、approvalApprovedAt、humanDecisionWait 与 approvalWait，且不再存在对应 `missingEvidence`。
-- 依赖：GitHub 官方可订阅的 explicit review event、受控 GitHub App/webhook 接收面与 hosted ledger 不可变回读。
+- 影响或价值：GitHub Deployment、Deployment Status 与 Actions review-history 的当前只读响应没有同时给出 required-reviewer 请求和批准的明确事件时间；私有仓当前套餐也无法启用原生 required reviewers。用 `queued/in_progress` 或 Prod job `started_at` 替代会把 runner/concurrency queue 误算成审批，造成 timing 假绿。
+- 完成判定：`GWT-001` 的“只申请一次 production approval”分项由受控 GitHub App/webhook 与 hosted authority 直接覆盖——webhook 验签后 append-only 持久化 request/approved 事件及接收时间，严格绑定 delivery ID、installation、repository、workflow run、head SHA、candidate、environment 与 reviewer decision；workflow exact-byte 回读生成 approvalRequestedAt、approvalApprovedAt、humanDecisionWait 与 approvalWait，且回执声明 `nativeProtection=false`、`enforcement=external_hosted_ledger`，不再存在对应 `missingEvidence`。
+- 依赖：GitHub 官方可订阅事件、GitHub App installation/webhook secret、受控接收面与 hosted approval authority 不可变回读。
 
 <a id="open-002"></a>
 ### OPEN-002 灰度发布到生产 验收证据

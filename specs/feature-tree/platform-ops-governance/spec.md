@@ -63,6 +63,8 @@
 - mutable runtime 退出不得删除 named volume，也不得从当前源码重渲染旧 runtime；只有 Compose 资源释放、volume 保留和 canonical port 收敛均被回读后，receipt 才能进入 `stopped`。
 - 任一 mutable runtime 身份或收敛检查失败必须返回 typed `GATE_BLOCK`，不得写入成功事实。
 - immutable runtime 退出必须绑定 canonical running startup receipt 与其 `candidateDigest` 对应的只读 candidate root；candidate 自身 package/Graph/provider/observability/Compose 字节仍须完整校验，但不得因当前工作区已生成下一版 Graph 而拒绝停止旧 candidate。
+- 私有仓无法启用原生 required reviewers 时，生产审批事实由本领域独立 hosted approval authority 拥有。受控 GitHub App/webhook 只接收官方 event/action 闭集，验证签名与 delivery ID 后按 request→approved 追加，并绑定 installation、repository、workflow run、head SHA、candidate、environment 与 reviewer decision。
+- workflow 只按 candidate/run 读取 hosted exact-byte approval readback；该 readback 必须声明 `nativeProtection=false` 与 `enforcement=external_hosted_ledger`。缺 request/approved、签名无效、重复 delivery 不同 payload、顺序或身份漂移均 `GATE_BLOCK`，不得用 job queue、Deployment status 或人工布尔值替代。
 
 <a id="req-003"></a>
 ### REQ-003 候选绑定的保留数据修复必须在业务 API 启动前完成
@@ -85,6 +87,7 @@
 - 禁止结果：不得绕过本领域公开 command/query/event 写入其拥有事实。
 - 禁止结果：不得用当前工作树重新推断旧 runtime、手工删除容器、purge volume，或在资源未收敛时伪造 `stopped` receipt。
 - 可观察结果：immutable teardown 在当前 workspace 前进后仍从 receipt candidate 自身恢复精确 Provider/observability/image composition，受控释放旧 Compose 容器与网络并保留 named volumes。
+- 可观察结果：GitHub webhook request/approved 事件经签名验证后进入独立 append-only approval authority，同一 delivery 幂等、不同 payload 冲突，workflow exact-byte 回读同一 candidate 且明确不冒充原生 protection。
 
 <a id="dom-002"></a>
 ### DOM-002 active release 保留数据修复与启动前证据

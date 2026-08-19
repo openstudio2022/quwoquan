@@ -33,6 +33,8 @@
 - 理由：建立平台侧可观测、配置治理、服务治理、安全隐私、发布回滚的统一治理能力。
 - 被否决方案：由调用方、页面或脚本复制本层状态并绕过公开契约。
 - 约束与影响：实现只能细化对应规格与 canonical contract；冲突时先修正规格或契约。
+- 生产审批 authority 与 rollout ledger、timing ledger 分离：webhook 接收面只 append event，审批 readback 只按 repository/run/head/candidate/environment 查询；部署编排只消费 readback，不拥有 reviewer decision。
+- 私有仓当前套餐下该 authority 是外部硬门，不是 GitHub 原生 branch/environment protection 的副本或兼容层。任何用户可见或机器回执必须保留 `nativeProtection=false`。
 - 关联要求：`REQ-001`
 - 关联能力：[`commercial-readiness-risk-closure`](./commercial-readiness-risk-closure/spec.md)、[`config-and-reliability-governance`](./config-and-reliability-governance/spec.md)、[`observability-and-alerting`](./observability-and-alerting/spec.md)、[`security-privacy-audit`](./security-privacy-audit/spec.md)
 

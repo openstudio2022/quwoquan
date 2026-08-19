@@ -114,7 +114,7 @@
 - 并发上限只约束任一时刻可同时运行的 worker 进程数，不构成 submission、dispatch、对象准入或 promotion 的前置条件。达不到上限、只跑一路或全部串行完成都不改变任何对象的准入与发布结果。
 - 来源发现阶段的 `autoResearchMaxConcurrentWorkers` 与 ReliableTask 交付阶段的 `fleetMaxConcurrentWorkers` 只能由 immutable execution policy 冻结。runtime profile、环境变量、命令行默认值与任何探针观测都不是合法来源。
 - preflight capacity soak 与 workspace smoke 的 `effectiveConcurrency` 只描述探针当时的实际并行度，是诊断观测而不是生产上限；把它投影成上限即为非法来源，必须 fail closed。
-- `local-apple-silicon + cursor_grok` 的容量来源是 create-once receipt `quwoquan_data/control_plane/_shared/capacity_calibration/m100-wave-soak-20260818-v4/receipt.json`（摘要 `sha256:653180ed007d37bd01644f5d19e27b406532cf026a701086a0e06b2beda744f0`）：`autoResearchMaxConcurrentWorkers=8`、`fleetMaxConcurrentWorkers=3`、`objectWallClockSeconds=660`、`completionGraceSeconds=60`。该自包含闭包绑定 100/100 零 429/auth/5xx/timeout/bridge-disconnect 的 `cursor_grok` probe、1.57GB RSS / 1118.5% CPU / 8 bridge 峰值、真实 fleet peak=3 与 20 个逐对象 timing；超出适用范围或任一 evidence ref/digest 漂移即 execution 冻结失败。
+- `local-apple-silicon + cursor_grok` 的容量来源是 create-once receipt `quwoquan_data/control_plane/_shared/capacity_calibration/m100-wave-soak-20260818-v4/receipt.json`（摘要 `sha256:653180ed007d37bd01644f5d19e27b406532cf026a701086a0e06b2beda744f0`）：`autoResearchMaxConcurrentWorkers=8`、`fleetMaxConcurrentWorkers=3`、`objectWallClockSeconds=660`、`completionGraceSeconds=60`。该自包含闭包绑定 100/100 零 429/auth/5xx/timeout/bridge-disconnect 的 `cursor_grok` probe、1.57GB RSS / 1118.5% CPU / 8 bridge 峰值、真实 fleet peak=3 与 20 个逐对象 timing；超出适用范围或任一 evidence ref/digest 漂移即 execution 冻结失败。该 receipt 的字节在 20260818 事故中永久缺失且从未被版本控制跟踪，摘要绑定在重新 soak 之前不可校验，见 `OPEN-006`。
 - `execution_state` 中 `managedAgentScheduler` 的 `promptCount` 是单个 managed checkpoint 内语义 Agent prompt 级调度的运行观测。它既不是资源上限，也不是 ReliableTask 的 worker 进程并行度，两个维度不得互相读取或互相推导，该对象也不得以 worker 词元命名任何 prompt 级观测。
 - `approvedQuota`（对象下限）、`targetObjectCount`（本次冻结的工作单元数，也是派生 job 数）与并行上限是三个互不相同的语义，必须在执行策略中各自显式冻结。任一字段不得同时承载其中两个语义，`requiredWorkers` 不得继续由工作单元数或 quota 派生。
 - 规模只改变 wave 数：job 数增长只增加 wave 数，不增加任一时刻同时运行的 worker 进程数。wave 数只由 job 数与冻结的并行上限决定，与 quota 无关。
@@ -386,3 +386,14 @@
 - 尚缺验收证据：缺少可控时钟 local_contract 和真实进程被强制杀死后的 api_integration，后者必须证明心跳停止、typed 过期与最后心跳事实保留。
 - 完成判定：`GWT-014` 的全部结果子句成立，且心跳间隔与过期阈值来自 calibration receipt，而不是默认常量或从容量上限、单对象 wall-clock 挪用的数值。
 - 依赖：Data owner 先在可代表主清单的样本上标定单实体耗时分布与心跳写入开销，再实现心跳读写面。local_contract 覆盖持续心跳、在场为空和 typed 失败；api_integration 覆盖真实进程终止后的过期判定；环境消费证据由 `OPEN-001` 承接。
+
+### OPEN-006 `m100-wave-soak-20260818-v4` calibration receipt 字节永久缺失
+
+- 类型：`external_blocker`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：`REQ-006` 把 `local-apple-silicon + cursor_grok` 的容量来源指向 `quwoquan_data/control_plane/_shared/capacity_calibration/m100-wave-soak-20260818-v4/receipt.json` 并绑定摘要 `sha256:653180ed007d37bd01644f5d19e27b406532cf026a701086a0e06b2beda744f0`，但该目录在 20260818 工作区删除事故中属于未跟踪目录，成员文件从未被任何提交或快照枚举，事故台账判定为 L3 永久缺失。receipt 自包含闭包内含 20 个逐对象 timing 与 soak evidence 摘要，无法从 spec 复述的结论数值反推，因此该摘要绑定在重新 soak 之前不可校验，容量数值只剩 spec 文本一处来源。
+- 尚缺实现：`capacity_calibration_cli` 的 receipt 产出必须落到**被 git 跟踪**的 create-once 路径；当前 `control_plane/_shared/capacity_calibration/` 未纳入版本控制，任何干净检出都读不到 receipt，等价于该容量来源在 CI 中从不存在。
+- 尚缺验收证据：`test_repository_capacity_calibration_receipt_is_self_contained` 在干净检出上必然 `GATE_BLOCK`（receipt is missing）。禁止以手写 receipt 或改小断言的方式转绿——伪造的 receipt 不可能命中已冻结摘要，改断言等于放弃摘要绑定。
+- 完成判定：Data owner 重跑 `local-apple-silicon + cursor_grok` 的 M100 wave soak，由 `capacity_calibration_cli` 产出新 receipt 并提交入库，同步更新 `REQ-006` 与设计中的 calibrationId 与摘要；在此之前该容量来源保持 `GATE_BLOCK`，不得由默认常量、runtime profile 或探针观测替代。
+- 依赖：需要真实 `cursor_grok` provider 额度与本机 fleet 资源完成 100 对象 soak，属于事故永久证据损失的补测，不可由本轮恢复合成。
