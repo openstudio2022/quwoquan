@@ -74,9 +74,11 @@ Future<Box<String>?> openStringBoxOrNull(String name) async {
 ## 门禁
 
 ```bash
-python3 quwoquan_app/scripts/runtime/observability/verify_null_failure_isolation.py
+make verify-app-null-failure-isolation
 make verify-service-nil-semantics
 ```
+
+两者已接入 `make gate` → `quwoquan_ops/gate/gate_repo.sh` 的 `run_app` / `run_cloud`。
 
 - Dart 侧**无 allowlist 也无基线**：解析器约定与证据要求都能自动判定，没有可调的旋钮，
   新增只能是 BLOCK。

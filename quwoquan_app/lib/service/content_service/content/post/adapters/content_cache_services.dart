@@ -8,6 +8,7 @@ import 'package:quwoquan_app/service/content_service/content/post/domain/generat
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_detail_payload.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_app/runtime/transport/models/cursor_page.dart';
+import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/content_activation_identity.dart';
 import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/discovery_feed_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_projection_codec.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/content_read_model_projection.dart';
@@ -116,11 +117,18 @@ class ContentQuerySnapshot {
     this.policyDigest,
     this.outcome = ContentFeedOutcome.content,
     this.emptyReason,
+    this.activationIdentity,
   }) {
     final digest = policyDigest;
     if (digest != null && !isCanonicalSha256Digest(digest)) {
       throw const FormatException(
         'policyDigest must be a canonical SHA-256 digest',
+      );
+    }
+    if (activationIdentity != null &&
+        emptyReason == ContentFeedEmptyReason.noActiveRelease) {
+      throw const FormatException(
+        'no_active_release must not carry a content activation identity',
       );
     }
   }
@@ -138,6 +146,9 @@ class ContentQuerySnapshot {
   final String? policyDigest;
   final ContentFeedOutcome outcome;
   final ContentFeedEmptyReason? emptyReason;
+
+  /// 快照绑定的运行时内容激活身份；`null` 表示不绑定 release 的查询。
+  final ContentActivationIdentity? activationIdentity;
 
   CursorPage<ContentPostViewData> toCursorPage() {
     return CursorPage<ContentPostViewData>(
@@ -166,6 +177,7 @@ class ContentQuerySnapshot {
       paginationExpiresAt: paginationIsUsable ? paginationExpiresAt : null,
       feedRequestId: feedRequestId,
       policyDigest: policyDigest,
+      activationIdentity: activationIdentity,
     );
   }
 
@@ -182,6 +194,8 @@ class ContentQuerySnapshot {
       'policyDigest': policyDigest,
       'outcome': outcome.name,
       'emptyReason': _feedEmptyReasonToWire(emptyReason),
+      'activationReleaseId': activationIdentity?.releaseId,
+      'activationManifestDigest': activationIdentity?.manifestDigest,
     };
   }
 
@@ -228,6 +242,11 @@ class ContentQuerySnapshot {
         policyDigest: _optionalSnapshotPolicyDigest(map['policyDigest']),
         outcome: outcome,
         emptyReason: emptyReason,
+        activationIdentity: resolveContentActivationIdentity(
+          releaseId: map['activationReleaseId']?.toString(),
+          manifestDigest: map['activationManifestDigest']?.toString(),
+          emptyReason: emptyReason,
+        ),
       );
     } catch (error, stackTrace) {
       // 快照损坏时按「无缓存」继续，但损坏本身是真实故障，必须留证据。
@@ -555,6 +574,26 @@ class ContentQuerySnapshotStore {
   int _hydrationGeneration = 0;
   Future<void>? _persistenceDrain;
   bool _persistenceDirty = false;
+  ContentActivationIdentity? _activationIdentity;
+  bool _activationIdentityAdopted = false;
+
+  /// 采纳远端权威下发的运行时内容激活身份。
+  ///
+  /// 身份切换只改变「哪一批 release-bound 快照可回放」，不删除快照：服务端回滚
+  /// 到旧 release 时同一次采纳即原子恢复。采纳 `null`（`no_active_release`）后
+  /// 任何绑定 release 的快照都不得回放；不绑定 release 的快照不受影响。
+  void adoptContentActivationIdentity(ContentActivationIdentity? identity) {
+    _activationIdentity = identity;
+    _activationIdentityAdopted = true;
+  }
+
+  bool _isReplayable(ContentQuerySnapshot snapshot) {
+    final bound = snapshot.activationIdentity;
+    if (bound == null || !_activationIdentityAdopted) {
+      return true;
+    }
+    return bound == _activationIdentity;
+  }
 
   Future<void> ensureHydrated() async {
     if (!_persistToPreferences) {
@@ -599,6 +638,9 @@ class ContentQuerySnapshotStore {
       return null;
     }
     _snapshots[normalized] = snapshot;
+    if (!_isReplayable(snapshot)) {
+      return null;
+    }
     final freshness = age <= freshFor
         ? CacheFreshness.fresh
         : CacheFreshness.stale;
@@ -629,6 +671,7 @@ class ContentQuerySnapshotStore {
     String? policyDigest,
     ContentFeedOutcome outcome = ContentFeedOutcome.content,
     ContentFeedEmptyReason? emptyReason,
+    ContentActivationIdentity? activationIdentity,
   }) {
     final normalized = key.trim();
     if (normalized.isEmpty) {
@@ -656,6 +699,7 @@ class ContentQuerySnapshotStore {
       policyDigest: policyDigest,
       outcome: outcome,
       emptyReason: emptyReason,
+      activationIdentity: activationIdentity,
       fetchedAt: _now(),
     );
     _diskBackedKeys.remove(normalized);

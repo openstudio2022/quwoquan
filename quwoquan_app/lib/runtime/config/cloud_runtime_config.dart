@@ -1,3 +1,6 @@
+import 'package:quwoquan_app/runtime/errors/generated/ops/ops_event_record_errors.g.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
+
 /// compile-time 业务环境配置缺失或非法。
 ///
 /// 该异常只承载脱敏的 define 键集合，不承载 URL、token 或原始异常文本。
@@ -586,6 +589,47 @@ class CloudRuntimeConfig {
   /// 只用于启动证据的环境摘要；绝不返回 URL。
   static Map<String, String> get runtimeDefineSummary {
     return _resolution.runtimeDefineSummary;
+  }
+
+  /// runtime package 未水合或非法时的 typed unavailable；配置完整时返回 null。
+  ///
+  /// 业务请求不得在配置不可用时抛裸异常或拼装半份配置，故此处只返回脱敏的
+  /// configurationState 与缺失键集合，绝不返回 URL。
+  static RuntimeFailure? runtimeAvailabilityFailure() {
+    final summary = runtimeDefineSummary;
+    final configurationState = summary['configurationState'] ?? 'invalid';
+    if (configurationState == 'complete') {
+      return null;
+    }
+    const errorCode = OpsEventRecordErrorCode.startupConfigurationInvalid;
+    return RuntimeFailure(
+      code: errorCode.code,
+      semanticReason: errorCode.name,
+      transportStatus: errorCode.httpStatus,
+      origin: RuntimeFailureOrigin.localClient,
+      kind: RuntimeFailureKind.unavailable,
+      nature: RuntimeFailureNature.transient,
+      location: const RuntimeFailureLocation(
+        businessObject: 'runtime.startup',
+        functionModule: 'runtime_config',
+      ),
+      context: RuntimeFailureContext(
+        attributes: <RuntimeContextAttribute>[
+          RuntimeContextAttribute(
+            key: 'configurationState',
+            value: configurationState,
+          ),
+          RuntimeContextAttribute(
+            key: 'invalidDefineKeys',
+            value: summary['missingKeys'] ?? '',
+          ),
+        ],
+      ),
+      recovery: const RuntimeRecoveryDirective(
+        action: 'retry',
+        disruptionLevel: 'inline',
+      ),
+    );
   }
 
   /// 正式启动必须获得同一环境包的网关与四类媒体 authority。

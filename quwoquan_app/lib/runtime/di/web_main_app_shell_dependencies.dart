@@ -83,7 +83,6 @@ final webMainAppShellDependenciesProvider =
           buildIntersectionInbox: buildGatheringIntersectionInboxSlot,
         ),
         buildProfile: () => const MyProfilePage(),
-        buildActionsDiscovery: () => const GatheringActionsDiscoveryPage(),
         openCreate: (context, intent) {
           final action = EditorStartAction.values.singleWhere(
             (candidate) => candidate.name == intent.name,

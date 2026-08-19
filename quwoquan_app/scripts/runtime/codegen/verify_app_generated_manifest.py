@@ -583,9 +583,15 @@ def verify_emitter_boundary() -> None:
                 f"{forbidden}"
             )
     for source in sorted(GENERATOR_ROOT.glob("*.go")):
+        # app_identity_codegen.go 与 shell_navigation_codegen.go 同类：它们是
+        # `--app-identity-only` / `--shell-navigation-metadata-only` 独立模式，
+        # 以 app_artifact_manifest.yaml 为源、由各自的 generated_manifest.json 与
+        # verify-app-identity / verify-app-shell-navigation 单独绑定，不属于
+        # ContractGraph 驱动的 App emitter，因此不受 Graph/lock 唯一输入约束。
         if source.name.endswith("_test.go") or source.name in {
             "contract_graph_source.go",
             "shell_navigation_codegen.go",
+            "app_identity_codegen.go",
         }:
             continue
         text = source.read_text(encoding="utf-8")

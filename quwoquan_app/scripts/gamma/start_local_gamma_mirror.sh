@@ -169,7 +169,11 @@ case "$WORKLOAD" in
       echo "[local-gamma] GATE_BLOCK: full workload requires package-bound Provider workloads" >&2
       exit 2
     fi
-    export COMPOSE_PROFILES="${COMPOSE_PROFILES:+${COMPOSE_PROFILES},}commercial-observability,assistant-runtime,edge-media,${QWQ_PROVIDER_RUNTIME_COMPOSE_PROFILES}"
+    # full workload 无条件加载 platform-ops fragment，而 base compose 把该服务
+    # 挂在 control-plane profile 上（bounded content workload 靠这个 profile 整份
+    # 排除它）。不激活该 profile，Compose 会在 full 下也排除 platform-ops，而
+    # gamma_platform_ops_ready 仍要求它就绪，等价于必然超时。
+    export COMPOSE_PROFILES="${COMPOSE_PROFILES:+${COMPOSE_PROFILES},}commercial-observability,assistant-runtime,edge-media,control-plane,${QWQ_PROVIDER_RUNTIME_COMPOSE_PROFILES}"
     ;;
   *)
     echo "[local-gamma] FAIL: QWQ_WORKLOAD must be content-release, content-commercial or full" >&2
@@ -657,6 +661,32 @@ else
   default_legal_static_root="$RUNTIME_CANDIDATE_ROOT/packages/legal-static/current/public"
 fi
 LOCAL_GAMMA_LEGAL_STATIC_ROOT="${LOCAL_GAMMA_LEGAL_STATIC_ROOT:-$default_legal_static_root}"
+# gamma-proxy 把 /srv/web 挂成 immutable 公网 Web 包，并把内容摘要写进响应头。
+# 该包由 `stackctl package --kind web` 产出、`current` 指向唯一激活版本，
+# 因此 root 与 digest 必须一起从同一次读取派生：只绑其一会让代理端的证据头
+# 与实际挂载的包脱钩。
+if [[ -z "${LOCAL_GAMMA_PUBLIC_WEB_ROOT:-}" || -z "${QWQ_PUBLIC_WEB_CONTENT_DIGEST:-}" ]]; then
+  public_web_binding="$(PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - "$QWQ_LOCAL_RELEASE_TARGET" <<'PY'
+import json
+import sys
+
+from quwoquan_ops.cli.lib.output_paths import deployment_target_path
+
+package_root = deployment_target_path(
+    sys.argv[1], "standalone-packages", "web", "packages", "public-web"
+)
+release_root = package_root / "current"
+manifest = json.loads((release_root / "manifest.json").read_text(encoding="utf-8"))
+print(release_root.resolve() / "public")
+print("sha256:" + str(manifest["contentSHA256"]))
+PY
+)" || {
+    echo "[local-release] FAIL: immutable public Web package is unavailable; run stackctl package --env ${CONFIG_SOURCE_ENV} --kind web" >&2
+    exit 1
+  }
+  LOCAL_GAMMA_PUBLIC_WEB_ROOT="${LOCAL_GAMMA_PUBLIC_WEB_ROOT:-$(sed -n 1p <<<"$public_web_binding")}"
+  QWQ_PUBLIC_WEB_CONTENT_DIGEST="${QWQ_PUBLIC_WEB_CONTENT_DIGEST:-$(sed -n 2p <<<"$public_web_binding")}"
+fi
 LOCAL_GAMMA_READY_INDEX_STREAM="${LOCAL_GAMMA_READY_INDEX_STREAM:-reliabletask:chat:avatar:ready:${LOCAL_GAMMA_READY_INDEX_SUFFIX}}"
 LOCAL_GAMMA_READY_INDEX_GROUP="${LOCAL_GAMMA_READY_INDEX_GROUP:-chat.group_avatar_worker.${LOCAL_GAMMA_READY_INDEX_SUFFIX}}"
 LOCAL_GAMMA_READY_INDEX_QUEUE="${LOCAL_GAMMA_READY_INDEX_QUEUE:-reliabletask.chat.avatar}"
@@ -687,7 +717,9 @@ export \
   LOCAL_GAMMA_MODEL_CACHE_ROOT \
   LOCAL_GAMMA_PORTAL_ROOT \
   GAMMA_RUN_ROOT \
-  LOCAL_GAMMA_LEGAL_STATIC_ROOT
+  LOCAL_GAMMA_LEGAL_STATIC_ROOT \
+  LOCAL_GAMMA_PUBLIC_WEB_ROOT \
+  QWQ_PUBLIC_WEB_CONTENT_DIGEST
 export QWQ_LOCAL_RELEASE_ENV QWQ_LOCAL_RELEASE_TARGET
 
 library_image() {
