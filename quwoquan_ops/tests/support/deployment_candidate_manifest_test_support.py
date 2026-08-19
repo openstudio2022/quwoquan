@@ -20,6 +20,9 @@ from unittest import mock
 
 from quwoquan_ops.cli.lib import deployment_candidate_manifest as subject
 from quwoquan_ops.cli.lib.deployment_candidate_manifest import provider_binding_overlay
+from quwoquan_ops.cli.lib.runtime_topology_package import (
+    SCHEMA as RUNTIME_TOPOLOGY_SCHEMA,
+)
 
 
 @lru_cache(maxsize=1)
@@ -176,7 +179,7 @@ class DeploymentCandidateManifestContractBase(unittest.TestCase):
         self.runtime_topology_path.write_text(
             json.dumps(
                 {
-                    "schema": "qwq.runtime_topology_package.v3",
+                    "schema": RUNTIME_TOPOLOGY_SCHEMA,
                     "environment": "alpha",
                     "target": "alpha-local",
                     "topologyDigest": "sha256:" + "f" * 64,

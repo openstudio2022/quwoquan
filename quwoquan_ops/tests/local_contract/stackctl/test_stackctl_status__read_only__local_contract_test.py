@@ -8,6 +8,7 @@ import argparse
 import json
 
 from quwoquan_ops.cli import stackctl
+from quwoquan_ops.cli.lib import read_only_user_availability
 
 
 _LAYERS = (
@@ -31,7 +32,7 @@ def _availability_report(*, first_blocker_class: str) -> dict[str, object]:
         for name in _LAYERS
     ]
     return {
-        "schema": "stackctl.read_only_user_availability/v1",
+        "schema": read_only_user_availability.SCHEMA,
         "target": "gamma-local",
         "environment": "gamma",
         "observedAt": "2026-08-18T00:00:00Z",

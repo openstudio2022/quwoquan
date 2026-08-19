@@ -23,6 +23,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from quwoquan_ops.cli.lib import read_only_user_availability as _read_only_user_availability
+
 
 def register_parser(
     subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
@@ -226,7 +228,7 @@ def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
     except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as error:
         detail = f"read-only availability aggregation blocked: {error}"
         user_availability = {
-            "schema": "stackctl.read_only_user_availability/v1",
+            "schema": _read_only_user_availability.SCHEMA,
             "target": args.target,
             "environment": env_name,
             "status": "failed",

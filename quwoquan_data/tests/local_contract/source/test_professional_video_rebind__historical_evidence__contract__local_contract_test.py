@@ -97,11 +97,17 @@ def test_a_manifest_missing_any_identity_field_fails_closed(field: str) -> None:
         validate_historical_video_manifest(manifest)
 
 
+def invalid_sha256_fixture(payload: str) -> str:
+    """一个刻意不是 canonical sha256 的摘要值，只用于反证拒绝。"""
+
+    return f"sha256:{payload}"
+
+
 def test_a_manifest_with_a_non_canonical_digest_fails_closed() -> None:
-    """三个身份字段必须是 canonical sha256，短摘要或别名都不算。"""
+    """三个身份字段必须是 canonical sha256，短摘要与别名都不得通过。"""
 
     manifest = _manifest()
-    manifest["sourceDigest"] = "sha256:abc"
+    manifest["sourceDigest"] = invalid_sha256_fixture("abc")
 
     with pytest.raises(
         HistoricalVideoEvidenceError, match="must be one canonical sha256 digest"

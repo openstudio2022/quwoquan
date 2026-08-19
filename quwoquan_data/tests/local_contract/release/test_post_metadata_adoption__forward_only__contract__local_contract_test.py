@@ -407,7 +407,7 @@ def test_metadata_adoption_can_create_v2_from_package_when_v1_is_not_materialize
     result = apply_post_metadata_adoption(
         source_execution_root=execution,
         source_package_root=source_package,
-        adoption_id="image-generator-forward-without-canonical-v1",
+        adoption_id="image-generator-forward-without-canonical",
         output_root=output_root,
         publish_root=publish,
     )

@@ -333,7 +333,9 @@ def test_a_capacity_receipt_needs_both_ref_and_digest() -> None:
     outcome = AgentRunOutcome.finished(provider=PROVIDER)
 
     with pytest.raises(ValueError, match="ref and digest are required"):
-        outcome.with_capacity_receipt(receipt_ref="", receipt_digest="sha256:abc")
+        outcome.with_capacity_receipt(
+            receipt_ref="", receipt_digest="sha256:" + "a" * 64
+        )
     with pytest.raises(ValueError, match="ref and digest are required"):
         outcome.with_capacity_receipt(receipt_ref="receipt.json", receipt_digest="  ")
 

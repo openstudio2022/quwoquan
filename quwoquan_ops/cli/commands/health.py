@@ -21,6 +21,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from quwoquan_ops.cli.lib import read_only_user_availability as _read_only_user_availability
+
 
 def register_parser(
     subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
@@ -378,7 +380,7 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
             )
         ]
         user_availability = {
-            "schema": "stackctl.read_only_user_availability/v1",
+            "schema": _read_only_user_availability.SCHEMA,
             "target": args.target,
             "environment": env_name,
             "observedAt": _stackctl.utc_now(),

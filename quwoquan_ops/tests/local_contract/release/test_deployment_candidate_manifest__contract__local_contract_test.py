@@ -172,9 +172,12 @@ class DeploymentCandidateManifestContractTest(
 
         graph_drift = dict(canonical)
         graph_drift["contractGraphDigest"] = "sha256:" + "9" * 64
+        # The environment artifact binds the contract graph digest into its own
+        # identity, so a drifted graph breaks that binding before the package
+        # fingerprint is ever compared.
         with self.assertRaisesRegex(
             ValueError,
-            "package fingerprint release identity drifted",
+            "environmentArtifact binding drifted or digest drifted",
         ):
             subject.validate_candidate_manifest(
                 graph_drift,

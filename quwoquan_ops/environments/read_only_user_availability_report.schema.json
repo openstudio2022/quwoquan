@@ -16,7 +16,7 @@
     "evidence"
   ],
   "properties": {
-    "schema": {"const": "stackctl.read_only_user_availability/v1"},
+    "schema": {"const": "stackctl.read_only_user_availability"},
     "target": {
       "enum": ["alpha-local", "beta-local", "gamma-local", "prod-sim", "prod-hosted"]
     },

@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 
-SCHEMA = "stackctl.read_only_user_availability/v1"
+SCHEMA = "stackctl.read_only_user_availability"
 LAYERS = (
     "build_ready",
     "runtime_full_ready",
