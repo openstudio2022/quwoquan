@@ -31,7 +31,7 @@ from content.execution.queue.reliabletask.report import (  # noqa: E402
     ReliableTaskFleetOutcome,
     ReliableTaskFleetReport,
 )
-from content.execution.queue.reliabletask.worker import (  # noqa: E402
+from content.execution.queue.reliabletask.author import (  # noqa: E402
     _recover_completed_author_outcome,
 )
 from content.execution.workspace import execution_root  # noqa: E402

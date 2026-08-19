@@ -138,6 +138,7 @@ def test_homepage_review_preserves_full_governed_entity_type(
         review_model=governed_cursor_grok_model(),
         review_model_family="grok",
         review_parameters=(),
+        reviewer_workers=context.spec.execution_policy.fleet_max_concurrent_workers,
     )
 
     assert captured == {

@@ -18,7 +18,6 @@ from core.data_issue import (
 from core.io import read_json, write_json
 from core.paths import execution_root
 from core.prompt_render import render as render_prompt
-from core.runtime_policy import active_runtime_policy
 from core.schema import assert_valid
 from governance.coverage.entity_extract import entity_ref, require_domain_etype
 from governance.coverage.license import RightsEnforcementMode, rights_proof_required
@@ -270,7 +269,7 @@ def run_homepage_independent_reviews(
     scope = runtime_spec.get("scope")
     raw_targets = scope.get("coverageTargets") if isinstance(scope, Mapping) else []
     targets = [target for target in raw_targets or [] if isinstance(target, Mapping)]
-    reviewer_workers = active_runtime_policy().reviewer_workers
+    reviewer_workers = ctx.spec.execution_policy.fleet_max_concurrent_workers
     with ThreadPoolExecutor(max_workers=reviewer_workers) as executor:
         futures = [
             executor.submit(

@@ -136,6 +136,14 @@ class QueueJobStage(StrEnum):
     PUBLISH = "publish"
 
 
+class ReliableTaskDispatchStatus(StrEnum):
+    """Terminal result of one controller dispatch to the service-owned fleet."""
+
+    COMPLETED = "completed"
+    WAITING = "waiting"
+    BLOCKED = "blocked"
+
+
 class QueueFailureKind(StrEnum):
     """Machine-readable reason class for a queue transition to failure."""
 
@@ -238,10 +246,11 @@ class ManagedAgentCheckpointStatus(StrEnum):
 
 
 class AgentFailureKind(StrEnum):
-    """Closed failure classes for Cursor SDK and its isolated subprocess."""
+    """Closed failure classes for managed semantic-agent adapters."""
 
     SDK_UNAVAILABLE = "sdk_unavailable"
     CREDENTIAL_INVALID = "credential_invalid"
+    PROVIDER_REJECTED = "provider_rejected"
     BUDGET_EXCEEDED = "budget_exceeded"
     BRIDGE_UNAVAILABLE = "bridge_unavailable"
     SDK_EXECUTION_FAILED = "sdk_execution_failed"
@@ -251,6 +260,8 @@ class AgentFailureKind(StrEnum):
     SUBPROCESS_EXITED = "subprocess_exited"
     FUTURE_TIMEOUT = "future_timeout"
     CHECKPOINT_GATE = "checkpoint_gate"
+    AUTHENTICATION_REJECTED = "authentication_rejected"
+    CAPACITY_UNPROVEN = "capacity_unproven"
 
 
 class ReadinessMode(StrEnum):
@@ -340,6 +351,7 @@ __all__ = [
     "QueueFailureKind",
     "QueueJobStage",
     "QueueJobState",
+    "ReliableTaskDispatchStatus",
     "QueueTimelineEvent",
     "ReleaseDeletePolicy",
     "ReleaseRunKind",

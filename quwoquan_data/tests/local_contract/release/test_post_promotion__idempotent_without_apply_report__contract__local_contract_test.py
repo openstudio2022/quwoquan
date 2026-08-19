@@ -110,7 +110,7 @@ def test_promote_post_object_skips_apply_when_canonical_matches_package(
     monkeypatch.setattr(subject, "apply_object_transaction", fake_apply)
     monkeypatch.setattr(
         subject,
-        "_repair_applied_pool_record_drift",
+        "repair_applied_post_pool_record_drift",
         lambda **_kwargs: False,
     )
     result = subject.promote_post_object(

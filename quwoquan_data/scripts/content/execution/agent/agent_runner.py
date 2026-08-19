@@ -7,7 +7,6 @@ timing and stable failure semantics. Provider fallback is forbidden.
 
 from __future__ import annotations
 
-import hashlib
 import sys
 import time
 from pathlib import Path
@@ -16,7 +15,6 @@ from typing import Any
 from core.control_types import AgentFailureKind, AgentProvider, AgentRunStatus
 from core.cursor_bridge_transport import protected_cursor_client
 from core.cursor_credentials import is_cursor_auth_error, resolve_cursor_api_key
-from core.paths import OUTPUT_ROOT
 from core.runtime_policy import active_runtime_policy
 
 from content.execution.agent.managed_workspace import (
@@ -439,13 +437,6 @@ def _managed_agent_runner_for_provider_unjournaled(
     ctx: ExecutionContext,
     prompt: str,
 ):
-    from content.execution.agent.capacity_broker import (
-        SemanticCapacityBroker,
-        SemanticCapacityTimeout,
-        SemanticProviderCircuitOpen,
-        semantic_provider_capacity,
-        semantic_provider_lane,
-    )
     from content.execution.agent.outcome import AgentRunOutcome
 
     provider = ctx.agent_provider
@@ -486,119 +477,17 @@ def _managed_agent_runner_for_provider_unjournaled(
             ),
             error_code="semantic_provider_role_binding_mismatch",
         )
-    broker = SemanticCapacityBroker(
-        account_scope_id=policy.semantic_capacity.account_scope_id,
-        host_scope_id=policy.semantic_capacity.host_scope_id,
-    )
-    circuit = broker.check_circuit(provider)
-    if circuit is not None:
-        try:
-            failure_kind = AgentFailureKind(str(circuit.get("failureKind") or ""))
-        except ValueError:
-            failure_kind = AgentFailureKind.PROVIDER_REJECTED
-        return AgentRunOutcome.failed(
-            failure_kind,
-            provider=provider,
-            message=(
-                "semantic provider circuit is open: "
-                + str(circuit.get("message") or failure_kind.value)
-            ),
-            retryable=bool(circuit.get("retryable")),
-            retry_after_seconds=int(circuit.get("retryAfterSeconds") or 0),
-            error_code="provider_circuit_open",
-        )
-    try:
-        lease = broker.acquire(
-            provider,
-            lane=semantic_provider_lane(ctx),
-            capacity=semantic_provider_capacity(policy),
-            lane_capacity=policy.semantic_capacity.lane_concurrency_limit,
-            requests_per_minute=policy.semantic_capacity.requests_per_minute,
-            burst_limit=policy.semantic_capacity.burst_limit,
-            wait_timeout_seconds=float(policy.assignment_deadline_seconds),
-            lease_ttl_seconds=float(
-                policy.agent_timeout_seconds
-                + policy.managed_future_grace_seconds
-                + policy.process_termination_timeout_seconds
-            ),
-        )
-    except SemanticProviderCircuitOpen as exc:
-        raw_kind = str(exc.circuit.get("failureKind") or "")
-        try:
-            kind = AgentFailureKind(raw_kind)
-        except ValueError:
-            kind = AgentFailureKind.PROVIDER_REJECTED
-        return AgentRunOutcome.failed(
-            kind,
-            provider=provider,
-            message=f"semantic provider circuit is open: {exc}",
-            retryable=bool(exc.circuit.get("retryable")),
-            retry_after_seconds=int(exc.circuit.get("retryAfterSeconds") or 0),
-            error_code="provider_circuit_open",
-        )
-    except SemanticCapacityTimeout as exc:
-        return AgentRunOutcome.failed(
-            AgentFailureKind.CAPACITY_UNPROVEN,
-            provider=provider,
-            message=str(exc),
-            retryable=True,
-            error_code="semantic_provider_capacity_wait_timeout",
-        )
-    with lease:
-        if provider is AgentProvider.CURSOR_SDK:
-            outcome = _default_managed_agent_runner(ctx, prompt)
-        elif provider is AgentProvider.CODEX_SDK:
-            from content.execution.agent.codex_adapter import run_codex_agent
+    if provider is AgentProvider.CURSOR_SDK:
+        return _default_managed_agent_runner(ctx, prompt)
+    if provider is AgentProvider.CODEX_SDK:
+        from content.execution.agent.codex_adapter import run_codex_agent
 
-            outcome = run_codex_agent(ctx, prompt)
-        else:  # pragma: no cover - AgentProvider is a closed enum
-            return AgentRunOutcome.failed(
-                AgentFailureKind.SDK_UNAVAILABLE,
-                provider=provider,
-                message=f"unsupported semantic agent provider: {provider.value}",
-            )
-        try:
-            _receipt, receipt_path = broker.write_capacity_receipt(
-                lease,
-                execution_id=ctx.execution_id,
-                model=ctx.model,
-                role=role,
-                prompt=prompt,
-                outcome=outcome,
-                runtime_profile_id=policy.profile_id,
-            )
-            receipt_ref = receipt_path.resolve().relative_to(OUTPUT_ROOT.resolve()).as_posix()
-            receipt_digest = "sha256:" + hashlib.sha256(receipt_path.read_bytes()).hexdigest()
-            outcome = outcome.with_capacity_receipt(
-                receipt_ref=receipt_ref,
-                receipt_digest=receipt_digest,
-            )
-        except (OSError, RuntimeError, ValueError) as exc:
-            return AgentRunOutcome.failed(
-                AgentFailureKind.CAPACITY_UNPROVEN,
-                provider=provider,
-                message=f"semantic capacity receipt failed: {type(exc).__name__}",
-                started=outcome.started,
-                retryable=False,
-                error_code="semantic_capacity_receipt_failed",
-            )
-    if outcome.failure_kind in {
-        AgentFailureKind.CREDENTIAL_INVALID,
-        AgentFailureKind.AUTHENTICATION_REJECTED,
-        AgentFailureKind.PROVIDER_REJECTED,
-    } and (not outcome.retryable or outcome.retry_after_seconds > 0):
-        broker.open_circuit(
-            provider,
-            model=ctx.model,
-            failure_kind=outcome.failure_kind,
-            message=_redact_managed_secret(outcome.message),
-            cooldown_seconds=float(
-                outcome.retry_after_seconds or min(policy.agent_timeout_seconds, 300)
-            ),
-            retryable=outcome.retryable,
-            retry_after_seconds=outcome.retry_after_seconds,
-        )
-    return outcome
+        return run_codex_agent(ctx, prompt)
+    return AgentRunOutcome.failed(  # pragma: no cover - AgentProvider is a closed enum
+        AgentFailureKind.SDK_UNAVAILABLE,
+        provider=provider,
+        message=f"unsupported semantic agent provider: {provider.value}",
+    )
 
 
 def _managed_agent_runner_for_provider(ctx: ExecutionContext, prompt: str):

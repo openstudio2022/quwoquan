@@ -33,7 +33,7 @@ from core.paths import OUTPUT_ROOT, PUBLISH_ROOT
 from core.tree_integrity import tree_integrity_stats
 
 
-def _repair_applied_pool_record_drift(
+def repair_applied_post_pool_record_drift(
     *,
     package_root: Path,
     canonical_post: Path,
@@ -195,7 +195,7 @@ def promote_post_object(
     )
     canonical_ready = (canonical_post / "manifest.json").is_file()
     if canonical_ready:
-        _repair_applied_pool_record_drift(
+        repair_applied_post_pool_record_drift(
             package_root=package_root,
             canonical_post=canonical_post,
             canonical_ref=normalized_ref,
@@ -304,4 +304,8 @@ def promote_execution_posts(execution_id: str) -> tuple[str, ...]:
     return tuple(promoted)
 
 
-__all__ = ["promote_execution_posts", "promote_post_object"]
+__all__ = [
+    "promote_execution_posts",
+    "promote_post_object",
+    "repair_applied_post_pool_record_drift",
+]

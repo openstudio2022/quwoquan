@@ -13,7 +13,7 @@ from core.image_asset_strategy import (
 )
 from core.io import write_json
 from core.paths import execution_root
-from content.source.research.source_quality import _license_allows_app_publish  # noqa: PLC2701
+from content.source.research.source_quality import license_allows_commercial_distribution
 from content.source.source_inputs import curated_images_for_entity
 from content.execution import store
 from content.execution.coverage import coverage_entity_ids, coverage_entity_type
@@ -48,7 +48,7 @@ def _publishable_image_issue(image: Mapping[str, Any]) -> str:
             return f"missing {field}"
     if str(image.get("usageScope") or "") != "app_publish":
         return f"usageScope={image.get('usageScope') or ''} is not app_publish"
-    if not _license_allows_app_publish(str(image.get("license") or ""), str(image.get("termsUrl") or "")):
+    if not license_allows_commercial_distribution(str(image.get("license") or ""), str(image.get("termsUrl") or "")):
         return f"license {image.get('license') or ''} is not app publish compatible"
     try:
         width = int(image.get("width") or 0)

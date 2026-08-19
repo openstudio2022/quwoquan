@@ -101,6 +101,30 @@ def _load_image_variant_policy() -> tuple[int, dict[str, dict[str, Any]]]:
 IMAGE_VARIANT_POLICY_VERSION, IMAGE_VARIANT_PROFILES = _load_image_variant_policy()
 
 
+def effective_delivery_width(profile: str, *, stored_width: int) -> int:
+    """Project one profile's declared width onto the width of a stored body.
+
+    A profile's declared width is an upper bound on delivery, never an upscale
+    target: a stored body narrower than the declared width is delivered at its
+    own width, because upscaling only adds bytes and no information. Every
+    consumer derives its pixel result from this single projection, so a
+    delivered width below the declared width is a legal outcome rather than
+    profile or descriptor drift.
+    """
+    declared = IMAGE_VARIANT_PROFILES.get(profile)
+    if declared is None:
+        raise ValueError(f"content image variant profile is unknown: {profile}")
+    if (
+        isinstance(stored_width, bool)
+        or not isinstance(stored_width, int)
+        or stored_width < 1
+    ):
+        raise ValueError(
+            f"stored image width must be a positive integer: {stored_width!r}"
+        )
+    return min(int(declared["width"]), stored_width)
+
+
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:

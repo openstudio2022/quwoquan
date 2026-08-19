@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
 from content.release.canonical.object_transaction_contract import (
@@ -13,8 +14,24 @@ from content.release.canonical.release_attestation import ReleaseAttestation
 from content.release.canonical.release_header import validate_release_header
 from content.release.model import DataSourceOwner, ReleaseKind
 from governance.coverage.distribution import ProductLifecycleState, ReleaseClass
+from core.release_layout import verify_release_holdings
 from core.schema import assert_valid
 from core.source_digest import SourceDefinitionSnapshot
+
+
+def assert_holdings_reachable(release_root: Path, release_id: str) -> None:
+    """Fail closed when the content library can no longer honour a holding.
+
+    A release references media bodies instead of copying them, so the payload
+    bytes being present is a weaker claim than the release being intact: the
+    holding stands only while the library still keeps that entry at the digest
+    the release recorded.
+    """
+    issues = verify_release_holdings(release_root)
+    if issues:
+        raise ObjectTransactionError(
+            f"DATA.RELEASE.HOLDING_UNREACHABLE: {release_id}: " + "; ".join(issues)
+        )
 
 
 def release_desired_state_document(
@@ -187,6 +204,7 @@ def release_attestation_document(
 
 
 __all__ = [
+    "assert_holdings_reachable",
     "release_attestation_document",
     "release_desired_state_document",
     "release_header_document",

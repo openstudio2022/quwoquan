@@ -1,3 +1,4 @@
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-007
 """The collector keeps running after it reclaims an acquisition body.
 
 Reclaiming staged bodies is the point of the acquisition lifecycle, so the very

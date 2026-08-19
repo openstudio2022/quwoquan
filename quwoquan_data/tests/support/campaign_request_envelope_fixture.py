@@ -11,7 +11,7 @@ from content.execution.campaign import (
     request_envelope_build,
 )
 from content.execution.campaign.external_inputs import content_source_revision
-from content.execution.scale.capacity_plan import throughput_basis_digest
+from content.release.canonical.research_scale_capacity import throughput_basis_digest
 from core.io import write_json
 from core.paths import research_scale_promotions_root
 from core.runtime_policy import active_runtime_policy

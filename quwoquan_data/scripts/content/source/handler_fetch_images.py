@@ -54,6 +54,19 @@ def _source_asset_key(item: Mapping[str, Any]) -> tuple[str, str]:
     return provider, source_id
 
 
+def _planned_attribution_fragment(spec: Mapping[str, Any]) -> dict[str, Any]:
+    """检索计划没铸归因时，键必须缺席，而不是落一个空对象。
+
+    空对象会被 post manifest 的 sourceAttribution 契约判成十几个 required
+    字段缺失，把「该走受审计采集」误导成「补字段即可」。
+    """
+
+    attribution = spec.get("sourceAttribution")
+    if not isinstance(attribution, Mapping) or not attribution:
+        return {}
+    return {"sourceAttribution": dict(attribution)}
+
+
 def _is_frozen_professional_image_work_unit(spec: Mapping[str, Any]) -> bool:
     return all(
         str(spec.get(field) or "").strip()
@@ -388,7 +401,7 @@ def prepare_entity_images(
                 "rightsStatus": spec.get("rightsStatus") or spec.get("rightsAuditStatus") or "",
                 "authorizationRequired": spec.get("authorizationRequired"),
                 **projected_distribution_decision(spec),
-                "sourceAttribution": dict(spec.get("sourceAttribution") or {}),
+                **_planned_attribution_fragment(spec),
                 "rightsIssues": list(spec.get("rightsIssues") or []),
                 "caption": str(spec.get("caption") or relevance),
                 "relevance": relevance,

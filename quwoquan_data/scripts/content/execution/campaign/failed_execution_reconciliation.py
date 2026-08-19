@@ -18,7 +18,6 @@ from content.execution.campaign.submission_reconciliation_contract import (
     canonical_digest,
     file_digest,
     load_terminal_submission_documents,
-    predecessor_campaign_root_execution_id,
     reconciliation_receipt_path,
     resolve_ref,
     safe_regular_ref,
@@ -293,7 +292,7 @@ def reconcile_failed_campaign(
 ) -> tuple[dict[str, Any], Path]:
     source_repo = (repo_root or paths.REPO_ROOT).resolve()
     resolved_output = (output_root or paths.OUTPUT_ROOT).resolve()
-    root_id = predecessor_campaign_root_execution_id(root_execution_id)
+    root_id = parse_execution_id(root_execution_id).execution_id
     if root_id != root_execution_id:
         raise typed("IDENTITY_DRIFT", "rootExecutionId must be the homepage lane")
     submissions = load_terminal_submission_documents(

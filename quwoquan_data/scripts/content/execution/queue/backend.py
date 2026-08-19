@@ -15,15 +15,21 @@ from core.schema import assert_valid
 
 from content.execution import store
 from content.execution.identity import parse_execution_id, validate_execution_id
-from content.execution.runtime_evidence.reliabletask_process import (
-    load_frozen_campaign_observer_context,
-    load_frozen_observer_binary_binding,
-    prepare_controller_observer_binary,
+from content.execution.queue.reliabletask.job_set import (
+    RELIABLETASK_JOB_SET_ENVELOPE_DIR,
+)
+from content.execution.queue.reliabletask.job_set import (
+    freeze_job_set as freeze_reliabletask_job_set,
+)
+from content.execution.queue.reliabletask.job_set import (
+    job_set_envelope_path as reliabletask_job_set_envelope_path,
+)
+from content.execution.queue.reliabletask.job_set import (
+    load_job_sets as load_reliabletask_job_set_envelopes,
 )
 from content.execution.workspace import (
     execution_root,
     load_frozen_execution_manifest,
-    load_frozen_target_set,
 )
 
 QUEUE_BACKEND_ENVELOPE_SCHEMA = "quwoquan_data.execution_queue_backend_envelope"
@@ -36,8 +42,12 @@ def queue_backend_envelope_path(execution_id: str) -> Path:
 
 
 def _digest(payload: Mapping[str, Any]) -> str:
+    return _digest_any(dict(payload))
+
+
+def _digest_any(payload: object) -> str:
     encoded = json.dumps(
-        dict(payload),
+        payload,
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
@@ -54,11 +64,25 @@ def _approved_quota(spec: Mapping[str, Any]) -> int:
     return value
 
 
-def _m100_plus(execution_id: str, spec: Mapping[str, Any]) -> bool:
+def _scale_class(execution_id: str, spec: Mapping[str, Any]) -> str:
     identity = parse_execution_id(execution_id)
     match = _M_SCALE_RE.fullmatch(identity.intent)
     intent_scale = int(match.group("count")) if match else 0
-    return max(intent_scale, _approved_quota(spec)) >= 100
+    scale = max(intent_scale, _approved_quota(spec))
+    if scale >= 10_000:
+        return "M10000_PLUS"
+    if scale >= 100:
+        return "M100_PLUS"
+    return "BELOW_M100"
+
+
+def _campaign_scale(execution_id: str, spec: Mapping[str, Any]) -> str:
+    identity = parse_execution_id(execution_id)
+    match = _M_SCALE_RE.fullmatch(identity.intent)
+    count = int(match.group("count")) if match else _approved_quota(spec)
+    if count < 1 or count > 100_000:
+        raise ValueError("execution campaign scale is outside the governed range")
+    return f"M{count}"
 
 
 def _queue_policy(spec: Mapping[str, Any]) -> dict[str, Any]:
@@ -92,47 +116,20 @@ def freeze_execution_queue_backend(
     policy = _queue_policy(effective_spec)
     backend = QueueBackend(str(policy["backend"]))
     approved_quota = _approved_quota(effective_spec)
-    scale_class = "M100_PLUS" if _m100_plus(normalized, effective_spec) else "BELOW_M100"
-    if scale_class == "M100_PLUS" and backend is not QueueBackend.RELIABLE_TASK:
-        raise ValueError(
-            "M100+ immutable queue backend must be reliabletask; "
-            f"observed {backend.value}"
-        )
-    observer_binding: dict[str, object] = {}
-    if backend is QueueBackend.RELIABLE_TASK:
-        campaign_bound = bool(
-            str(os.environ.get("QWQ_CAMPAIGN_ROOT_EXECUTION_ID") or "").strip()
-        )
-        if scale_class == "M100_PLUS" or campaign_bound:
-            binding = load_frozen_observer_binary_binding()
-            context = load_frozen_campaign_observer_context()
-            source_digest = frozen_manifest.get("sourceDigest")
-            target_set = load_frozen_target_set(normalized)
-            if (
-                context.execution_id != normalized
-                or not isinstance(source_digest, Mapping)
-                or source_digest.get("digest") != context.source_digest
-                or target_set.get("entityCatalogDigest")
-                != context.entity_catalog_digest
-            ):
-                raise ValueError(
-                    "campaign ReliableTask queue backend source identity drift"
-                )
-            observer_binding.update(context.as_envelope_document())
-        else:
-            binding = prepare_controller_observer_binary().binding
-        observer_binding.update(binding.as_document())
+    scale_class = _scale_class(normalized, effective_spec)
+    delivery_backend = QueueBackend.RELIABLE_TASK
     stable = {
         "schema": QUEUE_BACKEND_ENVELOPE_SCHEMA,
         "executionId": normalized,
+        "campaignScale": _campaign_scale(normalized, effective_spec),
         "scaleClass": scale_class,
         "approvedQuota": approved_quota,
         "queueBackend": backend.value,
+        "poolDeliveryBackend": delivery_backend.value,
         "queuePolicyDigest": _digest(policy),
         "executionManifestDigest": _digest(frozen_manifest),
         "sourceDigest": frozen_manifest.get("sourceDigest"),
         "targetSetDigest": str(frozen_manifest.get("targetSetDigest") or ""),
-        **observer_binding,
     }
     envelope = {**stable, "envelopeDigest": _digest(stable)}
     assert_valid(
@@ -182,31 +179,26 @@ def load_execution_queue_backend(
         label=f"queue backend envelope:{normalized}",
     )
     try:
-        backend = QueueBackend(str(payload.get("queueBackend") or ""))
+        QueueBackend(str(payload.get("queueBackend") or ""))
     except ValueError as exc:
         raise ValueError("queue backend envelope backend is invalid") from exc
-    if payload.get("scaleClass") == "M100_PLUS" and backend is not QueueBackend.RELIABLE_TASK:
-        raise ValueError("M100+ queue backend envelope must bind reliabletask")
+    if payload.get("poolDeliveryBackend") != QueueBackend.RELIABLE_TASK.value:
+        raise ValueError("pool delivery backend envelope must bind reliabletask")
     if verify_inputs:
         spec = store.load_spec(normalized)
         manifest = load_frozen_execution_manifest(normalized)
         policy = _queue_policy(spec)
         expected = {
-            "scaleClass": "M100_PLUS" if _m100_plus(normalized, spec) else "BELOW_M100",
+            "campaignScale": _campaign_scale(normalized, spec),
+            "scaleClass": _scale_class(normalized, spec),
             "approvedQuota": _approved_quota(spec),
             "queueBackend": str(policy["backend"]),
+            "poolDeliveryBackend": QueueBackend.RELIABLE_TASK.value,
             "queuePolicyDigest": _digest(policy),
             "executionManifestDigest": _digest(manifest),
             "sourceDigest": manifest.get("sourceDigest"),
             "targetSetDigest": str(manifest.get("targetSetDigest") or ""),
         }
-        if backend is QueueBackend.RELIABLE_TASK:
-            expected.update(
-                {
-                    "observerBinaryRef": payload.get("observerBinaryRef"),
-                    "observerBinarySha256": payload.get("observerBinarySha256"),
-                }
-            )
         drift = [key for key, value in expected.items() if payload.get(key) != value]
         if drift:
             raise ValueError(
@@ -225,16 +217,16 @@ def resolve_execution_queue_backend(
     normalized = validate_execution_id(execution_id)
     envelope = load_execution_queue_backend(normalized)
     backend = QueueBackend(str(envelope["queueBackend"]))
-    environment_override = str(
-        os.environ.get("QWQ_OBJECT_QUEUE_BACKEND") or ""
-    ).strip()
+    environment_override = str(os.environ.get("QWQ_OBJECT_QUEUE_BACKEND") or "").strip()
     if environment_override:
         raise ValueError(
             "queue backend environment override is forbidden; "
             "the immutable execution envelope is authoritative"
         )
     candidates = {
-        "requested": str(requested.value if isinstance(requested, QueueBackend) else requested or "").strip(),
+        "requested": str(
+            requested.value if isinstance(requested, QueueBackend) else requested or ""
+        ).strip(),
         "metadata.queueBackend": str(metadata_backend or "").strip(),
     }
     drift = [
@@ -251,10 +243,52 @@ def resolve_execution_queue_backend(
     return backend
 
 
+def resolve_pool_delivery_backend(
+    execution_id: str,
+    *,
+    requested: str | QueueBackend | None,
+    metadata_backend: object = None,
+) -> QueueBackend:
+    """Resolve publish delivery independently from semantic job execution."""
+
+    normalized = validate_execution_id(execution_id)
+    envelope = load_execution_queue_backend(normalized)
+    backend = QueueBackend(str(envelope["poolDeliveryBackend"]))
+    environment_override = str(os.environ.get("QWQ_OBJECT_QUEUE_BACKEND") or "").strip()
+    if environment_override:
+        raise ValueError(
+            "queue backend environment override is forbidden; "
+            "the immutable execution envelope is authoritative"
+        )
+    candidates = {
+        "requested": str(
+            requested.value if isinstance(requested, QueueBackend) else requested or ""
+        ).strip(),
+        "metadata.queueBackend": str(metadata_backend or "").strip(),
+    }
+    drift = [
+        f"{label}={value}"
+        for label, value in candidates.items()
+        if value and value != backend.value
+    ]
+    if drift:
+        raise ValueError(
+            "pool delivery backend tamper: "
+            + ", ".join(drift)
+            + f"; frozen={backend.value}"
+        )
+    return backend
+
+
 __all__ = [
     "QUEUE_BACKEND_ENVELOPE_REF",
+    "RELIABLETASK_JOB_SET_ENVELOPE_DIR",
     "freeze_execution_queue_backend",
+    "freeze_reliabletask_job_set",
     "load_execution_queue_backend",
+    "load_reliabletask_job_set_envelopes",
     "queue_backend_envelope_path",
+    "reliabletask_job_set_envelope_path",
     "resolve_execution_queue_backend",
+    "resolve_pool_delivery_backend",
 ]

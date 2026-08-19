@@ -1,16 +1,27 @@
 """Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
+import time
+
 from content.execution.coverage import coverage_entity_type, coverage_entity_type_for_entity
+from content.execution.planning.capacity_calibration import remaining_batch_seconds
 from content.execution.support import Any, ExecutionContext, Mapping, _active_spec, read_json, store, write_json
 from content.source.research.auto_plan_report import AUTO_RESEARCH_MERGE_ROW_KEYS
-from core.runtime_policy import active_runtime_policy
 
 def _aggregate_auto_research_throughput(waves: list[Mapping[str, Any]]) -> dict[str, Any]:
     entity_count = sum(int(wave.get("entityCount") or 0) for wave in waves)
     elapsed = sum(float(wave.get("elapsedSeconds") or 0) for wave in waves)
-    workers = max((int(wave.get("maxWorkers") or 0) for wave in waves), default=0)
+    # 冻结上限与实测峰值是两个词元，不得互换或合并成一个 worker 数。
+    ceiling = max(
+        (int(wave.get("frozenMaxConcurrentWorkers") or 0) for wave in waves),
+        default=0,
+    )
+    peak = max(
+        (int(wave.get("peakConcurrentWorkers") or 0) for wave in waves),
+        default=0,
+    )
     return {
-        "maxWorkers": workers,
+        "frozenMaxConcurrentWorkers": ceiling,
+        "peakConcurrentWorkers": peak,
         "entityCount": entity_count,
         "elapsedSeconds": round(elapsed, 3),
         "entitiesPerMinute": round(entity_count / elapsed * 60, 3) if elapsed > 0 else 0,
@@ -106,7 +117,7 @@ def _write_auto_research_report(
     for key in (
         "partialRun",
         "partialReason",
-        "maxAutoResearchWavesPerRun",
+        "fleetBatchDeadlineEpochSeconds",
         "remainingEntityIds",
         "remainingEntityCount",
         "networkOutage",
@@ -211,7 +222,13 @@ def _run_download_auto_research(
                 "ineligibleTargets": [],
                 "ineligibleTargetCount": 0,
             },
-            "throughput": {"maxWorkers": 0, "entityCount": 0, "elapsedSeconds": 0, "entitiesPerMinute": 0},
+            "throughput": {
+                "frozenMaxConcurrentWorkers": 0,
+                "peakConcurrentWorkers": 0,
+                "entityCount": 0,
+                "elapsedSeconds": 0,
+                "entitiesPerMinute": 0,
+            },
         }
     selected_lanes = _download_auto_research_lanes(ctx)
     carrier = parse_execution_id(ctx.execution_id).content_type.value
@@ -219,10 +236,10 @@ def _run_download_auto_research(
         ctx.execution_id,
         carrier,
     )
-    runtime_policy = active_runtime_policy()
-    worker_count = runtime_policy.research_workers
-    wave_size = _auto_research_wave_size(ctx, entity_count=len(ids), worker_count=worker_count)
-    max_waves_per_run = runtime_policy.research_max_waves_per_run
+    execution_policy = ctx.spec.execution_policy
+    worker_count = execution_policy.auto_research_max_concurrent_workers
+    # 规模增长只增加 wave 数，不增加同时运行的进程数：一个 wave 就是一次满并发。
+    wave_size = max(1, min(len(ids), worker_count))
     existing_wave_count = 0
     completed_entity_ids: list[str] = []
     existing: dict[str, Any] = {}
@@ -327,20 +344,25 @@ def _run_download_auto_research(
                 completed_this_run.append(entity_id)
         auto_report["completedEntityIds"] = list(completed_this_run)
         auto_report["completedEntityCount"] = len(completed_this_run)
-        budget_exhausted = bool(
-            max_waves_per_run
-            and (wave_index % max_waves_per_run) == 0
-            and unstarted_ids
+        deadline_exhausted = bool(
+            unstarted_ids
+            and remaining_batch_seconds(
+                execution_policy.capacity_calibration,
+                now_epoch_seconds=int(time.time()),
+            )
+            <= 0
         )
-        if auto_report.get("partialRun") or budget_exhausted:
+        if auto_report.get("partialRun") or deadline_exhausted:
             remaining_ids = list(writer_remaining_ids)
             for entity_id in unstarted_ids:
                 if entity_id not in remaining_ids:
                     remaining_ids.append(entity_id)
             auto_report["partialRun"] = True
-            if budget_exhausted:
-                auto_report["partialReason"] = "max_auto_research_waves_per_run"
-                auto_report["maxAutoResearchWavesPerRun"] = max_waves_per_run
+            if deadline_exhausted:
+                auto_report["partialReason"] = "fleet_batch_deadline_exhausted"
+                auto_report["fleetBatchDeadlineEpochSeconds"] = (
+                    execution_policy.fleet_batch_deadline_epoch_seconds
+                )
             auto_report["remainingEntityIds"] = remaining_ids
             auto_report["remainingEntityCount"] = len(remaining_ids)
         else:
@@ -366,8 +388,3 @@ def _run_download_auto_research(
 def _download_auto_research_lanes(ctx: ExecutionContext) -> frozenset[str]:
     """Return the research lanes admitted by the immutable execution spec."""
     return frozenset(lane.value for lane in ctx.spec.content.research.lanes)
-
-def _auto_research_wave_size(ctx: ExecutionContext, *, entity_count: int, worker_count: int) -> int:
-    del ctx, worker_count
-    configured = active_runtime_policy().research_wave_size
-    return min(max(1, entity_count), configured)

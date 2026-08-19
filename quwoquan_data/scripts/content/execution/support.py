@@ -32,6 +32,7 @@ from core.data_issue import (
     data_issues,
     issue_messages,
 )
+from core.article_commercial_policy import article_commercial_closure_enabled
 from core.cursor_credentials import cursor_api_key_file, is_cursor_auth_error, resolve_cursor_api_key
 from core.execution_branch import execution_branch_issues, execution_branch_payload
 from governance.coverage.entity_extract import require_domain_etype

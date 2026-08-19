@@ -1,3 +1,4 @@
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-007
 """Acquisition bodies are reclaimable; acquisition evidence is not.
 
 Acquisition used to be retained as one indivisible population, so the fetched

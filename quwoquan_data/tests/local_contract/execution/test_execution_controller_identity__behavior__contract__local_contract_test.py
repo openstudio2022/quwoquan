@@ -107,7 +107,10 @@ def test_controller_entrypoint_loads_coverage_and_baseline_through_execution_bou
     )
 
     assert observed["entityIds"] == ["测试实体甲"]
-    assert observed["maxWorkers"] == 1
+    # worker 启动参数只随 execution 冻结，运行时不得另有来源。
+    assert observed["maxWorkers"] == (
+        fixture.spec().execution_policy.fleet_max_concurrent_workers
+    )
 
 
 def test_execution_guards_are_real_context_managers():

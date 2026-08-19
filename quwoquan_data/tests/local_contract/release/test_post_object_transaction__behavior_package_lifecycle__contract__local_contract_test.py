@@ -139,7 +139,7 @@ def test_applied_post_pool_digest_repair_appends_record_sequence(
         )
         _write_json(record_path, record)
 
-    assert post_promotion._repair_applied_pool_record_drift(
+    assert post_promotion.repair_applied_post_pool_record_drift(
         package_root=package,
         canonical_post=canonical,
         canonical_ref=POST_REF,
