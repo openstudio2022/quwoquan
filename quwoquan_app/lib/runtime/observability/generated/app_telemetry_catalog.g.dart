@@ -24,6 +24,13 @@ abstract final class AppTelemetryValueBackgroundRetryTerminal {
   static const Set<String> values = <String>{notApplicable, retryScheduled, retryExhausted, published, pendingReview, rejected, cancelled};
 }
 
+abstract final class AppTelemetryValueBuildMode {
+  static const String debug = "debug";
+  static const String profile = "profile";
+  static const String release = "release";
+  static const Set<String> values = <String>{debug, profile, release};
+}
+
 abstract final class AppTelemetryValueCacheAgeBucket {
   static const String notApplicable = "not_applicable";
   static const String under1h = "under_1h";
@@ -87,6 +94,14 @@ abstract final class AppTelemetryValueChatSource {
   static const Set<String> values = <String>{contacts, group, circle, roster, composer, conversation, settings};
 }
 
+abstract final class AppTelemetryValueContentIdentityOutcome {
+  static const String bound = "bound";
+  static const String absent = "absent";
+  static const String protocolFailure = "protocol_failure";
+  static const String unavailable = "unavailable";
+  static const Set<String> values = <String>{bound, absent, protocolFailure, unavailable};
+}
+
 abstract final class AppTelemetryValueContentType {
   static const String micro = "micro";
   static const String article = "article";
@@ -115,6 +130,16 @@ abstract final class AppTelemetryValueDevicePlatform {
   static const String web = "web";
   static const String desktop = "desktop";
   static const Set<String> values = <String>{android, ios, ohos, web, desktop};
+}
+
+abstract final class AppTelemetryValueDistributionClass {
+  static const String devDirect = "dev_direct";
+  static const String simulator = "simulator";
+  static const String registeredDevice = "registered_device";
+  static const String store = "store";
+  static const String officialWeb = "official_web";
+  static const String hostedWeb = "hosted_web";
+  static const Set<String> values = <String>{devDirect, simulator, registeredDevice, store, officialWeb, hostedWeb};
 }
 
 abstract final class AppTelemetryValueEnvironment {
@@ -347,13 +372,21 @@ class AppTelemetryPayload {
     });
   }
 
-  factory AppTelemetryPayload.appStartup({required int tClickToFirstFrameMs, required int tFirstFrameToShellMs, required int tShellToContentMs, required int tClickToContentMs, required bool hasError}) {
+  factory AppTelemetryPayload.appStartup({required int tClickToFirstFrameMs, required int tFirstFrameToShellMs, required int tShellToContentMs, required int tClickToContentMs, required bool hasError, String? environment, String? buildMode, String? distributionClass, String? launchProvenance, String? buildNumber, String? launchManifestDigest, String? terminalState, String? contentIdentityOutcome}) {
     return AppTelemetryPayload._('app_startup', 'event', <String, Object?>{
       'tClickToFirstFrameMs': tClickToFirstFrameMs,
       'tFirstFrameToShellMs': tFirstFrameToShellMs,
       'tShellToContentMs': tShellToContentMs,
       'tClickToContentMs': tClickToContentMs,
       'hasError': hasError,
+      if (environment != null) 'environment': environment,
+      if (buildMode != null) 'buildMode': buildMode,
+      if (distributionClass != null) 'distributionClass': distributionClass,
+      if (launchProvenance != null) 'launchProvenance': launchProvenance,
+      if (buildNumber != null) 'buildNumber': buildNumber,
+      if (launchManifestDigest != null) 'launchManifestDigest': launchManifestDigest,
+      if (terminalState != null) 'terminalState': terminalState,
+      if (contentIdentityOutcome != null) 'contentIdentityOutcome': contentIdentityOutcome,
     });
   }
 
@@ -697,7 +730,7 @@ abstract final class AppTelemetryCatalog {
     'app_frame_jank_outcome': AppTelemetryEventDefinition(eventType: 'app_frame_jank_outcome', logType: 'event', requiredExtensions: <String>{'sampledFrames', 'jankyFrames', 'worstFrameMs', 'worstBuildFrameMs', 'worstRasterFrameMs', 'jankThresholdMs', 'result'}, optionalExtensions: <String>{'surfaceId', 'channelId'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
     'home_feed_resource_snapshot': AppTelemetryEventDefinition(eventType: 'home_feed_resource_snapshot', logType: 'event', requiredExtensions: <String>{'resourceKind', 'currentValue', 'result'}, optionalExtensions: <String>{'resourceProfile', 'limitValue', 'queuedValue', 'inflightValue', 'cacheSizeBytes', 'surfaceId', 'channelId'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
     'home_feed_cache_read_outcome': AppTelemetryEventDefinition(eventType: 'home_feed_cache_read_outcome', logType: 'event', requiredExtensions: <String>{'cacheSource', 'cacheClass', 'result'}, optionalExtensions: <String>{'surfaceId', 'channelId'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
-    'app_startup': AppTelemetryEventDefinition(eventType: 'app_startup', logType: 'event', requiredExtensions: <String>{'tClickToFirstFrameMs', 'tFirstFrameToShellMs', 'tShellToContentMs', 'tClickToContentMs', 'hasError'}, optionalExtensions: <String>{}, normalSampleRate: 1, slowThresholdMs: 3000, internalPriority: 'critical'),
+    'app_startup': AppTelemetryEventDefinition(eventType: 'app_startup', logType: 'event', requiredExtensions: <String>{'tClickToFirstFrameMs', 'tFirstFrameToShellMs', 'tShellToContentMs', 'tClickToContentMs', 'hasError'}, optionalExtensions: <String>{'environment', 'buildMode', 'distributionClass', 'launchProvenance', 'buildNumber', 'launchManifestDigest', 'terminalState', 'contentIdentityOutcome'}, normalSampleRate: 1, slowThresholdMs: 3000, internalPriority: 'critical'),
     'runtime_exception': AppTelemetryEventDefinition(eventType: 'runtime_exception', logType: 'error', requiredExtensions: <String>{'errorCode'}, optionalExtensions: <String>{'operationId', 'httpStatus', 'callStack'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'error'),
     'product_action': AppTelemetryEventDefinition(eventType: 'product_action', logType: 'event', requiredExtensions: <String>{'journey', 'action'}, optionalExtensions: <String>{'surfaceId', 'objectType', 'objectId', 'reasonId', 'targetType', 'targetId', 'environment', 'durationMs', 'result', 'failReasonCode', 'recoveryAction', 'requestId', 'traceId'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
     'login_funnel': AppTelemetryEventDefinition(eventType: 'login_funnel', logType: 'event', requiredExtensions: <String>{'action', 'flowId', 'step', 'result'}, optionalExtensions: <String>{'entryMode', 'fromStep', 'toStep', 'provider', 'otpPurpose', 'consentState', 'durationMs', 'attemptIndex', 'countdownBucket', 'motionReduced', 'dismissPolicy'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
@@ -728,6 +761,7 @@ abstract final class AppTelemetryCatalog {
 
   static const Map<String, Set<String>> extensionEnumValues = <String, Set<String>>{
     "backgroundRetryTerminal": AppTelemetryValueBackgroundRetryTerminal.values,
+    "buildMode": AppTelemetryValueBuildMode.values,
     "cacheAgeBucket": AppTelemetryValueCacheAgeBucket.values,
     "cacheSource": AppTelemetryValueCacheSource.values,
     "callType": AppTelemetryValueCallType.values,
@@ -735,10 +769,12 @@ abstract final class AppTelemetryCatalog {
     "chatAction": AppTelemetryValueChatAction.values,
     "chatOutcome": AppTelemetryValueChatOutcome.values,
     "chatSource": AppTelemetryValueChatSource.values,
+    "contentIdentityOutcome": AppTelemetryValueContentIdentityOutcome.values,
     "contentType": AppTelemetryValueContentType.values,
     "decoderQueueMode": AppTelemetryValueDecoderQueueMode.values,
     "detectionSource": AppTelemetryValueDetectionSource.values,
     "devicePlatform": AppTelemetryValueDevicePlatform.values,
+    "distributionClass": AppTelemetryValueDistributionClass.values,
     "environment": AppTelemetryValueEnvironment.values,
     "governanceAction": AppTelemetryValueGovernanceAction.values,
     "memberCountBucket": AppTelemetryValueMemberCountBucket.values,

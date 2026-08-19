@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: d68dfe12604d5c5225ba691373427dc83221ebf23391ec8cf7c2432f88b2a76a
+// ContractGraph SHA256: 84dfd87556df4ea11fd328bc5da6cf605bad480038327148f7a298c5702b1fe2
 
 part of '../../../ops/ops_operation_contracts.g.dart';
 
@@ -54,7 +54,7 @@ List<Object?> _generatedRequestList(Object? value, String path) {
   throw FormatException('$path must be a list');
 }
 
-// Derived from product_ops/event_record/event_catalog.yaml; source SHA256: c9f4f405b855fb7cd9d8fd76e4ebbf1fba38e98a4432d43a8b852f1549fa3471.
+// Derived from product_ops/event_record/event_catalog.yaml; source SHA256: 97540827dc2fde542c9e578c83fb49c8566f05045eb216a169fb28fbd346e596.
 final class EventRecord {
   EventRecord({
     required String logType,
@@ -70,6 +70,8 @@ final class EventRecord {
     int? attemptIndex,
     int? audioUnderrunCount,
     String? backgroundRetryTerminal,
+    String? buildMode,
+    String? buildNumber,
     String? cacheAgeBucket,
     String? cacheClass,
     int? cacheSizeBytes,
@@ -83,6 +85,7 @@ final class EventRecord {
     String? chatSource,
     int? connectTimeMs,
     String? consentState,
+    String? contentIdentityOutcome,
     String? contentType,
     String? copyKey,
     String? correlationHash,
@@ -96,6 +99,7 @@ final class EventRecord {
     bool? digestMatch,
     String? disconnectReason,
     String? dismissPolicy,
+    String? distributionClass,
     int? droppedFrames,
     bool? durationMismatch,
     int? durationMs,
@@ -116,6 +120,8 @@ final class EventRecord {
     int? jankThresholdMs,
     int? jankyFrames,
     String? journey,
+    String? launchManifestDigest,
+    String? launchProvenance,
     int? limitValue,
     bool? mediaConnected,
     String? memberCountBucket,
@@ -186,6 +192,8 @@ final class EventRecord {
        attemptIndex = attemptIndex,
        audioUnderrunCount = audioUnderrunCount,
        backgroundRetryTerminal = backgroundRetryTerminal,
+       buildMode = buildMode,
+       buildNumber = buildNumber,
        cacheAgeBucket = cacheAgeBucket,
        cacheClass = cacheClass,
        cacheSizeBytes = cacheSizeBytes,
@@ -199,6 +207,7 @@ final class EventRecord {
        chatSource = chatSource,
        connectTimeMs = connectTimeMs,
        consentState = consentState,
+       contentIdentityOutcome = contentIdentityOutcome,
        contentType = contentType,
        copyKey = copyKey,
        correlationHash = correlationHash,
@@ -212,6 +221,7 @@ final class EventRecord {
        digestMatch = digestMatch,
        disconnectReason = disconnectReason,
        dismissPolicy = dismissPolicy,
+       distributionClass = distributionClass,
        droppedFrames = droppedFrames,
        durationMismatch = durationMismatch,
        durationMs = durationMs,
@@ -232,6 +242,8 @@ final class EventRecord {
        jankThresholdMs = jankThresholdMs,
        jankyFrames = jankyFrames,
        journey = journey,
+       launchManifestDigest = launchManifestDigest,
+       launchProvenance = launchProvenance,
        limitValue = limitValue,
        mediaConnected = mediaConnected,
        memberCountBucket = memberCountBucket,
@@ -297,6 +309,9 @@ final class EventRecord {
     }
     if (this.audioUnderrunCount != null && this.audioUnderrunCount! < 0) {
       throw ArgumentError.value(this.audioUnderrunCount, "audioUnderrunCount", "must be at least 0");
+    }
+    if (this.buildNumber != null && this.buildNumber!.length > 32) {
+      throw ArgumentError.value(this.buildNumber, "buildNumber", "length exceeds 32");
     }
     if (this.cacheClass != null && this.cacheClass!.length > 32) {
       throw ArgumentError.value(this.cacheClass, "cacheClass", "length exceeds 32");
@@ -384,6 +399,12 @@ final class EventRecord {
     }
     if (this.journey != null && this.journey!.length > 128) {
       throw ArgumentError.value(this.journey, "journey", "length exceeds 128");
+    }
+    if (this.launchManifestDigest != null && this.launchManifestDigest!.length > 80) {
+      throw ArgumentError.value(this.launchManifestDigest, "launchManifestDigest", "length exceeds 80");
+    }
+    if (this.launchProvenance != null && this.launchProvenance!.length > 64) {
+      throw ArgumentError.value(this.launchProvenance, "launchProvenance", "length exceeds 64");
     }
     if (this.limitValue != null && this.limitValue! < 0) {
       throw ArgumentError.value(this.limitValue, "limitValue", "must be at least 0");
@@ -517,7 +538,7 @@ final class EventRecord {
       "app_frame_jank_outcome" => (logType: "event", required: const <String>{"jankThresholdMs", "jankyFrames", "result", "sampledFrames", "worstBuildFrameMs", "worstFrameMs", "worstRasterFrameMs"}, allowed: const <String>{"channelId", "devicePlatform", "jankThresholdMs", "jankyFrames", "result", "sampledFrames", "surfaceId", "worstBuildFrameMs", "worstFrameMs", "worstRasterFrameMs"}),
       "home_feed_resource_snapshot" => (logType: "event", required: const <String>{"currentValue", "resourceKind", "result"}, allowed: const <String>{"cacheSizeBytes", "channelId", "currentValue", "devicePlatform", "inflightValue", "limitValue", "queuedValue", "resourceKind", "resourceProfile", "result", "surfaceId"}),
       "home_feed_cache_read_outcome" => (logType: "event", required: const <String>{"cacheClass", "cacheSource", "result"}, allowed: const <String>{"cacheClass", "cacheSource", "channelId", "devicePlatform", "result", "surfaceId"}),
-      "app_startup" => (logType: "event", required: const <String>{"hasError", "tClickToContentMs", "tClickToFirstFrameMs", "tFirstFrameToShellMs", "tShellToContentMs"}, allowed: const <String>{"devicePlatform", "hasError", "tClickToContentMs", "tClickToFirstFrameMs", "tFirstFrameToShellMs", "tShellToContentMs"}),
+      "app_startup" => (logType: "event", required: const <String>{"hasError", "tClickToContentMs", "tClickToFirstFrameMs", "tFirstFrameToShellMs", "tShellToContentMs"}, allowed: const <String>{"buildMode", "buildNumber", "contentIdentityOutcome", "devicePlatform", "distributionClass", "environment", "hasError", "launchManifestDigest", "launchProvenance", "tClickToContentMs", "tClickToFirstFrameMs", "tFirstFrameToShellMs", "tShellToContentMs", "terminalState"}),
       "runtime_exception" => (logType: "error", required: const <String>{"errorCode"}, allowed: const <String>{"callStack", "devicePlatform", "errorCode", "httpStatus", "operationId"}),
       "product_action" => (logType: "event", required: const <String>{"action", "journey"}, allowed: const <String>{"action", "devicePlatform", "durationMs", "environment", "failReasonCode", "journey", "objectId", "objectType", "reasonId", "recoveryAction", "requestId", "result", "surfaceId", "targetId", "targetType", "traceId"}),
       "login_funnel" => (logType: "event", required: const <String>{"action", "flowId", "result", "step"}, allowed: const <String>{"action", "attemptIndex", "consentState", "countdownBucket", "devicePlatform", "dismissPolicy", "durationMs", "entryMode", "flowId", "fromStep", "motionReduced", "otpPurpose", "provider", "result", "step", "toStep"}),
@@ -554,6 +575,8 @@ final class EventRecord {
       if (this.attemptIndex != null) "attemptIndex",
       if (this.audioUnderrunCount != null) "audioUnderrunCount",
       if (this.backgroundRetryTerminal != null) "backgroundRetryTerminal",
+      if (this.buildMode != null) "buildMode",
+      if (this.buildNumber != null) "buildNumber",
       if (this.cacheAgeBucket != null) "cacheAgeBucket",
       if (this.cacheClass != null) "cacheClass",
       if (this.cacheSizeBytes != null) "cacheSizeBytes",
@@ -567,6 +590,7 @@ final class EventRecord {
       if (this.chatSource != null) "chatSource",
       if (this.connectTimeMs != null) "connectTimeMs",
       if (this.consentState != null) "consentState",
+      if (this.contentIdentityOutcome != null) "contentIdentityOutcome",
       if (this.contentType != null) "contentType",
       if (this.copyKey != null) "copyKey",
       if (this.correlationHash != null) "correlationHash",
@@ -580,6 +604,7 @@ final class EventRecord {
       if (this.digestMatch != null) "digestMatch",
       if (this.disconnectReason != null) "disconnectReason",
       if (this.dismissPolicy != null) "dismissPolicy",
+      if (this.distributionClass != null) "distributionClass",
       if (this.droppedFrames != null) "droppedFrames",
       if (this.durationMismatch != null) "durationMismatch",
       if (this.durationMs != null) "durationMs",
@@ -600,6 +625,8 @@ final class EventRecord {
       if (this.jankThresholdMs != null) "jankThresholdMs",
       if (this.jankyFrames != null) "jankyFrames",
       if (this.journey != null) "journey",
+      if (this.launchManifestDigest != null) "launchManifestDigest",
+      if (this.launchProvenance != null) "launchProvenance",
       if (this.limitValue != null) "limitValue",
       if (this.mediaConnected != null) "mediaConnected",
       if (this.memberCountBucket != null) "memberCountBucket",
@@ -667,6 +694,9 @@ final class EventRecord {
     if (this.backgroundRetryTerminal != null && !const <String>{"not_applicable", "retry_scheduled", "retry_exhausted", "published", "pending_review", "rejected", "cancelled"}.contains(this.backgroundRetryTerminal)) {
       throw ArgumentError.value(this.backgroundRetryTerminal, "backgroundRetryTerminal", 'unsupported event extension value');
     }
+    if (this.buildMode != null && !const <String>{"debug", "profile", "release"}.contains(this.buildMode)) {
+      throw ArgumentError.value(this.buildMode, "buildMode", 'unsupported event extension value');
+    }
     if (this.cacheAgeBucket != null && !const <String>{"not_applicable", "under_1h", "one_to_24h", "over_24h"}.contains(this.cacheAgeBucket)) {
       throw ArgumentError.value(this.cacheAgeBucket, "cacheAgeBucket", 'unsupported event extension value');
     }
@@ -691,6 +721,9 @@ final class EventRecord {
     if (this.chatSource != null && !const <String>{"contacts", "group", "circle", "roster", "composer", "conversation", "settings"}.contains(this.chatSource)) {
       throw ArgumentError.value(this.chatSource, "chatSource", 'unsupported event extension value');
     }
+    if (this.contentIdentityOutcome != null && !const <String>{"bound", "absent", "protocol_failure", "unavailable"}.contains(this.contentIdentityOutcome)) {
+      throw ArgumentError.value(this.contentIdentityOutcome, "contentIdentityOutcome", 'unsupported event extension value');
+    }
     if (this.contentType != null && !const <String>{"micro", "article", "image", "video", "unknown"}.contains(this.contentType)) {
       throw ArgumentError.value(this.contentType, "contentType", 'unsupported event extension value');
     }
@@ -702,6 +735,9 @@ final class EventRecord {
     }
     if (this.devicePlatform != null && !const <String>{"android", "ios", "ohos", "web", "desktop"}.contains(this.devicePlatform)) {
       throw ArgumentError.value(this.devicePlatform, "devicePlatform", 'unsupported event extension value');
+    }
+    if (this.distributionClass != null && !const <String>{"dev_direct", "simulator", "registered_device", "store", "official_web", "hosted_web"}.contains(this.distributionClass)) {
+      throw ArgumentError.value(this.distributionClass, "distributionClass", 'unsupported event extension value');
     }
     if (this.environment != null && !const <String>{"alpha", "beta", "gamma", "prod"}.contains(this.environment)) {
       throw ArgumentError.value(this.environment, "environment", 'unsupported event extension value');
@@ -766,6 +802,8 @@ final class EventRecord {
   final int? attemptIndex;
   final int? audioUnderrunCount;
   final String? backgroundRetryTerminal;
+  final String? buildMode;
+  final String? buildNumber;
   final String? cacheAgeBucket;
   final String? cacheClass;
   final int? cacheSizeBytes;
@@ -779,6 +817,7 @@ final class EventRecord {
   final String? chatSource;
   final int? connectTimeMs;
   final String? consentState;
+  final String? contentIdentityOutcome;
   final String? contentType;
   final String? copyKey;
   final String? correlationHash;
@@ -792,6 +831,7 @@ final class EventRecord {
   final bool? digestMatch;
   final String? disconnectReason;
   final String? dismissPolicy;
+  final String? distributionClass;
   final int? droppedFrames;
   final bool? durationMismatch;
   final int? durationMs;
@@ -812,6 +852,8 @@ final class EventRecord {
   final int? jankThresholdMs;
   final int? jankyFrames;
   final String? journey;
+  final String? launchManifestDigest;
+  final String? launchProvenance;
   final int? limitValue;
   final bool? mediaConnected;
   final String? memberCountBucket;
@@ -871,7 +913,7 @@ final class EventRecord {
   final int? worstRasterFrameMs;
 
   factory EventRecord.fromWire(Map<String, Object?> map, [String path = "EventRecord"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"logType", "eventType", "sessionId", "pageName", "occurredAt", "deviceManufacturer", "deviceModel", "appVersion", "networkClass", "action", "attemptIndex", "audioUnderrunCount", "backgroundRetryTerminal", "cacheAgeBucket", "cacheClass", "cacheSizeBytes", "cacheSource", "callStack", "callType", "catalogSource", "channelId", "chatAction", "chatOutcome", "chatSource", "connectTimeMs", "consentState", "contentType", "copyKey", "correlationHash", "countdownBucket", "currentValue", "declaredDurationMs", "decoderFallbackEnabled", "decoderQueueMode", "detectionSource", "devicePlatform", "digestMatch", "disconnectReason", "dismissPolicy", "droppedFrames", "durationMismatch", "durationMs", "effectivePlaybackMs", "entryMode", "environment", "errorCode", "failReasonCode", "failureKind", "feedbackSurface", "flowId", "fromStep", "governanceAction", "hasCache", "hasError", "httpStatus", "inflightValue", "jankThresholdMs", "jankyFrames", "journey", "limitValue", "mediaConnected", "memberCountBucket", "mentionScope", "motionReduced", "networkQuality", "objectId", "objectState", "objectType", "observedDurationMs", "operationId", "otpPurpose", "participantCount", "playbackMode", "processedVideoFrames", "provider", "publicationStage", "queuedValue", "rankPosition", "readyMs", "reasonId", "rebufferCount", "rebufferMs", "reconnectCount", "recoveryAction", "releaseIdHash", "rendererMode", "requestId", "resourceKind", "resourceProfile", "result", "resultCount", "sampledFrames", "seekCommandMaxMs", "seekCount", "seekEvidenceSource", "seekFailureCount", "seekSettleMaxMs", "step", "surfaceId", "tClickToContentMs", "tClickToFirstFrameMs", "tFirstFrameToShellMs", "tShellToContentMs", "targetId", "targetType", "terminalState", "toStep", "traceId", "transport", "ttffMs", "turnAction", "unreadCountBucket", "watermarkResult", "worstBuildFrameMs", "worstFrameMs", "worstRasterFrameMs"}, path);
+    _generatedRequestRejectUnknownFields(map, const <String>{"logType", "eventType", "sessionId", "pageName", "occurredAt", "deviceManufacturer", "deviceModel", "appVersion", "networkClass", "action", "attemptIndex", "audioUnderrunCount", "backgroundRetryTerminal", "buildMode", "buildNumber", "cacheAgeBucket", "cacheClass", "cacheSizeBytes", "cacheSource", "callStack", "callType", "catalogSource", "channelId", "chatAction", "chatOutcome", "chatSource", "connectTimeMs", "consentState", "contentIdentityOutcome", "contentType", "copyKey", "correlationHash", "countdownBucket", "currentValue", "declaredDurationMs", "decoderFallbackEnabled", "decoderQueueMode", "detectionSource", "devicePlatform", "digestMatch", "disconnectReason", "dismissPolicy", "distributionClass", "droppedFrames", "durationMismatch", "durationMs", "effectivePlaybackMs", "entryMode", "environment", "errorCode", "failReasonCode", "failureKind", "feedbackSurface", "flowId", "fromStep", "governanceAction", "hasCache", "hasError", "httpStatus", "inflightValue", "jankThresholdMs", "jankyFrames", "journey", "launchManifestDigest", "launchProvenance", "limitValue", "mediaConnected", "memberCountBucket", "mentionScope", "motionReduced", "networkQuality", "objectId", "objectState", "objectType", "observedDurationMs", "operationId", "otpPurpose", "participantCount", "playbackMode", "processedVideoFrames", "provider", "publicationStage", "queuedValue", "rankPosition", "readyMs", "reasonId", "rebufferCount", "rebufferMs", "reconnectCount", "recoveryAction", "releaseIdHash", "rendererMode", "requestId", "resourceKind", "resourceProfile", "result", "resultCount", "sampledFrames", "seekCommandMaxMs", "seekCount", "seekEvidenceSource", "seekFailureCount", "seekSettleMaxMs", "step", "surfaceId", "tClickToContentMs", "tClickToFirstFrameMs", "tFirstFrameToShellMs", "tShellToContentMs", "targetId", "targetType", "terminalState", "toStep", "traceId", "transport", "ttffMs", "turnAction", "unreadCountBucket", "watermarkResult", "worstBuildFrameMs", "worstFrameMs", "worstRasterFrameMs"}, path);
     return EventRecord(
       logType: _generatedRequestString(map["logType"], '$path.logType'),
       eventType: _generatedRequestString(map["eventType"], '$path.eventType'),
@@ -886,6 +928,8 @@ final class EventRecord {
       attemptIndex: map["attemptIndex"] == null ? null : _generatedRequestInt(map["attemptIndex"], '$path.attemptIndex'),
       audioUnderrunCount: map["audioUnderrunCount"] == null ? null : _generatedRequestInt(map["audioUnderrunCount"], '$path.audioUnderrunCount'),
       backgroundRetryTerminal: map["backgroundRetryTerminal"] == null ? null : _generatedRequestString(map["backgroundRetryTerminal"], '$path.backgroundRetryTerminal'),
+      buildMode: map["buildMode"] == null ? null : _generatedRequestString(map["buildMode"], '$path.buildMode'),
+      buildNumber: map["buildNumber"] == null ? null : _generatedRequestString(map["buildNumber"], '$path.buildNumber'),
       cacheAgeBucket: map["cacheAgeBucket"] == null ? null : _generatedRequestString(map["cacheAgeBucket"], '$path.cacheAgeBucket'),
       cacheClass: map["cacheClass"] == null ? null : _generatedRequestString(map["cacheClass"], '$path.cacheClass'),
       cacheSizeBytes: map["cacheSizeBytes"] == null ? null : _generatedRequestInt(map["cacheSizeBytes"], '$path.cacheSizeBytes'),
@@ -899,6 +943,7 @@ final class EventRecord {
       chatSource: map["chatSource"] == null ? null : _generatedRequestString(map["chatSource"], '$path.chatSource'),
       connectTimeMs: map["connectTimeMs"] == null ? null : _generatedRequestInt(map["connectTimeMs"], '$path.connectTimeMs'),
       consentState: map["consentState"] == null ? null : _generatedRequestString(map["consentState"], '$path.consentState'),
+      contentIdentityOutcome: map["contentIdentityOutcome"] == null ? null : _generatedRequestString(map["contentIdentityOutcome"], '$path.contentIdentityOutcome'),
       contentType: map["contentType"] == null ? null : _generatedRequestString(map["contentType"], '$path.contentType'),
       copyKey: map["copyKey"] == null ? null : _generatedRequestString(map["copyKey"], '$path.copyKey'),
       correlationHash: map["correlationHash"] == null ? null : _generatedRequestString(map["correlationHash"], '$path.correlationHash'),
@@ -912,6 +957,7 @@ final class EventRecord {
       digestMatch: map["digestMatch"] == null ? null : _generatedRequestBool(map["digestMatch"], '$path.digestMatch'),
       disconnectReason: map["disconnectReason"] == null ? null : _generatedRequestString(map["disconnectReason"], '$path.disconnectReason'),
       dismissPolicy: map["dismissPolicy"] == null ? null : _generatedRequestString(map["dismissPolicy"], '$path.dismissPolicy'),
+      distributionClass: map["distributionClass"] == null ? null : _generatedRequestString(map["distributionClass"], '$path.distributionClass'),
       droppedFrames: map["droppedFrames"] == null ? null : _generatedRequestInt(map["droppedFrames"], '$path.droppedFrames'),
       durationMismatch: map["durationMismatch"] == null ? null : _generatedRequestBool(map["durationMismatch"], '$path.durationMismatch'),
       durationMs: map["durationMs"] == null ? null : _generatedRequestInt(map["durationMs"], '$path.durationMs'),
@@ -932,6 +978,8 @@ final class EventRecord {
       jankThresholdMs: map["jankThresholdMs"] == null ? null : _generatedRequestInt(map["jankThresholdMs"], '$path.jankThresholdMs'),
       jankyFrames: map["jankyFrames"] == null ? null : _generatedRequestInt(map["jankyFrames"], '$path.jankyFrames'),
       journey: map["journey"] == null ? null : _generatedRequestString(map["journey"], '$path.journey'),
+      launchManifestDigest: map["launchManifestDigest"] == null ? null : _generatedRequestString(map["launchManifestDigest"], '$path.launchManifestDigest'),
+      launchProvenance: map["launchProvenance"] == null ? null : _generatedRequestString(map["launchProvenance"], '$path.launchProvenance'),
       limitValue: map["limitValue"] == null ? null : _generatedRequestInt(map["limitValue"], '$path.limitValue'),
       mediaConnected: map["mediaConnected"] == null ? null : _generatedRequestBool(map["mediaConnected"], '$path.mediaConnected'),
       memberCountBucket: map["memberCountBucket"] == null ? null : _generatedRequestString(map["memberCountBucket"], '$path.memberCountBucket'),
@@ -1006,6 +1054,8 @@ final class EventRecord {
     if (this.attemptIndex != null) "attemptIndex": this.attemptIndex!,
     if (this.audioUnderrunCount != null) "audioUnderrunCount": this.audioUnderrunCount!,
     if (this.backgroundRetryTerminal != null) "backgroundRetryTerminal": this.backgroundRetryTerminal!,
+    if (this.buildMode != null) "buildMode": this.buildMode!,
+    if (this.buildNumber != null) "buildNumber": this.buildNumber!,
     if (this.cacheAgeBucket != null) "cacheAgeBucket": this.cacheAgeBucket!,
     if (this.cacheClass != null) "cacheClass": this.cacheClass!,
     if (this.cacheSizeBytes != null) "cacheSizeBytes": this.cacheSizeBytes!,
@@ -1019,6 +1069,7 @@ final class EventRecord {
     if (this.chatSource != null) "chatSource": this.chatSource!,
     if (this.connectTimeMs != null) "connectTimeMs": this.connectTimeMs!,
     if (this.consentState != null) "consentState": this.consentState!,
+    if (this.contentIdentityOutcome != null) "contentIdentityOutcome": this.contentIdentityOutcome!,
     if (this.contentType != null) "contentType": this.contentType!,
     if (this.copyKey != null) "copyKey": this.copyKey!,
     if (this.correlationHash != null) "correlationHash": this.correlationHash!,
@@ -1032,6 +1083,7 @@ final class EventRecord {
     if (this.digestMatch != null) "digestMatch": this.digestMatch!,
     if (this.disconnectReason != null) "disconnectReason": this.disconnectReason!,
     if (this.dismissPolicy != null) "dismissPolicy": this.dismissPolicy!,
+    if (this.distributionClass != null) "distributionClass": this.distributionClass!,
     if (this.droppedFrames != null) "droppedFrames": this.droppedFrames!,
     if (this.durationMismatch != null) "durationMismatch": this.durationMismatch!,
     if (this.durationMs != null) "durationMs": this.durationMs!,
@@ -1052,6 +1104,8 @@ final class EventRecord {
     if (this.jankThresholdMs != null) "jankThresholdMs": this.jankThresholdMs!,
     if (this.jankyFrames != null) "jankyFrames": this.jankyFrames!,
     if (this.journey != null) "journey": this.journey!,
+    if (this.launchManifestDigest != null) "launchManifestDigest": this.launchManifestDigest!,
+    if (this.launchProvenance != null) "launchProvenance": this.launchProvenance!,
     if (this.limitValue != null) "limitValue": this.limitValue!,
     if (this.mediaConnected != null) "mediaConnected": this.mediaConnected!,
     if (this.memberCountBucket != null) "memberCountBucket": this.memberCountBucket!,

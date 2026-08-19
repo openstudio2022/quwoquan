@@ -16,6 +16,7 @@ class IntegrationRequestPageIds {
     'GetExternalInteractionMetricsSnapshot': 'integration.get.external.interaction.metrics.snapshot',
     'GetExternalInteractionRequest': 'integration.get.external.interaction.request',
     'GetNearbyLocations': 'integration.get.nearby.locations',
+    'GetSmsOtpDeliveryReadiness': 'integration.get.sms.otp.delivery.readiness',
     'InvokeConnectorCapability': 'integration.invoke.connector.capability',
     'ListConnectorConnections': 'integration.list.connector.connections',
     'ListConnectorDefinitions': 'integration.list.connector.definitions',
@@ -43,6 +44,7 @@ class IntegrationRequestPageIds {
   static const String getExternalInteractionMetricsSnapshot = 'integration.get.external.interaction.metrics.snapshot';
   static const String getExternalInteractionRequest = 'integration.get.external.interaction.request';
   static const String getNearbyLocations = 'integration.get.nearby.locations';
+  static const String getSmsOtpDeliveryReadiness = 'integration.get.sms.otp.delivery.readiness';
   static const String invokeConnectorCapability = 'integration.invoke.connector.capability';
   static const String listConnectorConnections = 'integration.list.connector.connections';
   static const String listConnectorDefinitions = 'integration.list.connector.definitions';

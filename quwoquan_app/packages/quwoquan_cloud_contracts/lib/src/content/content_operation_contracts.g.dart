@@ -1,5 +1,5 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: d68dfe12604d5c5225ba691373427dc83221ebf23391ec8cf7c2432f88b2a76a
+// ContractGraph SHA256: 84dfd87556df4ea11fd328bc5da6cf605bad480038327148f7a298c5702b1fe2
 
 library;
 
@@ -1605,6 +1605,8 @@ final class ContentDiscoveryFeedPageSlice {
     required this.feedRequestId,
     this.policyDigest,
     required this.objectCards,
+    this.releaseId,
+    this.manifestDigest,
   });
 
   final List<ContentPostProjection> items;
@@ -1616,9 +1618,11 @@ final class ContentDiscoveryFeedPageSlice {
   final String feedRequestId;
   final String? policyDigest;
   final List<FeedObjectCard> objectCards;
+  final String? releaseId;
+  final String? manifestDigest;
 
   factory ContentDiscoveryFeedPageSlice.fromWire(Map<String, Object?> map, [String path = "ContentDiscoveryFeedPageSlice"]) {
-    _rejectUnknownFields(map, const <String>{"items", "outcome", "emptyReason", "nextCursor", "previousCursor", "paginationExpiresAt", "feedRequestId", "policyDigest", "objectCards"}, path);
+    _rejectUnknownFields(map, const <String>{"items", "outcome", "emptyReason", "nextCursor", "previousCursor", "paginationExpiresAt", "feedRequestId", "policyDigest", "objectCards", "releaseId", "manifestDigest"}, path);
     return ContentDiscoveryFeedPageSlice(
       items: List<ContentPostProjection>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => ContentPostProjection.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
       outcome: ContentFeedOutcome.fromWire(map["outcome"], '$path.outcome'),
@@ -1629,6 +1633,8 @@ final class ContentDiscoveryFeedPageSlice {
       feedRequestId: _requiredString(map["feedRequestId"], '$path.feedRequestId'),
       policyDigest: map["policyDigest"] == null ? null : _requiredString(map["policyDigest"], '$path.policyDigest'),
       objectCards: List<FeedObjectCard>.unmodifiable(_requiredList(map["objectCards"], '$path.objectCards').asMap().entries.map((entry) => FeedObjectCard.fromWire(_requiredObject(entry.value, '$path.objectCards' + '[${entry.key}]'), '$path.objectCards' + '[${entry.key}]'))),
+      releaseId: map["releaseId"] == null ? null : _requiredString(map["releaseId"], '$path.releaseId'),
+      manifestDigest: map["manifestDigest"] == null ? null : _requiredString(map["manifestDigest"], '$path.manifestDigest'),
     );
   }
 
@@ -1642,6 +1648,8 @@ final class ContentDiscoveryFeedPageSlice {
     "feedRequestId": feedRequestId,
     if (policyDigest != null) "policyDigest": policyDigest!,
     "objectCards": objectCards.map((value) => value.toWire()).toList(growable: false),
+    if (releaseId != null) "releaseId": releaseId!,
+    if (manifestDigest != null) "manifestDigest": manifestDigest!,
   };
 }
 

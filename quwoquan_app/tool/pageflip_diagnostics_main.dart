@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../test/support/pageflip/pageflip_diagnostics.dart';
+import '../test/support/runtime/pageflip/pageflip_diagnostics.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
