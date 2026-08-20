@@ -139,6 +139,42 @@ func TestExternalInteractionResolutionFailsClosedWithoutCompiledEnvironmentBindi
 	}
 }
 
+// 材料读取器把「键不存在」与「键存在但只有空白」当成同一件事：空白 endpoint
+// 或空白 token 一旦被当成在场，composition root 就会带着无效凭据启动。
+func TestExternalInteractionBindingTreatsBlankMaterialAsAbsent(t *testing.T) {
+	binding := ExternalInteractionBinding{
+		Endpoints: map[string]string{
+			"endpoint":              "https://sms-provider-substitute:9443/v1/provider/sms/send",
+			"user_service_base_url": "   ",
+		},
+		Secrets: map[string]string{
+			"INTEGRATION_SMS_TOKEN":          "target-scoped-provider-token",
+			"INTEGRATION_PUSH_APNS_KEY_FILE": "\t\n",
+		},
+	}
+
+	if value, ok := binding.Endpoint("endpoint"); !ok ||
+		value != "https://sms-provider-substitute:9443/v1/provider/sms/send" {
+		t.Fatalf("present endpoint material must be readable: value=%q ok=%v", value, ok)
+	}
+	if _, ok := binding.Endpoint("user_service_base_url"); ok {
+		t.Fatal("blank endpoint material must be reported as absent")
+	}
+	if _, ok := binding.Endpoint("apns_topic"); ok {
+		t.Fatal("undeclared endpoint role must be reported as absent")
+	}
+	if value, ok := binding.Secret("INTEGRATION_SMS_TOKEN"); !ok ||
+		value != "target-scoped-provider-token" {
+		t.Fatalf("present secret material must be readable: ok=%v", ok)
+	}
+	if _, ok := binding.Secret("INTEGRATION_PUSH_APNS_KEY_FILE"); ok {
+		t.Fatal("blank secret material must be reported as absent")
+	}
+	if _, ok := binding.Secret("INTEGRATION_PUSH_FCM_SERVICE_ACCOUNT_FILE"); ok {
+		t.Fatal("undeclared secret key must be reported as absent")
+	}
+}
+
 // 纯守卫子句不依赖编译期绑定，未打包树里同样必须 fail closed。
 func TestExternalInteractionResolutionRequiresRuntimeConfigProvider(t *testing.T) {
 	if _, err := ResolveSMSBinding("prod", nil); err == nil ||
