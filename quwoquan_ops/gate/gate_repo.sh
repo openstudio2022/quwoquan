@@ -353,6 +353,12 @@ run_app() {
   # 仅分析主 App 业务代码与测试；vendor/plugins/** 属于 path overrides 的第三方依赖，
   # 其 example/test/pigeons 不应作为 quwoquan_app 主工程门禁输入。
   (cd quwoquan_app && flutter analyze lib test)
+  # canonical UAT 与 Patrol support 的 package context 归物理隔离的 test host：
+  # 生产 pubspec 不含 patrol，因此它们只能在这里被静态分析。两条分析的并集
+  # 必须覆盖全部 canonical UAT，由 verify_local_dependency_purity 证明无排除假绿。
+  (cd quwoquan_app/test_host/patrol && flutter pub get --offline)
+  (cd quwoquan_app/test_host/patrol && flutter analyze \
+    lib test/patrol test/canonical/user_acceptance test/canonical/support/runtime/patrol)
   # Dart 语义门禁：视觉 token + iOS 语义风格（chevron / Cupertino 组件边界）
   if command -v python3 >/dev/null 2>&1; then
     python3 quwoquan_app/scripts/runtime/architecture/verify_retired_terms_zero.py || exit 1

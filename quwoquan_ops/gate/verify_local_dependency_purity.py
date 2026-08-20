@@ -467,6 +467,96 @@ def _verify_production_test_dependency_purity(
                 leak(wrapper_source, f"coverage enumeration missing {marker}")
 
 
+def _verify_uat_static_analysis_coverage(
+    failures: list[str],
+    *,
+    app_dir: Path = ROOT / "quwoquan_app",
+    gate_script: Path = ROOT / "quwoquan_ops/gate/gate_repo.sh",
+) -> None:
+    """Prove the main-App exclusion never silently drops a canonical UAT.
+
+    生产 pubspec 不含 patrol，因此 canonical UAT 与 Patrol support 只能在
+    test host 的 package context 下静态分析。主 App 的排除因此必须与 test host
+    的分析集合严格互补：每一个 canonical UAT 都要经 test/canonical symlink
+    落进 test host 的分析根，否则排除就是假绿。
+    """
+
+    def uncovered(path: Path, reason: str) -> None:
+        _fail(
+            failures,
+            "APP.PACKAGE.uat_static_analysis_uncovered: "
+            f"{_display_path(path)} {reason}",
+        )
+
+    canonical_uat_root = app_dir / "test/user_acceptance"
+    patrol_support_root = app_dir / "test/support/runtime/patrol"
+    host_dir = app_dir / "test_host/patrol"
+    canonical_link = host_dir / "test/canonical"
+
+    production_options = app_dir / "analysis_options.yaml"
+    if not production_options.is_file():
+        uncovered(production_options, "is missing")
+        return
+    production_excludes = (
+        (yaml.safe_load(production_options.read_text(encoding="utf-8")) or {})
+        .get("analyzer", {})
+        .get("exclude")
+        or []
+    )
+    for required_exclude in (
+        "test/user_acceptance/**",
+        "test/support/runtime/patrol/**",
+    ):
+        if required_exclude not in production_excludes:
+            uncovered(
+                production_options,
+                f"must exclude {required_exclude} from the main-App analysis",
+            )
+
+    # canonical UAT 只允许被 symlink 引用；复制会立刻产生第二个真相源。
+    if not canonical_link.is_symlink():
+        uncovered(canonical_link, "must be a symlink to the main App test tree")
+        return
+    if canonical_link.resolve() != (app_dir / "test").resolve():
+        uncovered(canonical_link, "must resolve to the main App test tree")
+        return
+
+    host_options = host_dir / "analysis_options.yaml"
+    if host_options.is_file():
+        host_excludes = (
+            (yaml.safe_load(host_options.read_text(encoding="utf-8")) or {})
+            .get("analyzer", {})
+            .get("exclude")
+            or []
+        )
+        for host_exclude in host_excludes:
+            if str(host_exclude).startswith("test/canonical"):
+                uncovered(host_options, f"must not exclude {host_exclude}")
+
+    analysis_roots = ("user_acceptance", "support/runtime/patrol")
+    if not gate_script.is_file():
+        uncovered(gate_script, "is missing")
+    else:
+        gate_text = gate_script.read_text(encoding="utf-8")
+        for analysis_root in analysis_roots:
+            if f"test/canonical/{analysis_root}" not in gate_text:
+                uncovered(
+                    gate_script,
+                    f"must analyze test/canonical/{analysis_root} in the test host",
+                )
+
+    covered_sources = tuple(
+        sorted(canonical_uat_root.rglob("*_test.dart"))
+    ) + tuple(sorted(patrol_support_root.rglob("*.dart")))
+    if not covered_sources:
+        uncovered(canonical_uat_root, "exposes no canonical UAT to analyze")
+    for source in covered_sources:
+        relative = source.relative_to(app_dir / "test").as_posix()
+        analyzed = canonical_link / relative
+        if not analyzed.is_file():
+            uncovered(source, "is not reachable from the test host analysis root")
+
+
 def _verify_android_vendoring(failures: list[str]) -> None:
     for name in REQUIRED_ANDROID_ARTIFACTS:
         artifact = ANDROID_ARTIFACTS_DIR / name
@@ -577,6 +667,7 @@ def main() -> int:
         pod_executable=os.environ.get("QWQ_COCOAPODS_EXECUTABLE", ""),
     )
     _verify_production_test_dependency_purity(failures)
+    _verify_uat_static_analysis_coverage(failures)
     _verify_android_vendoring(failures)
     _verify_vendor_build_files(failures)
 
