@@ -340,6 +340,62 @@ def test_cocoapods_wrapper_normalizes_to_self_reported_runtime(
     )
 
 
+def _stub_pod_inspection(monkeypatch, version: str) -> None:
+    class Result:
+        returncode = 0
+
+        def __init__(self, stdout: str) -> None:
+            self.stdout = stdout
+
+    results = iter(
+        [
+            Result(f"{version}\n"),
+            Result("Executable Path: /opt/pod/libexec/bin/pod\n"),
+        ]
+    )
+    monkeypatch.setattr(
+        "quwoquan_ops.cli.lib.app_dependency_toolchain.subprocess.run",
+        lambda *_args, **_kwargs: next(results),
+    )
+
+
+def test_cocoapods_is_not_applicable_without_any_installed_pod(monkeypatch) -> None:
+    """CocoaPods 只存在于 macOS，Linux 上缺席不构成版本漂移。"""
+
+    monkeypatch.setattr("shutil.which", lambda _name: None)
+    failures: list[str] = []
+
+    _verify_cocoapods_toolchain(failures)
+
+    assert failures == []
+
+
+def test_cocoapods_still_rejects_declared_but_unusable_executable(
+    monkeypatch,
+) -> None:
+    """显式声明就是承诺有 CocoaPods，声明却不可用仍然是漂移。"""
+
+    monkeypatch.setattr("shutil.which", lambda _name: None)
+    _stub_pod_inspection(monkeypatch, "1.15.2")
+    failures: list[str] = []
+
+    _verify_cocoapods_toolchain(failures, pod_executable="/usr/local/bin/pod")
+
+    assert failures and failures[0].startswith("APP.DEPENDENCY.cocoapods_mixed:")
+
+
+def test_cocoapods_still_rejects_drift_discovered_on_path(monkeypatch) -> None:
+    """装了 CocoaPods 就必须判：缺席豁免不能顺带放过 PATH 上的漂移版本。"""
+
+    monkeypatch.setattr("shutil.which", lambda _name: "/usr/local/bin/pod")
+    _stub_pod_inspection(monkeypatch, "1.15.2")
+    failures: list[str] = []
+
+    _verify_cocoapods_toolchain(failures)
+
+    assert failures and failures[0].startswith("APP.DEPENDENCY.cocoapods_mixed:")
+
+
 def _write_production_purity_fixture(root: Path, *, leaked: bool) -> Path:
     app = root / "quwoquan_app"
     (app / "ios/Runner.xcodeproj").mkdir(parents=True)

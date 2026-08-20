@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import sys
 from pathlib import Path
 
@@ -317,6 +318,12 @@ def _verify_cocoapods_toolchain(
     *,
     pod_executable: str = "",
 ) -> None:
+    # 这条判据禁的是 wrapper 与 runtime 版本漂移，而「机器上没装 CocoaPods」不构成漂移。
+    # CocoaPods 只存在于 macOS，Linux 上不可能有 pod，缺席即判失败会让判据在那里结构上
+    # 无法通过。处理方式与同文件的 Pods/ 一致：缺席不校验，存在才校验。调用方显式声明了
+    # 路径就必须成立——那是承诺有 CocoaPods，声明却不可用仍然是漂移。
+    if not pod_executable.strip() and not shutil.which("pod"):
+        return
     try:
         resolve_cocoapods_executable(pod_executable)
     except AppDependencyToolchainError as error:
