@@ -155,8 +155,6 @@ entries:
   anchor: GWT-013
 - spec: specs/feature-tree/runtime/runtime-client-foundation/unified-app-page-access/spec.md
   anchor: GWT-001
-- spec: specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/spec.md
-  anchor: GWT-001
 - spec: specs/feature-tree/runtime/runtime-governance/spec.md
   anchor: SIT-002
 - spec: specs/feature-tree/runtime/runtime-testinfra/spec.md

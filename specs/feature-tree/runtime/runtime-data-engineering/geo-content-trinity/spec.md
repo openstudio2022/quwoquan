@@ -82,3 +82,12 @@
 - 准出影响：`block`
 - 影响或价值：尚缺同一 immutable release digest 的 tag/creator/content/homepage 四环境 activation、API/media consumer readback 与 rollback/replay receipt。仓库内 importer/MediaAsset authority、local/hosted topology 的 `userPostgresPortRole`/`userPostgresDsnEnv` 契约与 local_contract 已另轨关闭，禁止用这些静态工程门替代 Alpha → Beta → Gamma → Prod 的真实晋级证据。Alpha 对 `20260731--travel-zhejiang-six--scale-017`（`payloadSha256=sha256:93af46e1a2399c22ae6df81c95a6a546a5f652ad025ad477f49b6885c9bc4eae`）已有 import + consumer ship verify + `stackctl verify --profile integration` 证据，但**不得**据此关闭本 OPEN；Beta/Gamma/Prod activation、readback 与 rollback/replay 仍缺。
 - 完成判定：`GWT-002` 的 3 条 THEN 组全部具备子句级 `spec_ref`（`gwt-002.t1..t3`）绑定的真实晋级证据——同一 immutable release digest 依次取得 Beta、Gamma、Prod 的 activation、consumer readback 与 rollback/replay receipt，静态工程门不计。
+
+<a id="open-003"></a>
+### OPEN-003 golden 树媒体持有缺可复现来源
+
+- 类型：`capability_gap`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：尚缺把 golden 树媒体持有从版本控制重建的能力。入库的 `quwoquan_data/publish/` golden 树引用 5 个 system-creator 头像 body（`3dc302…webp` 等），这些 body 只存在于运行机器的内容库。因此 `test_geo_content_trinity_legacy_golden_cannot_bypass_current_release_gates` 在空内容库上无法诚实运行——它证明的是「历史 golden 不能绕过当前发布门」，而不是「这台机器的库里恰好有这几个 body」。相邻的 publish purity 契约已改为经 `admit_media_body` 自备字节，本条是剩下唯一还依赖环境既有库存的用例。
+- 完成判定：`GWT-001` 对 creator/avatar 经 immutable release MediaAsset authority 绑定 source unit 的那条 THEN，在空 `QWQ_LIBRARY_ROOT` 上也由版本控制内的来源满足——golden 树引用的每个 media body 都能重建（fixture 自备字节，或 golden 树自带 CAS 切片并由发布门校验闭包），且该用例在空库上连续两次通过。
