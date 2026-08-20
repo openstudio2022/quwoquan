@@ -40,8 +40,8 @@ func newSMSOTPProviderFixture(
 	t.Cleanup(upstream.Close)
 	externalProvider, err := provider.NewHTTPExternalProvider(
 		provider.HTTPExternalProviderConfig{
-			Name:              "aliyun_sms",
-			Operation:         reliabletask.ExternalInteractionOperationSmsOTP,
+			Name:      "aliyun_sms",
+			Operation: reliabletask.ExternalInteractionOperationSmsOTP,
 			// 路径与 sms-provider-substitute 声明的 INTEGRATION_SMS_ENDPOINT 一致；
 			// query 单独拼接，否则 path authority 的匹配会被 ?trace= 截断。
 			Endpoint: upstream.URL + "/v1/provider/sms/send" +
