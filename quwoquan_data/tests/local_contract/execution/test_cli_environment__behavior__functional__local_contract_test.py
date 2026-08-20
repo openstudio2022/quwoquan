@@ -62,6 +62,9 @@ def test_cli_exposes_only_durable_task_facades():
     )
     assert choices.split(",") == [
         "preflight",
+        "compile-intent",
+        "calibrate-capacity",
+        "capacity-bootstrap",
         "prepare-campaign",
         "execute",
         "drain-pool-delivery",
