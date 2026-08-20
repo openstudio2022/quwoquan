@@ -19,6 +19,9 @@ import pytest
 from jsonschema import Draft202012Validator, FormatChecker
 
 from quwoquan_ops.ci import render_release_lifecycle_receipts as lifecycle
+from quwoquan_ops.tests.support.app_artifact_manifest_test_support import (
+    app_artifact_manifest,
+)
 from quwoquan_ops.tests.support.rollout_stage_promotion_evidence_test_support import (
     promotion_evidence,
 )
@@ -375,6 +378,13 @@ class FinalAcceptanceFixture:
                         "sourceGitSha": COMMIT,
                         "sourceTreeDigest": TREE,
                         "contentSHA256": TEST_DIGEST.removeprefix("sha256:"),
+                        "artifactManifest": app_artifact_manifest(
+                            environment=environment,
+                            surface=surface,
+                            source_git_sha=COMMIT,
+                            source_tree_digest=TREE,
+                            artifact_digest=TEST_DIGEST,
+                        ),
                     }
                 elif environment == "prod" and surface == "android":
                     payload = {
@@ -383,6 +393,13 @@ class FinalAcceptanceFixture:
                         "sourceTreeDigest": TREE,
                         "packagedAPK": "quwoquan.apk",
                         "apkSHA256": TEST_DIGEST.removeprefix("sha256:"),
+                        "artifactManifest": app_artifact_manifest(
+                            environment=environment,
+                            surface=surface,
+                            source_git_sha=COMMIT,
+                            source_tree_digest=TREE,
+                            artifact_digest=TEST_DIGEST,
+                        ),
                     }
                 elif environment == "prod" and surface == "opsPortal":
                     payload = {
@@ -399,6 +416,13 @@ class FinalAcceptanceFixture:
                         "sourceGitSha": COMMIT,
                         "sourceTreeDigest": TREE,
                         "packageDigest": TEST_DIGEST,
+                        "artifactManifest": app_artifact_manifest(
+                            environment=environment,
+                            surface=surface,
+                            source_git_sha=COMMIT,
+                            source_tree_digest=TREE,
+                            artifact_digest=TEST_DIGEST,
+                        ),
                     }
                 relative = (
                     f"packages/applications/{environment}/{surface}/receipt.json"

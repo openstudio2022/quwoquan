@@ -42,9 +42,9 @@ DART_RESOLVER_PATH = (
 )
 ANDROID_BUILD_PATH = ROOT / "quwoquan_app/android/app/build.gradle.kts"
 ANDROID_MANIFEST_PATH = ROOT / "quwoquan_app/android/app/src/main/AndroidManifest.xml"
-IOS_DEBUG_CONFIG_PATH = ROOT / "quwoquan_app/ios/Flutter/Debug.xcconfig"
-IOS_PROFILE_CONFIG_PATH = ROOT / "quwoquan_app/ios/Flutter/Profile.xcconfig"
-IOS_RELEASE_CONFIG_PATH = ROOT / "quwoquan_app/ios/Flutter/Release.xcconfig"
+IOS_DEBUG_CONFIG_PATH = ROOT / "quwoquan_app/ios/Flutter/Base/Debug.xcconfig"
+IOS_PROFILE_CONFIG_PATH = ROOT / "quwoquan_app/ios/Flutter/Base/Profile.xcconfig"
+IOS_RELEASE_CONFIG_PATH = ROOT / "quwoquan_app/ios/Flutter/Base/Release.xcconfig"
 IOS_PROJECT_PATH = ROOT / "quwoquan_app/ios/Runner.xcodeproj/project.pbxproj"
 
 RELEASE_ONLY_CLASSES = {"store", "official_web", "hosted_web"}
@@ -118,6 +118,14 @@ class AppArtifactManifestMetadataTest(unittest.TestCase):
         # 非市场渠道只允许非可提升 distributionClass。
         non_market = allowed - market_channels
         self.assertEqual(non_market, {"dev_direct", "simulator", "registered_device"})
+
+    def test_ios_simulator_does_not_claim_unsupported_aot_build_modes(self) -> None:
+        simulator = self.document["distribution_classes"]["simulator"]
+        self.assertEqual(simulator["platform_build_modes"]["ios"], ["debug"])
+        self.assertEqual(
+            simulator["platform_build_modes"]["android"],
+            ["debug", "profile", "release"],
+        )
 
     def test_launch_provenance_enumerates_all_valid_entries(self) -> None:
         self.assertEqual(
@@ -256,7 +264,17 @@ class AppArtifactManifestMetadataTest(unittest.TestCase):
 
         ios_project = IOS_PROJECT_PATH.read_text(encoding="utf-8")
         self.assertNotIn("QWQEnvironment.xcconfig", ios_project)
-        self.assertEqual(ios_project.count("/* Debug-alpha */"), 8)
+        self.assertNotIn("RunnerUITests", ios_project)
+        self.assertEqual(ios_project.count("/* Debug-alpha */"), 6)
+        for base_config in (
+            IOS_DEBUG_CONFIG_PATH,
+            IOS_PROFILE_CONFIG_PATH,
+            IOS_RELEASE_CONFIG_PATH,
+        ):
+            base_source = base_config.read_text(encoding="utf-8")
+            self.assertNotIn("Pods-Runner.debug.xcconfig", base_source)
+            self.assertNotIn("Pods-Runner.profile.xcconfig", base_source)
+            self.assertNotIn("Pods-Runner.release.xcconfig", base_source)
         for environment in contract["environment_suffixes"]:
             identity_source = (
                 ROOT / f"quwoquan_app/ios/Flutter/Identity/{environment}.xcconfig"
@@ -271,6 +289,11 @@ class AppArtifactManifestMetadataTest(unittest.TestCase):
                 source = (
                     ROOT / f"quwoquan_app/ios/Flutter/{configuration}.xcconfig"
                 ).read_text(encoding="utf-8")
+                self.assertIn(
+                    f"Pods-Runner.{build_mode}-{environment}.xcconfig",
+                    source,
+                )
+                self.assertNotIn("Pods-RunnerTests", source)
                 self.assertIn(
                     "QWQ_MODE_BUNDLE_ID_SUFFIX ="
                     + (

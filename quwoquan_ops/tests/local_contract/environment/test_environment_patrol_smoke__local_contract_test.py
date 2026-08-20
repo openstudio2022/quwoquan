@@ -81,7 +81,7 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
         )
         self.assertRegex(
             wrapper_target,
-            r"^test/user_acceptance/patrol/"
+            r"^test/patrol/"
             r"qwq_environment_smoke_[0-9a-f]{16}_test\.dart$",
         )
         self.assertNotIn("..", wrapper_target)
@@ -104,12 +104,35 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
         )
         self.assertNotIn(str(smoke.APP_DIR), command[command.index("-t") + 1])
 
+    def test_patrol_host_enumerates_every_canonical_uat_once(self) -> None:
+        expected = tuple(
+            path.relative_to(smoke.APP_DIR).as_posix()
+            for path in sorted(
+                (smoke.APP_DIR / "test/user_acceptance").rglob("*_test.dart")
+            )
+            if path.is_file()
+        )
+
+        enumerated = smoke._canonical_patrol_uat_targets()
+
+        self.assertEqual(tuple(target for target, _ in enumerated), expected)
+        wrapper_targets = tuple(wrapper for _, wrapper in enumerated)
+        self.assertEqual(len(wrapper_targets), len(set(wrapper_targets)))
+        self.assertTrue(
+            all(
+                wrapper.startswith("test/patrol/qwq_environment_smoke_")
+                and wrapper.endswith("_test.dart")
+                for wrapper in wrapper_targets
+            )
+        )
+
     def test_patrol_target_wrapper_forwards_main_and_is_removed_in_finally(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:
             app_dir = Path(temporary_dir) / "quwoquan_app"
-            wrapper_directory = app_dir / smoke.PATROL_TEST_DIRECTORY
+            patrol_host_dir = app_dir / "test_host/patrol"
+            wrapper_directory = patrol_host_dir / smoke.PATROL_TEST_DIRECTORY
             target_path = app_dir / smoke.BASIC_VIABILITY_TARGET
             wrapper_directory.mkdir(parents=True)
             target_path.parent.mkdir(parents=True)
@@ -120,7 +143,12 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
 
             wrapper_path: Path | None = None
             cleanup = None
-            with mock.patch.object(smoke_wrapper, "APP_DIR", app_dir):
+            with (
+                mock.patch.object(smoke_wrapper, "APP_DIR", app_dir),
+                mock.patch.object(
+                    smoke_wrapper, "PATROL_HOST_DIR", patrol_host_dir
+                ),
+            ):
                 try:
                     wrapper_path, wrapper_target, cleanup = (
                         smoke._create_patrol_target_wrapper(
@@ -130,7 +158,7 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
                     self.assertTrue(wrapper_path.is_file())
                     self.assertEqual(
                         wrapper_target,
-                        wrapper_path.relative_to(app_dir).as_posix(),
+                        wrapper_path.relative_to(patrol_host_dir).as_posix(),
                     )
                     self.assertRegex(
                         wrapper_path.stem,
@@ -143,7 +171,7 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
                     self.assertEqual(
                         wrapper_path.read_text(encoding="utf-8"),
                         "// Ephemeral runner-owned Patrol wrapper; never commit this file.\n"
-                        "import '../journeys/app_startup/"
+                        "import '../../../../test/user_acceptance/journeys/app_startup/"
                         "basic_viability__user_acceptance_test.dart' "
                         "as canonical_target;\n\n"
                         "void main() {\n"
@@ -836,10 +864,12 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
         self.assertIn("publicSlicePrefix: media/video/s/media-canary-seek-125s/v1", profile_text)
         self.assertIn("media-canary-hour-boundary-3595s", profile_text)
 
-        patrol_main = (
-            ROOT / "quwoquan_app/test/user_acceptance/patrol/patrol_test_main.dart"
-        ).read_text(encoding="utf-8")
-        self.assertNotIn("runQuwoquanApp(", patrol_main)
+        self.assertFalse(
+            (
+                ROOT
+                / "quwoquan_app/test/user_acceptance/patrol/patrol_test_main.dart"
+            ).exists()
+        )
         harness = (
             ROOT
             / "quwoquan_app/test/support/runtime/patrol/"

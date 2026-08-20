@@ -109916,7 +109916,7 @@
           },
           {
             "path": "quwoquan_app/test/user_acceptance/service/content_service/content/feed_delivery_page/feed_load__user_acceptance_test.dart",
-            "sha256": "0c919ea13195b4a56b6ec3050f4af47956ebf9bf50ddfee566f8fbb73495b5f0"
+            "sha256": "f496de9be3c096cad17624acac1152d411ad4ba4af52ced775ce0bc6c0c5e272"
           }
         ],
         "pageParticipant": false,
@@ -128188,11 +128188,11 @@
     },
     {
       "path": "_shared/app_artifact_manifest.yaml",
-      "sha256": "5994c108683f0ad45628ea4f57052c1381f6154cc204b1354c141708ab1adc84"
+      "sha256": "b30aa9bff14cbe99c689fd0070bcb0cab0f2b6df4ecc33d01971203493291a8b"
     },
     {
       "path": "_shared/app_launch_manifest.yaml",
-      "sha256": "e7b70fd3ae4749355493ef0fef059cdb50d0b6ce466097203b713e3dd059dfcc"
+      "sha256": "e800eee8a30459075cd3168375f395268f74e322044073211519fe23bc092696"
     },
     {
       "path": "_shared/app_pages.yaml",
@@ -133387,7 +133387,7 @@
     },
     {
       "path": "_shared/app_artifact_manifest.yaml",
-      "sha256": "5994c108683f0ad45628ea4f57052c1381f6154cc204b1354c141708ab1adc84",
+      "sha256": "b30aa9bff14cbe99c689fd0070bcb0cab0f2b6df4ecc33d01971203493291a8b",
       "mediaType": "application/yaml",
       "content": {
         "application_identity": {
@@ -133597,12 +133597,22 @@
               "profile",
               "release"
             ],
-            "description": "Simulator/Emulator 安装制品（含 prod-sim 双模拟器验证）。",
+            "description": "Simulator/Emulator 安装制品；Flutter iOS simulator 只支持 Debug，iOS AOT Release 必须编译 iphoneos 制品且不能用 simulator 冒充。",
             "launch_provenances": [
               "canonical_launcher",
               "release_package",
               "icon_cold_launch"
             ],
+            "platform_build_modes": {
+              "android": [
+                "debug",
+                "profile",
+                "release"
+              ],
+              "ios": [
+                "debug"
+              ]
+            },
             "platforms": [
               "android",
               "ios"
@@ -133642,8 +133652,7 @@
         "platforms": [
           "android",
           "ios",
-          "web",
-          "macos"
+          "web"
         ],
         "schema_id": "app_artifact_manifest",
         "schemas": {
@@ -133651,6 +133660,7 @@
             "additional_fields": false,
             "constraints": [
               "distributionClass 与 buildMode 的组合必须满足 distribution_classes 声明；store/official_web/hosted_web 只接受 release。",
+              "simulator 的 platform_build_modes 是平台特有硬边界；iOS 仅允许 Debug，iOS Release 必须生成 iphoneos AOT 制品且不得以 Debug simulator 冒充。",
               "promotable 必须等于 distribution_classes 中该 class 的 promotability 且 buildMode 为 release。",
               "本清单不携带内容 release 身份；内容激活身份只由 Content API 响应在运行时下发。",
               "alpha/beta/gamma/prod 与 Debug/Release 的 applicationId 必须互不覆盖；Prod 正式 ID 只取已登记外部事实。"
@@ -133708,8 +133718,7 @@
                 "allowed_values": [
                   "android",
                   "ios",
-                  "web",
-                  "macos"
+                  "web"
                 ],
                 "type": "string"
               },
@@ -133903,8 +133912,7 @@
                 "allowed_values": [
                   "android",
                   "ios",
-                  "web",
-                  "macos"
+                  "web"
                 ],
                 "type": "string"
               }
@@ -133924,7 +133932,7 @@
     },
     {
       "path": "_shared/app_launch_manifest.yaml",
-      "sha256": "e7b70fd3ae4749355493ef0fef059cdb50d0b6ce466097203b713e3dd059dfcc",
+      "sha256": "e800eee8a30459075cd3168375f395268f74e322044073211519fe23bc092696",
       "mediaType": "application/yaml",
       "content": {
         "description": "Android、iOS、App 与 Ops 共同消费的启动清单、launcher handoff 和摘要协议；runtime 拥有组合语义，各平台不得复制字段或摘要规则。",
@@ -134083,6 +134091,142 @@
               "transport"
             ],
             "schema_value": "app-effective-launch-manifest"
+          },
+          "app_launch_attempt": {
+            "additional_fields": false,
+            "append_only_transitions": true,
+            "constraints": [
+              "transitions 只能按 prepared → compiling → compiled → installing → installed → launching → launched 前进；failed、runtime_degraded 与 stopped 是显式终态，不得倒推或补写 launched。",
+              "编译、安装和启动失败的 firstBlocker 分别为 APP.LAUNCH.compile_failed、APP.LAUNCH.install_failed 与 APP.LAUNCH.launch_failed；Prod Debug 必须在 prepared 后以 APP.LAUNCH.prod_debug_forbidden 失败。",
+              "ui-only 允许把 runtime、Provider、TLS、transport 与 content readiness 记入 warnings 后继续；content-live 与 release-artifact 不得把同一问题降级为 warning。",
+              "stopped 只表示用户或父进程正常停止已启动会话，不得解释为编译失败，也不得清理 App 或环境数据。",
+              "prod-sim 的 release-artifact 只允许 Android exact Release emulator artifact；Flutter iOS Simulator 只支持 Debug，iOS Release/Profile 必须以 APP.LAUNCH.ios_release_simulator_unsupported 阻断，不能生成或消费伪 Release 启动回执。"
+            ],
+            "fields": {
+              "artifactDigest": {
+                "type": "string"
+              },
+              "attemptId": {
+                "min_length": 1,
+                "type": "string"
+              },
+              "buildMode": {
+                "allowed_values": [
+                  "debug",
+                  "profile",
+                  "release"
+                ],
+                "type": "string"
+              },
+              "deviceId": {
+                "min_length": 1,
+                "type": "string"
+              },
+              "environment": {
+                "allowed_values": [
+                  "alpha",
+                  "beta",
+                  "gamma",
+                  "prod"
+                ],
+                "type": "string"
+              },
+              "firstBlocker": {
+                "type": "string"
+              },
+              "launchDigest": {
+                "type": "string"
+              },
+              "logRefs": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "nonPromotable": {
+                "type": "boolean"
+              },
+              "platform": {
+                "allowed_values": [
+                  "android",
+                  "ios"
+                ],
+                "type": "string"
+              },
+              "runMode": {
+                "allowed_values": [
+                  "content-live",
+                  "ui-only",
+                  "release-artifact"
+                ],
+                "type": "string"
+              },
+              "schema": {
+                "const": "app-launch-attempt",
+                "type": "string"
+              },
+              "status": {
+                "allowed_values": [
+                  "prepared",
+                  "compiling",
+                  "compiled",
+                  "installing",
+                  "installed",
+                  "launching",
+                  "launched",
+                  "runtime_degraded",
+                  "failed",
+                  "stopped"
+                ],
+                "type": "string"
+              },
+              "target": {
+                "allowed_values": [
+                  "alpha-local",
+                  "beta-local",
+                  "gamma-local",
+                  "prod-sim",
+                  "prod-hosted"
+                ],
+                "type": "string"
+              },
+              "transitions": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "updatedAt": {
+                "format": "rfc3339_utc",
+                "type": "string"
+              },
+              "warnings": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required_fields": [
+              "schema",
+              "attemptId",
+              "environment",
+              "target",
+              "platform",
+              "buildMode",
+              "runMode",
+              "artifactDigest",
+              "launchDigest",
+              "status",
+              "transitions",
+              "warnings",
+              "firstBlocker",
+              "deviceId",
+              "logRefs",
+              "updatedAt",
+              "nonPromotable"
+            ],
+            "schema_value": "app-launch-attempt"
           },
           "app_launcher_handoff": {
             "additional_fields": false,

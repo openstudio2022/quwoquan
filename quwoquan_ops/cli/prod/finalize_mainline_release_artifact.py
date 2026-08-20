@@ -38,7 +38,7 @@ STATUSES = frozenset(
         "rollback-failed",
     }
 )
-APPLICATION_PLATFORMS = ("android", "ios", "web", "macos")
+APPLICATION_PLATFORMS = ("android", "ios", "web")
 APPLICATION_PACKAGES = {
     environment: (
         *APPLICATION_PLATFORMS,
@@ -120,6 +120,7 @@ APPLICATION_PACKAGE_FIELDS = frozenset(
         "sourceGitSha",
         "sourceTreeDigest",
         "packageDigest",
+        "artifactManifest",
     }
 )
 APPLICATION_DESCRIPTOR_FIELDS = frozenset(

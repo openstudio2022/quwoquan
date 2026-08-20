@@ -388,7 +388,8 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
 
         with tempfile.TemporaryDirectory() as temporary_dir:
             app_dir = Path(temporary_dir) / "quwoquan_app"
-            wrapper_directory = app_dir / smoke.PATROL_TEST_DIRECTORY
+            patrol_host_dir = app_dir / "test_host/patrol"
+            wrapper_directory = patrol_host_dir / smoke.PATROL_TEST_DIRECTORY
             target_path = app_dir / smoke.MESSAGE_HOME_TARGET
             wrapper_directory.mkdir(parents=True)
             target_path.parent.mkdir(parents=True)
@@ -398,7 +399,12 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
                 encoding="utf-8",
             )
             cleanup = None
-            with mock.patch.object(smoke_wrapper, "APP_DIR", app_dir):
+            with (
+                mock.patch.object(smoke_wrapper, "APP_DIR", app_dir),
+                mock.patch.object(
+                    smoke_wrapper, "PATROL_HOST_DIR", patrol_host_dir
+                ),
+            ):
                 try:
                     wrapper_path, wrapper_target, cleanup = (
                         smoke._create_patrol_target_wrapper(

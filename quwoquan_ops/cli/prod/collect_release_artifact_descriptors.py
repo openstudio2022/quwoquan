@@ -54,6 +54,7 @@ GENERIC_APPLICATION_FIELDS = frozenset(
         "sourceGitSha",
         "sourceTreeDigest",
         "packageDigest",
+        "artifactManifest",
     }
 )
 ALL_APPLICATION_KEYS = frozenset(
@@ -396,6 +397,19 @@ def _validate_generic_application_source(
         raise ValueError(f"generic application evidence tree mismatch: {expected_key}")
     if DIGEST_PATTERN.fullmatch(str(payload.get("packageDigest") or "")) is None:
         raise ValueError(f"generic application package digest is invalid: {expected_key}")
+    artifact = payload.get("artifactManifest")
+    if (
+        not isinstance(artifact, dict)
+        or artifact.get("schema") != "app-artifact-manifest"
+        or artifact.get("environment") != environment
+        or artifact.get("platform") != surface
+        or artifact.get("sourceGitSha") != source["gitSha"]
+        or artifact.get("sourceTreeDigest") != source["treeDigest"]
+        or not isinstance(artifact.get("promotable"), bool)
+    ):
+        raise ValueError(
+            f"generic AppArtifactManifest binding is invalid: {expected_key}"
+        )
 
 
 def load_application_package_sources(directory: Path) -> dict[tuple[str, str], Path]:

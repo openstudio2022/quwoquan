@@ -441,7 +441,10 @@ class DevUpTest(unittest.TestCase):
         self.assertIn('"reverse",', build_gradle)
         self.assertIn("QWQ_CONSUMER_LEASE_ACQUIRED", build_gradle)
         self.assertIn("QWQ_ANDROID_LOCAL_PORTS", build_gradle)
-        self.assertIn("build_launcher_handoff.py", instance_launcher)
+        self.assertIn('bash "$APP_DIR/run.sh"', instance_launcher)
+        self.assertIn("launch_release_artifact.py", instance_launcher)
+        self.assertNotIn("build_launcher_handoff.py", instance_launcher)
+        self.assertNotIn("flutter run", instance_launcher)
         self.assertEqual(
             launch_manifest_metadata["target_environment"]["prod-sim"],
             "prod",
@@ -463,9 +466,8 @@ class DevUpTest(unittest.TestCase):
             set(handoff_schema["required_fields"]),
         )
         self.assertNotIn("QWQ_ANDROID_LOCAL_ENV_CA", instance_launcher)
-        self.assertIn("runtimeConfigDigest", instance_launcher)
-        self.assertIn("dartDefinesDigest", instance_launcher)
-        self.assertIn("androidReverseReceiptDigest", instance_launcher)
+        self.assertIn("--launch-receipt", instance_launcher)
+        self.assertIn("--artifact-manifest", instance_launcher)
         self.assertIn("certificate_paths(TARGET)", alpha_script)
         self.assertIn("/etc/caddy/tls/fullchain.pem", alpha_script)
         self.assertNotIn("tls internal", alpha_script)

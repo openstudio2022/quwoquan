@@ -235,12 +235,11 @@ jobs:
           from pathlib import Path
           environment = "${{ matrix.environment }}"
           runtime = json.loads(
-              Path(f"quwoquan_ops/environments/{environment}/runtime.yaml").read_text(
+              Path("quwoquan_ops/environments/prod/runtime.yaml").read_text(
                   encoding="utf-8"
               )
           )
-          target = "prod-hosted" if environment == "prod" else f"{environment}-local"
-          images = runtime["targets"][target]["buildImages"]
+          images = runtime["targets"]["prod-hosted"]["buildImages"]
           import hashlib
           from quwoquan_ops.cli.lib.immutable_image_composition import first_party_service_names
           from quwoquan_ops.cli.prod.generate_mainline_release_artifact import render_release_snapshot
@@ -255,14 +254,9 @@ jobs:
               sort_keys=True,
           ).encode("utf-8")
           config_digest = "sha256:" + hashlib.sha256(encoded).hexdigest()
-          prod_images = json.loads(
-              Path("quwoquan_ops/environments/prod/runtime.yaml").read_text(
-                  encoding="utf-8"
-              )
-          )["targets"]["prod-hosted"]["buildImages"]
           print(f"go_base_image={images['goBaseImage']}")
           print(f"alpine_base_image={images['alpineBaseImage']}")
-          print(f"python_base_image={images.get('pythonBaseImage', prod_images['pythonBaseImage'])}")
+          print(f"python_base_image={images['pythonBaseImage']}")
           print(f"artifact_config_digest={config_digest}")
           PY
       - name: 设置 QEMU

@@ -12,7 +12,7 @@ digest_contract:
   identity_format: "sha256:<64-lowercase-hex>"
 
 environments: [alpha, beta, gamma, prod]
-platforms: [android, ios, web, macos]
+platforms: [android, ios, web]
 build_modes: [debug, profile, release]
 
 # distributionClass 与 BuildMode 的合法组合。Debug 签名制品仅限开发者本机、
@@ -29,8 +29,11 @@ distribution_classes:
       [direct_flutter_run, canonical_launcher, hot_restart, icon_cold_launch]
     promotable: false
   simulator:
-    description: Simulator/Emulator 安装制品（含 prod-sim 双模拟器验证）。
+    description: Simulator/Emulator 安装制品；Flutter iOS simulator 只支持 Debug，iOS AOT Release 必须编译 iphoneos 制品且不能用 simulator 冒充。
     build_modes: [debug, profile, release]
+    platform_build_modes:
+      android: [debug, profile, release]
+      ios: [debug]
     platforms: [android, ios]
     launch_provenances:
       [canonical_launcher, release_package, icon_cold_launch]
@@ -205,7 +208,7 @@ schemas:
     fields:
       schema: { type: string, const: app-artifact-manifest }
       environment: { type: string, allowed_values: [alpha, beta, gamma, prod] }
-      platform: { type: string, allowed_values: [android, ios, web, macos] }
+      platform: { type: string, allowed_values: [android, ios, web] }
       buildMode: { type: string, allowed_values: [debug, profile, release] }
       distributionClass:
         type: string
@@ -222,6 +225,7 @@ schemas:
       promotable: { type: boolean }
     constraints:
       - distributionClass 与 buildMode 的组合必须满足 distribution_classes 声明；store/official_web/hosted_web 只接受 release。
+      - simulator 的 platform_build_modes 是平台特有硬边界；iOS 仅允许 Debug，iOS Release 必须生成 iphoneos AOT 制品且不得以 Debug simulator 冒充。
       - promotable 必须等于 distribution_classes 中该 class 的 promotability 且 buildMode 为 release。
       - 本清单不携带内容 release 身份；内容激活身份只由 Content API 响应在运行时下发。
       - alpha/beta/gamma/prod 与 Debug/Release 的 applicationId 必须互不覆盖；Prod 正式 ID 只取已登记外部事实。
@@ -302,13 +306,16 @@ schemas:
       - sourceGitSha
       - sourceTreeDigest
       - packageDigest
+      - artifactManifest
     fields:
       schema: { type: string, const: release-application-package }
       environment: { type: string, allowed_values: [alpha, beta, gamma, prod] }
-      surface: { type: string, allowed_values: [android, ios, web, macos] }
+      surface: { type: string, allowed_values: [android, ios, web] }
       sourceGitSha: { type: string, format: git_object_sha }
       sourceTreeDigest: { type: string, format: git_tree_digest }
       packageDigest: { type: string, format: sha256_identity }
+      artifactManifest: { type: object, schema_ref: app_artifact_manifest }
     constraints:
       - packageDigest 必须是对 canonical payload 目录的不可变 sha256 树摘要。
       - sourceGitSha/sourceTreeDigest 必须与检出的 reviewed candidate 完全一致。
+      - artifactManifest 必须逐字段保留 canonical AppArtifactManifest；environment/platform/source 必须与外层一致，artifactDigest 必须与真实 payload 制品一致，distributionClass/promotable 不得降维或改写。

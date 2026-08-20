@@ -194,14 +194,12 @@ func renderAppIdentityArtifacts(metadata appArtifactIdentityMetadata, sourceSHA 
 		})
 		for _, buildMode := range metadata.BuildModes {
 			configurationName := strings.ToUpper(buildMode[:1]) + buildMode[1:] + "-" + environment
-			baseConfigName := strings.ToUpper(buildMode[:1]) + buildMode[1:] + ".xcconfig"
+			baseConfigName := "Base/" + strings.ToUpper(buildMode[:1]) + buildMode[1:] + ".xcconfig"
 			lowerConfigurationName := strings.ToLower(configurationName)
 			wrapper := strings.Join([]string{
 				"// Generated from " + appIdentityMetadataRelativePath + "; do not edit.",
 				"#include \"" + baseConfigName + "\"",
 				"#include? \"Pods/Target Support Files/Pods-Runner/Pods-Runner." + lowerConfigurationName + ".xcconfig\"",
-				"#include? \"Pods/Target Support Files/Pods-RunnerTests/Pods-RunnerTests." + lowerConfigurationName + ".xcconfig\"",
-				"#include? \"Pods/Target Support Files/Pods-Runner-RunnerUITests/Pods-Runner-RunnerUITests." + lowerConfigurationName + ".xcconfig\"",
 				"#include \"Identity/" + environment + ".xcconfig\"",
 				"QWQ_EXPECTED_BUILD_MODE = " + buildMode,
 				"QWQ_EXPECTED_CONFIGURATION = " + configurationName,

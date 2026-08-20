@@ -24,6 +24,17 @@ ROOT = Path(__file__).resolve().parents[4]
 
 
 class ExternalProviderGovernanceContractTest(unittest.TestCase):
+    def test_message_transport_roots_use_package_bound_generated_bindings(self) -> None:
+        registry = governance.load_registry()
+        self.assertEqual(provider_gate.message_transport_static_issues(registry), [])
+        service_root = ROOT / "quwoquan_service" / "services"
+        roots = sorted(service_root.glob("*/cmd/**/message_transport.go"))
+        self.assertTrue(roots)
+        for path in roots:
+            source = path.read_text(encoding="utf-8")
+            self.assertIn("CompiledBindingFor(", source, path)
+            self.assertNotIn("ExternalProviderBindingFor(", source, path)
+
     def test_provider_runtime_has_one_package_bound_launch_track(self) -> None:
         sources = {
             relative: (ROOT / relative).read_text(encoding="utf-8")

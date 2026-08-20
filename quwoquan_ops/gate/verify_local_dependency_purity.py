@@ -1,24 +1,41 @@
 #!/usr/bin/env python3
-"""Block hidden build/runtime dependency fetches from supported local workflows."""
+"""Block hidden build/runtime fetches and App dependency-lock drift.
+
+Trigger: App pub/plugin/Pod locks, CocoaPods invocation, launcher or CI builds.
+Block: cross-lock mismatch, mixed CocoaPods executable/runtime, or implicit fetch.
+Repair: perform one explicit dependency transaction, commit its locks, then consume
+them with offline/enforce-lockfile and ``pod install --deployment`` only.
+"""
 
 from __future__ import annotations
 
-from pathlib import Path
+import hashlib
+import json
+import os
 import re
 import sys
+from pathlib import Path
 
 import yaml
 
-
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from quwoquan_ops.cli.lib.app_dependency_toolchain import (
+    AppDependencyToolchainError,
+    resolve_cocoapods_executable,
+)
 
 GATE_REPO = ROOT / "quwoquan_ops/gate/gate_repo.sh"
 RUN_SH = ROOT / "quwoquan_app/run.sh"
 FLUTTER_TEST_GUARD = ROOT / "quwoquan_app/scripts/env/run_flutter_test_guarded.py"
 PUBSPEC = ROOT / "quwoquan_app/pubspec.yaml"
+PUBSPEC_LOCK = ROOT / "quwoquan_app/pubspec.lock"
 PODFILE_LOCK = ROOT / "quwoquan_app/ios/Podfile.lock"
 PODS_MANIFEST_LOCK = ROOT / "quwoquan_app/ios/Pods/Manifest.lock"
 PODS_DIR = ROOT / "quwoquan_app/ios/Pods"
+IOS_PLUGIN_ROOT = ROOT / "quwoquan_app/ios/.symlinks/plugins"
 ANDROID_ARTIFACTS_DIR = ROOT / "quwoquan_app/vendor/android_artifacts"
 FLUTTER_WEBRTC_ANDROID = ROOT / "quwoquan_app/vendor/plugins/flutter_webrtc/android/build.gradle"
 LIVEKIT_ANDROID = ROOT / "quwoquan_app/vendor/plugins/livekit_client/android/build.gradle"
@@ -26,6 +43,13 @@ APP_ANDROID_BUILD = ROOT / "quwoquan_app/android/app/build.gradle.kts"
 FLUTTER_WEBRTC_CMAKE = ROOT / "quwoquan_app/vendor/plugins/flutter_webrtc/third_party/CMakeLists.txt"
 LIVEKIT_LINUX_CMAKE = ROOT / "quwoquan_app/vendor/plugins/livekit_client/linux/CMakeLists.txt"
 PACKAGE_SWIFT_GLOB = "quwoquan_app/vendor/plugins/**/Package.swift"
+
+PRODUCTION_TEST_MARKERS = (
+    "patrol",
+    "integration_test",
+    "PatrolJUnitRunner",
+    "RunnerUITests",
+)
 
 REQUIRED_ANDROID_ARTIFACTS = (
     "android-144.7559.01.aar",
@@ -109,8 +133,8 @@ def _verify_scripts(failures: list[str]) -> None:
     _check_contains(
         failures,
         path=FLUTTER_TEST_GUARD,
-        needle='["flutter", "pub", "get", "--offline"]',
-        description="offline Flutter test bootstrap",
+        needle='["flutter", "pub", "get", "--offline", "--enforce-lockfile"]',
+        description="locked offline Flutter test bootstrap",
     )
 
 
@@ -191,6 +215,224 @@ def _verify_ios_pods(
                 failures,
                 f"Missing vendored CocoaPod directory for trunk pod {pod_name!r}: {_display_path(pod_dir)}",
             )
+
+
+def _pod_version(lock_data: dict[object, object], pod_name: str) -> str:
+    prefix = f"{pod_name} ("
+    for declaration in lock_data.get("PODS", []):
+        value = next(iter(declaration), "") if isinstance(declaration, dict) else declaration
+        text = str(value)
+        if text.startswith(prefix) and text.endswith(")"):
+            return text[len(prefix) : -1]
+    return ""
+
+
+def _verify_ios_cross_lock(
+    failures: list[str],
+    *,
+    pubspec_lock: Path = PUBSPEC_LOCK,
+    podfile_lock: Path = PODFILE_LOCK,
+    pods_manifest_lock: Path = PODS_MANIFEST_LOCK,
+    plugin_root: Path = IOS_PLUGIN_ROOT,
+) -> None:
+    missing = [path for path in (pubspec_lock, podfile_lock) if not path.is_file()]
+    if missing:
+        for path in missing:
+            _fail(failures, f"APP.DEPENDENCY.lock_drift: missing {_display_path(path)}")
+        return
+    pub_lock = yaml.safe_load(pubspec_lock.read_text(encoding="utf-8")) or {}
+    pod_lock = yaml.safe_load(podfile_lock.read_text(encoding="utf-8")) or {}
+    packages = pub_lock.get("packages") or {}
+    for plugin in ("firebase_core", "firebase_messaging"):
+        declared = str((packages.get(plugin) or {}).get("version") or "").strip()
+        projected_pubspec = plugin_root / plugin / "pubspec.yaml"
+        projected = ""
+        if projected_pubspec.is_file():
+            projected = str(
+                (yaml.safe_load(projected_pubspec.read_text(encoding="utf-8")) or {}).get(
+                    "version", ""
+                )
+            ).strip()
+        locked_pod = _pod_version(pod_lock, plugin)
+        if not declared or declared != projected or declared != locked_pod:
+            _fail(
+                failures,
+                "APP.DEPENDENCY.lock_drift: "
+                f"{plugin} pub={declared or '<missing>'} "
+                f"plugin={projected or '<missing>'} pod={locked_pod or '<missing>'}",
+            )
+
+    firebase_version_file = plugin_root / "firebase_core/ios/firebase_sdk_version.rb"
+    expected_firebase = ""
+    if firebase_version_file.is_file():
+        match = re.search(
+            r"firebase_sdk_version!\(\).*?['\"]([^'\"]+)['\"]",
+            firebase_version_file.read_text(encoding="utf-8"),
+            re.DOTALL,
+        )
+        expected_firebase = match.group(1) if match else ""
+    for pod_name in ("Firebase/CoreOnly", "Firebase/Messaging"):
+        actual = _pod_version(pod_lock, pod_name)
+        if not expected_firebase or actual != expected_firebase:
+            _fail(
+                failures,
+                "APP.DEPENDENCY.lock_drift: "
+                f"{pod_name} plugin={expected_firebase or '<missing>'} "
+                f"pod={actual or '<missing>'}",
+            )
+    if pods_manifest_lock.exists() and (
+        podfile_lock.read_bytes() != pods_manifest_lock.read_bytes()
+    ):
+        _fail(
+            failures,
+            "APP.DEPENDENCY.lock_drift: Pods/Manifest.lock differs from Podfile.lock",
+        )
+
+
+def _verify_cocoapods_toolchain(
+    failures: list[str],
+    *,
+    pod_executable: str = "",
+) -> None:
+    try:
+        resolve_cocoapods_executable(pod_executable)
+    except AppDependencyToolchainError as error:
+        _fail(
+            failures,
+            f"APP.DEPENDENCY.cocoapods_mixed: {error}",
+        )
+
+
+def _verify_production_test_dependency_purity(
+    failures: list[str],
+    *,
+    app_dir: Path = ROOT / "quwoquan_app",
+) -> None:
+    """Keep native test runners in the isolated host and enumerate every UAT."""
+
+    def leak(path: Path, marker: str) -> None:
+        _fail(
+            failures,
+            "APP.PACKAGE.production_test_dependency_leak: "
+            f"{_display_path(path)} contains {marker}",
+        )
+
+    production_pubspec = app_dir / "pubspec.yaml"
+    if not production_pubspec.is_file():
+        leak(production_pubspec, "missing production pubspec")
+        return
+    decoded = yaml.safe_load(production_pubspec.read_text(encoding="utf-8")) or {}
+    for section in ("dependencies", "dev_dependencies", "dependency_overrides"):
+        entries = decoded.get(section) or {}
+        for dependency in ("patrol", "integration_test"):
+            if dependency in entries:
+                leak(production_pubspec, f"{section}.{dependency}")
+
+    plugin_graph = app_dir / ".flutter-plugins-dependencies"
+    if not plugin_graph.is_file():
+        leak(plugin_graph, "missing generated plugin graph")
+    else:
+        try:
+            graph = json.loads(plugin_graph.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            leak(plugin_graph, "invalid generated plugin graph")
+        else:
+            plugin_names = {
+                str(plugin.get("name") or "")
+                for plugins in (graph.get("plugins") or {}).values()
+                for plugin in plugins
+                if isinstance(plugin, dict)
+            }
+            for dependency in ("patrol", "integration_test"):
+                if dependency in plugin_names:
+                    leak(plugin_graph, dependency)
+
+    source_paths = (
+        app_dir / "ios/Podfile",
+        app_dir / "ios/Podfile.lock",
+        app_dir / "ios/Runner.xcodeproj/project.pbxproj",
+        app_dir / "ios/Runner/GeneratedPluginRegistrant.m",
+        app_dir / "android/app/build.gradle.kts",
+        app_dir
+        / "android/app/src/main/java/com/quwoquan/quwoquan_app/StartupEagerPluginRegistry.java",
+    )
+    source_paths += tuple(sorted((app_dir / "ios/Flutter").glob("*.xcconfig")))
+    if (app_dir / "ios/Pods/Manifest.lock").is_file():
+        source_paths += (app_dir / "ios/Pods/Manifest.lock",)
+    for path in source_paths:
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for marker in PRODUCTION_TEST_MARKERS:
+            if marker in text:
+                leak(path, marker)
+
+    host_dir = app_dir / "test_host/patrol"
+    host_pubspec = host_dir / "pubspec.yaml"
+    host_graph = host_dir / ".flutter-plugins-dependencies"
+    for path, markers in (
+        (host_pubspec, ("patrol:", "integration_test:")),
+        (
+            host_dir / "android/app/build.gradle.kts",
+            ("pl.leancode.patrol.PatrolJUnitRunner",),
+        ),
+        (
+            host_dir / "ios/RunnerUITests/RunnerUITests.m",
+            ("PATROL_INTEGRATION_TEST_IOS_RUNNER",),
+        ),
+    ):
+        if not path.is_file():
+            leak(path, "missing isolated Patrol host owner")
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for marker in markers:
+            if marker not in text:
+                leak(path, f"missing isolated host marker {marker}")
+    if not host_graph.is_file():
+        leak(host_graph, "missing isolated host plugin graph")
+    else:
+        graph_text = host_graph.read_text(encoding="utf-8", errors="replace")
+        for marker in ('"name":"patrol"', '"name":"integration_test"'):
+            if marker not in graph_text:
+                leak(host_graph, f"missing {marker}")
+
+    canonical_uat_root = app_dir / "test/user_acceptance"
+    canonical_uats = tuple(sorted(canonical_uat_root.rglob("*_test.dart")))
+    if not canonical_uats:
+        leak(canonical_uat_root, "no canonical UAT discovered")
+    canonical_targets = tuple(
+        path.relative_to(app_dir).as_posix() for path in canonical_uats
+    )
+    wrapper_targets = tuple(
+        "test/patrol/qwq_environment_smoke_"
+        + hashlib.sha256(target.encode("utf-8")).hexdigest()[:16]
+        + "_test.dart"
+        for target in canonical_targets
+    )
+    if len(set(wrapper_targets)) != len(canonical_targets):
+        leak(canonical_uat_root, "canonical UAT wrapper target collision")
+    copied_uats = tuple(sorted((host_dir / "test").rglob("*_user_acceptance_test.dart")))
+    for copied in copied_uats:
+        leak(copied, "canonical UAT copy in test host")
+    wrapper_source = (
+        ROOT
+        / "quwoquan_ops/cli/smoke/environment_patrol_smoke/wrapper.py"
+    )
+    if app_dir != ROOT / "quwoquan_app":
+        wrapper_source = app_dir / "test_host_wrapper.py"
+    if not wrapper_source.is_file():
+        leak(wrapper_source, "missing canonical UAT wrapper")
+    else:
+        wrapper_text = wrapper_source.read_text(encoding="utf-8")
+        for marker in (
+            'root_parts = ("test", "user_acceptance")',
+            "APP_DIR / normalized",
+            "PATROL_HOST_DIR / PATROL_TEST_DIRECTORY",
+            "def _canonical_patrol_uat_targets()",
+            'canonical_root.rglob("*_test.dart")',
+        ):
+            if marker not in wrapper_text:
+                leak(wrapper_source, f"coverage enumeration missing {marker}")
 
 
 def _verify_android_vendoring(failures: list[str]) -> None:
@@ -297,6 +539,12 @@ def main() -> int:
     _verify_scripts(failures)
     _verify_pubspec(failures)
     _verify_ios_pods(failures)
+    _verify_ios_cross_lock(failures)
+    _verify_cocoapods_toolchain(
+        failures,
+        pod_executable=os.environ.get("QWQ_COCOAPODS_EXECUTABLE", ""),
+    )
+    _verify_production_test_dependency_purity(failures)
     _verify_android_vendoring(failures)
     _verify_vendor_build_files(failures)
 

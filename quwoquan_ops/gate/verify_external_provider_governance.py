@@ -222,7 +222,7 @@ def message_transport_static_issues(registry: dict[object, object]) -> list[str]
         helpers_by_service.setdefault(service_id, []).append(helper)
         source = helper.read_text(encoding="utf-8")
         relative = helper.relative_to(ROOT).as_posix()
-        if "ExternalProviderBindingFor(" not in source:
+        if "CompiledBindingFor(" not in source:
             issues.append(f"{relative}: message root must consume its generated binding")
         if "RequireConfiguredRedisMessageTransport(" not in source:
             issues.append(f"{relative}: message root must run generated-binding preflight")
@@ -259,7 +259,7 @@ def message_transport_static_issues(registry: dict[object, object]) -> list[str]
                     f"{relative}: direct transport construction must stay behind generated preflight"
                 )
             elif (
-                "ExternalProviderBindingFor(" not in source
+                "CompiledBindingFor(" not in source
                 or "RequireConfiguredRedisMessageTransport(" not in source
             ):
                 issues.append(

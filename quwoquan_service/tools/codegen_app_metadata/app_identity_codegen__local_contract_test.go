@@ -11,7 +11,7 @@ func TestAppIdentityCodegenRendersCompletePlatformMatrix(t *testing.T) {
 	metadata := appArtifactIdentityMetadata{
 		SchemaID:     "app_artifact_manifest",
 		Environments: []string{"alpha", "beta", "gamma", "prod"},
-		Platforms:    []string{"android", "ios", "web", "macos"},
+		Platforms:    []string{"android", "ios", "web"},
 		BuildModes:   []string{"debug", "profile", "release"},
 		ApplicationIdentity: appIdentityContract{
 			DisplayNameBase: "趣我圈",
@@ -56,7 +56,7 @@ func TestAppIdentityCodegenRendersCompletePlatformMatrix(t *testing.T) {
 	}
 	debugAlpha := byPath["ios/Flutter/Debug-alpha.xcconfig"]
 	for _, expected := range []string{
-		`#include "Debug.xcconfig"`,
+		`#include "Base/Debug.xcconfig"`,
 		`#include "Identity/alpha.xcconfig"`,
 		`QWQ_EXPECTED_CONFIGURATION = Debug-alpha`,
 		`QWQ_MODE_BUNDLE_ID_SUFFIX = .debug`,
@@ -78,7 +78,7 @@ func TestAppIdentityCodegenCheckRejectsStaleArtifact(t *testing.T) {
 	}
 	metadata := `schema_id: app_artifact_manifest
 environments: [alpha, beta, gamma, prod]
-platforms: [android, ios, web, macos]
+platforms: [android, ios, web]
 build_modes: [debug, profile, release]
 application_identity:
   display_name_base: 趣我圈

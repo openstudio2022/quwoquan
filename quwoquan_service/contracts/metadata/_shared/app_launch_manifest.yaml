@@ -33,6 +33,61 @@ launch_policies:
     environments: [prod]
 
 schemas:
+  app_launch_attempt:
+    schema_value: app-launch-attempt
+    additional_fields: false
+    append_only_transitions: true
+    required_fields:
+      - schema
+      - attemptId
+      - environment
+      - target
+      - platform
+      - buildMode
+      - runMode
+      - artifactDigest
+      - launchDigest
+      - status
+      - transitions
+      - warnings
+      - firstBlocker
+      - deviceId
+      - logRefs
+      - updatedAt
+      - nonPromotable
+    fields:
+      schema: { type: string, const: app-launch-attempt }
+      attemptId: { type: string, min_length: 1 }
+      environment: { type: string, allowed_values: [alpha, beta, gamma, prod] }
+      target: { type: string, allowed_values: [alpha-local, beta-local, gamma-local, prod-sim, prod-hosted] }
+      platform: { type: string, allowed_values: [android, ios] }
+      buildMode: { type: string, allowed_values: [debug, profile, release] }
+      runMode: { type: string, allowed_values: [content-live, ui-only, release-artifact] }
+      artifactDigest: { type: string }
+      launchDigest: { type: string }
+      status:
+        type: string
+        allowed_values: [prepared, compiling, compiled, installing, installed, launching, launched, runtime_degraded, failed, stopped]
+      transitions:
+        type: array
+        items: { type: object }
+      warnings:
+        type: array
+        items: { type: string }
+      firstBlocker: { type: string }
+      deviceId: { type: string, min_length: 1 }
+      logRefs:
+        type: array
+        items: { type: string }
+      updatedAt: { type: string, format: rfc3339_utc }
+      nonPromotable: { type: boolean }
+    constraints:
+      - transitions 只能按 prepared → compiling → compiled → installing → installed → launching → launched 前进；failed、runtime_degraded 与 stopped 是显式终态，不得倒推或补写 launched。
+      - 编译、安装和启动失败的 firstBlocker 分别为 APP.LAUNCH.compile_failed、APP.LAUNCH.install_failed 与 APP.LAUNCH.launch_failed；Prod Debug 必须在 prepared 后以 APP.LAUNCH.prod_debug_forbidden 失败。
+      - ui-only 允许把 runtime、Provider、TLS、transport 与 content readiness 记入 warnings 后继续；content-live 与 release-artifact 不得把同一问题降级为 warning。
+      - stopped 只表示用户或父进程正常停止已启动会话，不得解释为编译失败，也不得清理 App 或环境数据。
+      - prod-sim 的 release-artifact 只允许 Android exact Release emulator artifact；Flutter iOS Simulator 只支持 Debug，iOS Release/Profile 必须以 APP.LAUNCH.ios_release_simulator_unsupported 阻断，不能生成或消费伪 Release 启动回执。
+
   app_effective_launch_manifest:
     schema_value: app-effective-launch-manifest
     additional_fields: false

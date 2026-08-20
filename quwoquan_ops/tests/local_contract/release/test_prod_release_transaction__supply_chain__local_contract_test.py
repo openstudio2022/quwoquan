@@ -24,6 +24,9 @@ from quwoquan_ops.cli.prod import hosted_release_ledger
 from quwoquan_ops.tests.support.rollout_stage_promotion_evidence_test_support import (
     promotion_evidence,
 )
+from quwoquan_ops.tests.support.app_artifact_manifest_test_support import (
+    app_artifact_manifest,
+)
 
 ROOT = Path(__file__).resolve().parents[4]
 APP_EVIDENCE_REF = "oci://ghcr.io/example/quwoquan/app-candidate@sha256:" + ("a" * 64)
@@ -283,6 +286,13 @@ def _evidence_sources(
             "contentSHA256": finalizer.sha256_tree(
                 payload_root / "prod/web"
             ).removeprefix("sha256:"),
+            "artifactManifest": app_artifact_manifest(
+                environment="prod",
+                surface="web",
+                source_git_sha=str(source["gitSha"]),
+                source_tree_digest=str(source["treeDigest"]),
+                artifact_digest=finalizer.sha256_tree(payload_root / "prod/web"),
+            ),
         },
         "androidOfficialRelease": {
             "schema": "client-app.android.official-release",
@@ -292,6 +302,15 @@ def _evidence_sources(
             "apkSHA256": finalizer.sha256_file(
                 payload_root / "prod/android/quwoquan.apk"
             ).removeprefix("sha256:"),
+            "artifactManifest": app_artifact_manifest(
+                environment="prod",
+                surface="android",
+                source_git_sha=str(source["gitSha"]),
+                source_tree_digest=str(source["treeDigest"]),
+                artifact_digest=finalizer.sha256_file(
+                    payload_root / "prod/android/quwoquan.apk"
+                ),
+            ),
         },
         "opsPortal": {
             "schema": "qwq.ops_portal_package",
@@ -465,8 +484,15 @@ def _application_package_sources(
                 "surface": surface,
                 "sourceGitSha": source["gitSha"],
                 "sourceTreeDigest": source["treeDigest"],
-                "packageDigest": finalizer.sha256_tree(
+                "packageDigest": (package_digest := finalizer.sha256_tree(
                     payloads / environment / surface
+                )),
+                "artifactManifest": app_artifact_manifest(
+                    environment=environment,
+                    surface=surface,
+                    source_git_sha=str(source["gitSha"]),
+                    source_tree_digest=str(source["treeDigest"]),
+                    artifact_digest=package_digest,
                 ),
             },
         )

@@ -18,10 +18,13 @@ REPO_ROOT = Path(__file__).resolve().parents[4]
 
 
 APP_DIR = REPO_ROOT / "quwoquan_app"
+PATROL_HOST_DIR = APP_DIR / "test_host" / "patrol"
 APP_LAUNCHER_HANDOFF_BUILDER = (
     APP_DIR / "scripts" / "device" / "build_launcher_handoff.py"
 )
-PATROL_TEST_DIRECTORY = "test/user_acceptance/patrol"
+PATROL_TEST_DIRECTORY = "test/patrol"
+PATROL_ANDROID_PACKAGE = "com.quwoquan.testhost.patrol"
+PATROL_IOS_BUNDLE_ID = "com.quwoquan.testhost.patrol"
 DEFAULT_REPORT = REPO_ROOT / ".qwq_output" / "env" / "repo" / "runs" / "device-matrix" / "environment-smoke" / "report.json"
 DEFAULT_TARGET = (
     "test/user_acceptance/journeys/home_video_playback/"
@@ -205,7 +208,9 @@ PATROL_EXECUTION_SUMMARY_PATTERN = re.compile(
     re.DOTALL,
 )
 XCODE_GLOBAL_PRODUCTS_DIR = Path.home() / "Library" / "Developer" / "Xcode" / "XcodeDerivedData" / "Build" / "Products"
-PATROL_IOS_PRODUCTS_DIR = APP_DIR / "build" / "ios_integ" / "Build" / "Products"
+PATROL_IOS_PRODUCTS_DIR = (
+    PATROL_HOST_DIR / "build" / "ios_integ" / "Build" / "Products"
+)
 LOCAL_TARGETS = {"alpha-local", "beta-local", "gamma-local", "prod-sim"}
 LOCAL_ENVIRONMENT_ALIAS_TARGETS = {
     "alpha": "alpha-local",

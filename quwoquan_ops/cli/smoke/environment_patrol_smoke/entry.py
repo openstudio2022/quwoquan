@@ -44,8 +44,8 @@ from .cli_args import (
 )
 from .constants import (
     ACCOUNT_ENFORCEMENT_CANDIDATE_DIGEST_PATTERN,
-    APP_DIR,
     CONTROLLED_EDGE_RESTORE_REQUEST_PREFIX,
+    PATROL_HOST_DIR,
     REPO_ROOT,
     RUNTIME_RECOVERY_EVIDENCE_FIELDS,
     utc_now,
@@ -560,7 +560,7 @@ def main() -> int:
             log_path.write_text("dry-run\n", encoding="utf-8")
             result = {
                 "command": _redact_command(command),
-                "cwd": str(APP_DIR),
+                "cwd": str(PATROL_HOST_DIR),
                 "exitCode": 0,
                 "timedOut": False,
                 "durationMs": 0,
@@ -647,7 +647,7 @@ def main() -> int:
                         device_evidence_stream.start()
                     result = run_command(
                         command,
-                        cwd=APP_DIR,
+                        cwd=PATROL_HOST_DIR,
                         env=command_env,
                         timeout_seconds=args.timeout_seconds,
                         log_path=run_dir / "patrol.log",
@@ -672,7 +672,7 @@ def main() -> int:
                 except Exception as error:  # noqa: BLE001
                     result = {
                         "command": _redact_command(command),
-                        "cwd": str(APP_DIR),
+                        "cwd": str(PATROL_HOST_DIR),
                         "exitCode": 2,
                         "timedOut": False,
                         "durationMs": 0,
@@ -682,7 +682,7 @@ def main() -> int:
             except Exception as error:  # noqa: BLE001
                 result = {
                     "command": _redact_command(command),
-                    "cwd": str(APP_DIR),
+                    "cwd": str(PATROL_HOST_DIR),
                     "exitCode": 2,
                     "timedOut": False,
                     "durationMs": 0,

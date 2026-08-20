@@ -16,7 +16,7 @@ from typing import Any
 
 
 ENVIRONMENTS = ("alpha", "beta", "gamma", "prod")
-PLATFORMS = ("android", "ios", "web", "macos")
+PLATFORMS = ("android", "ios", "web")
 ARCHIVE_NAME = "app-candidate-shard.tar.gz"
 ARTIFACT_TYPE = "application/vnd.quwoquan.app-candidate-shard"
 LAYER_TYPE = "application/vnd.quwoquan.app-candidate-shard+tar+gzip"

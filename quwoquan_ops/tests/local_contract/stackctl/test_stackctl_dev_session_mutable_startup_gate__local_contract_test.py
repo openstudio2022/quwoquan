@@ -810,4 +810,8 @@ class StackctlDevSessionMutableStartupGateTest(StackctlDevSessionTestBase):
         self.assertEqual(result["launchPolicy"], "test_live")
         self.assertEqual(result["contentBindingState"], "unbound")
         self.assertTrue(result["warnings"])
-        self.assertIn("./run.sh --env alpha -d emulator-5554", result["details"][0])
+        self.assertIn(
+            "./run.sh --env alpha --target alpha-local --mode content-live "
+            "-d emulator-5554",
+            result["details"][0],
+        )

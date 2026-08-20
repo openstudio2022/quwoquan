@@ -23,11 +23,12 @@ from .constants import (
     APP_CONTENT_VIDEO_PAGE_COUNT_ENV,
     CORE_READBACK_TARGET,
     HOME_VIDEO_PLAYBACK_TARGET,
+    PATROL_ANDROID_PACKAGE,
+    PATROL_HOST_DIR,
+    PATROL_IOS_BUNDLE_ID,
     PATROL_TEST_DIRECTORY,
     PROFILE_JOURNEY_TARGET,
     RELEASE_APP_UAT_DEFINES,
-    android_release_uat_package,
-    ios_release_uat_bundle_ids,
 )
 from .devices import patrol_ios_runtime_argument
 from .handoff import (
@@ -153,6 +154,24 @@ def _patrol_bundler_target(target: str) -> str:
     )
 
 
+def _canonical_patrol_uat_targets() -> tuple[tuple[str, str], ...]:
+    """Enumerate every canonical UAT and its collision-free host wrapper target."""
+
+    canonical_root = APP_DIR / "test/user_acceptance"
+    targets = tuple(
+        path.relative_to(APP_DIR).as_posix()
+        for path in sorted(canonical_root.rglob("*_test.dart"))
+        if path.is_file()
+    )
+    if not targets:
+        raise RuntimeError("No canonical App UAT is available for the Patrol host")
+    enumerated = tuple((target, _patrol_bundler_target(target)) for target in targets)
+    wrapper_targets = tuple(wrapper_target for _, wrapper_target in enumerated)
+    if len(set(wrapper_targets)) != len(wrapper_targets):
+        raise RuntimeError("Canonical App UAT wrapper target collision")
+    return enumerated
+
+
 def _create_patrol_target_wrapper(
     target: str,
     *,
@@ -163,7 +182,7 @@ def _create_patrol_target_wrapper(
 
     _patrol_bundler_target(target)
     normalized = target.strip().replace("\\", "/")
-    wrapper_directory = APP_DIR / PATROL_TEST_DIRECTORY
+    wrapper_directory = PATROL_HOST_DIR / PATROL_TEST_DIRECTORY
     if wrapper_directory.is_symlink() or not wrapper_directory.is_dir():
         raise RuntimeError("Patrol test directory is missing or unsafe")
     bundle_path = wrapper_directory / "test_bundle.dart"
@@ -182,6 +201,10 @@ def _create_patrol_target_wrapper(
     if not relative_import.startswith("../"):
         raise RuntimeError("Patrol wrapper target must remain outside its shell directory")
     imports = [f"import '{relative_import}' as canonical_target;"]
+    relative_support_import = os.path.relpath(
+        APP_DIR / "test/support/runtime/patrol/patrol_test_support.dart",
+        wrapper_directory,
+    ).replace(os.sep, "/")
     actor_module_path: Path | None = None
     conversation_module_path: Path | None = None
     actor_install = ""
@@ -190,7 +213,7 @@ def _create_patrol_target_wrapper(
         imports = [
             "import 'dart:convert';",
             *imports,
-            "import '../../support/runtime/patrol/patrol_test_support.dart' "
+            f"import '{relative_support_import}' "
             "as patrol_support;",
         ]
     if typed_actor is not None:
@@ -307,7 +330,7 @@ def _create_patrol_target_wrapper(
         text=True,
     )
     wrapper_path = Path(raw_path)
-    wrapper_target = wrapper_path.relative_to(APP_DIR).as_posix()
+    wrapper_target = wrapper_path.relative_to(PATROL_HOST_DIR).as_posix()
     if re.fullmatch(
         r"qwq_environment_smoke_[A-Za-z0-9_]+_test\.dart",
         wrapper_path.name,
@@ -476,7 +499,7 @@ def _purge_typed_actor_credential_artifacts(
     if not canonical_values:
         return 0
     needles = tuple(value.encode("utf-8") for value in canonical_values)
-    root = app_dir or APP_DIR
+    root = app_dir or PATROL_HOST_DIR
     removed = 0
     for path in _generated_patrol_artifact_candidates(root):
         if _generated_artifact_contains_any(path, needles):
@@ -561,17 +584,12 @@ def patrol_command(
         f"--dart-define=API_CONTRACT_PRODUCT_OPS_BASE_URL={product_ops_base_url}",
         f"--dart-define=VIDEO_PLAYBACK_CANARY_WORK_ID={video_playback_canary_work_id}",
     ]
-    # patrol UAT 以 Flutter Debug 构建运行；安装/驱动的 App 身份必须与
-    # 环境 × BuildMode 的 canonical applicationId/bundle id 单轨一致，
-    # 覆盖 patrol.yaml 中的静态占位值。
+    # Patrol instrumentation 只能安装物理隔离 test host；环境身份仅由
+    # production Remote runtime defines 传入，test host 永不成为可晋级制品。
     if str(device.get("targetPlatform") or "").lower().startswith("android"):
-        command.append(
-            f"--package-name={android_release_uat_package(runtime_env, 'debug')}"
-        )
+        command.append(f"--package-name={PATROL_ANDROID_PACKAGE}")
     else:
-        command.append(
-            f"--bundle-id={ios_release_uat_bundle_ids(runtime_env, 'debug')[0]}"
-        )
+        command.append(f"--bundle-id={PATROL_IOS_BUNDLE_ID}")
     if canonical_runtime_defines is None:
         command.extend(
             (

@@ -5,6 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from quwoquan_ops.ci.render_release_application_package import (
+    _validate_artifact_manifest,
+)
 from quwoquan_ops.ci.render_provider_conformance_source import (
     expected_required_cell_count_from_readiness,
 )
@@ -299,6 +302,14 @@ def validate_application_package_evidence(
             raise ValueError(
                 f"application package source binding mismatch for {environment}/{surface}"
             )
+        if surface in {"android", "web"}:
+            _validate_artifact_manifest(
+                payload.get("artifactManifest"),
+                environment=environment,
+                surface=surface,
+                source_git_sha=str(source["gitSha"]),
+                source_tree_digest=str(source["treeDigest"]),
+            )
     else:
         if set(payload) != APPLICATION_PACKAGE_FIELDS:
             raise ValueError(
@@ -316,6 +327,13 @@ def validate_application_package_evidence(
             raise ValueError(
                 f"application package evidence binding mismatch: {environment}/{surface}"
             )
+        _validate_artifact_manifest(
+            payload.get("artifactManifest"),
+            environment=environment,
+            surface=surface,
+            source_git_sha=str(source["gitSha"]),
+            source_tree_digest=str(source["treeDigest"]),
+        )
     return application_package_digest(
         payload,
         environment=environment,

@@ -273,11 +273,13 @@ def main() -> int:
     if "--legal-base-url" not in alpha_run:
         issues.append("alpha run.sh must pass legal-static base URL with app env dart-defines")
     if (
-        "prepare_android_reverse" not in app_instance_launcher
-        or "enable_android_adb_reverse" not in app_instance_launcher
+        'bash "$APP_DIR/run.sh"' not in app_instance_launcher
+        or 'exec "${command[@]}"' not in app_instance_launcher
+        or "prepare_android_reverse" in app_instance_launcher
+        or "enable_android_adb_reverse" in app_instance_launcher
     ):
         issues.append(
-            "shared app-instance launcher must prepare adb reverse without rewriting authorities"
+            "shared app-instance launcher must delegate transport preparation to canonical run.sh"
         )
     alpha_script = (ROOT / "quwoquan_ops/cli/alpha/content_release_runtime.py").read_text(
         encoding="utf-8"

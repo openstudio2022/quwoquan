@@ -7,7 +7,6 @@ import os
 import shutil
 import subprocess
 import sys
-import time
 import urllib.parse
 from pathlib import Path
 from typing import Any
@@ -41,7 +40,7 @@ DEV_UP_APP_TARGETS = {
 }
 WEB_DEVICE_IDS = {"chrome", "web-server", "edge", "firefox"}
 DEV_UP_ENV_DESCRIPTIONS = {
-    "alpha": "本地 mock 栈 + App",
+    "alpha": "本地 Alpha production Remote composition + App",
     "beta": "本地 beta 栈 + App",
     "gamma": "local gamma mirror + App",
     "prod-sim": "prod-sim App 连接",
@@ -435,15 +434,11 @@ def build_start_app_command(
     *,
     topology: dict[str, Any] | None = None,
     rollout_mode: str = "",
+    app_mode: str = "content-live",
+    launch_receipt: Path | None = None,
+    launch_log_ref: Path | None = None,
 ) -> list[str]:
-    manifest = topology or load_environment_topology()
-    device = find_device(device_id, app_dir=DEFAULT_APP_DIR, include_desktop=False) or {}
-    device_kind = detect_device_kind(
-        device_id,
-        target_platform=str(device.get("targetPlatform", "")),
-        emulator=bool(device.get("emulator", False)) if device else None,
-    )
-    overrides = resolve_app_endpoint_overrides(env_name, device_kind, topology=manifest)
+    del topology
     command = [
         "bash",
         "quwoquan_app/scripts/device/run_app_instance.sh",
@@ -453,18 +448,8 @@ def build_start_app_command(
         app_target_for_env(env_name),
         "--device-id",
         device_id,
-        "--gateway-base-url",
-        overrides["gatewayBaseUrl"],
-        "--legal-base-url",
-        overrides["legalBaseUrl"],
-        "--media-avatar-base-url",
-        overrides["mediaAvatarBaseUrl"],
-        "--media-image-base-url",
-        overrides["mediaImageBaseUrl"],
-        "--media-video-base-url",
-        overrides["mediaVideoBaseUrl"],
-        "--media-upload-base-url",
-        overrides["mediaUploadBaseUrl"],
+        "--mode",
+        app_mode,
         "--instance-namespace",
         f"{env_name}-dev-up",
         "--service-mode",
@@ -472,6 +457,10 @@ def build_start_app_command(
     ]
     if rollout_mode:
         command.extend(["--rollout-mode", rollout_mode])
+    if launch_receipt is not None:
+        command.extend(["--launch-receipt", str(launch_receipt)])
+    if launch_log_ref is not None:
+        command.extend(["--launch-log-ref", str(launch_log_ref)])
     return command
 
 
@@ -482,8 +471,10 @@ def launch_app(
     topology: dict[str, Any] | None = None,
     rollout_mode: str = "",
     log_path: Path | None = None,
-    startup_wait_seconds: float = 1.5,
+    startup_wait_seconds: float = 900,
 ) -> subprocess.Popen[str]:
+    from quwoquan_ops.cli.lib.app_launch_attempt import wait_for_app_launch_attempt
+
     manifest = topology or load_environment_topology()
     target_name = app_target_for_env(env_name)
     target = get_target(manifest, target_name)
@@ -524,14 +515,18 @@ def launch_app(
         command_env["QWQ_DEVICE_TRUST_PLATFORM"] = trust_platform
         command_env["QWQ_DEVICE_TRUST_RECEIPT"] = str(trust["receipt"])
         command_env["QWQ_DEVICE_TRUST_LEASE_ID"] = str(trust["leaseId"])
+    launch_log = log_path or (
+        observability_runtime_logs_root(env_name) / f"{env_name}-app-launch.log"
+    )
+    launch_receipt = launch_log.with_suffix(".receipt.json")
     command = build_start_app_command(
         env_name,
         device_id,
         topology=manifest,
         rollout_mode=rollout_mode,
-    )
-    launch_log = log_path or (
-        observability_runtime_logs_root(env_name) / f"{env_name}-app-launch.log"
+        app_mode="content-live",
+        launch_receipt=launch_receipt,
+        launch_log_ref=launch_log,
     )
     launch_log.parent.mkdir(parents=True, exist_ok=True)
     log_handle = launch_log.open("a", encoding="utf-8")
@@ -548,12 +543,18 @@ def launch_app(
         )
     finally:
         log_handle.close()
-    if startup_wait_seconds > 0:
-        time.sleep(startup_wait_seconds)
-    if process.poll() is not None:
+    try:
+        attempt = wait_for_app_launch_attempt(
+            launch_receipt,
+            timeout_seconds=startup_wait_seconds,
+        )
+    except TimeoutError as error:
+        process.terminate()
+        raise RuntimeError(str(error)) from error
+    if attempt["status"] == "failed":
         output = launch_log.read_text(encoding="utf-8") if launch_log.exists() else ""
         raise RuntimeError(
-            "app launch exited before reaching steady state:\n"
+            f"{attempt['firstBlocker']}: App launch failed before launched:\n"
             + summarize_output(output)
         )
     return process

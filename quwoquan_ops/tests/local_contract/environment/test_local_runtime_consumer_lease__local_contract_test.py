@@ -48,12 +48,17 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
                 "#!/usr/bin/env bash\n"
                 "set -euo pipefail\n"
                 f"printf '%s\\n' \"$*\" >> {shlex.quote(str(flutter_log))}\n"
-                "if [[ \"$*\" == \"pub get --offline\" ]]; then exit 0; fi\n"
+                "if [[ \"${1:-}\" == \"pub\" && \"${2:-}\" == \"get\" ]]; then exit 0; fi\n"
                 "if [[ \"$*\" == \"devices --machine\" ]]; then\n"
                 f"  printf '%s\\n' {shlex.quote(device_payload)}\n"
                 "  exit 0\n"
                 "fi\n"
-                "if [[ \"${1:-}\" == \"run\" ]]; then exit 0; fi\n"
+                "if [[ \"${1:-}\" == \"run\" ]]; then\n"
+                "  echo 'Built build/app/outputs/flutter-apk/app-alpha-debug.apk'\n"
+                "  echo 'Installing and launching...'\n"
+                "  echo 'Flutter run key commands.'\n"
+                "  exit 0\n"
+                "fi\n"
                 "exit 97\n",
                 encoding="utf-8",
             )
@@ -162,12 +167,14 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
 
     def test_android_launcher_owns_and_releases_lease(self) -> None:
         script = APP_RUN.read_text(encoding="utf-8")
-        self.assertIn("trap release_consumer_lease EXIT", script)
+        self.assertIn("trap cleanup_run EXIT", script)
+        self.assertIn("cleanup_run()", script)
+        self.assertIn("release_consumer_lease", script)
         self.assertIn("consumer-lease acquire", script)
         self.assertIn("consumer-lease release", script)
         self.assertIn('if [[ -z "$DEVICE_ID" ]]', script)
         self.assertIn("pass -d/--device-id", script)
-        self.assertIn("--package-name com.quwoquan.quwoquan_app", script)
+        self.assertIn('--package-name "$QWQ_DEBUG_APP_ID"', script)
         self.assertIn("--ports \"$QWQ_ANDROID_LOCAL_PORTS\"", script)
         self.assertIn('export QWQ_ENVIRONMENT="${REQUESTED_ENVIRONMENT:-alpha}"', script)
         self.assertIn('export QWQ_APP_RUNTIME_ENV="$QWQ_ENVIRONMENT"', script)
@@ -184,14 +191,18 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
             script,
         )
         self.assertIn("--platform ios-simulator", script)
-        self.assertIn("--bundle-id com.example.quwoquanApp", script)
+        self.assertIn('--bundle-id "$QWQ_DEBUG_APP_ID"', script)
         self.assertIn("QWQ_CONSUMER_LEASE_ID", script)
         self.assertIn("QWQ_ANDROID_REVERSE_RECEIPT_DIGEST", script)
         self.assertIn("QWQ_ANDROID_REVERSE_OWNED_PORTS", script)
         self.assertIn("QWQ_ANDROID_VM_FORWARD_PREEXISTING", script)
         self.assertIn("forward --remove tcp:8888", script)
-        self.assertIn('"compileStatus": "passed" if exit_code == 0', script)
-        self.assertIn('"launchStatus": "completed" if exit_code == 0', script)
+        self.assertIn('"compileStatus": compile_status', script)
+        self.assertIn('"installStatus": install_status', script)
+        self.assertIn('"launchStatus": launch_status', script)
+        self.assertIn('"runtimeStatus": runtime_status', script)
+        self.assertIn('receipt.get("transitions")', script)
+        self.assertNotIn('"compileStatus": "passed" if exit_code == 0', script)
         self.assertIn('"contentAvailability": preflight.get', script)
         self.assertIn('"providerAvailability": provider_availability', script)
         self.assertIn('DEVICE_TRUST_PLATFORM="android-emulator"', script)
@@ -253,7 +264,8 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
         self.assertIn('if (appLaunchPolicy == "prod_release")', launcher_gate)
         self.assertIn('if (leaseAcquired != "1")', launcher_gate)
         self.assertIn("test_live transport lease is unavailable", launcher_gate)
-        self.assertIn("contentReadinessReceiptDigest.matches", launcher_gate)
+        self.assertNotIn("contentReadinessReceiptDigest.matches", launcher_gate)
+        self.assertIn('if (appLaunchPolicy == "prod_release")', launcher_gate)
 
     def test_build_grace_blocks_without_adb_probe(self) -> None:
         with tempfile.TemporaryDirectory() as output_root, patch.dict(

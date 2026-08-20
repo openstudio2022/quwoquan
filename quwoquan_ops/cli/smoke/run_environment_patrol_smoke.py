@@ -159,6 +159,7 @@ from quwoquan_ops.cli.smoke.environment_patrol_smoke import (  # noqa: E402,F401
     _apply_launcher_handoff_to_command_env,
     _bind_patrol_consumer_lease_to_handoff,
     _bind_typed_test_data_actor,
+    _canonical_patrol_uat_targets,
     _canonical_handoff_projection,
     _canonical_test_live_launcher_handoff,
     _cleanup_patrol_target_wrapper,

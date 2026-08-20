@@ -54,7 +54,7 @@ def register_parser(
     # app-artifact（DEC-004 canonical App 制品入口）：显式接收
     # platform/build-mode/distribution-class/device，按 metadata 裁决身份。
     package_parser.add_argument(
-        "--app-platform", choices=["android", "ios"], default=""
+        "--app-platform", choices=["android", "ios", "web"], default=""
     )
     package_parser.add_argument(
         "--app-build-mode", choices=["debug", "profile", "release"], default=""
@@ -72,7 +72,6 @@ def register_parser(
         default="",
     )
     package_parser.add_argument("--device", default="")
-    package_parser.add_argument("--artifact-path", default="")
     package_parser.add_argument("--service", default="")
     package_parser.add_argument("--include-services", action="store_true")
     package_parser.add_argument(
@@ -148,11 +147,15 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
         if not target_name and env_name in _stackctl.DEFAULT_TARGET_BY_ENV:
             target_name = _stackctl.DEFAULT_TARGET_BY_ENV[env_name]
         previous_override = os.environ.get(_stackctl.PACKAGE_ROOT_OVERRIDE_ENV)
-        isolated_root = _stackctl.deployment_target_path(
-            target_name,
-            "standalone-packages",
-            package_kind,
-            "packages",
+        isolated_root = (
+            _stackctl.deployment_target_path(target_name, "packages")
+            if package_kind == "app-artifact"
+            else _stackctl.deployment_target_path(
+                target_name,
+                "standalone-packages",
+                package_kind,
+                "packages",
+            )
         )
         os.environ[_stackctl.PACKAGE_ROOT_OVERRIDE_ENV] = str(isolated_root)
         try:

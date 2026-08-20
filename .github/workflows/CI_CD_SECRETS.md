@@ -13,7 +13,7 @@ Podman；ACK 仅作为后续演进项。volcengine、huaweicloud 入口保留，
 |----------|------|------|----------|
 | **delivery-gate.yml** | `push dev1.0`、`pull_request(dev1.0 -> main)`、手动 | 集成与 promotion 主门禁：拓扑校验、L1+L2 | G0~G3 |
 | **service_pipeline.yml** | `push main`、手动 | main 后 Go 构建、rec-model 镜像、kustomize 校验 | G2 |
-| **app_pipeline.yml** | 仅由 mainline `workflow_call` | 四环境 Android/iOS/macOS/Web、Prod Ops Portal 与 immutable App OCI evidence | G2 / 候选 |
+| **app_pipeline.yml** | 仅由 mainline `workflow_call` | 四环境 Android/iOS/Web canonical 编译与 immutable App OCI evidence | G2 / 候选 |
 | **pre-release-gate.yml** | `push dev1.0`、`pull_request(dev1.0 -> main)`、手动 | deploy → L3 → L4 → gamma smoke | G3→G5b |
 | **app-env-device-matrix-self-hosted.yml** | `push dev1.0` / `pull_request(dev1.0 -> main)` / 被调用 / 手动 | self-hosted 动态设备矩阵唯一入口 | G5b |
 | **prod-sim-manual-admission.yml** | 手动 | exact main SHA 的隔离、不可晋级 first-party 预演 | G5b 诊断 |
@@ -64,21 +64,20 @@ App 候选构建会 fail closed，且会把人为等待错误引入 600 秒关�
 | **QWQ_ANDROID_RELEASE_STORE_PASSWORD** | Android keystore 密码 |
 | **QWQ_ANDROID_RELEASE_KEY_ALIAS** | Android 签名 key alias |
 | **QWQ_ANDROID_RELEASE_KEY_PASSWORD** | Android 签名 key 密码 |
-| **QWQ_ANDROID_EXPECTED_SIGNING_CERTIFICATE_SHA256** | 受保护环境登记的 Android 正式签名证书 SHA-256；必须与 APK 实际签名一致 |
 | **QWQ_ANDROID_ALPHA_GOOGLE_SERVICES_JSON** | Alpha Android Remote composition 的 Firebase 配置原文 |
 | **QWQ_ANDROID_BETA_GOOGLE_SERVICES_JSON** | Beta Android Remote composition 的 Firebase 配置原文 |
 | **QWQ_ANDROID_GAMMA_GOOGLE_SERVICES_JSON** | Gamma Android Remote composition 的 Firebase 配置原文 |
 | **QWQ_ANDROID_PROD_GOOGLE_SERVICES_JSON** | Prod Android Remote composition 的 Firebase 配置原文 |
-| **QWQ_IOS_DISTRIBUTION_CERT_P12_B64** | Base64 编码的 iOS Distribution P12 |
-| **QWQ_IOS_DISTRIBUTION_CERT_PASSWORD** | iOS Distribution P12 密码 |
-| **QWQ_IOS_PROVISIONING_PROFILE_B64** | Base64 编码的正式 Provisioning Profile |
-| **QWQ_IOS_EXPORT_OPTIONS_PLIST_B64** | Base64 编码的 ExportOptions.plist |
+
+iOS Distribution P12、Provisioning Profile 与 ExportOptions 只属于独立的签名 IPA/商店分发 gate，
+不进入本 workflow 的四环境基础编译矩阵。Flutter 不支持 iOS Release simulator；iOS 基础矩阵编译 unsigned iphoneos Release `.app`，Simulator 启动另走 non-promotable Debug gate。Prod iOS 正式 ID 未登记时，
+该分发 gate 必须保持 `GATE_BLOCK`。
 
 ### 发布证明
 
 - 本 workflow 不再接受 tag 或独立手动发布；只能绑定 mainline 传入的完整 Git SHA。
-- Android、iOS、macOS、Web 四个平台矩阵并行展开 16 个环境 shard；Prod 同时生成
-  Android official、Public Web 和 Ops Portal 真实 payload。任一环境/平台缺失即硬失败。
+- Android、iOS、Web 三个平台矩阵并行展开 12 个环境 shard；三个 job 都只调用
+  `stackctl package --kind app-artifact`，不直接持有 Flutter 构建命令。任一环境/平台缺失即硬失败。
 - 每个矩阵 shard 直接写入 run/attempt 唯一的 GHCR OCI transport tag；aggregate 先将 tag
   原子解析为 digest，再只按 exact `ghcr.io/...@sha256:...` 回读并拒绝文件冲突。Actions
   Artifact 不参与 job 间交换。aggregate 校验全部实际 payload 后发布唯一正式 App evidence OCI；

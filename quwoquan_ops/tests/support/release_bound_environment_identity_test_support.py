@@ -13,6 +13,9 @@ from pathlib import Path
 from typing import Any
 
 from quwoquan_ops.ci import generate_release_bound_environment_identity as renderer
+from quwoquan_ops.tests.support.app_artifact_manifest_test_support import (
+    app_artifact_manifest,
+)
 from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
     APPLICATION_PACKAGES,
     ENVIRONMENTS,
@@ -152,6 +155,13 @@ class Fixture:
                     "sourceTreeDigest": TREE_DIGEST,
                     "packagedAPK": "quwoquan.apk",
                     "apkSHA256": package_digests[surface].removeprefix("sha256:"),
+                    "artifactManifest": app_artifact_manifest(
+                        environment=self.environment,
+                        surface=surface,
+                        source_git_sha=GIT_SHA,
+                        source_tree_digest=TREE_DIGEST,
+                        artifact_digest=package_digests[surface],
+                    ),
                 }
             else:
                 payload = {
@@ -161,6 +171,13 @@ class Fixture:
                     "sourceGitSha": GIT_SHA,
                     "sourceTreeDigest": TREE_DIGEST,
                     "packageDigest": package_digests[surface],
+                    "artifactManifest": app_artifact_manifest(
+                        environment=self.environment,
+                        surface=surface,
+                        source_git_sha=GIT_SHA,
+                        source_tree_digest=TREE_DIGEST,
+                        artifact_digest=package_digests[surface],
+                    ),
                 }
             self.app_paths.append(
                 _write(

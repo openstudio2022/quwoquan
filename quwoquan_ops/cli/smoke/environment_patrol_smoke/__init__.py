@@ -182,6 +182,7 @@ from .devices import (  # noqa: E402,F401
     xcode_ios_simulator_sdk_version,
 )
 from .wrapper import (  # noqa: E402,F401
+    _canonical_patrol_uat_targets,
     _cleanup_patrol_target_wrapper,
     _create_patrol_secret_define_file,
     _create_patrol_target_wrapper,

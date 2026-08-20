@@ -20,7 +20,6 @@ import re
 import shlex
 import subprocess
 import sys
-import time
 
 from pathlib import Path
 from typing import Any
@@ -161,6 +160,7 @@ def _run_dev_session_target(
     launch_app_requested: bool,
     report_dir: Path,
     content_binding_request: Mapping[str, str] | None = None,
+    app_mode: str = "content-live",
 ) -> dict[str, Any]:
     """Render one mutable non-production session without immutable packaging."""
     import quwoquan_ops.cli.stackctl as _stackctl
@@ -416,6 +416,10 @@ def _run_dev_session_target(
         )
 
     if launch_app_requested:
+        from quwoquan_ops.cli.lib.app_launch_attempt import (
+            wait_for_app_launch_attempt,
+        )
+
         selected_device = device_id or _stackctl.resolve_device_id(
             include_mobile=True,
             include_web=False,
@@ -423,10 +427,28 @@ def _run_dev_session_target(
             label="[stackctl dev-session]",
         )
         launch_log = report_dir / f"app-launch-{selected_device.replace('/', '_')}.log"
+        launch_receipt = report_dir / (
+            f"app-launch-{selected_device.replace('/', '_')}.json"
+        )
         launch_log.parent.mkdir(parents=True, exist_ok=True)
         with launch_log.open("a", encoding="utf-8") as log_handle:
             process = subprocess.Popen(
-                ["bash", "run.sh", "--env", environment, "-d", selected_device],
+                [
+                    "bash",
+                    "run.sh",
+                    "--env",
+                    environment,
+                    "--target",
+                    target,
+                    "--mode",
+                    app_mode,
+                    "--launch-receipt",
+                    str(launch_receipt),
+                    "--launch-log-ref",
+                    str(launch_log),
+                    "-d",
+                    selected_device,
+                ],
                 cwd=_stackctl.ROOT / "quwoquan_app",
                 stdin=subprocess.DEVNULL,
                 stdout=log_handle,
@@ -434,22 +456,54 @@ def _run_dev_session_target(
                 text=True,
                 start_new_session=True,
             )
-        time.sleep(1.5)
-        if process.poll() is not None:
+        try:
+            launch_attempt = wait_for_app_launch_attempt(
+                launch_receipt,
+                timeout_seconds=900,
+            )
+        except TimeoutError as exc:
+            process.terminate()
+            try:
+                process.wait(timeout=15)
+            except subprocess.TimeoutExpired:
+                process.kill()
             return {
                 "exitCode": 1,
                 "sessionKind": "mutable",
-                "blockerKind": "app_launch_failed",
-                "details": [summarize_output(launch_log.read_text(encoding="utf-8"))],
+                "blockerKind": "APP.LAUNCH.receipt_timeout",
+                "details": [str(exc), summarize_output(launch_log.read_text(encoding="utf-8"))],
                 "fullRuntimeSelected": False,
                 "phases": phases,
             }
+        launch_status = str(launch_attempt["status"])
+        if launch_status == "failed":
+            first_blocker = str(
+                launch_attempt.get("firstBlocker") or "APP.LAUNCH.launch_failed"
+            )
+            return {
+                "exitCode": 1,
+                "sessionKind": "mutable",
+                "blockerKind": first_blocker,
+                "details": [
+                    summarize_output(launch_log.read_text(encoding="utf-8")),
+                    f"launchReceipt={_stackctl.relpath(launch_receipt)}",
+                ],
+                "fullRuntimeSelected": False,
+                "appLaunchAttempt": launch_attempt,
+                "phases": phases,
+            }
+        if launch_status == "runtime_degraded":
+            warnings.extend(str(item) for item in launch_attempt["warnings"])
         phases.append(
             {
                 "name": "app-launch",
                 "exitCode": 0,
-                "summary": f"test_live App launch started with pid={process.pid}",
-                "details": [f"device={selected_device}"],
+                "summary": f"App machine receipt reached {launch_status}",
+                "details": [
+                    f"device={selected_device}",
+                    f"mode={app_mode}",
+                    f"receipt={_stackctl.relpath(launch_receipt)}",
+                ],
                 "reportDir": _stackctl.relpath(report_dir),
             }
         )
@@ -475,7 +529,7 @@ def _run_dev_session_target(
             warnings.append(warning)
             mutable_workspace_warnings.append(warning)
 
-    handoff = ["./run.sh", "--env", environment]
+    handoff = ["./run.sh", "--env", environment, "--target", target, "--mode", app_mode]
     if device_id:
         handoff.extend(("-d", device_id))
     return {
@@ -756,6 +810,7 @@ def command_dev_session(args: argparse.Namespace) -> dict[str, Any]:
                         launch_app_requested=bool(getattr(args, "launch_app", False)),
                         report_dir=report_dir / target,
                         content_binding_request=content_binding_request,
+                        app_mode=str(getattr(args, "app_mode", "content-live")),
                     )
                     sessions.append(
                         {
@@ -861,6 +916,12 @@ def register_parser(subparsers: "argparse._SubParsersAction") -> None:
     dev_session_parser.add_argument("--all-nonprod", action="store_true")
     dev_session_parser.add_argument("--device-id", default="")
     dev_session_parser.add_argument("--launch-app", action="store_true")
+    dev_session_parser.add_argument(
+        "--app-mode",
+        choices=("content-live", "ui-only"),
+        default="content-live",
+        help="App 启动策略；默认严格 content-live，ui-only 显式非可提升告警继续。",
+    )
     dev_session_parser.add_argument("--startup-attempt-id", default="")
     dev_session_parser.add_argument(
         "--release-id",
@@ -887,4 +948,3 @@ def register_parser(subparsers: "argparse._SubParsersAction") -> None:
         default="",
         help="commercial readiness必需；consumer readiness可省略。",
     )
-

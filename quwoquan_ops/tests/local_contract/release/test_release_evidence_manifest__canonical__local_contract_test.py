@@ -16,6 +16,9 @@ from quwoquan_ops.cli.prod import collect_mainline_image_descriptors as image_co
 from quwoquan_ops.cli.prod import collect_release_artifact_descriptors as evidence_collector
 from quwoquan_ops.cli.prod import finalize_mainline_release_artifact as finalizer
 from quwoquan_ops.cli.prod import load_prod_plane_images
+from quwoquan_ops.tests.support.app_artifact_manifest_test_support import (
+    app_artifact_manifest,
+)
 
 
 DIGEST = "sha256:" + ("a" * 64)
@@ -234,6 +237,13 @@ class ReleaseEvidenceManifestCanonicalContractTest(unittest.TestCase):
                     "contentSHA256": finalizer.sha256_tree(web_payload).removeprefix(
                         "sha256:"
                     ),
+                    "artifactManifest": app_artifact_manifest(
+                        environment="prod",
+                        surface="web",
+                        source_git_sha=source["gitSha"],
+                        source_tree_digest=source["treeDigest"],
+                        artifact_digest=finalizer.sha256_tree(web_payload),
+                    ),
                 },
             ),
             "androidOfficialRelease": self._write_json(
@@ -246,6 +256,15 @@ class ReleaseEvidenceManifestCanonicalContractTest(unittest.TestCase):
                     "apkSHA256": finalizer.sha256_file(
                         android_payload / "quwoquan.apk"
                     ).removeprefix("sha256:"),
+                    "artifactManifest": app_artifact_manifest(
+                        environment="prod",
+                        surface="android",
+                        source_git_sha=source["gitSha"],
+                        source_tree_digest=source["treeDigest"],
+                        artifact_digest=finalizer.sha256_file(
+                            android_payload / "quwoquan.apk"
+                        ),
+                    ),
                 },
             ),
             "opsPortal": self._write_json(
@@ -471,8 +490,15 @@ class ReleaseEvidenceManifestCanonicalContractTest(unittest.TestCase):
                     "surface": surface,
                     "sourceGitSha": source["gitSha"],
                     "sourceTreeDigest": source["treeDigest"],
-                    "packageDigest": finalizer.sha256_tree(
+                    "packageDigest": (package_digest := finalizer.sha256_tree(
                         payloads / environment / surface
+                    )),
+                    "artifactManifest": app_artifact_manifest(
+                        environment=environment,
+                        surface=surface,
+                        source_git_sha=source["gitSha"],
+                        source_tree_digest=source["treeDigest"],
+                        artifact_digest=package_digest,
                     ),
                 },
             )
