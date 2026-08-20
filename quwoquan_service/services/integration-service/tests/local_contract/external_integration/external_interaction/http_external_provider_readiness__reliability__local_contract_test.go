@@ -42,7 +42,10 @@ func newSMSOTPProviderFixture(
 		provider.HTTPExternalProviderConfig{
 			Name:              "aliyun_sms",
 			Operation:         reliabletask.ExternalInteractionOperationSmsOTP,
-			Endpoint:          upstream.URL + "/v1/provider/sms/send?trace=must-not-reach-probe",
+			// 路径与 sms-provider-substitute 声明的 INTEGRATION_SMS_ENDPOINT 一致；
+			// query 单独拼接，否则 path authority 的匹配会被 ?trace= 截断。
+			Endpoint: upstream.URL + "/v1/provider/sms/send" +
+				"?trace=must-not-reach-probe",
 			BearerToken:       "provider-token",
 			Timeout:           timeout,
 			OTPCodeSealer:     sealer,
