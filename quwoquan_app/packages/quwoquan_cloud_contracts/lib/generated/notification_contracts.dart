@@ -1,5 +1,5 @@
 // Code generated from the canonical notification operation owner. DO NOT EDIT.
-// ContractGraph SHA256: a60b8ff7b0ab4b9c8092722170f993770e6f840c5f60a3ea8106f447161d19f8
+// ContractGraph SHA256: 48db322283434d837f49d0657307e523afc65ce66b468b74468a2ac324abf0f0
 
 library;
 
