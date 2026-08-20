@@ -709,6 +709,17 @@ def _validate_runtime_config_authority_parity(
         / "device"
         / "run_app_instance.sh"
     ).read_text(encoding="utf-8")
+    # run_app_instance.sh 已收敛成 adapter：非 Prod 委派 run.sh，Prod 消费确切
+    # Release 制品，它自己不再组装 dart-define。四个 media base 的注入由
+    # print_app_env_dart_defines.py 单点拥有（run.sh 经 build_launcher_handoff.py
+    # 消费），因此显式注入这条查它，禁止单一 fallback 这条仍查两个 launcher 面。
+    dart_defines_source = (
+        ROOT
+        / "quwoquan_app"
+        / "scripts"
+        / "env"
+        / "print_app_env_dart_defines.py"
+    ).read_text(encoding="utf-8")
     for source_path, source in (
         ("run_environment_patrol_smoke.py", patrol_source),
         ("run_app_instance.sh", app_instance_source),
@@ -717,6 +728,10 @@ def _validate_runtime_config_authority_parity(
             issues.append(
                 f"{source_path}: 正式 launcher/Patrol 禁止单一 media base fallback"
             )
+    for source_path, source in (
+        ("run_environment_patrol_smoke.py", patrol_source),
+        ("print_app_env_dart_defines.py", dart_defines_source),
+    ):
         for _, define_key in APP_RUNTIME_CONFIG_MEDIA_FIELDS.values():
             if define_key not in source:
                 issues.append(f"{source_path}: 缺少显式注入 {define_key} 的路径")
