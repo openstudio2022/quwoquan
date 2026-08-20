@@ -128188,7 +128188,7 @@
     },
     {
       "path": "_shared/app_artifact_manifest.yaml",
-      "sha256": "b30aa9bff14cbe99c689fd0070bcb0cab0f2b6df4ecc33d01971203493291a8b"
+      "sha256": "07f69f7ef47901af09f948433a7c3cfe6e2a9f5f3bb36242f884fdbca424f3a3"
     },
     {
       "path": "_shared/app_launch_manifest.yaml",
@@ -133387,7 +133387,7 @@
     },
     {
       "path": "_shared/app_artifact_manifest.yaml",
-      "sha256": "b30aa9bff14cbe99c689fd0070bcb0cab0f2b6df4ecc33d01971203493291a8b",
+      "sha256": "07f69f7ef47901af09f948433a7c3cfe6e2a9f5f3bb36242f884fdbca424f3a3",
       "mediaType": "application/yaml",
       "content": {
         "application_identity": {
@@ -133880,9 +133880,14 @@
             "additional_fields": false,
             "constraints": [
               "packageDigest 必须是对 canonical payload 目录的不可变 sha256 树摘要。",
-              "sourceGitSha/sourceTreeDigest 必须与检出的 reviewed candidate 完全一致。"
+              "sourceGitSha/sourceTreeDigest 必须与检出的 reviewed candidate 完全一致。",
+              "artifactManifest 必须逐字段保留 canonical AppArtifactManifest；environment/platform/source 必须与外层一致，artifactDigest 必须与真实 payload 制品一致，distributionClass/promotable 不得降维或改写。"
             ],
             "fields": {
+              "artifactManifest": {
+                "schema_ref": "app_artifact_manifest",
+                "type": "object"
+              },
               "environment": {
                 "allowed_values": [
                   "alpha",
@@ -133923,7 +133928,8 @@
               "surface",
               "sourceGitSha",
               "sourceTreeDigest",
-              "packageDigest"
+              "packageDigest",
+              "artifactManifest"
             ],
             "schema_value": "release-application-package"
           }
