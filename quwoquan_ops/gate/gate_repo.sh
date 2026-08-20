@@ -194,7 +194,10 @@ python3 quwoquan_ops/tests/local_contract/gate/test_emitted_error_code_declarati
   # 否则门禁实现回退无人可见。缺口容忍基线已删除，本门禁为零容忍——配套测试统一由
   # make test-gate-companion-local-contract 执行。
   make test-gate-companion-local-contract
-  python3 quwoquan_ops/gate/verify_gate_local_contract_execution.py "${gate_change_range_args[@]}"
+  # 不传变更区间时数组为空。bash 3.2（macOS 自带）在 set -u 下把空数组的
+  # "${arr[@]}" 当成未绑定变量，用 ${arr[@]+...} 保护后在 3.2 与 4+ 上行为一致。
+  python3 quwoquan_ops/gate/verify_gate_local_contract_execution.py \
+    ${gate_change_range_args[@]+"${gate_change_range_args[@]}"}
   python3 quwoquan_ops/tests/local_contract/gate/test_gate_local_contract_execution__contract__local_contract_test.py
   python3 quwoquan_ops/gate/verify_local_env_port_manifest.py
   python3 quwoquan_ops/gate/verify_prod_rollout_stackctl_contract.py
