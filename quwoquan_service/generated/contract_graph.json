@@ -106978,7 +106978,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/circle/circle_shell_widget__local_contract_test.dart",
-            "sha256": "43b9348b0dda95bc3e5886017904bf366c023f4e84fb2eef8f002b92222099df"
+            "sha256": "3c8ac7d1762efcf7da1d954118c36ee05ad2f07107e3984ca9c90ef44c8c3339"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/circle/circle_stats_page_widget__local_contract_test.dart",
@@ -113434,7 +113434,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/presentation/home_page.dart",
-            "sha256": "a243f0a86b1e9fb1b230af8d155d0df496aa6f617354a395f29374c5c256b253"
+            "sha256": "ae248a21751cc2f177e1af966716a43772c95026e83e08e52575393ba376460e"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/presentation/interest_onboarding_page.dart",
@@ -113462,7 +113462,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/presentation/work_browser_entry_page.dart",
-            "sha256": "b01802ab3a4cff75c39644f089d47d566c6645c1055ed3b346c865a2c33d51d0"
+            "sha256": "35a75384a1e922d054a28b3a72c16854d0cdb718418bf7c00e6caf185aff5f09"
           }
         ],
         "localContract": [
@@ -113708,7 +113708,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/discovery_share_template__typed_wire_context__functional__local_contract_test.dart",
-            "sha256": "c93a2229261237eebc718320b4bf66b0134e85f2ba13f1325be82db968942d15"
+            "sha256": "a7bc40184ac931a1a906b37f7bb0b8c11f1b93ad53544794482f53be97e3265d"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/discovery_wire_lookup__local_contract_test.dart",
@@ -113804,7 +113804,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/markdown_seo_html_renderer__local_contract_test.dart",
-            "sha256": "6ac90b5b94ea75944f70450cc3f6e79d466ae76c767832c867e67e05647cdeab"
+            "sha256": "354604446451c7a782154bac8434d2c64f339d78f27e98c6353de5bd8072c3f0"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/more_action_popup__functional__local_contract_test.dart",
@@ -113948,11 +113948,11 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/share_template_by_identity_widget__local_contract_test.dart",
-            "sha256": "10e9031697e6bfe04085d56cc553e7c3fd602978652252f2b0f3595b3dd87dc9"
+            "sha256": "426b254d4422098384bee5475e82bc6f8433d6076d522bbe46dd50c6c077f232"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/share_unified_surface_parity__local_contract_test.dart",
-            "sha256": "dcc52039229fedbb9946dcc4c4c9933a7fe104706249f66585314a2e84e8bfd6"
+            "sha256": "f7de269e578a271c7eada0845cb99deb0333a738040cd3abdbd9b6a64f99ff8d"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/text_publish_payload_media_refs__local_contract_test.dart",
@@ -115082,7 +115082,7 @@
         "presentation": [
           {
             "path": "quwoquan_app/lib/service/entity_service/entity_homepage/homepage/presentation/homepage_detail_page.dart",
-            "sha256": "926a5ef154115e300edb8a4ed36054af20955f5f3a26c22fa35747aae58afe7c"
+            "sha256": "73ee68e9cc2208809c8b36285afc0ce412788299faefb5e121d766a7c05b23ae"
           },
           {
             "path": "quwoquan_app/lib/service/entity_service/entity_homepage/homepage/presentation/homepage_introduction_page.dart",
@@ -115124,7 +115124,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage/homepage_detail_share__functional__local_contract_test.dart",
-            "sha256": "aa2780247fe518330812b921396a7531b919ef3044ada321d7ef418275285ebc"
+            "sha256": "1c14a11024715b4818de3dce276fccebf1651fbe637d00e824288c601c38e019"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage/homepage_detail_wishlist__functional__local_contract_test.dart",
@@ -124745,7 +124745,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/persona_management/persona/other_profile_journey__local_contract_test.dart",
-            "sha256": "e6a5928dff6b507e4343608e92f2ff7090b7fc80ae71ad2815ff4cdd5fb5a34e"
+            "sha256": "6c61697da0d185c263d99016aa2a4f0972a81f405e0147ffa75291d9bf9ed43c"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/persona_management/persona/other_profile_page__local_contract_test.dart",
@@ -124809,7 +124809,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/persona_management/persona/profile_shell_widget__local_contract_test.dart",
-            "sha256": "33761002601c1041c730a51cc853c43929aa901e1aa9e6b3b8b76b913017ee26"
+            "sha256": "ea40b1624922716334f3949541bfce42db5178893c59ea85b3efc019a789cdc0"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/persona_management/persona/profile_slogan_card__local_contract_test.dart",
