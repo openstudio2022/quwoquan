@@ -59,6 +59,20 @@ class _WorkBrowserEntryPageState extends ConsumerState<WorkBrowserEntryPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _resolve());
   }
 
+  @override
+  void didUpdateWidget(WorkBrowserEntryPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.workId.trim() == widget.workId.trim()) {
+      return;
+    }
+    // 同一路由换 workId 时 State 被复用：必须先丢弃上一个 extra 回到加载态，
+    // 否则直达用户会继续看到上一个作品——正是本页要消除的「看到无关内容」断点。
+    _extra = null;
+    _error = null;
+    _loading = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _resolve());
+  }
+
   Future<void> _resolve() async {
     if (!mounted) {
       return;

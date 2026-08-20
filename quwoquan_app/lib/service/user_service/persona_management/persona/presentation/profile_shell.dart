@@ -20,7 +20,8 @@ import 'package:quwoquan_app/runtime/di/rtc_call_entry_dependencies.dart';
 import 'package:quwoquan_app/design_system/media/app_media_image.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/design_system/semantics/navigation_semantic_constants.dart';
-import 'package:quwoquan_app/runtime/transport/links/app_public_content_links.dart';
+import 'package:quwoquan_app/runtime/di/runtime_package_dependencies.dart'
+    show publicContentLinkBuilderProvider;
 import 'package:quwoquan_app/runtime/transport/media/avatar_image_url.dart';
 import 'package:quwoquan_app/runtime/transport/media/content_media_url.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';

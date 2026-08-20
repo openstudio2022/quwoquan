@@ -45,6 +45,7 @@ import '../../../../../support/service/content_service/content/content_behavior_
 
 import '../../../../../support/service/circle_service/circle_management/circle/typed_circle_query_test_double.dart';
 import '../../../../../support/service/circle_service/circle_management/circle/circle_contract_test_builders.dart';
+import '../../../../../support/runtime/public_content_link_test_scope.dart';
 
 class _AuthenticatedCircleSession extends AuthSessionController {
   @override
@@ -200,6 +201,7 @@ Widget _scopedApp({
         );
   return ProviderScope(
     overrides: [
+      ...publicContentLinkOverrides(),
       authSessionControllerProvider.overrideWith(
         _AuthenticatedCircleSession.new,
       ),

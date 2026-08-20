@@ -27,6 +27,7 @@ import 'package:quwoquan_app/runtime/di/ops_event_dependencies.dart'
 import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart'
     show runtimeFailureFromError;
 import 'package:quwoquan_app/runtime/observability/trackers/journey_event_tracker.dart';
+import 'package:quwoquan_app/runtime/transport/cloud_retry_policy.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/home_feed_post_open_action.dart';
@@ -68,6 +69,7 @@ class _HomePageState extends ConsumerState<HomePage>
   final Map<String, Object> _automaticRecoveryConsumedErrors =
       <String, Object>{};
   final Set<String> _automaticRecoveryInFlightChannels = <String>{};
+  Timer? _automaticRecoveryBackoffTimer;
   bool _wasBackgrounded = false;
   int _activeChannelReconcileGeneration = 0;
   int _surfaceActivityGeneration = 0;
@@ -99,6 +101,7 @@ class _HomePageState extends ConsumerState<HomePage>
           _automaticRecoveryConsumedErrors.remove(channelId);
         }
       }
+      _scheduleAutomaticRecoveryBackoff(next);
     }, fireImmediately: true);
     WidgetsBinding.instance.addObserver(this);
     _networkSubscription = ref
@@ -125,6 +128,7 @@ class _HomePageState extends ConsumerState<HomePage>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _feedStateSubscription.close();
+    _automaticRecoveryBackoffTimer?.cancel();
     unawaited(_networkSubscription?.cancel());
     _surfaceActivityGeneration += 1;
     _feedNotifier.cancelChannelRequests(_activeChannelId);
@@ -160,6 +164,38 @@ class _HomePageState extends ConsumerState<HomePage>
         unawaited(_recoverActiveChannelOnce());
         return;
     }
+  }
+
+  /// transient 阻断态出现后，按 canonical backoff 给一次自动重取机会。
+  ///
+  /// connectivity 恢复与前后台恢复这两个既有信号在「一直弱网、用户一直停留」的
+  /// 静默期都不会到来，用户会卡在错误态直到手动重试。退避只 arm 一次，且真正的
+  /// 重取仍由 [_automaticRecoveryConsumedErrors] 判定同一阻断态只消费一次，
+  /// 因此不会退化成轮询。
+  void _scheduleAutomaticRecoveryBackoff(
+    Map<String, AsyncValue<DiscoveryFeedState>> feedStates,
+  ) {
+    if (_automaticRecoveryBackoffTimer != null) {
+      return;
+    }
+    final channelId = _activeChannelId;
+    final current = feedStates[channelId]?.value;
+    final error = current?.items.isEmpty == true
+        ? current?.blockingError
+        : null;
+    if (error == null || !_isAutomaticRecoveryCandidate(error)) {
+      return;
+    }
+    if (identical(_automaticRecoveryConsumedErrors[channelId], error)) {
+      return;
+    }
+    _automaticRecoveryBackoffTimer = Timer(
+      const CloudRetryPolicy().maxBackoff,
+      () {
+        _automaticRecoveryBackoffTimer = null;
+        unawaited(_recoverActiveChannelOnce());
+      },
+    );
   }
 
   Future<void> _recoverActiveChannelOnce() async {

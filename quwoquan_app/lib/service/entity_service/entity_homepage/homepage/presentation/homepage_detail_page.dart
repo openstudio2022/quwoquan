@@ -10,7 +10,8 @@ import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/app
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/link_templates.g.dart';
-import 'package:quwoquan_app/runtime/transport/links/app_public_content_links.dart';
+import 'package:quwoquan_app/runtime/di/runtime_package_dependencies.dart'
+    show publicContentLinkBuilderProvider;
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
@@ -296,7 +297,9 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
       subtitle: detail.subtitle ?? '',
       thumbnailUrl: detail.coverUrl ?? '',
       deeplink: AppLinkTemplates.entityHomepageAppDeepLink(widget.homepageId),
-      landingUrl: AppPublicContentLinks.entityHomepageWebUrl(widget.homepageId),
+      landingUrl: ref
+          .read(publicContentLinkBuilderProvider)
+          .entityHomepageWebUrl(widget.homepageId),
       objectRef: MessageCardObjectRef(
         objectTypeRef: 'homepage',
         objectId: widget.homepageId,

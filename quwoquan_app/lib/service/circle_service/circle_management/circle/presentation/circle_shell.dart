@@ -30,7 +30,8 @@ import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/l10n/copy/app_concept_constants.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/design_system/semantics/navigation_semantic_constants.dart';
-import 'package:quwoquan_app/runtime/transport/links/app_public_content_links.dart';
+import 'package:quwoquan_app/runtime/di/runtime_package_dependencies.dart'
+    show publicContentLinkBuilderProvider;
 import 'package:quwoquan_app/runtime/auth/auth_gate.dart';
 import 'package:quwoquan_app/runtime/auth/auth_continuation.dart'
     show JoinCircleContinuation, authContinuationProvider;
@@ -408,7 +409,9 @@ class _CircleShellState extends ConsumerState<CircleShell> {
       case _CircleMoreAction.copyLink:
         await Clipboard.setData(
           ClipboardData(
-            text: AppPublicContentLinks.circleWebUrl(widget.circleId),
+            text: ref
+                .read(publicContentLinkBuilderProvider)
+                .circleWebUrl(widget.circleId),
           ),
         );
         if (context.mounted) {
@@ -476,7 +479,9 @@ class _CircleShellState extends ConsumerState<CircleShell> {
     required String circleName,
     bool asInvite = false,
   }) async {
-    final url = AppPublicContentLinks.circleWebUrl(widget.circleId);
+    final url = ref
+        .read(publicContentLinkBuilderProvider)
+        .circleWebUrl(widget.circleId);
     final resolvedName = circleName.isEmpty
         ? AppConceptConstants.circles
         : circleName;

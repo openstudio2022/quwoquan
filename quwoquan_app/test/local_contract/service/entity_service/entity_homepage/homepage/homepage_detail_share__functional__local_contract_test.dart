@@ -9,6 +9,7 @@ import '../../../../../support/service/chat_service/chat/conversation/chat_repos
 import '../../../../../support/service/recommendation_service/recommendation/recommendation_feature_profile_view/intersection_repository_typed_double.dart';
 import '../../../../../support/service/entity_service/entity_homepage/homepage/homepage_test_adapter.dart';
 import '../../../../../support/runtime/homepage_source_cards_boundary_overrides.dart';
+import '../../../../../support/runtime/public_content_link_test_scope.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/presentation/homepage_detail_page.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart'
@@ -56,6 +57,7 @@ void main() {
   Widget buildApp() {
     return ProviderScope(
       overrides: [
+        ...publicContentLinkOverrides(),
         ...homepageSourceCardsBoundaryOverrides(),
         authSessionControllerProvider.overrideWith(_GuestHomepageSession.new),
         behaviorRepositoryProvider.overrideWithValue(

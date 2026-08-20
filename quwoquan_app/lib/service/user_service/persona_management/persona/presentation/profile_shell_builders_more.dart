@@ -9,9 +9,9 @@ extension _ProfileShellBuildersMore on _ProfileShellState {
     final userHandle = (profile?.userHandle ?? '').trim().isNotEmpty
         ? profile!.userHandle.trim()
         : widget.userId;
-    final landingUrl = AppPublicContentLinks.publicWebUrlForPath(
-      AppLinkTemplates.userWebPath(userHandle),
-    );
+    final landingUrl = ref
+        .read(publicContentLinkBuilderProvider)
+        .publicWebUrlForPath(AppLinkTemplates.userWebPath(userHandle));
     final displayName = (profile?.displayName ?? '').trim();
     final bio = (profile?.bio ?? '').trim();
     final shareText = <String>[

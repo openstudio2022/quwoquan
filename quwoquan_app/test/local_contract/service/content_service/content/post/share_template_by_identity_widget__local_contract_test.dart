@@ -19,7 +19,7 @@ import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_models.dart';
-import 'package:quwoquan_app/runtime/transport/links/app_public_content_links.dart';
+import '../../../../../support/runtime/public_content_link_test_scope.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/runtime/observability/telemetry/app_telemetry_outbox.dart';
 import 'package:quwoquan_app/runtime/observability/telemetry/app_telemetry_reporter.dart';
@@ -85,6 +85,7 @@ void main() {
       ),
       enableIdentityTemplate: true,
       visibility: 'public',
+      publicLinks: testPublicContentLinks,
     );
 
     await tester.pumpWidget(
@@ -97,7 +98,7 @@ void main() {
     expect(template.deeplink, 'quwoquan://content/post/moment_1');
     expect(
       template.landingUrl,
-      startsWith(AppPublicContentLinks.postWebUrl('moment_1')),
+      startsWith('$testPublicWebOrigin/post/moment_1'),
     );
     expect(find.text(MediaText.shareTemplateMomentTitle), findsOneWidget);
     expect(find.text(FoundationText.copyLink), findsOneWidget);
@@ -143,6 +144,7 @@ void main() {
       ),
       enableIdentityTemplate: true,
       visibility: 'public',
+      publicLinks: testPublicContentLinks,
     );
 
     await tester.pumpWidget(
@@ -250,6 +252,7 @@ void main() {
       ),
       enableIdentityTemplate: true,
       visibility: 'public',
+      publicLinks: testPublicContentLinks,
     );
 
     await tester.pumpWidget(
@@ -319,6 +322,7 @@ void main() {
       ),
       enableIdentityTemplate: true,
       visibility: 'public',
+      publicLinks: testPublicContentLinks,
     );
 
     await tester.pumpWidget(
@@ -331,7 +335,7 @@ void main() {
     expect(template.deeplink, 'quwoquan://content/post/work_1');
     expect(
       template.landingUrl,
-      startsWith(AppPublicContentLinks.postWebUrl('work_1')),
+      startsWith('$testPublicWebOrigin/post/work_1'),
     );
     expect(find.text(MediaText.shareTemplateWorkTitle), findsOneWidget);
     expect(find.text(ContentText.shareCircleVisibilityNotice), findsNothing);
@@ -405,6 +409,7 @@ void main() {
       ),
       enableIdentityTemplate: false,
       visibility: 'public',
+      publicLinks: testPublicContentLinks,
     );
 
     await tester.pumpWidget(
@@ -723,6 +728,7 @@ ContentShareTemplate _publicTemplate(String postId) {
       ),
     ),
     enableIdentityTemplate: true,
+    publicLinks: testPublicContentLinks,
   );
 }
 

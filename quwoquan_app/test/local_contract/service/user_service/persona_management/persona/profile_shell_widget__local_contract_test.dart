@@ -84,6 +84,7 @@ import '../../../../../support/service/user_service/account/user_account/user_ac
 import '../../../../../support/service/content_service/content/profile_interaction_activity_view/test_profile_interaction_facets.dart';
 import '../../../../../support/service/content_service/content/profile_interaction_activity_view/author_impact_fixtures.dart';
 import '../../../../../support/service/recommendation_service/recommendation/recommendation_feature_profile_view/intersection_fixtures.dart';
+import '../../../../../support/runtime/public_content_link_test_scope.dart';
 
 /// 在 UI 测试中使 capability 保持 null（current 关注/私信 布局）
 class _ThrowingCapabilityRepository extends RelationshipCapabilityRepository {
@@ -541,6 +542,7 @@ List<Override> _profileScopeOverrides({
     intersectionRepositoryProvider.overrideWithValue(
       const _EmptyIntersectionRepository(),
     ),
+    ...publicContentLinkOverrides(),
     ...overrides.cast<Override>(),
   ];
 }
