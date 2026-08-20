@@ -116805,7 +116805,7 @@
           },
           {
             "path": "quwoquan_service/services/integration-service/tests/local_contract/external_integration/external_interaction/http_external_provider_readiness__reliability__local_contract_test.go",
-            "sha256": "7808d7a89c8809d007977035c5bafacf45323fe8adee926109efc8bd5ceca9ab"
+            "sha256": "6077502249b4fe74c35044243640f565101e86f688e337a67131ee0500c21e06"
           },
           {
             "path": "quwoquan_service/services/integration-service/tests/local_contract/external_integration/external_interaction/provider_result_relay__reliability__local_contract_test.go",
