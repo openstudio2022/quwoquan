@@ -102,6 +102,18 @@ def _manifest_identity(
     return object_id, version
 
 
+def _latest_physical_record_sequence(object_root: Path) -> int | None:
+    versions_root = object_root / "_pool/versions"
+    if not versions_root.is_dir():
+        return None
+    sequences = [
+        int(path.stem)
+        for path in versions_root.glob("*.json")
+        if path.is_file() and path.stem.isdigit() and not path.stem.startswith("0")
+    ]
+    return max(sequences) if sequences else None
+
+
 def _evidence_is_current(object_root: Path, record: Mapping[str, Any]) -> bool:
     try:
         evidence = object_root / _safe_rel(
@@ -242,6 +254,27 @@ class CanonicalIdentityStateQuery:
             row for row in history.exclusions if row.superseded_by is None
         ]
         if blocking:
+            record_sequence = _latest_physical_record_sequence(object_root)
+            if (
+                object_id is not None
+                and manifest_version is not None
+                and record_sequence is not None
+            ):
+                return self._validated(
+                    object_type=object_type,
+                    object_ref=canonical_ref,
+                    object_id=object_id,
+                    state="invalid_unrepairable",
+                    deepest_error=blocking[0].reason,
+                    recovery_action={
+                        "command": "resolve_invalid_canonical_identity",
+                        "action": "terminate",
+                    },
+                    snapshot_token=snapshot_token,
+                    content_version=manifest_version,
+                    record_sequence=record_sequence,
+                    terminal_fact=None,
+                )
             raise ObjectTransactionError(blocking[0].reason)
         if not history.records:
             if (

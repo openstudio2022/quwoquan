@@ -276,7 +276,7 @@ def test_pre_sequence_record_shape_stays_excluded(tmp_path: Path) -> None:
     assert report["supply"]["article"]["publishable"] == 0
     assert any(
         row["ref"] == "posts/article/pre-seq1/1"
-        and row["code"] == "DATA.POOL.OBJECT_NOT_ADMITTED"
+        and row["code"] == "DATA.POOL.RECORD_SEQUENCE_MISSING"
         for row in report["issues"]
     )
 
@@ -482,10 +482,10 @@ def test_incomplete_attribution_only_excludes_that_post_from_strict_capacity(
     assert report["environmentCapacity"]["alpha"] == 1
     assert [
         issue for issue in report["issues"]
-        if issue["code"] == "DATA.POOL.OBJECT_NOT_ADMITTED"
+        if issue["code"] == "DATA.POOL.PAYLOAD_DIGEST_DRIFT"
     ] == [{
         "gate": "eligibility",
-        "code": "DATA.POOL.OBJECT_NOT_ADMITTED",
+        "code": "DATA.POOL.PAYLOAD_DIGEST_DRIFT",
         "ref": "posts/image/incomplete/1",
     }]
 
@@ -851,4 +851,9 @@ def test_extra_bad_object_does_not_block_attained_milestone(
     assert report["nextWave"] == []
     assert report["issueCount"] == 1
     assert report["issues"][0]["code"] == "DATA.POOL.EXPLICIT_ADMISSION_MISSING"
-    assert report["nextAction"].startswith("build Research milestone release")
+    assert "nextAction" not in report
+    assert any(
+        row["objectRef"] == "posts/article/admission-pending-extra/1"
+        and row["state"] == "absent"
+        for row in report["canonicalIdentityStates"]
+    )

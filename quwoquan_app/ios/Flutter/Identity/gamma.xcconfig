@@ -1,5 +1,5 @@
 // Generated from _shared/app_artifact_manifest.yaml; do not edit.
-QWQ_APP_IDENTITY_SOURCE_SHA256 = sha256:b30aa9bff14cbe99c689fd0070bcb0cab0f2b6df4ecc33d01971203493291a8b
+QWQ_APP_IDENTITY_SOURCE_SHA256 = sha256:07f69f7ef47901af09f948433a7c3cfe6e2a9f5f3bb36242f884fdbca424f3a3
 QWQ_APP_RUNTIME_ENV = gamma
 QWQ_IOS_BASE_BUNDLE_ID = com.example.quwoquanApp
 QWQ_ENV_BUNDLE_ID_SUFFIX = .gamma
