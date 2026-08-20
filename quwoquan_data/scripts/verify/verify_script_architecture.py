@@ -270,7 +270,8 @@ def script_architecture_issues() -> list[str]:
                 "T/M/B/phase/part milestones"
             )
         text = path.read_text(encoding="utf-8")
-        lines = text.count("\n") + 1
+        # 末行换行符不开启新的一行。多算 1 行会把恰好用满预算的模块报成超限。
+        lines = text.count("\n") + (0 if text.endswith("\n") else 1)
         if path == SCRIPTS_ROOT / "cli.py":
             limit = MAX_CLI_LINES
         elif path.parent == SCRIPTS_ROOT / "content/execution/controller":
