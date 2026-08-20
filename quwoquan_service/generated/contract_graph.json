@@ -116785,7 +116785,7 @@
           },
           {
             "path": "quwoquan_service/services/integration-service/tests/local_contract/external_integration/external_interaction/external_interaction_error_codes__contract__local_contract_test.go",
-            "sha256": "1ccc7520eea24fdcd3d5ba2e835a2a60b419f8182c523e0cd4abb20bb14452ee"
+            "sha256": "9991b59fded7522e7281de0f94765c2162ccb8b1126f88e3acb1f8ebaa2afaed"
           },
           {
             "path": "quwoquan_service/services/integration-service/tests/local_contract/external_integration/external_interaction/external_interaction_handler__local_contract_test.go",
