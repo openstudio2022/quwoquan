@@ -36,6 +36,10 @@
 - `alpha` 与其他环境使用同一 Remote composition/schema/网络平面，只能在容量、endpoint、访问控制、数据 release 和第三方 sandbox 策略上差异化。
 - 本地 host 端口必须来自 1000 端口块 + plane + 10 端口槽位模型，canonical 端口以 `0` 结尾。
 - App / Service env package 都必须携带 canonical unversioned schema identity、artifact policy 摘要与机器可读报告。
+- App 产品支持面固定为 Android、iOS 与 Web；未持有平台工程、包身份、签名和真实安装启动证据的平台不得进入 metadata、schema、CI 或发布矩阵。
+- Android、iOS 与 Web 制品必须由 `stackctl package` 从同一只读 source capsule 分环境生成；Android/iOS 每次构建必须显式选择与 environment 同名的 flavor/scheme，并在写 manifest 前回读包身份、签名、effective launch digest 与生产纯度。
+- production App 的 pub/plugin/Pod/registrant/linker/filelist/SBOM 与最终 APK/AAB/IPA 可达图不得含 Patrol、integration_test、PatrolJUnitRunner、XCTest 或其他 test runner；设备 UAT 只能由物理隔离的 test host 单向依赖 production App。
+- 日常与 CI 构建只消费已锁定依赖；Dart lock、Flutter plugin podspec、Podfile.lock、Pods/Manifest.lock 与 CocoaPods executable/version 任一漂移时在编译前返回 typed blocker，禁止启动路径自动 update 或联网修复。
 - `prod` 只能读取 `prod` 包；禁止 `prod-gray` 环境、目录或 artifact。
 - 同一环境存在多个部署 target 时，每个 target 必须写入独立 package 目录，并从环境 `urlRoles + target urlOverrides + portProfile` 的解析结果投影 App 运行时端点；禁止复制环境默认 target 的 URL 或跨 target 复用可变产物。
 - `prod-hosted` artifact 禁止包含 mock/seed/debug/local/test host 与跨环境 URL；`prod-sim` 仍属于 `prod` 环境，但全部公共入口必须使用 `*.sim.quwoquan.com`，不得命中生产 host、增加第五环境或放宽 `prod-hosted` 纯度门。
@@ -69,6 +73,7 @@
 ### REQ-003 双端本地运行持有可释放 consumer lease
 
 - `quwoquan_app/run.sh --mode content-live -d <device>` 是显式选择设备、持有 consumer lease、准备平台 transport 并验证真实首页/视频书内容的 canonical launcher，也是未指定 mode 时的默认；`--mode ui-only` 只允许调试安全 Shell 与页面布局且生成 `nonPromotable=true` 证据。IDE launch profile 可以薄包装该入口。
+- `dev-session --app-mode content-live|ui-only` 与 canonical launcher 使用同一执行体且默认 `content-live`；只有操作者显式选择 `ui-only` 时，test_live readiness 问题才可记为 warning 后继续真实编译、安装与启动。
 - `quwoquan_app/run.sh --mode content-live --env alpha|beta|gamma -d <device>` 是内容联调入口；裸 `flutter run` 与 IDE 直接 Flutter Debug 默认选择 metadata 声明的 `alpha-local`，显式环境统一通过 `--flavor alpha|beta|gamma` 选择对应 canonical local target，禁止选择 Prod 或直接覆盖 URL、密钥、target、manifest 与 release。`QWQ_ENVIRONMENT` 只允许由 canonical wrapper 转译为同名 flavor，`APP_RUNTIME_ENV` 只校验实际 flavor 投影，不得反向选择原生包身份。
 - direct Debug 必须把当前 topology 派生的 test-live runtime config 与 native manifest 交给 Dart 冷启动和 Hot Restart，不得在 App 代码中复制 Alpha endpoint。该配置记录可变摘要供诊断，但摘要变化不得阻止测试编译；实际 environment、application/bundle ID 与显示名必须在 Gradle/Xcode 解析构建图之前由静态 flavor/scheme configuration 确定。
 - App 构建不得读取或改写共享的“当前环境”文件。任意前序环境后，默认 Alpha 或显式 Alpha/Beta/Gamma 的第一条构建命令必须成功；`alpha → beta → gamma → alpha` 顺序切换不得要求 clean 或重试，并发构建不得共享可写 identity 输入或输出。
@@ -88,6 +93,8 @@
 - 只有操作者显式传入 `--ensure-runtime` 时，`content-live` 才可委托 `stackctl` 启动当前已选 immutable candidate，且不得执行 package、repair 或重选 release。
 - `ui-only` 预检以 `warning` + exit 0 报告服务、Provider、内容与漂移问题；`content-live` 必须消费严格 delivery 结果，不得把 warning 重新解释为内容可用。
 - direct Debug 与 canonical launcher 在安装前必须调用 `stackctl app-debug-preflight`。Alpha/Beta/Gamma test-live 只校验安全环境选择与最小 handoff并收集运行时诊断，不委托商业 `app-content-preflight`；Prod release 启动继续验证 immutable candidate、必要服务/Provider，并委托 `app-content-preflight` 绑定 commercial readiness、rollback/replay、首页/视频书、Creator 与媒体证据。
+- 所有启动入口必须写同一 `app-launch-attempt` receipt，并等待最长 15 分钟直到真实达到 `launched` 或产生首个 typed failure；PID 存活、进程已创建或 1.5 秒未退出均不是成功。编译、安装、启动失败分别使用 `APP.LAUNCH.compile_failed`、`APP.LAUNCH.install_failed`、`APP.LAUNCH.launch_failed`，已启动后的运行时不可用记为 `runtime_degraded` warning，正常 Ctrl-C 记为 `stopped`。
+- Android `prod-sim` 只安装并启动 exact Release artifact；Flutter 不支持 iOS AOT Release/Profile simulator，故 iOS Release 基础编译生成 unsigned iphoneos `.app`，Simulator 只允许 non-promotable Debug 启动且不得冒充 Release/Prod 证据。`prod-hosted` 只消费已签名 artifact、manifest、安装回执和严格 readiness，禁止 `flutter run`、Debug 或未经授权的真实 rollout。
 - 每次 Dart isolate 启动必须先生成新 `attemptId`，再调用原生 `beginStartupAttempt(attemptId)`。原生返回 `attemptKind=cold|hotRestart`、`processElapsedMs`、`attemptElapsedMs` 与 `deadlineOrigin=nativeProcess|dartHotRestart`。
 - `startup_attempt_started` 只能在 native runtime package 已水合且 `configurationState=complete` 后发送；Cold Start 的 6 秒预算可使用进程时钟，Hot Restart 只能使用本次 attempt 时钟。进程总存活时间只作诊断，不得写入 `welcomeExitMs` 或消耗 Hot Restart 预算。
 - `stackctl app-content-uat` 必须在唯一 environment operation owner 已完成同一 baseline/release activation 后，顺序对 Alpha、Beta、Gamma 执行上述预检、字面 `flutter run`、首页 Feed、`environment_app_core_readback` 与视频播放 Patrol。
@@ -98,7 +105,7 @@
 <a id="req-004"></a>
 ### REQ-004 所有有效构建、安装与启动路径行为等价
 
-- 有效路径集合固定为：裸 `flutter run`（Debug，canonical Alpha/Beta/Gamma local target）、canonical launcher `run.sh`（content-live/ui-only）、`stackctl package` 产物 Debug 安装到 Simulator/Emulator/登记设备后点击图标、`prod-sim`/`prod-hosted` Release 安装、应用市场 Release 安装（Apple App Store/TestFlight、华为、小米、OPPO、vivo、应用宝）、官网签名 APK 安装，以及上述任一渠道的同包名覆盖升级。
+- 有效路径集合固定为：裸 `flutter run`（Debug，canonical Alpha/Beta/Gamma local target）、canonical launcher `run.sh`（content-live/ui-only）、`stackctl package` 产物 Debug 安装到 Simulator/Emulator/登记设备后点击图标、Android `prod-sim` exact Release、Android/iOS `prod-hosted` Release、应用市场 Release 安装（Apple App Store/TestFlight、华为、小米、OPPO、vivo、应用宝）、官网签名 APK 安装，以及上述任一渠道的同包名覆盖升级。iOS Simulator 只允许 non-promotable Debug，不属于 Release 安装路径。
 - 等价定义：同一环境与同一服务端状态下，各路径的规范化行为指纹一致——配置完成态、首个安全终态、路由/登录态、内容 outcome 与 release identity、恢复动作均相同，且无 fatal recovery 差异。BuildMode、launch provenance 与 install channel 只允许作为观测事实记录，不得参与业务分支。
 - 每类安装渠道产出独立、按 store/device/build 追加的 install receipt。应用市场渠道的准出证据必须来自真实市场客户端下载安装与安装后冷启动 telemetry 回读，官网 APK 渠道必须来自官网下载对象的 SHA-256/签名/包名比对与安装后启动回读。package-only 编译、side-load 或另一渠道回执不得互相替代。
 - Debug 签名制品仅限开发者本机、Simulator/Emulator 与已登记设备，不进入 TestFlight、任何应用市场或官网公开下载；市场与官网只接受 Release 签名制品。
@@ -132,6 +139,8 @@
 - AND Prod `stackctl package / up / health / verify` 只读取 immutable active candidate，重复 package 只在完整 manifest 和全部 digest 相同的情况下返回原始 receipt，不隐式重建或覆盖候选。
 - AND 同一 release train 的 Alpha/Beta/Gamma/Prod environment artifact 从同一 source capsule 派生但最终镜像 digest 互不复用；交换 image/config/binding、篡改 `APP_ENV` 或在运行时选择其他环境时均在 listener 前失败。
 - AND `dev-session --all-nonprod` 顺序生成三份 target 隔离的 compile/launch、告警与 health 结果，单个 target 的 runtime health 失败不得抹除其真实编译结果。
+- AND Android/iOS 的 production dependency graph、native linker/filelist、SBOM 与最终制品均不含测试插件或 test runner，物理隔离的 UAT test host 枚举全部 canonical 用户验收 case 而不反向进入 production package。
+- AND Dart/Pod 跨锁与 CocoaPods executable/version 一致；任一漂移在真实编译前返回 `APP.DEPENDENCY.lock_drift`，且不执行自动 update 或 repo refresh。
 - AND bounded content workload 复用健康 full runtime 后，App preflight 仍读取原 full receipt；独立 bounded runtime 的 receipt 不冒充 full readiness。
 - AND `stackctl status` 在环境未启动、secret 缺失或 Provider 不可用时只返回诊断失败，不创建 secret、不启动或修复任何组件；consumer/commercial readiness 只有在 canonical Data receipt 与三个 release-bound exact query 均通过时才返回成功。
 - AND 失败时返回 canonical failure，且不产生伪成功事实。
@@ -147,6 +156,7 @@
 - AND consumer lease 的只读状态检查不删除 stale lease。
 - AND 本地 Alpha 与 Beta/Gamma/Prod 使用同一 production Remote composition；首页、视频与 Creator 由已激活 release 提供，消息和我的主页由真实身份经领域公开 command/event 形成并由真实服务 query 提供，启动器和 UAT 不得隐式切入 Mock、fixture 或残缺 public plane。
 - AND target/env 冲突、Prod endpoint/credential 泄露、依赖或真实编译失败时 App 在安装前失败；`ui-only` 对 runtime、系统信任、transport、API 与内容不可用记录告警并进入非晋级安全 Shell，`content-live` 对 runtime、release binding、API、Media、Search、Recommendation 或 readiness 不可用在 Flutter 安装前返回 typed blocker。
+- AND 启动回执按 prepared、compiling、compiled、installing、installed、launching、launched 单向推进；子进程在 1.5 秒后编译失败不得出现 launched，父入口只消费该回执而不自行解释 PID。
 - AND 裸 Android/iOS Debug `flutter run` 使用 `direct_flutter_run` canonical Alpha/Beta/Gamma handoff，冷启动与 Hot Restart 后环境、target 与 digest 保持一致并进入安全 Shell。
 - AND 任意前序环境后，默认 Alpha 与显式 Alpha/Beta/Gamma flavor 的第一条 `flutter run/build` 或 Xcode Run/Profile/Archive 命令即使用本次 environment × BuildMode 身份成功构建；`alpha → beta → gamma → alpha` 不依赖 clean、共享文件刷新或重试，并发构建不互相覆盖 identity 输入或产物。
 - AND 冷启动和连续 Hot Restart 均先完成 `beginStartupAttempt`，再以 `configurationState=complete` 发送 attempt 事件；Hot Restart 的 `welcomeExitMs` 始终相对本次 attempt 且不超过 6000ms。
@@ -222,13 +232,3 @@
 - 准出影响：`block`
 - 影响或价值：当前 suite 尚未消费受控 Edge recovery target，也没有同一 Alpha release 下 Android Emulator 与 iOS Simulator 的正向、独立 `no_active_release` 空态和 5xx 恢复原始 CaseResult；单端或父 report 不能作为 promotion 证据。
 - 完成判定：`GWT-004` 由 suite plan/result 的 `local_contract`、真实 Alpha release lifecycle/readback 的 `api_integration` 与两端 production Remote `user_acceptance` 直接覆盖，结果明确 `nonPromotable=true` 且无 Alpha-only aggregate。
-
-<a id="open-005"></a>
-### OPEN-005 macOS 制品声明与实际平台支持未裁决
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现与验收证据：`app_artifact_manifest.yaml` 的平台 schema 仍声明 `macos`，但当前仓库没有 macOS App 工程，任何 distribution class 也未生成 macOS 有效安装启动路径。继续悬空会让发布矩阵和代码生成误把“schema 允许”解释为“平台已支持”。
-- 完成判定：裁决 macOS 产品范围后更新 `REQ-004` 与 `GWT-003`：若支持，则补齐 macOS 工程、四环境 identity、Run/Profile/Archive、签名与真实启动 CaseResult；若不支持，则从 canonical metadata/schema 中移除 macOS，且 Android/iOS/Web 现行路径保持不变。
-- 依赖：AppRoot 平台范围裁决、Apple Developer macOS signing 与分发渠道决定。

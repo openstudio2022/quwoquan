@@ -70,22 +70,29 @@
 - 被否决方案：现在就跟 Flutter 默认或 WebRTC 二进制再抬到 17；或为迁就 2021 年 iOS 14 出厂机把下限降到 14（与 Flutter 3.47 的 15.0 引擎底线冲突）。
 - 约束与影响：真相源是 `quwoquan_app/ios/Podfile` 与 `Runner.xcodeproj` 的 16.0。本决策管 iOS 操作系统安装下限，不管 Product Ops 的 App Build minimum。Android 安装下限见 [DEC-006](#dec-006)。
 - 关联要求：`REQ-003`
-- 影响 Story：[`cross-platform-portability`](./cross-platform-portability/spec.md)
+- 影响 Story：DEC-003 与 DEC-006 共同影响 [`cross-platform-portability`](./cross-platform-portability/spec.md)
 - 关联验收：`GWT-002`
 
 <a id="dec-004"></a>
 ### DEC-004 启动身份六维正交与运行时内容身份解析
 - 决策：把启动链路的身份事实拆为六个正交维度——环境（environment）、平台（platform）、BuildMode、启动来源（launch provenance）、安装渠道（install channel）与内容激活身份（content activation identity）。任一维度只允许作为观测事实记录，业务行为只由环境与服务端状态决定。App 端由单一不可变 production `RuntimePackageResolver/Validator` 解析并校验 runtime package，`app_bootstrap` 与 local_contract 测试直接调用同一实现，不设 `ForTest` 后门；内容身份由 Content API 响应经 typed `ContentActivationIdentity` 值对象送达 Query Slice 与缓存层，App 不拥有内容激活写入。
-- 对象边界：
+- 对象边界由以下不可变值对象与派生投影组成。
   - `RuntimeManifest`：runtime 拥有的 immutable value object，随 artifact 嵌入，进程内只读，不是 aggregate。
   - `LaunchProvenance`：`StartupAttempt` runtime session 的 value object，只用于观测，禁止业务消费。
   - `ContentActivationIdentity`（`releaseId + manifestDigest`）：content activation owner 下发到 Query Slice 的 value object；有内容、`no_eligible_content` 与 continuation 必须携带完整 identity，`no_active_release` 必须明确缺席 identity，Remote/解码失败只能是 failure。
   - `BehaviorFingerprint`：UAT `CaseResult` 的 derived projection，不是业务 aggregate，不回写 App runtime。
-- 跨边界 port：App 读取走 `RuntimePackageReader → RuntimePackageResolver/Validator`（平台实现留在 `lib/runtime/platform/**`）；内容只读走 `ContentDiscoveryFeedQuery` 返回带 identity 的 Slice；启动观测走 `StartupAttemptRecorder` 追加 provenance、`StartupAttemptQuery` 供 telemetry/UAT 回读；测试证据走 `StartupCaseEvidenceAppender/Query` 生成并比较 `BehaviorFingerprint`，不得成为业务 runtime 依赖。
+- App 读取边界：App 读取走 `RuntimePackageReader → RuntimePackageResolver/Validator`，平台实现留在 `lib/runtime/platform/**`。
+- 内容只读边界：`ContentDiscoveryFeedQuery` 返回带 identity 的 Slice。
+- 启动观测边界：`StartupAttemptRecorder` 追加 provenance，`StartupAttemptQuery` 供 telemetry/UAT 回读。
+- 测试证据边界：`StartupCaseEvidenceAppender/Query` 生成并比较 `BehaviorFingerprint`，不得成为业务 runtime 依赖。
 - 缓存切换：`ContentQuerySnapshotStore` 以 `manifestDigest` 为 namespace 原子切换；新 digest 切新 namespace，`no_active_release` 清当前可见快照且不回放旧 release，网络失败可在最大年龄内展示“已验证但可能过期”的 LKG 而不冒充当前成功，服务端回滚到旧 release 时可恢复其保留 namespace。
-- 失败 surface 映射固定：`no_active_release` 是无 CTA 的 `AppEmptyState`；网络/协议/身份错误是带 canonical 重试的 `AppPageErrorState`；只有配置/签名致命错误进入 bootstrap/native recovery。Debug/Profile/Release 对同一错误渲染同一 surface，Debug 仅追加脱敏诊断。
+- 无内容 surface：`no_active_release` 是无 CTA 的 `AppEmptyState`。
+- 可重试失败 surface：网络、协议或身份错误是带 canonical 重试的 `AppPageErrorState`。
+- 致命失败 surface：只有配置或签名致命错误进入 bootstrap/native recovery。Debug/Profile/Release 对同一错误渲染同一 surface，Debug 仅追加脱敏诊断。
 - 被否决方案：`launchMode` 参与业务分支（如 `blocksRemoteForDirectUnboundLaunch` 判死 direct debug）、构建期把内容三元烘焙进 App 制品、Provider 直接解析 wire 或持有可变全局内容身份、测试经 `hydrate*ForTest` 后门旁路生产解析。
-- 约束与影响：`app_effective_launch_manifest` 不再携带 `contentBindingState` 或内容三元；内容发布/回滚不要求重新打包 App；同一 runtime 输入下改变 provenance/channel/BuildMode 时 `BehaviorFingerprint` 必须不变，该性质由 local_contract 穷举验证。
+- 约束与影响：`app_effective_launch_manifest` 不再携带 `contentBindingState` 或内容三元。
+- 发布边界：内容发布或回滚不要求重新打包 App。
+- 行为不变量：同一 runtime 输入下改变 provenance/channel/BuildMode 时 `BehaviorFingerprint` 必须不变，该性质由 local_contract 穷举验证。
 - 关联要求：`REQ-001`
 - 影响 Story：[`cold-start-performance`](./cold-start-performance/spec.md)、[`public-content-web-entry`](./public-content-web-entry/spec.md)、[`local-cache-architecture`](./local-cache-architecture/spec.md)、[`app-remote-config`](./app-remote-config/spec.md)
 - 关联验收：[`cold-start-performance GWT-005`](./cold-start-performance/spec.md#gwt-005)、[`environment-topology-and-packaging GWT-003`](../runtime-config/environment-topology-and-packaging/spec.md#gwt-003)
@@ -107,7 +114,6 @@
 - 被否决方案：人为锁到固定 API（例如 29）；或在对应系统未满五年时把 `minSdk` 写得比 Flutter 更高。
 - 约束与影响：真相源是 `quwoquan_app/android/app/build.gradle.kts` 的 `minSdk = flutter.minSdkVersion`。五年约束由合同对照 Flutter SDK 解析值与 Android 正式发布日裁定。本决策管操作系统安装下限，不管 `targetSdk` / `compileSdk`，也不管 Product Ops 的 App Build minimum。
 - 关联要求：`REQ-004`
-- 影响 Story：[`cross-platform-portability`](./cross-platform-portability/spec.md)
 - 关联验收：`GWT-003`
 
 ## 5. 失败与恢复

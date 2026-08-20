@@ -28,7 +28,9 @@
 <a id="req-001"></a>
 ### REQ-001 工作流技能统一模板
 
-- 顶层 SKILL.md 必须 `metadata.kind: workflow` 且八段齐全（触发/输入/角色/执行/交付件/内置评审/失败与停止/HANDOFF）；交付件与内置评审段不得为空；HANDOFF 必须声明唯一合法下游。
+- 顶层 SKILL.md 必须 `metadata.kind: workflow` 且八段齐全（触发/输入/角色/执行/交付件/内置评审/失败与停止/HANDOFF）。
+- 交付件与内置评审段不得为空。
+- HANDOFF 必须声明唯一合法下游。
 
 <a id="req-002"></a>
 ### REQ-002 命令与技能双向映射
@@ -38,7 +40,9 @@
 <a id="req-003"></a>
 ### REQ-003 profile 精确派发
 
-- 评审装配必须先由 changed_paths 与 deliverable 派生 profile，再按条件选择角色 checklist；未匹配 profile 的角色与 gate 不得加载；选中 bundle 内相同 gate 只执行一次。
+- 评审装配必须先由 changed_paths 与 deliverable 派生 profile，再按条件选择角色 checklist。
+- 未匹配 profile 的角色与 gate 不得加载。
+- 选中 bundle 内相同 gate 只执行一次。
 
 ## 4. 契约引用
 
@@ -74,7 +78,9 @@
 
 - GIVEN 一次只触及单一技术栈的改动（如纯 Go contract 或纯 Python gate）。
 - WHEN 评审注册表按 changed_paths 派生 profile 并装配 bundle。
-- THEN bundle 只含匹配 profile 的角色 checklist；不匹配技术栈的 gate 不出现在证据计划中；相同 gate 在计划内只出现一次。
+- THEN bundle 只含匹配 profile 的角色 checklist，并满足以下约束。
+  - 不匹配技术栈的 gate 不出现在证据计划中。
+  - 相同 gate 在计划内只出现一次。
 
 <a id="gwt-005"></a>
 ### GWT-005 三家 harness 同源一致

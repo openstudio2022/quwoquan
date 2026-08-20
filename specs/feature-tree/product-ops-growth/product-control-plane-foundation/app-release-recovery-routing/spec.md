@@ -86,7 +86,11 @@
 <a id="req-007"></a>
 ### REQ-007 受信分发渠道事实单一真相源
 
-- 每个平台的受信安装渠道集合只由 `app_release` 发布事实声明：iOS 为 Apple App Store（TestFlight 仅内测轨）；Android 为官网 CDN APK 与已登记受信市场（华为、小米、OPPO、vivo、应用宝）；Web 为官方 PWA。未在发布事实登记的渠道不得出现在任何查询响应或页面。
+- 每个平台的受信安装渠道集合只由 `app_release` 发布事实声明。
+- iOS 受信安装渠道为 Apple App Store，TestFlight 仅用于内测轨。
+- Android 受信安装渠道为官网 CDN APK 与已登记受信市场（华为、小米、OPPO、vivo、应用宝）。
+- Web 受信安装渠道为官方 PWA。
+- 未在发布事实登记的渠道不得出现在任何查询响应或页面。
 - 每个市场渠道声明 channelId、store product 标识、该渠道当前已上架 version/build、上架状态与回退方式；一个渠道审核未过或下架不得使其他渠道的发布事实不可用。
 - Android 恢复页“前往更新”固定走官网 HTTPS CDN 下载；市场渠道只用于更新引导（跳转本机安装来源对应市场的详情页），不作为恢复页下载源。
 - 官网 APK 的 `androidApkUrl`、`androidApkSha256`、`androidPackageName`、`androidSigningCertificateSha256` 是恢复页、更新提示与官网/网页版安装转化组件共用的唯一真相源，禁止任何组件持有第二份下载配置或硬编码地址。
@@ -127,7 +131,9 @@
 
 - GIVEN `app_release` 发布事实已登记 iOS App Store 与五个 Android 受信市场的渠道事实，其中部分渠道可能未就绪。
 - WHEN 客户端或官网查询平台安装/更新路由，或发布流水线登记某渠道的上传、审核与发布回执。
-- THEN 查询只返回该平台已登记且就绪的受信渠道；Android 更新引导按本机安装来源匹配市场渠道，恢复页下载仍固定官网 CDN；iOS 更新只跳转 App Store。
+- THEN 查询只返回该平台已登记且就绪的受信渠道，并遵循以下路由。
+  - Android 更新引导按本机安装来源匹配市场渠道，恢复页下载仍固定官网 CDN。
+  - iOS 更新只跳转 App Store。
 - AND 每个渠道的上传、审核、发布与真机安装回执独立登记；未就绪渠道显式保持 `GATE_BLOCK/OPEN`，不阻塞其他渠道，也不得由其他渠道回执替代。
 
 ## 6. 依赖

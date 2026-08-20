@@ -149,7 +149,7 @@
 <a id="gwt-005"></a>
 ### GWT-005 安装后首启、后续图标启动与市场身份回读一致
 
-- GIVEN 设备经任一有效渠道完成安装——脚本安装、打包 Debug 安装、`prod-sim`/`prod-hosted` Release、应用市场客户端安装（含市场重签/优化后的制品）、官网签名 APK，或在旧版本上覆盖升级。
+- GIVEN 设备经任一有效渠道完成安装——脚本安装、打包 Debug 安装、Android `prod-sim` exact Release、Android/iOS `prod-hosted` Release、应用市场客户端安装（含市场重签/优化后的制品）、官网签名 APK，或在旧版本上覆盖升级；iOS Simulator Debug 不计作 Release 安装。
 - WHEN 首次点击图标冷启动，随后杀进程再次点击图标启动。
 - THEN 两次启动读取同一嵌入 launch manifest 与 runtime package，进入同一安全 Shell 行为；首启只在性能采样中携带 first-install 维度。
 - AND 市场安装制品的回读证明当前签名身份、version/build 与发布 provenance 的 source candidate 绑定一致，市场处理差异不改变任何启动行为。
@@ -199,5 +199,5 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：安装后首启/后续图标启动等价、Debug/Release 同 surface 与市场处理后身份回读尚无实现与真实证据；市场渠道依赖外部账号、审核与真机（见 [`environment-topology-and-packaging OPEN-003`](../../runtime-config/environment-topology-and-packaging/spec.md#open-003)），非市场渠道的首启等价与同 surface 断言可先在本地设备矩阵闭环。
+- 影响或价值：尚缺安装后首启与后续图标启动等价、Debug/Release 同 surface、市场处理后身份回读的完整实现与真实验收证据。市场渠道依赖外部账号、审核与真机（见 [`environment-topology-and-packaging OPEN-003`](../../runtime-config/environment-topology-and-packaging/spec.md#open-003)）；非市场渠道的首启等价与同 surface 断言可先在本地设备矩阵闭环。
 - 完成判定：`GWT-005` 的全部结果子句由真实测试逐条绑定（gwt-005.t1..t5）：脚本/Debug/官网 APK/覆盖升级路径由设备矩阵 runner 产出安装回执与启动回读，市场路径绑定真实市场安装回执；缺失渠道保持显式阻断。

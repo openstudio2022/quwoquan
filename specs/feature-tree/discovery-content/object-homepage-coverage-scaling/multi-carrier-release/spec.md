@@ -8,7 +8,7 @@
 
 ## 1. 用户价值
 
-作为内容运营者，我希望文章、图片、视频和主页对象以独立 execution 分别调度和生产，同时共享冻结实体目录与 release 边界，从而能分别恢复失败并复核来源、媒体、实体与环境消费是否闭合。
+作为内容运营者，我希望用一份可确认、可修改、可取消的意图请求明确区域、载体和各载体对象数量，让文章、图片、视频和主页对象以独立 execution 分别调度和生产，同时共享冻结实体目录与 release 边界，从而能分别恢复失败并复核来源、媒体、实体与环境消费是否闭合。
 
 ## 2. 范围与非目标
 
@@ -19,6 +19,8 @@
 - article lane 在冻结 target set 之前完成实体级来源预筛，并把候选级拒绝原因聚合为实体级单一首要失败原因。
 - Research 与 Commercial 共用 acquisition、semantic、review 和 canonical pool；只在 immutable release build 时按逐对象 `usageScope` 与全部 entity/post 资产的商用权利闭包选择不同子集，不建立第二套 commercial workflow、pool 或 semantic queue。
 - 批次级/跨载体聚合门只作目标与统计；四载体共用 acquisition/rights/distribution admission，research 只放宽未验证的分发权利，不放宽访问控制、内容安全、隐私、未成年人、恶意文件、去重、实体相关性、质量或可播放性。
+- 内容运营者提交区域、active carrier、每载体对象数量、lifecycle 与 fresh/retry 意图后，先得到不产生 execution 事实的 typed preview；只有显式确认才确定性编译为现有 carrier request envelope。
+- 经确认的请求沿既有 execute、逐 task 终态、pool/review/promotion、immutable release、环境 import/activate/readback 与 App CaseResult 单轨推进；任一步失败停在可恢复的 typed 终态。
 
 ### Out of Scope
 
@@ -29,14 +31,18 @@
 - article 来源预筛的匹配置信度、最小正文字数与探测预算的具体数值（见 `OPEN-004`）。
 - 来源发现阶段存活心跳的间隔与判定过期的阈值的具体数值（见 `OPEN-005`）。
 - 冻结期多样性准入的每实体累计上限与 Top-N 上限数值：阈值由多样性策略的既有 owner 单点拥有，本 Story 只消费其准入结论，并约束该结论的归属、呈现与批次级零合格归因。
+- 由自然语言静默猜测缺失数量、未知区域、载体、lifecycle、provider、来源策略或 retry 依据；resolver 可以在 preview 中提出显式默认建议，但确认前不得写 envelope 或执行。
+- 新建第二套 Campaign、Execution、Reconciliation、SourcePool、发布台账或运行生命周期；意图请求只编译到现有 request envelope。
+- 将 Data 的 `homepage` 载体解释为 App micro；本 Story 的四个消费 surface 固定为 entity homepage 对象主页、article 文章、image 图片与 video 视频。
 
 ## 3. 行为要求
 
+<a id="req-001"></a>
 ### REQ-001 多载体统一发布边界
 
 - 每个发布对象必须闭合 creator、tag、entity、media 与 source 引用；运行 receipt 只能写入输出目录，不得回写静态真相源。
 - homepage、article、image、video 不以彼此的 execution 或 publish 结果作为运行前置；post 只依赖可解析的 canonical entity identity。
-- 本次请求中的 active execution 必须从同一不可变 source-definition capsule、execution bundle 与 entity catalog digest 形成彼此独立、可分别调度的 workload；调度器可按当时可用容量串行或重叠运行，任一时刻不要求全部 active workload 同时运行。固定四 lane 并发、固定 worker 数、固定数量的同时 workspace 或 capacity soak 结果均不得作为 submission、dispatch、对象准入或 promotion 前置。单一载体失败不得覆盖其他载体工作包，也不得阻止其他载体已合格对象发布。capsule 封存后不得再用 live worktree 漂移否定该 execution。
+- 已绑定有效 calibration receipt 的 active execution 必须从同一不可变 source-definition capsule、execution bundle 与 entity catalog digest 形成彼此独立、可分别调度的 workload。调度器可按当时可用容量串行或重叠运行，任一时刻不要求全部 active workload 同时运行。达到并发上限、固定四 lane 同时运行、固定数量的同时 workspace 或 capacity soak 观测结果均不得作为 submission、dispatch、对象准入或 promotion 前置。缺失有效 calibration receipt 则在 execution policy 冻结前 typed blocked。单一载体失败不得覆盖其他载体工作包，也不得阻止其他载体已合格对象发布。capsule 封存后不得再用 live worktree 漂移否定该 execution。
 - `task execute --stage submit-only|campaign-run|campaign-freeze|campaign-lane-run|campaign-finalize|review-only` 是唯一 campaign 门面；单 controller 可用 `campaign-run`，复制会话必须先由 `campaign-freeze` 等齐本次显式 active workload 的 immutable submission 并冻结唯一 plan、只读 capsule 与 `planDigest`，再由每个 `campaign-lane-run` 独占一路 claim，最后由 `campaign-finalize` 只聚合实际 active workload 的 create-once receipt。collision、branch/commit/source/catalog mismatch、重复 claim、主工作树漂移或超时均 fail closed。
 - submission-only attempt 只能在无 plan/report/runtime/execution 证据时由 `reconcile-submissions` 收口。
 - 已冻结 campaign 若全部 active claim 在 author/review/publish 前 terminal failed，只有在对应 active execution root 已经受 GC protection 合法清理且 source identity 确实漂移后，才允许 `reconcile-failed-campaign` 写 create-once supersession。
@@ -45,7 +51,7 @@
 - 下一序列逐 lane 声明 `retryOf` 并精确引用 reconciliation receipt。任一进程仍存活、lease 未释放、execution receipt 缺失或字节漂移均 fail closed。
 - independent review 已完成 Provider journal、却因 controller 中断只留下 schema-valid pending response 时，不得把 pending 改写或冒充旧 `reviewer_result`。只有 sole pending response 与 sole 未绑定的 finished Grok reviewer work unit 可由独立 create-once interruption reconciliation receipt 精确绑定 campaign/capsule/execution/journal/response 全部摘要；新 `retryOf` 必须同时消费该 receipt 与其余对象已绑定的 final reviewer result，只纳入 failed refs，并把 typed issues 注入对应实体的新对象重写。前驱 qualified 对象不得进入 retry scope。
 - controller 为本次 active workload 建立同一 content-addressed、只读 source/executor capsule，并为每条 active lane 分配独立 execution root、queue namespace 与 staging prefix；active workload 独立调度，review 可串行或重叠执行，每条 lane 按自身 review 结果独立进入 publish，不得因任一 lane 失败而整批 abort，也不得为每条 lane 复制完整 Git object store。共享 canonical publish 继续由对象事务锁保持单写者，最终 Manifest/release 必须精确验证全部被选对象及引用闭包。
-- semantic author/reviewer 只消费 create-once 本地 journal 与只读 source capsule。Provider/model、凭据、runtime、网络与真实 startup 是启动该 semantic task 的 preflight；soak、workspace smoke、effective concurrency 与 resource samples 只诊断实际容量，不得改变 task dispatch、对象准入或 promotion。review 通过后才生成 immutable pool-delivery intent，ReliableTask 与 generation/fence/worker binary 仅负责 intent 的幂等交付。transport 不可用时对象保持 `deliveryPending`，不得撤销 review、重复调用 semantic Provider 或阻塞其它 lane。
+- semantic author/reviewer 只消费 create-once 本地 journal 与只读 source capsule。Provider/model、凭据、runtime、网络与真实 startup 是启动该 semantic task 的 preflight；execution 已绑定有效 calibration receipt 后，soak、workspace smoke、effective concurrency 与 resource samples 只诊断实际容量，不得改变 task dispatch、对象准入或 promotion。缺 receipt 的 measurement-only bootstrap 不是内容 task dispatch，不能生成 author/reviewer、pool-delivery 或 publish 成功事实。review 通过后才生成 immutable pool-delivery intent，ReliableTask 与 generation/fence/worker binary 仅负责 intent 的幂等交付。transport 不可用时对象保持 `deliveryPending`，不得撤销 review、重复调用 semantic Provider 或阻塞其它 lane。
 - 每个实际启动的 semantic task 必须逐项写入 create-once typed 终态结果；排队、尚未启动、capacity sample 或 workspace sample 均不得合并成 task 成功或失败，也不得替代实际 task 结果。
 - lane 终态独立记录为 `published`（`qualified >= quota`）、`partial`（`0 < qualified < quota` 且已合格对象已发布）或 `blocked`（`qualified == 0` 或 review/publish 失败）；campaign 终态为聚合视图：`succeeded`（全部 active workload 均达标）、`succeeded_partial`（至少一路发布了合格对象）、`blocked`（无任何可发布合格对象）。
 - `quota` 是里程碑累计目标，不是发布许可条件；`partial` lane 必须发布全部已合格对象，并将 shortfall 写入 typed evidence，不得因未达 quota 丢弃合格对象。
@@ -53,7 +59,7 @@
 - 若存在 discard，每个 discard 必须具备非空 `objectRef` 与 typed `issues`，且 `selected == qualified + discarded`；不得要求真实批次必须存在 discard 才准出。
 - article/image/video 的 canonical Post manifest 必须显式声明 `contentIdentity=work`；schema、promotion 与 importer 任一层发现缺失或非 `work` 均阻断该对象，禁止由消费者默认补值。
 - 新增 canonical Post 必须显式携带稳定 `contentId`、递增 `version`、`sourceType=data`、`variantPurpose`、`admission.processResult/qualityResult/usageScope` 与 `status`。只有 `completed + passed + active` 可被 ReleaseManifest 选择。
-- 统一池 reader 只接受显式 create-once pool record。缺 admission、稳定 `contentId/contentVersion`、完整 `sourceAttribution` 或 source identity 的历史对象按对象排除，不得在读取时从 review、路径或当前 source identity 推导。可修复对象只能由 governed repair 基于 canonical bytes 与 fresh source evidence 追加新的 `recordSequence`，保持原 `contentVersion`。旧 record 与旧 task receipt 均不改写、不复用。
+- 统一池 reader 只接受显式 create-once pool record。缺 admission、稳定 `contentId/contentVersion`、完整 `sourceAttribution` 或 source identity 的历史对象按对象排除，不得在读取时从 review、路径或当前 source identity 推导。payload drift 的恢复只有三种互斥 command。fresh evidence 证明当前 canonical bytes 仍是同一逻辑版本时执行 record repair，保持 `contentVersion`、只追加 `recordSequence + 1`。fresh immutable author/review/rights evidence 证明是新 payload 时执行 payload rebuild，原子写入 `contentVersion + 1` 与 `recordSequence + 1`。两类证据均不成立时追加 terminal record，保持 `contentVersion`、推进 `recordSequence` 并冻结 terminal reason/next action。旧 record、旧 payload evidence 与旧 task receipt 均不改写、不复用。
 - 环境定向 Manifest 从同一 pool 生成固定载体/作者轮转顺序并按 Alpha 2,100、Beta 10k、Gamma 100k 截取稳定 Post 前缀，Homepage 不计 Post cap；环境无关 M100/M1000 Research Manifest 精确冻结 cohort 并可由四环境消费。相同 `contentId` 在同一 manifest 只出现一个版本，有供给且容量允许时 article/image/video 必须同时出现。
 - campaign report 必须保留 named main branch、status、phase、run generation/fencing、heartbeat、review/publish return code、source capsule/execution-root ref、qualified/finalized count 与 cleanup 终态；报告是运行回执，不得成为新的内容或 release 真相源。
 - 复制会话的 carrier claim 必须绑定 campaign/run generation/fencing、carrier、execution、只读 source capsule 与独立 execution root；同一 carrier 同一 generation 只能存在一个有效 claim，过期或跨 generation owner 不得 finalize。
@@ -62,6 +68,7 @@
 - M1000 sourcing 以请求冻结的完整行政区域 frontier 为产品范围：穷举所选区域全部市、区、县与可识别 POI，合格对象即使显著超过 1000 也全部准入。不得设置单一区县、单一实体类型、Provider 或 creator 数量/比例上限。
 - M10000 将同一 frontier 先推广到全国，再扩海外，国内外只共享一套 canonical geo/entity/source contract。
 
+<a id="req-002"></a>
 ### REQ-002 生命周期与统一素材 admission
 
 - acquisition、semantic、review、canonical pool 与全局运行配置均不声明或推断 lifecycle/class。每次 immutable release build 必须显式选择 `research|commercial`，并在 create-once release header/attestation/activation 中冻结同值 `releaseClass/productLifecycleState`；环境名、临时环境变量或 fixture 不得推断该状态。
@@ -69,6 +76,7 @@
 - `research` 允许已取得且权利状态为 verified/unverified/unknown 的资产，restricted、未取得、生成素材或缺来源/权利缺口字段仍阻断；`commercial` 只允许 verified 且具有商业授权证据的 `commercial_allowed`。
 - research immutable release 必须冻结权利状态计数、精确 authorization-required asset IDs、四载体 `researchAcceptedCount`、逐来源 assets funnel 和 `containsUnverifiedAssets`；未授权资产不得计入 `commercialAcceptedCount` 或生成 commercial readiness。
 
+<a id="req-003"></a>
 ### REQ-003 站点、实体与 creator 深挖的文章、图片和视频来源
 
 - Article 来源按 `著名旅游站点的站点级发现 -> 实体强相关主题搜索补充 -> 命中 creator 的公开作品分页` 顺序运行。站点级发现优先消费公开 sitemap、列表、专题、分页或官方 API；实体搜索只接受攻略、游记、玩法、避坑、出行或摄影等旅行强相关命中。每一篇作品独立执行实体/地理/旅行意图、内容安全、重复与质量判断，creator 主页不可访问时才使用搜索索引补全公开结果，不得据此宣称抓全作者全集。
@@ -82,6 +90,7 @@
 - 视频候选保留 play/like/comment/share/favorite 的真实观测与观测时间，并只在同平台、同主题、同时间桶内按 percentile 排序。缺失项保持缺失并标明不可参与热度排序的原因，不得补零或生成虚假排名。
 - ranking-ineligible 视频可以进入 research release；热度信号完整度和 percentile 只作为推荐与供给统计。只有公开可取得、可解码、可播放、无 DRM、未绕过访问控制且通过安全/相关性门的真实视频文件可进入 research release。
 
+<a id="req-004"></a>
 ### REQ-004 四环境 research 隔离、商用切换与规模门
 
 - research activation 前，四环境分别证明身份白名单、匿名内容和媒体关闭、无公开 CDN/匿名 URL、分享/导出/索引关闭、内部 App 签名与研究态标识、媒体短期签名 URL 和访问审计；任一缺失立即 `GATE_BLOCK`。
@@ -92,15 +101,16 @@
 - 日常 research release 不以规模数量作为发布许可。
 - Content candidate 必须按 `prepared -> imported -> projected -> verified -> active` 单轨推进；逐阶段持久化脱敏 receipt，记录 duration、attempted/success count、checkpoint 与首个 typed blocker。只有 `verified` 可切换 active pointer，任一阶段失败保留 previous active 与已成功阶段事实。
 - 三个累计规模 milestone 固定为 homepage/article/image/video：M100=`100/100/100/10`、M1000=`1000/1000/1000/100`、M10000=`10000/10000/10000/1000`。这些数字均为 promotion 下限；日常 publish 允许 partial，已合格对象超过下限时继续准入，不为凑整数截断 frontier。milestone promotion 必须逐路满足 `totalUniqueFinalizedCount >= targetCount` 且 `shortfallCount=0`。
-- source-pool、oversampling、Provider、实际重叠时长、workspace/soak/resource samples 和恢复事实用于计划容量与定位瓶颈；缺失、未运行或失败的诊断样本不得改变一个已完成、质量合格且在授权范围内对象的池准入、dispatch 或 milestone 结果。
+- source-pool、oversampling、Provider、实际重叠时长、workspace/soak/resource samples 和恢复事实用于计划容量与定位瓶颈；execution 已绑定有效 calibration receipt 后，缺失、未运行或失败的附加诊断样本不得改变一个已完成、质量合格且在授权范围内对象的池准入、dispatch 或 milestone 结果。有效 receipt 本身缺失时 execution policy typed blocked，measurement-only bootstrap 只产容量证据且不参与对象准入、dispatch 或 milestone。
 - 规模 promotion 只验证累计唯一对象数量、对象准入结果和所构建 ReleaseManifest 的引用闭包；精确重复不计数，缺引用对象留在池中等待修复，不阻断其他合格对象发布。
 - 后继 milestone 只生成累计目标差额。前驱 promotion receipt 只记录 lineage，不作为新合格对象入池或当前 milestone 计数的前置门。M1000 的 source discovery/acquisition、semantic 与 review 可以在 M100 环境验收期间并行；M1000 promotion 前必须补足同一 M100 Research release 的 Alpha activation/readback 与 100 例 App UAT。该产品阶段门不撤销池中任何 M100 对象，也不冻结后继来源队列。
 - promotion receipt 必须记录各 carrier 的 target、admitted、publishable、deliveryPending、selected、excluded 和 gap；illustrated、video popularity、automatic recovery、source mix、实际调度重叠、workspace/soak 与资源使用只作为诊断统计。
 - M1000 与 M10000 的时间、Provider 容量和故障恢复样本用于计划和 SRE 评估；目标未按期完成时报告实际 gap，不撤销已经完成的池追加或已验证 Release。
 - semantic author/reviewer 通过受治理 `cursor_sdk|codex_sdk` adapter 执行，Provider、model、model parameters、role、SDK/runtime digest 与 run/result digest 在 execution 冻结。受治理生产主选为 `cursor_grok`，exact model 与 parameters 由当前 runtime profile 声明并经 fresh preflight 实测准入，不在规格中另建版本常量。
-- `cursor_auto` 只能在父 execution 已以允许的 typed provider/model failure 终止后，以新的 `retryOf` 显式选择。禁止 execution 中静默 fallback 或由 SDK Auto 首次路由替代 Grok 证据。capacity soak 未运行或未通过时，不得用下载数或框架测试冒充已测得的稳态容量，但该诊断结论不得阻断 task dispatch、合格对象发布或规模 promotion。
+- `cursor_auto` 只能在父 execution 已以允许的 typed provider/model failure 终止后，以新的 `retryOf` 显式选择。禁止 execution 中静默 fallback 或由 SDK Auto 首次路由替代 Grok 证据。execution 已绑定有效 calibration receipt 后，附加 capacity soak 未运行或未通过不得用下载数或框架测试冒充稳态容量，也不得撤销既有 task dispatch、合格对象发布或规模 promotion；有效 receipt 缺失时不得启动日常 task dispatch，只能进入 `GWT-019` 的 measurement-only bootstrap。
 - 10 万级不是单一 promotion 事务：使用同一分片键持续生产，并以 1K/5K/10K immutable release waves 累计到不少于 100000 个合格对象；单 wave 或 named scale 仍是下限，不是总量上限。跨分片全局去重、checkpoint 恢复、dead-letter 隔离与连续 7 天无全局冻结的 soak 用于独立的 100K 稳态运行/SRE 结论，不是累计对象达到 M10000 或 100K 数量下限的 promotion 前置。
 
+<a id="req-005"></a>
 ### REQ-005 已审核闭包采纳与 release identity incident
 
 - `adopt-reviewed-closure` 是现有四 lane campaign/release 单轨上的一种身份收口方式，不是第二个 aggregator、第二套 publish 目录或手工 manifest 入口。它只能采纳一个已存在且不可变的 reviewed release 对象闭包，不重新生成、不改写正文/媒体/审核/权利事实，不修改上游 release。
@@ -109,12 +119,13 @@
 - 同一 `releaseId` 曾对应多个 payload/canonical identity 时，必须先生成 append-only、create-once identity incident；incident 按上述精确 tuple 保留每次观测的 attestation 与 execution closure，且所有受影响 execution 在 incident 未关闭前不得 discard 或 GC。仅 releaseId 相等、仅文件名相等或仅有历史口头记录都不构成可采纳证据。
 - provenance 合同引入前已 create-once 的 incident 已全部完成一次性 CLI migration（迁移源 namespace 已清空，migration 器与其 schema 已退役）：迁移当时验证了原 incident 精确文件摘要、receipt digest、合同引入 commit/时间边界、旧 schema 闭集、同目录 snapshot 路径/文件摘要/attestation identity 与 execution closure，并把每个 snapshot 分类为 `original_file`，在独立 create-once namespace 留下 source-bound receipt 与当前 schema projection，原 incident/evidence 未被修改。GC/discard 仅在原文件仍逐字节匹配 migration receipt、projection 的观测 identity 与 execution closure 与原 incident 完全一致且 projection 通过当前 schema 全量校验时消费该 projection，否则继续 fail closed。
 
+<a id="req-006"></a>
 ### REQ-006 有界并发、绝对批次截止与可复核运行终态
 
-- 并发上限只约束任一时刻可同时运行的 worker 进程数，不构成 submission、dispatch、对象准入或 promotion 的前置条件。达不到上限、只跑一路或全部串行完成都不改变任何对象的准入与发布结果。
+- 有效 calibration receipt 已冻结进 execution policy 后，并发上限只约束任一时刻可同时运行的 worker 进程数，不再以“是否达到该上限”作为 submission、dispatch、对象准入或 promotion 的前置条件。达不到上限、只跑一路或全部串行完成都不改变任何对象的准入与发布结果；receipt 缺失或无效仍在 policy 冻结前 typed blocked。
 - 来源发现阶段的 `autoResearchMaxConcurrentWorkers` 与 ReliableTask 交付阶段的 `fleetMaxConcurrentWorkers` 只能由 immutable execution policy 冻结。runtime profile、环境变量、命令行默认值与任何探针观测都不是合法来源。
 - preflight capacity soak 与 workspace smoke 的 `effectiveConcurrency` 只描述探针当时的实际并行度，是诊断观测而不是生产上限；把它投影成上限即为非法来源，必须 fail closed。
-- `local-apple-silicon + cursor_grok` 的容量来源是 create-once receipt `quwoquan_data/control_plane/_shared/capacity_calibration/m100-wave-soak-20260818-v4/receipt.json`（摘要 `sha256:653180ed007d37bd01644f5d19e27b406532cf026a701086a0e06b2beda744f0`）：`autoResearchMaxConcurrentWorkers=8`、`fleetMaxConcurrentWorkers=3`、`objectWallClockSeconds=660`、`completionGraceSeconds=60`。该自包含闭包绑定 100/100 零 429/auth/5xx/timeout/bridge-disconnect 的 `cursor_grok` probe、1.57GB RSS / 1118.5% CPU / 8 bridge 峰值、真实 fleet peak=3 与 20 个逐对象 timing；超出适用范围或任一 evidence ref/digest 漂移即 execution 冻结失败。该 receipt 的字节在 20260818 事故中永久缺失且从未被版本控制跟踪，摘要绑定在重新 soak 之前不可校验，见 `OPEN-006`。
+- `local-apple-silicon + cursor_grok` 的容量值只能来自当前可读取、受版本控制且 create-once 的 calibration receipt。receipt 必须自包含 Provider probe、资源观测、真实 fleet peak、逐对象 timing 与适用范围；任一 evidence ref/digest 漂移即 execution 冻结失败。缺失或从未受版本控制的 receipt 不能继续授权任何并发、wall-clock 或 grace 数值，见 `OPEN-006`。
 - `execution_state` 中 `managedAgentScheduler` 的 `promptCount` 是单个 managed checkpoint 内语义 Agent prompt 级调度的运行观测。它既不是资源上限，也不是 ReliableTask 的 worker 进程并行度，两个维度不得互相读取或互相推导，该对象也不得以 worker 词元命名任何 prompt 级观测。
 - `approvedQuota`（对象下限）、`targetObjectCount`（本次冻结的工作单元数，也是派生 job 数）与并行上限是三个互不相同的语义，必须在执行策略中各自显式冻结。任一字段不得同时承载其中两个语义，`requiredWorkers` 不得继续由工作单元数或 quota 派生。
 - 规模只改变 wave 数：job 数增长只增加 wave 数，不增加任一时刻同时运行的 worker 进程数。wave 数只由 job 数与冻结的并行上限决定，与 quota 无关。
@@ -130,6 +141,7 @@
 - 可续跑中断必须给出精确可续跑 refs，其余六种原因必须给出不可续跑的判定依据。「全部候选实体被选择器准入排除」在该依据之外还必须给出逐实体的准入排除 refs，指向选择器在冻结选择证据上已声明的排除条目，缺该 refs 时该原因不成立。运营者只读运行回执即可决定续跑、修来源、重新冻结时间预算、缩减对象体量还是扩大候选范围，不需要读取运行日志。
 - 批次级零合格原因的唯一写者是本 Story 的 lane 回执。媒体侧只产出对象级排除码，两层以引用衔接而不复制，媒体侧不得自建批次级原因值。批次级原因只在一个批次的全部对象都被拦下时成立，存在任一合格对象时该 lane 仍按合格对象数进入 `partial`。
 
+<a id="req-007"></a>
 ### REQ-007 article 来源预筛准入与实体级首要失败原因
 
 - 内容运营者在 article lane 冻结 target set 之前就能知道哪些实体存在可锚定的长文来源，因此工作单元不再被无来源实体占用；同一 quota 下 article 的累计下限达成得更快，而不是把 target set 砍小后更早收敛为 `partial`。
@@ -152,6 +164,7 @@
 - 同一实体在来源预筛、auto_research 与 content_plan 三个阶段的 ready 判定必须可按实体逐一对齐。任一阶段 ready 数下降时，必须能精确列出在该阶段出局的是哪些实体及其首要原因，不得只保留两个互不可对账的阶段计数。
 - 站点与 provider 级抓取准入、候选级相关性判定的闭集及其不可变审计证据，以及 workload receipt 的 target/selected/qualified/finalized/discarded/shortfall 计数口径，由 `specs/feature-tree/runtime/runtime-data-engineering/article-commercial-scale-closure/spec.md` 的 `REQ-003` 与 `REQ-004` 拥有。本 REQ 只消费其逐候选判定结果做实体级聚合与准入，不复制该闭集，也不建立第二套来源台账。
 
+<a id="req-008"></a>
 ### REQ-008 来源发现阶段运行中的存活与进度可判定
 
 - 来源发现阶段在尚未终止时必须可判定存活与进度：阶段进程必须按执行策略冻结的心跳间隔持续写入运行中进度面，写入时机独立于任何单个实体是否得出终态。只在实体终态时写一次不满足本要求——单个实体的来源发现耗时可以远大于任何可接受的存活判定间隔，此时运营者读到的是一段与「进程已死」无法区分的静默。
@@ -162,6 +175,17 @@
 - 本 REQ 与 `REQ-006` 的分工：`REQ-006` 约束任一时刻可同时运行的 worker 上限、批次绝对截止，以及阶段终止之后运行回执的可复核性与零合格 typed 原因；本 REQ 只约束阶段仍在运行期间的存活与进度可判定性。两者不得互相推导——心跳仍在推进不表示批次剩余时间未耗尽，剩余时间未耗尽也不表示阶段仍存活。心跳也不得被写回运行回执充当第二套容量或截止结论。
 - ReliableTask 交付阶段不在本 REQ 范围内：它的静默窗口已由 `REQ-006` 的单对象 wall-clock 上限与逐工作单元 typed 终态限定，不重复约束。
 - 心跳间隔与判定过期的阈值不在本层冻结，见 `OPEN-005`；在其冻结之前，以「文件最近被写过」推断存活不成立。
+
+<a id="req-009"></a>
+### REQ-009 用户意图只编译为现有四载体请求信封
+
+- WorkRequest 只表达内容运营者确认的区域范围、active carrier、每载体对象数量、`research|commercial` lifecycle、`fresh|retry` 意图与显式依赖引用；它不拥有 Campaign、Execution、Reconciliation、SourcePool、release 或环境状态。
+- preview 必须回显解析出的输入、每个 active carrier 的对象数量、提出的默认建议、依赖 identity/digest 与 typed outcome。缺数量、未知或冲突的区域/载体/lifecycle、无效 retry 引用返回 `needs_input`；SourcePool 或其它必需依赖缺失、依赖 digest 漂移返回 `blocked`。两类结果的新 envelope 写入数均为零。
+- 内容运营者可以确认、修改或取消 preview。修改回到新的 preview。取消不写 WorkRequest 或 envelope。只有确认才进入编译。登录态不属于本地 Data CLI 的用户入口；provider credential、来源访问权限与素材 rights 分别在 preflight、source admission 与对象 admission 返回 typed 失败，不得塌陷为空结果。
+- 同一已确认 WorkRequest、resolver policy/catalog digest 与全部依赖 ref/digest 必须生成相同 WorkRequest digest 与每 carrier envelope digest。每个 active carrier 恰好生成一个现有 request envelope；编译器不得直写 ExecutionSpec、Campaign plan/report、reconciliation receipt 或 SourcePool。
+- 多 carrier 编译采用全有或全无语义：任一 carrier 无法形成合法 envelope 时，本次不发布任何新 envelope，已存在的 create-once artifact 保持不变并回到可修改 preview。同 ID 同 bytes 重放幂等；同 ID 不同 bytes、policy/receipt/source digest 漂移必须在写前失败。
+- `fresh` 不得携带 `retryOf` 或 reconciliation。`retry` 必须绑定 exact `retryOf` 与兼容的 create-once receipt。网络或 provider 不可用、provider 未授权、rights 被拒、`DATA.POOL.EMPTY`、执行中断或批次截止分别保留自身 typed 终态和下一动作。修复输入后回到 preview；已经产生 execution 事实的恢复只能由新的 `retryOf` 请求进入现有恢复链。
+- 确认后的完整用户路径固定为 `envelope -> task execute -> typed task terminal -> canonical pool/review/promotion -> immutable release -> Alpha import/activate -> API/media readback -> App CaseResult`。每一步只消费前一步的 immutable ref/digest，失败不得跳到后续步骤，也不得由旧 receipt 冒充本次完成。
 
 ## 4. 契约引用
 
@@ -338,6 +362,60 @@
 - THEN 进度面缺席、不可读或缺必需字段时得到 typed 失败结果，不被读成进度为零，不被默认判为存活，也不被上一份快照冒充为当前事实。
 - THEN 心跳中的 elapsed、已完成实体数与每分钟实体数只作为当次运行事实呈现，不表述为稳态吞吐或容量结论，也不改变 dispatch、对象准入、publish、finalize 与 milestone 结果。
 
+<a id="gwt-015"></a>
+### GWT-015 意图 preview 经确认后确定性编译且失败零写入
+
+- GIVEN 内容运营者输入区域、homepage/article/image/video 中的 active carrier、每载体正整数对象数量、lifecycle、fresh/retry 与显式依赖引用。
+- WHEN resolver 生成 preview，运营者依次选择修改、取消或确认。
+- THEN 修改只生成反映新输入的新 preview，取消不写 WorkRequest/envelope。
+- THEN 缺数量、未知或冲突输入、无效 retry 返回 typed `needs_input`；SourcePool 或其它必需依赖缺失、依赖 digest 漂移返回 typed `blocked`。两类结果的新 envelope 数均为零。
+- THEN 只有确认生成稳定 WorkRequest digest，并为每个 active carrier 恰好生成一个现有 request envelope；相同输入、policy/catalog digest 与依赖 ref/digest 重放得到相同摘要，同 ID 异字节在写前失败。
+- THEN 编译结果可读出 WorkRequest、resolver policy/catalog、全部 dependency 与 envelope 的 ref/digest；ExecutionSpec、Campaign plan/report、reconciliation receipt 与 SourcePool 均未由编译器写入。
+- THEN 任一 carrier 编译失败时全批零发布，已存在的 create-once artifact 不变；修复输入后回到 preview。
+- THEN envelope 已被现有 submit/freeze 链消费后，provider/network/permission、rights、空源、中断或截止失败保留真实阶段终态。恢复只能由新 `retryOf` 消费精确 receipt，且其它 carrier 的既有合格对象不被撤销。
+- THEN 同一 immutable candidate 对 1-carrier 与 4-carrier 的 success、blocked、collision 各形成可重放 benchmark；成功场景满足 preview/confirm p95 预算，blocked/collision 新 envelope 数为零，样本不足或超预算不得形成性能达标结论。
+
+<a id="gwt-016"></a>
+### GWT-016 同一请求的四载体数量可逐 surface 闭环复核
+
+- GIVEN 一个已确认请求为 homepage/article/image/video 分别声明正整数对象数量，且同一请求沿现有单轨形成 immutable Research release。
+- WHEN Alpha 依次完成 import、projection/API/media verify、activate，并以 production Remote composition 运行 App CaseResult。
+- THEN 每载体均满足 `selected = imported = projected = verified = readback = qualified`。`qualified >= requested` 表示该载体达标；`0 < qualified < requested` 表示 partial，`shortfall = requested - qualified`，已合格对象仍可见而不伪造成达标。
+- THEN entity homepage 只在对象主页验收，article 只在文章 surface 验收，image 只在图片 surface 验收，video 只在视频 surface 验收；每个 surface 分别形成绑定同一 release digest 的 CaseResult，micro 不在本 Story 的载体或验收范围内。
+- THEN import、projection 或 API/media verify 在 activate 前失败时 candidate 停在对应 typed 终态，previous active pointer 不变，且不生成本 candidate 的激活成功事实。
+- THEN activate 后任一 surface CaseResult 失败时生成绑定本 candidate 与 previous active 的 rollback receipt，恢复 previous active pointer；receipt 可读出 rollback 起止时刻与 `durationMs <= 300000`，超过预算或 pointer 未恢复时终态为 canonical `rollback_failed` 而不是成功。本次失败 CaseResult 与其它 surface 的真实通过证据均保持可读，旧 release/receipt 不得替代本次失败项。
+
+<a id="gwt-017"></a>
+### GWT-017 全新媒体先完成来源准入再于 execution 后完成独立内容审核
+
+- GIVEN 干净输出根中没有可复用的 Image/Video independent review receipt，运营者为同一目标实体取得全新媒体，并分别冻结 acquisition、像素或运动媒体探测、rights attribution 与 source-scoped semantic review。
+- WHEN 系统从这些证据构建首个 media SourcePool、编译 WorkRequest 并执行 author/reviewer。
+- THEN catalog、acquisition、source review 与其 path evidence 均可从一个 portable evidence root 逐字节解析；绝对路径、`..`、symlink、缺失 ref 或 digest drift 返回 typed blocked，且零 SourcePool candidate 可见。
+- THEN SourcePool 只确认物理来源可供 execution 使用，不把 source-scoped review 表述为内容级 independent review；execution manifest、author evidence 或 reviewer evidence 尚未形成时，SourcePool 可调度但 canonical publish 仍为零。
+- THEN execution 后 acquisition、author、reviewer 使用三个互异且可回读的 runId，accepted `independent_asset_review_receipt` 精确绑定同一 asset bytes、对象、模型身份与判断；该 receipt 缺失、blocked 或 identity drift 时 publish/release fail closed。
+- THEN Image 与 Video 各自独立满足上述链路；任一 Video `entityMatch=mismatch` 即保持 `DATA.SOURCE.SAFETY_REVIEW_BLOCKED`，不得因 playable、4K、premium eligible 或已有下载字节进入 SourcePool。
+- THEN accepted receipt 形成后，同一对象只被 canonical append 一次；重放得到相同摘要，异字节或重复身份在写前失败。
+
+<a id="gwt-018"></a>
+### GWT-018 invalid canonical identity 不得被误判为已消费或无动作空缺
+
+- GIVEN 一个 Homepage stable objectRef 已存在 canonical manifest，但 latest pool record 的 payload digest 与当前 payload 不一致，source-ready pool 含同 objectRef 的候选，且治理输入明确处于以下互斥情形之一：fresh evidence 证明当前 bytes 仍是同一逻辑版本、fresh immutable author/review/rights evidence 证明当前 bytes 是新 payload、两类证据均不成立。
+- WHEN 运营者执行 pool inspection、backfill planning 与 source-ready scheduling。
+- THEN 三个读取面均保留最深层 `DATA.POOL.PAYLOAD_DIGEST_DRIFT`，不折叠为 generic `DATA.POOL.OBJECT_NOT_ADMITTED`，也不只因 manifest 存在就把候选静默过滤为已消费。
+- THEN 结果按上述谓词只给出一个受治理 command：record repair、payload rebuild 或 terminal；未裁决前不得创建新对象、覆盖旧 payload 或继续 semantic dispatch。
+- THEN record repair 保持原 `contentVersion`，只追加 `recordSequence + 1` 并绑定 current payload/fresh evidence；payload rebuild 原子写入 `contentVersion + 1` 与 `recordSequence + 1`，旧 record/payload evidence 保持可读。摘要、evidence 或写入冲突时原状态不变。
+- THEN terminal command 不创建新内容版本，保持 `contentVersion`、推进 `recordSequence` 并冻结 terminal reason 与“选择新 identity 或关闭本意图”的 next action；三个分支都禁止出现 `gap > 0`、`sourceReadyBacklog = 0` 且没有恢复动作的永久饥饿状态。
+
+<a id="gwt-019"></a>
+### GWT-019 空工作区只通过 measurement-only bootstrap 生成首份容量授权
+
+- GIVEN `local-apple-silicon` 的干净工作区没有受版本控制的 capacity receipt、没有 execution output，且 fresh `cursor_grok` preflight 已通过。
+- WHEN Data owner 启动 capacity calibration bootstrap。
+- THEN bootstrap authority 固定为 measurement-only、单 worker、M100 exact measurement workload，不读取日常 runtime default 或历史 capacity 数值，也不创建 WorkRequest、content execution、author/reviewer、pool-delivery、canonical object、release 或环境成功事实。
+- THEN bootstrap 为每个测量对象写独立 timing 终态，并生成 passed fleet report；任一对象、Provider、资源采样、deadline 或证据写入失败时输出 typed blocker，零 capacity receipt 可见，既有内容状态不变。
+- THEN `capacity_calibration_cli` 只消费上述 fresh fleet/object timing，对候选并发执行每档 100 次真实 `cursor_grok` probe，并把 Provider/resource/fleet/timing closure 与 applicability 写入 create-once receipt；任一 ref/digest/host/provider 漂移均 fail closed。
+- THEN receipt 提交为当前受版本控制真相源并通过无 skip 的摘要校验后，日常 execution policy 才能绑定它并启动；bootstrap authority 不能被日常 task、retry、promotion 或环境入口选择。
+
 ## 6. 依赖
 
 - 前置要求：父能力的 execution、review 与 release 契约。
@@ -347,15 +425,17 @@
 
 ## 7. 开放事项
 
+<a id="open-001"></a>
 ### OPEN-001 多载体 research 环境消费与规模证据
 
 - 类型：`external_blocker`
 - 优先级：`P0`
 - 准出影响：`block`
 - 影响或价值：当前仍缺足量专业来源池、实际 task 的逐项终态与池交付证据、真实四路累计数量，以及 canonical pool → immutable release → environment consumer 的精确引用闭包，所以最终规模闭环保持 `GATE_BLOCK`；fresh soak、四个同时 workspace、固定并发或 remote executor 主机数量不属于该阻断。
-- 完成判定：`GWT-001/GWT-002/GWT-004` 有 local_contract 与真实 Content importer、Search、Recommendation、Homepage、Persona readback；依次达到 M100、M1000、M10000 的累计唯一数量并能从统一池构建和发布对应 immutable Research Release。
+- 完成判定：`GWT-001/GWT-002/GWT-004/GWT-016` 有 local_contract 与真实 Content importer、Search、Recommendation、Homepage、Persona readback。entity homepage→对象主页、article→文章 surface、image→图片 surface、video→视频 surface 分别形成同 release digest 的 App CaseResult，且 micro 明确不属于 Data homepage。依次达到 M100、M1000、M10000 的累计唯一数量并能从统一池构建和发布对应 immutable Research Release。
 - 依赖：Data/Runtime/Service owner维护对象生成与池追加；Testing/Ops owner负责同一 Research Manifest 在 Alpha/Beta/Gamma/Prod 的独立 import/private-isolation/verify/activate/rollback/replay，Commercial 转换另立显式授权 release。Provider 与 remote executor 只影响生成吞吐和计划时间，不改变已合格对象准入。
 
+<a id="open-002"></a>
 ### OPEN-002 回收器引用图完整性契约与 task 可回收规则互斥
 
 - 类型：`risk`
@@ -365,6 +445,19 @@
 - 完成判定：`GWT-007` 全部结果子句成立，由 local_contract 锁定「release → task 引用在 task 被回收后的合法终态」与相应保护语义。
 - 依赖：Data owner 需在两条路线间裁决——让回收器报告未解析引用并保守保护被引用对象，或禁止回收任何被 release 引用的 task（后者使 task 树随发布数单调增长，与单对象存储预算冲突）。回收器侧已修复的可达性缺陷（可回收缓存引用、缺席证明字段与作用域、节点 kind 收敛、运行时冻结校验器职责归位、acquisition 命名空间）不在此阻断内。
 
+<a id="open-003"></a>
+### OPEN-003 media workUnit 复合验收的直接证据未闭合
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：尚缺 media workUnit 的完整实现与验收证据。已有多资产 projection 与逐资产 typed exclusion 测试，但未以子句级证据证明数量三值、manifest/receipt exact pair 与 brief/content object 的同一 `workUnitId` 全部闭合，不能把文件存在或父锚点引用冒充完成。
+- 尚缺实现：projection 导出面必须让 brief 与 content object 逐一保留输入 workUnit 的同一稳定 identity，并在无法唯一映射时只排除该资产。
+- 尚缺验收证据：缺少对数量三值、exact pair、同一 `workUnitId` 与 partial/blocked 分界的逐子句直接断言。
+- 完成判定：`GWT-006.t1`、`GWT-006.t2`、`GWT-006.t3` 均由 local_contract 直接绑定，其中 `t2` 必须断言 brief 与 content object 保持同一 `workUnitId`。
+- 依赖：Data media owner 补齐直接断言；不得放宽验收或以 OPEN 本身冒充通过。
+
+<a id="open-004"></a>
 ### OPEN-004 article 来源预筛的判定阈值与探测预算 calibration
 
 - 类型：`capability_gap`
@@ -374,8 +467,9 @@
 - 尚缺实现：实体锚定判定、最小正文门槛、单实体探测预算、补采重筛、四态聚合和三阶段逐实体对账尚未接入 article target selection。
 - 尚缺验收证据：缺少受治理 provider-state 下拒绝、超时与探测预算耗尽的 api_integration，以及一次真实 execution 的 selection、auto_research、content_plan receipt 对账。
 - 完成判定：`GWT-012` 与 `GWT-013` 的全部结果子句成立，且预筛阈值与探测预算来自 calibration receipt，而不是默认常量或从成稿质量门挪用的数值。
-- 依赖：Data owner 先在可代表主清单冷门实体占比的样本上完成受治理预筛 calibration，再实现四态准入与补采。local_contract 覆盖四态、子原因、归并优先级、补采和两种零合格终态；api_integration 覆盖真实探测状态与三阶段对账；环境消费证据由 `OPEN-001` 承接。
+- 依赖：Data owner 先在可代表主清单冷门实体占比的样本上完成受治理预筛 calibration，再实现四态准入与补采。local_contract 覆盖四态、子原因、归并优先级、补采和两种零合格终态。api_integration 覆盖真实探测状态与三阶段对账。环境消费证据由 `OPEN-001` 承接。
 
+<a id="open-005"></a>
 ### OPEN-005 来源发现阶段存活心跳的间隔与过期阈值 calibration
 
 - 类型：`capability_gap`
@@ -385,15 +479,86 @@
 - 尚缺实现：运行中心跳、最近心跳保留、运行中未按间隔心跳、已终止不会再心跳、进度缺席/不可读/字段缺失的 typed 结果尚未进入统一进度面。
 - 尚缺验收证据：缺少可控时钟 local_contract 和真实进程被强制杀死后的 api_integration，后者必须证明心跳停止、typed 过期与最后心跳事实保留。
 - 完成判定：`GWT-014` 的全部结果子句成立，且心跳间隔与过期阈值来自 calibration receipt，而不是默认常量或从容量上限、单对象 wall-clock 挪用的数值。
-- 依赖：Data owner 先在可代表主清单的样本上标定单实体耗时分布与心跳写入开销，再实现心跳读写面。local_contract 覆盖持续心跳、在场为空和 typed 失败；api_integration 覆盖真实进程终止后的过期判定；环境消费证据由 `OPEN-001` 承接。
+- 依赖：Data owner 先在可代表主清单的样本上标定单实体耗时分布与心跳写入开销，再实现心跳读写面。local_contract 覆盖持续心跳、在场为空和 typed 失败。api_integration 覆盖真实进程终止后的过期判定。环境消费证据由 `OPEN-001` 承接。
 
-### OPEN-006 `m100-wave-soak-20260818-v4` calibration receipt 字节永久缺失
+<a id="open-006"></a>
+### OPEN-006 受治理容量 calibration 无可自举的 M100 receipt
 
-- 类型：`external_blocker`
+- 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：`REQ-006` 把 `local-apple-silicon + cursor_grok` 的容量来源指向 `quwoquan_data/control_plane/_shared/capacity_calibration/m100-wave-soak-20260818-v4/receipt.json` 并绑定摘要 `sha256:653180ed007d37bd01644f5d19e27b406532cf026a701086a0e06b2beda744f0`，但该目录在 20260818 工作区删除事故中属于未跟踪目录，成员文件从未被任何提交或快照枚举，事故台账判定为 L3 永久缺失。receipt 自包含闭包内含 20 个逐对象 timing 与 soak evidence 摘要，无法从 spec 复述的结论数值反推，因此该摘要绑定在重新 soak 之前不可校验，容量数值只剩 spec 文本一处来源。
-- 尚缺实现：`capacity_calibration_cli` 的 receipt 产出必须落到**被 git 跟踪**的 create-once 路径；当前 `control_plane/_shared/capacity_calibration/` 未纳入版本控制，任何干净检出都读不到 receipt，等价于该容量来源在 CI 中从不存在。
+- 影响或价值：当前用于授权本机 `cursor_grok` 容量值的 receipt 字节不在受版本控制真相源中，无法复核其逐对象 timing、Provider probe 与资源证据。`task calibrate-capacity` 已接入 canonical CLI，但 producer 必须先消费 fresh M100 fleet report 与逐对象 execution state，而当前 execution policy 又必须先加载该 receipt 才能启动，恢复后的空工作区因此形成启动环。规格复述的旧数值不能反向合成 receipt，也不能继续授权 execution policy。
+- 尚缺实现：需要一个不授权日常生产、只以冻结安全并发执行真实 M100 measurement 的 calibration bootstrap path。它必须产出 producer 所需 fleet/object timing，再由 `capacity_calibration_cli` 完成 100 次 Provider probe 与 create-once receipt。receipt 必须落到被 Git 跟踪的 create-once 路径，任何干净检出都能读取并校验同一字节。bootstrap 不得回退到默认容量常量、fixture 或历史 runtime profile。
 - 尚缺验收证据：`test_repository_capacity_calibration_receipt_is_self_contained` 在干净检出上必然 `GATE_BLOCK`（receipt is missing）。禁止以手写 receipt 或改小断言的方式转绿——伪造的 receipt 不可能命中已冻结摘要，改断言等于放弃摘要绑定。
-- 完成判定：Data owner 重跑 `local-apple-silicon + cursor_grok` 的 M100 wave soak，由 `capacity_calibration_cli` 产出新 receipt 并提交入库，同步更新 `REQ-006` 与设计中的 calibrationId 与摘要；在此之前该容量来源保持 `GATE_BLOCK`，不得由默认常量、runtime profile 或探针观测替代。
-- 依赖：需要真实 `cursor_grok` provider 额度与本机 fleet 资源完成 100 对象 soak，属于事故永久证据损失的补测，不可由本轮恢复合成。
+- 完成判定：`GWT-019.t1..t4` 从无 capacity receipt、无 execution output 的干净工作区开始。local_contract 证明 authority、composition 与状态机边界。api_integration 以真实 bootstrap 进程和受控 Provider state 证明只运行 measurement 且 canonical/release/environment 成功事实增量均为 0。live reliability soak 才在 `local-apple-silicon + cursor_grok` 上完成真实 M100 measurement 与每个候选并发档 100 次 probe。随后由 `capacity_calibration_cli` 产出并提交新 receipt，repository gate 在干净检出校验其摘要与 applicability，删除动态 skip，同步更新 `REQ-006` 与设计中的 calibrationId/摘要，并重新直接覆盖 `GWT-009.t4`、`GWT-010.t4` 与 `GWT-011.t2`。在此之前该容量来源保持 `GATE_BLOCK`，不得由默认常量、runtime profile 或探针观测替代。
+- 依赖：先在 `design` 冻结 bootstrap 与日常 execution policy 的单向边界；需要真实 `cursor_grok` provider 额度与本机 fleet 资源完成 100 对象 soak，缺失证据不可由事故记录、规格文字或静态输入合成。
+
+<a id="open-007"></a>
+### OPEN-007 来源发现 slot 复用与全部实体终态证据未闭合
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：尚缺来源发现 slot 复用的实现与验收证据。并发测试未在冻结 8 worker、180 entity 场景中直接证明单实体失败或超时后释放 slot 并由下一实体接管；通用 fixture 与结果计数不能冒充该精确调度语义。
+- 尚缺实现：scheduler 必须在单实体失败或超时终态后释放同一冻结并发额度，并让下一个待处理实体接管而不丢失其它实体。
+- 尚缺验收证据：缺少可控挂起、失败、放行与接管的 deterministic 断言，以及全部 180 个实体各自终态的闭合计数。
+- 完成判定：`GWT-008.t1`、`GWT-008.t2`、`GWT-008.t3`、`GWT-008.t4` 均由 deterministic local_contract 直接绑定，实测峰值、全部实体终态、失败 slot 接管与报告事实分别可断言。
+- 依赖：Data scheduler owner 补齐可控挂起、失败、放行与 slot 接管场景；不得把吞吐 sample 当作调度正确性。
+
+<a id="open-008"></a>
+### OPEN-008 零合格七原因与运营动作契约未闭合
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：尚缺零合格七原因及运营动作的 canonical 实现与验收证据。现有原因不足以表达 publish storage budget 与 selector admission 两类原因及其唯一阶段、缩减对象体量/扩大候选范围动作；仅补 spec_ref 会制造假绿。
+- 尚缺实现：canonical schema 与生产消费者必须新增两类原因、唯一阶段与对应运营动作，并让未知值 fail closed。
+- 尚缺验收证据：缺少七原因、阶段互斥、可续跑 refs 与六类不可续跑依据的直接 local_contract。
+- 完成判定：canonical schema、生产消费者与 local_contract 直接覆盖 `GWT-011.t3`、`GWT-011.t4`，七个原因、唯一阶段、可续跑 refs 与六类不可续跑依据均单义且未知值 fail closed。
+- 依赖：Data terminal-contract owner 先改唯一 schema，再更新消费者与测试；禁止双读旧值或默认映射为 generic blocked。
+
+<a id="open-009"></a>
+### OPEN-009 WorkRequest 下游端到端数量闭环尚未实现
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：当前 canonical WorkRequest、carrier execution policy、`compile-intent` typed port/CLI 与整批原子 writer 已实现，local_contract 已覆盖 preview、修改、取消、needs-input/blocked、M1/WORKLOAD、1/4 carrier confirm、同摘要重放和持久化失败零可见；但真实 CLI 的现有 submit/freeze/retry、immutable release、环境 import/readback 与四个 App surface 尚未绑定同一 WorkRequest/receipt，因此仍不能证明一份意图的四载体数量沿现有单轨闭环。
+- 尚缺实现：真实 `compile-intent confirm` 产出的 envelope 还没有以同一 WorkRequest/compile receipt 身份贯穿现有 submit/freeze/retry、canonical pool、immutable Research release 与环境 import/readback/App CaseResult 消费链；retry 的真实 predecessor/reconciliation 输入也尚未形成。
+- 尚缺验收证据：缺少 `GWT-015.t6` 的真实 CLI api_integration，以及 `GWT-016.t1..t4` 绑定同一 immutable candidate 的 release/import/readback、四 surface production Remote CaseResult 与失败 rollback receipt。
+- 完成判定：`GWT-015.t1..t5` 由 local_contract 覆盖 preview、四态结果、确定性摘要、owner 禁写边界与 all-or-nothing，`GWT-015.t6` 由 api_integration 覆盖现有 submit/freeze/retry 链；`GWT-016.t1`、`GWT-016.t3` 由 release/import/projection/verify/readback api_integration 覆盖，`GWT-016.t2`、`GWT-016.t4` 由 production Remote user_acceptance 的四个独立 App CaseResult 与 rollback receipt 覆盖。
+- 依赖：Data owner 以真实 source-ready 输入完成 `GWT-015.t6`，再沿 canonical pool 与 immutable Research release 形成 `GWT-016` 的 import/readback/App CaseResult；在这些新鲜证据形成前不得用 local_contract、fixture 或旧 receipt 关闭本 OPEN。
+
+<a id="open-010"></a>
+### OPEN-010 WorkRequest 专项性能与成本实测缺失
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：当前 2 秒 preview、5 秒 confirm 的 p95 仍是设计 SLO，通用性能门禁没有覆盖 WorkRequest；每日 1,000 次确认、平均每份 artifact 16 KiB 与 180 天保留也是容量基线而非实测，不能据此宣称引擎已稳定或成本已闭合。
+- 完成判定：`GWT-015.t7` 由同一 immutable candidate 的专项 benchmark 直接覆盖。1-carrier 与 4-carrier 每个成功场景至少 20 个样本并证明 preview/confirm p95 分别不超过 2,000/5,000 ms，blocked/collision 全部零 envelope 发布。报告同时给出 WorkRequest/compile receipt 的 p50/p95 bytes、每日 1,000 请求的 30/180 天未压缩投影，并验证 schema 256 KiB 单 artifact 上限与引用保护归档。
+- 依赖：Data owner 在 WorkRequest metadata、compiler 与原子 writer 完成后补 benchmark runner 与 canonical report；缺样本、候选 SHA/源摘要漂移或任一场景失败均保持本 OPEN，不得用通用 App/feed 性能门禁替代。
+
+<a id="open-011"></a>
+### OPEN-011 首个 Image/Video SourcePool 的审核身份与 evidence-root 无法自举
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：当前全新媒体即使已经完成 acquisition 与 source-scoped semantic review，`project-candidates` 仍强制要求 `independent_asset_review_receipt`；该 receipt 又要求 content execution manifest、author 与 reviewer execution 身份，而 WorkRequest 在 execution 前必须先消费完整 SourcePool，形成 `SourcePool -> execution -> independent review -> SourcePool` 启动环。当前 Image catalog 的 `pathEvidence.ref` 还相对另一个 `image-input` 根，严格单 evidence-root 投影首先返回 `DATA.SOURCE.POOL_INVALID`，不能靠复制 JSON、`..` 或绝对路径绕过。
+- 尚缺实现：冻结 media source admission 与 post-author independent review 的单向阶段边界；首波 SourcePool 必须能消费同一 portable evidence root 下的 acquisition/source-review 事实，但不得提前宣称内容级 rights/quality review 已完成。execution 后仍必须由不同 runId 的 author/reviewer 生成 accepted independent receipt，且 publish/release 在该 receipt 缺失时 fail closed。catalog、acquisition 与所有 path evidence 必须由 CLI 从同一可解析根重新冻结。
+- 尚缺验收证据：缺少从“仓内无既有 media review receipt”的干净输出根开始，依次完成 Image/Video acquisition、source-pool projection、WorkRequest、author/reviewer、independent review、publish 的 api_integration；还缺 catalog ref-root 漂移、reviewer local-root 漂移和 execution 身份缺失的 typed blocker 断言。
+- 完成判定：`GWT-017.t1..t5` 由同一 M1 intent 的 api_integration 直接覆盖：Image/Video 各有一个全新 asset，从 portable acquisition/source review 进入 SourcePool，执行后生成三个互异 runId 的独立 review closure，并在 accepted receipt 前零 canonical 可见、accepted receipt 后各精确一个对象可发布；任一 root/digest/identity 漂移均输出稳定 typed blocker。
+- 依赖：先在 `design` 决定 source admission receipt 与 content independent review receipt 的对象边界和时序；Video 仍需一个与目标实体语义匹配且权利链可治理的真实候选，当前铁路视频的 `DATA.SOURCE.SAFETY_REVIEW_BLOCKED` 不得重包装为通过。
+
+<a id="open-012"></a>
+### OPEN-012 invalid canonical identity 导致 Homepage 永久饥饿
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：当前峨眉山 Homepage 已有 canonical manifest，但 latest pool record 与 payload digest 漂移，底层事实为 `DATA.POOL.PAYLOAD_DIGEST_DRIFT`。`pool-inspect` 把它折叠为 generic `DATA.POOL.OBJECT_NOT_ADMITTED`，source-ready loader 又只因 manifest 存在就把同 stable objectRef 视为已消费，现场结果为 `gap=1`、`sourceReadyBacklog=0`、`dispatchCandidateCount=0`；backfill 同时返回 drift 且不给 repair requirement，因此继续补采 source 或重试都不会前进。
+- 尚缺实现：把“已准入且已消费”“存在但可修复”“存在且不可修复的 canonical collision”分为互斥状态；保留最深层 `DATA.POOL.PAYLOAD_DIGEST_DRIFT`，由受治理 repair/rebuild 或显式终止 stable identity 收敛。不得把 invalid canonical 当作新对象覆盖，也不得无声过滤 source-ready candidate。
+- 尚缺验收证据：缺少 payload drift 的 pool-inspect typed readback、source-ready 调度裁决、从 immutable evidence 修复后 contentVersion/recordSequence 前进、不可修复时显式终止且不再计入可调度 backlog 的 api_integration。
+- 完成判定：`GWT-018.t1..t4` 由同一 api_integration 直接覆盖。测试先通过真实 canonical application command 创建有效状态，再只通过明确的基础设施存储边界 fault-injection port 制造 digest drift，禁止直接写 manifest、ledger 或 fixture seed，并分别构造 record repair、payload rebuild 与 terminal 的互斥证据谓词。首轮 inspection 精确保留 `DATA.POOL.PAYLOAD_DIGEST_DRIFT` 且只给出对应 command。record repair 保持 `contentVersion` 只推进 `recordSequence`，payload rebuild 同时推进两者并保留旧证据，terminal 不创建新内容版本且携带 terminal reason/next action。三个分支都不再出现 `gap>0 && backlog=0 && 无恢复动作`。
+- 依赖：`design` 先冻结 canonical repair authority、immutable evidence 来源、recordSequence/contentVersion 与 source-ready consumer 的职责边界；实现不得通过放宽 payload digest 或恢复 manifest-only admission 完成。

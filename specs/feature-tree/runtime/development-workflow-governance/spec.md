@@ -32,7 +32,7 @@
 
 
 - [`directory-native-sdd`](./directory-native-sdd/spec.md)：工具必须直接扫描目录与 Markdown；删除 `.qwq_output` 后仍可从受版本控制真相源重建上下文。
-- [`agent-skill-review-context-organization`](./agent-skill-review-context-organization/spec.md)：顶层 Skill 只收录完整工作流并套用统一八段模板；评审按 profile 精确装配，无关 gate 零加载；三家 harness 从同一真相源加载。
+- [`agent-skill-review-context-organization`](./agent-skill-review-context-organization/spec.md)：顶层 Skill 只收录完整工作流并套用统一八段模板，评审按 profile 精确装配且对无关 gate 零加载，三家 harness 从同一真相源加载。
 
 ## 5. 能力要求
 
@@ -55,7 +55,12 @@
 ### REQ-003 角色化评审与跨 harness 载体
 
 - 评审必须由 `review` 工作流按 `(workflow, deliverable, profiles)` 从注册表派发角色执行：profile 由 changed_paths 与 deliverable 派生，未匹配 profile 的角色不派发，选中 bundle 内相同 gate 只执行一次。角色名以 `.agents/skills/review/references/roles/` 为唯一真相源，其他文件不得自行列举角色清单。
-- Agent 上下文载体只允许五类，各有唯一职责：顶层 Skill 只收录可独立触发、有输入/步骤/交付件/失败终态的完整工作流；role 定义评审或执行职责；checklist 只放带分级的可执行判定；reference 只放唯一 owner 的未分级知识；tool 只放该工作流独占的小工具。原则、标准、检查项不得作为顶层 Skill 存在。
+- Agent 上下文载体只允许顶层 Skill、role、checklist、reference 与 tool 五类，各有唯一职责。
+- 顶层 Skill 只收录可独立触发、有输入、步骤、交付件和失败终态的完整工作流；原则、标准、检查项不得作为顶层 Skill 存在。
+- role 定义评审或执行职责。
+- checklist 只放带分级的可执行判定。
+- reference 只放唯一 owner 的未分级知识。
+- tool 只放该工作流独占的小工具。
 - checklist 每条必须带 `MUST / MUST NOT / SHOULD / SHOULD NOT / MAY / ADVISORY` 分级；标 MUST 的条目必须绑定真实存在的 `gate:` 命令或客观可判定的 `check:` 谓词，否则必须降级为 SHOULD。
 - 指令真相源必须放在三家 harness 共享载体（`AGENTS.md` 与 `.agents/skills/`）；harness 专属目录只允许放触发加速器与生成产物。
 - 任一工作目录下 `AGENTS.md` 的合并总量必须落在最严 harness 的上下文预算内，超限必须阻断而不是静默截断。

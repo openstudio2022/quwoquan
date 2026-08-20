@@ -57,7 +57,11 @@
 - 登录墙、robots deny、网络不可达与不相关候选必须形成 typed blocked/discard；`factual_reference_only` 只保留事实引用身份，不得保存原文或伪造成功。
 - content plan 只消费 target set 冻结的 canonical target 与 aliases 作为实体锚定；只偶然列举目标的城市总览或 figure caption 不能因行长、推断短别名或标题回填成为目标文章底稿。
 - `factual_reference_only` 只可提取可核验事实、路线顺序、必要数字与专有名词；成稿必须使用独立句式、结构和叙事，不得保留来源连续长句、自然段、小标题或原文结构，也不得以 licensed adaptation 的底稿留存率为其设下限。
-- independent review 已有 finished Grok journal，但 controller 中断后只剩唯一 schema-valid pending response 时，不得改写旧 execution 的 `reviewer_result`/attestation。只有唯一 pending response 与唯一未绑定 finished reviewer work unit 能生成 create-once reconciliation receipt；标准 campaign submission 必须从该 receipt 与其余 final review 自动派生 failed-only refs，plan 冻结该 scope，lane argv 透传该 scope，并在新 sequence 以 `retryOf` 消费 typed issues；已通过对象不得重试。
+- independent review 已有 finished Grok journal，但 controller 中断后只剩唯一 schema-valid pending response 时，不得改写旧 execution 的 `reviewer_result`/attestation。
+- 只有唯一 pending response 与唯一未绑定 finished reviewer work unit 能生成 create-once reconciliation receipt。
+- 标准 campaign submission 必须从该 receipt 与其余 final review 自动派生 failed-only refs。
+- plan 冻结该 scope，lane argv 透传该 scope，并在新 sequence 以 `retryOf` 消费 typed issues。
+- 已通过对象不得重试。
 
 ## 4. 契约引用
 

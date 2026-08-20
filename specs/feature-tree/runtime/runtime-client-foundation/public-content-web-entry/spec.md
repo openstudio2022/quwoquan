@@ -59,7 +59,9 @@
 ### REQ-005 安装转化入口对 4 类对象统一可用
 
 - 安装转化组件必须区分手机与 PC，并只使用受控配置注入的下载地址。
-- Android 入口只提供官网正式签名 APK 下载；iOS 入口只展示 App Store 链接与 PWA 添加主屏指引，standalone 模式隐藏安装横幅；PC 并列提供 Android 下载与 iOS 两类入口（可用二维码承载）。
+- Android 入口只提供官网正式签名 APK 下载。
+- iOS 入口只展示 App Store 链接与 PWA 添加主屏指引，standalone 模式隐藏安装横幅。
+- PC 并列提供 Android 下载与 iOS 两类入口，可用二维码承载。
 - 经网页版下载安装的 App，其安装后首次点击图标启动行为必须与其他受支持安装渠道等价；下载对象的 SHA-256、包名与签名证书摘要必须与 `app_release` 发布事实逐字段一致。
 
 <a id="req-006"></a>
@@ -211,7 +213,7 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：无人值守 runner `quwoquan_app/scripts/device/web_download_install_uat.py` 已实现 download_verify（URL 来源、SHA-256、签名证书摘要、包名与 canonical 身份比对）、全新安装/覆盖升级、图标冷启动与首帧回读，并有 `web_download_install_runner__local_contract_test.py` 绑定；尚缺安装转化组件对手机/PC 两形态与 4 类对象页的统一覆盖，以及 runner 对真实官网 CDN 与真机的执行证据（受 app-release-recovery-routing OPEN-001 外部阻断）。
+- 影响或价值：尚缺安装转化组件对手机/PC 两形态与 4 类对象页的统一实现和验收覆盖，以及 runner 对真实官网 CDN 与真机的执行证据（受 app-release-recovery-routing OPEN-001 外部阻断）。无人值守 runner `quwoquan_app/scripts/device/web_download_install_uat.py` 已实现 download_verify（URL 来源、SHA-256、签名证书摘要、包名与 canonical 身份比对）、全新安装与覆盖升级、图标冷启动与首帧回读，并有 `web_download_install_runner__local_contract_test.py` 绑定。
 - 完成判定：`GWT-005` 与 `GWT-007` 对应行为满足且真实测试 `spec_ref` 有效；`GWT-007` 的 Android 轨以该 runner 对真实官网分发产出下载比对与安装后启动回读证据。
 
 <a id="open-004"></a>
