@@ -21,9 +21,26 @@ from content.release.canonical.aggregate_release import (
 from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
 )
+from content.release.canonical.rehydrate_media_holdings import (
+    main as admit_carried_media_holdings,
+)
 from core.source_digest import content_source_revision
 
 ENTITY_CATALOG_DIGEST = "sha256:" + "e" * 64
+
+
+@pytest.fixture(autouse=True)
+def _carried_media_holdings() -> None:
+    """Put the golden tree's media in the library before the gates are judged.
+
+    On an empty library the release build stops at a dangling asset ref, so the
+    case would report a missing holding while claiming to prove that legacy
+    golden data cannot bypass the current gates. Admitting the carried bytes
+    first keeps the assertion about the gates rather than about whatever this
+    machine happened to have in its library.
+    """
+
+    assert admit_carried_media_holdings(publish_root=PUBLISH) == 0
 
 
 def _object(path: Path) -> dict[str, object]:

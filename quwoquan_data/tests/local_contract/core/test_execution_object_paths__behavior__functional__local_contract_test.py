@@ -1,4 +1,7 @@
-"""One execution work package uses publish-isomorphic object paths."""
+"""One execution work package uses publish-isomorphic object paths.
+
+spec_ref: specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/spec.md#gwt-001.t3
+"""
 from __future__ import annotations
 
 import os

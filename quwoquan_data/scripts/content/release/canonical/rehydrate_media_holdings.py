@@ -80,8 +80,10 @@ def rehydrate_one(digest: str) -> str:
     return "admitted"
 
 
-def main() -> int:
-    digests = required_digests(PUBLISH_ROOT)
+def main(publish_root: Path | None = None) -> int:
+    # 测试进程把 PUBLISH_ROOT 隔离到空临时根，照那里扫会一条都扫不到，
+    # 于是"零条holdings"被当成成功；调用方要判的是哪棵树就把哪棵树交进来。
+    digests = required_digests(publish_root or PUBLISH_ROOT)
     outcomes: dict[str, list[str]] = {}
     for digest in sorted(digests):
         outcomes.setdefault(rehydrate_one(digest), []).append(digest)
