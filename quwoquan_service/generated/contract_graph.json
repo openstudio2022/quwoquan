@@ -114174,6 +114174,10 @@
         ],
         "localContract": [
           {
+            "path": "quwoquan_service/services/content-service/tests/local_contract/trust_safety/post_moderation_case/adapters/inbound/http/publication_eligibility_wire__contract__local_contract_test.go",
+            "sha256": "23b1416c71577ddbe13ec5c00c021cec377599e385429a0519837413076fc725"
+          },
+          {
             "path": "quwoquan_service/services/content-service/tests/local_contract/trust_safety/post_moderation_case/application/event_sources__contract__local_contract_test.go",
             "sha256": "71198d0a3c6dd221a245cfd3a793acafc9442aadf5eb71479827ad712aaf63f5"
           },
