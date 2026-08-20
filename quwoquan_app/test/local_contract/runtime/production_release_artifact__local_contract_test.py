@@ -171,9 +171,15 @@ class ProductionReleaseArtifactContractTest(unittest.TestCase):
             self.assertIn(job_name, workflow)
         self.assertNotIn("macos:", workflow)
         self.assertNotIn("flutter build", workflow)
+        # android/ios/web 三个面各打一份 app-artifact；prod 另有官方包 app-release
+        # 与 ops-portal 两种不同 kind。只数打包调用总数，会在新增一种合法 kind 时
+        # 假红，所以按 kind 逐项钉住，再用总数兜住「多出一条没登记的打包」。
+        self.assertEqual(workflow.count("--kind app-artifact"), 3)
+        self.assertEqual(workflow.count("--kind app-release"), 1)
+        self.assertEqual(workflow.count("--kind ops-portal"), 1)
         self.assertEqual(
             workflow.count("stackctl.py --output-format json package"),
-            3,
+            5,
         )
         for environment in ("alpha", "beta", "gamma", "prod"):
             self.assertIn(environment, workflow)

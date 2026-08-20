@@ -135,17 +135,20 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
             launcher,
         )
         self.assertIn('--target "$QWQ_LAUNCH_TARGET" --runtime-mode test_live', launcher)
+        # test_live 的 preflight、启动策略与租约判据收敛给 run.sh 这一个 owner；
+        # run_app_instance.sh 只做入参校验与转发，不再复制一份 preflight。判据因此
+        # 钉在 owner 身上，再要求 adapter 不得自建第二次 preflight 或第二条 Flutter
+        # 命令——「一套策略」被破坏只会以这两种形式出现。
+        self.assertIn('payload.get("status") not in {"passed", "warning"}', launcher)
+        self.assertIn("export QWQ_APP_LAUNCH_POLICY=test_live", launcher)
+        self.assertIn("--launch-policy test_live", launcher)
         self.assertIn(
-            'app-debug-preflight --target "$TARGET_NAME" --runtime-mode test_live',
-            app_instance,
+            "GATE_BLOCK: content-live requires a runtime consumer lease.",
+            launcher,
         )
-        self.assertIn('payload.get("status") not in {"passed", "warning"}', app_instance)
-        self.assertIn('--launch-policy "$LAUNCH_POLICY"', app_instance)
-        self.assertIn('if [[ "$LAUNCH_POLICY" == "test_live" ]]', app_instance)
-        self.assertIn(
-            "GATE_BLOCK: Android runtime consumer lease is unavailable.",
-            app_instance,
-        )
+        self.assertIn('bash "$APP_DIR/run.sh"', app_instance)
+        self.assertNotIn("app-debug-preflight", app_instance)
+        self.assertNotIn("flutter run", app_instance)
         self.assertIn(
             'app-debug-preflight --target "$DIRECT_TARGET" --runtime-mode test_live',
             ios,

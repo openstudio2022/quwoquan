@@ -11,9 +11,20 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
-DEFAULT_ROOT = Path(__file__).resolve().parents[4]
+_SCRIPTS_ROOT = next(
+    parent
+    for parent in Path(__file__).resolve().parents
+    if parent.name == "scripts" and (parent / "_common" / "paths.py").is_file()
+)
+if str(_SCRIPTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_ROOT))
+
+from _common.paths import REPO_ROOT
+
+DEFAULT_ROOT = REPO_ROOT
 
 
 def _read_required(path: Path, root: Path, issues: list[str]) -> str:

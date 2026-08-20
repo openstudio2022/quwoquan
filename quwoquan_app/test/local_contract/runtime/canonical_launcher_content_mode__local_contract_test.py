@@ -199,7 +199,7 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
             )
             self.assertEqual(
                 (app.parent / "flutter.log").read_text(encoding="utf-8"),
-                "pub get --offline\n",
+                "pub get --offline --enforce-lockfile\n",
             )
 
     def test_delivery_block_emits_one_formal_recovery_and_stops_flutter(self) -> None:
@@ -272,7 +272,7 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
             )
             self.assertEqual(
                 (app.parent / "flutter.log").read_text(encoding="utf-8"),
-                "pub get --offline\n",
+                "pub get --offline --enforce-lockfile\n",
             )
 
     def test_launcher_remains_valid_bash(self) -> None:

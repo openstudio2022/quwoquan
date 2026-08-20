@@ -960,7 +960,7 @@ report = {
     "deviceId": device_id,
     "platform": platform,
     "runMode": run_mode,
-    "nonPromotable": True,
+    "nonPromotable": run_mode == "ui-only",
     "contentLive": preflight.get("contentLive", "not_evaluated"),
     "launchPolicy": "test_live",
     "compileStatus": compile_status,
