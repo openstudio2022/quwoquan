@@ -24,9 +24,11 @@ from quwoquan_ops.cli.commands.package_app_artifact import (
     _CAPSULE_ROOTS,
     _artifact_digest,
     _ios_unsigned_release_command,
-    _read_android_identity,
-    _signing_digest,
     command_package_app_artifact,
+)
+from quwoquan_ops.cli.commands.package_app_artifact_identity import (
+    read_android_identity,
+    signing_digest,
 )
 
 
@@ -91,21 +93,24 @@ class StackctlAppArtifactIdentityTest(unittest.TestCase):
                 returncode=0,
                 stdout="SHA256: " + ":".join(["AB"] * 32) + "\n",
             )
+            identity_module = (
+                "quwoquan_ops.cli.commands.package_app_artifact_identity"
+            )
             with mock.patch(
-                "quwoquan_ops.cli.commands.package_app_artifact._bundletool_command",
+                f"{identity_module}.bundletool_command",
                 return_value=["bundletool"],
             ), mock.patch(
-                "quwoquan_ops.cli.commands.package_app_artifact.subprocess.run",
+                f"{identity_module}.subprocess.run",
                 side_effect=[identity_result, signature_result],
             ) as run, mock.patch(
-                "quwoquan_ops.cli.commands.package_app_artifact.shutil.which",
+                f"{identity_module}.shutil.which",
                 return_value="/usr/bin/keytool",
             ):
-                identity = _read_android_identity(
+                identity = read_android_identity(
                     artifact,
                     "com.quwoquan.quwoquan_app",
                 )
-                signature = _signing_digest("android", artifact)
+                signature = signing_digest("android", artifact)
             self.assertEqual(identity, "com.quwoquan.quwoquan_app")
             self.assertEqual(signature, "sha256:" + "ab" * 32)
             self.assertIn("dump", run.call_args_list[0].args[0])

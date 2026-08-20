@@ -14,7 +14,6 @@ import hashlib
 import importlib.util
 import json
 import os
-import plistlib
 import re
 import shutil
 import stat
@@ -31,6 +30,12 @@ _ROOT = Path(__file__).resolve().parents[3]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
+from quwoquan_ops.cli.commands.package_app_artifact_identity import (
+    AppArtifactBuildError,
+    read_android_identity,
+    read_ios_identity,
+    signing_digest,
+)
 from quwoquan_ops.cli.lib.app_dependency_toolchain import (
     AppDependencyToolchainError,
     resolve_cocoapods_executable,
@@ -83,20 +88,12 @@ _EMPTY_STATUS_DIGEST = (
 )
 
 
-class AppArtifactBuildError(RuntimeError):
-    """Typed build failure whose first line is safe to expose as firstBlocker."""
-
-
 def _distribution_classes() -> dict[str, Any]:
     document = load_json_yaml(ARTIFACT_METADATA_PATH)
     classes = document.get("distribution_classes")
     if not isinstance(classes, dict) or not classes:
         raise AppIdentityError("distribution_classes metadata is missing")
     return classes
-
-
-def _sha256_bytes(value: bytes) -> str:
-    return "sha256:" + hashlib.sha256(value).hexdigest()
 
 
 def _artifact_digest(path: Path) -> str:
@@ -303,142 +300,6 @@ def _handoff(
     return value
 
 
-def _locate_android_tool(name: str) -> str:
-    for variable in ("ANDROID_HOME", "ANDROID_SDK_ROOT"):
-        root = os.environ.get(variable, "").strip()
-        if not root:
-            continue
-        candidates = sorted((Path(root) / "build-tools").glob(f"*/{name}"))
-        if candidates:
-            return str(candidates[-1])
-    return shutil.which(name) or ""
-
-
-def _bundletool_command() -> list[str]:
-    executable = os.environ.get("QWQ_BUNDLETOOL_EXECUTABLE", "").strip()
-    if executable:
-        return [executable]
-    discovered = shutil.which("bundletool")
-    if discovered:
-        return [discovered]
-    jar = os.environ.get("QWQ_BUNDLETOOL_JAR", "").strip()
-    if jar and Path(jar).is_file():
-        java = shutil.which("java")
-        if java:
-            return [java, "-jar", str(Path(jar).resolve())]
-    raise AppArtifactBuildError(
-        "APP.PACKAGE.identity_tool_missing: set QWQ_BUNDLETOOL_EXECUTABLE "
-        "or QWQ_BUNDLETOOL_JAR for AAB readback"
-    )
-
-
-def _read_android_identity(artifact: Path, expected: str) -> str:
-    if artifact.suffix == ".aab":
-        result = subprocess.run(
-            [
-                *_bundletool_command(),
-                "dump",
-                "manifest",
-                f"--bundle={artifact}",
-                "--module=base",
-                "--xpath=/manifest/@package",
-            ],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        actual = result.stdout.strip().strip('"')
-        if result.returncode != 0 or actual != expected:
-            raise AppArtifactBuildError(
-                "APP.PACKAGE.identity_mismatch: "
-                f"expected={expected} actual={actual or '<missing>'}"
-            )
-        return actual
-    aapt = _locate_android_tool("aapt")
-    if not aapt:
-        raise AppArtifactBuildError("APP.PACKAGE.identity_tool_missing: aapt")
-    result = subprocess.run(
-        [aapt, "dump", "badging", str(artifact)],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    match = re.search(r"package: name='([^']+)'", result.stdout)
-    actual = match.group(1) if match else ""
-    if result.returncode != 0 or actual != expected:
-        raise AppArtifactBuildError(
-            "APP.PACKAGE.identity_mismatch: "
-            f"expected={expected} actual={actual or '<missing>'}"
-        )
-    return actual
-
-
-def _read_ios_identity(artifact: Path, expected: str) -> str:
-    info = artifact / "Info.plist"
-    if not info.is_file():
-        raise AppArtifactBuildError("APP.PACKAGE.identity_missing: iOS Info.plist")
-    value = plistlib.loads(info.read_bytes())
-    actual = str(value.get("CFBundleIdentifier") or "")
-    if actual != expected:
-        raise AppArtifactBuildError(
-            f"APP.PACKAGE.identity_mismatch: expected={expected} actual={actual}"
-        )
-    return actual
-
-
-def _signing_digest(platform: str, artifact: Path) -> str:
-    if platform == "android":
-        if artifact.suffix == ".aab":
-            keytool = shutil.which("keytool")
-            if not keytool:
-                raise AppArtifactBuildError(
-                    "APP.PACKAGE.signature_tool_missing: keytool"
-                )
-            result = subprocess.run(
-                [keytool, "-printcert", "-jarfile", str(artifact)],
-                check=False,
-                capture_output=True,
-                text=True,
-            )
-            match = re.search(r"SHA256:\s*([0-9A-Fa-f:]+)", result.stdout)
-            if result.returncode != 0 or match is None:
-                raise AppArtifactBuildError(
-                    "APP.PACKAGE.signature_readback_failed"
-                )
-            return "sha256:" + match.group(1).replace(":", "").lower()
-        apksigner = _locate_android_tool("apksigner")
-        if not apksigner:
-            raise AppArtifactBuildError(
-                "APP.PACKAGE.signature_tool_missing: apksigner"
-            )
-        result = subprocess.run(
-            [apksigner, "verify", "--print-certs", str(artifact)],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        match = re.search(
-            r"certificate SHA-256 digest:\s*([0-9A-Fa-f:]+)", result.stdout
-        )
-        if result.returncode != 0 or match is None:
-            raise AppArtifactBuildError("APP.PACKAGE.signature_readback_failed")
-        normalized = match.group(1).replace(":", "").lower()
-        return "sha256:" + normalized
-    if platform == "ios":
-        result = subprocess.run(
-            ["codesign", "-d", "--verbose=4", str(artifact)],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        combined = result.stdout + result.stderr
-        match = re.search(r"CDHash=([0-9A-Fa-f]+)", combined)
-        if match:
-            return _sha256_bytes(match.group(1).lower().encode("ascii"))
-        return _sha256_bytes(b"unsigned-ios-simulator")
-    return _sha256_bytes(b"web-not-applicable")
-
-
 def _copy_artifact(source: Path, destination: Path) -> Path:
     if destination.exists():
         raise AppArtifactBuildError(
@@ -604,7 +465,7 @@ def _build_from_capsule(
                 source_artifact,
                 attempt_dir / f"quwoquan-{environment}-{build_mode}{source_artifact.suffix}",
             )
-            _read_android_identity(artifact, application_id)
+            read_android_identity(artifact, application_id)
         elif platform == "ios":
             if distribution_class in {"registered_device", "store"}:
                 export_options = command_env["QWQ_IOS_EXPORT_OPTIONS_PLIST"]
@@ -679,7 +540,7 @@ def _build_from_capsule(
                     attempt_dir / f"quwoquan-{environment}-{build_mode}.app",
                 )
             if artifact.suffix == ".app":
-                _read_ios_identity(artifact, application_id)
+                read_ios_identity(artifact, application_id)
         else:
             # Web 只有一个编译实现：package_web_official_release。它负责 PWA
             # 策略、构建校验、noindex 与内容寻址的 immutable release；这里只把
@@ -715,7 +576,7 @@ def _build_from_capsule(
             "artifactPath": str(artifact),
             "artifactDigest": _artifact_digest(artifact),
             "launchManifestDigest": str(handoff["effectiveLaunchManifestDigest"]),
-            "signingIdentityDigest": _signing_digest(platform, artifact),
+            "signingIdentityDigest": signing_digest(platform, artifact),
             "sourceCapsuleDigest": str(capsule["deploymentInputDigest"]),
             "sourceStatusDigest": str(capsule["workspaceStatusDigest"]),
         }
