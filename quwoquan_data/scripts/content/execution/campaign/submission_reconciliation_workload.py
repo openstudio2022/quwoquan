@@ -96,11 +96,11 @@ def frozen_submission_workload(
         # Terminal evidence created before the active-workload envelope was
         # frozen can only identify the former complete canonical preset.
         active = CAMPAIGN_CARRIERS
-        legacy_quotas = {int(row.get("quota") or 0) for row in submissions.values()}
-        if len(legacy_quotas) != 1 or next(iter(legacy_quotas)) < 1:
-            raise typed("IDENTITY_DRIFT", "legacy submission quotas are invalid")
-        legacy_quota = next(iter(legacy_quotas))
-        workloads = {carrier: legacy_quota for carrier in active}
+        uniform_quotas = {int(row.get("quota") or 0) for row in submissions.values()}
+        if len(uniform_quotas) != 1 or next(iter(uniform_quotas)) < 1:
+            raise typed("IDENTITY_DRIFT", "uniform submission quotas are invalid")
+        uniform_quota = next(iter(uniform_quotas))
+        workloads = {carrier: uniform_quota for carrier in active}
 
     roots = {str(row.get("rootExecutionId") or "") for row in submissions.values()}
     if len(roots) != 1 or not next(iter(roots)):

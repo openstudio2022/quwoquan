@@ -91,6 +91,29 @@ def _candidate(carrier: str) -> dict[str, object]:
         "playabilityFileSha256": None,
         "videoReadiness": None,
     }
+    if carrier in {"image", "video"}:
+        for field in (
+            "sourceUnitRef",
+            "sourceUnitDigest",
+            "sourceUnitFileSha256",
+            "acquisitionRef",
+            "acquisitionDigest",
+            "acquisitionFileSha256",
+            "rightsRef",
+            "rightsDigest",
+            "rightsFileSha256",
+            "qualityRef",
+            "qualityDigest",
+            "qualityFileSha256",
+            "playabilityRef",
+            "playabilityDigest",
+            "playabilityFileSha256",
+        ):
+            value.pop(field)
+        value.update(
+            sourceAdmissionRef=f"receipts/media-source-admission/{identity}.json",
+            sourceAdmissionDigest=_digest([carrier, "source-admission"]),
+        )
     if carrier in {"homepage", "article"}:
         value["sourceReadyEvidenceRootRef"] = "."
         value["sourceAttribution"] = _source_attribution(carrier)
@@ -99,11 +122,6 @@ def _candidate(carrier: str) -> dict[str, object]:
     if carrier == "video":
         value.update(
             {
-                "playabilityRef": "evidence/video-1/playability.json",
-                "playabilityDigest": _digest([carrier, "playability"]),
-                "playabilityFileSha256": _digest(
-                    [carrier, "playability-file"]
-                ),
                 "videoReadiness": {
                     "playable": True,
                     "motion": True,
@@ -487,12 +505,8 @@ def test_explicit_project_candidates_cli_needs_no_milestone_and_dispatches_both_
             _digest(["homepage-article", "batch"]),
             "--source-ready-set-file-sha256",
             _digest(["homepage-article", "batch-file"]),
-            "--image-catalog-ref",
-            "catalogs/image.json",
-            "--image-acquisition-ref",
-            "acquisition/image.json",
-            "--image-review-ref",
-            "review/image.json",
+            "--image-source-admission-ref",
+            "receipts/media-source-admission/image.json",
         ]
     )
     arguments.handler(arguments)

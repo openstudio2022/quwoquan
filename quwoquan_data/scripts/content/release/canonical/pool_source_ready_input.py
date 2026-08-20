@@ -8,6 +8,10 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from content.release.canonical.canonical_identity_state import (
+    CanonicalIdentityStateQuery,
+    canonical_identity_is_consumed,
+)
 from content.release.canonical.object_transaction_contract import _read_json
 from content.source.research.scale_source_pool import (
     validate_scale_source_pool_evidence,
@@ -74,16 +78,25 @@ def load_source_ready_input(
         evidence_root=evidence_root,
     )
     candidates = {carrier: [] for carrier in _CARRIERS}
+    identity_query = CanonicalIdentityStateQuery(publish_root=publish_root)
+    canonical_identity_states: list[dict[str, Any]] = []
     for raw in plan["candidates"]:
         row = dict(raw)
         carrier = str(row["carrier"])
         object_ref = str(row["objectRef"]).strip("/")
-        # Any existing canonical manifest owns this stable object identity.
-        # A later wave must not reinterpret it as fresh semantic work.
-        if (
-            object_ref in consumed_object_refs
-            or (publish_root / object_ref / "manifest.json").is_file()
-        ):
+        if object_ref in consumed_object_refs:
+            continue
+        identity_state = identity_query.get(
+            object_type="homepage" if carrier == "homepage" else "content",
+            object_ref=object_ref,
+        )
+        if identity_state["state"] != "absent":
+            canonical_identity_states.append(
+                {"carrier": carrier, "identityState": identity_state}
+            )
+        if canonical_identity_is_consumed(identity_state):
+            continue
+        if str(identity_state["state"]).startswith("invalid_"):
             continue
         candidates[carrier].append(
             {
@@ -111,6 +124,7 @@ def load_source_ready_input(
             "sourcePoolDigest": str(plan["planDigest"]),
             "sourcePoolEvidenceRootRef": normalized_evidence_ref,
             "evidenceBindingCount": int(validation["evidenceBindingCount"]),
+            "canonicalIdentityStates": canonical_identity_states,
         },
         candidates,
     )

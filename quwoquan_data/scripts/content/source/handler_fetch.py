@@ -26,12 +26,18 @@ from content.post.article.evidence_text import (
     score_source_markdown,
 )
 from content.source import handler_fetch_contract
-from content.source.contracts import MediaProvenance
 from content.source.fetch_payload import fetch_source_payload
 from content.source.handler_fetch_images import prepare_entity_images
 from content.source.handler_fetch_media import (
     EntityMediaClosureInput,
     close_entity_media,
+)
+from content.source.handler_fetch_metrics import (
+    accepted_source_rows,
+    apply_source_image_rejections,
+    build_source_asset_count_row,
+    page_has_inline_video,
+    source_with_fetch_runtime,
 )
 from content.source.handler_fetch_setup import prepare_entity_fetch_plan
 from content.source.handler_images import (
@@ -396,13 +402,7 @@ def _fetch_download_entity(
                     flush=True,
                 )
                 quality = {**cached_quality, "retainedFromCache": True}
-        from content.source.html_text import html_has_inline_video
-
-        page_has_video = False
-        if html_bytes:
-            page_has_video = html_has_inline_video(html_bytes.decode("utf-8", errors="replace"))
-        if not page_has_video and fetched_text:
-            page_has_video = html_has_inline_video(fetched_text)
+        page_has_video = page_has_inline_video(html_bytes, fetched_text)
         source_images, source_image_issues, source_image_funnel = _download_source_unit_images(
             source,
             execution_id=execution_id,
@@ -417,32 +417,11 @@ def _fetch_download_entity(
                 f"sourceImage:{source['source_id']}: {issue}"
                 for issue in source_image_issues
             )
-        source_drop_categories = source_image_funnel.get("dropReasonCounts")
-        if isinstance(source_drop_categories, Mapping):
-            category_map = {
-                "fetch_failure": "fetch_or_non_image",
-                "pixel_policy": "pixel_too_small",
-                "decode_policy": "safety_or_watermark",
-                "safety_policy": "safety_or_watermark",
-                "rights_policy": "rights",
-                "relevance_policy": "other",
-                "invalid_payload": "other",
-                "duplicate": "other",
-            }
-            for category, count in source_drop_categories.items():
-                target_category = category_map.get(str(category), "other")
-                rejected_by_category[target_category] += int(count or 0)
-        source_for_unit = dict(source)
-        for key in (
-            "requestedTitle",
-            "resolvedTitle",
-            "redirectChain",
-            "fetchFinalUrl",
-        ):
-            if key in fetch_runtime:
-                source_for_unit[
-                    "finalUrl" if key == "fetchFinalUrl" else key
-                ] = fetch_runtime[key]
+        apply_source_image_rejections(
+            rejected_by_category,
+            source_image_funnel.get("dropReasonCounts"),
+        )
+        source_for_unit = source_with_fetch_runtime(source, fetch_runtime)
         try:
             manifest = write_source_unit(
                 object_dir,
@@ -520,39 +499,16 @@ def _fetch_download_entity(
                 sourceCount=len(sources),
             )
             continue
-        candidate_count = int(source_image_funnel.get("candidateCount") or 0)
-        accepted_count = (
-            int(manifest.get("assetCount") or 0)
-            if str(quality.get("quality") or "") != "Reject"
-            else 0
-        )
-        fetch_failures = source_image_funnel.get("fetchFailures")
-        downloaded_count = candidate_count - (
-            len(fetch_failures) if isinstance(fetch_failures, list) else 0
-        )
-        rights_counts = {
-            "verifiedAssetCount": 0,
-            "unverifiedAssetCount": 0,
-            "restrictedAssetCount": 0,
-            "unknownAssetCount": 0,
-        }
-        for image in source_images if accepted_count else ():
-            status = MediaProvenance.from_mapping(
-                image,
+        source_asset_counts.append(
+            build_source_asset_count_row(
+                manifest=manifest,
+                source=source,
+                quality=quality,
+                source_image_funnel=source_image_funnel,
+                source_images=source_images,
                 vertical=vertical,
-            ).rights_audit_status.value
-            rights_counts[f"{status}AssetCount"] += 1
-        source_count_row = {
-            "displayName": str(manifest.get("title") or source["source_id"]),
-            "provider": str(manifest.get("platform") or "web"),
-            "plannedAssetCount": candidate_count,
-            "discoveredAssetCount": candidate_count,
-            "downloadedAssetCount": max(0, downloaded_count),
-            "acceptedAssetCount": accepted_count,
-            "rejectedAssetCount": max(0, candidate_count - accepted_count),
-            **rights_counts,
-        }
-        source_asset_counts.append(source_count_row)
+            )
+        )
         unit_dir = execution_source_unit_dir(execution_id, str(manifest.get("sourceUnitId") or ""))
         if str(quality.get("quality") or "") == "Reject":
             rejected_dir = _move_rejected_source_unit(object_dir, unit_dir, quality=quality)
@@ -581,26 +537,14 @@ def _fetch_download_entity(
                 source_images
             )
         written_source_dirs.add(unit_dir)
-        quality_rows.append(
-            {
-                "sourceId": source["source_id"],
-                "quality": quality.get("quality"),
-                "score": quality.get("score"),
-                "url": source["url"],
-                "statusCode": quality.get("statusCode", status_code),
-                "retainedFromCache": bool(quality.get("retainedFromCache")),
-            }
+        quality_row, fetched_source = accepted_source_rows(
+            source=source,
+            quality=quality,
+            entity_id=entity_id,
+            status_code=status_code,
         )
-        fetched_sources.append(
-            {
-                "sourceId": source["source_id"],
-                "url": source["url"],
-                "quality": quality.get("quality"),
-                "score": quality.get("score"),
-                "entityId": entity_id,
-                "retainedFromCache": bool(quality.get("retainedFromCache")),
-            }
-        )
+        quality_rows.append(quality_row)
+        fetched_sources.append(fetched_source)
         _write_download_progress(
             execution_id,
             status="running",
@@ -642,8 +586,6 @@ def _fetch_download_entity(
         planned_homepage_source_images=planned_homepage_source_images,
         kept_source_homepage_images=kept_source_homepage_images,
     ))
-
-
     return {
         "entityId": entity_id,
         "entityIndex": entity_index,
@@ -654,5 +596,4 @@ def _fetch_download_entity(
         "failedImage": failed_image,
         "sourcedVideoFailure": sourced_video_failure,
     }
-
 __all__ = [name for name in globals() if not name.startswith("__")]

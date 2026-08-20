@@ -6,7 +6,7 @@ import hashlib
 import json
 import re
 import subprocess
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -41,18 +41,6 @@ from content.release.canonical.research_scale_predecessor import (
 
 ENVELOPE_SCHEMA = "quwoquan_data.content_campaign_request_envelope"
 
-_OPERATIONS = {
-    "homepage": "homepage.generate", "article": "article.generate",
-    "image": "image.generate", "video": "video.generate",
-}
-_SELECTORS = {
-    "homepage": "source-ready-priority", "article": "priority",
-    "image": "priority", "video": "source-ready-priority",
-}
-_OPERATOR_PROMPTS = {
-    "homepage": "执行实体内容生成", "article": "执行文章内容生成",
-    "image": "执行图片内容生成", "video": "执行视频内容生成",
-}
 _SCOPE_TOKEN_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 _VERTICAL_RE = re.compile(r"^[a-z][a-z0-9-]*$")
 
@@ -94,7 +82,7 @@ def envelope_path(
     root: Path | None = None,
     sequence: int = 1,
 ) -> Path:
-    if carrier not in _OPERATIONS:
+    if carrier not in CAMPAIGN_CARRIERS:
         raise ValueError(f"unsupported carrier: {carrier}")
     parent = scale_root(
         scale,
@@ -195,7 +183,7 @@ def normalize_execution_scope(
 
 
 def default_family_ref(*, vertical: str, carrier: str) -> str:
-    if carrier not in _OPERATIONS:
+    if carrier not in CAMPAIGN_CARRIERS:
         raise ValueError(f"unsupported carrier: {carrier}")
     return f"content/{vertical}/{carrier}/{carrier}"
 
@@ -327,6 +315,11 @@ def write_scale_envelopes(
     scale_source_pool: Path | None = None,
     source_pool_evidence_root: Path | None = None,
     retry_evidence_output_root: Path | None = None,
+    batch_documents_factory: Callable[
+        [Mapping[str, Mapping[str, Any]], Mapping[str, Path]],
+        Mapping[str, Mapping[str, Any]],
+    ]
+    | None = None,
 ) -> dict[str, Path]:
     """Write immutable envelopes for selected carriers at one resolved scale."""
     from content.execution.campaign.request_envelope_writer import (
@@ -365,77 +358,7 @@ def write_scale_envelopes(
         scale_source_pool=scale_source_pool,
         source_pool_evidence_root=source_pool_evidence_root,
         retry_evidence_output_root=retry_evidence_output_root,
-    )
-
-
-def write_campaign_envelopes(
-    *,
-    scales: Iterable[str] | None = None,
-    quota: int | None = None,
-    region_ref: str = "china",
-    vertical: str = "travel",
-    topic: str | None = None,
-    target_names: Iterable[str] | None = None,
-    source_providers: Iterable[str] | None = None,
-    family_ref: str | None = None,
-    carriers: Iterable[str] | None = None,
-    workloads: Mapping[str, int] | None = None,
-    repo_root: Path | None = None,
-    output_root: Path | None = None,
-    day: str | None = None,
-    sequence: int = 1,
-    semantic_selection_id: str = DEFAULT_SEMANTIC_SELECTION_ID,
-    semantic_preflight_receipt: Path | None = None,
-    semantic_preflight_output_root: Path | None = None,
-    capacity_calibration_receipt: Path | None = None,
-    capacity_calibration_output_root: Path | None = None,
-    predecessor_execution_ids_by_carrier: Mapping[str, str] | None = None,
-    predecessor_reconciliation_receipt: Path | None = None,
-    reconciliation_output_root: Path | None = None,
-    promotion_receipt: Path | None = None,
-    promotion_output_root: Path | None = None,
-    pre_acquisition_handoff: Path | None = None,
-    pre_acquisition_handoff_output_root: Path | None = None,
-    external_input_refs_by_carrier: Mapping[str, Iterable[Mapping[str, Any]]] | None = None,
-    acquisition_root: Path | None = None,
-    scale_source_pool: Path | None = None,
-    source_pool_evidence_root: Path | None = None,
-) -> dict[str, dict[str, Path]]:
-    from content.execution.campaign.request_envelope_writer import (
-        write_campaign_envelopes as write_atomic_campaign_envelopes,
-    )
-
-    return write_atomic_campaign_envelopes(
-        scales=scales,
-        quota=quota,
-        region_ref=region_ref,
-        vertical=vertical,
-        topic=topic,
-        target_names=target_names,
-        source_providers=source_providers,
-        family_ref=family_ref,
-        carriers=carriers,
-        workloads=workloads,
-        repo_root=repo_root,
-        output_root=output_root,
-        day=day,
-        sequence=sequence,
-        semantic_selection_id=semantic_selection_id,
-        semantic_preflight_receipt=semantic_preflight_receipt,
-        semantic_preflight_output_root=semantic_preflight_output_root,
-        capacity_calibration_receipt=capacity_calibration_receipt,
-        capacity_calibration_output_root=capacity_calibration_output_root,
-        predecessor_execution_ids_by_carrier=predecessor_execution_ids_by_carrier,
-        predecessor_reconciliation_receipt=predecessor_reconciliation_receipt,
-        reconciliation_output_root=reconciliation_output_root,
-        promotion_receipt=promotion_receipt,
-        promotion_output_root=promotion_output_root,
-        pre_acquisition_handoff=pre_acquisition_handoff,
-        pre_acquisition_handoff_output_root=pre_acquisition_handoff_output_root,
-        external_input_refs_by_carrier=external_input_refs_by_carrier,
-        acquisition_root=acquisition_root,
-        scale_source_pool=scale_source_pool,
-        source_pool_evidence_root=source_pool_evidence_root,
+        batch_documents_factory=batch_documents_factory,
     )
 
 
@@ -450,6 +373,5 @@ __all__ = [
     "read_json",
     "reconciliation_reference",
     "scale_root",
-    "write_campaign_envelopes",
     "write_scale_envelopes",
 ]

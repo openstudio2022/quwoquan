@@ -178,12 +178,20 @@ def plan_pool_backfill(
 ) -> dict[str, Any]:
     """Derive a read-only append batch exclusively from existing evidence."""
 
-    entity_items, entity_exclusions, entity_repairs, entity_admitted = canonical_plan_items(
-        publish_root, "entities"
-    )
-    content_items, content_exclusions, content_repairs, content_admitted = canonical_plan_items(
-        publish_root, "posts"
-    )
+    (
+        entity_items,
+        entity_exclusions,
+        entity_repairs,
+        entity_admitted,
+        entity_identity_states,
+    ) = canonical_plan_items(publish_root, "entities")
+    (
+        content_items,
+        content_exclusions,
+        content_repairs,
+        content_admitted,
+        content_identity_states,
+    ) = canonical_plan_items(publish_root, "posts")
     author_items, author_exclusions, author_admitted = _author_plan_items(
         creator_pool_root, publish_root
     )
@@ -230,6 +238,10 @@ def plan_pool_backfill(
         ),
         "detailsRef": None,
         "repairRequirements": [*entity_repairs, *content_repairs],
+        "canonicalIdentityStates": [
+            *entity_identity_states,
+            *content_identity_states,
+        ],
         "batch": batch,
     }
 

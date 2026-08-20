@@ -6,7 +6,7 @@
     "schema", "result", "milestone", "workloadMode", "activeCarriers",
     "workloadTargets", "targetAttained", "checks", "authors",
     "supply", "usageScope", "environmentCapacity", "reasons", "issueCount",
-    "nextWave", "pendingDelivery", "semanticScheduling", "nextAction"
+    "nextWave", "canonicalIdentityStates", "pendingDelivery", "semanticScheduling"
   ],
   "additionalProperties": false,
   "properties": {
@@ -96,7 +96,11 @@
         }
       }
     },
-    "nextAction": {"type": "string", "minLength": 1},
+    "canonicalIdentityStates": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "canonical_identity_state_projection.schema.json"}
+    },
     "pendingDelivery": {
       "type": "array",
       "uniqueItems": true,
@@ -298,7 +302,12 @@
         "sourcePoolFileSha256": {"$ref": "#/$defs/nullableDigest"},
         "sourcePoolDigest": {"$ref": "#/$defs/nullableDigest"},
         "sourcePoolEvidenceRootRef": {"$ref": "#/$defs/nullableRef"},
-        "evidenceBindingCount": {"type": "integer", "minimum": 0}
+        "evidenceBindingCount": {"type": "integer", "minimum": 0},
+        "canonicalIdentityStates": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/sourceReadyIdentityState"}
+        }
       }
     },
     "throughputInput": {
@@ -364,6 +373,15 @@
         },
         "sourceUnitRef": {"type": "string", "minLength": 1},
         "sourceReadyEvidenceRootRef": {"type": "string", "minLength": 1}
+      }
+    },
+    "sourceReadyIdentityState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["carrier", "identityState"],
+      "properties": {
+        "carrier": {"enum": ["homepage", "article", "image", "video"]},
+        "identityState": {"$ref": "canonical_identity_state_projection.schema.json"}
       }
     }
   }

@@ -1,9 +1,8 @@
 """Build and promote approved post objects through the canonical transaction."""
+
 from __future__ import annotations
 
 import hashlib
-import json
-import os
 import shutil
 import tempfile
 from collections.abc import Mapping
@@ -47,6 +46,16 @@ from content.release.canonical.post_transaction_assets import (
 from content.release.canonical.post_transaction_assets import (
     source_assets as _source_assets,
 )
+from content.release.canonical.post_transaction_existing import (
+    reuse_existing_post_package,
+)
+from content.release.canonical.post_transaction_media import (
+    _copy_post_surface,
+    _creator_ref,
+    _final_content_ref,
+    _media_dimensions,
+    _post_asset_path,
+)
 from content.release.canonical.post_transaction_sources import (
     asset_source_use_mode as _asset_source_use_mode,
 )
@@ -59,7 +68,6 @@ from content.release.canonical.post_transaction_sources import (
 from core.content_library import link_from_library
 from core.control_types import SourcePolicyRevision
 from core.paths import OUTPUT_ROOT, PUBLISH_ROOT, now_iso
-from core.schema import assert_valid
 from core.source_digest import (
     ExecutionBundleIdentity,
     SourceDefinitionSnapshot,
@@ -70,78 +78,6 @@ from governance.coverage.license import (
     RightsAuditStatus,
     parse_rights_audit_status,
 )
-
-
-def _post_asset_path(post_root: Path, raw: Mapping[str, Any]) -> Path:
-    file_name = str(raw.get("fileName") or "").strip()
-    if not file_name:
-        raise ObjectTransactionError("post manifest asset 缺 fileName")
-    relative = _safe_rel(file_name, label="manifest.assets.fileName")
-    direct = post_root / relative
-    nested = post_root / "assets" / relative
-    path = direct if direct.is_file() else nested
-    if not path.is_file():
-        raise ObjectTransactionError(f"post manifest asset 不存在：{file_name}")
-    return path
-
-
-def _media_dimensions(path: Path, raw: Mapping[str, Any]) -> tuple[int, int, str]:
-    mime = str(raw.get("mimeType") or "").strip()
-    if mime.startswith("video/"):
-        width = int(raw.get("width") or 0)
-        height = int(raw.get("height") or 0)
-        if width < 1 or height < 1:
-            raise ObjectTransactionError(f"video asset 缺有效尺寸：{path}")
-        return width, height, mime
-    from core.image_decode import probe_image_path
-
-    probe = probe_image_path(path)
-    if not probe.succeeded:
-        raise ObjectTransactionError(f"post image asset 不可解析：{path}: {probe.failure.value}")
-    resolved_mime = probe.mime_type or mime
-    if probe.width < 1 or probe.height < 1 or not resolved_mime.startswith("image/"):
-        raise ObjectTransactionError(f"post image asset 缺有效尺寸或 MIME：{path}")
-    return probe.width, probe.height, resolved_mime
-
-
-def _copy_post_surface(source: Path, target: Path) -> None:
-    """Copy the reviewed post surface into the transaction package.
-
-    The package still carries the bodies alongside the documents, because the
-    transaction is what admits them into the content library. Which of those
-    files canonical publish ends up owning is decided once, in
-    ``build_transaction_delta``, not by what is copied here.
-    """
-    for name in ("article.md", "video.md", "provenance.json", "subtitles.vtt"):
-        path = source / name
-        if path.is_file():
-            shutil.copy2(path, target / name)
-    assets = source / "assets"
-    if assets.is_dir():
-        shutil.copytree(assets, target / "assets")
-
-
-def _final_content_ref(target: Path, *, holds_media: bool) -> str:
-    """Name the document a consumer opens first for one canonical post.
-
-    It must name a document, because canonical publish holds no media body: an
-    image post therefore points at its asset reference record, which is the
-    surface that resolves the work's bodies in the content library.
-    """
-    if (target / "article.md").is_file():
-        return "article.md"
-    if (target / "video.md").is_file():
-        return "video.md"
-    if holds_media:
-        return "asset.refs.json"
-    raise ObjectTransactionError("post object has no final publishable content")
-
-
-def _creator_ref(manifest: Mapping[str, Any]) -> str:
-    ref = str(manifest.get("creatorProfileId") or "").strip()
-    if not ref:
-        raise ObjectTransactionError("post manifest 缺 creatorProfileId")
-    return _safe_id(ref, label="creatorProfileId")
 
 
 def build_post_object_transaction_package(
@@ -171,7 +107,9 @@ def build_post_object_transaction_package(
         execution_root=execution_root,
         execution_manifest=manifest,
     )
-    canonical_ref = _safe_rel(object_ref.removeprefix("posts/"), label="objectRef").as_posix()
+    canonical_ref = _safe_rel(
+        object_ref.removeprefix("posts/"), label="objectRef"
+    ).as_posix()
     source = execution_root / "posts" / canonical_ref
     source_manifest = _read_json(source / "manifest.json")
     # Pool delivery freezes the reviewed object with the repository-wide Merkle
@@ -231,9 +169,7 @@ def build_post_object_transaction_package(
         for key, expected in expected_intent_bindings.items()
         if delivery_intent.get(key) != expected
     )
-    reservation_id = str(
-        delivery_intent.get("poolIdentityReservationId") or ""
-    )
+    reservation_id = str(delivery_intent.get("poolIdentityReservationId") or "")
     if not reservation_id.startswith("sha256:"):
         drifted_bindings.append("poolIdentityReservationId")
     if drifted_bindings:
@@ -242,160 +178,20 @@ def build_post_object_transaction_package(
             + ",".join(drifted_bindings)
         )
     if package_root.exists():
-        existing = _read_json(package_root / "object_transaction_package.json")
-        if (
-            existing.get("transactionId") == transaction_id
-            and existing.get("executionId") == execution_id
-            and existing.get("inputPayloadDigest") == input_payload_digest
-        ):
-            rights_path = package_root / "object/rights.json"
-            rights = _read_json(rights_path)
-            package_mode = existing.get("publishMediaMode")
-            rights_mode = rights.get("publishMediaMode")
-            if package_mode is None or rights_mode is None:
-                run_root = (
-                    OUTPUT_ROOT
-                    / "data/local/workspace/object-transactions"
-                    / transaction_id
-                )
-                packaged_manifest = _read_json(package_root / "object/manifest.json")
-                closure = existing.get("closure")
-                if (
-                    (run_root / "audit_report.json").exists()
-                    or (run_root / "apply_report.json").exists()
-                    or package_mode not in {None, "text_only"}
-                    or rights_mode not in {None, "text_only"}
-                    or existing.get("target", {}).get("objectKind") != "posts"
-                    or existing.get("target", {}).get("objectRef") != canonical_ref
-                    or not isinstance(closure, Mapping)
-                    or closure.get("rightsRef") != "rights.json"
-                    or closure.get("casRefs") != []
-                    or packaged_manifest.get("publishMediaMode") != "text_only"
-                    or packaged_manifest.get("assets") != []
-                    or rights.get("assets") != []
-                    or any(
-                        packaged_manifest.get(key) != value
-                        for key, value in creator_binding.items()
-                    )
-                ):
-                    raise ObjectTransactionError(
-                        "DATA.POOL.IDEMPOTENCY_CONFLICT: "
-                        "pre-media-mode package contract drift"
-                    )
-            if rights_mode is None:
-                rights = {**rights, "publishMediaMode": "text_only"}
-                try:
-                    assert_valid(
-                        rights,
-                        "release",
-                        "asset_rights_closure",
-                        label="object_transaction_asset_rights_closure",
-                    )
-                except (ValueError, FileNotFoundError) as exc:
-                    raise ObjectTransactionError(str(exc)) from exc
-                encoded = (
-                    json.dumps(rights, ensure_ascii=False, indent=2, sort_keys=True)
-                    + "\n"
-                ).encode("utf-8")
-                temporary = package_root / "object/.rights.json.upgrade"
-                descriptor = os.open(
-                    temporary,
-                    os.O_WRONLY | os.O_CREAT | os.O_EXCL,
-                    0o600,
-                )
-                try:
-                    with os.fdopen(descriptor, "wb") as handle:
-                        handle.write(encoded)
-                        handle.flush()
-                        os.fsync(handle.fileno())
-                    os.replace(temporary, rights_path)
-                finally:
-                    temporary.unlink(missing_ok=True)
-            if package_mode is None or rights_mode is None:
-                object_root = package_root / "object"
-                closure = existing["closure"]
-                pool_record_path = object_root / "_pool/versions/1.json"
-                pool_record = _read_json(pool_record_path)
-                if (
-                    pool_record.get("objectId")
-                    != packaged_manifest.get("contentId")
-                    or pool_record.get("contentVersion")
-                    != packaged_manifest.get("version")
-                    or pool_record.get("recordSequence") != 1
-                ):
-                    raise ObjectTransactionError(
-                        "DATA.POOL.IDEMPOTENCY_CONFLICT: "
-                        "pre-media-mode pool record drift"
-                    )
-                refreshed_pool_record = build_canonical_pool_record(
-                    object_root=object_root,
-                    object_type="content",
-                    object_ref=canonical_ref,
-                )
-                refreshed_pool_record["recordSequence"] = 1
-                if any(
-                    refreshed_pool_record.get(key) != value
-                    for key, value in pool_record.items()
-                    if key not in {"payloadDigest", "canonicalObjectDigest"}
-                ):
-                    raise ObjectTransactionError(
-                        "DATA.POOL.IDEMPOTENCY_CONFLICT: "
-                        "pre-media-mode pool record drift"
-                    )
-                _write_json(pool_record_path, refreshed_pool_record)
-                review_binding = _review_binding(object_root, existing)
-                existing = {
-                    **existing,
-                    "publishMediaMode": "text_only",
-                    "objectClosureDigest": _closure_digest(
-                        object_root=object_root,
-                        object_kind="posts",
-                        object_ref=canonical_ref,
-                        target_schema=EXPECTED_OBJECT_SCHEMAS["posts"],
-                        source_policy_revision=str(
-                            existing.get("sourcePolicyRevision") or ""
-                        ),
-                        closure=closure,
-                        cas_rows=[],
-                        review=review_binding,
-                    ),
-                }
-                try:
-                    assert_valid(
-                        existing,
-                        "release",
-                        "object_transaction_package",
-                        label="object_transaction_package",
-                    )
-                except (ValueError, FileNotFoundError) as exc:
-                    raise ObjectTransactionError(str(exc)) from exc
-                encoded = (
-                    json.dumps(existing, ensure_ascii=False, indent=2, sort_keys=True)
-                    + "\n"
-                ).encode("utf-8")
-                package_path = package_root / "object_transaction_package.json"
-                temporary = package_root / ".object_transaction_package.json.upgrade"
-                descriptor = os.open(
-                    temporary,
-                    os.O_WRONLY | os.O_CREAT | os.O_EXCL,
-                    0o600,
-                )
-                try:
-                    with os.fdopen(descriptor, "wb") as handle:
-                        handle.write(encoded)
-                        handle.flush()
-                        os.fsync(handle.fileno())
-                    os.replace(temporary, package_path)
-                finally:
-                    temporary.unlink(missing_ok=True)
-            return existing
-        raise ObjectTransactionError(
-            "DATA.POOL.IDEMPOTENCY_CONFLICT: "
-            f"sourceTaskId={execution_id} objectId={canonical_ref} payloadDigest drift"
+        return reuse_existing_post_package(
+            package_root=package_root,
+            transaction_id=transaction_id,
+            execution_id=execution_id,
+            input_payload_digest=input_payload_digest,
+            canonical_ref=canonical_ref,
+            creator_binding=creator_binding,
+            output_root=OUTPUT_ROOT,
         )
 
     package_root.parent.mkdir(parents=True, exist_ok=True)
-    staging = Path(tempfile.mkdtemp(prefix=f".{package_root.name}.", dir=package_root.parent))
+    staging = Path(
+        tempfile.mkdtemp(prefix=f".{package_root.name}.", dir=package_root.parent)
+    )
     try:
         object_root = staging / "object"
         object_root.mkdir(parents=True)
@@ -428,7 +224,9 @@ def build_post_object_transaction_package(
             cas_ref = Path("cas") / f"{digest_hex}.{suffix}"
             cas_target = staging / cas_ref
             cas_target.parent.mkdir(parents=True, exist_ok=True)
-            link_from_library(asset_source, cas_target, kind="media", expected_sha256=digest_hex)
+            link_from_library(
+                asset_source, cas_target, kind="media", expected_sha256=digest_hex
+            )
             width, height, mime = _media_dimensions(asset_source, raw)
             related_sources = _asset_sources(raw, source_assets)
             primary_source = related_sources[0] if related_sources else {}
@@ -503,7 +301,9 @@ def build_post_object_transaction_package(
                     "authorizationProof: not independently verified for research distribution"
                 )
             if not all((source_url, fetched_at)):
-                raise ObjectTransactionError(f"post asset 权利审计字段不完整：{asset_id}")
+                raise ObjectTransactionError(
+                    f"post asset 权利审计字段不完整：{asset_id}"
+                )
             effective_license_name = license_name or "unknown"
             if (
                 rights_audit_status is not RightsAuditStatus.VERIFIED
@@ -581,55 +381,57 @@ def build_post_object_transaction_package(
             if usage_scope == "internal_reference":
                 usage_scope = "editorial"
             rights_row = {
-                    "assetId": asset_id,
-                    "sourceKind": str(primary_source.get("platform") or "source_catalog"),
-                    "sourceUseMode": source_use_mode,
-                    "canonicalFilePage": source_url,
-                    "snapshotUrl": source_url,
-                    "pageRevision": _digest_file(snapshot_path),
-                    "originalAssetUrl": _https(primary_source.get("url"), source_url),
-                    "author": author,
-                    "source": _https(raw.get("collectionPageUrl"), primary_source.get("collectionPageUrl"), source_url),
-                    "licenseName": effective_license_name,
-                    "licenseShortName": effective_license_name,
-                    "licenseUrl": license_url,
-                    "usageScope": usage_scope,
-                    "attribution": (
-                        f"{raw.get('caption') or asset_id!s}，"
-                        + (
-                            f"作者：{author}，许可：{effective_license_name}"
-                            if rights_audit_status is RightsAuditStatus.VERIFIED
-                            else "来源已记录，作者与许可尚未核实"
-                        )
-                    ),
-                    "caption": str(raw.get("caption") or ""),
-                    "captionSource": "captured source asset metadata",
-                    "modifications": "post composition and delivery encoding when applicable",
-                    "fetchedAt": fetched_at,
-                    "snapshot": {
-                        "ref": snapshot_ref.as_posix(),
-                        "sha256": _digest_file(snapshot_path),
-                        "bytes": snapshot_path.stat().st_size,
-                    },
-                    "asset": {
-                        "ref": cas_ref.as_posix(),
-                        "sha256": digest,
-                        "bytes": asset_source.stat().st_size,
-                        "mimeType": mime,
-                        "width": width,
-                        "height": height,
-                    },
-                    "authorizationProof": authorization_proof,
-                    "distributionDecision": distribution_decision,
-                    "rightsAuditStatus": rights_audit_status.value,
-                    "rightsAuditIssues": rights_audit_issues,
-                    "modelReleaseStatus": model_release_status,
-                }
+                "assetId": asset_id,
+                "sourceKind": str(primary_source.get("platform") or "source_catalog"),
+                "sourceUseMode": source_use_mode,
+                "canonicalFilePage": source_url,
+                "snapshotUrl": source_url,
+                "pageRevision": _digest_file(snapshot_path),
+                "originalAssetUrl": _https(primary_source.get("url"), source_url),
+                "author": author,
+                "source": _https(
+                    raw.get("collectionPageUrl"),
+                    primary_source.get("collectionPageUrl"),
+                    source_url,
+                ),
+                "licenseName": effective_license_name,
+                "licenseShortName": effective_license_name,
+                "licenseUrl": license_url,
+                "usageScope": usage_scope,
+                "attribution": (
+                    f"{raw.get('caption') or asset_id!s}，"
+                    + (
+                        f"作者：{author}，许可：{effective_license_name}"
+                        if rights_audit_status is RightsAuditStatus.VERIFIED
+                        else "来源已记录，作者与许可尚未核实"
+                    )
+                ),
+                "caption": str(raw.get("caption") or ""),
+                "captionSource": "captured source asset metadata",
+                "modifications": "post composition and delivery encoding when applicable",
+                "fetchedAt": fetched_at,
+                "snapshot": {
+                    "ref": snapshot_ref.as_posix(),
+                    "sha256": _digest_file(snapshot_path),
+                    "bytes": snapshot_path.stat().st_size,
+                },
+                "asset": {
+                    "ref": cas_ref.as_posix(),
+                    "sha256": digest,
+                    "bytes": asset_source.stat().st_size,
+                    "mimeType": mime,
+                    "width": width,
+                    "height": height,
+                },
+                "authorizationProof": authorization_proof,
+                "distributionDecision": distribution_decision,
+                "rightsAuditStatus": rights_audit_status.value,
+                "rightsAuditIssues": rights_audit_issues,
+                "modelReleaseStatus": model_release_status,
+            }
             if independent_review is not None:
                 rights_row.update(
-                    acquisitionReceiptRef=independent_review[
-                        "acquisitionReceiptRef"
-                    ],
+                    acquisitionReceiptRef=independent_review["acquisitionReceiptRef"],
                     independentAssetReview=independent_review,
                 )
             rights_rows.append(rights_row)
@@ -658,9 +460,13 @@ def build_post_object_transaction_package(
                 )
             )
         freeze_canonical_video_poster_identities(canonical_assets)
-        publish_media_mode = str(effective_source_manifest.get("publishMediaMode") or "").strip()
+        publish_media_mode = str(
+            effective_source_manifest.get("publishMediaMode") or ""
+        ).strip()
         if not cas_rows and publish_media_mode != "text_only":
-            raise ObjectTransactionError("post transaction requires at least one rights-bound asset")
+            raise ObjectTransactionError(
+                "post transaction requires at least one rights-bound asset"
+            )
         final_content_ref = _final_content_ref(
             object_root,
             holds_media=bool(cas_rows),
@@ -677,7 +483,11 @@ def build_post_object_transaction_package(
             "treeDigest": _tree_digest(creator_root),
         }
         tag_refs = sorted(
-            {str(item).strip() for item in effective_source_manifest.get("tagRefs") or [] if str(item).strip()}
+            {
+                str(item).strip()
+                for item in effective_source_manifest.get("tagRefs") or []
+                if str(item).strip()
+            }
         )
         _write_json(object_root / "creator.refs.json", {"creatorRefs": [creator_ref]})
         _write_json(object_root / "tag.refs.json", {"tagRefs": tag_refs})
@@ -762,9 +572,7 @@ def build_post_object_transaction_package(
             "executionId": execution_id,
             "inputPayloadDigest": input_payload_digest,
             "publishMediaMode": (
-                "text_only"
-                if publish_media_mode == "text_only"
-                else "embedded_media"
+                "text_only" if publish_media_mode == "text_only" else "embedded_media"
             ),
             "sourcePolicyRevision": source_policy,
             "target": {

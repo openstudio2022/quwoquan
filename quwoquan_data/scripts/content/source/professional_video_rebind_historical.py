@@ -1,7 +1,7 @@
 """Minimal immutable checks for historical professional-video evidence.
 
 Historical manifests and receipts are evidence, not documents to migrate in
-place.  Their canonical document digests bind every legacy field, while fresh
+place.  Their canonical document digests bind every retired field, while fresh
 rebind output is independently validated against the current schema.  This
 module therefore validates only the immutable identity/digest envelope; CAS
 and per-asset provenance are checked by the rebind/frozen-asset consumers.
@@ -101,7 +101,7 @@ def validate_historical_video_manifest(value: object) -> dict[str, Any]:
 
 
 def validate_historical_video_receipt(value: object) -> dict[str, Any]:
-    """Validate immutable receipt identity/digest, ignoring legacy projections."""
+    """Validate immutable receipt identity/digest, ignoring retired projections."""
     if not isinstance(value, dict):
         raise HistoricalVideoEvidenceError("historical video receipt must be an object")
     if value.get("schema") != _RECEIPT_SCHEMA:

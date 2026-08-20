@@ -1,6 +1,6 @@
 """Strict, target-scoped relevance evidence for article base-source planning.
 
-The legacy ``entityFocusScore`` counts the full length of every line containing
+The coarse ``entityFocusScore`` counts the full length of every line containing
 an aggressively shortened alias.  A city-wide page can therefore outrank an
 exact entity page merely because one long paragraph mentions the target once.
 This module deliberately uses only the canonical target and aliases frozen in

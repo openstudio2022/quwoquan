@@ -3,6 +3,7 @@ from __future__ import annotations
 from content.execution.coverage import coverage_entity_type, coverage_entity_type_for_entity
 from content.execution.support import Any, DataIssue, DataIssueCode, DataIssueStage, DataIssueLane, DataRecoveryAction, ExecutionContext, Mapping, Path, article_commercial_closure_enabled, data_issue, data_issues, execution_content_plan_packet_path, execution_root, image_count_is_hard_quota, minimum_publishable_images_per_target, read_json, relative_execution_ref, write_json
 from content.execution.controller.content_plan_assets import (
+    _canonical_image_asset_issue,
     article_asset_claims as _article_asset_claims,
     asset_ref as _asset_ref, asset_rows as _asset_rows, asset_sha as _asset_sha,
     claim as _claim, claims_conflict as _claims_conflict,
@@ -16,12 +17,7 @@ from content.execution.controller.content_plan_decisions import (
     missing_source_diagnostic,
     persist_content_plan_shortfall_absorb as _persist_content_plan_shortfall_absorb,
 )
-from core.entity_focus import (
-    VERDICT_STRONG as _VERDICT_STRONG,
-    classify_entity_focus as _classify_entity_focus,
-    coverage_targets_mentioned as _coverage_targets_mentioned,
-)
-
+from core.entity_focus import VERDICT_STRONG as _VERDICT_STRONG, classify_entity_focus as _classify_entity_focus, coverage_targets_mentioned as _coverage_targets_mentioned
 def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) -> list[DataIssue]:
     """Build exact per-entity content plans from validated source units."""
     from content.execution.controller.content_plan_prep import _article_source_quality_sort_key, _assess_content_plan_publish_image, _clean_content_plan_outputs
@@ -262,6 +258,9 @@ def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) ->
                     asset_path = root / asset_ref
                     if not asset_path.is_file():
                         rejects.reject_image("asset_file_missing", source_id, asset_ref)
+                        continue
+                    if _canonical_image_asset_issue(source_dir, row):
+                        rejects.reject_image("canonical_duplicate", source_id, asset_ref)
                         continue
                     verdict = _assess_content_plan_publish_image(asset_path, ctx)
                     if verdict.blocks_image_publish:

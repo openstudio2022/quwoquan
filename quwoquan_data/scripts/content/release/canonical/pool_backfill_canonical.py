@@ -14,6 +14,9 @@ from content.release.canonical.content_pool_record import (
     iter_pool_records,
     pool_payload_digest,
 )
+from content.release.canonical.canonical_identity_state import (
+    CanonicalIdentityStateQuery,
+)
 from content.release.canonical.object_source_identity import (
     validate_object_source_identity,
 )
@@ -243,18 +246,45 @@ def canonical_plan_items(
     list[dict[str, str]],
     list[dict[str, Any]],
     list[dict[str, str]],
+    list[dict[str, Any]],
 ]:
     object_type = "homepage" if kind == "entities" else "content"
     items: list[dict[str, Any]] = []
     exclusions: list[dict[str, str]] = []
     repair_requirements: list[dict[str, Any]] = []
     already_admitted: list[dict[str, str]] = []
+    identity_states: list[dict[str, Any]] = []
     root = publish_root / kind
+    identity_query = CanonicalIdentityStateQuery(publish_root=publish_root)
     video_digests = _video_digests(root) if kind == "posts" else Counter()
     for manifest_path in sorted(root.rglob("manifest.json")) if root.is_dir() else []:
         object_root = manifest_path.parent
         object_ref = object_root.relative_to(root).as_posix()
         manifest = _read_json(manifest_path)
+        identity_state = identity_query.get(
+            object_type=object_type,
+            object_ref=f"{kind}/{object_ref}",
+        )
+        identity_states.append(identity_state)
+        if identity_state["state"].startswith("invalid_"):
+            exclusions.append(
+                {
+                    "objectType": object_type,
+                    "objectRef": object_ref,
+                    "reason": str(identity_state["deepestError"]),
+                }
+            )
+            repair_requirements.append(identity_state)
+            continue
+        if identity_state["state"] == "terminated":
+            exclusions.append(
+                {
+                    "objectType": object_type,
+                    "objectRef": object_ref,
+                    "reason": "DATA.POOL.IDENTITY_TERMINATED",
+                }
+            )
+            continue
         passed, evidence_path = object_evidence(object_root)
         process_result = "completed" if passed else "failed"
         quality_result = "passed" if passed else "failed"
@@ -395,7 +425,13 @@ def canonical_plan_items(
         if reason:
             item["reason"] = reason
         items.append(item)
-    return items, exclusions, repair_requirements, already_admitted
+    return (
+        items,
+        exclusions,
+        repair_requirements,
+        already_admitted,
+        identity_states,
+    )
 
 
 __all__ = [

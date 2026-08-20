@@ -320,8 +320,6 @@ def _require_phase_args(args: argparse.Namespace) -> None:
         raise ValueError(
             "--scale-source-pool and --source-pool-evidence-root must be provided together"
         )
-    if scale not in {"M100", "M1000", "M10000"} and any(pool_values):
-        raise ValueError("below-M100 envelopes forbid scale source pool inputs")
 def _workload_targets(scale: str) -> dict[str, int]:
     return campaign_workload_targets(scale)
 

@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/canonical_identity_state_projection.schema.json",
+  "title": "Canonical identity state query projection",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "objectType", "objectId", "objectRef", "state",
+    "deepestError", "recoveryAction", "optimisticSnapshotToken",
+    "contentVersion", "recordSequence", "terminalFact"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.canonical_identity_state_projection"},
+    "objectType": {"enum": ["homepage", "content"]},
+    "objectId": {"type": ["string", "null"], "minLength": 1},
+    "objectRef": {"type": "string", "minLength": 1},
+    "state": {
+      "enum": [
+        "absent", "admitted_current", "invalid_record_repairable",
+        "invalid_payload_rebuildable", "invalid_unrepairable", "terminated"
+      ]
+    },
+    "deepestError": {
+      "type": ["string", "null"],
+      "pattern": "^DATA\\.[A-Z0-9_.]+$"
+    },
+    "recoveryAction": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/recoveryAction"}
+      ]
+    },
+    "optimisticSnapshotToken": {"$ref": "#/$defs/digest"},
+    "contentVersion": {"type": ["integer", "null"], "minimum": 1},
+    "recordSequence": {"type": ["integer", "null"], "minimum": 1},
+    "terminalFact": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/terminalProjection"}
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"state": {"const": "absent"}}, "required": ["state"]},
+      "then": {
+        "properties": {
+          "objectId": {"type": "null"},
+          "deepestError": {"type": "null"},
+          "recoveryAction": {"type": "null"},
+          "contentVersion": {"type": "null"},
+          "recordSequence": {"type": "null"},
+          "terminalFact": {"type": "null"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"state": {"const": "admitted_current"}}, "required": ["state"]},
+      "then": {
+        "properties": {
+          "objectId": {"type": "string"},
+          "deepestError": {"type": "null"},
+          "recoveryAction": {"type": "null"},
+          "contentVersion": {"type": "integer", "minimum": 1},
+          "recordSequence": {"type": "integer", "minimum": 1},
+          "terminalFact": {"type": "null"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"state": {"const": "invalid_record_repairable"}}, "required": ["state"]},
+      "then": {"$ref": "#/$defs/recordRepairable"}
+    },
+    {
+      "if": {"properties": {"state": {"const": "invalid_payload_rebuildable"}}, "required": ["state"]},
+      "then": {"$ref": "#/$defs/payloadRebuildable"}
+    },
+    {
+      "if": {"properties": {"state": {"const": "invalid_unrepairable"}}, "required": ["state"]},
+      "then": {"$ref": "#/$defs/unrepairable"}
+    },
+    {
+      "if": {"properties": {"state": {"const": "terminated"}}, "required": ["state"]},
+      "then": {
+        "properties": {
+          "objectId": {"type": "string"},
+          "deepestError": {"const": "DATA.POOL.IDENTITY_TERMINATED"},
+          "recoveryAction": {"type": "null"},
+          "contentVersion": {"type": "integer", "minimum": 1},
+          "recordSequence": {"type": "integer", "minimum": 1},
+          "terminalFact": {"$ref": "#/$defs/terminalProjection"}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "recoveryAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command", "action"],
+      "properties": {
+        "command": {"const": "resolve_invalid_canonical_identity"},
+        "action": {"enum": ["record_repair", "payload_rebuild", "terminate"]}
+      }
+    },
+    "invalidBase": {
+      "properties": {
+        "objectId": {"type": "string"},
+        "deepestError": {"type": "string", "pattern": "^DATA\\.[A-Z0-9_.]+$"},
+        "contentVersion": {"type": "integer", "minimum": 1},
+        "recordSequence": {"type": "integer", "minimum": 1},
+        "terminalFact": {"type": "null"}
+      }
+    },
+    "recordRepairable": {
+      "allOf": [
+        {"$ref": "#/$defs/invalidBase"},
+        {"properties": {"recoveryAction": {"properties": {"action": {"const": "record_repair"}}}}}
+      ]
+    },
+    "payloadRebuildable": {
+      "allOf": [
+        {"$ref": "#/$defs/invalidBase"},
+        {"properties": {"recoveryAction": {"properties": {"action": {"const": "payload_rebuild"}}}}}
+      ]
+    },
+    "unrepairable": {
+      "allOf": [
+        {"$ref": "#/$defs/invalidBase"},
+        {"properties": {"recoveryAction": {"properties": {"action": {"const": "terminate"}}}}}
+      ]
+    },
+    "terminalProjection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "terminalReason", "nextAction"],
+      "properties": {
+        "ref": {"type": "string", "minLength": 1},
+        "terminalReason": {
+          "enum": [
+            "immutable_evidence_unavailable", "identity_collision_unrecoverable",
+            "operator_closed_intent"
+          ]
+        },
+        "nextAction": {"enum": ["select_new_identity", "close_intent"]}
+      }
+    }
+  }
+}

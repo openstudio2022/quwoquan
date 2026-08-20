@@ -45,105 +45,14 @@ from content.execution.identity import parse_execution_id
 from content.execution.workspace import entity_catalog_digest
 
 
-def _source_drift_successor(
-    plan: Mapping[str, Any],
-    report: Mapping[str, Any],
-    runtime: Mapping[str, Any],
-) -> bool:
-    distributed = plan.get("distributedRun")
-    if not isinstance(distributed, Mapping):
-        return False
-    failure = (
-        "ValueError: campaign sourceDigest drift: "
-        f"frozen={plan.get('sourceDigest')} current="
-    )
-    return (
-        report.get("status") == "blocked"
-        and report.get("phase") == "freeze"
-        and report.get("planDigest") is None
-        and report.get("sourceDigest") is None
-        and report.get("entityCatalogDigest") is None
-        and str(report.get("failure") or "").startswith(failure)
-        and runtime.get("status") == "blocked"
-        and runtime.get("phase") == "freeze"
-        and runtime.get("planDigest") is None
-        and runtime.get("lanes") == {}
-        and bool(runtime.get("finishedAt"))
-        and runtime.get("failure") == report.get("failure")
-        and runtime.get("runId") == report.get("campaignRunId")
-        and runtime.get("generation") == report.get("campaignGeneration")
-        and runtime.get("fencingToken") == report.get("campaignFencingToken")
-        and int(runtime.get("generation") or 0)
-        == int(distributed.get("campaignGeneration") or 0) + 1
-        and runtime.get("runId") != distributed.get("campaignRunId")
-    )
-def _terminalize_dead_source_drift_claims(
-    root_id: str,
-    *,
-    output_root: Path,
-) -> None:
-    campaign = campaigns_root(output_root) / root_id
-    plan = read_json(campaign / "campaign_plan.json")
-    report = read_json(campaign / "campaign_report.json")
-    runtime = read_json(campaign / "runtime/snapshot.json")
-    if not all(isinstance(item, Mapping) for item in (plan, report, runtime)):
-        return
-    if not _source_drift_successor(plan, report, runtime):
-        return
-    distributed = plan["distributedRun"]
-    for carrier in CAMPAIGN_CARRIERS:
-        path = campaign / "claims" / f"{carrier}.json"
-        claim = read_json(path)
-        if not isinstance(claim, dict) or claim.get("status") not in {
-            "active",
-            "starting",
-            "running",
-        }:
-            continue
-        execution_root = Path(str(claim.get("executionRoot") or ""))
-        if (
-            claim.get("rootExecutionId") != root_id
-            or claim.get("carrier") != carrier
-            or claim.get("planDigest") != plan.get("planDigest")
-            or claim.get("campaignRunId") != distributed.get("campaignRunId")
-            or claim.get("campaignGeneration")
-            != distributed.get("campaignGeneration")
-            or claim.get("campaignFencingToken")
-            != distributed.get("campaignFencingToken")
-            or _pid_alive(claim.get("pid"))
-            or _pid_alive(claim.get("pgid"))
-            or execution_root.exists()
-        ):
-            raise typed(
-                "CAMPAIGN_NOT_TERMINAL_FAILED",
-                f"{carrier} source-drift claim is still live or identity-drifted",
-            )
-        now = _now()
-        claim.update(
-            {
-                "status": "failed",
-                "phase": "completed",
-                "returnCode": (
-                    claim["returnCode"]
-                    if isinstance(claim.get("returnCode"), int)
-                    and claim["returnCode"] != 0
-                    else 130
-                ),
-                "error": str(claim.get("error") or "").strip()
-                or "DATA.CAMPAIGN.LANE_PROCESS_GONE_AFTER_SOURCE_DRIFT",
-                "terminationOwner": claim.get("terminationOwner")
-                or "external_or_kernel",
-                "updatedAt": now,
-                "finishedAt": now,
-            }
-        )
-        assert_valid(
-            claim,
-            "execution",
-            "content_campaign_lane_claim",
-            label=f"source-drift terminal campaign lane claim:{carrier}",
-        )
-        write_json(path, claim)
+from content.execution.campaign.failed_execution_claim_terminalization import (
+    _terminalize_dead_source_drift_claims,
+)
+from content.execution.campaign.failed_execution_reconciliation_source_drift import (
+    source_drift_successor as _source_drift_successor,
+)
+
+
 def _failed_campaign_evidence(
     root_id: str,
     *,

@@ -1,6 +1,5 @@
 """Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
-
 from core.control_types import ExecutionStage, StageStatus
 from core.data_issue import DataIssue
 

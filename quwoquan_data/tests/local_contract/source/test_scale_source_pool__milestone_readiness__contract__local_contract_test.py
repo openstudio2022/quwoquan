@@ -80,9 +80,11 @@ def _byte_digest(value: bytes) -> str:
     return "sha256:" + hashlib.sha256(value).hexdigest()
 
 
-def _lane_selections() -> dict[str, dict[str, object]]:
+def _lane_selections(
+    carriers: tuple[str, ...] = ("homepage", "article", "image", "video"),
+) -> dict[str, dict[str, object]]:
     selections: dict[str, dict[str, object]] = {}
-    for carrier in ("homepage", "article", "image", "video"):
+    for carrier in carriers:
         stable: dict[str, object] = {
             "carrier": carrier,
             "candidateIds": [f"{carrier}-00000"],
@@ -120,43 +122,59 @@ def _candidate(carrier: str, index: int, *, provider: str) -> dict[str, object]:
         "entityRef": entity_ref,
         "observedEntityRef": entity_ref,
         **IDENTITY,
-        "sourceUnitRef": EVIDENCE_PAYLOADS["sourceUnit"][0],
-        "sourceUnitDigest": _digest(f"source-unit:{carrier}:{index}"),
-        "sourceUnitFileSha256": _byte_digest(EVIDENCE_PAYLOADS["sourceUnit"][1]),
         "provider": provider,
         "contentSha256": _digest(f"content:{carrier}:{index}"),
         "acquisitionStatus": "acquired",
-        "acquisitionRef": EVIDENCE_PAYLOADS["acquisition"][0],
-        "acquisitionDigest": _digest(f"acquisition:{carrier}:{index}"),
-        "acquisitionFileSha256": _byte_digest(EVIDENCE_PAYLOADS["acquisition"][1]),
         "rightsStatus": "unverified",
         "distributionDecision": "research_allowed",
-        "rightsRef": EVIDENCE_PAYLOADS["rights"][0],
-        "rightsDigest": _digest(f"rights:{carrier}:{index}"),
-        "rightsFileSha256": _byte_digest(EVIDENCE_PAYLOADS["rights"][1]),
         "qualityStatus": "passed",
-        "qualityRef": EVIDENCE_PAYLOADS["quality"][0],
-        "qualityDigest": _digest(f"quality:{carrier}:{index}"),
-        "qualityFileSha256": _byte_digest(EVIDENCE_PAYLOADS["quality"][1]),
         "generated": False,
-        "playabilityRef": None,
-        "playabilityDigest": None,
-        "playabilityFileSha256": None,
         "videoReadiness": None,
     }
     if carrier in {"homepage", "article"}:
-        candidate["sourceReadyEvidenceRootRef"] = "."
-        candidate["sourceAttribution"] = _source_attribution(carrier, index)
+        candidate.update(
+            {
+                "sourceReadyEvidenceRootRef": ".",
+                "sourceAttribution": _source_attribution(carrier, index),
+                "sourceUnitRef": EVIDENCE_PAYLOADS["sourceUnit"][0],
+                "sourceUnitDigest": _digest(f"source-unit:{carrier}:{index}"),
+                "sourceUnitFileSha256": _byte_digest(
+                    EVIDENCE_PAYLOADS["sourceUnit"][1]
+                ),
+                "acquisitionRef": EVIDENCE_PAYLOADS["acquisition"][0],
+                "acquisitionDigest": _digest(f"acquisition:{carrier}:{index}"),
+                "acquisitionFileSha256": _byte_digest(
+                    EVIDENCE_PAYLOADS["acquisition"][1]
+                ),
+                "rightsRef": EVIDENCE_PAYLOADS["rights"][0],
+                "rightsDigest": _digest(f"rights:{carrier}:{index}"),
+                "rightsFileSha256": _byte_digest(EVIDENCE_PAYLOADS["rights"][1]),
+                "qualityRef": EVIDENCE_PAYLOADS["quality"][0],
+                "qualityDigest": _digest(f"quality:{carrier}:{index}"),
+                "qualityFileSha256": _byte_digest(
+                    EVIDENCE_PAYLOADS["quality"][1]
+                ),
+                "playabilityRef": None,
+                "playabilityDigest": None,
+                "playabilityFileSha256": None,
+            }
+        )
+    else:
+        candidate.update(
+            {
+                "sourceAdmissionRef": (
+                    f"receipts/media-source-admission/{carrier}-{index:05d}.json"
+                ),
+                "sourceAdmissionDigest": _digest(
+                    f"source-admission:{carrier}:{index}"
+                ),
+            }
+        )
     if carrier == "article":
         candidate["publishMediaMode"] = "illustrated"
     if carrier == "video":
         candidate.update(
             {
-                "playabilityRef": EVIDENCE_PAYLOADS["playability"][0],
-                "playabilityDigest": _digest(f"playability:video:{index}"),
-                "playabilityFileSha256": _byte_digest(
-                    EVIDENCE_PAYLOADS["playability"][1]
-                ),
                 "videoReadiness": {
                     "playable": True,
                     "motion": True,
@@ -202,6 +220,14 @@ def _m100_candidates() -> list[dict[str, object]]:
         for index in range(18)
     )
     return candidates
+
+
+def _content_candidates() -> list[dict[str, object]]:
+    return [
+        _candidate(carrier, index, provider=f"{carrier}-source")
+        for carrier in ("homepage", "article")
+        for index in range(180)
+    ]
 
 
 def _plan(candidates: list[dict[str, object]] | None = None) -> dict[str, object]:
@@ -282,7 +308,7 @@ def test_pending_delivery_object_is_not_redispatched_as_semantic_work(
 ) -> None:
     output = tmp_path / "output"
     evidence = _write_evidence_root(output / "evidence-root")
-    plan = _plan()
+    plan = _plan(_content_candidates())
     plan_ref = "data/source-pools/m100.json"
     plan_path = output / plan_ref
     plan_path.parent.mkdir(parents=True, exist_ok=True)
@@ -415,7 +441,7 @@ def test_image_provider_mix_is_statistical(providers: list[str]) -> None:
 def test_plan_is_create_once_digest_bound_and_rejects_legacy_fields(
     tmp_path: Path,
 ) -> None:
-    plan = _plan()
+    plan = _plan(_content_candidates())
     evidence_root = _write_evidence_root(tmp_path)
     destination = tmp_path / "scale-source-pools" / "m100.json"
     with ThreadPoolExecutor(max_workers=2) as executor:
@@ -452,13 +478,13 @@ def test_evidence_closure_hashes_unique_files_once_and_all_bindings(
     tmp_path: Path,
 ) -> None:
     validation = validate_scale_source_pool_evidence(
-        _plan(),
+        _plan(_content_candidates()),
         evidence_root=_write_evidence_root(tmp_path),
     )
 
     assert validation["evidenceFileSha256Verified"] is True
-    assert validation["evidenceFileCount"] == 5
-    assert validation["evidenceBindingCount"] == 2_250
+    assert validation["evidenceFileCount"] == 4
+    assert validation["evidenceBindingCount"] == 1_440
 
 
 @pytest.mark.parametrize(
@@ -470,7 +496,7 @@ def test_evidence_closure_rejects_drift_missing_and_path_escape(
     mutation: str,
 ) -> None:
     evidence_root = _write_evidence_root(tmp_path)
-    plan = _plan()
+    plan = _plan(_content_candidates())
     candidate = plan["candidates"][0]
     if mutation == "digest_drift":
         candidate["sourceUnitFileSha256"] = "sha256:" + "f" * 64
@@ -496,7 +522,7 @@ def test_evidence_closure_rejects_symlink_even_when_target_hash_matches(
     evidence_root = _write_evidence_root(tmp_path)
     link = evidence_root / "shared" / "source-unit-link.json"
     link.symlink_to(evidence_root / EVIDENCE_PAYLOADS["sourceUnit"][0])
-    plan = _plan()
+    plan = _plan(_content_candidates())
     plan["candidates"][0]["sourceUnitRef"] = "shared/source-unit-link.json"
     plan = _redigest(plan)
 
@@ -506,50 +532,41 @@ def test_evidence_closure_rejects_symlink_even_when_target_hash_matches(
     assert captured.value.code == SOURCE_POOL_EVIDENCE_INVALID
 
 
-@pytest.mark.parametrize("mutation", ["video_missing", "non_video_present"])
-def test_playability_physical_binding_is_video_only(
-    tmp_path: Path,
-    mutation: str,
-) -> None:
+def test_media_candidate_rejects_retired_pre_admission_physical_bindings() -> None:
     plan = _plan()
-    if mutation == "video_missing":
-        video = next(row for row in plan["candidates"] if row["carrier"] == "video")
-        video["playabilityFileSha256"] = None
-    else:
-        homepage = next(
-            row for row in plan["candidates"] if row["carrier"] == "homepage"
-        )
-        homepage.update(
-            {
-                "playabilityRef": EVIDENCE_PAYLOADS["playability"][0],
-                "playabilityDigest": _digest("unexpected-playability"),
-                "playabilityFileSha256": _byte_digest(
-                    EVIDENCE_PAYLOADS["playability"][1]
-                ),
-            }
-        )
+    video = next(row for row in plan["candidates"] if row["carrier"] == "video")
+    video.update(
+        {
+            "playabilityRef": EVIDENCE_PAYLOADS["playability"][0],
+            "playabilityDigest": _digest("retired-playability"),
+            "playabilityFileSha256": _byte_digest(
+                EVIDENCE_PAYLOADS["playability"][1]
+            ),
+        }
+    )
     plan = _redigest(plan)
 
     with pytest.raises(ScaleSourcePoolError) as captured:
-        validate_scale_source_pool_evidence(
-            plan,
-            evidence_root=_write_evidence_root(tmp_path),
-        )
+        validate_scale_source_pool(plan)
 
-    assert captured.value.code == SOURCE_POOL_EVIDENCE_INVALID
+    assert captured.value.code == SOURCE_POOL_INVALID
 
 
 def test_evidence_root_must_exist_and_must_not_be_a_symlink(tmp_path: Path) -> None:
     missing = tmp_path / "missing"
     with pytest.raises(ScaleSourcePoolError) as captured:
-        validate_scale_source_pool_evidence(_plan(), evidence_root=missing)
+        validate_scale_source_pool_evidence(
+            _plan(_content_candidates()), evidence_root=missing
+        )
     assert captured.value.code == SOURCE_POOL_EVIDENCE_INVALID
 
     real = _write_evidence_root(tmp_path)
     linked_root = tmp_path / "evidence-link"
     linked_root.symlink_to(real, target_is_directory=True)
     with pytest.raises(ScaleSourcePoolError) as captured:
-        validate_scale_source_pool_evidence(_plan(), evidence_root=linked_root)
+        validate_scale_source_pool_evidence(
+            _plan(_content_candidates()), evidence_root=linked_root
+        )
     assert captured.value.code == SOURCE_POOL_EVIDENCE_INVALID
 
 
@@ -568,7 +585,7 @@ def test_cli_plans_validates_writes_and_reports_create_once_collision(
 
     candidates_path = tmp_path / "candidates.json"
     candidates_path.write_text(
-        json.dumps({"candidates": _m100_candidates()}, ensure_ascii=False),
+        json.dumps({"candidates": _content_candidates()}, ensure_ascii=False),
         encoding="utf-8",
     )
     plan_result = _run_cli(
@@ -669,7 +686,10 @@ def test_campaign_binding_freezes_exact_sorted_lane_selection_and_physical_bytes
     output_root = tmp_path / "output"
     plan_path = output_root / "data/local/workspace/source-pool/plan.json"
     plan_path.parent.mkdir(parents=True)
-    plan_path.write_text(json.dumps(_plan(), ensure_ascii=False), encoding="utf-8")
+    plan_path.write_text(
+        json.dumps(_plan(_content_candidates()), ensure_ascii=False),
+        encoding="utf-8",
+    )
     evidence_root = _write_evidence_root(output_root)
 
     binding, evidence_ref, selection = bind_scale_source_pool(
@@ -677,7 +697,7 @@ def test_campaign_binding_freezes_exact_sorted_lane_selection_and_physical_bytes
         evidence_root=evidence_root,
         output_root=output_root,
         target_scale="M100",
-        carrier="video",
+        carrier="article",
         count=10,
         source_revision=IDENTITY["sourceRevision"],
         source_digest=IDENTITY["sourceDigest"],
@@ -686,7 +706,7 @@ def test_campaign_binding_freezes_exact_sorted_lane_selection_and_physical_bytes
 
     assert selection["candidateCount"] == 10
     assert selection["candidateIds"] == [
-        f"video-{index:05d}" for index in range(10)
+        f"article-{index:05d}" for index in range(10)
     ]
     assert binding["planRef"] == "data/local/workspace/source-pool/plan.json"
     validate_bound_scale_source_pool(
@@ -710,21 +730,24 @@ def test_capsule_snapshot_revalidates_plan_and_evidence_without_media_payload(
     output_root = tmp_path / "output"
     plan_path = output_root / "pool/plan.json"
     plan_path.parent.mkdir(parents=True)
-    plan_path.write_text(json.dumps(_plan(), ensure_ascii=False), encoding="utf-8")
+    plan_path.write_text(
+        json.dumps(_plan(_content_candidates()), ensure_ascii=False),
+        encoding="utf-8",
+    )
     evidence_root = _write_evidence_root(output_root)
     binding, evidence_ref, _selection = bind_scale_source_pool(
         plan_path,
         evidence_root=evidence_root,
         output_root=output_root,
         target_scale="M100",
-        carrier="image",
+        carrier="article",
         count=100,
         source_revision=IDENTITY["sourceRevision"],
         source_digest=IDENTITY["sourceDigest"],
         entity_catalog_digest=IDENTITY["entityCatalogDigest"],
     )
     snapshot = tmp_path / "capsule/scale-source-pool"
-    selections = _lane_selections()
+    selections = _lane_selections(("homepage", "article"))
     snapshot_digest = materialize_bound_scale_source_pool(
         binding,
         evidence_root_ref=evidence_ref,
@@ -746,5 +769,4 @@ def test_capsule_snapshot_revalidates_plan_and_evidence_without_media_payload(
         "evidence/shared/acquisition.json",
         "evidence/shared/rights.json",
         "evidence/shared/quality.json",
-        "evidence/shared/playability.json",
     }

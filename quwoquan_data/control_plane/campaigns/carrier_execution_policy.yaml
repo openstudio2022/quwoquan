@@ -1,0 +1,26 @@
+schema: quwoquan_data.carrier_execution_policy
+carriers:
+  homepage:
+    operation: homepage.generate
+    defaultSelector: source-ready-priority
+    operatorPrompt:
+      ref: campaign/carrier-execution/homepage
+      text: 执行实体内容生成
+  article:
+    operation: article.generate
+    defaultSelector: priority
+    operatorPrompt:
+      ref: campaign/carrier-execution/article
+      text: 执行文章内容生成
+  image:
+    operation: image.generate
+    defaultSelector: priority
+    operatorPrompt:
+      ref: campaign/carrier-execution/image
+      text: 执行图片内容生成
+  video:
+    operation: video.generate
+    defaultSelector: source-ready-priority
+    operatorPrompt:
+      ref: campaign/carrier-execution/video
+      text: 执行视频内容生成

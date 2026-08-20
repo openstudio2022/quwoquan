@@ -97,6 +97,13 @@ def _patch_envelope_deps(monkeypatch) -> None:
         binding = {
             "poolId": "pool-local-contract",
             "targetScale": str(kwargs["target_scale"]),
+            "workloadMode": (
+                "explicit"
+                if str(kwargs["target_scale"]) == "WORKLOAD"
+                else "milestone_preset"
+            ),
+            "activeCarriers": list(kwargs.get("active_carriers") or (carrier,)),
+            "workloadTargets": dict(kwargs.get("workload_targets") or {carrier: count}),
             "sourceRevision": str(kwargs["source_revision"]),
             "sourceDigest": str(kwargs["source_digest"]),
             "entityCatalogDigest": str(kwargs["entity_catalog_digest"]),

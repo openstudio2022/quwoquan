@@ -34,6 +34,9 @@ from content.source.research.homepage_article_source_ready_aggregate import (
 from content.source.research.homepage_article_source_ready_batch import (
     freeze_homepage_article_source_ready_batch,
 )
+from content.source.research.media_source_admission_cli import (
+    register_media_source_admission_parsers,
+)
 from content.source.research.professional_image_manual_file_evidence_cli import (
     register_professional_image_manual_file_evidence_parser,
 )
@@ -181,12 +184,8 @@ def handle_project_candidates(args: argparse.Namespace) -> None:
                 source_digest=args.source_digest,
                 entity_catalog_digest=args.entity_catalog_digest,
                 entity_catalog_ref=args.entity_catalog_ref,
-                image_catalog_refs=args.image_catalog_ref,
-                image_acquisition_refs=args.image_acquisition_ref,
-                image_review_refs=args.image_review_ref,
-                video_catalog_refs=args.video_catalog_ref,
-                video_acquisition_refs=args.video_acquisition_ref,
-                video_review_refs=args.video_review_ref,
+                image_source_admission_refs=args.image_source_admission_ref,
+                video_source_admission_refs=args.video_source_admission_ref,
             )
         candidates = build_scale_source_pool_candidates(
             target_scale=args.target_scale,
@@ -465,6 +464,8 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     freeze_video.add_argument("--output-root")
     freeze_video.set_defaults(handler=handle_freeze_professional_video_catalog)
 
+    register_media_source_admission_parsers(commands)
+
     project = commands.add_parser(
         "project-candidates",
         help="从当前 wave 的 catalog/evidence 确定性 create-once 投影候选文件",
@@ -504,12 +505,8 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     project.add_argument("--source-ready-set-ref")
     project.add_argument("--source-ready-set-digest")
     project.add_argument("--source-ready-set-file-sha256")
-    project.add_argument("--image-catalog-ref", action="append")
-    project.add_argument("--image-acquisition-ref", action="append")
-    project.add_argument("--image-review-ref", action="append")
-    project.add_argument("--video-catalog-ref", action="append")
-    project.add_argument("--video-acquisition-ref", action="append")
-    project.add_argument("--video-review-ref", action="append")
+    project.add_argument("--image-source-admission-ref", action="append")
+    project.add_argument("--video-source-admission-ref", action="append")
     project.set_defaults(handler=handle_project_candidates)
 
     plan = commands.add_parser("plan", help="从已审核候选构建 digest-bound pool")

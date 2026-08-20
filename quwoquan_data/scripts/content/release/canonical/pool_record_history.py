@@ -151,7 +151,7 @@ def _physical_record_sequence(path: Path) -> int:
     return value
 
 
-def _is_explicit_legacy_record(
+def _is_explicit_retired_record(
     raw: Mapping[str, Any],
     *,
     physical_sequence: int,
@@ -170,7 +170,7 @@ def _is_explicit_legacy_record(
     )
 
 
-def _validate_legacy_supersession(
+def _validate_retired_supersession(
     *,
     raw: Mapping[str, Any],
     successor: Mapping[str, Any],
@@ -182,20 +182,20 @@ def _validate_legacy_supersession(
     if any(raw.get(key) != successor.get(key) for key in identity_fields):
         raise ObjectTransactionError(
             "DATA.POOL.RECORD_IDENTITY_CONFLICT: "
-            f"legacySequence={physical_sequence}"
+            f"retiredSequence={physical_sequence}"
         )
     if successor.get("contentVersion") != raw.get("version"):
         raise ObjectTransactionError(
             "DATA.POOL.RECORD_VERSION_CONFLICT: "
-            f"legacySequence={physical_sequence}"
+            f"retiredSequence={physical_sequence}"
         )
     digest_fields = ("evidenceDigest", "payloadDigest")
     if any(raw.get(key) != successor.get(key) for key in digest_fields):
         raise ObjectTransactionError(
             "DATA.POOL.RECORD_DIGEST_CONFLICT: "
-            f"legacySequence={physical_sequence}"
+            f"retiredSequence={physical_sequence}"
         )
-    legacy_payload = {
+    retired_payload = {
         key: value for key, value in raw.items() if key != "version"
     }
     successor_payload = {
@@ -203,10 +203,10 @@ def _validate_legacy_supersession(
         for key, value in successor.items()
         if key not in {"recordSequence", "contentVersion"}
     }
-    if legacy_payload != successor_payload:
+    if retired_payload != successor_payload:
         raise ObjectTransactionError(
             "DATA.POOL.RECORD_SUPERSESSION_CONFLICT: "
-            f"legacySequence={physical_sequence}"
+            f"retiredSequence={physical_sequence}"
         )
 
 
@@ -261,12 +261,12 @@ def read_pool_record_history(
             ),
             None,
         )
-        if successor is not None and _is_explicit_legacy_record(
+        if successor is not None and _is_explicit_retired_record(
             raw,
             physical_sequence=physical_sequence,
             reason=reason,
         ):
-            _validate_legacy_supersession(
+            _validate_retired_supersession(
                 raw=raw,
                 successor=successor,
                 physical_sequence=physical_sequence,

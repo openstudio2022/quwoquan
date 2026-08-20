@@ -13,6 +13,9 @@ from content.execution.planning.capacity_calibration_writer import (
 from core.paths import CONTROL_PLANE_SHARED_ROOT, REPO_ROOT
 
 
+_CALIBRATION_FAILED = "DATA.CAPACITY.CALIBRATION_FAILED"
+
+
 def handle_calibrate_capacity(args: argparse.Namespace) -> None:
     calibration_id = str(args.calibration_id or "").strip()
     output_dir = (
@@ -51,7 +54,7 @@ def handle_calibrate_capacity(args: argparse.Namespace) -> None:
         )
     except (OSError, TypeError, ValueError, CapacityCalibrationRunError) as exc:
         raise SystemExit(
-            f"[task calibrate-capacity] GATE_BLOCK {exc}"
+            f"[task calibrate-capacity] GATE_BLOCK {_CALIBRATION_FAILED}: {exc}"
         ) from exc
     print(
         json.dumps(

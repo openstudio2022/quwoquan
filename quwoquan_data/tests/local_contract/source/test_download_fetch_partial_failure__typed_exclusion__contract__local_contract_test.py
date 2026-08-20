@@ -1,4 +1,5 @@
 # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-006
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-006.t7
 """download_fetch 的局部失败必须是 typed exclusion，而不是静默丢弃或整批失败。
 
 `REQ-003`：「单 Provider 或 shard 的 typed failure 只阻断自身，不阻断同 carrier

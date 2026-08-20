@@ -54,91 +54,16 @@ _RECOVERY_EXECUTION_STAGES_BY_QUEUE_STAGE = {
 }
 
 
-def _has_audited_remote_recovery(
-    execution_id: str,
-    stage: QueueJobStage,
-) -> bool:
-    """Permit DLQ revival only after the controller recorded recovery evidence."""
-    from content.execution.support import load_execution_state
-
-    accepted_stages = _RECOVERY_EXECUTION_STAGES_BY_QUEUE_STAGE.get(
-        stage,
-        frozenset({stage.value}),
-    )
-    state = load_execution_state(execution_id)
-    for action in reversed(tuple(state.recovery_actions or ())):
-        if not isinstance(action, Mapping):
-            continue
-        if str(action.get("stage") or "").strip() not in accepted_stages:
-            continue
-        if str(action.get("recoveredAt") or "").strip():
-            return True
-    return False
+from content.execution.queue.reliabletask.fleet_recovery import (
+    _has_audited_remote_recovery,
+    _object_timeout_seconds,
+)
 
 
-def _object_timeout_seconds(jobs: list[object]) -> int:
-    from content.execution.queue.model import QueueJob
-
-    if not jobs or not all(isinstance(job, QueueJob) for job in jobs):
-        raise ValueError("ReliableTask fleet requires declared QueueJob values")
-    values = {job.max_wall_clock_seconds for job in jobs}
-    if len(values) != 1:
-        raise ValueError("ReliableTask fleet jobs must share one object timeout")
-    timeout_seconds = next(iter(values))
-    if timeout_seconds < 1:
-        raise ValueError("ReliableTask object timeout must be positive")
-    return timeout_seconds
-
-
-def _attempt_request_name(*, recover_dead_tasks: bool) -> str:
-    """Keep audited recovery input separate from the immutable first attempt."""
-
-    return "recovery-request.json" if recover_dead_tasks else "request.json"
-
-
-def _remaining_quota(
-    execution_id: str,
-    stage: QueueJobStage,
-    active_job_count: int,
-) -> int:
-    """Remaining approved quota this fleet invocation must still deliver.
-
-    The batch gate admits on quota, never on全量成功, so the request carries the
-    quota that is still outstanding for this stage.  Objects already accepted in
-    an earlier invocation are subtracted; the oversampled surplus is free to fail.
-    """
-    from content.execution import store
-
-    policy = store.load_spec(execution_id).get("executionPolicy") or {}
-    approved = policy.get("approvedQuota")
-    if isinstance(approved, bool) or not isinstance(approved, int) or approved < 1:
-        raise ValueError(
-            f"execution {execution_id} executionPolicy.approvedQuota is required"
-        )
-    already_accepted = sum(
-        1
-        for job in _load_jobs(execution_id)
-        if job.backend is QueueBackend.RELIABLE_TASK
-        and job.stage is stage
-        and job.state is QueueJobState.SUCCEEDED
-    )
-    remaining = approved - already_accepted
-    if remaining < 1:
-        raise ValueError(
-            f"execution {execution_id} 已达 {stage.value} 准出配额 "
-            f"{approved}（已接受 {already_accepted}），无需再派发 fleet"
-        )
-    if remaining > active_job_count and stage is not QueueJobStage.PUBLISH:
-        raise ValueError(
-            f"候选池耗尽，区域实体供给不足：{stage.value} 剩余配额 {remaining} "
-            f"超过待执行 job 数 {active_job_count}"
-        )
-    # Publication consumes the immutable review-qualified closure.  The
-    # semantic approvedQuota is a milestone target, not authority to suppress
-    # already qualified objects when the reviewed closure is partial.  Deliver
-    # every frozen publish job and leave the remaining milestone gap to a new
-    # source/semantic wave; author acquisition remains strict above.
-    return min(remaining, active_job_count)
+from content.execution.queue.reliabletask.fleet_quota import (
+    _attempt_request_name,
+    _remaining_quota,
+)
 
 
 def build_fleet_request(

@@ -119,30 +119,7 @@ def require_frozen_campaign_preflight_admission(
     return dict(binding)
 
 
-def empty_lane(execution_id: str = "pending") -> dict[str, Any]:
-    return {
-        "executionId": execution_id,
-        "status": "pending",
-        "phase": "submission",
-        "reviewReturnCode": None,
-        "publishReturnCode": None,
-        "sourceCapsuleRef": None,
-        "sourceCapsuleDigest": None,
-        "sourceCapsuleCommitSha": None,
-        "sourceCapsuleSourceDigest": None,
-        "sourceCapsuleReadOnly": None,
-        "executionRootRef": None,
-        "cleanupStatus": "not_created",
-        "approvedQuota": None,
-        "qualifiedCount": None,
-        "finalizedCount": None,
-        "selectedCount": None,
-        "discardedCount": None,
-        "shortfallCount": None,
-        "deliveryPendingCount": 0,
-        "deliveryIntentRefs": [],
-        "error": None,
-    }
+from content.execution.campaign.plan_lane_state import empty_lane
 
 
 def write_report(

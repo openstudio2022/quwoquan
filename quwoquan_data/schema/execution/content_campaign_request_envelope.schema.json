@@ -269,21 +269,6 @@
           ]
         }
       }
-    },
-    {
-      "if": {
-        "properties": {"scale": {"enum": ["M100", "M1000", "M10000"]}},
-        "required": ["scale"]
-      },
-      "else": {
-        "not": {
-          "anyOf": [
-            {"required": ["scaleSourcePool"]},
-            {"required": ["sourcePoolEvidenceRootRef"]},
-            {"required": ["sourcePoolSelection"]}
-          ]
-        }
-      }
     }
   ]
 }

@@ -28,7 +28,7 @@ def media_work_units_for_carrier(
     *,
     carrier: str,
 ) -> tuple[dict[str, Any], ...] | None:
-    """Return ``None`` for legacy quota mode and exact rows for work-unit mode."""
+    """Return ``None`` for quota-only mode and exact rows for work-unit mode."""
 
     content = spec.get("content") if isinstance(spec.get("content"), Mapping) else {}
     if "workUnits" not in content:

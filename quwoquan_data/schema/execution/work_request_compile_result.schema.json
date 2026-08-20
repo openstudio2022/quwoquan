@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/work_request_compile_result.schema.json",
+  "oneOf": [
+    {"$ref": "#/$defs/preview"},
+    {"$ref": "#/$defs/needsInput"},
+    {"$ref": "#/$defs/blocked"},
+    {"$ref": "#/$defs/confirmed"},
+    {"$ref": "#/$defs/canceled"}
+  ],
+  "$defs": {
+    "base": {
+      "type": "object",
+      "required": ["schema", "outcome", "requestDigest"],
+      "properties": {
+        "schema": {"const": "quwoquan_data.work_request_compile_result"},
+        "outcome": {"enum": ["preview", "needs_input", "blocked", "confirmed", "canceled"]},
+        "requestDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "preview": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "type": "object", "required": ["outcome", "normalizedRequest"],
+          "additionalProperties": false,
+          "properties": {
+            "schema": {}, "requestDigest": {}, "outcome": {"const": "preview"},
+            "normalizedRequest": {"type": "object"}
+          }
+        }
+      ]
+    },
+    "needsInput": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "type": "object", "required": ["outcome", "missingFields"],
+          "additionalProperties": false,
+          "properties": {
+            "schema": {}, "requestDigest": {}, "outcome": {"const": "needs_input"},
+            "missingFields": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+          }
+        }
+      ]
+    },
+    "blocked": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "type": "object", "required": ["outcome", "error"],
+          "additionalProperties": false,
+          "properties": {
+            "schema": {}, "requestDigest": {}, "outcome": {"const": "blocked"},
+            "error": {
+              "type": "object", "required": ["code", "message", "attributes"], "additionalProperties": false,
+              "properties": {
+                "code": {"type": "string", "pattern": "^DATA\\.WORK_REQUEST\\.[A-Z0-9_]+$"},
+                "message": {"type": "string", "minLength": 1},
+                "attributes": {"type": "object", "additionalProperties": {"type": "string"}}
+              }
+            }
+          }
+        }
+      ]
+    },
+    "confirmed": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "type": "object", "required": ["outcome", "workRequestRef", "workRequestDigest", "carrierPolicyDigest", "entityCatalogDigest", "dependencySetDigest", "compileReceiptRef", "compileReceiptDigest", "carrierEnvelopes", "replayed"],
+          "additionalProperties": false,
+          "properties": {
+            "schema": {}, "requestDigest": {}, "outcome": {"const": "confirmed"},
+            "workRequestRef": {"type": "string", "minLength": 1},
+            "workRequestDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+            "carrierPolicyDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+            "entityCatalogDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+            "dependencySetDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+            "compileReceiptRef": {"type": "string", "minLength": 1},
+            "compileReceiptDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+            "carrierEnvelopes": {"type": "array", "minItems": 1, "items": {"$ref": "work_request.schema.json#/$defs/envelopeRef"}},
+            "replayed": {"type": "boolean"}
+          }
+        }
+      ]
+    },
+    "canceled": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "type": "object", "required": ["outcome"], "additionalProperties": false,
+          "properties": {"schema": {}, "requestDigest": {}, "outcome": {"const": "canceled"}}
+        }
+      ]
+    }
+  }
+}

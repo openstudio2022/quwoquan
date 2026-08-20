@@ -52,6 +52,12 @@ from content.execution.controller.execute.video_acquisition_agent_input import (
 from content.execution.execution_supersession import (
     register_supersede_execution_parser,
 )
+from content.execution.planning.capacity_calibration_cli import (
+    register_calibrate_capacity_parser,
+)
+from content.execution.planning.capacity_bootstrap_cli import (
+    register_capacity_bootstrap_parser,
+)
 from content.execution.planning.discover_image_supported_api_metadata import (
     register_discover_image_supported_api_metadata_parser,
 )
@@ -64,12 +70,19 @@ from content.execution.runtime_evidence.cli import (
 
 
 def register_parser(subparsers: argparse._SubParsersAction) -> None:
+    from content.execution.planning.work_request_cli import (
+        register_compile_intent_parser,
+    )
+
     parser = subparsers.add_parser(
         "task",
         help="内容执行门面：唯一 execution 工作包编排",
     )
     commands = parser.add_subparsers(dest="task_command")
     register_task_preflight_parser(commands)
+    register_compile_intent_parser(commands)
+    register_calibrate_capacity_parser(commands)
+    register_capacity_bootstrap_parser(commands)
     register_prepare_campaign_parser(commands)
     register_recipe_parser(commands)
     register_drain_pool_delivery_parser(commands)

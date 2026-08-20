@@ -1,0 +1,181 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/capacity_bootstrap_run.schema.json",
+  "oneOf": [
+    {"$ref": "#/$defs/run"},
+    {"$ref": "#/$defs/state"},
+    {"$ref": "#/$defs/evidence"}
+  ],
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "safeRef": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+    },
+    "runId": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{2,127}$"},
+    "workload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scale", "objectCount", "digest"],
+      "properties": {
+        "scale": {"const": "M100"},
+        "objectCount": {"const": 100},
+        "digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "blocker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "recovery"],
+      "properties": {
+        "code": {"type": "string", "pattern": "^DATA\\.CAPACITY\\.BOOTSTRAP_[A-Z0-9_]+$"},
+        "recovery": {
+          "enum": [
+            "retry_with_new_bootstrap_run",
+            "inspect_measurement_evidence",
+            "operator_canceled"
+          ]
+        }
+      }
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema", "documentKind", "bootstrapRunId", "authority", "hostClass",
+        "providerTier", "semanticSelectionId", "workload", "policyRef",
+        "policyDigest", "preparedAt", "runDigest"
+      ],
+      "properties": {
+        "schema": {"const": "quwoquan_data.capacity_calibration_bootstrap"},
+        "documentKind": {"const": "run"},
+        "bootstrapRunId": {"$ref": "#/$defs/runId"},
+        "authority": {"const": "measurement_only"},
+        "hostClass": {"type": "string", "minLength": 1},
+        "providerTier": {"type": "string", "minLength": 1},
+        "semanticSelectionId": {"const": "cursor_grok"},
+        "workload": {"$ref": "#/$defs/workload"},
+        "policyRef": {"$ref": "#/$defs/safeRef"},
+        "policyDigest": {"$ref": "#/$defs/digest"},
+        "retryOf": {"$ref": "#/$defs/runId"},
+        "preparedAt": {"type": "string", "format": "date-time"},
+        "runDigest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema", "documentKind", "bootstrapRunId", "ordinal", "status",
+        "runRef", "runDigest", "recordedAt", "stateDigest"
+      ],
+      "properties": {
+        "schema": {"const": "quwoquan_data.capacity_calibration_bootstrap"},
+        "documentKind": {"const": "state"},
+        "bootstrapRunId": {"$ref": "#/$defs/runId"},
+        "ordinal": {"type": "integer", "minimum": 1},
+        "status": {"enum": ["prepared", "running", "measured", "failed", "canceled"]},
+        "runRef": {"$ref": "#/$defs/safeRef"},
+        "runDigest": {"$ref": "#/$defs/digest"},
+        "evidenceRef": {"$ref": "#/$defs/safeRef"},
+        "evidenceDigest": {"$ref": "#/$defs/digest"},
+        "blocker": {"$ref": "#/$defs/blocker"},
+        "recordedAt": {"type": "string", "format": "date-time"},
+        "stateDigest": {"$ref": "#/$defs/digest"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "measured"}}, "required": ["status"]},
+          "then": {"required": ["evidenceRef", "evidenceDigest"]}
+        },
+        {
+          "if": {"properties": {"status": {"const": "failed"}}, "required": ["status"]},
+          "then": {"required": ["evidenceRef", "evidenceDigest", "blocker"]}
+        },
+        {
+          "if": {"properties": {"status": {"const": "canceled"}}, "required": ["status"]},
+          "then": {"required": ["blocker"]}
+        }
+      ]
+    },
+    "objectTiming": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["objectRef", "outcome", "durationMilliseconds"],
+      "properties": {
+        "objectRef": {"type": "string", "minLength": 1},
+        "outcome": {"enum": ["succeeded", "failed"]},
+        "durationMilliseconds": {"type": "integer", "minimum": 1},
+        "blocker": {"$ref": "#/$defs/blocker"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"outcome": {"const": "failed"}}, "required": ["outcome"]},
+          "then": {"required": ["blocker"]}
+        }
+      ]
+    },
+    "resourceSample": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rssBytes", "cpuPercent", "capturedAt"],
+      "properties": {
+        "rssBytes": {"type": "integer", "minimum": 1},
+        "cpuPercent": {"type": "number", "minimum": 0},
+        "capturedAt": {"type": "string", "format": "date-time"}
+      }
+    },
+    "fleetReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "outcome", "total", "peakConcurrentWorkers", "wallClockMilliseconds",
+        "resourceSamples"
+      ],
+      "properties": {
+        "outcome": {"enum": ["passed", "failed"]},
+        "total": {"const": 100},
+        "peakConcurrentWorkers": {"const": 1},
+        "wallClockMilliseconds": {"type": "integer", "minimum": 1},
+        "resourceSamples": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/resourceSample"}
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema", "documentKind", "bootstrapRunId", "authority", "hostClass",
+        "providerTier", "semanticSelectionId", "workload", "policyDigest",
+        "objectTimings", "fleetReport", "blockers", "evidenceDigest"
+      ],
+      "properties": {
+        "schema": {"const": "quwoquan_data.capacity_calibration_bootstrap"},
+        "documentKind": {"const": "evidence"},
+        "bootstrapRunId": {"$ref": "#/$defs/runId"},
+        "authority": {"const": "measurement_only"},
+        "hostClass": {"type": "string", "minLength": 1},
+        "providerTier": {"type": "string", "minLength": 1},
+        "semanticSelectionId": {"const": "cursor_grok"},
+        "workload": {"$ref": "#/$defs/workload"},
+        "policyDigest": {"$ref": "#/$defs/digest"},
+        "objectTimings": {
+          "type": "array",
+          "minItems": 100,
+          "maxItems": 100,
+          "items": {"$ref": "#/$defs/objectTiming"}
+        },
+        "fleetReport": {"$ref": "#/$defs/fleetReport"},
+        "blockers": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/blocker"}
+        },
+        "evidenceDigest": {"$ref": "#/$defs/digest"}
+      }
+    }
+  }
+}

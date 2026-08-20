@@ -408,13 +408,16 @@ def test_campaign_request_envelope_freeze__contract__local_contract_test(
     )
     assert second["homepage"] == homepage
 
-    named = envelopes.write_campaign_envelopes(
-        scales=["M1", "M100000"],
-        region_ref="china",
-        repo_root=repo,
-        output_root=tmp_path,
-        day="20260731",
-    )
+    named = {
+        scale: envelopes.write_scale_envelopes(
+            scale,
+            region_ref="china",
+            repo_root=repo,
+            output_root=tmp_path,
+            day="20260731",
+        )
+        for scale in ("M1", "M100000")
+    }
     assert set(named) == {"M1", "M100000"}
     m1 = envelopes.build_envelope(
         scale="M1",
@@ -454,7 +457,7 @@ def test_campaign_request_envelope_freeze__contract__local_contract_test(
     assert "--china-zhejiang--" in arbitrary["executionId"]
     assert arbitrary["familyRef"] == "content/travel/article/article"
 
-    by_quota = envelopes.write_campaign_envelopes(
+    by_quota = envelopes.write_scale_envelopes(
         quota=37,
         region_ref="china",
         topic="zhejiang",
@@ -462,7 +465,7 @@ def test_campaign_request_envelope_freeze__contract__local_contract_test(
         output_root=tmp_path / "by-quota",
         day="20260731",
     )
-    assert set(by_quota) == {"M37"}
+    assert set(by_quota) == {"homepage", "article", "image", "video"}
 
     with pytest.raises(CampaignScaleError, match="GATE_BLOCK"):
         resolve_campaign_scale(quota=0)

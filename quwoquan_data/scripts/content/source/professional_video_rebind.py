@@ -156,7 +156,7 @@ def _verify_source_asset(
 
 
 def _assert_current_rebound_item(item: Mapping[str, Any]) -> None:
-    """Keep one legacy-only item from cancelling valid rebound siblings."""
+    """Keep one retired-shape item from cancelling valid rebound siblings."""
     schema = load_schema("source", "professional_video_acquisition_manifest")
     item_schema = schema.get("$defs", {}).get("item")
     if not isinstance(item_schema, dict):

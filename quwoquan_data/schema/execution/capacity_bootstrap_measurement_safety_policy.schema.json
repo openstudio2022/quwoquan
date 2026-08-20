@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/capacity_bootstrap_measurement_safety_policy.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "policyId", "authority", "workload",
+    "maxConcurrentWorkers", "allowedSemanticSelectionIds"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.capacity_bootstrap_measurement_safety_policy"},
+    "policyId": {"const": "capacity-bootstrap-measurement-safety"},
+    "authority": {"const": "measurement_only"},
+    "workload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scale", "objectCount"],
+      "properties": {
+        "scale": {"const": "M100"},
+        "objectCount": {"const": 100}
+      }
+    },
+    "maxConcurrentWorkers": {"const": 1},
+    "allowedSemanticSelectionIds": {
+      "type": "array",
+      "const": ["cursor_grok"]
+    }
+  }
+}

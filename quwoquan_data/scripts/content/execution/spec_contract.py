@@ -496,7 +496,8 @@ class ExecutionSpec:
             and self.execution_policy.approved_quota > target_count
         ):
             raise ValueError(
-                "legacy execution approvedQuota cannot exceed targetEntityCount"
+                "non-work-unit execution approvedQuota cannot exceed "
+                "targetEntityCount"
             )
         if self.queue_policy.heartbeat_seconds >= self.queue_policy.lease_seconds:
             raise ValueError(

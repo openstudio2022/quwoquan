@@ -15,6 +15,9 @@ from core.source_digest import (
 from governance.coverage.distribution import load_content_distribution_policy
 
 from content.execution.campaign import request_envelope as owner
+from content.execution.campaign.carrier_execution_policy import (
+    carrier_execution_policy,
+)
 from content.execution.campaign.external_inputs import (
     content_source_revision,
     external_inputs_digest,
@@ -90,8 +93,7 @@ def build_envelope(
     workloads: Mapping[str, int] | None = None,
     workload_mode: str = "explicit",
 ) -> dict[str, Any]:
-    if carrier not in owner._OPERATIONS:
-        raise ValueError(f"unsupported carrier: {carrier}")
+    execution_policy = carrier_execution_policy(carrier)
     resolved = resolve_campaign_scale(scale=scale, quota=quota)
     vertical_id = owner._normalize_vertical(vertical)
     source_repo = (repo_root or paths.REPO_ROOT).resolve()
@@ -311,13 +313,6 @@ def build_envelope(
         raise ValueError(
             "DATA.SOURCE.POOL_SHORTFALL: scale source pool and evidence root must be provided together"
         )
-    if (
-        resolved.scale not in {"M100", "M1000", "M10000"}
-        and any(value is not None for value in pool_inputs)
-    ):
-        raise ValueError(
-            "DATA.SOURCE.POOL_SHORTFALL: below-M100 forbids scale source pool inputs"
-        )
     if all(value is not None for value in pool_inputs):
         assert scale_source_pool is not None and source_pool_evidence_root is not None
         (
@@ -328,9 +323,11 @@ def build_envelope(
             scale_source_pool,
             evidence_root=source_pool_evidence_root,
             output_root=(source_pool_output_root or paths.OUTPUT_ROOT),
-            target_scale=resolved.scale,
+            target_scale=(
+                "WORKLOAD" if workload_mode == "explicit" else resolved.scale
+            ),
             carrier=carrier,
-            count=count,
+            count=quota_value,
             source_revision=source_revision,
             source_digest=str(source["digest"]),
             entity_catalog_digest=catalog_digest,
@@ -349,14 +346,14 @@ def build_envelope(
             carrier: quota_value,
         },
         "carrier": carrier,
-        "operation": owner._OPERATIONS[carrier],
+        "operation": execution_policy["operation"],
         "vertical": vertical_id,
         "familyRef": family_ref or owner.default_family_ref(
             vertical=vertical_id,
             carrier=carrier,
         ),
         "regionRef": region_ref,
-        "selector": owner._SELECTORS[carrier],
+        "selector": execution_policy["defaultSelector"],
         "quota": quota_value,
         "count": count,
         "capacityCalibration": capacity_binding,
@@ -378,7 +375,7 @@ def build_envelope(
         "externalInputRefs": frozen_external_refs,
         "externalInputsDigest": external_inputs_digest(frozen_external_refs),
         "allowedStage": "submit-only",
-        "operatorPrompt": owner._OPERATOR_PROMPTS[carrier],
+        "operatorPrompt": execution_policy["operatorPrompt"]["text"],
     }
     if promotion_reference is not None:
         stable["researchScalePromotion"] = promotion_reference
@@ -398,11 +395,8 @@ def build_envelope(
             admitted_at=frozen_at,
             output_root=(semantic_preflight_output_root or paths.OUTPUT_ROOT),
         )
-    envelope = {
-        **stable,
-        "requestDigest": owner._sha256(stable),
-        "frozenAt": frozen_at,
-    }
+    frozen = {**stable, "frozenAt": frozen_at}
+    envelope = {**frozen, "requestDigest": owner._sha256(frozen)}
     owner._require_stable_source_inputs(
         source,
         execution_bundle=execution_bundle,

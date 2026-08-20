@@ -34,7 +34,7 @@ def load_campaign_envelope(
     stable = {
         key: value
         for key, value in payload.items()
-        if key not in {"requestDigest", "frozenAt"}
+        if key != "requestDigest"
     }
     if payload.get("requestDigest") != _sha256(stable):
         raise ValueError("campaign envelope requestDigest drift")

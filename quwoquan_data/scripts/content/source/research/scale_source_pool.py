@@ -21,6 +21,10 @@ from core.schema import assert_valid
 from core.source_attribution import canonical_source_attribution
 from content.execution.campaign.lane import normalize_workloads
 
+from content.source.media_source_admission import (
+    MediaSourceAdmissionError,
+    MediaSourceAdmissionQuery,
+)
 from content.source.research.scale_source_pool_evidence_path import (
     ScaleSourcePoolEvidencePathError,
     compute_evidence_file_sha256,
@@ -115,6 +119,19 @@ def _binding_issues(candidate: Mapping[str, Any], *, candidate_id: str) -> list[
             canonical_source_attribution(candidate.get("sourceAttribution"))
         except ValueError as exc:
             issues.append(f"{candidate_id}.sourceAttribution is incomplete: {exc}")
+    if candidate.get("carrier") in {"image", "video"}:
+        try:
+            _safe_ref(
+                candidate.get("sourceAdmissionRef"),
+                label=f"{candidate_id}.sourceAdmissionRef",
+            )
+        except ScaleSourcePoolError as exc:
+            issues.extend(exc.issues)
+        if not _SHA256.fullmatch(
+            str(candidate.get("sourceAdmissionDigest") or "").strip()
+        ):
+            issues.append(f"{candidate_id}.sourceAdmissionDigest is not sha256")
+        return issues
     root_ref = candidate.get("sourceReadyEvidenceRootRef")
     if candidate.get("carrier") in {"homepage", "article"} or root_ref is not None:
         try:
@@ -140,16 +157,6 @@ def _video_issues(candidate: Mapping[str, Any], *, candidate_id: str) -> list[st
     if not isinstance(readiness, Mapping):
         return [f"{candidate_id} lacks videoReadiness"]
     issues: list[str] = []
-    try:
-        _safe_ref(candidate.get("playabilityRef"), label=f"{candidate_id}.playabilityRef")
-    except ScaleSourcePoolError as exc:
-        issues.extend(exc.issues)
-    if not _SHA256.fullmatch(str(candidate.get("playabilityDigest") or "").strip()):
-        issues.append(f"{candidate_id}.playabilityDigest is not sha256")
-    if not _SHA256.fullmatch(
-        str(candidate.get("playabilityFileSha256") or "").strip()
-    ):
-        issues.append(f"{candidate_id}.playabilityFileSha256 is not sha256")
     if any(readiness.get(field) is not True for field in ("playable", "motion")):
         issues.append(f"{candidate_id} is not playable motion media")
     return issues
@@ -247,7 +254,7 @@ def validate_scale_source_pool(plan: Mapping[str, Any]) -> dict[str, Any]:
                 and readiness.get("premiumEligible") is True
             )
         elif any(
-            candidate[field] is not None
+            candidate.get(field) is not None
             for field in (
                 "playabilityRef",
                 "playabilityDigest",
@@ -341,6 +348,34 @@ def validate_scale_source_pool_evidence(
         binding_count = 0
         for candidate in plan["candidates"]:
             candidate_id = str(candidate["candidateId"])
+            if candidate["carrier"] in {"image", "video"}:
+                result = MediaSourceAdmissionQuery(root).require_accepted(
+                    str(candidate["sourceAdmissionRef"])
+                )
+                receipt = result["receipt"]
+                snapshot = receipt["assetSnapshot"]
+                if (
+                    result["receiptDigest"] != candidate["sourceAdmissionDigest"]
+                    or receipt["assetKind"] != candidate["carrier"]
+                    or receipt["objectRef"] != candidate["objectRef"]
+                    or snapshot["contentSha256"] != candidate["contentSha256"]
+                    or snapshot["rightsStatus"] != candidate["rightsStatus"]
+                    or snapshot["distributionDecision"]
+                    != candidate["distributionDecision"]
+                ):
+                    raise ScaleSourcePoolError(
+                        SOURCE_POOL_EVIDENCE_INVALID,
+                        [f"{candidate_id} source admission projection drift"],
+                    )
+                receipt_path = resolve_evidence_file(
+                    root,
+                    result["receiptRef"],
+                    label=f"{candidate_id}.sourceAdmissionRef",
+                )
+                relative = receipt_path.relative_to(root).as_posix()
+                computed[relative] = compute_evidence_file_sha256(receipt_path)
+                binding_count += 1
+                continue
             candidate_root = _candidate_evidence_root(
                 root, candidate, candidate_id=candidate_id
             )
@@ -386,7 +421,7 @@ def validate_scale_source_pool_evidence(
                         ],
                     )
                 binding_count += 1
-    except ScaleSourcePoolEvidencePathError as exc:
+    except (ScaleSourcePoolEvidencePathError, MediaSourceAdmissionError) as exc:
         raise ScaleSourcePoolError(SOURCE_POOL_EVIDENCE_INVALID, [exc]) from exc
     validation = validate_scale_source_pool(plan)
     return {

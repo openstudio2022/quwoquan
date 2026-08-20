@@ -74,7 +74,7 @@ class SourcedVideoEvidence:
 
     @property
     def effective_distribution_decision(self) -> str:
-        """Resolve the asset-level decision even for legacy admission payloads."""
+        """Resolve the asset decision for publication-admission payloads."""
         return self.distribution_decision or distribution_decision_for_admission(
             self.publication_admission
         )
