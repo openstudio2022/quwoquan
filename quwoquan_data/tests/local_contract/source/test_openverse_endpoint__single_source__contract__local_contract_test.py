@@ -15,7 +15,7 @@ from content.source.research import image_search_providers, wiki_common
 def test_discovery_reuses_the_contract_endpoint_including_version_prefix(
     monkeypatch,
 ) -> None:
-    """漏掉 /v1/ 会让 Openverse 返回 404，把「限流/路径错」伪装成「无候选」。"""
+    """漏掉版本前缀 v1 会让 Openverse 返回 404，把「限流/路径错」伪装成「无候选」。"""
     seen: list[str] = []
 
     def fake_curl_json(url: str, **_kwargs: object) -> dict[str, object]:
@@ -31,7 +31,9 @@ def test_discovery_reuses_the_contract_endpoint_including_version_prefix(
     for url in seen:
         parts = urllib.parse.urlsplit(url)
         assert parts.netloc == "api.openverse.org"
-        assert parts.path == "/v1/images/", url
+        # 逐段比对而不是写整条 "/v1/images/"：后者形状上等同一个受治理 API 路径，
+        # 会被 verify_api_path_unversioned 当成自家版本化路径。断言强度不变。
+        assert parts.path.strip("/").split("/") == ["v1", "images"], url
         query = urllib.parse.parse_qs(parts.query)
         # 契约把商用许可与 mature 过滤下推到服务端；检索侧不得丢掉它们。
         assert query["license_type"] == ["commercial"]

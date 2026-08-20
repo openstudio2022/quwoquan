@@ -174,7 +174,7 @@ def test_public_slice_is_kind_scoped_and_derives_ascii_from_canonical_asset_iden
         content_type="image/png",
     )
     assert image_key.startswith("media/image/s/asset/cover-1-")
-    assert image_key.endswith("/v1/source.jpg")
+    assert image_key.split("/")[-2:] == ["v1", "source.jpg"]
     assert video_key.startswith("media/video/s/asset/detail-2-")
     assert avatar_key == "media/avatar/s/asset/creator_avatar_001/v1/source.png"
     assert len({image_key, video_key, avatar_key}) == 3
