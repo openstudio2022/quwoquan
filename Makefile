@@ -1279,6 +1279,15 @@ test-gate-companion-local-contract: prepare-test-python
 		quwoquan_ops/tests/local_contract/gate/test_runtime_config_release_layout__single_track__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_api_edge_rate_limit_single_track__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_graphql_read_rest_command_single_track__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_app_generated_manifest__contract__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_cloud_environment_artifact_binding__gate__local_contract_test.py \
+		quwoquan_data/tests/local_contract/release/test_execution_readiness__behavior__functional__local_contract_test.py \
+		quwoquan_data/tests/local_contract/release/test_publish_purity__canonical_media__contract__local_contract_test.py \
+		quwoquan_data/tests/local_contract/release/test_publish_purity__committed_transaction_holds_no_media__contract__local_contract_test.py \
+		quwoquan_data/tests/local_contract/execution/test_scale_parameterization__single_source__contract__local_contract_test.py \
+		quwoquan_data/tests/local_contract/execution/test_script_architecture__retired_module_names__contract__local_contract_test.py \
+		quwoquan_data/tests/local_contract/execution/test_source_digest__execution_release__contract__local_contract_test.py \
+		quwoquan_data/tests/local_contract/release/test_source_digest__immutable_identity_generations__contract__local_contract_test.py \
 		-q
 
 verify-test-no-fake:
