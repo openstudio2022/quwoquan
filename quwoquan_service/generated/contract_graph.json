@@ -113118,7 +113118,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/application/discovery_feed_loading.dart",
-            "sha256": "316bc3870afa1a4ba22e8b6dd6cdc951e14b693a643c4590ce02342fd5b40268"
+            "sha256": "44833320a71a332ebd87cef650d2984d185d2f8ccfec10b7ad6e9e7cac655376"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/application/discovery_feed_pagination_lifecycle.dart",
@@ -113126,7 +113126,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/application/discovery_feed_provider.dart",
-            "sha256": "d478620f993c6a73527576a6c594ddc5020db7edba41d8414bfee95ce6ab5f42"
+            "sha256": "7f8f60f820e665bc2ad3842f1b7b99bb38cb325614a933d9658476653f57133e"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/application/discovery_state_provider.dart",
@@ -113688,7 +113688,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/discovery_feed_home_channel_lifecycle__local_contract_test.dart",
-            "sha256": "a741e2ddaa165125c5c3340067e56e40a7781bb3e062464ca77bb1294f184f1b"
+            "sha256": "0cb73ba600a37cb9e3a4a4fd8b3e917dcbadf62dc94b89bf0710b3dfe94d4f82"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/discovery_feed_query_contract__local_contract_test.dart",
@@ -116777,7 +116777,7 @@
           },
           {
             "path": "quwoquan_service/services/integration-service/tests/local_contract/external_integration/external_interaction/external_interaction_binding__local_contract_test.go",
-            "sha256": "8b4fbc7f9ab792d67a48279899edb2eb85acd7ecfab657d2053d708331d19830"
+            "sha256": "8ec0009ce60cad964f27b0266cdeffe91ad2d08a4c05f3ff6b301564421cd3a5"
           },
           {
             "path": "quwoquan_service/services/integration-service/tests/local_contract/external_integration/external_interaction/external_interaction_dependencies__reliability__local_contract_test.go",
@@ -116792,6 +116792,10 @@
             "sha256": "f5e4f3d4fcd93e523be388adeca8a0000f81555275986cf5e6ce3a8c618de1b0"
           },
           {
+            "path": "quwoquan_service/services/integration-service/tests/local_contract/external_integration/external_interaction/external_interaction_wire_guards__contract__local_contract_test.go",
+            "sha256": "51f2f1f2b7a56b1846fd3bb4a02389ff82487078cf9ae6ea79a09c54c28fc0aa"
+          },
+          {
             "path": "quwoquan_service/services/integration-service/tests/local_contract/external_integration/external_interaction/external_provider_wiring__local_contract_test.go",
             "sha256": "6f5ff2a4a714287df164ce06cd0d576d88cfb001d0b8f199507b02bcdec18930"
           },
@@ -116800,12 +116804,24 @@
             "sha256": "9379994fceead8c8333a78c1f7ac30ace5a25492afd3b11ba289339c7fdb088d"
           },
           {
+            "path": "quwoquan_service/services/integration-service/tests/local_contract/external_integration/external_interaction/http_external_provider_readiness__reliability__local_contract_test.go",
+            "sha256": "7808d7a89c8809d007977035c5bafacf45323fe8adee926109efc8bd5ceca9ab"
+          },
+          {
             "path": "quwoquan_service/services/integration-service/tests/local_contract/external_integration/external_interaction/provider_result_relay__reliability__local_contract_test.go",
             "sha256": "84bef04a5d6e2d44727a81de57bce5abd3ebbd268ce5e27539a646944591c8a6"
           },
           {
+            "path": "quwoquan_service/services/integration-service/tests/local_contract/external_integration/external_interaction/provider_result_relay_health__reliability__local_contract_test.go",
+            "sha256": "dab622296762c657620472ee467bdd2b1f15f3b537ac33b57d63963a6fd3b554"
+          },
+          {
             "path": "quwoquan_service/services/integration-service/tests/local_contract/external_integration/external_interaction/runtime_config__local_contract_test.go",
             "sha256": "d54b214fa7c547bc4fb595d3e956d1b0a525327cff1aff1b8f65d0b7d7f6093d"
+          },
+          {
+            "path": "quwoquan_service/services/integration-service/tests/local_contract/external_integration/external_interaction/runtime_config_validation__contract__local_contract_test.go",
+            "sha256": "36bc5c60c97584067c77c8a7bfc5584c01c9ab1afe73f39d910efc0d17d7cae9"
           },
           {
             "path": "quwoquan_service/services/integration-service/tests/local_contract/external_integration/external_interaction/sms_otp_delivery_readiness__local_contract_test.go",
@@ -117096,6 +117112,10 @@
           }
         ],
         "localContract": [
+          {
+            "path": "quwoquan_service/services/integration-service/tests/local_contract/external_integration/location/amap_location_provider__local_contract_test.go",
+            "sha256": "6f4e09979ef69ee1d65f5d577f2cd6b285a4f92d9c8561ca5ec13a576eb702d2"
+          },
           {
             "path": "quwoquan_service/services/integration-service/tests/local_contract/external_integration/location/event_ownership__contract__local_contract_test.go",
             "sha256": "50c650b9bf7f2fb6804899d03ec2aa8e8833ab38b5a23456f8ebf88d8bac2db6"
@@ -121024,6 +121044,10 @@
             "sha256": "e8a5285e958769deb66f4daf497766dd0794860c9f2ddd1bb8d45fa66a7b8d58"
           },
           {
+            "path": "quwoquan_service/services/rtc-service/tests/local_contract/rtc/call_session/call_missed_history_facet__local_contract_test.go",
+            "sha256": "b392a897a6a50cc0cfd1a53251279abed4a48ae75a75aabd2ae67343522fe586"
+          },
+          {
             "path": "quwoquan_service/services/rtc-service/tests/local_contract/rtc/call_session/call_operation_facets__local_contract_test.go",
             "sha256": "77f8068f638b87ddaa370d3fd49193ba0ad50f4f8e0e94a189ad1d6900c76114"
           },
@@ -121058,6 +121082,10 @@
           {
             "path": "quwoquan_service/services/rtc-service/tests/local_contract/rtc/call_session/event_source_binding__contract__local_contract_test.go",
             "sha256": "cba414b8c0641de9509968d0d3a37c9ca10348b5495be92990dcd5924ca31b6e"
+          },
+          {
+            "path": "quwoquan_service/services/rtc-service/tests/local_contract/rtc/call_session/media_room_participants__local_contract_test.go",
+            "sha256": "6ccf8905db1ded0ddeb8eef4fcfc1573135b5e868ed63c97b5f853811d5b5e44"
           },
           {
             "path": "quwoquan_service/services/rtc-service/tests/local_contract/rtc/call_session/media_transport__local_contract_test.go",
@@ -128192,7 +128220,7 @@
     },
     {
       "path": "_shared/app_launch_manifest.yaml",
-      "sha256": "e800eee8a30459075cd3168375f395268f74e322044073211519fe23bc092696"
+      "sha256": "0fc548b38c93662b7e6369df9cd289311fd07ec85b4a1593e038966806f3750d"
     },
     {
       "path": "_shared/app_pages.yaml",
@@ -133938,7 +133966,7 @@
     },
     {
       "path": "_shared/app_launch_manifest.yaml",
-      "sha256": "e800eee8a30459075cd3168375f395268f74e322044073211519fe23bc092696",
+      "sha256": "0fc548b38c93662b7e6369df9cd289311fd07ec85b4a1593e038966806f3750d",
       "mediaType": "application/yaml",
       "content": {
         "description": "Android、iOS、App 与 Ops 共同消费的启动清单、launcher handoff 和摘要协议；runtime 拥有组合语义，各平台不得复制字段或摘要规则。",
@@ -133954,6 +133982,21 @@
           },
           "identity_format": "sha256:\u003c64-lowercase-hex\u003e",
           "input_encoding": "utf-8"
+        },
+        "launch_blockers": {
+          "APP.LAUNCH.compile_failed": "编译未产出可安装制品。",
+          "APP.LAUNCH.device_unavailable": "目标设备不可用或未被 canonical 设备发现认领。",
+          "APP.LAUNCH.install_failed": "制品已编译但未能安装到目标设备。",
+          "APP.LAUNCH.ios_release_simulator_unsupported": "Flutter iOS Simulator 只支持 Debug，不得伪造 Release 启动回执。",
+          "APP.LAUNCH.launch_failed": "已安装但未能到达 launched。",
+          "APP.LAUNCH.platform_unsupported": "目标平台不属于 android、ios。",
+          "APP.LAUNCH.prod_artifact_invalid": "给出的 Prod artifact manifest 与 exact 身份或摘要不符。",
+          "APP.LAUNCH.prod_artifact_required": "prod-sim 必须显式给出 canonical Release artifact manifest。",
+          "APP.LAUNCH.prod_debug_forbidden": "Prod 不接受 Debug 构建或直接 Flutter 执行。",
+          "APP.LAUNCH.prod_hosted_flutter_forbidden": "prod-hosted 只消费已签名制品、安装回执与显式 rollout 授权。",
+          "APP.LAUNCH.receipt_invalid": "attempt receipt 不满足本 schema。",
+          "APP.LAUNCH.receipt_timeout": "等待终态超时且未观测到 typed failure。",
+          "APP.WEB.recovery_unavailable": "恢复 Web 静态面不可达，不得据此生成 launched 或 ready 假证据。"
         },
         "launch_policies": {
           "prod_release": {
@@ -134106,7 +134149,12 @@
               "编译、安装和启动失败的 firstBlocker 分别为 APP.LAUNCH.compile_failed、APP.LAUNCH.install_failed 与 APP.LAUNCH.launch_failed；Prod Debug 必须在 prepared 后以 APP.LAUNCH.prod_debug_forbidden 失败。",
               "ui-only 允许把 runtime、Provider、TLS、transport 与 content readiness 记入 warnings 后继续；content-live 与 release-artifact 不得把同一问题降级为 warning。",
               "stopped 只表示用户或父进程正常停止已启动会话，不得解释为编译失败，也不得清理 App 或环境数据。",
-              "prod-sim 的 release-artifact 只允许 Android exact Release emulator artifact；Flutter iOS Simulator 只支持 Debug，iOS Release/Profile 必须以 APP.LAUNCH.ios_release_simulator_unsupported 阻断，不能生成或消费伪 Release 启动回执。"
+              "prod-sim 的 release-artifact 只允许 Android exact Release emulator artifact；Flutter iOS Simulator 只支持 Debug，iOS Release/Profile 必须以 APP.LAUNCH.ios_release_simulator_unsupported 阻断，不能生成或消费伪 Release 启动回执。",
+              "firstBlocker 非空时只允许取 launch_blockers 声明的码；不得写入自由文本或服务端错误码。",
+              "configurationState 只表达 runtime package 解析结论，unobserved 表示本次 attempt 尚未观测；它绝不携带内容 release 身份，服务不可用不得写成 invalid。",
+              "runtimeHealthStatus 只在 launched 之后可离开 unobserved；degraded 与 unavailable 必须同时出现对应 warning，且不得倒推 launch 阶段失败。",
+              "recoveryWebStatus=unavailable 必须以 APP.WEB.recovery_unavailable 记录并禁止生成 launched 或 ready 假证据；恢复面不属于本次 attempt 验收面时取 not_applicable。",
+              "recoveryWebEvidenceRef 只在 recoveryWebStatus 为 available 或 unavailable 时非空，且必须指向可回读的 HTTP/字体/digest 证据，不得写入摘要文字。"
             ],
             "fields": {
               "artifactDigest": {
@@ -134124,6 +134172,15 @@
                 ],
                 "type": "string"
               },
+              "configurationState": {
+                "allowed_values": [
+                  "unobserved",
+                  "pending_native",
+                  "complete",
+                  "invalid"
+                ],
+                "type": "string"
+              },
               "deviceId": {
                 "min_length": 1,
                 "type": "string"
@@ -134138,6 +134195,8 @@
                 "type": "string"
               },
               "firstBlocker": {
+                "allow_empty": true,
+                "allowed_values_ref": "launch_blockers",
                 "type": "string"
               },
               "launchDigest": {
@@ -134159,11 +134218,32 @@
                 ],
                 "type": "string"
               },
+              "recoveryWebEvidenceRef": {
+                "type": "string"
+              },
+              "recoveryWebStatus": {
+                "allowed_values": [
+                  "not_applicable",
+                  "unobserved",
+                  "available",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
               "runMode": {
                 "allowed_values": [
                   "content-live",
                   "ui-only",
                   "release-artifact"
+                ],
+                "type": "string"
+              },
+              "runtimeHealthStatus": {
+                "allowed_values": [
+                  "unobserved",
+                  "healthy",
+                  "degraded",
+                  "unavailable"
                 ],
                 "type": "string"
               },
@@ -134227,6 +134307,10 @@
               "transitions",
               "warnings",
               "firstBlocker",
+              "configurationState",
+              "runtimeHealthStatus",
+              "recoveryWebStatus",
+              "recoveryWebEvidenceRef",
               "deviceId",
               "logRefs",
               "updatedAt",

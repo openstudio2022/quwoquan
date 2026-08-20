@@ -232,9 +232,17 @@ final class AppStartupRuntime {
       StartupTelemetryPhase.configurationValidation,
       outcome: 'validated',
     );
+    final configured = _snapshot(phase: 'configuration_validation');
     _recordPlatformStartupEvent(
       eventName: 'startup_runtime_configured',
-      properties: _snapshot(phase: 'configuration_validation').toJson(),
+      properties: configured.toJson(),
+    );
+    // launch attempt receipt 的 configurationState 只能从控制台回读，
+    // 这条证据与 runtime summary 同源，不另立判定。
+    developer.log(
+      'startup_configuration_state '
+      'state=${configured.configurationState ?? 'unobserved'}',
+      name: 'QWQStartup',
     );
   }
 

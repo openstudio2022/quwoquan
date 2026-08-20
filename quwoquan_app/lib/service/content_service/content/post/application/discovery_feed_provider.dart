@@ -54,20 +54,13 @@ void _requireCanonicalPolicyDigest(String? policyDigest) {
   }
 }
 
-bool _isCanonicalInitialEmptyPage(
-  String channelId,
-  DiscoveryFeedPage page, {
-  required ContentReleaseRequirement releaseRequirement,
-}) {
+bool _isCanonicalInitialEmptyPage(String channelId, DiscoveryFeedPage page) {
   if (!page.isCanonicalEmpty) {
     return false;
   }
-  final requiresActiveRelease =
-      releaseRequirement == ContentReleaseRequirement.required;
   return switch (page.emptyReason!) {
     ContentFeedEmptyReason.followingEmpty => channelId == 'following',
-    ContentFeedEmptyReason.noActiveRelease =>
-      channelId != 'following' && !requiresActiveRelease,
+    ContentFeedEmptyReason.noActiveRelease => channelId != 'following',
     ContentFeedEmptyReason.noEligibleContent => channelId != 'following',
     ContentFeedEmptyReason.continuationEnd => false,
   };

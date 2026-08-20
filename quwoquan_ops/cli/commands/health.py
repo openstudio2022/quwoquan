@@ -152,6 +152,52 @@ def _script_probes_for_target(
     return statuses, stdout_sections, findings
 
 
+def _surface_health(statuses: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Report the API plane and the static recovery Web plane independently.
+
+    两个面各自只由自己的探针决定：API 全停不得把静态恢复面标成 failed，
+    静态面缺失也不得被 API 的绿色掩盖。
+    """
+    from quwoquan_ops.cli.commands.diagnostics_shared import (
+        PUBLIC_WEB_STATIC_SCOPE,
+    )
+
+    def summarize(
+        selected: list[dict[str, Any]],
+        *,
+        blocker: str,
+    ) -> dict[str, Any]:
+        observed = [item for item in selected if not item.get("skipped")]
+        if not observed:
+            return {"status": "not_observed", "firstBlocker": "", "checks": []}
+        failed = [item for item in observed if not item.get("ok")]
+        return {
+            "status": "failed" if failed else "ok",
+            "firstBlocker": blocker if failed else "",
+            "checks": [str(item.get("name") or "") for item in observed],
+        }
+
+    return {
+        "api": summarize(
+            [
+                item
+                for item in statuses
+                if item.get("scope") == "edge" and item.get("name") == "api-health"
+            ],
+            # API 面没有 launcher typed blocker，沿用 findings 的探针命名。
+            blocker="edge/api-health",
+        ),
+        "publicWeb": summarize(
+            [
+                item
+                for item in statuses
+                if item.get("scope") == PUBLIC_WEB_STATIC_SCOPE
+            ],
+            blocker="APP.WEB.recovery_unavailable",
+        ),
+    }
+
+
 def command_health(args: argparse.Namespace) -> dict[str, Any]:
     import quwoquan_ops.cli.stackctl as _stackctl
 
@@ -428,6 +474,7 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
         findings.append(detail)
     ok_count = sum(1 for item in statuses if item["ok"])
     timing = _stackctl._finish_timing(started_monotonic, started_at)
+    surfaces = _surface_health(statuses)
     payload = {
         "command": "health",
         "target": args.target,
@@ -437,6 +484,7 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
         "retrySleepSeconds": retry_sleep_seconds,
         "httpProbeConcurrency": probe_concurrency,
         "checks": statuses,
+        "surfaces": surfaces,
         "findings": findings,
         "timestamp": _stackctl.utc_now(),
         "scriptProbes": _stackctl._script_probe_plan_for_target(topology, args.target),

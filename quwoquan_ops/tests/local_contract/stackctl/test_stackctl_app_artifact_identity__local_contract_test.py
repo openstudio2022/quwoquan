@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import sys
 import tempfile
 import unittest
@@ -21,6 +22,7 @@ if str(ROOT) not in sys.path:
 
 from quwoquan_ops.cli.commands.package_app_artifact import (
     _CAPSULE_ROOTS,
+    _artifact_digest,
     _ios_unsigned_release_command,
     _read_android_identity,
     _signing_digest,
@@ -265,6 +267,53 @@ class StackctlAppArtifactIdentityTest(unittest.TestCase):
             decision["applicationId"], "com.quwoquan.quwoquan_app.alpha.debug"
         )
         self.assertFalse(decision["promotable"])
+
+    def test_build_decision_carries_schema_digest_and_resolved_identity(self) -> None:
+        blocked = command_package_app_artifact(_args(distribution_class="store"))
+        self.assertEqual(blocked["exitCode"], 2, blocked)
+        # 编译成功后 decision 会被 AppArtifactManifest 覆写同一个 schema 键，
+        # 因此裁决态是唯一能证明 canonical 裁决 schema 名的观察点。
+        self.assertEqual(
+            blocked["decision"]["schema"],
+            "app-artifact-build-decision",
+        )
+        self.assertEqual(
+            blocked["decision"]["applicationId"],
+            "com.quwoquan.quwoquan_app.alpha.debug",
+        )
+        with tempfile.TemporaryDirectory() as directory, mock.patch(
+            "quwoquan_ops.cli.stackctl.deployment_target_path",
+            return_value=Path(directory),
+        ), mock.patch(
+            "quwoquan_ops.cli.commands.package_app_artifact._build_from_capsule",
+            side_effect=_fake_build,
+        ), mock.patch(
+            "quwoquan_ops.cli.commands.package_app_artifact.workspace_snapshot",
+            side_effect=[_snapshot(), _snapshot()],
+        ):
+            result = command_package_app_artifact(_args())
+            self.assertEqual(result["exitCode"], 0, result)
+            attempt_dir = Path(str(result["attemptDir"]))
+            decision = result["decision"]
+            self.assertRegex(
+                str(decision["artifactDigest"]),
+                r"^sha256:[0-9a-f]{64}$",
+            )
+            # 摘要必须是制品字节的内容寻址结果，而不是另一处推导出的第二真相源。
+            self.assertEqual(
+                decision["artifactDigest"],
+                _artifact_digest(attempt_dir / "app.apk"),
+            )
+            self.assertEqual(
+                decision["applicationId"],
+                "com.quwoquan.quwoquan_app.alpha.debug",
+            )
+            manifest = json.loads(
+                (attempt_dir / "manifest.json").read_text(encoding="utf-8")
+            )
+        self.assertEqual(manifest["schema"], "app-artifact-manifest")
+        self.assertEqual(manifest["artifactDigest"], decision["artifactDigest"])
+        self.assertEqual(manifest["applicationId"], decision["applicationId"])
 
     def test_artifact_path_bypass_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

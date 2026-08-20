@@ -24,6 +24,29 @@ FORWARD_STATES = (
 TERMINAL_STATES = frozenset({"launched", "runtime_degraded", "failed", "stopped"})
 _ALL_STATES = frozenset((*FORWARD_STATES, "runtime_degraded", "failed", "stopped"))
 
+# 与 app_launch_manifest.yaml 的 launch_blockers 同源；launcher 侧 typed blocker
+# 不经过服务端请求，因此不进任何服务 errors.yaml。
+LAUNCH_BLOCKERS = frozenset(
+    {
+        "APP.LAUNCH.compile_failed",
+        "APP.LAUNCH.install_failed",
+        "APP.LAUNCH.launch_failed",
+        "APP.LAUNCH.prod_debug_forbidden",
+        "APP.LAUNCH.prod_artifact_required",
+        "APP.LAUNCH.prod_artifact_invalid",
+        "APP.LAUNCH.prod_hosted_flutter_forbidden",
+        "APP.LAUNCH.ios_release_simulator_unsupported",
+        "APP.LAUNCH.device_unavailable",
+        "APP.LAUNCH.platform_unsupported",
+        "APP.LAUNCH.receipt_invalid",
+        "APP.LAUNCH.receipt_timeout",
+        "APP.WEB.recovery_unavailable",
+    }
+)
+CONFIGURATION_STATES = ("unobserved", "pending_native", "complete", "invalid")
+RUNTIME_HEALTH_STATUSES = ("unobserved", "healthy", "degraded", "unavailable")
+RECOVERY_WEB_STATUSES = ("not_applicable", "unobserved", "available", "unavailable")
+
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -61,6 +84,10 @@ def validate_app_launch_attempt(value: object) -> dict[str, Any]:
         "transitions",
         "warnings",
         "firstBlocker",
+        "configurationState",
+        "runtimeHealthStatus",
+        "recoveryWebStatus",
+        "recoveryWebEvidenceRef",
         "deviceId",
         "logRefs",
         "updatedAt",
@@ -104,6 +131,29 @@ def validate_app_launch_attempt(value: object) -> dict[str, Any]:
             isinstance(item, str) for item in value[field]
         ):
             raise ValueError(f"App launch attempt {field} is invalid")
+    first_blocker = str(value.get("firstBlocker") or "")
+    if first_blocker and first_blocker not in LAUNCH_BLOCKERS:
+        raise ValueError(f"App launch attempt firstBlocker is invalid: {first_blocker}")
+    for field, allowed in (
+        ("configurationState", CONFIGURATION_STATES),
+        ("runtimeHealthStatus", RUNTIME_HEALTH_STATUSES),
+        ("recoveryWebStatus", RECOVERY_WEB_STATUSES),
+    ):
+        if value.get(field) not in allowed:
+            raise ValueError(f"App launch attempt {field} is invalid")
+    if not isinstance(value.get("recoveryWebEvidenceRef"), str):
+        raise TypeError("App launch attempt recoveryWebEvidenceRef is invalid")
+    # 运行时健康只有真的启动过才可观测；否则 unobserved 是唯一诚实的取值。
+    if value["runtimeHealthStatus"] != "unobserved" and "launched" not in observed:
+        raise ValueError("App launch attempt runtime health requires launched")
+    if value["recoveryWebStatus"] in {"available", "unavailable"} and not str(
+        value["recoveryWebEvidenceRef"]
+    ):
+        raise ValueError("App launch attempt recovery web evidence is missing")
+    if value["recoveryWebStatus"] not in {"available", "unavailable"} and str(
+        value["recoveryWebEvidenceRef"]
+    ):
+        raise ValueError("App launch attempt recovery web evidence is unexpected")
     if not isinstance(value.get("nonPromotable"), bool):
         raise TypeError("App launch attempt promotability is invalid")
     return dict(value)
@@ -140,6 +190,10 @@ def create_app_launch_attempt(
         "transitions": [{"status": "prepared", "at": now}],
         "warnings": list(dict.fromkeys(str(item) for item in warnings if str(item))),
         "firstBlocker": "",
+        "configurationState": "unobserved",
+        "runtimeHealthStatus": "unobserved",
+        "recoveryWebStatus": "unobserved",
+        "recoveryWebEvidenceRef": "",
         "deviceId": device_id,
         "logRefs": list(dict.fromkeys(str(item) for item in log_refs if str(item))),
         "updatedAt": now,
@@ -212,6 +266,38 @@ def record_app_launch_attempt_warning(
         _atomic_write(receipt_path, validated)
         return validated
     return payload
+
+
+def record_app_launch_attempt_observation(
+    path: str | Path,
+    *,
+    configuration_state: str | None = None,
+    runtime_health_status: str | None = None,
+    recovery_web_status: str | None = None,
+    recovery_web_evidence_ref: str | None = None,
+    warning: str = "",
+    first_blocker: str = "",
+) -> dict[str, Any]:
+    """Record configuration、runtime health 与恢复面观测，不发明生命周期跃迁。"""
+
+    receipt_path = Path(path)
+    payload = read_app_launch_attempt(receipt_path)
+    for field, incoming in (
+        ("configurationState", configuration_state),
+        ("runtimeHealthStatus", runtime_health_status),
+        ("recoveryWebStatus", recovery_web_status),
+        ("recoveryWebEvidenceRef", recovery_web_evidence_ref),
+    ):
+        if incoming is not None:
+            payload[field] = incoming
+    if warning and warning not in payload["warnings"]:
+        payload["warnings"].append(warning)
+    if first_blocker and not payload["firstBlocker"]:
+        payload["firstBlocker"] = first_blocker
+    payload["updatedAt"] = utc_now()
+    validated = validate_app_launch_attempt(payload)
+    _atomic_write(receipt_path, validated)
+    return validated
 
 
 def wait_for_app_launch_attempt(

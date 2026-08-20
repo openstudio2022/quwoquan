@@ -126,3 +126,13 @@
 ## 6. 质量与观测
 
 - 沿用父 L1 质量约束；新增特有 SLO 时在本节声明。
+
+### Web 恢复面证据分工
+
+| 层级 | 唯一观察面 | 禁止替代 |
+| --- | --- | --- |
+| `local_contract` | `quwoquan_app/test/local_contract/runtime/web_bootstrap_surface__local_contract_test.py` 验证生成资产、状态机、语义和键盘合同 | 不证明真实 HTTP、字体下载或浏览器像素 |
+| `api_integration` | Ops public-Web runner 从 exact AppArtifactManifest 启动真实 HTTP 服务，验证 HTML/字体 status、UTF-8、MIME、digest、缓存和 Service Worker，并在 API plane 停止时证明静态恢复面仍可用 | 源码字符串和 package 文件存在性不计通过 |
+| `user_acceptance` | `quwoquan_app/test/user_acceptance/journeys/app_startup/` 消费 Chrome/Safari 实际页面、中文像素、恢复动作和 artifact digest | 报告 schema 读取、`UIApplication.open` 或浏览器进程创建不计通过 |
+
+字体 200、首次慢载、字体 404、首次离线、已缓存离线与 Service Worker 更新对 Alpha/Beta/Gamma/Prod 使用同一行为用例，环境只替换 exact artifact/origin。Prod 公网 DNS/TLS、Safari/Android 浏览器与正式发布授权缺失时继续保留 [`public-content-web-entry OPEN-004`](./public-content-web-entry/spec.md#open-004)，不得由本地浏览器或 package-only 结果填绿。

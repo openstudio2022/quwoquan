@@ -15,6 +15,8 @@ TOOLS_DIR = APP_DIR / "scripts/tools/device"
 sys.path.insert(0, str(TOOLS_DIR))
 
 from inspect_ios_native_startup import (
+    PATROL_HOST_IOS_DIR,
+    application_id_for,
     public_web_identity,
     verify_web_cta_with_xcuitest,
 )
@@ -100,6 +102,14 @@ QWQStartup ios_native_recovery_external_returned processId=41
         self.assertEqual(environment["QWQ_ENVIRONMENT"], "alpha")
         self.assertNotIn("QWQ_APP_RUNTIME_ENV", environment)
         self.assertNotIn("QWQ_LAUNCH_TARGET", environment)
+        # runner 归物理隔离的 test host，被测对象是当前环境的生产 App exact
+        # bundle identifier，不是 host 自身。
+        self.assertEqual(xcode.call_args.kwargs["cwd"], PATROL_HOST_IOS_DIR)
+        self.assertEqual(PATROL_HOST_IOS_DIR, APP_DIR / "test_host/patrol/ios")
+        self.assertEqual(
+            environment["QWQ_IOS_TARGET_BUNDLE_ID"],
+            application_id_for("ios", "alpha", "debug"),
+        )
 
     def test_xcuitest_rejects_a_different_opened_url_digest(self) -> None:
         expected = f"sha256:{'a' * 64}"

@@ -417,14 +417,33 @@ void main() {
           'androidTestImplementation("androidx.test.espresso:espresso-core',
         ),
       );
-      expect(gradle, contains('qwq.nativeStartupInstrumentation'));
+      // 生产 App 的 instrumentation runner 单轨：只保留原生 Gate runner。
+      // Patrol runner 与它的 MainActivityTest 属于物理隔离的 test host，
+      // 因此生产工程既不保留 runner 双轨开关，也不按 class 过滤 Patrol 用例。
       expect(gradle, contains('androidx.test.runner.AndroidJUnitRunner'));
+      expect(gradle, isNot(contains('qwq.nativeStartupInstrumentation')));
+      expect(gradle, isNot(contains('PatrolJUnitRunner')));
+      expect(gradle, isNot(contains('MainActivityTest')));
+      final nativeGateScript = _readAppFile(
+        'scripts/device/verify_android_native_startup_gate.sh',
+      );
       expect(
-        gradle,
+        nativeGateScript,
+        isNot(contains('qwq.nativeStartupInstrumentation')),
+      );
+      expect(
+        nativeGateScript,
         contains(
-          'testInstrumentationRunnerArguments["class"] =\n'
-          '                "com.quwoquan.quwoquan_app.MainActivityTest"',
+          '-Pandroid.testInstrumentationRunnerArguments.class='
+          'com.quwoquan.quwoquan_app.StartupGateHandoffInstrumentedTest',
         ),
+      );
+      final patrolHostGradle = _readAppFile(
+        'test_host/patrol/android/app/build.gradle.kts',
+      );
+      expect(
+        patrolHostGradle,
+        contains('pl.leancode.patrol.PatrolJUnitRunner'),
       );
       expect(gradle, contains('"QWQ_RUNTIME_CONFIG_DIGEST"'));
       expect(gradle, contains('expectedRuntimeConfigDigest'));
@@ -458,9 +477,27 @@ void main() {
           '"\$(inherited) QWQ_STARTUP_GATE_TEST_CONTROL";',
         ),
       );
+      // 测试控制条件只允许进入四环境 Debug configuration；任何 Release/Profile
+      // 带上它就等于把启动 gate 的测试开关编进可发布制品。
+      final testControlConfigurations =
+          RegExp(
+                r'isa = XCBuildConfiguration;([\s\S]*?)name = "?([A-Za-z0-9_.-]+)"?;',
+              )
+              .allMatches(xcodeProject)
+              .where(
+                (match) =>
+                    match.group(1)!.contains('QWQ_STARTUP_GATE_TEST_CONTROL'),
+              )
+              .map((match) => match.group(2)!)
+              .toList();
+      expect(testControlConfigurations, isNotEmpty);
       expect(
-        'QWQ_STARTUP_GATE_TEST_CONTROL'.allMatches(xcodeProject),
-        hasLength(1),
+        testControlConfigurations.toSet(),
+        hasLength(testControlConfigurations.length),
+      );
+      expect(
+        testControlConfigurations.where((name) => !name.startsWith('Debug')),
+        isEmpty,
       );
       expect(
         appDelegateGate.indexOf('if confirmedPreviousBuildFatal'),
@@ -541,8 +578,19 @@ void main() {
       expect(iosGateProbe, contains('trustedExactPublicWebURLRequested'));
       expect(iosGateProbe, contains('safariForegroundObserved'));
       expect(iosGateProbe, contains('sameAppProcessAfterReturn'));
-      final iosUiTest = _readAppFile('ios/RunnerUITests/RunnerUITests.m');
+      // 生产 iOS 工程不持有 test target；恢复面 XCUITest runner 归 test host，
+      // 被测对象由 exact 生产 bundle identifier 指定而不是 host 自身。
+      final iosUiTest = _readAppFile(
+        'test_host/patrol/ios/RunnerUITests/RunnerUITests.m',
+      );
       expect(iosUiTest, contains('QWQNativeStartupRecoveryWebUITests'));
+      expect(iosUiTest, contains('QWQ_IOS_TARGET_BUNDLE_ID'));
+      expect(iosUiTest, contains('initWithBundleIdentifier:bundleIdentifier'));
+      expect(
+        iosGateProbe,
+        contains('"QWQ_IOS_TARGET_BUNDLE_ID"] = application_id_for('),
+      );
+      expect(iosGateProbe, contains('cwd=PATROL_HOST_IOS_DIR'));
       expect(
         iosUiTest,
         contains('testRecoveryWebCTAOpensSafariAndReturnsToSameProcess'),
@@ -952,10 +1000,20 @@ void main() {
       final shell = _readAppFile(
         'lib/runtime/shell/composition/quwoquan_app_shell.dart',
       );
+      // probe 的 Android Activity 由 canonical application identity 派生，
+      // 不在 probe 内硬编码任一环境的 applicationId。
       expect(
         probe,
         contains(
-          'DEFAULT_ANDROID_ACTIVITY = "com.quwoquan.quwoquan_app/.StartupGateActivity"',
+          'DEFAULT_ANDROID_PACKAGE = application_id_for('
+          '"android", "alpha", "debug")',
+        ),
+      );
+      expect(
+        probe,
+        contains(
+          'f"{DEFAULT_ANDROID_PACKAGE}/{_ANDROID_CLASS_NAMESPACE}'
+          '.StartupGateActivity"',
         ),
       );
       expect(probe, contains('nativeWelcomeDetected'));
@@ -1105,7 +1163,14 @@ void main() {
         bootstrap,
         contains('NativeRuntimeConfigBridge.readRuntimePackage'),
       );
-      expect(runtimeConfig, contains("'configurationState': 'pending_native'"));
+      // configurationState 由唯一生产解析器产出，facade 只做投影。
+      final runtimePackageResolver = _readAppFile(
+        'lib/runtime/config/runtime_package_resolver.dart',
+      );
+      expect(
+        runtimePackageResolver,
+        contains("'configurationState': 'pending_native'"),
+      );
       expect(startupRuntime, contains('startup_runtime_configured'));
       expect(logHygiene, contains('APP_ROOT / "run.sh"'));
       expect(logHygiene, isNot(contains('cmd = ["flutter", "run"')));
@@ -1175,16 +1240,28 @@ void main() {
       expect(gradle, contains('direct-debug'));
       expect(gradle, contains('QWQ_RUNTIME_DART_DEFINES_JSON'));
       expect(gradle, contains('app-debug-preflight'));
-      expect(gradle, contains('QWQ_CONTENT_RELEASE_ID'));
-      expect(gradle, contains('QWQ_CONTENT_MANIFEST_DIGEST'));
-      expect(gradle, contains('QWQ_CONTENT_READINESS_RECEIPT_DIGEST'));
-      expect(activity, contains('contentReadinessReceiptDigest'));
+      // 内容激活是服务端运行时事实：Android 构建期与原生 handoff 都不得携带
+      // 内容 release 身份，否则一次内容不可用会被误判成配置非法而阻断启动。
+      for (final contentIdentityKey in const <String>[
+        'QWQ_CONTENT_RELEASE_ID',
+        'QWQ_CONTENT_MANIFEST_DIGEST',
+        'QWQ_CONTENT_READINESS_RECEIPT_DIGEST',
+        'CONTENT_BINDING_STATE',
+      ]) {
+        expect(gradle, isNot(contains(contentIdentityKey)));
+        expect(activity, isNot(contains(contentIdentityKey)));
+      }
+      expect(activity, isNot(contains('contentReadinessReceiptDigest')));
+      expect(activity, isNot(contains('contentBindingState')));
       final runtimeConfig = _readAppFile(
         'lib/runtime/config/cloud_runtime_config.dart',
       );
-      expect(runtimeConfig, contains('CloudRuntimePackageResolution.resolve'));
-      expect(runtimeConfig, contains('nativeRuntimeDriftKeys'));
-      expect(runtimeConfig, contains(r'NATIVE_RUNTIME_PACKAGE.$key'));
+      final runtimePackageResolver = _readAppFile(
+        'lib/runtime/config/runtime_package_resolver.dart',
+      );
+      expect(runtimeConfig, contains('RuntimePackageResolver.resolve'));
+      expect(runtimePackageResolver, contains('nativeDriftKeys'));
+      expect(runtimePackageResolver, contains(r'NATIVE_RUNTIME_PACKAGE.$key'));
       expect(runtimeConfig, contains('hydrateFromNativeRuntimePackage('));
       expect(
         runtimeConfig,
@@ -1193,6 +1270,10 @@ void main() {
       expect(
         runtimeConfig,
         isNot(contains('_forceNativeRuntimePackageForTest')),
+      );
+      expect(
+        runtimeConfig,
+        isNot(contains('clearNativeRuntimePackageForTest')),
       );
       expect(gradle, contains('requireCompleteRuntimeDartDefines'));
       expect(gradle, contains('verifyAndroidLocalLauncherContract'));
@@ -1253,10 +1334,10 @@ void main() {
       final instanceLauncher = _readAppFile(
         'scripts/device/run_app_instance.sh',
       );
+      final canonicalLauncher = _readAppFile('run.sh');
       final launcherHandoff = _readAppFile(
         'scripts/device/build_launcher_handoff.py',
       );
-      expect(instanceLauncher, contains('build_launcher_handoff.py'));
       expect(
         launcherHandoff,
         contains(
@@ -1265,15 +1346,30 @@ void main() {
       );
       expect(launcherHandoff, contains('effectiveLaunchManifestDigest'));
       expect(launcherHandoff, isNot(contains('runners/alpha')));
-      expect(instanceLauncher, contains('QWQ_ANDROID_LOCAL_TARGET'));
-      expect(instanceLauncher, contains('consumer-lease acquire'));
-      expect(instanceLauncher, contains('runtimeConfigDigest'));
-      expect(
-        instanceLauncher,
-        contains('QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST'),
-      );
-      expect(instanceLauncher, contains('--transport-required'));
-      expect(instanceLauncher, contains('QWQ_CONSUMER_LEASE_ID'));
+      // 一次 attempt 只有一个 launcher owner：adapter 只做入参校验、Prod 边界与
+      // instance state，随后委托 run.sh；handoff、lease 与 digest 全部归 run.sh。
+      expect(instanceLauncher, contains(r'bash "$APP_DIR/run.sh"'));
+      for (final canonicalOwnedToken in const <String>[
+        'build_launcher_handoff.py',
+        'QWQ_ANDROID_LOCAL_TARGET',
+        'consumer-lease acquire',
+        'runtimeConfigDigest',
+        'QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST',
+        '--transport-required',
+        'QWQ_CONSUMER_LEASE_ID',
+      ]) {
+        expect(
+          canonicalLauncher,
+          contains(canonicalOwnedToken),
+          reason: 'run.sh 必须持有 $canonicalOwnedToken',
+        );
+        expect(
+          instanceLauncher,
+          isNot(contains(canonicalOwnedToken)),
+          reason: 'run_app_instance.sh 不得重复 $canonicalOwnedToken',
+        );
+      }
+      expect(instanceLauncher, isNot(contains('flutter run')));
     });
 
     test('production 启动装配匿名遥测 Remote，并只接受服务端持久化 ACK', () {

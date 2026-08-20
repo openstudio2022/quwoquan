@@ -64,6 +64,43 @@ def _media_edge_health_url(public_bases: dict[str, Any]) -> str:
     return f"{_stackctl._public_url_origin(str(public_bases['mediaImage'])).rstrip('/')}/healthz"
 
 
+PUBLIC_WEB_STATIC_SCOPE = "public-web"
+
+# 恢复面是纯静态资源，必须与 API 平面独立观测：API 全停时 Shell、脚本、
+# Service Worker 与中文字体仍须 200，否则「使用网页版」这条恢复路径就是断的。
+_PUBLIC_WEB_STATIC_PROBES = (
+    ("public-web-shell", "/index.html", 200, "text/html"),
+    ("public-web-main", "/main.dart.js", 200, ""),
+    ("public-web-service-worker", "/flutter_service_worker.js", 200, ""),
+    (
+        "public-web-font",
+        "/assets/assets/fonts/noto_sans_sc/NotoSansSC%5Bwght%5D.ttf",
+        200,
+        "font/ttf",
+    ),
+)
+
+
+def _public_web_static_health_checks(
+    public_bases: dict[str, Any],
+) -> list[dict[str, Any]]:
+    origin = str(public_bases.get("publicWeb") or "").rstrip("/")
+    if not origin:
+        return []
+    checks: list[dict[str, Any]] = []
+    for name, path, expected_status, content_type in _PUBLIC_WEB_STATIC_PROBES:
+        check: dict[str, Any] = {
+            "name": name,
+            "scope": PUBLIC_WEB_STATIC_SCOPE,
+            "url": f"{origin}{path}",
+            "expectedStatus": expected_status,
+        }
+        if content_type:
+            check["expectedContentTypePrefix"] = content_type
+        checks.append(check)
+    return checks
+
+
 def _health_checks_for_target(
     topology: dict[str, Any],
     target_name: str,
@@ -114,6 +151,8 @@ def _health_checks_for_target(
                 "url": _stackctl._media_edge_health_url(public_bases),
             }
         )
+    if scope in {"edge", "full"} and "publicWeb" in public_bases:
+        checks.extend(_public_web_static_health_checks(public_bases))
     if scope in {"service", "full"}:
         checks.extend(_stackctl._service_health_checks_for_target(target_name))
     if scope in {"content-import", "content-consumer", "content-commercial", "full"}:

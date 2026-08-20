@@ -20,11 +20,15 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.lib.app_launch_attempt import (
+    CONFIGURATION_STATES,
     create_app_launch_attempt,
     read_app_launch_attempt,
+    record_app_launch_attempt_observation,
     record_app_launch_attempt_warning,
     transition_app_launch_attempt,
 )
+
+_CONFIGURATION_STATE_MARKER = "startup_configuration_state state="
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -67,6 +71,41 @@ def _failure_for(status: str) -> str:
     if status in {"compiled", "installing"}:
         return "APP.LAUNCH.install_failed"
     return "APP.LAUNCH.launch_failed"
+
+
+def _configuration_state_from(line: str) -> str:
+    """Read the App-reported configuration state; unknown text stays unobserved."""
+
+    if _CONFIGURATION_STATE_MARKER not in line:
+        return ""
+    tail = line.split(_CONFIGURATION_STATE_MARKER, 1)[1].strip().split()
+    state = tail[0] if tail else ""
+    return state if state in CONFIGURATION_STATES else ""
+
+
+def _settle_runtime_health(receipt: Path) -> None:
+    """Settle runtime health once, from what this attempt actually observed.
+
+    运行时健康只有真的到达 launched 才可观测；未启动的 attempt 保持 unobserved，
+    不得用编译或安装阶段的结论冒充运行时结论。
+    """
+
+    payload = read_app_launch_attempt(receipt)
+    launched = any(
+        str(item.get("status") or "") == "launched"
+        for item in payload["transitions"]
+        if isinstance(item, dict)
+    )
+    if not launched or payload["runtimeHealthStatus"] != "unobserved":
+        return
+    degraded = any(
+        warning.startswith("warning/runtime_degraded")
+        for warning in payload["warnings"]
+    ) or payload["status"] == "runtime_degraded"
+    record_app_launch_attempt_observation(
+        receipt,
+        runtime_health_status="degraded" if degraded else "healthy",
+    )
 
 
 def _installation_snapshot(
@@ -254,6 +293,12 @@ def main() -> int:
                     args.receipt,
                     "warning/runtime_degraded: bootstrap_failure",
                 )
+            configuration_state = _configuration_state_from(line)
+            if configuration_state:
+                record_app_launch_attempt_observation(
+                    args.receipt,
+                    configuration_state=configuration_state,
+                )
             if "syncing files" in lowered or "install complete" in lowered:
                 _advance(args.receipt, "launching")
             if (
@@ -275,6 +320,7 @@ def main() -> int:
             first_blocker=_failure_for(current),
             warning=str(error),
         )
+        _settle_runtime_health(args.receipt)
         return 1
     finally:
         for handle in log_handles:
@@ -283,6 +329,7 @@ def main() -> int:
     current = read_app_launch_attempt(args.receipt)["status"]
     if interrupted:
         transition_app_launch_attempt(args.receipt, "stopped")
+        _settle_runtime_health(args.receipt)
         return 130
     if timed_out:
         _advance_fresh_install(
@@ -299,6 +346,7 @@ def main() -> int:
             first_blocker=_failure_for(current),
             warning=f"launch did not reach launched within {args.timeout_seconds:g}s",
         )
+        _settle_runtime_health(args.receipt)
         return 124
     if exit_code != 0:
         _advance_fresh_install(
@@ -325,9 +373,11 @@ def main() -> int:
                     else _failure_for(current)
                 ),
             )
+        _settle_runtime_health(args.receipt)
         return exit_code
     if current == "launched":
         transition_app_launch_attempt(args.receipt, "stopped")
+        _settle_runtime_health(args.receipt)
         return 0
     transition_app_launch_attempt(
         args.receipt,
@@ -335,6 +385,7 @@ def main() -> int:
         first_blocker=_failure_for(current),
         warning="launch command exited before a launched milestone",
     )
+    _settle_runtime_health(args.receipt)
     return 1
 
 

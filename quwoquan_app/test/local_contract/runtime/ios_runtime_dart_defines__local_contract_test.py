@@ -252,6 +252,87 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
                 result.stderr,
             )
 
+    def test_patrol_handoff_preserves_canonical_production_entrypoint(self) -> None:
+        # Patrol 已迁出 production Runner（quwoquan_app/test_host/patrol），因此
+        # canonical patrol test_bundle.dart 不再享有入口例外：Xcode 传入的
+        # FLUTTER_TARGET 不得改写 Dart 侧与 native manifest 的 canonical
+        # lib/main_prod.dart，否则测试入口会随生产包一起发布。
+        handoff = _bound_test_live_handoff()
+        patrol_entrypoint = (
+            APP_DIR / "test/user_acceptance/patrol/test_bundle.dart"
+        ).resolve()
+        self.assertTrue(patrol_entrypoint.is_file())
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            env = dict(os.environ)
+            env["QWQ_IOS_STACKCTL_PYTHON"] = str(self.runtime_python)
+            env["QWQ_LAUNCH_HANDOFF_JSON"] = json.dumps(handoff)
+            env["DART_DEFINES"] = _encode_defines(handoff["dartDefines"])
+            env["FLUTTER_TARGET"] = str(patrol_entrypoint)
+            env["TARGET_BUILD_DIR"] = temporary_directory
+            env["UNLOCALIZED_RESOURCES_FOLDER_PATH"] = "Runner.app"
+            result = subprocess.run(
+                ["bash", str(SCRIPT)],
+                cwd=APP_DIR,
+                env=env,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            self.assertIn(
+                "export FLUTTER_TARGET=lib/main_prod.dart",
+                result.stdout,
+            )
+            manifest_path = (
+                Path(temporary_directory)
+                / "Runner.app"
+                / "QWQNativeRuntime.plist"
+            )
+            with manifest_path.open("rb") as stream:
+                manifest = plistlib.load(stream)
+            self.assertEqual(manifest["entrypoint"], "lib/main_prod.dart")
+
+    def test_patrol_handoff_rejects_noncanonical_test_entrypoint(self) -> None:
+        handoff = _bound_test_live_handoff()
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            env = dict(os.environ)
+            env["QWQ_IOS_STACKCTL_PYTHON"] = str(self.runtime_python)
+            env["QWQ_LAUNCH_HANDOFF_JSON"] = json.dumps(handoff)
+            env["DART_DEFINES"] = _encode_defines(
+                {
+                    **handoff["dartDefines"],
+                    "RUN_PATROL_ACCEPTANCE": "true",
+                }
+            )
+            env["FLUTTER_TARGET"] = str(
+                APP_DIR
+                / "test/user_acceptance/service/content_service/content/"
+                "feed_delivery_page/feed_load__user_acceptance_test.dart"
+            )
+            env["TARGET_BUILD_DIR"] = temporary_directory
+            env["UNLOCALIZED_RESOURCES_FOLDER_PATH"] = "Runner.app"
+            result = subprocess.run(
+                ["bash", str(SCRIPT)],
+                cwd=APP_DIR,
+                env=env,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 5)
+            self.assertIn(
+                "APP.PACKAGE.production_test_dependency_leak",
+                result.stderr,
+            )
+            # 拒绝必须发生在写 native manifest 之前，否则被拒的构建仍会留下一份
+            # 指向测试入口的运行时清单，Hot Restart 会据此回灌测试身份。
+            self.assertFalse(
+                (
+                    Path(temporary_directory)
+                    / "Runner.app"
+                    / "QWQNativeRuntime.plist"
+                ).exists()
+            )
+
     def test_canonical_handoff_rejects_conflicting_existing_defines(self) -> None:
         handoff = _bound_test_live_handoff()
         poisoned_defines = dict(handoff["dartDefines"])

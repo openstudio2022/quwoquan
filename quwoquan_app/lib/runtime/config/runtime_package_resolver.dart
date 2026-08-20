@@ -1,20 +1,10 @@
 /// 生产 runtime package 解析与校验（runtime-client-foundation DEC-004）。
 ///
-/// 本文件是 App 启动与 local_contract 测试共用的唯一实现：测试直接构造输入
-/// 调用 [RuntimePackageResolver.resolve] 与 [RuntimePackageValidator]，
-/// 不经任何 `ForTest` 后门，也不复制第二份校验规则。
-///
-/// 六维正交约束：environment / platform / BuildMode / launch provenance /
-/// install channel / content activation identity 相互独立；本文件只解析
-/// 前者中的 runtime package 与 launch identity，内容激活身份由 Content API
-/// 响应在运行时下发，绝不出现在 runtime package 中。
+/// 本文件是 App 启动与 local_contract 共用的唯一实现。内容激活身份只由
+/// Content API 在运行时下发，禁止进入 runtime package、native manifest 或
+/// Dart defines。
 library;
 
-/// canonical target → environment 映射。
-///
-/// 真相源是 `quwoquan_service/contracts/metadata/_shared/app_launch_manifest.yaml`
-/// 的 `target_environment`；local_contract 测试断言本常量与 metadata 一致，
-/// 防止 Dart 侧漂移出第二份拓扑。
 const Map<String, String> launchTargetEnvironment = <String, String>{
   'alpha-local': 'alpha',
   'beta-local': 'beta',
@@ -23,7 +13,6 @@ const Map<String, String> launchTargetEnvironment = <String, String>{
   'prod-hosted': 'prod',
 };
 
-/// runtime package 中允许出现的键集合。
 const Set<String> runtimePackageAllowedKeys = <String>{
   'APP_RUNTIME_ENV',
   'CLOUD_GATEWAY_BASE_URL',
@@ -40,80 +29,186 @@ const Set<String> runtimePackageAllowedKeys = <String>{
   'APP_LAUNCH_POLICY',
 };
 
-/// launch identity 观测键（不参与业务分支）。
+const Set<String> runtimePackageForbiddenContentKeys = <String>{
+  'CONTENT_BINDING_STATE',
+  'contentReleaseId',
+  'contentManifestDigest',
+  'contentReadinessReceiptDigest',
+};
+
 const Set<String> launchIdentityKeys = <String>{
   'launchTarget',
   'effectiveLaunchManifestDigest',
 };
 
-/// 解析后的不可变 runtime package。
+enum RuntimePackageSource { compileTime, native }
+
 final class ResolvedRuntimePackage {
   ResolvedRuntimePackage({
+    required this.source,
     required Map<String, String> values,
     required Map<String, String> launchIdentity,
     required Iterable<String> driftKeys,
+    required Iterable<String> forbiddenInputKeys,
+    required this.nativeRuntimePackageHydrated,
     required this.enforceNativeLaunchBinding,
   }) : values = Map<String, String>.unmodifiable(values),
        launchIdentity = Map<String, String>.unmodifiable(launchIdentity),
-       driftKeys = List<String>.unmodifiable(driftKeys);
+       driftKeys = List<String>.unmodifiable(driftKeys),
+       forbiddenInputKeys = List<String>.unmodifiable(forbiddenInputKeys);
 
+  final RuntimePackageSource source;
   final Map<String, String> values;
   final Map<String, String> launchIdentity;
   final List<String> driftKeys;
+  final List<String> forbiddenInputKeys;
+  final bool nativeRuntimePackageHydrated;
   final bool enforceNativeLaunchBinding;
+
+  bool get shouldLoadNativeRuntimePackage =>
+      source == RuntimePackageSource.native;
+
+  String valueFor(String key) => values[key] ?? '';
+
+  String get appRuntimeEnv => valueFor('APP_RUNTIME_ENV');
+  String get gatewayBaseUrl => valueFor('CLOUD_GATEWAY_BASE_URL');
+  String get realtimeConnectionUrl => valueFor('REALTIME_CONNECTION_URL');
+  String get publicWebBaseUrl => valueFor('PUBLIC_WEB_BASE_URL');
+  String get appDownloadBaseUrl => valueFor('APP_DOWNLOAD_BASE_URL');
+  String get legalBaseUrl => valueFor('APP_LEGAL_BASE_URL');
+  String get mediaAvatarCdnBaseUrl => valueFor('MEDIA_AVATAR_CDN_BASE_URL');
+  String get mediaImageCdnBaseUrl => valueFor('MEDIA_IMAGE_CDN_BASE_URL');
+  String get mediaVideoCdnBaseUrl => valueFor('MEDIA_VIDEO_CDN_BASE_URL');
+  String get mediaUploadBaseUrl => valueFor('MEDIA_UPLOAD_BASE_URL');
+  String get rtcMediaConnectionUrl => valueFor('RTC_MEDIA_CONNECTION_URL');
+  String get launchTarget => launchIdentity['launchTarget'] ?? '';
+  String get effectiveLaunchManifestDigest =>
+      launchIdentity['effectiveLaunchManifestDigest'] ?? '';
+
+  String get launchMode {
+    final value = valueFor('QWQ_APP_LAUNCH_MODE');
+    return value.isEmpty ? 'unknown' : value;
+  }
+
+  String get launchPolicy {
+    final value = valueFor('APP_LAUNCH_POLICY');
+    return value.isEmpty ? 'unknown' : value;
+  }
+
+  bool get isValidAppRuntimeEnv =>
+      appRuntimeEnv == 'alpha' ||
+      appRuntimeEnv == 'beta' ||
+      appRuntimeEnv == 'gamma' ||
+      appRuntimeEnv == 'prod';
+
+  List<String> get missingRequiredDefineKeys =>
+      RuntimePackageValidator.invalidRuntimePackageKeys(
+        runtimeEnv: appRuntimeEnv,
+        gatewayBaseUrl: gatewayBaseUrl,
+        realtimeConnectionUrl: realtimeConnectionUrl,
+        publicWebBaseUrl: publicWebBaseUrl,
+        appDownloadBaseUrl: appDownloadBaseUrl,
+        legalBaseUrl: legalBaseUrl,
+        mediaAvatarCdnBaseUrl: mediaAvatarCdnBaseUrl,
+        mediaImageCdnBaseUrl: mediaImageCdnBaseUrl,
+        mediaVideoCdnBaseUrl: mediaVideoCdnBaseUrl,
+        mediaUploadBaseUrl: mediaUploadBaseUrl,
+        rtcMediaConnectionUrl: rtcMediaConnectionUrl,
+        launchPolicy: launchPolicy,
+        launchTarget: launchTarget,
+        effectiveLaunchManifestDigest: effectiveLaunchManifestDigest,
+        enforceNativeLaunchBinding: enforceNativeLaunchBinding,
+        nativeDriftKeys: driftKeys,
+        forbiddenInputKeys: forbiddenInputKeys,
+      );
+
+  Map<String, String> get runtimeDefineSummary {
+    if (shouldLoadNativeRuntimePackage && !nativeRuntimePackageHydrated) {
+      return const <String, String>{
+        'runtimeEnv': 'unknown',
+        'launchMode': 'unknown',
+        'configurationState': 'pending_native',
+        'missingKeys': '',
+      };
+    }
+    final invalid = missingRequiredDefineKeys;
+    return <String, String>{
+      'runtimeEnv': appRuntimeEnv.isEmpty ? 'unknown' : appRuntimeEnv,
+      'launchMode': launchMode,
+      'launchPolicy': launchPolicy,
+      'configurationState': invalid.isEmpty ? 'complete' : 'invalid',
+      if (launchTarget.isNotEmpty) 'launchTarget': launchTarget,
+      if (effectiveLaunchManifestDigest.isNotEmpty)
+        'effectiveLaunchManifestDigest': effectiveLaunchManifestDigest,
+      'missingKeys': invalid.join(','),
+    };
+  }
 }
 
-/// 从原生嵌入的 runtime package 解析不可变配置。
 final class RuntimePackageResolver {
   const RuntimePackageResolver._();
 
-  /// 生产解析入口：过滤未声明键、裁剪空白，并在需要时计算与
-  /// compile-time package 的漂移键。
   static ResolvedRuntimePackage resolve({
     required Map<String, String> nativeValues,
     required Map<String, String> compiledPackage,
-    required bool compiledPackageIsEmpty,
+    required bool nativeRuntimePackageHydrated,
     bool enforceNativeLaunchBinding = true,
   }) {
+    final compiled = <String, String>{
+      for (final key in runtimePackageAllowedKeys)
+        key: (compiledPackage[key] ?? '').trim(),
+    };
+    final native = <String, String>{
+      for (final key in runtimePackageAllowedKeys)
+        if ((nativeValues[key] ?? '').trim().isNotEmpty)
+          key: nativeValues[key]!.trim(),
+    };
+    final compiledPackageIsEmpty = compiled.values.every(
+      (value) => value.isEmpty,
+    );
+    final selected = compiledPackageIsEmpty ? native : compiled;
     final launchIdentity = <String, String>{
-      for (final entry in nativeValues.entries)
-        if (launchIdentityKeys.contains(entry.key) &&
-            entry.value.trim().isNotEmpty)
-          entry.key: entry.value.trim(),
+      for (final key in launchIdentityKeys)
+        if ((nativeValues[key] ?? '').trim().isNotEmpty)
+          key: nativeValues[key]!.trim(),
     };
-    final values = <String, String>{
-      for (final entry in nativeValues.entries)
-        if (runtimePackageAllowedKeys.contains(entry.key) &&
-            entry.value.trim().isNotEmpty)
-          entry.key: entry.value.trim(),
-    };
-    final driftKeys = compiledPackageIsEmpty || !enforceNativeLaunchBinding
+    final driftKeys =
+        compiledPackageIsEmpty ||
+            !nativeRuntimePackageHydrated ||
+            !enforceNativeLaunchBinding
         ? const <String>[]
         : runtimePackageAllowedKeys
-              .where((key) => values[key] != compiledPackage[key])
+              .where((key) => native[key] != compiled[key])
               .toList();
+    final forbiddenInputKeys = <String>{
+      for (final package in <Map<String, String>>[
+        compiledPackage,
+        nativeValues,
+      ])
+        for (final key in runtimePackageForbiddenContentKeys)
+          if ((package[key] ?? '').trim().isNotEmpty) key,
+    };
     return ResolvedRuntimePackage(
-      values: values,
+      source: compiledPackageIsEmpty
+          ? RuntimePackageSource.native
+          : RuntimePackageSource.compileTime,
+      values: selected,
       launchIdentity: launchIdentity,
       driftKeys: driftKeys,
+      forbiddenInputKeys: forbiddenInputKeys,
+      nativeRuntimePackageHydrated: nativeRuntimePackageHydrated,
       enforceNativeLaunchBinding: enforceNativeLaunchBinding,
     );
   }
 }
 
-/// runtime package 的唯一校验实现。
 final class RuntimePackageValidator {
   const RuntimePackageValidator._();
 
   static const String testLiveLaunchPolicy = 'test_live';
   static const String prodReleaseLaunchPolicy = 'prod_release';
-
   static final RegExp _sha256Identity = RegExp(r'^sha256:[0-9a-f]{64}$');
 
-  /// 返回 runtime package 中缺失或非法的键；不包含任何 endpoint 值。
-  ///
-  /// launch provenance（launchMode）不参与任何判定；BuildMode、安装渠道与
-  /// 内容身份不属于本校验的输入。
   static List<String> invalidRuntimePackageKeys({
     required String runtimeEnv,
     required String gatewayBaseUrl,
@@ -131,14 +226,68 @@ final class RuntimePackageValidator {
     required String effectiveLaunchManifestDigest,
     required bool enforceNativeLaunchBinding,
     List<String> nativeDriftKeys = const <String>[],
+    List<String> forbiddenInputKeys = const <String>[],
   }) {
-    final validRuntimeEnv =
-        runtimeEnv == 'alpha' ||
-        runtimeEnv == 'beta' ||
-        runtimeEnv == 'gamma' ||
-        runtimeEnv == 'prod';
     final invalid = <String>[
-      if (!validRuntimeEnv) 'APP_RUNTIME_ENV',
+      ...invalidRuntimeEndpointKeys(
+        runtimeEnv: runtimeEnv,
+        gatewayBaseUrl: gatewayBaseUrl,
+        realtimeConnectionUrl: realtimeConnectionUrl,
+        publicWebBaseUrl: publicWebBaseUrl,
+        appDownloadBaseUrl: appDownloadBaseUrl,
+        legalBaseUrl: legalBaseUrl,
+        mediaAvatarCdnBaseUrl: mediaAvatarCdnBaseUrl,
+        mediaImageCdnBaseUrl: mediaImageCdnBaseUrl,
+        mediaVideoCdnBaseUrl: mediaVideoCdnBaseUrl,
+        mediaUploadBaseUrl: mediaUploadBaseUrl,
+        rtcMediaConnectionUrl: rtcMediaConnectionUrl,
+      ),
+      if (launchPolicy != testLiveLaunchPolicy &&
+          launchPolicy != prodReleaseLaunchPolicy)
+        'APP_LAUNCH_POLICY',
+      if (launchPolicy == testLiveLaunchPolicy && runtimeEnv == 'prod')
+        'APP_LAUNCH_POLICY',
+      if (launchPolicy == prodReleaseLaunchPolicy && runtimeEnv != 'prod')
+        'APP_LAUNCH_POLICY',
+      if (launchTarget.isNotEmpty &&
+          launchTargetEnvironment[launchTarget] != runtimeEnv)
+        'launchTarget',
+      if (enforceNativeLaunchBinding &&
+          launchPolicy == prodReleaseLaunchPolicy &&
+          launchTarget.isEmpty)
+        'launchTarget',
+      if (enforceNativeLaunchBinding &&
+          launchPolicy == prodReleaseLaunchPolicy &&
+          !_sha256Identity.hasMatch(effectiveLaunchManifestDigest))
+        'effectiveLaunchManifestDigest',
+      if (effectiveLaunchManifestDigest.isNotEmpty &&
+          !_sha256Identity.hasMatch(effectiveLaunchManifestDigest))
+        'effectiveLaunchManifestDigest',
+      ...forbiddenInputKeys,
+      for (final key in nativeDriftKeys) 'NATIVE_RUNTIME_PACKAGE.$key',
+    ];
+    return List<String>.unmodifiable(<String>{...invalid});
+  }
+
+  static List<String> invalidRuntimeEndpointKeys({
+    required String runtimeEnv,
+    required String gatewayBaseUrl,
+    required String realtimeConnectionUrl,
+    required String publicWebBaseUrl,
+    required String appDownloadBaseUrl,
+    required String legalBaseUrl,
+    required String mediaAvatarCdnBaseUrl,
+    required String mediaImageCdnBaseUrl,
+    required String mediaVideoCdnBaseUrl,
+    required String mediaUploadBaseUrl,
+    required String rtcMediaConnectionUrl,
+  }) {
+    final invalid = <String>[
+      if (runtimeEnv != 'alpha' &&
+          runtimeEnv != 'beta' &&
+          runtimeEnv != 'gamma' &&
+          runtimeEnv != 'prod')
+        'APP_RUNTIME_ENV',
       if (!isValidHttpsBaseUrl(gatewayBaseUrl)) 'CLOUD_GATEWAY_BASE_URL',
       if (!isValidSecureWebSocketUrl(realtimeConnectionUrl))
         'REALTIME_CONNECTION_URL',
@@ -154,33 +303,39 @@ final class RuntimePackageValidator {
       if (!isValidHttpsBaseUrl(mediaUploadBaseUrl)) 'MEDIA_UPLOAD_BASE_URL',
       if (!isValidSecureWebSocketUrl(rtcMediaConnectionUrl))
         'RTC_MEDIA_CONNECTION_URL',
-      if (launchPolicy != testLiveLaunchPolicy &&
-          launchPolicy != prodReleaseLaunchPolicy)
-        'APP_LAUNCH_POLICY',
-      if (launchPolicy == testLiveLaunchPolicy && runtimeEnv == 'prod')
-        'APP_LAUNCH_POLICY',
-      if (launchPolicy == prodReleaseLaunchPolicy && runtimeEnv != 'prod')
-        'APP_LAUNCH_POLICY',
-      // launch identity 一致性：launchTarget 一旦存在，必须映射到当前环境；
-      // 映射消费 canonical metadata 的 target_environment，禁止拼接
-      // 不存在的 `<env>-local` 之类字面量。
-      if (launchTarget.isNotEmpty &&
-          launchTargetEnvironment[launchTarget] != runtimeEnv)
-        'launchTarget',
-      // Release 制品必须内嵌完整 launch identity；direct Debug 与测试可缺席。
-      if (enforceNativeLaunchBinding &&
-          launchPolicy == prodReleaseLaunchPolicy &&
-          launchTarget.isEmpty)
-        'launchTarget',
-      if (enforceNativeLaunchBinding &&
-          launchPolicy == prodReleaseLaunchPolicy &&
-          !_sha256Identity.hasMatch(effectiveLaunchManifestDigest))
-        'effectiveLaunchManifestDigest',
-      if (effectiveLaunchManifestDigest.isNotEmpty &&
-          !_sha256Identity.hasMatch(effectiveLaunchManifestDigest))
-        'effectiveLaunchManifestDigest',
-      for (final key in nativeDriftKeys) 'NATIVE_RUNTIME_PACKAGE.$key',
     ];
+    if (invalid.isNotEmpty) {
+      return List<String>.unmodifiable(<String>{...invalid});
+    }
+    final publicWeb = Uri.parse(publicWebBaseUrl);
+    final legal = Uri.parse(legalBaseUrl);
+    final appDownload = Uri.parse(appDownloadBaseUrl);
+    final mediaAvatar = Uri.parse(mediaAvatarCdnBaseUrl);
+    final mediaImage = Uri.parse(mediaImageCdnBaseUrl);
+    final mediaVideo = Uri.parse(mediaVideoCdnBaseUrl);
+    final mediaUpload = Uri.parse(mediaUploadBaseUrl);
+    if (!_sameOrigin(publicWeb, legal) ||
+        legal.path != _joinBasePath(publicWeb.path, 'legal')) {
+      invalid.add('APP_LEGAL_BASE_URL');
+    }
+    if (!_sameOrigin(mediaAvatar, mediaImage) ||
+        !_sameOrigin(mediaImage, mediaVideo) ||
+        mediaAvatar.path != '/media/avatar' ||
+        mediaImage.path != '/media/image' ||
+        mediaVideo.path != '/media/video') {
+      invalid.addAll(<String>[
+        'MEDIA_AVATAR_CDN_BASE_URL',
+        'MEDIA_IMAGE_CDN_BASE_URL',
+        'MEDIA_VIDEO_CDN_BASE_URL',
+      ]);
+    }
+    if (!_sameOrigin(appDownload, mediaImage) ||
+        appDownload.path != '/download') {
+      invalid.add('APP_DOWNLOAD_BASE_URL');
+    }
+    if (_sameOrigin(mediaUpload, mediaImage) || mediaUpload.path.isNotEmpty) {
+      invalid.add('MEDIA_UPLOAD_BASE_URL');
+    }
     return List<String>.unmodifiable(<String>{...invalid});
   }
 
@@ -202,5 +357,15 @@ final class RuntimePackageValidator {
         uri.userInfo.isEmpty &&
         !uri.hasQuery &&
         !uri.hasFragment;
+  }
+
+  static bool _sameOrigin(Uri left, Uri right) =>
+      left.scheme.toLowerCase() == right.scheme.toLowerCase() &&
+      left.host.toLowerCase() == right.host.toLowerCase() &&
+      left.port == right.port;
+
+  static String _joinBasePath(String basePath, String child) {
+    final normalized = basePath.replaceFirst(RegExp(r'/+$'), '');
+    return '$normalized/$child';
   }
 }

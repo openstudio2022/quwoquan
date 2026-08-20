@@ -45,6 +45,10 @@ from quwoquan_ops.cli.lib.package_reuse import (
     materialize_package_input_capsule,
     workspace_snapshot,
 )
+from quwoquan_ops.cli.lib.web_official_release import (
+    WebOfficialReleaseError,
+    package_web_official_release,
+)
 
 _DEVICE_BOUND_CLASSES = frozenset({"registered_device"})
 _PLATFORMS = frozenset({"android", "ios", "web"})
@@ -485,6 +489,7 @@ def _build_from_capsule(
         capsule_root=capsule_root,
     )
     log_path = attempt_dir / "compile.log"
+    web_release: dict[str, object] | None = None
     with tempfile.TemporaryDirectory(
         prefix=f"qwq-app-{environment}-{platform}-",
         dir=str(attempt_dir.parent),
@@ -676,25 +681,27 @@ def _build_from_capsule(
             if artifact.suffix == ".app":
                 _read_ios_identity(artifact, application_id)
         else:
-            _run(
-                [
-                    "flutter",
-                    "build",
-                    "web",
-                    mode_flag,
-                    "--target",
-                    entrypoint,
-                    "--no-pub",
-                    *defines,
-                ],
-                cwd=app_dir,
-                env=command_env,
-                log_path=log_path,
-            )
-            artifact = _copy_artifact(
-                app_dir / "build/web",
-                attempt_dir / f"quwoquan-{environment}-{build_mode}-web",
-            )
+            # Web 只有一个编译实现：package_web_official_release。它负责 PWA
+            # 策略、构建校验、noindex 与内容寻址的 immutable release；这里只把
+            # 冻结 capsule 交给它编译一次，再对同一 release 写 AppArtifactManifest。
+            if build_mode != "release":
+                raise AppArtifactBuildError(
+                    "APP.PACKAGE.build_mode_invalid: hosted Web artifacts are "
+                    f"release-only, got {build_mode}"
+                )
+            try:
+                web_release = package_web_official_release(
+                    repo_root=workspace,
+                    environment=environment,
+                    target=target,
+                    package_root=attempt_dir / "web",
+                    public_origin=str(handoff["publicWebBaseUrl"]),
+                )
+            except WebOfficialReleaseError as error:
+                raise AppArtifactBuildError(
+                    f"APP.PACKAGE.compile_failed: {error}"
+                ) from error
+            artifact = Path(str(web_release["releasePath"]))
         findings, sbom = _scan_artifact(artifact, platform)
         if findings:
             raise AppArtifactBuildError(
@@ -704,7 +711,7 @@ def _build_from_capsule(
             json.dumps(sbom, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
-        return {
+        build: dict[str, Any] = {
             "artifactPath": str(artifact),
             "artifactDigest": _artifact_digest(artifact),
             "launchManifestDigest": str(handoff["effectiveLaunchManifestDigest"]),
@@ -712,6 +719,18 @@ def _build_from_capsule(
             "sourceCapsuleDigest": str(capsule["deploymentInputDigest"]),
             "sourceStatusDigest": str(capsule["workspaceStatusDigest"]),
         }
+        if web_release is not None:
+            # AppArtifactManifest 不接受额外字段，Web release 的 exact 身份落回执，
+            # 让两条入口指向同一 immutable release 时可被逐项核对。
+            build["webRelease"] = {
+                "releaseId": str(web_release["releaseId"]),
+                "contentSHA256": str(web_release["contentSHA256"]),
+                "manifestSHA256": str(web_release["manifestSHA256"]),
+                "manifestPath": str(web_release["manifestPath"]),
+                "activePath": str(web_release["activePath"]),
+                "publicOrigin": str(web_release["publicOrigin"]),
+            }
+        return build
 
 
 def _version() -> tuple[str, str]:

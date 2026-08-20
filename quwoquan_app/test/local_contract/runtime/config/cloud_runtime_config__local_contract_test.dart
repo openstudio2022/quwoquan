@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
+import 'package:quwoquan_app/runtime/config/runtime_package_resolver.dart';
 import 'package:quwoquan_app/runtime/errors/generated/ops/ops_event_record_errors.g.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
@@ -21,19 +22,18 @@ Map<String, String> _nativeRuntimePackageFor(String environment) {
     'RTC_MEDIA_CONNECTION_URL': 'wss://rtc.$environment.example.test',
     'QWQ_APP_LAUNCH_MODE': 'stackctl_$environment',
     'APP_LAUNCH_POLICY': 'test_live',
-    'CONTENT_BINDING_STATE': 'unbound',
   };
 }
 
-CloudRuntimePackageResolution _resolveRuntimePackage(
+ResolvedRuntimePackage _resolveRuntimePackage(
   Map<String, String> nativeRuntimePackage, {
   Map<String, String> compiledRuntimePackage = const <String, String>{},
   bool nativeRuntimePackageHydrated = true,
   bool enforceNativeLaunchBinding = true,
 }) {
-  return CloudRuntimePackageResolution.resolve(
-    compiledRuntimePackage: compiledRuntimePackage,
-    nativeRuntimePackage: nativeRuntimePackage,
+  return RuntimePackageResolver.resolve(
+    compiledPackage: compiledRuntimePackage,
+    nativeValues: nativeRuntimePackage,
     nativeRuntimePackageHydrated: nativeRuntimePackageHydrated,
     enforceNativeLaunchBinding: enforceNativeLaunchBinding,
   );
@@ -56,19 +56,20 @@ void main() {
         'RTC_MEDIA_CONNECTION_URL': 'wss://rtc.example.test',
         'QWQ_APP_LAUNCH_MODE': 'direct_flutter_run',
         'APP_LAUNCH_POLICY': 'test_live',
-        'CONTENT_BINDING_STATE': 'unbound',
         'launchTarget': 'alpha-local',
         'effectiveLaunchManifestDigest': 'sha256:3333333333333333333333333333333333333333333333333333333333333333',
       });
 
-      expect(resolution.source, CloudRuntimePackageSource.native);
+      expect(resolution.source, RuntimePackageSource.native);
       expect(resolution.shouldLoadNativeRuntimePackage, isTrue);
       expect(resolution.appRuntimeEnv, 'alpha');
       expect(resolution.launchMode, 'direct_flutter_run');
       expect(resolution.runtimeDefineSummary['configurationState'], 'complete');
       expect(resolution.missingRequiredDefineKeys, isEmpty);
-      expect(resolution.hasCompleteContentBinding, isFalse);
-      expect(resolution.runtimeDefineSummary['contentBindingState'], 'unbound');
+      expect(
+        resolution.runtimeDefineSummary,
+        isNot(contains('contentBindingState')),
+      );
     });
 
     test('runtime package 未水合或无效时业务请求得到 typed unavailable', () {
@@ -103,18 +104,28 @@ void main() {
       expect(CloudRuntimeConfig.runtimeAvailabilityFailure(), isNull);
     });
 
-    test('内容发布绑定缺失或 digest 非 canonical 时保持 invalid', () {
+    test('runtime package 重新带入内容激活身份时拒绝启动', () {
       final resolution = _resolveRuntimePackage(<String, String>{
-        ..._nativeRuntimePackageFor('prod'),
-        'APP_LAUNCH_POLICY': CloudRuntimeConfig.prodReleaseLaunchPolicy,
+        ..._nativeRuntimePackageFor('alpha'),
         'CONTENT_BINDING_STATE': 'bound',
         'contentReleaseId': 'release-alpha',
-        'contentManifestDigest': 'invalid',
+        'contentManifestDigest': 'sha256:1111111111111111111111111111111111111111111111111111111111111111',
         'contentReadinessReceiptDigest': 'sha256:2222222222222222222222222222222222222222222222222222222222222222',
       });
 
-      expect(resolution.hasCompleteContentBinding, isFalse);
-      expect(resolution.runtimeDefineSummary['contentBindingState'], 'invalid');
+      expect(
+        resolution.missingRequiredDefineKeys,
+        containsAll(<String>[
+          'CONTENT_BINDING_STATE',
+          'contentReleaseId',
+          'contentManifestDigest',
+          'contentReadinessReceiptDigest',
+        ]),
+      );
+      expect(
+        resolution.runtimeDefineSummary,
+        isNot(contains('contentReleaseId')),
+      );
     });
 
     test('裸 direct Flutter Debug 未绑定内容时进入 no_active_release 安全壳', () {
@@ -123,7 +134,6 @@ void main() {
         'QWQ_APP_LAUNCH_MODE': 'direct_flutter_run',
       });
 
-      expect(resolution.requiresReleaseBoundContent, isFalse);
       expect(resolution.missingRequiredDefineKeys, isEmpty);
     });
 
@@ -133,82 +143,30 @@ void main() {
         'QWQ_APP_LAUNCH_MODE': 'canonical_launcher',
       });
 
-      expect(resolution.requiresReleaseBoundContent, isFalse);
       expect(resolution.missingRequiredDefineKeys, isEmpty);
     });
 
-    test('test_live 接受完整 run-bound 内容并拒绝伪绑定或部分绑定', () {
-      const manifestDigest =
-          'sha256:1111111111111111111111111111111111111111111111111111111111111111';
-      const readinessDigest =
-          'sha256:2222222222222222222222222222222222222222222222222222222222222222';
-      const launchDigest =
-          'sha256:3333333333333333333333333333333333333333333333333333333333333333';
-
-      final complete = _resolveRuntimePackage(<String, String>{
-        ..._nativeRuntimePackageFor('alpha'),
-        'CONTENT_BINDING_STATE': 'bound',
-        'contentReleaseId': 'release-alpha-run',
-        'contentManifestDigest': manifestDigest,
-        'contentReadinessReceiptDigest': readinessDigest,
-        'launchTarget': 'alpha-local',
-        'effectiveLaunchManifestDigest': launchDigest,
-      });
-
-      expect(complete.hasCompleteContentBinding, isTrue);
-      expect(complete.requiresReleaseBoundContent, isTrue);
-      expect(complete.missingRequiredDefineKeys, isEmpty);
-      expect(complete.runtimeDefineSummary['contentBindingState'], 'bound');
-
-      final missingReadiness = _resolveRuntimePackage(<String, String>{
-        ..._nativeRuntimePackageFor('alpha'),
-        'CONTENT_BINDING_STATE': 'bound',
-        'contentReleaseId': 'release-alpha-run',
-        'contentManifestDigest': manifestDigest,
-        'launchTarget': 'alpha-local',
-        'effectiveLaunchManifestDigest': launchDigest,
-      });
-      expect(
-        missingReadiness.missingRequiredDefineKeys,
-        contains('contentReadinessReceiptDigest'),
-      );
-      expect(
-        missingReadiness.runtimeDefineSummary['contentBindingState'],
-        'invalid',
-      );
-
-      final undeclaredBinding = _resolveRuntimePackage(<String, String>{
-        ..._nativeRuntimePackageFor('alpha'),
-        'contentReleaseId': 'release-alpha-run',
-        'contentManifestDigest': manifestDigest,
-        'contentReadinessReceiptDigest': readinessDigest,
-      });
-      expect(
-        undeclaredBinding.missingRequiredDefineKeys,
-        contains('CONTENT_BINDING_STATE'),
-      );
-      expect(
-        undeclaredBinding.runtimeDefineSummary['contentBindingState'],
-        'invalid',
-      );
-    });
-
-    test('Prod launch policy 缺少 release-bound 内容时仍 fail-closed', () {
+    test('Prod runtime package 只要求 launch identity，不要求内容 identity', () {
       final resolution = _resolveRuntimePackage(<String, String>{
         ..._nativeRuntimePackageFor('prod'),
         'APP_LAUNCH_POLICY': CloudRuntimeConfig.prodReleaseLaunchPolicy,
-        'CONTENT_BINDING_STATE': 'bound',
+        'launchTarget': 'prod-hosted',
+        'effectiveLaunchManifestDigest': 'sha256:3333333333333333333333333333333333333333333333333333333333333333',
+      });
+
+      expect(resolution.missingRequiredDefineKeys, isEmpty);
+      expect(resolution.runtimeDefineSummary['configurationState'], 'complete');
+    });
+
+    test('Prod launch policy 缺少 launch identity 时仍 fail-closed', () {
+      final resolution = _resolveRuntimePackage(<String, String>{
+        ..._nativeRuntimePackageFor('prod'),
+        'APP_LAUNCH_POLICY': CloudRuntimeConfig.prodReleaseLaunchPolicy,
       });
 
       expect(
         resolution.missingRequiredDefineKeys,
-        containsAll(<String>[
-          'contentReleaseId',
-          'contentManifestDigest',
-          'contentReadinessReceiptDigest',
-          'launchTarget',
-          'effectiveLaunchManifestDigest',
-        ]),
+        containsAll(<String>['launchTarget', 'effectiveLaunchManifestDigest']),
       );
     });
 
@@ -218,7 +176,6 @@ void main() {
         'QWQ_APP_LAUNCH_MODE': 'direct_flutter_run',
       }, enforceNativeLaunchBinding: false);
 
-      expect(resolution.requiresReleaseBoundContent, isFalse);
       expect(resolution.missingRequiredDefineKeys, isEmpty);
     });
 
@@ -249,7 +206,7 @@ void main() {
         compiledRuntimePackage: compiled,
       );
 
-      expect(resolution.source, CloudRuntimePackageSource.compileTime);
+      expect(resolution.source, RuntimePackageSource.compileTime);
       expect(resolution.appRuntimeEnv, 'alpha');
       expect(
         resolution.missingRequiredDefineKeys,
@@ -265,7 +222,7 @@ void main() {
         },
       );
 
-      expect(resolution.source, CloudRuntimePackageSource.compileTime);
+      expect(resolution.source, RuntimePackageSource.compileTime);
       expect(resolution.gatewayBaseUrl, isEmpty);
       expect(
         resolution.missingRequiredDefineKeys,
@@ -396,9 +353,8 @@ void main() {
     });
 
     test('配置摘要只暴露环境、入口和缺失键，不暴露 endpoint', () {
-      final summary = _resolveRuntimePackage(
-        _nativeRuntimePackageFor('alpha'),
-      ).runtimeDefineSummary;
+      final summary = _resolveRuntimePackage(_nativeRuntimePackageFor('alpha'))
+          .runtimeDefineSummary;
 
       expect(
         summary.keys,

@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_app_state.dart';
-import '../../../support/runtime/patrol/patrol_test_support.dart';
+import '../../../support/runtime/patrol_acceptance_session.dart';
 
 void main() {
   group('Patrol acceptance session contract', () {

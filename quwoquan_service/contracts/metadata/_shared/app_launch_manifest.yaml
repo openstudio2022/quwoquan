@@ -32,6 +32,23 @@ launch_policies:
   prod_release:
     environments: [prod]
 
+# launcher 侧 typed blocker 的唯一真相源。这些码由 launcher、packager 与恢复面产生，
+# 不经过服务端请求，因此不进任何服务 errors.yaml；消费方只允许引用本枚举。
+launch_blockers:
+  APP.LAUNCH.compile_failed: 编译未产出可安装制品。
+  APP.LAUNCH.install_failed: 制品已编译但未能安装到目标设备。
+  APP.LAUNCH.launch_failed: 已安装但未能到达 launched。
+  APP.LAUNCH.prod_debug_forbidden: Prod 不接受 Debug 构建或直接 Flutter 执行。
+  APP.LAUNCH.prod_artifact_required: prod-sim 必须显式给出 canonical Release artifact manifest。
+  APP.LAUNCH.prod_artifact_invalid: 给出的 Prod artifact manifest 与 exact 身份或摘要不符。
+  APP.LAUNCH.prod_hosted_flutter_forbidden: prod-hosted 只消费已签名制品、安装回执与显式 rollout 授权。
+  APP.LAUNCH.ios_release_simulator_unsupported: Flutter iOS Simulator 只支持 Debug，不得伪造 Release 启动回执。
+  APP.LAUNCH.device_unavailable: 目标设备不可用或未被 canonical 设备发现认领。
+  APP.LAUNCH.platform_unsupported: 目标平台不属于 android、ios。
+  APP.LAUNCH.receipt_invalid: attempt receipt 不满足本 schema。
+  APP.LAUNCH.receipt_timeout: 等待终态超时且未观测到 typed failure。
+  APP.WEB.recovery_unavailable: 恢复 Web 静态面不可达，不得据此生成 launched 或 ready 假证据。
+
 schemas:
   app_launch_attempt:
     schema_value: app-launch-attempt
@@ -51,6 +68,10 @@ schemas:
       - transitions
       - warnings
       - firstBlocker
+      - configurationState
+      - runtimeHealthStatus
+      - recoveryWebStatus
+      - recoveryWebEvidenceRef
       - deviceId
       - logRefs
       - updatedAt
@@ -74,7 +95,17 @@ schemas:
       warnings:
         type: array
         items: { type: string }
-      firstBlocker: { type: string }
+      firstBlocker: { type: string, allowed_values_ref: launch_blockers, allow_empty: true }
+      configurationState:
+        type: string
+        allowed_values: [unobserved, pending_native, complete, invalid]
+      runtimeHealthStatus:
+        type: string
+        allowed_values: [unobserved, healthy, degraded, unavailable]
+      recoveryWebStatus:
+        type: string
+        allowed_values: [not_applicable, unobserved, available, unavailable]
+      recoveryWebEvidenceRef: { type: string }
       deviceId: { type: string, min_length: 1 }
       logRefs:
         type: array
@@ -87,6 +118,11 @@ schemas:
       - ui-only 允许把 runtime、Provider、TLS、transport 与 content readiness 记入 warnings 后继续；content-live 与 release-artifact 不得把同一问题降级为 warning。
       - stopped 只表示用户或父进程正常停止已启动会话，不得解释为编译失败，也不得清理 App 或环境数据。
       - prod-sim 的 release-artifact 只允许 Android exact Release emulator artifact；Flutter iOS Simulator 只支持 Debug，iOS Release/Profile 必须以 APP.LAUNCH.ios_release_simulator_unsupported 阻断，不能生成或消费伪 Release 启动回执。
+      - firstBlocker 非空时只允许取 launch_blockers 声明的码；不得写入自由文本或服务端错误码。
+      - configurationState 只表达 runtime package 解析结论，unobserved 表示本次 attempt 尚未观测；它绝不携带内容 release 身份，服务不可用不得写成 invalid。
+      - runtimeHealthStatus 只在 launched 之后可离开 unobserved；degraded 与 unavailable 必须同时出现对应 warning，且不得倒推 launch 阶段失败。
+      - recoveryWebStatus=unavailable 必须以 APP.WEB.recovery_unavailable 记录并禁止生成 launched 或 ready 假证据；恢复面不属于本次 attempt 验收面时取 not_applicable。
+      - recoveryWebEvidenceRef 只在 recoveryWebStatus 为 available 或 unavailable 时非空，且必须指向可回读的 HTTP/字体/digest 证据，不得写入摘要文字。
 
   app_effective_launch_manifest:
     schema_value: app-effective-launch-manifest

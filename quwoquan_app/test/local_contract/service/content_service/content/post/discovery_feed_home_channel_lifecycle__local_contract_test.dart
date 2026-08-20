@@ -18,17 +18,15 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
         CloudOperationCancellationSignal,
         ContentFeedEmptyReason,
         ContentFeedOutcome;
+
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
 
 List<Override> _boundaryOverrides({
   required ContentDiscoveryFeedQuery query,
   required List<HomeChannelConfig> channels,
-  ContentReleaseRequirement releaseRequirement =
-      ContentReleaseRequirement.optional,
 }) {
   return <Override>[
     ...sealedCloudBoundaryOverrides(),
-    contentReleaseRequirementProvider.overrideWithValue(releaseRequirement),
     contentDiscoveryFeedQueryProvider.overrideWithValue(query),
     homeChannelsProvider.overrideWithValue(channels),
     postInteractionStateProvider.overrideWith(
@@ -87,38 +85,40 @@ void main() {
     );
   });
 
-  test('release-bound 首页缺 active release 时返回 stillBlocked', () async {
-    final recommend = ContentUIConfig.homeChannels.firstWhere(
-      (channel) => channel.id == 'recommend',
-    );
-    final container = ProviderContainer(
-      overrides: _boundaryOverrides(
-        query: _ImmediateDiscoveryFeedQuery(
-          () async => DiscoveryFeedPage(
-            items: [],
-            outcome: ContentFeedOutcome.empty,
-            emptyReason: ContentFeedEmptyReason.noActiveRelease,
+  test(
+    'noActiveRelease 始终由 Content API typed outcome 形成 canonical empty',
+    () async {
+      final recommend = ContentUIConfig.homeChannels.firstWhere(
+        (channel) => channel.id == 'recommend',
+      );
+      final container = ProviderContainer(
+        overrides: _boundaryOverrides(
+          query: _ImmediateDiscoveryFeedQuery(
+            () async => DiscoveryFeedPage(
+              items: [],
+              outcome: ContentFeedOutcome.empty,
+              emptyReason: ContentFeedEmptyReason.noActiveRelease,
+            ),
           ),
+          channels: <HomeChannelConfig>[recommend],
         ),
-        channels: <HomeChannelConfig>[recommend],
-        releaseRequirement: ContentReleaseRequirement.required,
-      ),
-    );
-    addTearDown(container.dispose);
+      );
+      addTearDown(container.dispose);
 
-    final result = await container
-        .read(discoveryFeedMapProvider.notifier)
-        .load('recommend', force: true);
+      final result = await container
+          .read(discoveryFeedMapProvider.notifier)
+          .load('recommend', force: true);
 
-    expect(result.terminal, DiscoveryFeedLoadTerminal.stillBlocked);
-    expect(
-      container
-          .read(discoveryFeedMapProvider)['recommend']
-          ?.value
-          ?.blockingError,
-      isNotNull,
-    );
-  });
+      expect(result.terminal, DiscoveryFeedLoadTerminal.canonicalEmpty);
+      expect(
+        container
+            .read(discoveryFeedMapProvider)['recommend']
+            ?.value
+            ?.emptyReason,
+        ContentFeedEmptyReason.noActiveRelease,
+      );
+    },
+  );
 
   test('非 release-bound 首页仍接受 noActiveRelease canonicalEmpty', () async {
     final recommend = ContentUIConfig.homeChannels.firstWhere(
@@ -183,18 +183,17 @@ void main() {
     final recommend = ContentUIConfig.homeChannels.firstWhere(
       (channel) => channel.id == 'recommend',
     );
-    final query = _SequencedDiscoveryFeedQuery(<
-      Future<DiscoveryFeedPage> Function()
-    >[
-      () async => throw StateError('service unavailable'),
-      () async => DiscoveryFeedPage(
-        items: <ContentPostViewData>[_recoveredCanonicalPost()],
-        outcome: ContentFeedOutcome.content,
-        feedRequestId: 'feed-request-recovered',
-        policyDigest:
-            'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-      ),
-    ]);
+    final query = _SequencedDiscoveryFeedQuery(
+      <Future<DiscoveryFeedPage> Function()>[
+        () async => throw StateError('service unavailable'),
+        () async => DiscoveryFeedPage(
+          items: <ContentPostViewData>[_recoveredCanonicalPost()],
+          outcome: ContentFeedOutcome.content,
+          feedRequestId: 'feed-request-recovered',
+          policyDigest: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        ),
+      ],
+    );
     final container = ProviderContainer(
       overrides: _boundaryOverrides(
         query: query,

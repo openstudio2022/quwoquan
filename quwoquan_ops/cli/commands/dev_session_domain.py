@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shlex
 import subprocess
@@ -26,6 +27,10 @@ from typing import Any
 
 # HEAD 上 stackctl.py 未导入 summarize_output（潜伏 NameError 死分支），
 # 迁出时改为显式引用 dev_up 的实现。
+from quwoquan_ops.cli.lib.app_debug_preflight_handoff import (
+    app_debug_preflight_purpose,
+    write_app_debug_preflight_receipt,
+)
 from quwoquan_ops.cli.lib.dev_up import summarize_output
 from typing import Mapping
 
@@ -323,14 +328,30 @@ def _run_dev_session_target(
             }
         )
 
+    # 一次 attempt 只允许一个 preflight owner：dev-session 用与 launcher 同一
+    # purpose 执行唯一一次，再把 exact payload 交给 run.sh 复用。
+    preflight_purpose = app_debug_preflight_purpose(app_mode)
     if preflight_payload is None:
         preflight_payload = _stackctl.command_app_debug_preflight(
             _stackctl._dev_session_child_args(
                 "app-debug-preflight",
                 report_dir=report_dir / "preflight",
-                argv=["--target", target, "--runtime-mode", "test_live"],
+                argv=[
+                    "--purpose",
+                    preflight_purpose,
+                    "--target",
+                    target,
+                    "--runtime-mode",
+                    "test_live",
+                ],
             )
         )
+    preflight_receipt = write_app_debug_preflight_receipt(
+        report_dir / "preflight" / "app-debug-preflight.json",
+        preflight_payload,
+        purpose=preflight_purpose,
+        target=target,
+    )
     phases.append(_stackctl._dev_session_phase("preflight", preflight_payload))
     if int(preflight_payload.get("exitCode", 1)) != 0:
         return {
@@ -450,6 +471,12 @@ def _run_dev_session_target(
                     selected_device,
                 ],
                 cwd=_stackctl.ROOT / "quwoquan_app",
+                env={
+                    **os.environ,
+                    # 本 attempt 的 preflight owner 已是 dev-session；
+                    # launcher 只允许复用这份 exact receipt，不得再跑一次。
+                    "QWQ_APP_DEBUG_PREFLIGHT_RECEIPT": str(preflight_receipt),
+                },
                 stdin=subprocess.DEVNULL,
                 stdout=log_handle,
                 stderr=subprocess.STDOUT,
@@ -502,6 +529,9 @@ def _run_dev_session_target(
                 "details": [
                     f"device={selected_device}",
                     f"mode={app_mode}",
+                    f"configurationState={launch_attempt['configurationState']}",
+                    f"runtimeHealthStatus={launch_attempt['runtimeHealthStatus']}",
+                    f"recoveryWebStatus={launch_attempt['recoveryWebStatus']}",
                     f"receipt={_stackctl.relpath(launch_receipt)}",
                 ],
                 "reportDir": _stackctl.relpath(report_dir),

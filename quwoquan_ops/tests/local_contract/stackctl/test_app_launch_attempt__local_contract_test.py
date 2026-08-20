@@ -11,9 +11,18 @@ from unittest import mock
 
 import pytest
 
+import yaml
+
+from quwoquan_ops.cli.lib.app_debug_preflight_handoff import (
+    app_debug_preflight_purpose,
+    read_reusable_app_debug_preflight,
+    write_app_debug_preflight_receipt,
+)
 from quwoquan_ops.cli.lib.app_launch_attempt import (
+    LAUNCH_BLOCKERS,
     create_app_launch_attempt,
     read_app_launch_attempt,
+    record_app_launch_attempt_observation,
     transition_app_launch_attempt,
     wait_for_app_launch_attempt,
 )
@@ -21,6 +30,25 @@ from quwoquan_ops.cli.lib.app_launch_attempt import (
 ROOT = Path(__file__).resolve().parents[4]
 SUPERVISOR = ROOT / "quwoquan_app/scripts/device/supervise_app_launch.py"
 INSTANCE_LAUNCHER = ROOT / "quwoquan_app/scripts/device/run_app_instance.sh"
+LAUNCH_MANIFEST = (
+    ROOT / "quwoquan_service/contracts/metadata/_shared/app_launch_manifest.yaml"
+)
+
+
+def _launch_manifest() -> dict:
+    return yaml.safe_load(LAUNCH_MANIFEST.read_text(encoding="utf-8"))
+
+
+def _new_receipt(receipt: Path) -> dict:
+    return create_app_launch_attempt(
+        receipt,
+        environment="alpha",
+        target="alpha-local",
+        platform="android",
+        build_mode="debug",
+        run_mode="content-live",
+        device_id="emulator-5554",
+    )
 
 
 def _load_supervisor_module():
@@ -308,3 +336,200 @@ def test_prod_instance_paths_never_fall_back_to_flutter_run() -> None:
     )
     assert simulator.returncode == 2
     assert "APP.LAUNCH.prod_artifact_required" in simulator.stderr
+
+
+def test_launch_blockers_are_enumerated_by_metadata_not_by_free_text() -> None:
+    declared = _launch_manifest()["launch_blockers"]
+    assert set(declared) == set(LAUNCH_BLOCKERS)
+    assert "APP.WEB.recovery_unavailable" in declared
+    assert all(str(reason).strip() for reason in declared.values())
+    with tempfile.TemporaryDirectory() as temporary:
+        receipt = Path(temporary) / "attempt.json"
+        _new_receipt(receipt)
+        with pytest.raises(ValueError, match="firstBlocker is invalid"):
+            transition_app_launch_attempt(
+                receipt,
+                "failed",
+                first_blocker="APP.LAUNCH.compile_failed: gradle said no",
+            )
+
+
+def test_new_receipt_starts_unobserved_for_configuration_and_runtime() -> None:
+    manifest_fields = _launch_manifest()["schemas"]["app_launch_attempt"]
+    with tempfile.TemporaryDirectory() as temporary:
+        receipt = Path(temporary) / "attempt.json"
+        payload = _new_receipt(receipt)
+        assert set(payload) == set(manifest_fields["required_fields"])
+        assert payload["configurationState"] == "unobserved"
+        assert payload["runtimeHealthStatus"] == "unobserved"
+        assert payload["recoveryWebStatus"] == "unobserved"
+        assert payload["recoveryWebEvidenceRef"] == ""
+
+
+def test_runtime_health_cannot_be_claimed_without_reaching_launched() -> None:
+    with tempfile.TemporaryDirectory() as temporary:
+        receipt = Path(temporary) / "attempt.json"
+        _new_receipt(receipt)
+        transition_app_launch_attempt(receipt, "compiling")
+        with pytest.raises(ValueError, match="runtime health requires launched"):
+            record_app_launch_attempt_observation(
+                receipt,
+                runtime_health_status="healthy",
+            )
+
+
+def test_recovery_web_status_requires_readable_evidence_reference() -> None:
+    with tempfile.TemporaryDirectory() as temporary:
+        receipt = Path(temporary) / "attempt.json"
+        _new_receipt(receipt)
+        with pytest.raises(ValueError, match="recovery web evidence is missing"):
+            record_app_launch_attempt_observation(
+                receipt,
+                recovery_web_status="unavailable",
+            )
+        settled = record_app_launch_attempt_observation(
+            receipt,
+            recovery_web_status="unavailable",
+            recovery_web_evidence_ref=".qwq_output/env/repo/runs/web-cta/http.json",
+            first_blocker="APP.WEB.recovery_unavailable",
+        )
+        assert settled["firstBlocker"] == "APP.WEB.recovery_unavailable"
+        with pytest.raises(ValueError, match="recovery web evidence is unexpected"):
+            record_app_launch_attempt_observation(
+                receipt,
+                recovery_web_status="not_applicable",
+            )
+
+
+def test_configuration_state_is_read_from_the_app_console_evidence() -> None:
+    module = _load_supervisor_module()
+    assert module._configuration_state_from(
+        "[log] startup_configuration_state state=complete"
+    ) == "complete"
+    assert module._configuration_state_from(
+        "[log] startup_configuration_state state=pending_native"
+    ) == "pending_native"
+    # 未登记的取值不得写进 receipt，宁可保持 unobserved。
+    assert module._configuration_state_from(
+        "[log] startup_configuration_state state=content_missing"
+    ) == ""
+    assert module._configuration_state_from("unrelated output") == ""
+
+
+def test_launched_attempt_settles_runtime_health_from_observed_warnings() -> None:
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        healthy_receipt = root / "healthy.json"
+        result = _run_supervisor(
+            healthy_receipt,
+            "print('Xcode build done.', flush=True); "
+            "print('Syncing files to device iPhone...', flush=True); "
+            "print('startup_configuration_state state=complete', flush=True); "
+            "print('A Dart VM Service is available', flush=True)",
+        )
+        healthy = read_app_launch_attempt(healthy_receipt)
+        assert result.returncode == 0
+        assert healthy["status"] == "stopped"
+        assert healthy["configurationState"] == "complete"
+        assert healthy["runtimeHealthStatus"] == "healthy"
+
+        degraded_receipt = root / "degraded.json"
+        _run_supervisor(
+            degraded_receipt,
+            "print('Xcode build done.', flush=True); "
+            "print('Syncing files to device iPhone...', flush=True); "
+            "print('A Dart VM Service is available', flush=True); "
+            "print('[bootstrap] source=bootstrap_failure exception=typed', flush=True)",
+        )
+        degraded = read_app_launch_attempt(degraded_receipt)
+        assert degraded["runtimeHealthStatus"] == "degraded"
+
+
+def test_failed_attempt_leaves_runtime_health_unobserved() -> None:
+    with tempfile.TemporaryDirectory() as temporary:
+        receipt = Path(temporary) / "attempt.json"
+        _run_supervisor(
+            receipt,
+            "print('compiler failed', flush=True); raise SystemExit(7)",
+        )
+        payload = read_app_launch_attempt(receipt)
+        assert payload["status"] == "failed"
+        assert payload["runtimeHealthStatus"] == "unobserved"
+
+
+def test_one_attempt_has_exactly_one_preflight_owner() -> None:
+    # dev-session 是编排方，它执行唯一一次 preflight 并交出 exact receipt；
+    # canonical launcher 只允许复用，不得为同一 attempt 再跑第二次。
+    orchestrator = (
+        ROOT / "quwoquan_ops/cli/commands/dev_session_domain.py"
+    ).read_text(encoding="utf-8")
+    launcher = (ROOT / "quwoquan_app/run.sh").read_text(encoding="utf-8")
+
+    assert orchestrator.count("command_app_debug_preflight(") == 1
+    assert "write_app_debug_preflight_receipt(" in orchestrator
+    assert "QWQ_APP_DEBUG_PREFLIGHT_RECEIPT" in orchestrator
+
+    # 只统计真实执行；恢复提示里的命令文本不是第二个 owner。
+    execution = 'app-debug-preflight --purpose "$PREFLIGHT_PURPOSE"'
+    assert launcher.count(execution) == 1
+    assert "read_reusable_app_debug_preflight(" in launcher
+    reuse = launcher.index("QWQ_APP_DEBUG_PREFLIGHT_RECEIPT")
+    own = launcher.index(execution)
+    assert reuse < own, "reuse must be attempted before the launcher owns preflight"
+    # purpose 映射与 receipt 判定只有一份实现，launcher 不得内联复制。
+    assert "PREFLIGHT_PURPOSE=content_live" not in launcher
+    assert "PREFLIGHT_PURPOSE=runtime" not in launcher
+
+
+def test_preflight_purpose_is_derived_from_the_declared_app_mode() -> None:
+    assert app_debug_preflight_purpose("content-live") == "content_live"
+    assert app_debug_preflight_purpose("ui-only") == "runtime"
+    with pytest.raises(ValueError, match="APP.LAUNCH.app_mode_invalid"):
+        app_debug_preflight_purpose("")
+    with pytest.raises(ValueError, match="APP.LAUNCH.app_mode_invalid"):
+        app_debug_preflight_purpose("content_live")
+
+
+def test_preflight_receipt_is_reusable_only_for_the_exact_attempt() -> None:
+    payload = {"purpose": "content_live", "status": "passed", "warnings": []}
+    with tempfile.TemporaryDirectory() as temporary:
+        receipt = write_app_debug_preflight_receipt(
+            Path(temporary) / "preflight" / "app-debug-preflight.json",
+            payload,
+            purpose="content_live",
+            target="alpha-local",
+        )
+        reused = read_reusable_app_debug_preflight(
+            receipt,
+            purpose="content_live",
+            target="alpha-local",
+        )
+        assert json.loads(reused) == payload
+
+        with pytest.raises(ValueError, match="APP.LAUNCH.preflight_receipt_invalid"):
+            read_reusable_app_debug_preflight(
+                receipt,
+                purpose="runtime",
+                target="alpha-local",
+            )
+        with pytest.raises(ValueError, match="APP.LAUNCH.preflight_receipt_invalid"):
+            read_reusable_app_debug_preflight(
+                receipt,
+                purpose="content_live",
+                target="beta-local",
+            )
+        missing = Path(temporary) / "absent.json"
+        with pytest.raises(ValueError, match="APP.LAUNCH.preflight_receipt_invalid"):
+            read_reusable_app_debug_preflight(
+                missing,
+                purpose="content_live",
+                target="alpha-local",
+            )
+        foreign = Path(temporary) / "foreign.json"
+        foreign.write_text(json.dumps(payload), encoding="utf-8")
+        with pytest.raises(ValueError, match="APP.LAUNCH.preflight_receipt_invalid"):
+            read_reusable_app_debug_preflight(
+                foreign,
+                purpose="content_live",
+                target="alpha-local",
+            )

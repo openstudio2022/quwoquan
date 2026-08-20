@@ -18,10 +18,7 @@ export 'package:quwoquan_app/runtime/di/generated_operation_client_dependencies.
 export 'package:quwoquan_app/runtime/di/runtime_observability_dependencies.dart'
     show appEventLogPortProvider, exceptionTelemetryPortProvider;
 export 'package:quwoquan_app/runtime/di/runtime_package_dependencies.dart'
-    show
-        ContentReleaseRequirement,
-        contentReleaseRequirementProvider,
-        publicContentLinkBuilderProvider;
+    show publicContentLinkBuilderProvider;
 export 'package:quwoquan_app/runtime/observability/app_observability_ports.dart'
     show AppEventLogPort, ExceptionTelemetryPort;
 

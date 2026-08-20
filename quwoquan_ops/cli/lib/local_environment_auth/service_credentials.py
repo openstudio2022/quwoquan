@@ -108,13 +108,16 @@ def mint_local_product_ops_operator_token(
         **os.environ,
         **auth.environment,
         "APP_ENV": environment,
+        # 可丢弃缓存只能落在 local/cache/**：local/ 一级的其他 target 必须是
+        # <target>/{process,cache} 结构，直接建 local/go-build/<name> 会破坏
+        # verify_output_layout 的布局契约。
         "GOCACHE": str(
             _REPO_ROOT
-            / ".qwq_output/env/repo/local/go-build/local-operator-credential"
+            / ".qwq_output/env/repo/local/cache/go-build/local-operator-credential"
         ),
         "GOTMPDIR": str(
             _REPO_ROOT
-            / ".qwq_output/env/repo/local/go-tmp/local-operator-credential"
+            / ".qwq_output/env/repo/local/cache/go-tmp/local-operator-credential"
         ),
     }
     Path(process_environment["GOCACHE"]).mkdir(parents=True, exist_ok=True)

@@ -121,6 +121,7 @@ def _command_package_unlocked(
                 f"origin: {release['publicOrigin']}",
                 f"release: {release['releaseId']}",
                 f"manifest: {_stackctl.relpath(Path(str(release['manifestPath'])))}",
+                f"active: {_stackctl.relpath(Path(str(release['activePath'])))}",
                 f"noindex: {release['noindex']}",
             ],
         }

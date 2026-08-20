@@ -55,6 +55,5 @@ export QWQ_APP_BUILD_CONTEXT="package-only"
 
 cd "${APP_DIR}/android"
 ./gradlew :app:connectedDebugAndroidTest \
-  -Pqwq.nativeStartupInstrumentation=true \
   -Pandroid.testInstrumentationRunnerArguments.class=com.quwoquan.quwoquan_app.StartupGateHandoffInstrumentedTest,com.quwoquan.quwoquan_app.StartupLaunchResourceInstrumentedTest \
   -Pdart-defines="${GRADLE_DART_DEFINES}"

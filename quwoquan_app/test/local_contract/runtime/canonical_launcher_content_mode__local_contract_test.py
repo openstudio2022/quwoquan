@@ -14,7 +14,11 @@ from pathlib import Path
 
 
 APP_DIR = Path(__file__).resolve().parents[3]
+REPO_ROOT = APP_DIR.parent
 LAUNCHER = APP_DIR / "run.sh"
+PREFLIGHT_HANDOFF = (
+    REPO_ROOT / "quwoquan_ops/cli/lib/app_debug_preflight_handoff.py"
+)
 
 
 class CanonicalLauncherContentModeContractTest(unittest.TestCase):
@@ -43,13 +47,18 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
 
         stackctl = root / "quwoquan_ops/cli/stackctl.py"
         stackctl.parent.mkdir(parents=True)
+        preflight_log = root / "preflight_calls.log"
         stackctl.write_text(
             "#!/usr/bin/env python3\n"
             "import json\n"
             "import sys\n"
+            "from pathlib import Path\n"
             f"preflight = {preflight!r}\n"
             f"delivery = {delivery!r}\n"
             "if 'app-debug-preflight' in sys.argv:\n"
+            f"    with Path({str(preflight_log)!r}).open("
+            "'a', encoding='utf-8') as handle:\n"
+            "        handle.write(' '.join(sys.argv[1:]) + '\\n')\n"
             "    print(json.dumps(preflight))\n"
             f"    raise SystemExit({preflight_exit})\n"
             "if 'verify' in sys.argv and 'content-delivery' in sys.argv:\n"
@@ -61,6 +70,12 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
 
         dev_up = root / "quwoquan_ops/cli/lib/dev_up.py"
         dev_up.parent.mkdir(parents=True)
+        # preflight 的 purpose 映射与 receipt 复用判定只有一份实现，
+        # stub 树直接复用生产文件，避免在测试里造第二真相源。
+        (dev_up.parent / PREFLIGHT_HANDOFF.name).write_text(
+            PREFLIGHT_HANDOFF.read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
         find_device_log = root / "find_device.log"
         dev_up.write_text(
             "from pathlib import Path\n"
@@ -129,8 +144,127 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
         strict_preflight = source.index('app-debug-preflight --purpose "$PREFLIGHT_PURPOSE"')
         self.assertLess(strict_preflight, source.index("flutter pub get --offline"))
         self.assertLess(strict_preflight, source.index("find_device"))
-        self.assertIn('PREFLIGHT_PURPOSE=content_live', source)
-        self.assertIn('PREFLIGHT_PURPOSE=runtime', source)
+        # purpose 映射不得在 launcher 内联复制，只能取自 canonical handoff 模块。
+        self.assertNotIn("PREFLIGHT_PURPOSE=content_live", source)
+        self.assertNotIn("PREFLIGHT_PURPOSE=runtime", source)
+        self.assertIn("app_debug_preflight_purpose(sys.argv[1])", source)
+        self.assertIn(
+            'purpose = sys.argv[4]',
+            source,
+            "downstream purpose checks must consume the resolved purpose",
+        )
+
+    def test_launcher_reuses_upstream_preflight_receipt_without_rerunning(
+        self,
+    ) -> None:
+        payload = {
+            "purpose": "content_live",
+            "status": "passed",
+            "contentLive": "passed",
+            "contentBindingState": "bound",
+            "target": "alpha-local",
+            "releaseId": "research-alpha",
+            "manifestDigest": "sha256:" + "1" * 64,
+            "readinessReceiptDigest": "sha256:" + "2" * 64,
+            "contentBinding": {"verifyRunId": "verify-alpha"},
+        }
+        temporary, app, environment = self._workspace(preflight=payload)
+        with temporary:
+            root = Path(temporary.name)
+            receipt = root / "upstream-preflight.json"
+            receipt.write_text(
+                json.dumps(
+                    {
+                        "schema": "quwoquan_ops.app_debug_preflight",
+                        "purpose": "content_live",
+                        "target": "alpha-local",
+                        "payload": payload,
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            environment["QWQ_APP_DEBUG_PREFLIGHT_RECEIPT"] = str(receipt)
+            result = subprocess.run(
+                ["bash", "run.sh", "--mode", "content-live", "-d", "device"],
+                cwd=app,
+                env=environment,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertIn("reusing upstream content_live preflight", result.stdout)
+            self.assertFalse(
+                (root / "preflight_calls.log").exists(),
+                "launcher must not run a second preflight for the same attempt",
+            )
+            # 复用的回执必须继续驱动 content-live 判定，直到设备准备阶段才停。
+            self.assertTrue((root / "find_device.log").exists())
+            self.assertEqual(result.returncode, 2, result.stdout)
+
+    def test_launcher_blocks_when_upstream_receipt_mismatches_the_attempt(
+        self,
+    ) -> None:
+        temporary, app, environment = self._workspace(
+            preflight={"purpose": "content_live", "status": "passed"},
+        )
+        with temporary:
+            root = Path(temporary.name)
+            receipt = root / "upstream-preflight.json"
+            receipt.write_text(
+                json.dumps(
+                    {
+                        "schema": "quwoquan_ops.app_debug_preflight",
+                        "purpose": "runtime",
+                        "target": "alpha-local",
+                        "payload": {"purpose": "runtime", "status": "passed"},
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            environment["QWQ_APP_DEBUG_PREFLIGHT_RECEIPT"] = str(receipt)
+            result = subprocess.run(
+                ["bash", "run.sh", "--mode", "content-live", "-d", "device"],
+                cwd=app,
+                env=environment,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 2, result.stdout)
+            self.assertIn("APP.LAUNCH.preflight_receipt_invalid", result.stderr)
+            self.assertFalse(
+                (root / "preflight_calls.log").exists(),
+                "a mismatched handoff must block instead of silently re-running",
+            )
+
+    def test_launcher_owns_preflight_when_no_upstream_receipt_is_handed_off(
+        self,
+    ) -> None:
+        temporary, app, environment = self._workspace(
+            preflight={
+                "purpose": "runtime",
+                "status": "passed",
+                "contentLive": "not_requested",
+                "nonPromotable": True,
+                "target": "alpha-local",
+            },
+        )
+        with temporary:
+            root = Path(temporary.name)
+            environment.pop("QWQ_APP_DEBUG_PREFLIGHT_RECEIPT", None)
+            subprocess.run(
+                ["bash", "run.sh", "--mode", "ui-only", "-d", "device"],
+                cwd=app,
+                env=environment,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            calls = (root / "preflight_calls.log").read_text(encoding="utf-8")
+            self.assertEqual(len(calls.strip().splitlines()), 1, calls)
+            self.assertIn("--purpose runtime", calls)
 
     def test_content_live_transport_failures_are_hard_blockers(self) -> None:
         source = LAUNCHER.read_text(encoding="utf-8")

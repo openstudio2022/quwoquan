@@ -190,24 +190,69 @@ if [[ "$ENSURE_RUNTIME" == "1" ]]; then
   exit 2
 fi
 
-PREFLIGHT_PURPOSE=runtime
-if [[ "$RUN_MODE" == "content-live" ]]; then
-  PREFLIGHT_PURPOSE=content_live
-fi
+# App 运行模式到 preflight purpose 的映射只有一处实现，见
+# quwoquan_ops/cli/lib/app_debug_preflight_handoff.py。
+if ! PREFLIGHT_PURPOSE="$(
+  PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" \
+    python3 -c 'import sys
+from quwoquan_ops.cli.lib.app_debug_preflight_handoff import (
+    app_debug_preflight_purpose,
+)
 
-echo "[run] validating $PREFLIGHT_PURPOSE for $QWQ_LAUNCH_TARGET..."
-if ! APP_CONTENT_PREFLIGHT_JSON="$(
-  PYTHONDONTWRITEBYTECODE=1 python3 \
-    "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" --output-format json \
-    app-debug-preflight --purpose "$PREFLIGHT_PURPOSE" \
-    --target "$QWQ_LAUNCH_TARGET" --runtime-mode test_live
+try:
+    sys.stdout.write(app_debug_preflight_purpose(sys.argv[1]))
+except ValueError as error:
+    sys.stdout.write(str(error))
+    raise SystemExit(2) from None' "$RUN_MODE"
 )"; then
-  echo "$APP_CONTENT_PREFLIGHT_JSON" >&2
+  echo "[run] GATE_BLOCK: $PREFLIGHT_PURPOSE" >&2
   exit 2
 fi
 
+# 整个 attempt 只允许一个 preflight owner。上游编排方（dev-session）已执行时会
+# 交出 exact receipt；launcher 只复用或显式阻断，绝不重复执行第二次 preflight。
+APP_CONTENT_PREFLIGHT_JSON=""
+if [[ -n "${QWQ_APP_DEBUG_PREFLIGHT_RECEIPT:-}" ]]; then
+  if ! APP_CONTENT_PREFLIGHT_JSON="$(
+    PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" \
+      python3 -c 'import sys
+from quwoquan_ops.cli.lib.app_debug_preflight_handoff import (
+    read_reusable_app_debug_preflight,
+)
+
+try:
+    sys.stdout.write(
+        read_reusable_app_debug_preflight(
+            sys.argv[1], purpose=sys.argv[2], target=sys.argv[3]
+        )
+    )
+except ValueError as error:
+    sys.stdout.write(str(error))
+    raise SystemExit(2) from None' \
+      "$QWQ_APP_DEBUG_PREFLIGHT_RECEIPT" "$PREFLIGHT_PURPOSE" "$QWQ_LAUNCH_TARGET"
+  )"; then
+    echo "[run] GATE_BLOCK: $APP_CONTENT_PREFLIGHT_JSON" >&2
+    exit 2
+  fi
+  echo "[run] reusing upstream $PREFLIGHT_PURPOSE preflight for $QWQ_LAUNCH_TARGET"
+fi
+
+if [[ -z "$APP_CONTENT_PREFLIGHT_JSON" ]]; then
+  echo "[run] validating $PREFLIGHT_PURPOSE for $QWQ_LAUNCH_TARGET..."
+  if ! APP_CONTENT_PREFLIGHT_JSON="$(
+    PYTHONDONTWRITEBYTECODE=1 python3 \
+      "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" --output-format json \
+      app-debug-preflight --purpose "$PREFLIGHT_PURPOSE" \
+      --target "$QWQ_LAUNCH_TARGET" --runtime-mode test_live
+  )"; then
+    echo "$APP_CONTENT_PREFLIGHT_JSON" >&2
+    exit 2
+  fi
+fi
+
 APP_CONTENT_EXPORTS="$(
-  python3 - "$APP_CONTENT_PREFLIGHT_JSON" "$RUN_MODE" "$QWQ_LAUNCH_TARGET" <<'PY'
+  python3 - "$APP_CONTENT_PREFLIGHT_JSON" "$RUN_MODE" "$QWQ_LAUNCH_TARGET" \
+    "$PREFLIGHT_PURPOSE" <<'PY'
 import json
 import shlex
 import sys
@@ -215,7 +260,7 @@ import sys
 payload = json.loads(sys.argv[1])
 run_mode = sys.argv[2]
 target = sys.argv[3]
-purpose = "content_live" if run_mode == "content-live" else "runtime"
+purpose = sys.argv[4]
 recovery_command = (
     "python3 quwoquan_ops/cli/stackctl.py --output-format json "
     f"app-debug-preflight --purpose {purpose} --target {target} "

@@ -11,6 +11,52 @@ from pathlib import Path
 from typing import Any, Mapping
 
 
+def _exact_active_release(
+    *,
+    package_root: Path,
+    environment: str,
+    public_origin: str,
+) -> tuple[str, str]:
+    """Return the exact ``(releaseId, manifestSHA256)`` selected by the writer.
+
+    指针缺席（尚未迁移的包目录）返回空对，让调用方回落到 current 兼容投影；
+    指针在场但不可解析则是失败，不得降级。
+    """
+    from quwoquan_ops.cli.lib.web_official_release import (
+        ACTIVE_POINTER_NAME,
+        ACTIVE_POINTER_SCHEMA,
+    )
+
+    pointer = package_root.expanduser() / ACTIVE_POINTER_NAME
+    if not pointer.is_file() or pointer.is_symlink():
+        return "", ""
+    try:
+        payload = json.loads(pointer.read_bytes().decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError(
+            "mutable test_live public Web active release pointer is invalid UTF-8 JSON"
+        ) from exc
+    release_id = ""
+    manifest_digest = ""
+    if isinstance(payload, dict):
+        release_id = str(payload.get("releaseId") or "").strip()
+        manifest_digest = str(payload.get("manifestSHA256") or "").strip()
+    if (
+        not isinstance(payload, dict)
+        or payload.get("schema") != ACTIVE_POINTER_SCHEMA
+        or payload.get("environment") != environment
+        or payload.get("publicOrigin") != public_origin
+        or not release_id
+        or "/" in release_id
+        or release_id.startswith(".")
+        or re.fullmatch(r"sha256:[0-9a-f]{64}", manifest_digest) is None
+    ):
+        raise ValueError(
+            "mutable test_live public Web active release pointer does not match the target"
+        )
+    return release_id, manifest_digest
+
+
 def _load_dev_session_public_web_package(
     *,
     environment: str,
@@ -33,26 +79,45 @@ def _load_dev_session_public_web_package(
         ) from exc
 
     canonical_package_root = package_root.expanduser().resolve()
+    # 身份真相源是 writer 落下的 exact 指针；current 只是兼容投影，
+    # 两者同时存在时必须指向同一 release，否则按失败处理。
+    expected_release_id, expected_manifest_digest = _exact_active_release(
+        package_root=package_root,
+        environment=environment,
+        public_origin=expected_origin,
+    )
     current = package_root.expanduser() / "current"
-    if not current.is_symlink():
-        raise ValueError(
-            "mutable test_live public Web package current symlink is missing"
-        )
-    raw_link = os.readlink(current)
-    link_path = Path(raw_link)
-    if link_path.is_absolute() or ".." in link_path.parts:
-        raise ValueError(
-            "mutable test_live public Web package current symlink is unsafe"
-        )
-    try:
-        release_root = current.resolve(strict=True)
-        release_root.relative_to(canonical_package_root)
-    except (FileNotFoundError, RuntimeError, ValueError) as exc:
-        raise ValueError(
-            "mutable test_live public Web package current symlink escapes its package root"
-        ) from exc
-    if not release_root.is_dir() or release_root.is_symlink():
-        raise ValueError("mutable test_live public Web release root is unsafe")
+    if expected_release_id:
+        release_root = canonical_package_root / expected_release_id
+        if not release_root.is_dir() or release_root.is_symlink():
+            raise ValueError(
+                "mutable test_live public Web active release is missing"
+            )
+        if current.is_symlink() and os.readlink(current) != expected_release_id:
+            raise ValueError(
+                "mutable test_live public Web current projection contradicts the "
+                "active release pointer"
+            )
+    else:
+        if not current.is_symlink():
+            raise ValueError(
+                "mutable test_live public Web package current symlink is missing"
+            )
+        raw_link = os.readlink(current)
+        link_path = Path(raw_link)
+        if link_path.is_absolute() or ".." in link_path.parts:
+            raise ValueError(
+                "mutable test_live public Web package current symlink is unsafe"
+            )
+        try:
+            release_root = current.resolve(strict=True)
+            release_root.relative_to(canonical_package_root)
+        except (FileNotFoundError, RuntimeError, ValueError) as exc:
+            raise ValueError(
+                "mutable test_live public Web package current symlink escapes its package root"
+            ) from exc
+        if not release_root.is_dir() or release_root.is_symlink():
+            raise ValueError("mutable test_live public Web release root is unsafe")
 
     manifest_path = release_root / "manifest.json"
     public_root = release_root / "public"
@@ -105,10 +170,16 @@ def _load_dev_session_public_web_package(
             "mutable test_live public Web package content digest drifted"
         )
 
+    manifest_digest = "sha256:" + hashlib.sha256(manifest_bytes).hexdigest()
+    if expected_manifest_digest and manifest_digest != expected_manifest_digest:
+        raise ValueError(
+            "mutable test_live public Web package manifest digest drifted"
+        )
+
     receipt = {
         "environment": environment,
         "packageVersion": release_id,
-        "manifestDigest": "sha256:" + hashlib.sha256(manifest_bytes).hexdigest(),
+        "manifestDigest": manifest_digest,
         "contentDigest": "sha256:" + content_sha256,
         "publicOrigin": expected_origin,
     }

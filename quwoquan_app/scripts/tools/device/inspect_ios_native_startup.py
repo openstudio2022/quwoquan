@@ -26,6 +26,15 @@ if str(_SCRIPTS_ROOT) not in sys.path:
 
 from _common.paths import APP_ROOT
 
+_OPS_ROOT = APP_ROOT.parent
+if str(_OPS_ROOT) not in sys.path:
+    sys.path.insert(0, str(_OPS_ROOT))
+
+from quwoquan_ops.cli.lib.app_identity import application_id_for
+
+# 生产 iOS 工程不持有 test target；恢复面 XCUITest runner 归物理隔离的 test host。
+PATROL_HOST_IOS_DIR = APP_ROOT / "test_host/patrol/ios"
+
 
 def run(*command: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
@@ -98,6 +107,9 @@ def verify_web_cta_with_xcuitest(
         test_environment.pop(key, None)
     test_environment["QWQ_ENVIRONMENT"] = environment
     test_environment["QWQ_IOS_SIMULATOR_UDID"] = simulator_udid
+    test_environment["QWQ_IOS_TARGET_BUNDLE_ID"] = application_id_for(
+        "ios", environment, "debug"
+    )
     command = [
         "xcodebuild",
         "-workspace",
@@ -120,7 +132,7 @@ def verify_web_cta_with_xcuitest(
     log_started_at = time.strftime("%Y-%m-%d %H:%M:%S")
     test = subprocess.run(
         command,
-        cwd=APP_ROOT / "ios",
+        cwd=PATROL_HOST_IOS_DIR,
         env=test_environment,
         check=False,
         capture_output=True,

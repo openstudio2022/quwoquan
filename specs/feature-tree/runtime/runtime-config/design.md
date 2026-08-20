@@ -7,7 +7,7 @@
 ## 1. 背景、目标与非目标
 
 - 设计目标：让同一环境与同一服务端状态下的配置、启动、内容 identity 和恢复动作可比较，并让 Alpha 双模拟器证据不被父 report 提升为 promotion 事实。
-- 非目标：复制 URL/端口、创建 Alpha 专用数据源、实现长期内容库、定义 App 业务对象，或把 Beta/Gamma/Prod 与真机证据并入此设计范围。
+- 非目标：复制 URL/端口、创建环境专用数据源、实现长期内容库或定义 App 业务对象。本设计覆盖四环境、双端与正式浏览器的合同和证据映射，但不把尚未执行或受外部账号、签名、设备、DNS/TLS、发布授权阻断的矩阵单元声明为已通过；这些单元的 OPEN 只在其真实证据到位后关闭。
 
 ## 2. Story 协作与状态流
 
@@ -71,3 +71,14 @@
 - Edge 与原 release 的恢复目标均为 5 分钟内完成；任何验收退出时 active fault 数必须为零，runtime health 必须通过，原 release readback 必须与进入前 digest 相同。
 - SLI 直接读取 stackctl create-once run result、target CaseResult、fault cleanup、health 与 release lifecycle/readback；告警以未清理 fault、恢复超时、digest 漂移或平台结果缺失为触发，不维护第二份状态台账。
 - rollout 只从 Alpha 两个模拟器开始且固定 `nonPromotable=true`。Beta/Gamma、Android 真机、正式 Green 与 Prod 保持对应 OPEN 和人工门，不能由本 DEC 推导通过。
+
+### 启动与恢复证据分层映射
+
+| Environment | Platform / entrypoint | 行为与验收锚点 | `local_contract` | `api_integration` | `user_acceptance` / 证据源 |
+| --- | --- | --- | --- | --- | --- |
+| Alpha/Beta/Gamma | Android/iOS：direct Debug、`run.sh`、packaged Debug | 完整 runtime package 得到 `configurationState=complete`；runtime/content 不可用只进入安全 Shell；[`GWT-002`](./environment-topology-and-packaging/spec.md#gwt-002)、[`UAT-003`](../../spec.md#uat-003) | `quwoquan_app/test/local_contract/runtime/config/`、launcher/handoff/identity suites；直接消费生产 resolver 与生成 handoff | immutable capsule 的 flavor 编译、package identity、install/launch receipt；结果按 compile/package/install/launch 分段 | Android Emulator/登记真机与 iOS Simulator/登记 iPhone 的冷启动、Hot Restart、图标启动和安全终态原始 CaseResult；报告读取测试不替代设备动作 |
+| Prod | Android/iOS：Release package、`prod-sim`/`prod-hosted` | Debug 禁止、exact artifact、签名与纯度 fail closed；[`GWT-001`](./environment-topology-and-packaging/spec.md#gwt-001)、[`GWT-003`](./environment-topology-and-packaging/spec.md#gwt-003) | Prod Debug 拒绝、manifest/identity/purity、测试依赖泄漏负例 | Android Release artifact 与 iOS unsigned iphoneos compile；签名、安装和 hosted 前置逐层记录 | 只消费已授权 exact Release artifact；缺正式 ID、签名、市场账号、真机或授权的单元保持 `OPEN-002/003`，不得由 simulator/package-only 代替 |
+| Alpha/Beta/Gamma/Prod | Web：`package --kind web`、`app-artifact --app-platform web`、`dev-session` | 单一 Web 编译 writer、exact manifest/current 投影、静态恢复面不依赖 API 健康；[`GWT-001`](./environment-topology-and-packaging/spec.md#gwt-001)、[`public-content-web-entry GWT-006`](../runtime-client-foundation/public-content-web-entry/spec.md#gwt-006) | Web bootstrap 状态机、authoring source/codegen、单 writer 与 manifest digest 契约 | exact artifact 的 HTML/字体 HTTP status、UTF-8、MIME、digest、缓存/Service Worker；API plane 关闭时静态恢复面仍可读 | Chrome/Safari 的字体 200、慢载、404、首次离线、缓存离线和 SW 更新；四环境公网缺口继续由 `public-content-web-entry OPEN-004` 承接 |
+| Alpha/Beta/Gamma/Prod | 原生 fatal recovery → 官方 Web CTA | CTA 打开本环境 exact origin 且中文可读；[`UAT-003`](../../spec.md#uat-003)、[`public-content-web-entry GWT-006`](../runtime-client-foundation/public-content-web-entry/spec.md#gwt-006) | fatal 注入状态机、canonical URL 与单一恢复动作 | 恢复 URL 的 HTTP 200、UTF-8、字体/HTML digest 与 artifact manifest 绑定 | 真正点击 CTA 后的浏览器页面、中文像素、键盘可达与恢复动作；`UIApplication.open`/Intent 成功本身不计通过 |
+
+所有 CaseResult 必须绑定同一冻结 source/capsule、artifact/launch digest 与本次 attempt。静态门禁、真实编译、package、install/launch、runtime health 和用户可见终态分别报告，前一层不得替代后一层。

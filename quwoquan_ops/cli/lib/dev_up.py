@@ -554,7 +554,9 @@ def launch_app(
     if attempt["status"] == "failed":
         output = launch_log.read_text(encoding="utf-8") if launch_log.exists() else ""
         raise RuntimeError(
-            f"{attempt['firstBlocker']}: App launch failed before launched:\n"
+            f"{attempt['firstBlocker']}: App launch failed before launched "
+            f"(configurationState={attempt['configurationState']}, "
+            f"runtimeHealthStatus={attempt['runtimeHealthStatus']}):\n"
             + summarize_output(output)
         )
     return process
