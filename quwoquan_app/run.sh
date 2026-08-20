@@ -4,16 +4,20 @@ set -euo pipefail
 
 APP_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$APP_DIR/.." && pwd)"
+export PYTHONPYCACHEPREFIX="${PYTHONPYCACHEPREFIX:-$ROOT_DIR/.qwq_output/env/repo/local/python-cache/app-launch}"
 REQUESTED_ENVIRONMENT="${QWQ_ENVIRONMENT:-}"
 REQUESTED_TARGET=""
 RUN_MODE="content-live"
 ENSURE_RUNTIME=0
+LAUNCH_RECEIPT="${QWQ_APP_LAUNCH_RECEIPT:-}"
+LAUNCH_LOG_REF="${QWQ_APP_LAUNCH_LOG_REF:-}"
 FLUTTER_ARGUMENTS=()
 
 print_usage() {
   cat <<'EOF'
 Usage: ./run.sh [--env alpha|beta|gamma] [--target alpha-local|beta-local|gamma-local]
-                [--mode content-live|ui-only] [--ensure-runtime] -d <device>
+                [--mode content-live|ui-only] [--launch-receipt <path>]
+                [--launch-log-ref <path>] [--ensure-runtime] -d <device>
 
 content-live is the default and starts Flutter only after the selected canonical
 content release passes runtime, release, API, media, Search and Recommendation delivery.
@@ -70,6 +74,30 @@ while [[ $# -gt 0 ]]; do
       ;;
     --ensure-runtime)
       ENSURE_RUNTIME=1
+      shift
+      ;;
+    --launch-receipt)
+      LAUNCH_RECEIPT="${2:-}"
+      [[ -n "$LAUNCH_RECEIPT" ]] || {
+        echo "[run] GATE_BLOCK: --launch-receipt requires a path." >&2
+        exit 2
+      }
+      shift 2
+      ;;
+    --launch-receipt=*)
+      LAUNCH_RECEIPT="${1#*=}"
+      shift
+      ;;
+    --launch-log-ref)
+      LAUNCH_LOG_REF="${2:-}"
+      [[ -n "$LAUNCH_LOG_REF" ]] || {
+        echo "[run] GATE_BLOCK: --launch-log-ref requires a path." >&2
+        exit 2
+      }
+      shift 2
+      ;;
+    --launch-log-ref=*)
+      LAUNCH_LOG_REF="${1#*=}"
       shift
       ;;
     -h|--help)
@@ -297,7 +325,7 @@ PY
 fi
 
 echo "[run] verifying local Flutter package resolution..."
-if ! flutter pub get --offline; then
+if ! flutter pub get --offline --enforce-lockfile; then
   echo "[run] FAIL: offline Flutter dependency resolution failed."
   echo "[run] This repo forbids implicit build-time network fetches. Run an explicit dependency sync only when intentionally changing third-party packages."
   exit 1
@@ -377,7 +405,14 @@ release_consumer_lease() {
   QWQ_CONSUMER_LEASE_ACQUIRED=0
 }
 
-trap release_consumer_lease EXIT
+cleanup_run() {
+  release_consumer_lease
+  if [[ -n "${QWQ_APP_INSTANCE_STATE_FILE:-}" ]]; then
+    rm -f -- "$QWQ_APP_INSTANCE_STATE_FILE"
+  fi
+}
+
+trap cleanup_run EXIT
 
 if [[ -n "$DEVICE_ID" ]]; then
   DEVICE_EXPORTS="$(
@@ -500,6 +535,31 @@ PY
 fi
 
 if [[ "${QWQ_RUN_DEVICE_KIND:-}" == ios-* ]]; then
+  POD_EXECUTABLE="${QWQ_COCOAPODS_EXECUTABLE:-$(command -v pod || true)}"
+  if [[ -z "$POD_EXECUTABLE" ]]; then
+    echo "[run] APP.DEPENDENCY.cocoapods_missing: pod executable not found." >&2
+    exit 1
+  fi
+  if ! POD_EXECUTABLE="$(PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" PYTHONDONTWRITEBYTECODE=1 python3 - "$POD_EXECUTABLE" <<'PY'
+import sys
+
+from quwoquan_ops.cli.lib.app_dependency_toolchain import (
+    AppDependencyToolchainError,
+    resolve_cocoapods_executable,
+)
+
+try:
+    print(resolve_cocoapods_executable(sys.argv[1]))
+except AppDependencyToolchainError as error:
+    raise SystemExit(f"APP.DEPENDENCY.cocoapods_mixed: {error}") from error
+PY
+  )"; then
+    exit 1
+  fi
+  if ! (cd "$APP_DIR/ios" && "$POD_EXECUTABLE" install --deployment); then
+    echo "[run] APP.DEPENDENCY.lock_drift: pod install --deployment failed." >&2
+    exit 1
+  fi
   PODFILE_LOCK="$APP_DIR/ios/Podfile.lock"
   PODS_MANIFEST_LOCK="$APP_DIR/ios/Pods/Manifest.lock"
   if [[ ! -f "$PODS_MANIFEST_LOCK" ]]; then
@@ -758,14 +818,53 @@ PY
 )
 
 set +e
-flutter run \
-  --no-pub \
-  --flavor "$QWQ_APP_RUNTIME_ENV" \
-  --target "$ENTRYPOINT" \
-  --host-vmservice-port=8888 \
-  --dds-port=8889 \
-  "${DART_DEFINES[@]}" \
-  "$@"
+if [[ -z "$LAUNCH_RECEIPT" ]]; then
+  LAUNCH_RECEIPT="$ROOT_DIR/.qwq_output/env/repo/runs/$(date -u +%Y%m%dT%H%M%SZ)-$$-${QWQ_LAUNCH_TARGET}-app-launch/attempt.json"
+fi
+case "${QWQ_RUN_DEVICE_KIND:-}" in
+  android*) LAUNCH_PLATFORM=android ;;
+  ios*) LAUNCH_PLATFORM=ios ;;
+  *)
+    echo "[run] GATE_BLOCK: unsupported launch platform ${QWQ_RUN_DEVICE_KIND:-unknown}." >&2
+    exit 2
+    ;;
+esac
+SUPERVISOR_CMD=(
+  python3 "$APP_DIR/scripts/device/supervise_app_launch.py"
+  --receipt "$LAUNCH_RECEIPT"
+  --environment "$QWQ_APP_RUNTIME_ENV"
+  --target "$QWQ_LAUNCH_TARGET"
+  --platform "$LAUNCH_PLATFORM"
+  --build-mode debug
+  --run-mode "$RUN_MODE"
+  --device "$DEVICE_ID"
+  --application-id "${QWQ_DEBUG_APP_ID:-}"
+  --launch-digest "$EFFECTIVE_LAUNCH_MANIFEST_DIGEST"
+  --timeout-seconds "${QWQ_APP_LAUNCH_TIMEOUT_SECONDS:-900}"
+)
+if [[ -n "$LAUNCH_LOG_REF" ]]; then
+  SUPERVISOR_CMD+=(--log-ref "$LAUNCH_LOG_REF")
+fi
+while IFS= read -r launch_warning; do
+  [[ -z "$launch_warning" ]] || SUPERVISOR_CMD+=(--warning "$launch_warning")
+done < <(
+  python3 - "$APP_CONTENT_PREFLIGHT_JSON" <<'PY'
+import json
+import sys
+
+for item in json.loads(sys.argv[1]).get("warnings") or []:
+    print(str(item).replace("\n", " "))
+PY
+)
+"${SUPERVISOR_CMD[@]}" -- \
+  flutter run \
+    --no-pub \
+    --flavor "$QWQ_APP_RUNTIME_ENV" \
+    --target "$ENTRYPOINT" \
+    --host-vmservice-port=8888 \
+    --dds-port=8889 \
+    "${DART_DEFINES[@]}" \
+    "$@"
 FLUTTER_RUN_EXIT_CODE=$?
 set -e
 
@@ -782,6 +881,7 @@ python3 - \
   "$EFFECTIVE_LAUNCH_MANIFEST_DIGEST" \
   "$RUN_MODE" \
   "$APP_CONTENT_DELIVERY_JSON" \
+  "$LAUNCH_RECEIPT" \
   "$TEST_LIVE_REPORT_PATH" <<'PY'
 import json
 import pathlib
@@ -797,11 +897,48 @@ import sys
     handoff_digest,
     run_mode,
     delivery_json,
+    launch_receipt_path,
     report_path,
 ) = sys.argv[1:]
 preflight = json.loads(preflight_json)
 delivery = json.loads(delivery_json)
 exit_code = int(flutter_exit_code)
+receipt = json.loads(pathlib.Path(launch_receipt_path).read_text(encoding="utf-8"))
+if receipt.get("schema") != "app-launch-attempt":
+    raise SystemExit("APP.LAUNCH.receipt_invalid: test_live report requires app-launch-attempt")
+transition_states = [
+    str(item.get("status") or "")
+    for item in receipt.get("transitions") or []
+    if isinstance(item, dict)
+]
+first_blocker = str(receipt.get("firstBlocker") or "")
+launch_warnings = [str(item) for item in receipt.get("warnings") or []]
+compile_status = (
+    "compiled"
+    if "compiled" in transition_states
+    else "failed"
+    if first_blocker == "APP.LAUNCH.compile_failed"
+    else "not_reached"
+)
+install_status = (
+    "installed"
+    if "installed" in transition_states
+    else "failed"
+    if first_blocker == "APP.LAUNCH.install_failed"
+    else "not_reached"
+)
+launch_status = (
+    "launched"
+    if "launched" in transition_states
+    else "failed"
+    if first_blocker == "APP.LAUNCH.launch_failed"
+    else "not_reached"
+)
+runtime_status = (
+    "degraded"
+    if any(item.startswith("warning/runtime_degraded") for item in launch_warnings)
+    else "not_evaluated"
+)
 runtime_checks = list(preflight.get("runtimeChecks") or [])
 service_health = {
     str(check.get("name") or "unknown"): {
@@ -824,10 +961,17 @@ report = {
     "nonPromotable": True,
     "contentLive": preflight.get("contentLive", "not_evaluated"),
     "launchPolicy": "test_live",
-    "compileStatus": "passed" if exit_code == 0 else "failed_or_not_completed",
-    "launchStatus": "completed" if exit_code == 0 else "failed_or_not_completed",
+    "compileStatus": compile_status,
+    "installStatus": install_status,
+    "launchStatus": launch_status,
+    "runtimeStatus": runtime_status,
+    "lifecycleStatus": receipt.get("status"),
+    "firstBlocker": first_blocker,
     "exitCode": exit_code,
-    "runtimeWarnings": list(preflight.get("warnings") or []),
+    "runtimeWarnings": list(dict.fromkeys([
+        *list(preflight.get("warnings") or []),
+        *launch_warnings,
+    ])),
     "serviceHealth": service_health,
     "contentAvailability": preflight.get("contentAvailability")
     or {"state": "unbound"},
@@ -837,6 +981,7 @@ report = {
     },
     "providerAvailability": provider_availability,
     "effectiveLaunchManifestDigest": handoff_digest,
+    "launchAttemptId": receipt.get("attemptId"),
 }
 path = pathlib.Path(report_path)
 path.write_text(

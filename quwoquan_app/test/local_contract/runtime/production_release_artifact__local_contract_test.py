@@ -6,19 +6,28 @@ import subprocess
 import tempfile
 import unittest
 import zipfile
+from importlib import util
 from pathlib import Path
-
+from unittest import mock
 
 APP = Path(__file__).resolve().parents[3]
 ROOT = APP.parent
 VERIFIER = APP / "scripts/runtime/architecture/verify_production_release_artifact.py"
 
 
+def _load_verifier_module():
+    spec = util.spec_from_file_location("verify_production_release_artifact", VERIFIER)
+    assert spec is not None and spec.loader is not None
+    module = util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _write_prod_runtime_package(deploy_root: Path) -> None:
     package = deploy_root / "prod-hosted" / "packages" / "app"
     package.mkdir(parents=True, exist_ok=True)
     (package / "app_runtime.yaml").write_text(
-        "\n".join(
+        "\n".join(  # noqa: FLY002 - fixture remains readable as YAML lines.
             [
                 "schema: app-runtime-config",
                 "runtime:",
@@ -52,6 +61,30 @@ def _write_prod_runtime_package(deploy_root: Path) -> None:
 
 
 class ProductionReleaseArtifactContractTest(unittest.TestCase):
+    def test_ios_bundle_rejects_unembedded_rpath_framework(self) -> None:
+        verifier = _load_verifier_module()
+        with tempfile.TemporaryDirectory() as directory:
+            app = Path(directory) / "Runner.app"
+            app.mkdir()
+            executable = app / "Runner"
+            executable.write_bytes(b"\xcf\xfa\xed\xfeproduction")
+            otool = subprocess.CompletedProcess(
+                ["otool"],
+                0,
+                stdout=(
+                    f"{executable}:\n"
+                    "\t@rpath/Missing.framework/Missing "
+                    "(compatibility version 1.0.0, current version 1.0.0)\n"
+                ),
+                stderr="",
+            )
+            with mock.patch.object(verifier.subprocess, "run", return_value=otool):
+                missing = verifier.missing_ios_rpath_dependencies(app)
+            self.assertEqual(
+                missing,
+                ["Runner -> @rpath/Missing.framework/Missing"],
+            )
+
     def test_accepts_clean_production_zip_and_emits_sbom_provenance(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -134,23 +167,19 @@ class ProductionReleaseArtifactContractTest(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/app_pipeline.yml").read_text(
             encoding="utf-8"
         )
-        for job_name, command in (
-            ("android:", "flutter build appbundle --release"),
-            ("ios:", "flutter build ipa --release"),
-            ("macos:", "flutter build macos --release"),
-            ("web:", "--kind web"),
-        ):
+        for job_name in ("android:", "ios:", "web:"):
             self.assertIn(job_name, workflow)
-            self.assertIn(command, workflow)
+        self.assertNotIn("macos:", workflow)
+        self.assertNotIn("flutter build", workflow)
+        self.assertEqual(
+            workflow.count("stackctl.py --output-format json package"),
+            3,
+        )
         for environment in ("alpha", "beta", "gamma", "prod"):
             self.assertIn(environment, workflow)
-        for surface in ("android", "ios", "web", "macos"):
-            self.assertIn(f"--surface {surface}", workflow)
-        self.assertIn("verify_production_release_artifact.py", workflow)
-        self.assertIn("apksigner", workflow)
-        self.assertIn("codesign --verify --deep --strict", workflow)
-        self.assertIn("${env_name}-ios-launcher-handoff.json", workflow)
-        self.assertIn("QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST", workflow)
+        for surface in ("android", "ios", "web"):
+            self.assertIn(f"--app-platform {surface}", workflow)
+        self.assertIn("collect_stackctl_app_shard.py", workflow)
         self.assertIn("app_candidate_evidence.Dockerfile", workflow)
         self.assertIn("app_evidence_ref", workflow)
         self.assertIn("critical_path_seconds", workflow)

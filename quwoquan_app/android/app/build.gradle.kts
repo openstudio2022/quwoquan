@@ -245,8 +245,6 @@ fun generatedModeDisplayMark(buildMode: String): String {
 val qwqEnvironmentReleaseIdentity = appIdentity(effectiveAppRuntimeEnvironment, "release")
 val qwqDirectDebugApplicationId =
     appIdentity(effectiveAppRuntimeEnvironment, "debug").applicationId
-val runNativeStartupInstrumentation =
-    providers.gradleProperty("qwq.nativeStartupInstrumentation").orNull == "true"
 val nativeRecoveryBaseUrl =
     System.getenv("QWQ_APP_RECOVERY_BASE_URL")?.trim().orEmpty().ifEmpty {
         handoffString(directDebugHandoff, "recoveryBaseUrl")
@@ -487,23 +485,9 @@ android {
             "QWQ_RUNTIME_DART_DEFINES_JSON",
             escapedBuildConfigValue(nativeRuntimeDefinesJson),
         )
-        // Patrol remains the default runner for Dart tests. Native Gate tests
-        // explicitly select AndroidJUnitRunner so they can validate recovery
-        // without starting Patrol or a second Flutter product flow.
-        testInstrumentationRunner =
-            if (runNativeStartupInstrumentation) {
-                "androidx.test.runner.AndroidJUnitRunner"
-            } else {
-                "pl.leancode.patrol.PatrolJUnitRunner"
-            }
+        // 生产 App 只保留原生 Gate runner；Patrol instrumentation 属于独立 test host。
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         testInstrumentationRunnerArguments["clearPackageData"] = "true"
-        if (!runNativeStartupInstrumentation) {
-            // Patrol owns the Dart UAT through MainActivityTest. Native Gate
-            // instrumentation has a separate explicit runner/property and
-            // must never be discovered during a Patrol device journey.
-            testInstrumentationRunnerArguments["class"] =
-                "com.quwoquan.quwoquan_app.MainActivityTest"
-        }
         ndk {
             if (androidAbiSplitsEnabled) {
                 // splits.abi 与 Flutter 默认 abiFilters 冲突；显式拆包时由 split 决定 ABI。

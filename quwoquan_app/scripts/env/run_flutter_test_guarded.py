@@ -325,7 +325,9 @@ def _ensure_flutter_pub_get() -> None:
   if package_config.exists():
     return
   print("[flutter-test-guard] package_config missing, running flutter pub get --offline")
-  rc = _run_checked(["flutter", "pub", "get", "--offline"])
+  rc = _run_checked(
+      ["flutter", "pub", "get", "--offline", "--enforce-lockfile"]
+  )
   if rc != 0:
     print(
       "[flutter-test-guard] FAIL: offline Flutter dependency resolution failed. "

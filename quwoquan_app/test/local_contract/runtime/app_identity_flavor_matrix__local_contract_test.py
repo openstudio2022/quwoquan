@@ -31,7 +31,7 @@ class AppIdentityFlavorMatrixTest(unittest.TestCase):
         self.assertNotIn("defaultConfigurationName = Release;", project)
         self.assertEqual(
             project.count('defaultConfigurationName = "Release-alpha";'),
-            4,
+            3,
         )
         self.assertFalse(
             (APP / "ios/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme").exists()
@@ -91,6 +91,36 @@ class AppIdentityFlavorMatrixTest(unittest.TestCase):
                     )
                     self.assertEqual(values.get("QWQ_APP_RUNTIME_ENV"), environment)
                     self.assertEqual(values.get("FLUTTER_TARGET"), "lib/main_prod.dart")
+                    effective_link_settings = " ".join(
+                        values.get(key, "")
+                        for key in (
+                            "FRAMEWORK_SEARCH_PATHS",
+                            "OTHER_LDFLAGS",
+                            "OTHER_MODULE_VERIFIER_FLAGS",
+                        )
+                    ).lower()
+                    for forbidden in (
+                        "cocoaasyncsocket",
+                        "integration_test",
+                        "patrol",
+                        "xctest",
+                    ):
+                        self.assertNotIn(
+                            forbidden,
+                            effective_link_settings,
+                            f"Runner {mode}-{environment} links {forbidden}",
+                        )
+
+    def test_iOS_base_configs_never_include_generic_pods_graph(self) -> None:
+        for mode in MODES:
+            base = (APP / f"ios/Flutter/Base/{mode}.xcconfig").read_text(
+                encoding="utf-8"
+            )
+            self.assertNotIn(
+                f"Pods-Runner.{mode.lower()}.xcconfig",
+                base,
+                f"Runner {mode} must select Pods only through an environment wrapper",
+            )
 
     def test_build_does_not_create_mutable_identity_state(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

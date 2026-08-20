@@ -6,5 +6,5 @@ SDKROOT = iphoneos
 SUPPORTED_PLATFORMS = iphoneos iphonesimulator
 QWQ_APS_ENVIRONMENT = production
 
-// Environment identity is selected by generated Release-<environment>.xcconfig.
-// This base file owns only Flutter Release toolchain settings.
+// Flutter tooling compatibility config. Flavored Runner targets use
+// Base/Release.xcconfig and select their exact dependency graph in the wrapper.

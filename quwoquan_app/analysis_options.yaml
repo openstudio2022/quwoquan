@@ -27,8 +27,8 @@ analyzer:
     - ios/**
     - web/**
     - windows/**
-    - macos/**
     - linux/**
+    - macos/**
 
 linter:
   # The lint rules applied to this project can be customized in the

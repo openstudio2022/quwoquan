@@ -3,8 +3,14 @@
 
 from __future__ import annotations
 
-
+import argparse
+import hashlib
+import json
+import os
+import subprocess
 import sys
+import zipfile
+from collections.abc import Iterable
 from pathlib import Path
 
 _SCRIPTS_ROOT = next(
@@ -15,22 +21,13 @@ _SCRIPTS_ROOT = next(
 if str(_SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_ROOT))
 
-from _common.paths import APP_ROOT, REPO_ROOT, SCRIPTS_ROOT
-
-import argparse
-import hashlib
-import json
-import os
-import sys
-import zipfile
-from pathlib import Path
-from typing import Iterable
+from _common.paths import REPO_ROOT
 
 ROOT = REPO_ROOT
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quwoquan_ops.cli.lib.environment_topology import (  # noqa: E402
+from quwoquan_ops.cli.lib.environment_topology import (
     get_target,
     load_environment_topology,
 )
@@ -42,8 +39,21 @@ FORBIDDEN_MARKERS = (
     b"test_fixtures/",
     b"runners/alpha/",
     b"alpha_cloud_composition",
+    b"patrol",
+    b"integration_test",
+    b"PatrolJUnitRunner",
+    b"RunnerUITests",
+    b"XCTest",
 )
 MAX_ENTRY_BYTES = 128 * 1024 * 1024
+MACHO_MAGICS = {
+    b"\xca\xfe\xba\xbe",
+    b"\xbe\xba\xfe\xca",
+    b"\xfe\xed\xfa\xce",
+    b"\xce\xfa\xed\xfe",
+    b"\xfe\xed\xfa\xcf",
+    b"\xcf\xfa\xed\xfe",
+}
 
 
 def sha256_file(path: Path) -> str:
@@ -80,6 +90,39 @@ def artifact_contains(path: Path, marker: bytes) -> bool:
     return any(marker in payload for _, payload in iter_artifact_entries(path))
 
 
+def missing_ios_rpath_dependencies(app_path: Path) -> list[str]:
+    """Resolve every Mach-O @rpath payload against the final .app bundle."""
+
+    findings: set[str] = set()
+    for binary in sorted(item for item in app_path.rglob("*") if item.is_file()):
+        try:
+            with binary.open("rb") as source:
+                if source.read(4) not in MACHO_MAGICS:
+                    continue
+            result = subprocess.run(
+                ["otool", "-L", str(binary)],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if result.returncode != 0:
+            continue
+        for raw_line in result.stdout.splitlines()[1:]:
+            dependency = raw_line.strip().split(" (", 1)[0]
+            if not dependency.startswith("@rpath/"):
+                continue
+            relative = dependency.removeprefix("@rpath/")
+            candidates = (app_path / relative, app_path / "Frameworks" / relative)
+            if not any(candidate.is_file() for candidate in candidates):
+                findings.add(
+                    f"{binary.relative_to(app_path).as_posix()} -> {dependency}"
+                )
+    return sorted(findings)
+
+
 def scan_artifact(path: Path, platform: str) -> tuple[list[str], dict[str, object]]:
     findings: list[str] = []
     scanned_entries: list[dict[str, object]] = []
@@ -99,6 +142,11 @@ def scan_artifact(path: Path, platform: str) -> tuple[list[str], dict[str, objec
                     f"{path}: production {platform} artifact contains forbidden marker "
                     f"{marker.decode('ascii')} in {normalized_name}"
                 )
+    if platform == "ios" and path.is_dir():
+        findings.extend(
+            f"{path}: production ios artifact has unresolved runtime dependency {item}"
+            for item in missing_ios_rpath_dependencies(path)
+        )
     public_web_base = str(
         get_target(load_environment_topology(), "prod-hosted")["publicBases"][
             "publicWeb"
@@ -121,7 +169,7 @@ def scan_artifact(path: Path, platform: str) -> tuple[list[str], dict[str, objec
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--platform", choices=("android", "ios", "macos", "web"), required=True)
+    parser.add_argument("--platform", choices=("android", "ios", "web"), required=True)
     parser.add_argument("--artifact", required=True)
     parser.add_argument("--report", required=True)
     parser.add_argument("--launcher-handoff", default="")
@@ -146,9 +194,9 @@ def main() -> int:
         try:
             decoded = json.loads(handoff_path.read_text(encoding="utf-8"))
             if not isinstance(decoded, dict):
-                raise ValueError("launcher handoff must be an object")
+                raise TypeError("launcher handoff must be an object")
             handoff = decoded
-        except (OSError, ValueError, json.JSONDecodeError) as error:
+        except (OSError, TypeError, ValueError, json.JSONDecodeError) as error:
             findings.append(f"launcher handoff is invalid: {error}")
         else:
             if (

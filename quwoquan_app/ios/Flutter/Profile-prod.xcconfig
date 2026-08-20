@@ -1,8 +1,6 @@
 // Generated from _shared/app_artifact_manifest.yaml; do not edit.
-#include "Profile.xcconfig"
+#include "Base/Profile.xcconfig"
 #include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.profile-prod.xcconfig"
-#include? "Pods/Target Support Files/Pods-RunnerTests/Pods-RunnerTests.profile-prod.xcconfig"
-#include? "Pods/Target Support Files/Pods-Runner-RunnerUITests/Pods-Runner-RunnerUITests.profile-prod.xcconfig"
 #include "Identity/prod.xcconfig"
 QWQ_EXPECTED_BUILD_MODE = profile
 QWQ_EXPECTED_CONFIGURATION = Profile-prod

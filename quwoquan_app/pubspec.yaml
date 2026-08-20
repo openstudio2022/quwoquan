@@ -107,10 +107,6 @@ dev_dependencies:
   path_provider_platform_interface: ^2.1.3
   webview_flutter_platform_interface: ^2.15.1
   flutter_lints: ^6.0.0
-  # user_acceptance Patrol（真实设备 / Firebase Test Lab）
-  patrol: ^4.5.0
-  integration_test:
-    sdk: flutter
   build_runner: ^2.15.0
   test: ^1.31.1
   fake_async: ^1.3.3
@@ -137,8 +133,6 @@ dependency_overrides:
     path: vendor/plugins/mobile_scanner
   package_info_plus:
     path: vendor/plugins/package_info_plus
-  patrol:
-    path: vendor/plugins/patrol
   photo_manager:
     path: vendor/plugins/photo_manager
   record_web:
@@ -172,7 +166,7 @@ dependency_overrides:
 flutter:
   default-flavor: alpha
   config:
-    # patrol / video_thumbnail 等插件在 vendored 形态下仍走 CocoaPods；livekit_client 已补 iOS Package.swift
+    # video_thumbnail 等插件在 vendored 形态下仍走 CocoaPods；livekit_client 已补 iOS Package.swift
     enable-swift-package-manager: false
   generate: true
   uses-material-design: true
@@ -205,9 +199,6 @@ flutter:
     - family: Noto Color Emoji
       fonts:
         - asset: assets/fonts/noto_color_emoji/NotoColorEmoji-Regular.ttf
-
-patrol:
-  test_directory: test/user_acceptance/patrol
 
 hooks:
   user_defines:

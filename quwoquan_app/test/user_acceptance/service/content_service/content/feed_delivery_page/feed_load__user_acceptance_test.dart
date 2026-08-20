@@ -5,8 +5,8 @@
 /// 守护：发现页全链路（app → gamma → content-service）可渲染内容卡片
 /// 只测 flutter_test 无法替代的行为：真实网络请求、真实设备渲染
 ///
-/// 注：App 由 test/user_acceptance/patrol/patrol_test_main.dart 的 app.main() 启动，
-///     本 test 直接与已运行的 App 交互，不需要 pumpWidget。
+/// 注：Patrol test host 的临时 wrapper 启动 production app.main()；本 test
+///     直接与已运行的 App 交互，不需要 pumpWidget。
 ///
 /// 执行方式（本地，需连接真机或模拟器）：
 ///   patrol test test/user_acceptance/service/content_service/content/feed_delivery_page/feed_load__user_acceptance_test.dart \

@@ -1,8 +1,6 @@
 // Generated from _shared/app_artifact_manifest.yaml; do not edit.
-#include "Release.xcconfig"
+#include "Base/Release.xcconfig"
 #include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.release-gamma.xcconfig"
-#include? "Pods/Target Support Files/Pods-RunnerTests/Pods-RunnerTests.release-gamma.xcconfig"
-#include? "Pods/Target Support Files/Pods-Runner-RunnerUITests/Pods-Runner-RunnerUITests.release-gamma.xcconfig"
 #include "Identity/gamma.xcconfig"
 QWQ_EXPECTED_BUILD_MODE = release
 QWQ_EXPECTED_CONFIGURATION = Release-gamma

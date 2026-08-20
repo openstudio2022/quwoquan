@@ -1,0 +1,40 @@
+name: quwoquan_patrol_host
+description: 趣我圈 canonical user_acceptance 的物理隔离 Patrol test host
+publish_to: none
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.13.0 <4.0.0'
+  flutter: '>=3.47.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  quwoquan_app:
+    path: ../..
+  quwoquan_cloud_contracts:
+    path: ../../packages/quwoquan_cloud_contracts
+  flutter_riverpod: ^3.4.2
+  go_router: ^17.2.3
+  http: ^1.6.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+  patrol: ^4.5.0
+  flutter_lints: ^6.0.0
+  test_api: ^0.7.12
+
+dependency_overrides:
+  patrol:
+    path: ../../vendor/plugins/patrol
+
+flutter:
+  config:
+    enable-swift-package-manager: false
+  uses-material-design: true
+
+patrol:
+  test_directory: test/patrol

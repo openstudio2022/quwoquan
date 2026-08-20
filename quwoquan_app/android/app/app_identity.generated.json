@@ -1,7 +1,7 @@
 {
   "schema": "qwq.app-identity-generated",
   "source": "_shared/app_artifact_manifest.yaml",
-  "sourceSha256": "sha256:5994c108683f0ad45628ea4f57052c1381f6154cc204b1354c141708ab1adc84",
+  "sourceSha256": "sha256:b30aa9bff14cbe99c689fd0070bcb0cab0f2b6df4ecc33d01971203493291a8b",
   "environments": [
     "alpha",
     "beta",

@@ -57,8 +57,10 @@ def collect_issues(root: Path) -> list[str]:
         issues.append("run.sh must select the canonical Flutter flavor")
 
     app_instance = sources[app / "scripts/device/run_app_instance.sh"]
-    if '"--flavor",' not in app_instance:
-        issues.append("run_app_instance.sh must select an explicit Flutter flavor")
+    if 'bash "$APP_DIR/run.sh"' not in app_instance or "flutter run" in app_instance:
+        issues.append(
+            "run_app_instance.sh must delegate non-Prod flavor selection to run.sh"
+        )
 
     runner_scheme = app / "ios/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme"
     if runner_scheme.exists():

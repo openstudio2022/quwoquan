@@ -524,31 +524,14 @@ main_entrypoint = "lib/main_prod.dart"
 flutter_target = os.environ.get("FLUTTER_TARGET", "").strip()
 patrol_enabled = merged.get("RUN_PATROL_ACCEPTANCE", "").strip().lower() == "true"
 if patrol_enabled:
-    if not flutter_target:
-        print(
-            "[ios-dart-defines] FAIL: Patrol build requires FLUTTER_TARGET.",
-            file=sys.stderr,
-        )
-        raise SystemExit(5)
-    target_path = Path(flutter_target)
-    if not target_path.is_absolute():
-        target_path = app_dir / target_path
-    target_path = target_path.resolve()
-    canonical_patrol_entrypoint = (
-        app_dir / "test/user_acceptance/patrol/test_bundle.dart"
-    ).resolve()
-    if target_path != canonical_patrol_entrypoint or not target_path.is_file():
-        print(
-            "[ios-dart-defines] FAIL: Patrol build must use the canonical "
-            "test/user_acceptance/patrol/test_bundle.dart entrypoint.",
-            file=sys.stderr,
-        )
-        raise SystemExit(5)
-    effective_flutter_target = flutter_target
-    native_entrypoint = target_path.relative_to(app_dir).as_posix()
-else:
-    effective_flutter_target = main_entrypoint
-    native_entrypoint = main_entrypoint
+    print(
+        "[ios-dart-defines] APP.PACKAGE.production_test_dependency_leak: "
+        "Patrol belongs to quwoquan_app/test_host/patrol.",
+        file=sys.stderr,
+    )
+    raise SystemExit(5)
+effective_flutter_target = main_entrypoint
+native_entrypoint = main_entrypoint
 missing = sorted(key for key in required_keys if not merged.get(key, "").strip())
 if missing:
     print(

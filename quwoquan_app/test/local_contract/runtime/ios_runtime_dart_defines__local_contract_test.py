@@ -9,7 +9,6 @@ import base64
 import json
 import os
 import plistlib
-import shlex
 import subprocess
 import sys
 import tempfile
@@ -224,11 +223,8 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
                 handoff["launchPolicy"],
             )
 
-    def test_patrol_handoff_preserves_canonical_test_bundle_entrypoint(self) -> None:
+    def test_production_ios_handoff_rejects_patrol_test_flag(self) -> None:
         handoff = _bound_test_live_handoff()
-        patrol_entrypoint = (
-            APP_DIR / "test/user_acceptance/patrol/test_bundle.dart"
-        ).resolve()
         with tempfile.TemporaryDirectory() as temporary_directory:
             env = dict(os.environ)
             env["QWQ_IOS_STACKCTL_PYTHON"] = str(self.runtime_python)
@@ -239,70 +235,22 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
                     "RUN_PATROL_ACCEPTANCE": "true",
                 }
             )
-            env["FLUTTER_TARGET"] = str(patrol_entrypoint)
+            env["FLUTTER_TARGET"] = str(APP_DIR / "lib/main_prod.dart")
             env["TARGET_BUILD_DIR"] = temporary_directory
             env["UNLOCALIZED_RESOURCES_FOLDER_PATH"] = "Runner.app"
             result = subprocess.run(
                 ["bash", str(SCRIPT)],
                 cwd=APP_DIR,
                 env=env,
-                check=True,
+                check=False,
                 capture_output=True,
                 text=True,
             )
-            target_export = next(
-                line
-                for line in result.stdout.splitlines()
-                if line.startswith("export FLUTTER_TARGET=")
+            self.assertEqual(result.returncode, 5)
+            self.assertIn(
+                "APP.PACKAGE.production_test_dependency_leak",
+                result.stderr,
             )
-            target_assignment = shlex.split(
-                target_export.removeprefix("export ")
-            )[0]
-            self.assertEqual(
-                target_assignment.split("=", 1)[1],
-                str(patrol_entrypoint),
-            )
-            manifest_path = (
-                Path(temporary_directory)
-                / "Runner.app"
-                / "QWQNativeRuntime.plist"
-            )
-            with manifest_path.open("rb") as stream:
-                manifest = plistlib.load(stream)
-            self.assertEqual(
-                manifest["entrypoint"],
-                "test/user_acceptance/patrol/test_bundle.dart",
-            )
-
-    def test_patrol_handoff_rejects_noncanonical_test_entrypoint(self) -> None:
-        handoff = _bound_test_live_handoff()
-        env = dict(os.environ)
-        env["QWQ_IOS_STACKCTL_PYTHON"] = str(self.runtime_python)
-        env["QWQ_LAUNCH_HANDOFF_JSON"] = json.dumps(handoff)
-        env["DART_DEFINES"] = _encode_defines(
-            {
-                **handoff["dartDefines"],
-                "RUN_PATROL_ACCEPTANCE": "true",
-            }
-        )
-        env["FLUTTER_TARGET"] = str(
-            APP_DIR
-            / "test/user_acceptance/service/content_service/content/"
-            "feed_delivery_page/feed_load__user_acceptance_test.dart"
-        )
-        result = subprocess.run(
-            ["bash", str(SCRIPT)],
-            cwd=APP_DIR,
-            env=env,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        self.assertEqual(result.returncode, 5)
-        self.assertIn(
-            "Patrol build must use the canonical",
-            result.stderr,
-        )
 
     def test_canonical_handoff_rejects_conflicting_existing_defines(self) -> None:
         handoff = _bound_test_live_handoff()
