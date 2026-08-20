@@ -89,19 +89,14 @@ def test_repository_capacity_calibration_receipt_is_self_contained() -> None:
         / "control_plane/_shared/capacity_calibration/"
         / "m100-wave-soak-20260818-v4/receipt.json"
     )
-    if not path.is_file():
-        # The receipt's bytes were never version-controlled and were lost in the
-        # 20260818 workspace deletion, so the digest this asserts cannot be proven
-        # again until the soak is re-run (OPEN-006 in the multi-carrier-release
-        # spec). Reconstructing it from the numbers the spec quotes would fabricate
-        # the very self-contained evidence closure under test, so the assertions
-        # stay here and start proving the receipt again the moment one exists.
-        import pytest
-
-        pytest.skip(
-            "governed capacity calibration receipt is absent: "
-            "multi-carrier-release OPEN-006 (bytes lost 20260818, re-soak pending)"
-        )
+    # OPEN-006 要求缺 receipt 时在干净检出上 GATE_BLOCK。动态 skip 会把这个
+    # P0 证据缺口变成静默通过，因此这里断言 receipt 在场：它只能由真实 M100
+    # soak 经 capacity_calibration_cli 产出并入库，用规格复述的数值反向合成
+    # receipt 恰好会伪造本用例要证的自包含闭包。
+    assert path.is_file(), (
+        f"governed capacity calibration receipt is missing: {path}. "
+        "multi-carrier-release OPEN-006 blocks until a real M100 soak produces it"
+    )
     receipt = load_capacity_calibration_receipt(path)
     assert receipt["frozenCapacity"] == {
         "autoResearchMaxConcurrentWorkers": 8,
