@@ -327,7 +327,11 @@ jobs:
   quwoquan_service_packaging:
     name: Delivery Gate — Service Packaging
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # 构建期固化恢复后，三个环境各自是一次真实镜像构建（环境固化输入进了
+    # buildInputDigest 闭包），不再是 alpha 之后两次廉价复用：
+    # 事故前 820+126+119 秒，恢复后 884+461+426 秒，30 分钟已经装不下。
+    # 取 40 是本仓评审过的运行器作业硬上限，不为这一条把上限本身放宽。
+    timeout-minutes: 40
     needs: topology_regression
     if: ${{ needs.topology_regression.outputs.service == 'true' }}
     outputs:
