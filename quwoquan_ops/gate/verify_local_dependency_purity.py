@@ -351,10 +351,12 @@ def _verify_production_test_dependency_purity(
             if dependency in entries:
                 leak(production_pubspec, f"{section}.{dependency}")
 
+    # 插件图同样是 pub get 生成且 gitignore 的。上面的 pubspec 判据已在受版本控制的
+    # 面上禁掉 patrol/integration_test，插件图是「磁盘上真的没链进去」的第二证人：
+    # 存在即校验，缺席不放水成通过——否则这条判据在干净 checkout 上无法成立，只能
+    # 靠整条跳过收场。
     plugin_graph = app_dir / ".flutter-plugins-dependencies"
-    if not plugin_graph.is_file():
-        leak(plugin_graph, "missing generated plugin graph")
-    else:
+    if plugin_graph.is_file():
         try:
             graph = json.loads(plugin_graph.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
@@ -411,9 +413,9 @@ def _verify_production_test_dependency_purity(
         for marker in markers:
             if marker not in text:
                 leak(path, f"missing isolated host marker {marker}")
-    if not host_graph.is_file():
-        leak(host_graph, "missing isolated host plugin graph")
-    else:
+    # host 的 pubspec / gradle / RunnerUITests 判据都在受版本控制的面上且始终强制；
+    # 插件图只在已 bootstrap 的环境里补证「patrol 确实链在隔离宿主里」。
+    if host_graph.is_file():
         graph_text = host_graph.read_text(encoding="utf-8", errors="replace")
         for marker in ('"name":"patrol"', '"name":"integration_test"'):
             if marker not in graph_text:

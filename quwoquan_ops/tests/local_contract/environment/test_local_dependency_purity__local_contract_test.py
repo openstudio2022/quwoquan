@@ -135,6 +135,67 @@ def test_cross_lock_accepts_one_exact_graph() -> None:
         assert failures == []
 
 
+GRAPH_ABSENCE_FAILURES = (
+    "missing generated plugin graph",
+    "missing isolated host plugin graph",
+)
+
+
+def _graph_with(*plugin_names: str) -> str:
+    plugins = ",".join(f'{{"name":"{name}"}}' for name in plugin_names)
+    return '{"plugins":{"ios":[' + plugins + "]}}"
+
+
+def test_plugin_graphs_absent_on_clean_checkout_are_not_reported_as_leaks() -> None:
+    """.flutter-plugins-dependencies 由 pub get 生成且 gitignore，缺席不是泄漏。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        app_dir = Path(tmp)
+        (app_dir / "pubspec.yaml").write_text("name: quwoquan_app\n", encoding="utf-8")
+        failures: list[str] = []
+        _verify_production_test_dependency_purity(failures, app_dir=app_dir)
+        assert not [
+            failure
+            for failure in failures
+            if any(marker in failure for marker in GRAPH_ABSENCE_FAILURES)
+        ]
+
+
+def test_materialized_plugin_graph_still_rejects_patrol_in_production() -> None:
+    """图一旦存在就必须校验：patrol 链进生产 App 仍要被判为泄漏。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        app_dir = Path(tmp)
+        (app_dir / "pubspec.yaml").write_text("name: quwoquan_app\n", encoding="utf-8")
+        (app_dir / ".flutter-plugins-dependencies").write_text(
+            _graph_with("patrol"), encoding="utf-8"
+        )
+        failures: list[str] = []
+        _verify_production_test_dependency_purity(failures, app_dir=app_dir)
+        assert [
+            failure
+            for failure in failures
+            if ".flutter-plugins-dependencies contains patrol" in failure
+        ]
+
+
+def test_materialized_host_graph_still_requires_patrol_in_isolated_host() -> None:
+    """隔离宿主的图一旦存在，就必须证明 patrol 真的链在宿主里。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        app_dir = Path(tmp)
+        (app_dir / "pubspec.yaml").write_text("name: quwoquan_app\n", encoding="utf-8")
+        host_dir = app_dir / "test_host/patrol"
+        host_dir.mkdir(parents=True)
+        (host_dir / ".flutter-plugins-dependencies").write_text(
+            _graph_with("integration_test"), encoding="utf-8"
+        )
+        failures: list[str] = []
+        _verify_production_test_dependency_purity(failures, app_dir=app_dir)
+        assert [
+            failure
+            for failure in failures
+            if 'missing "name":"patrol"' in failure
+        ]
+
+
 def _write_tracked_locks_only(
     root: Path,
     *,
