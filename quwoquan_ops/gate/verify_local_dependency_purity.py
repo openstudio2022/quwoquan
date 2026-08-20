@@ -243,8 +243,15 @@ def _verify_ios_cross_lock(
     pub_lock = yaml.safe_load(pubspec_lock.read_text(encoding="utf-8")) or {}
     pod_lock = yaml.safe_load(podfile_lock.read_text(encoding="utf-8")) or {}
     packages = pub_lock.get("packages") or {}
+    # pubspec.lock 与 Podfile.lock 都受版本控制，两者的一致性在任何 checkout 上都可
+    # 判定，始终强制。ios/.symlinks/plugins 是 pub get 生成且 gitignore 的：它证明
+    # 磁盘上真正被链接的插件版本，只在已 bootstrap 的环境里存在，因此作为「存在即
+    # 校验」的第三证人。否则这条判据在干净 Linux checkout 上结构上无法通过，只能靠
+    # 整条跳过来收场，那等于把它变成空转。
+    plugin_tree_present = plugin_root.is_dir()
     for plugin in ("firebase_core", "firebase_messaging"):
         declared = str((packages.get(plugin) or {}).get("version") or "").strip()
+        locked_pod = _pod_version(pod_lock, plugin)
         projected_pubspec = plugin_root / plugin / "pubspec.yaml"
         projected = ""
         if projected_pubspec.is_file():
@@ -253,13 +260,16 @@ def _verify_ios_cross_lock(
                     "version", ""
                 )
             ).strip()
-        locked_pod = _pod_version(pod_lock, plugin)
-        if not declared or declared != projected or declared != locked_pod:
+        drifted = not declared or declared != locked_pod
+        if plugin_tree_present and declared != projected:
+            drifted = True
+        if drifted:
             _fail(
                 failures,
                 "APP.DEPENDENCY.lock_drift: "
                 f"{plugin} pub={declared or '<missing>'} "
-                f"plugin={projected or '<missing>'} pod={locked_pod or '<missing>'}",
+                f"plugin={projected or '<not-materialized>'} "
+                f"pod={locked_pod or '<missing>'}",
             )
 
     firebase_version_file = plugin_root / "firebase_core/ios/firebase_sdk_version.rb"
@@ -271,15 +281,28 @@ def _verify_ios_cross_lock(
             re.DOTALL,
         )
         expected_firebase = match.group(1) if match else ""
-    for pod_name in ("Firebase/CoreOnly", "Firebase/Messaging"):
-        actual = _pod_version(pod_lock, pod_name)
-        if not expected_firebase or actual != expected_firebase:
+    # 期望值只写在被链接插件里，没有受版本控制的副本；树不在时改判 Podfile.lock 内部
+    # 自洽（两个 Firebase pod 必须同版本且非空），这部分同样在任何 checkout 上可判定。
+    firebase_pods = {
+        pod_name: _pod_version(pod_lock, pod_name)
+        for pod_name in ("Firebase/CoreOnly", "Firebase/Messaging")
+    }
+    for pod_name, actual in firebase_pods.items():
+        if not actual or (expected_firebase and actual != expected_firebase):
             _fail(
                 failures,
                 "APP.DEPENDENCY.lock_drift: "
-                f"{pod_name} plugin={expected_firebase or '<missing>'} "
+                f"{pod_name} plugin={expected_firebase or '<not-materialized>'} "
                 f"pod={actual or '<missing>'}",
             )
+    if len(set(firebase_pods.values())) > 1:
+        _fail(
+            failures,
+            "APP.DEPENDENCY.lock_drift: Firebase pods disagree: "
+            + ", ".join(
+                f"{name}={version or '<missing>'}" for name, version in firebase_pods.items()
+            ),
+        )
     if pods_manifest_lock.exists() and (
         podfile_lock.read_bytes() != pods_manifest_lock.read_bytes()
     ):

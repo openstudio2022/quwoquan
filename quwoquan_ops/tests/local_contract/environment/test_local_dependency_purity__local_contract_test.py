@@ -135,6 +135,89 @@ def test_cross_lock_accepts_one_exact_graph() -> None:
         assert failures == []
 
 
+def _write_tracked_locks_only(
+    root: Path,
+    *,
+    pub_version: str,
+    pod_version: str,
+    messaging_pod: str = "12.15.0",
+) -> None:
+    """只写两份受版本控制的锁，不铺 ios/.symlinks/plugins。"""
+
+    (root / "pubspec.lock").write_text(
+        "packages:\n"
+        f"  firebase_core:\n    version: {pub_version}\n"
+        "  firebase_messaging:\n    version: 16.4.3\n",
+        encoding="utf-8",
+    )
+    (root / "Podfile.lock").write_text(
+        "PODS:\n"
+        f"  - firebase_core ({pod_version})\n"
+        "  - firebase_messaging (16.4.3)\n"
+        "  - Firebase/CoreOnly (12.15.0)\n"
+        f"  - Firebase/Messaging ({messaging_pod})\n",
+        encoding="utf-8",
+    )
+
+
+def test_cross_lock_holds_without_materialized_plugin_tree() -> None:
+    """ios/.symlinks 由 pub get 生成且 gitignore，干净 checkout 上缺席不算漂移。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        _write_tracked_locks_only(root, pub_version="4.12.1", pod_version="4.12.1")
+        failures: list[str] = []
+        _verify_ios_cross_lock(
+            failures,
+            pubspec_lock=root / "pubspec.lock",
+            podfile_lock=root / "Podfile.lock",
+            pods_manifest_lock=root / "Manifest.lock",
+            plugin_root=root / "plugins",
+        )
+        assert failures == []
+
+
+def test_cross_lock_still_rejects_drift_without_materialized_plugin_tree() -> None:
+    """插件树缺席不得降级成放行：两份受版本控制的锁自己就足以判定漂移。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        _write_tracked_locks_only(root, pub_version="4.12.1", pod_version="4.13.0")
+        failures: list[str] = []
+        _verify_ios_cross_lock(
+            failures,
+            pubspec_lock=root / "pubspec.lock",
+            podfile_lock=root / "Podfile.lock",
+            pods_manifest_lock=root / "Manifest.lock",
+            plugin_root=root / "plugins",
+        )
+        assert failures == [
+            (
+                "APP.DEPENDENCY.lock_drift: firebase_core pub=4.12.1 "
+                "plugin=<not-materialized> pod=4.13.0"
+            )
+        ]
+
+
+def test_cross_lock_rejects_disagreeing_firebase_pods_without_plugin_tree() -> None:
+    """Firebase 期望版本只写在被链接插件里；树缺席时仍要求 Podfile.lock 内部自洽。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        _write_tracked_locks_only(
+            root,
+            pub_version="4.12.1",
+            pod_version="4.12.1",
+            messaging_pod="12.14.0",
+        )
+        failures: list[str] = []
+        _verify_ios_cross_lock(
+            failures,
+            pubspec_lock=root / "pubspec.lock",
+            podfile_lock=root / "Podfile.lock",
+            pods_manifest_lock=root / "Manifest.lock",
+            plugin_root=root / "plugins",
+        )
+        assert any("Firebase pods disagree" in failure for failure in failures)
+
+
 def test_cocoapods_rejects_mixed_executable_and_runtime(monkeypatch) -> None:
     class Result:
         returncode = 0
