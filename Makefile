@@ -1288,6 +1288,18 @@ test-gate-companion-local-contract: prepare-test-python
 		quwoquan_data/tests/local_contract/execution/test_script_architecture__retired_module_names__contract__local_contract_test.py \
 		quwoquan_data/tests/local_contract/execution/test_source_digest__execution_release__contract__local_contract_test.py \
 		quwoquan_data/tests/local_contract/release/test_source_digest__immutable_identity_generations__contract__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_environment_assembly__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_environment_packaging_contract__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_execution_profiles__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_root_layout__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_acceptance_freeze__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_content_library_addressing__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_object_size_budget__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_pageflip_backward_mainline__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_app_identity_state_isolation__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_media_release_contract__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_publish_closure__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_reusable_data_contract__gate__local_contract_test.py \
 		-q
 
 verify-test-no-fake:
