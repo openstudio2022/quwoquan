@@ -72,8 +72,16 @@ void main() {
       );
     });
 
+    // 门禁把一整包 runtime define 编进测试二进制，进程内的全局解析恒为
+    // complete，未水合与半份包这两种态造不出来。故三种态都由纯 resolver 造出
+    // 摘要再喂给判读规则；compile-time 优先级另有用例把关，不在这里绕开。
     test('runtime package 未水合或无效时业务请求得到 typed unavailable', () {
-      final pending = CloudRuntimeConfig.runtimeAvailabilityFailure();
+      final pending = CloudRuntimeConfig.runtimeAvailabilityFailure(
+        summary: _resolveRuntimePackage(
+          const <String, String>{},
+          nativeRuntimePackageHydrated: false,
+        ).runtimeDefineSummary,
+      );
       expect(pending, isNotNull);
       expect(pending!.kind, RuntimeFailureKind.unavailable);
       expect(
@@ -82,11 +90,12 @@ void main() {
       );
       expect(pending.recovery.action, 'retry');
 
-      CloudRuntimeConfig.hydrateFromNativeRuntimePackage(<String, String>{
-        ..._nativeRuntimePackageFor('alpha'),
-        'CLOUD_GATEWAY_BASE_URL': '',
-      });
-      final invalid = CloudRuntimeConfig.runtimeAvailabilityFailure();
+      final invalid = CloudRuntimeConfig.runtimeAvailabilityFailure(
+        summary: _resolveRuntimePackage(<String, String>{
+          ..._nativeRuntimePackageFor('alpha'),
+          'CLOUD_GATEWAY_BASE_URL': '',
+        }).runtimeDefineSummary,
+      );
       expect(invalid, isNotNull);
       expect(invalid!.kind, RuntimeFailureKind.unavailable);
       expect(
@@ -98,10 +107,14 @@ void main() {
         isTrue,
       );
 
-      CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
-        _nativeRuntimePackageFor('alpha'),
+      expect(
+        CloudRuntimeConfig.runtimeAvailabilityFailure(
+          summary: _resolveRuntimePackage(
+            _nativeRuntimePackageFor('alpha'),
+          ).runtimeDefineSummary,
+        ),
+        isNull,
       );
-      expect(CloudRuntimeConfig.runtimeAvailabilityFailure(), isNull);
     });
 
     test('runtime package 重新带入内容激活身份时拒绝启动', () {

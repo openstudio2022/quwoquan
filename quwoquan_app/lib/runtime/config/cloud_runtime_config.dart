@@ -288,9 +288,16 @@ class CloudRuntimeConfig {
   ///
   /// 业务请求不得在配置不可用时抛裸异常或拼装半份配置，故此处只返回脱敏的
   /// configurationState 与缺失键集合，绝不返回 URL。
-  static RuntimeFailure? runtimeAvailabilityFailure() {
-    final summary = runtimeDefineSummary;
-    final configurationState = summary['configurationState'] ?? 'invalid';
+  ///
+  /// [summary] 只替换被判读的那份摘要，不碰任何全局状态：门禁把一整包
+  /// runtime define 编进测试二进制，全局解析结果恒为 complete，未水合与
+  /// 半份包这两种态在进程里根本造不出来，判读规则也就无从被覆盖。留这个
+  /// 入参是让规则本身可被独立喂数，compile-time 优先级仍由全局链路决定。
+  static RuntimeFailure? runtimeAvailabilityFailure({
+    Map<String, String>? summary,
+  }) {
+    final resolved = summary ?? runtimeDefineSummary;
+    final configurationState = resolved['configurationState'] ?? 'invalid';
     if (configurationState == 'complete') {
       return null;
     }
@@ -314,7 +321,7 @@ class CloudRuntimeConfig {
           ),
           RuntimeContextAttribute(
             key: 'invalidDefineKeys',
-            value: summary['missingKeys'] ?? '',
+            value: resolved['missingKeys'] ?? '',
           ),
         ],
       ),
