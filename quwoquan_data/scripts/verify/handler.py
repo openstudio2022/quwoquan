@@ -245,6 +245,12 @@ def _run_filter_catalog_gate() -> int:
     return 0 if report["passed"] else 1
 
 
+def _admit_carried_media_holdings() -> int:
+    from content.release.canonical.rehydrate_media_holdings import main as rehydrate_main
+
+    return int(rehydrate_main() or 0)
+
+
 def _run_static_gate(name: str, run: Callable[[], int | None]) -> tuple[str, int]:
     try:
         result = run()
@@ -286,6 +292,12 @@ def handle_all() -> None:
     from verify import verify_coverage_static_identity
     from verify import verify_media_release_contract
     from verify import verify_object_size_budget
+
+    # 闭包类门禁问的是内容库而不是这棵树，而库按设计在仓外，一份新检出手里
+    # 一个字节都没有。先把仓内携带的媒体字节入库，这些门禁才是在判内容对错，
+    # 而不是在判这台机器上有没有跑过别的流程。已入库时这一步是空转。
+    if _admit_carried_media_holdings() != 0:
+        raise SystemExit(1)
 
     gates = (
         ("cli-first", verify_cli_first.main),
