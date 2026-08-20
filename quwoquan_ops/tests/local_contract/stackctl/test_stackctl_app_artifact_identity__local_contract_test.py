@@ -83,9 +83,11 @@ class StackctlAppArtifactIdentityTest(unittest.TestCase):
                 returncode=0,
                 stdout="com.quwoquan.quwoquan_app\n",
             )
+            # keytool 打印的是 32 个冒号分隔的十六进制字节对，fixture 用满长
+            # 指纹，避免断言一个长度不合法的摘要。
             signature_result = mock.Mock(
                 returncode=0,
-                stdout="SHA256: AA:BB:CC\n",
+                stdout="SHA256: " + ":".join(["AB"] * 32) + "\n",
             )
             with mock.patch(
                 "quwoquan_ops.cli.commands.package_app_artifact._bundletool_command",
@@ -103,7 +105,7 @@ class StackctlAppArtifactIdentityTest(unittest.TestCase):
                 )
                 signature = _signing_digest("android", artifact)
             self.assertEqual(identity, "com.quwoquan.quwoquan_app")
-            self.assertEqual(signature, "sha256:aabbcc")
+            self.assertEqual(signature, "sha256:" + "ab" * 32)
             self.assertIn("dump", run.call_args_list[0].args[0])
             self.assertIn("-jarfile", run.call_args_list[1].args[0])
 
