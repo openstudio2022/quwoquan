@@ -340,6 +340,7 @@ def check() -> None:
             problems.append(f"generated asset is stale: {path.name}")
     if problems:
         raise WebBootstrapAssetsError(
-            "web bootstrap assets are out of sync (run: "
-            "python3 scripts/cli.py web generate-bootstrap): " + "; ".join(problems)
+            "web bootstrap assets are out of sync (run: python3 "
+            "quwoquan_app/scripts/cli.py web generate-bootstrap): "
+            + "; ".join(problems)
         )
