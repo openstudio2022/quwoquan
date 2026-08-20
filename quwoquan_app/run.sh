@@ -4,7 +4,9 @@ set -euo pipefail
 
 APP_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$APP_DIR/.." && pwd)"
-export PYTHONPYCACHEPREFIX="${PYTHONPYCACHEPREFIX:-$ROOT_DIR/.qwq_output/env/repo/local/python-cache/app-launch}"
+# bytecode 缓存统一落 local/cache/**：local/<target>/ 只允许 process/ 与 cache/，
+# 直接写 local/python-cache/<name> 会被 verify_output_layout 判为非法布局。
+export PYTHONPYCACHEPREFIX="${PYTHONPYCACHEPREFIX:-$ROOT_DIR/.qwq_output/env/repo/local/cache/python/app-launch}"
 REQUESTED_ENVIRONMENT="${QWQ_ENVIRONMENT:-}"
 REQUESTED_TARGET=""
 RUN_MODE="content-live"
