@@ -440,14 +440,19 @@ class _HomePageState extends ConsumerState<HomePage>
       _scheduleActiveChannelReconciliation(effectiveActiveChannelId);
     }
     final bg = SettingsSemanticConstants.conversationSheetCardSurface(isDark);
+    // 三处 overlay 字段只有「底色亮度」与「其上前景的反色」两种取值。各写一遍
+    // isDark 三元会把同一个明暗判断摊成三处，调深浅时容易改一处漏两处。
+    final barBrightness = isDark ? Brightness.dark : Brightness.light;
+    final barForegroundBrightness = switch (barBrightness) {
+      Brightness.dark => Brightness.light,
+      Brightness.light => Brightness.dark,
+    };
     final statusBarStyle = SystemUiOverlayStyle(
       statusBarColor: AppColors.transparent,
-      statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
-      statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+      statusBarIconBrightness: barForegroundBrightness,
+      statusBarBrightness: barBrightness,
       systemNavigationBarColor: AppColors.transparent,
-      systemNavigationBarIconBrightness: isDark
-          ? Brightness.light
-          : Brightness.dark,
+      systemNavigationBarIconBrightness: barForegroundBrightness,
     );
 
     return AnnotatedRegion<SystemUiOverlayStyle>(

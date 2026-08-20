@@ -756,9 +756,7 @@ func NewModule() (_ *Module, resultErr error) {
 		),
 		application.WithDeviceRegistration(deviceRegistrationCommands),
 		application.WithConsentRecordStore(consentRecordStore),
-		application.WithFederatedPhoneBindingTickets(
-			credentialStore,
-		),
+		application.WithFederatedPhoneBindingTickets(credentialStore),
 		application.WithOtpCodeStore(otpCodeCache),
 		application.WithAuthenticationChallenges(challengeadapter.NewHandler(authenticationChallenges)),
 		application.WithOTPCodeSealer(otpCodeSealer),
