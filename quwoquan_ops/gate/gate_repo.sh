@@ -356,7 +356,9 @@ run_app() {
   # canonical UAT 与 Patrol support 的 package context 归物理隔离的 test host：
   # 生产 pubspec 不含 patrol，因此它们只能在这里被静态分析。两条分析的并集
   # 必须覆盖全部 canonical UAT，由 verify_local_dependency_purity 证明无排除假绿。
-  (cd quwoquan_app/test_host/patrol && flutter pub get --offline)
+  # host 的 lock 由 App 的 lock 播种，两侧版本逐条对齐，只多出 patrol 自己那几个包；
+  # --offline 在这里不成立：那 7 个包 App 从不解析，runner 缓存里没有。
+  (cd quwoquan_app/test_host/patrol && flutter pub get --enforce-lockfile)
   (cd quwoquan_app/test_host/patrol && flutter analyze \
     lib test/patrol test/canonical/user_acceptance test/canonical/support/runtime/patrol)
   # Dart 语义门禁：视觉 token + iOS 语义风格（chevron / Cupertino 组件边界）
