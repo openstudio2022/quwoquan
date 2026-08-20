@@ -361,9 +361,11 @@ jobs:
           set -euo pipefail
           [[ "$APP_EVIDENCE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
           APP_EVIDENCE_REF="$REGISTRY/$IMAGE_PREFIX/app-candidate-artifact@$APP_EVIDENCE_DIGEST"
-          echo "app_evidence_ref=$APP_EVIDENCE_REF" >> "$GITHUB_OUTPUT"
-          echo "app_evidence_digest=$APP_EVIDENCE_DIGEST" >> "$GITHUB_OUTPUT"
-          echo "source_git_sha=$SOURCE_GIT_SHA" >> "$GITHUB_OUTPUT"
+          {
+            echo "app_evidence_ref=$APP_EVIDENCE_REF"
+            echo "app_evidence_digest=$APP_EVIDENCE_DIGEST"
+            echo "source_git_sha=$SOURCE_GIT_SHA"
+          } >> "$GITHUB_OUTPUT"
       - id: timing
         env: {GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'}
         run: |
