@@ -17,8 +17,8 @@ import (
 	"time"
 
 	rtauth "quwoquan_service/runtime/auth"
-	"quwoquan_service/services/realtime-gateway/internal/realtime/connection/application"
 	wsadapter "quwoquan_service/services/realtime-gateway/internal/realtime/connection/adapters/inbound/ws"
+	"quwoquan_service/services/realtime-gateway/internal/realtime/connection/application"
 )
 
 func requireConnectionErrorCode(
@@ -194,4 +194,173 @@ func TestIssueTicketStoreFailureEmitsRealtimeInternalError(t *testing.T) {
 		t, response.Body, response.StatusCode, http.StatusInternalServerError,
 		"REALTIME.SYSTEM.internal_error",
 	)
+}
+
+type errSemValidationTicketStore struct {
+	issueCalls   int
+	consumeCalls int
+	revokeCalls  int
+}
+
+func (store *errSemValidationTicketStore) Issue(
+	context.Context,
+	application.TicketClaims,
+	time.Duration,
+) (string, error) {
+	store.issueCalls++
+	return "unexpected-ticket", nil
+}
+
+func (store *errSemValidationTicketStore) Consume(
+	context.Context,
+	string,
+) (application.TicketClaims, error) {
+	store.consumeCalls++
+	return application.TicketClaims{}, nil
+}
+
+func (store *errSemValidationTicketStore) Revoke(
+	context.Context,
+	string,
+	string,
+) error {
+	store.revokeCalls++
+	return nil
+}
+
+type errSemValidationAuthority struct {
+	calls int
+}
+
+func (authority *errSemValidationAuthority) ReadAccountSecurity(
+	context.Context,
+	string,
+) (rtauth.AccountSecuritySnapshot, error) {
+	authority.calls++
+	return rtauth.AccountSecuritySnapshot{
+		AccountState: "active",
+		AuthEpoch:    1,
+	}, nil
+}
+
+type errSemValidationGate struct {
+	admitCalls int
+}
+
+func (gate *errSemValidationGate) Admit(
+	context.Context,
+	application.TrustedIdentity,
+	int64,
+) error {
+	gate.admitCalls++
+	return nil
+}
+
+func (*errSemValidationGate) RegisterSession(
+	context.Context,
+	application.TrustedIdentity,
+	string,
+) error {
+	return nil
+}
+
+func (*errSemValidationGate) UnregisterSession(
+	context.Context,
+	application.TrustedIdentity,
+	string,
+) error {
+	return nil
+}
+
+func (*errSemValidationGate) ApplyAccountSecurityEvent(
+	context.Context,
+	application.AccountSecurityEvent,
+) (application.AccountSecurityApplyResult, error) {
+	return application.AccountSecurityApplyResult{}, nil
+}
+
+func TestTicketServiceRequiresEveryCollaborator(t *testing.T) {
+	t.Parallel()
+	store := &errSemValidationTicketStore{}
+	authority := &errSemValidationAuthority{}
+	gate := &errSemValidationGate{}
+
+	for _, testCase := range []struct {
+		name      string
+		store     application.TicketStore
+		authority rtauth.AccountSecurityAuthority
+		gate      application.AccountSecurityGate
+	}{
+		{name: "store", authority: authority, gate: gate},
+		{name: "authority", store: store, gate: gate},
+		{name: "gate", store: store, authority: authority},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			service, err := application.NewTicketService(
+				testCase.store,
+				testCase.authority,
+				testCase.gate,
+			)
+			if service != nil {
+				t.Fatal("invalid ticket service must not be returned")
+			}
+			if err == nil || err.Error() !=
+				"realtime ticket service requires store, account security authority and gate" {
+				t.Fatalf("unexpected construction error: %v", err)
+			}
+		})
+	}
+}
+
+func TestTicketServiceRejectsInvalidInputBeforeDependencies(t *testing.T) {
+	t.Parallel()
+	store := &errSemValidationTicketStore{}
+	authority := &errSemValidationAuthority{}
+	gate := &errSemValidationGate{}
+	service, err := application.NewTicketService(store, authority, gate)
+	if err != nil {
+		t.Fatalf("new ticket service: %v", err)
+	}
+
+	_, err = service.Issue(context.Background(), application.TrustedIdentity{
+		AccountID: "  ",
+		PersonaID: " persona-validation ",
+		DeviceID:  " device-validation ",
+	}, 1)
+	if err == nil || err.Error() !=
+		"realtime ticket requires trusted account, persona and device identities" {
+		t.Fatalf("unexpected incomplete identity error: %v", err)
+	}
+
+	_, err = service.Issue(context.Background(), application.TrustedIdentity{
+		AccountID: "account-validation",
+		PersonaID: "persona-validation",
+		DeviceID:  "device-validation",
+	}, 0)
+	if !errors.Is(err, application.ErrAccountSecurityDenied) {
+		t.Fatalf("non-positive auth epoch error = %v", err)
+	}
+
+	if _, err := service.Consume(context.Background(), "  "); !errors.Is(
+		err,
+		application.ErrTicketInvalid,
+	) {
+		t.Fatalf("blank ticket error = %v", err)
+	}
+
+	if store.issueCalls != 0 || store.consumeCalls != 0 || store.revokeCalls != 0 {
+		t.Fatalf(
+			"invalid input reached ticket store: issue=%d consume=%d revoke=%d",
+			store.issueCalls,
+			store.consumeCalls,
+			store.revokeCalls,
+		)
+	}
+	if authority.calls != 0 || gate.admitCalls != 0 {
+		t.Fatalf(
+			"invalid input reached security dependencies: authority=%d gate=%d",
+			authority.calls,
+			gate.admitCalls,
+		)
+	}
 }
