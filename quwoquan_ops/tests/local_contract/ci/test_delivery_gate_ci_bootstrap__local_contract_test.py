@@ -270,6 +270,19 @@ def test_delivery_runs_service_core_and_packaging_as_parallel_siblings() -> None
     assert "run_bounded_apt_install.sh tesseract-ocr" in packaging
     assert "needs: topology_regression" in coverage
     assert "GATE_SERVICE_PHASE: coverage" in coverage
+    coverage_fn = GATE_REPO_PATH.read_text(encoding="utf-8")
+    coverage_fn = coverage_fn[
+        coverage_fn.index("run_service_canonical_coverage()") : coverage_fn.index(
+            "\nrun_service() {"
+        )
+    ]
+    assert (
+        "make -C quwoquan_service/services/recommendation-service prepare-test-python"
+        in coverage_fn
+    )
+    assert coverage_fn.index("prepare-test-python") < coverage_fn.index(
+        "verify_canonical_coverage.py --collect --scope cloud"
+    )
     assert (
         '--require-count "service=1" --require-count "service_packaging=3"'
         ' --require-count "service_coverage=1"'

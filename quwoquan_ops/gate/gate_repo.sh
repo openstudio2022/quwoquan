@@ -301,6 +301,9 @@ run_service_core_after_packaging() {
 # 只有唯一 canonical receipt/rule/baseline 能参与 Delivery Gate。
 # 采集器自带漂移检测、自己重跑被测模块，不读前面几段的产物，因此可独立成格。
 run_service_canonical_coverage() {
+  # 采集器会重跑 recommendation-service 的 Python 测例，必须先落到 Makefile 声明的
+  # 受管 rec-model 环境；core 相位以前靠 `make gate` 顺带准备，独立成格后要自己备。
+  make -C quwoquan_service/services/recommendation-service prepare-test-python
   python3 quwoquan_ops/gate/verify_canonical_coverage.py --collect --scope cloud
 }
 
