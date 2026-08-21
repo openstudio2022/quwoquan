@@ -50,7 +50,7 @@ class ReusableWorkflowJobTimeoutContractTest(unittest.TestCase):
                     self.assertLessEqual(timeout, 5, f"{relative}:{job_name}")
                 checked.add((relative, str(job_name)))
 
-        self.assertEqual(len(checked), 22)
+        self.assertEqual(len(checked), 23)
 
 
 if __name__ == "__main__":

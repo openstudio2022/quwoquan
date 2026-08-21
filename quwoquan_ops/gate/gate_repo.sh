@@ -48,9 +48,9 @@ fi
 
 service_phase="${GATE_SERVICE_PHASE:-all}"
 case "$service_phase" in
-  all|core|packaging) ;;
+  all|core|packaging|coverage) ;;
   *)
-    echo "[gate] FAIL: invalid GATE_SERVICE_PHASE=$service_phase (expected all|core|packaging)" >&2
+    echo "[gate] FAIL: invalid GATE_SERVICE_PHASE=$service_phase (expected all|core|packaging|coverage)" >&2
     exit 2
     ;;
 esac
@@ -294,9 +294,13 @@ run_service_core_after_packaging() {
       $(go list ./tests/... | grep -v '/tests/api_integration' || true) \
       -count=1
   )
-  # 云侧 statement 覆盖率按 service/context/object 计量；service cmd 与仓库级
-  # shared runtime 分别进入显式 cross-cutting 单元。旧格式输入直接 fail-closed，
-  # 只有唯一 canonical receipt/rule/baseline 能参与 Delivery Gate。
+}
+
+# 云侧 statement 覆盖率按 service/context/object 计量；service cmd 与仓库级
+# shared runtime 分别进入显式 cross-cutting 单元。旧格式输入直接 fail-closed，
+# 只有唯一 canonical receipt/rule/baseline 能参与 Delivery Gate。
+# 采集器自带漂移检测、自己重跑被测模块，不读前面几段的产物，因此可独立成格。
+run_service_canonical_coverage() {
   python3 quwoquan_ops/gate/verify_canonical_coverage.py --collect --scope cloud
 }
 
@@ -306,6 +310,7 @@ run_service() {
       run_service_core_before_packaging
       run_service_packaging
       run_service_core_after_packaging
+      run_service_canonical_coverage
       ;;
     core)
       run_service_core_before_packaging
@@ -313,6 +318,9 @@ run_service() {
       ;;
     packaging)
       run_service_packaging
+      ;;
+    coverage)
+      run_service_canonical_coverage
       ;;
   esac
 }
