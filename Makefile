@@ -61,7 +61,7 @@
 .PHONY: verify-local-port-manifest
 .PHONY: verify-public-vs-upstream-url-contract
 .PHONY: verify-domain-governance
-.PHONY: verify-python-script-governance
+.PHONY: verify-python-script-governance verify-service-probe-homology
 .PHONY: verify-vertical-architecture-ratchet
 .PHONY: test-vertical-architecture-ratchet-local-contract
 .PHONY: sync-page-object-source-paths verify-page-object-source-paths
@@ -465,6 +465,10 @@ verify-domain-governance:
 verify-python-script-governance:
 	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_python_script_governance.py --scope all --mode check
 
+# 服务端就绪路由与 deploy readinessProbe 同源：探针错配会让依赖断裂报绿。
+verify-service-probe-homology:
+	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_service_probe_homology.py
+
 # 垂类架构静态防回退：存量债务只减不增，已退役 travel-service 永久零缺口。
 verify-vertical-architecture-ratchet:
 	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_vertical_architecture_ratchet.py
@@ -499,9 +503,22 @@ verify-emitted-error-code-declaration:
 	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_emitted_error_code_declaration.py
 	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/tests/local_contract/gate/test_emitted_error_code_declaration__contract__local_contract_test.py
 
+# 三个环境包彼此不共享中间态：每个 env 的 package/contract/isolation 只读自己的产物，
+# 越权 token 集合来自环境配置而非兄弟环境的落盘结果。因此 CI 可按 env 拆成并行作业，
+# 本地默认仍一次跑全三环境。prod 永远不在这里打包，走 verify-prod-packaging-contract。
 verify-env-packaging:
-	@deploy_work_root="$$(mktemp -d "$${TMPDIR:-/tmp}/quwoquan-deploy.XXXXXX")"; \
-	set -eu; \
+	@set -eu; \
+	packaging_envs="$${QWQ_PACKAGING_ENVS:-alpha beta gamma}"; \
+	for env_name in $$packaging_envs; do \
+		case "$$env_name" in \
+			alpha|beta|gamma) ;; \
+			*) \
+				echo "[env-packaging] GATE_BLOCK: QWQ_PACKAGING_ENVS 只接受 alpha|beta|gamma，收到 $$env_name" >&2; \
+				echo "[env-packaging] FIX: repair the first typed blocker above, then rerun make verify-env-packaging" >&2; \
+				exit 2 ;; \
+		esac; \
+	done; \
+	deploy_work_root="$$(mktemp -d "$${TMPDIR:-/tmp}/quwoquan-deploy.XXXXXX")"; \
 	run_phase() { \
 		phase_name="$$1"; shift; \
 		phase_started_at="$$(date +%s)"; \
@@ -531,14 +548,16 @@ verify-env-packaging:
 	export QWQ_GRAPHQL_READ_REGISTRY_SIGNING_KEY_ID="packaging-contract"; \
 	export QWQ_GRAPHQL_READ_REGISTRY_SIGNING_PRIVATE_KEY_FILE="$$deploy_work_root/graphql-signing-private.pem"; \
 	export QWQ_GRAPHQL_READ_REGISTRY_TRUSTED_PUBLIC_KEYS_FILE="$$deploy_work_root/graphql-trusted-public-keys.json"; \
-	run_phase package-alpha env QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/cli/stackctl.py --output-format json package --env alpha --include-services --release-attestation "$$candidate" --rollback-release-attestation "$$rollback"; \
-	run_phase package-beta env QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/cli/stackctl.py --output-format json package --env beta --include-services --release-attestation "$$candidate" --rollback-release-attestation "$$rollback"; \
-	run_phase package-gamma env QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/cli/stackctl.py --output-format json package --env gamma --include-services --release-attestation "$$candidate" --rollback-release-attestation "$$rollback"; \
-	for env_name in alpha beta gamma; do \
+	for env_name in $$packaging_envs; do \
+		run_phase "package-$$env_name" env QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/cli/stackctl.py --output-format json package --env "$$env_name" --include-services --release-attestation "$$candidate" --rollback-release-attestation "$$rollback"; \
+	done; \
+	for env_name in $$packaging_envs; do \
 		run_phase "contract-$$env_name" env QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/gate/verify_environment_packaging_contract.py --env "$$env_name"; \
 		run_phase "isolation-$$env_name" env QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/gate/verify_env_artifact_isolation.py --env "$$env_name"; \
 	done; \
-	run_phase gamma-prod-isomorphism python3 quwoquan_ops/environments/verify/verify_gamma_local_prod_isomorphism.py
+	case " $$packaging_envs " in \
+		*" gamma "*) run_phase gamma-prod-isomorphism python3 quwoquan_ops/environments/verify/verify_gamma_local_prod_isomorphism.py ;; \
+	esac
 
 verify-prod-packaging-contract: prepare-test-python
 	@$(PYTEST_RUNNER) $(PYTEST_INTERPRETER_FLAGS) -m pytest $(PYTEST_FLAGS) \
@@ -1071,6 +1090,7 @@ verify:
 	@$(MAKE) verify-retired-runtime-architecture
 	@$(MAKE) verify-service-ddd-cqrs-baseline
 	@$(MAKE) verify-service-architecture
+	@$(MAKE) verify-service-probe-homology
 	@$(MAKE) verify-commercial-contract-generation
 	@$(MAKE) verify-app-cloud-runtime-single-path
 	@$(MAKE) verify-app-contract-handoff

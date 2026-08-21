@@ -256,7 +256,7 @@ def test_delivery_runs_service_core_and_packaging_as_parallel_siblings() -> None
     assert "设置 Go" not in packaging
     assert "设置 Dart" not in packaging
     assert "run_bounded_apt_install.sh tesseract-ocr" in packaging
-    assert '--require-count "service=1" --require-count "service_packaging=1"' in workflow
+    assert '--require-count "service=1" --require-count "service_packaging=3"' in workflow
     assert "FANOUT+=(service service_packaging)" in workflow
     assert "--local-required service --local-required service_packaging" in workflow
     assert "SERVICE_PACKAGING: ${{ needs.quwoquan_service_packaging.result }}" in workflow
@@ -281,7 +281,9 @@ def test_service_gate_passes_the_exact_reviewed_change_range() -> None:
     assert "GATE_CHANGE_BASE_SHA and GATE_CHANGE_HEAD_SHA must be provided together" in gate
     assert '--base-sha "$GATE_CHANGE_BASE_SHA"' in gate
     assert '--head-sha "$GATE_CHANGE_HEAD_SHA"' in gate
-    assert 'verify_gate_local_contract_execution.py "${gate_change_range_args[@]}"' in gate
+    # set -u 下空数组展开会直接炸，所以调用侧用的是 ${arr[@]+"${arr[@]}"} 保护形式。
+    assert "verify_gate_local_contract_execution.py" in gate
+    assert '${gate_change_range_args[@]+"${gate_change_range_args[@]}"}' in gate
 
 
 def test_delivery_change_range_requires_complete_workflow_call_identity(
@@ -425,8 +427,15 @@ def test_delivery_and_promotion_gates_defer_edges_to_canonical_evaluator() -> No
 def test_app_pipeline_uses_only_the_repository_pinned_flutter_version() -> None:
     workflow = (ROOT / ".github/workflows/app_pipeline.yml").read_text(encoding="utf-8")
 
-    assert workflow.count("quwoquan_app/.flutter-version") == 4
-    assert workflow.count("flutter-version: ${{ steps.flutter_version.outputs.value }}") == 4
+    # 装 Flutter 的作业数会随流水线收敛增减，绑死数量只会把测试变成待改的常量；
+    # 真正的约束是「每一次装 Flutter 都从仓库 pin 读版本」，两侧计数必须相等且非零。
+    pinned_reads = workflow.count("quwoquan_app/.flutter-version")
+    assert pinned_reads > 0
+    assert workflow.count("subosito/flutter-action") == pinned_reads
+    assert (
+        workflow.count("flutter-version: '${{ steps.flutter_version.outputs.value }}'")
+        == pinned_reads
+    )
     assert "channel: stable" not in workflow
     assert (ROOT / "quwoquan_app/.flutter-version").read_text(encoding="utf-8") == "3.47.0\n"
 

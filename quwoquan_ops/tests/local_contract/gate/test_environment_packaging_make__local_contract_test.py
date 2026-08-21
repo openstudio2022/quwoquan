@@ -24,18 +24,15 @@ def test_environment_packaging_uses_hermetic_deploy_workspace_and_rechecks_outpu
     assert "QWQ_GRAPHQL_READ_REGISTRY_SIGNING_KEY_ID" in recipe
     assert "QWQ_GRAPHQL_READ_REGISTRY_SIGNING_PRIVATE_KEY_FILE" in recipe
     assert "QWQ_GRAPHQL_READ_REGISTRY_TRUSTED_PUBLIC_KEYS_FILE" in recipe
-    assert "--env alpha" in recipe
-    assert "--env beta" in recipe
-    assert "--env gamma" in recipe
+    assert 'packaging_envs="$${QWQ_PACKAGING_ENVS:-alpha beta gamma}"' in recipe
+    assert '--env "$$env_name"' in recipe
     assert "--env prod" not in recipe
-    assert "for env_name in alpha beta gamma" in recipe
+    assert "for env_name in $$packaging_envs" in recipe
     assert 'prepare_environment_packaging_contract_inputs.py "$$deploy_work_root";' in recipe
     assert "run_phase()" in recipe
     for phase in (
         "prepare",
-        "package-alpha",
-        "package-beta",
-        "package-gamma",
+        "package-$$env_name",
         "contract-$$env_name",
         "isolation-$$env_name",
         "gamma-prod-isomorphism",
@@ -169,6 +166,115 @@ esac
     assert "--env beta" in invocations
     assert "--env gamma" not in invocations
     assert "verify_environment_packaging_contract.py" not in invocations
+
+
+def _pass_through_python_shim(tmp_path: Path) -> tuple[Path, Path]:
+    shim_dir = tmp_path / "bin"
+    shim_dir.mkdir()
+    invocation_log = tmp_path / "python-invocations"
+    python_shim = shim_dir / "python3"
+    python_shim.write_text(
+        """#!/bin/sh
+printf '%s\\n' "$*" >> "$QWQ_TEST_PYTHON_INVOCATIONS"
+case "$1" in
+  *cleanup_deployment_test_workspace.py)
+    rmdir "$2"
+    exit 0
+    ;;
+esac
+exit 0
+""",
+        encoding="utf-8",
+    )
+    python_shim.chmod(0o755)
+    return shim_dir, invocation_log
+
+
+def _run_env_packaging(
+    shim_dir: Path,
+    invocation_log: Path,
+    **extra_env: str,
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["make", "verify-env-packaging"],
+        cwd=ROOT,
+        env={
+            **os.environ,
+            "PATH": f"{shim_dir}:{os.environ['PATH']}",
+            "QWQ_TEST_PYTHON_INVOCATIONS": str(invocation_log),
+            **extra_env,
+        },
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+
+def test_environment_packaging_covers_all_three_envs_by_default(tmp_path: Path) -> None:
+    shim_dir, invocation_log = _pass_through_python_shim(tmp_path)
+
+    result = _run_env_packaging(shim_dir, invocation_log)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    invocations = invocation_log.read_text(encoding="utf-8")
+    for env_name in ("alpha", "beta", "gamma"):
+        assert f"package --env {env_name}" in invocations
+        assert f"verify_environment_packaging_contract.py --env {env_name}" in invocations
+        assert f"verify_env_artifact_isolation.py --env {env_name}" in invocations
+    assert "verify_gamma_local_prod_isomorphism.py" in invocations
+    assert "--env prod" not in invocations
+
+
+def test_single_env_selection_packages_only_that_env(tmp_path: Path) -> None:
+    shim_dir, invocation_log = _pass_through_python_shim(tmp_path)
+
+    result = _run_env_packaging(shim_dir, invocation_log, QWQ_PACKAGING_ENVS="beta")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    invocations = invocation_log.read_text(encoding="utf-8")
+    assert "package --env beta" in invocations
+    assert "package --env alpha" not in invocations
+    assert "package --env gamma" not in invocations
+    # gamma/prod 同构只属于 gamma 那一格，否则并行拆分后会被判三遍。
+    assert "verify_gamma_local_prod_isomorphism.py" not in invocations
+
+
+def test_env_selection_refuses_anything_outside_the_three_envs(tmp_path: Path) -> None:
+    shim_dir, invocation_log = _pass_through_python_shim(tmp_path)
+
+    result = _run_env_packaging(shim_dir, invocation_log, QWQ_PACKAGING_ENVS="prod")
+
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert (
+        "GATE_BLOCK: QWQ_PACKAGING_ENVS 只接受 alpha|beta|gamma，收到 prod"
+        in result.stderr
+    )
+    assert not invocation_log.exists()
+
+
+def test_delivery_gate_packages_the_three_envs_as_parallel_siblings() -> None:
+    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
+    job_start = workflow.index("  quwoquan_service_packaging:")
+    job_end = workflow.index("\n  search_contract_smoke:", job_start)
+    job = workflow[job_start:job_end]
+
+    assert "name: Delivery Gate — Service Packaging (${{ matrix.packaging_env }})" in job
+    assert "fail-fast: false" in job
+    assert "packaging_env: [alpha, beta, gamma]" in job
+    assert "QWQ_PACKAGING_ENVS: ${{ matrix.packaging_env }}" in job
+    # 三格并行后时长与结果都按兄弟作业收口：少跑一格必须算证据不齐，而不是默认通过。
+    assert '--require-count "service_packaging=3"' in workflow
+    assert '--phase "service_packaging=Delivery Gate — Service Packaging"' in workflow
+
+
+def test_delivery_gate_cancels_superseded_runs_without_merging_the_two_ranges() -> None:
+    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
+    concurrency = workflow[workflow.index("concurrency:") : workflow.index("\non:")]
+
+    assert "group: delivery-gate-${{ github.event_name }}-${{ github.ref }}" in concurrency
+    assert "cancel-in-progress: true" in concurrency
+    # push 对上一个 tip、pull_request 对 main，两段区间不同；按 head SHA 归一会丢区间。
+    assert "head.sha" not in concurrency
 
 
 def test_prod_packaging_contract_and_runtime_readiness_are_separate_and_wired() -> None:

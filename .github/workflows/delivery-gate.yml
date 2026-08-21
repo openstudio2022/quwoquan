@@ -13,6 +13,13 @@ env:
   PUB_HOSTED_URL: https://pub.flutter-io.cn
   FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn
 
+# push 与 pull_request 覆盖的是两段不同的变更区间（前者对上一个 tip，后者对 main），
+# 不能按 head SHA 合并成一条跑道，否则会悄悄丢掉一段区间。这里只在同类跑道内归一：
+# 新提交到达时取消同一 ref 上被顶替的旧跑道，避免过期跑道继续占用运行器。
+concurrency:
+  group: delivery-gate-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [dev1.0]
@@ -325,15 +332,19 @@ jobs:
           echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
 
   quwoquan_service_packaging:
-    name: Delivery Gate — Service Packaging
+    name: Delivery Gate — Service Packaging (${{ matrix.packaging_env }})
     runs-on: ubuntu-latest
     # 构建期固化恢复后，三个环境各自是一次真实镜像构建（环境固化输入进了
     # buildInputDigest 闭包），不再是 alpha 之后两次廉价复用：
-    # 事故前 820+126+119 秒，恢复后 884+461+426 秒，30 分钟已经装不下。
-    # 取 40 是本仓评审过的运行器作业硬上限，不为这一条把上限本身放宽。
-    timeout-minutes: 40
+    # 事故前 820+126+119 秒，恢复后 884+461+426 秒，串行装不进门禁的
+    # 端到端硬阀。三者互不共享中间态，按 env 并行后这条边只剩最长的一个环境。
+    timeout-minutes: 30
     needs: topology_regression
     if: ${{ needs.topology_regression.outputs.service == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        packaging_env: [alpha, beta, gamma]
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
@@ -351,6 +362,7 @@ jobs:
       - name: Gate (quwoquan_service packaging)
         env:
           GATE_SERVICE_PHASE: packaging
+          QWQ_PACKAGING_ENVS: ${{ matrix.packaging_env }}
         run: bash quwoquan_ops/gate/gate_repo.sh --scope service
       - id: finish
         if: always()
@@ -980,7 +992,7 @@ jobs:
           )
           FANOUT=()
           if [[ "$SERVICE_IMPACTED" == "true" ]]; then
-            ARGS+=(--require-count "service=1" --require-count "service_packaging=1")
+            ARGS+=(--require-count "service=1" --require-count "service_packaging=3")
             FANOUT+=(service service_packaging)
           fi
           if [[ "$SERVICE_IMPACTED" == "true" || "$APP_IMPACTED" == "true" || "$TOPOLOGY_IMPACTED" == "true" || "$PRODUCE_RELEASE_EVIDENCE" == "true" ]]; then ARGS+=(--require-count "search=1"); FANOUT+=(search); fi
