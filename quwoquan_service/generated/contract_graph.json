@@ -119160,7 +119160,7 @@
           },
           {
             "path": "quwoquan_service/services/realtime-gateway/tests/local_contract/realtime/connection/connection_error_semantics__local_contract_test.go",
-            "sha256": "4f3252443623dc1a0c3474cec02abe20e642be52fcec21bc0d1cd865da03e163"
+            "sha256": "16fffe3fea80484fac30efd5ae778ee6c3e8813e8cd5d24ce5eacdc1e8d101d5"
           },
           {
             "path": "quwoquan_service/services/realtime-gateway/tests/local_contract/realtime/connection/connection_policy__contract__local_contract_test.go",
