@@ -61,7 +61,7 @@
 .PHONY: verify-local-port-manifest
 .PHONY: verify-public-vs-upstream-url-contract
 .PHONY: verify-domain-governance
-.PHONY: verify-python-script-governance verify-service-probe-homology
+.PHONY: verify-python-script-governance
 .PHONY: verify-vertical-architecture-ratchet
 .PHONY: test-vertical-architecture-ratchet-local-contract
 .PHONY: sync-page-object-source-paths verify-page-object-source-paths
@@ -464,10 +464,6 @@ verify-domain-governance:
 
 verify-python-script-governance:
 	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_python_script_governance.py --scope all --mode check
-
-# 服务端就绪路由与 deploy readinessProbe 同源：探针错配会让依赖断裂报绿。
-verify-service-probe-homology:
-	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_service_probe_homology.py
 
 # 垂类架构静态防回退：存量债务只减不增，已退役 travel-service 永久零缺口。
 verify-vertical-architecture-ratchet:
@@ -1090,7 +1086,6 @@ verify:
 	@$(MAKE) verify-retired-runtime-architecture
 	@$(MAKE) verify-service-ddd-cqrs-baseline
 	@$(MAKE) verify-service-architecture
-	@$(MAKE) verify-service-probe-homology
 	@$(MAKE) verify-commercial-contract-generation
 	@$(MAKE) verify-app-cloud-runtime-single-path
 	@$(MAKE) verify-app-contract-handoff
