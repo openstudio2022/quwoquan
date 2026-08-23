@@ -5,7 +5,9 @@ import 'package:cryptography/cryptography.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
 import 'package:quwoquan_app/runtime/config/runtime_package_resolver.dart';
+import 'package:quwoquan_app/runtime/errors/generated/ops/ops_event_record_errors.g.dart';
 import 'package:quwoquan_app/runtime/platform/native_runtime_config_bridge.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 const _now = '2026-08-22T12:00:00Z';
 
@@ -372,6 +374,38 @@ void main() {
     );
   });
 
+  test('runtime package 未水合或非法时业务请求得到 typed unavailable', () {
+    // 判读规则的输入就是脱敏摘要，因此这里直接喂非 complete 态，不靠测试之间的
+    // 全局水合副作用制造。摘要自身的产出由上面的 resolver 用例把关。
+    for (final state in <String>['missing', 'invalid']) {
+      final failure = CloudRuntimeConfig.runtimeAvailabilityFailure(
+        summary: <String, String>{
+          'configurationSource': 'signed-runtime-package',
+          'configurationState': state,
+        },
+      );
+      expect(failure, isNotNull);
+      expect(failure!.kind, RuntimeFailureKind.unavailable);
+      expect(
+        failure.code,
+        OpsEventRecordErrorCode.startupConfigurationInvalid.code,
+      );
+      expect(failure.recovery.action, 'retry');
+      expect(
+        failure.context.attributes.any(
+          (attribute) =>
+              attribute.key == 'configurationState' && attribute.value == state,
+        ),
+        isTrue,
+      );
+      // 不可用判读绝不回传 URL，只回传脱敏的来源与状态。
+      expect(
+        failure.context.attributes.map((attribute) => attribute.value),
+        everyElement(isNot(contains('://'))),
+      );
+    }
+  });
+
   test('CloudRuntimeConfig 水合 Web 暴露的 package JSON 后读取外置 runtime values', () async {
     final trustEnvelope = await _signedPackage();
     final runtimePackage = Map<String, Object?>.from(
@@ -395,6 +429,12 @@ void main() {
       'https://api.example.test/graphql',
     );
     expect(CloudRuntimeConfig.runtimeAvailabilityFailure(), isNull);
+    expect(
+      CloudRuntimeConfig.runtimeAvailabilityFailure(
+        summary: (await _resolve(await _signedPackage())).runtimeDefineSummary,
+      ),
+      isNull,
+    );
     expect(CloudRuntimeConfig.effectiveLaunchManifestDigest, isNull);
     expect(CloudRuntimeConfig.runtimeConfigTrustEnvelopeDigest, isNull);
     expect(

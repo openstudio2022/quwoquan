@@ -135,6 +135,34 @@ void main() {
         isNull,
       );
     });
+
+    test('releaseId 带首尾空白不是 canonical 值，直接构造属协议失败', () {
+      // 解析入口会先 trim，构造器这条守卫只有直接构造才走得到：
+      // 非空但与 trim 结果不等，说明上游把未规范化的值当身份用了。
+      expect(
+        () => ContentActivationIdentity(
+          releaseId: ' release-2026-08-01',
+          manifestDigest: digest,
+        ),
+        throwsFormatException,
+      );
+    });
+
+    test('身份是 value object：相等即同 hashCode，toString 交出二元组', () {
+      final left = ContentActivationIdentity(
+        releaseId: 'release-2026-08-01',
+        manifestDigest: digest,
+      );
+      final right = ContentActivationIdentity(
+        releaseId: 'release-2026-08-01',
+        manifestDigest: digest,
+      );
+
+      expect(left, right);
+      expect(left.hashCode, right.hashCode);
+      expect(left.toString(), contains('release-2026-08-01'));
+      expect(left.toString(), contains(digest));
+    });
   });
 
   group('ContentQuerySnapshotStore runtime identity 切换', () {

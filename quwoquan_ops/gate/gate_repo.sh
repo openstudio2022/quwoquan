@@ -48,9 +48,9 @@ fi
 
 service_phase="${GATE_SERVICE_PHASE:-all}"
 case "$service_phase" in
-  all|core|packaging) ;;
+  all|core|packaging|coverage) ;;
   *)
-    echo "[gate] FAIL: invalid GATE_SERVICE_PHASE=$service_phase (expected all|core|packaging)" >&2
+    echo "[gate] FAIL: invalid GATE_SERVICE_PHASE=$service_phase (expected all|core|packaging|coverage)" >&2
     exit 2
     ;;
 esac
@@ -294,9 +294,16 @@ run_service_core_after_packaging() {
       $(go list ./tests/... | grep -v '/tests/api_integration' || true) \
       -count=1
   )
-  # 云侧 statement 覆盖率按 service/context/object 计量；service cmd 与仓库级
-  # shared runtime 分别进入显式 cross-cutting 单元。旧格式输入直接 fail-closed，
-  # 只有唯一 canonical receipt/rule/baseline 能参与 Delivery Gate。
+}
+
+# 云侧 statement 覆盖率按 service/context/object 计量；service cmd 与仓库级
+# shared runtime 分别进入显式 cross-cutting 单元。旧格式输入直接 fail-closed，
+# 只有唯一 canonical receipt/rule/baseline 能参与 Delivery Gate。
+# 采集器自带漂移检测、自己重跑被测模块，不读前面几段的产物，因此可独立成格。
+run_service_canonical_coverage() {
+  # 采集器会重跑 recommendation-service 的 Python 测例，必须先落到 Makefile 声明的
+  # 受管 rec-model 环境；core 相位以前靠 `make gate` 顺带准备，独立成格后要自己备。
+  make -C quwoquan_service/services/recommendation-service prepare-test-python
   python3 quwoquan_ops/gate/verify_canonical_coverage.py --collect --scope cloud
 }
 
@@ -306,6 +313,7 @@ run_service() {
       run_service_core_before_packaging
       run_service_packaging
       run_service_core_after_packaging
+      run_service_canonical_coverage
       ;;
     core)
       run_service_core_before_packaging
@@ -313,6 +321,9 @@ run_service() {
       ;;
     packaging)
       run_service_packaging
+      ;;
+    coverage)
+      run_service_canonical_coverage
       ;;
   esac
 }
@@ -356,7 +367,9 @@ run_app() {
   # canonical UAT 与 Patrol support 的 package context 归物理隔离的 test host：
   # 生产 pubspec 不含 patrol，因此它们只能在这里被静态分析。两条分析的并集
   # 必须覆盖全部 canonical UAT，由 verify_local_dependency_purity 证明无排除假绿。
-  (cd quwoquan_app/test_host/patrol && flutter pub get --offline)
+  # host 的 lock 由 App 的 lock 播种，两侧版本逐条对齐，只多出 patrol 自己那几个包；
+  # --offline 在这里不成立：那 7 个包 App 从不解析，runner 缓存里没有。
+  (cd quwoquan_app/test_host/patrol && flutter pub get --enforce-lockfile)
   (cd quwoquan_app/test_host/patrol && flutter analyze \
     lib test/patrol test/canonical/user_acceptance test/canonical/support/runtime/patrol)
   # Dart 语义门禁：视觉 token + iOS 语义风格（chevron / Cupertino 组件边界）

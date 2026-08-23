@@ -13,6 +13,13 @@ env:
   PUB_HOSTED_URL: https://pub.flutter-io.cn
   FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn
 
+# push 与 pull_request 覆盖的是两段不同的变更区间（前者对上一个 tip，后者对 main），
+# 不能按 head SHA 合并成一条跑道，否则会悄悄丢掉一段区间。这里只在同类跑道内归一：
+# 新提交到达时取消同一 ref 上被顶替的旧跑道，避免过期跑道继续占用运行器。
+concurrency:
+  group: delivery-gate-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [dev1.0]
@@ -325,11 +332,19 @@ jobs:
           echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
 
   quwoquan_service_packaging:
-    name: Delivery Gate — Service Packaging
+    name: Delivery Gate — Service Packaging (${{ matrix.packaging_env }})
     runs-on: ubuntu-latest
+    # 构建期固化恢复后，三个环境各自是一次真实镜像构建（环境固化输入进了
+    # buildInputDigest 闭包），不再是 alpha 之后两次廉价复用：
+    # 事故前 820+126+119 秒，恢复后 884+461+426 秒，串行装不进门禁的
+    # 端到端硬阀。三者互不共享中间态，按 env 并行后这条边只剩最长的一个环境。
     timeout-minutes: 30
     needs: topology_regression
     if: ${{ needs.topology_regression.outputs.service == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        packaging_env: [alpha, beta, gamma]
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
@@ -347,6 +362,53 @@ jobs:
       - name: Gate (quwoquan_service packaging)
         env:
           GATE_SERVICE_PHASE: packaging
+          QWQ_PACKAGING_ENVS: ${{ matrix.packaging_env }}
+        run: bash quwoquan_ops/gate/gate_repo.sh --scope service
+      - id: finish
+        if: always()
+        name: Finish timer
+        run: |
+          echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
+
+  quwoquan_service_coverage:
+    name: Delivery Gate — Service Canonical Coverage
+    runs-on: ubuntu-latest
+    # 采集器自带漂移检测、自己重跑被测模块，不读 core/packaging 的产物，
+    # 因此与 App 侧一样独立成格：core 这条边省下这段采集时间。
+    timeout-minutes: 40
+    needs: topology_regression
+    if: ${{ needs.topology_regression.outputs.service == 'true' }}
+    outputs:
+      duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 1
+          ref: ${{ inputs.checkout_ref || github.event.pull_request.head.sha || github.sha }}
+      - id: start
+        name: Start timer
+        run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
+      - name: 设置 Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version-file: quwoquan_service/go.mod
+          cache: false
+      - name: 设置 Dart
+        uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260
+      - name: 安装 kustomize
+        run: bash quwoquan_ops/cli/shared/install_kustomize.sh
+      - name: 安装 Service 系统测试依赖
+        run: |
+          bash quwoquan_ops/ci/run_bounded_apt_install.sh prometheus tesseract-ocr ffmpeg redis-server
+          sudo systemctl stop redis-server || true
+      - name: Start recommendation test MongoDB replica set
+        run: bash quwoquan_ops/ci/run_recommendation_test_mongodb.sh
+      - name: 安装 Python 依赖 (recommendation-service)
+        run: |
+          pip install -r quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/requirements.txt
+      - name: Gate (quwoquan_service coverage)
+        env:
+          GATE_SERVICE_PHASE: coverage
         run: bash quwoquan_ops/gate/gate_repo.sh --scope service
       - id: finish
         if: always()
@@ -715,6 +777,7 @@ jobs:
       - topology_regression
       - quwoquan_service
       - quwoquan_service_packaging
+      - quwoquan_service_coverage
       - search_contract_smoke
       - quwoquan_app
       - quwoquan_app_static
@@ -855,6 +918,7 @@ jobs:
           TOPOLOGY_RESULT: ${{ needs.topology_regression.result }}
           SERVICE_RESULT: ${{ needs.quwoquan_service.result }}
           SERVICE_PACKAGING_RESULT: ${{ needs.quwoquan_service_packaging.result }}
+          SERVICE_COVERAGE_RESULT: ${{ needs.quwoquan_service_coverage.result }}
           SEARCH_RESULT: ${{ needs.search_contract_smoke.result }}
           APP_STATIC_RESULT: ${{ needs.quwoquan_app_static.result }}
           APP_TESTS_RESULT: ${{ needs.quwoquan_app_tests.result }}
@@ -875,6 +939,7 @@ jobs:
             --job-result "topology=$TOPOLOGY_RESULT"
             --job-result "service=$SERVICE_RESULT"
             --job-result "service_packaging=$SERVICE_PACKAGING_RESULT"
+            --job-result "service_coverage=$SERVICE_COVERAGE_RESULT"
             --job-result "search=$SEARCH_RESULT"
             --job-result "app_static=$APP_STATIC_RESULT"
             --job-result "app_tests=$APP_TESTS_RESULT"
@@ -893,7 +958,7 @@ jobs:
             --content-lifecycle-gamma "$QWQ_OUTPUT_ROOT/evidence/release/lifecycle-exit-gamma.json"
             --local-env-green-matrix "$QWQ_OUTPUT_ROOT/evidence/release/alpha-beta-gamma-green-matrix.json"
           )
-          if [[ "$SERVICE_IMPACTED" == "true" ]]; then ARGS+=(--local-required service --local-required service_packaging); fi
+          if [[ "$SERVICE_IMPACTED" == "true" ]]; then ARGS+=(--local-required service --local-required service_packaging --local-required service_coverage); fi
           if [[ "$APP_IMPACTED" == "true" ]]; then
             ARGS+=(--local-required app_static --local-required app_tests --local-required app_serial --local-required app_coverage)
           fi
@@ -928,6 +993,7 @@ jobs:
       - topology_regression
       - quwoquan_service
       - quwoquan_service_packaging
+      - quwoquan_service_coverage
       - search_contract_smoke
       - quwoquan_app
       - quwoquan_app_static
@@ -966,6 +1032,7 @@ jobs:
             --phase "topology=Delivery Gate — Topology"
             --phase "service=Delivery Gate — Service Core (L2)"
             --phase "service_packaging=Delivery Gate — Service Packaging"
+            --phase "service_coverage=Delivery Gate — Service Canonical Coverage"
             --phase "search=Delivery Gate — Search /search Contract Smoke"
             --phase "app_static=Delivery Gate — App Static"
             --phase "app_tests=Delivery Gate — App Tests Shard "
@@ -981,8 +1048,8 @@ jobs:
           )
           FANOUT=()
           if [[ "$SERVICE_IMPACTED" == "true" ]]; then
-            ARGS+=(--require-count "service=1" --require-count "service_packaging=1")
-            FANOUT+=(service service_packaging)
+            ARGS+=(--require-count "service=1" --require-count "service_packaging=3" --require-count "service_coverage=1")
+            FANOUT+=(service service_packaging service_coverage)
           fi
           if [[ "$SERVICE_IMPACTED" == "true" || "$APP_IMPACTED" == "true" || "$TOPOLOGY_IMPACTED" == "true" || "$PRODUCE_RELEASE_EVIDENCE" == "true" ]]; then ARGS+=(--require-count "search=1"); FANOUT+=(search); fi
           if [[ "$APP_IMPACTED" == "true" ]]; then
@@ -1018,6 +1085,7 @@ jobs:
           TOPOLOGY_SECONDS: ${{ steps.job_timing.outputs.phase_topology }}
           SERVICE_SECONDS: ${{ steps.job_timing.outputs.phase_service }}
           SERVICE_PACKAGING_SECONDS: ${{ steps.job_timing.outputs.phase_service_packaging }}
+          SERVICE_COVERAGE_SECONDS: ${{ steps.job_timing.outputs.phase_service_coverage }}
           SEARCH_SECONDS: ${{ steps.job_timing.outputs.phase_search }}
           APP_STATIC_SECONDS: ${{ steps.job_timing.outputs.phase_app_static }}
           APP_TESTS_SECONDS: ${{ steps.job_timing.outputs.phase_app_tests }}
@@ -1046,6 +1114,7 @@ jobs:
           PHASE_ARGS=(--phase "topology_regression=${TOPOLOGY_SECONDS}")
           if [[ -n "$SERVICE_SECONDS" ]]; then PHASE_ARGS+=(--phase "quwoquan_service=${SERVICE_SECONDS}"); fi
           if [[ -n "$SERVICE_PACKAGING_SECONDS" ]]; then PHASE_ARGS+=(--phase "quwoquan_service_packaging=${SERVICE_PACKAGING_SECONDS}"); fi
+          if [[ -n "$SERVICE_COVERAGE_SECONDS" ]]; then PHASE_ARGS+=(--phase "quwoquan_service_coverage=${SERVICE_COVERAGE_SECONDS}"); fi
           if [[ -n "$SEARCH_SECONDS" ]]; then PHASE_ARGS+=(--phase "search_contract_smoke=${SEARCH_SECONDS}"); fi
           if [[ -n "$APP_STATIC_SECONDS" ]]; then PHASE_ARGS+=(--phase "quwoquan_app_static=${APP_STATIC_SECONDS}"); fi
           if [[ -n "$APP_TESTS_SECONDS" ]]; then PHASE_ARGS+=(--phase "quwoquan_app_tests=${APP_TESTS_SECONDS}"); fi
@@ -1097,6 +1166,7 @@ jobs:
           TOPOLOGY: ${{ needs.topology_regression.result }}
           SERVICE: ${{ needs.quwoquan_service.result }}
           SERVICE_PACKAGING: ${{ needs.quwoquan_service_packaging.result }}
+          SERVICE_COVERAGE: ${{ needs.quwoquan_service_coverage.result }}
           SEARCH: ${{ needs.search_contract_smoke.result }}
           APP: ${{ needs.quwoquan_app.result }}
           APP_STATIC: ${{ needs.quwoquan_app_static.result }}
@@ -1127,6 +1197,7 @@ jobs:
           expect_success "topology_regression" "${TOPOLOGY}" "检查部署拓扑 / metadata 回归脚本"
           expect_success_or_skipped "quwoquan_service" "${SERVICE}" "检查 service scope gate 输出"
           expect_success_or_skipped "quwoquan_service_packaging" "${SERVICE_PACKAGING}" "检查三环境与 Prod packaging contract 输出"
+          expect_success_or_skipped "quwoquan_service_coverage" "${SERVICE_COVERAGE}" "检查云侧 canonical coverage 棘轮"
           expect_success_or_skipped "search_contract_smoke" "${SEARCH}" "检查 /search 商业信封与四环境探针契约"
           expect_success_or_skipped "quwoquan_app" "${APP}" "检查 app scope 汇总"
           expect_success_or_skipped "quwoquan_app_static" "${APP_STATIC}" "检查 app static + PA core"

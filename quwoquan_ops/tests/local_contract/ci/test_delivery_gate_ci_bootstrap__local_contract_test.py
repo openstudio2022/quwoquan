@@ -126,6 +126,7 @@ def _run_stubbed_service_phase(
         'run_service_core_before_packaging() { echo core-before; }\n'
         'run_service_packaging() { echo packaging; }\n'
         'run_service_core_after_packaging() { echo core-after; }\n'
+        'run_service_canonical_coverage() { echo coverage; }\n'
         f"service_phase={phase!r}\n{wrapper}\nrun_service\n",
         encoding="utf-8",
     )
@@ -173,15 +174,23 @@ def test_ops_portal_build_receives_the_external_deploy_root() -> None:
 def test_service_gate_installs_required_native_test_dependencies() -> None:
     workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
     job_start = workflow.index("  quwoquan_service:\n")
-    job_end = workflow.index("\n  search_contract_smoke:\n", job_start)
+    job_end = workflow.index("\n  quwoquan_service_packaging:\n", job_start)
     job = workflow[job_start:job_end]
 
     assert "prometheus tesseract-ocr ffmpeg redis-server" in job
     assert "run_bounded_apt_install.sh" in job
     assert "QWQ_TEST_MONGO_URI:" not in job
     assert job.count("run_recommendation_test_mongodb.sh") == 1
-    assert "docker run -d --name qwq-rec-mongo" not in job
-    assert "rs.initiate" not in job
+
+    # 采集格自己重跑被测模块，同样要 mongo；两处都必须走同一个 canonical 引导脚本，
+    # 不允许谁在作业里临时起一个容器。
+    coverage_start = workflow.index("  quwoquan_service_coverage:\n")
+    coverage_end = workflow.index("\n  search_contract_smoke:\n", coverage_start)
+    coverage = workflow[coverage_start:coverage_end]
+    assert "prometheus tesseract-ocr ffmpeg redis-server" in coverage
+    assert coverage.count("run_recommendation_test_mongodb.sh") == 1
+    assert "docker run -d --name qwq-rec-mongo" not in workflow
+    assert "rs.initiate" not in workflow
 
 
 def test_service_gate_phase_partition_preserves_default_full_gate() -> None:
@@ -227,9 +236,10 @@ def test_service_gate_phase_partition_executes_each_exact_call_set(
     tmp_path: Path,
 ) -> None:
     expected = {
-        "all": ["core-before", "packaging", "core-after"],
+        "all": ["core-before", "packaging", "core-after", "coverage"],
         "core": ["core-before", "core-after"],
         "packaging": ["packaging"],
+        "coverage": ["coverage"],
     }
     for phase, calls in expected.items():
         completed = _run_stubbed_service_phase(tmp_path, phase=phase)
@@ -243,9 +253,11 @@ def test_delivery_runs_service_core_and_packaging_as_parallel_siblings() -> None
     )
     core_start = workflow.index("  quwoquan_service:\n")
     packaging_start = workflow.index("  quwoquan_service_packaging:\n")
+    coverage_start = workflow.index("  quwoquan_service_coverage:\n")
     search_start = workflow.index("  search_contract_smoke:\n")
     core = workflow[core_start:packaging_start]
-    packaging = workflow[packaging_start:search_start]
+    packaging = workflow[packaging_start:coverage_start]
+    coverage = workflow[coverage_start:search_start]
 
     assert "needs: topology_regression" in core
     assert "needs: topology_regression" in packaging
@@ -256,10 +268,32 @@ def test_delivery_runs_service_core_and_packaging_as_parallel_siblings() -> None
     assert "设置 Go" not in packaging
     assert "设置 Dart" not in packaging
     assert "run_bounded_apt_install.sh tesseract-ocr" in packaging
-    assert '--require-count "service=1" --require-count "service_packaging=1"' in workflow
-    assert "FANOUT+=(service service_packaging)" in workflow
-    assert "--local-required service --local-required service_packaging" in workflow
+    assert "needs: topology_regression" in coverage
+    assert "GATE_SERVICE_PHASE: coverage" in coverage
+    coverage_fn = GATE_REPO_PATH.read_text(encoding="utf-8")
+    coverage_fn = coverage_fn[
+        coverage_fn.index("run_service_canonical_coverage()") : coverage_fn.index(
+            "\nrun_service() {"
+        )
+    ]
+    assert (
+        "make -C quwoquan_service/services/recommendation-service prepare-test-python"
+        in coverage_fn
+    )
+    assert coverage_fn.index("prepare-test-python") < coverage_fn.index(
+        "verify_canonical_coverage.py --collect --scope cloud"
+    )
+    assert (
+        '--require-count "service=1" --require-count "service_packaging=3"'
+        ' --require-count "service_coverage=1"'
+    ) in workflow
+    assert "FANOUT+=(service service_packaging service_coverage)" in workflow
+    assert (
+        "--local-required service --local-required service_packaging"
+        " --local-required service_coverage"
+    ) in workflow
     assert "SERVICE_PACKAGING: ${{ needs.quwoquan_service_packaging.result }}" in workflow
+    assert "SERVICE_COVERAGE: ${{ needs.quwoquan_service_coverage.result }}" in workflow
     summary_start = workflow.index("      - name: 汇总并阻断失败项")
     summary = workflow[summary_start:]
     assert "        if: always()" in summary
@@ -281,7 +315,9 @@ def test_service_gate_passes_the_exact_reviewed_change_range() -> None:
     assert "GATE_CHANGE_BASE_SHA and GATE_CHANGE_HEAD_SHA must be provided together" in gate
     assert '--base-sha "$GATE_CHANGE_BASE_SHA"' in gate
     assert '--head-sha "$GATE_CHANGE_HEAD_SHA"' in gate
-    assert 'verify_gate_local_contract_execution.py "${gate_change_range_args[@]}"' in gate
+    # set -u 下空数组展开会直接炸，所以调用侧用的是 ${arr[@]+"${arr[@]}"} 保护形式。
+    assert "verify_gate_local_contract_execution.py" in gate
+    assert '${gate_change_range_args[@]+"${gate_change_range_args[@]}"}' in gate
 
 
 def test_delivery_change_range_requires_complete_workflow_call_identity(
@@ -382,7 +418,7 @@ def test_pull_request_jobs_checkout_and_diff_the_exact_event_head() -> None:
         "ref: ${{ inputs.checkout_ref || "
         "github.event.pull_request.head.sha || github.sha }}"
     )
-    assert workflow.count(exact_checkout) == 12
+    assert workflow.count(exact_checkout) == 13
     assert "PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}" in workflow
     assert "PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}" in workflow
     assert "PUSH_BEFORE_SHA: ${{ github.event.before || '' }}" in workflow
@@ -425,8 +461,15 @@ def test_delivery_and_promotion_gates_defer_edges_to_canonical_evaluator() -> No
 def test_app_pipeline_uses_only_the_repository_pinned_flutter_version() -> None:
     workflow = (ROOT / ".github/workflows/app_pipeline.yml").read_text(encoding="utf-8")
 
-    assert workflow.count("quwoquan_app/.flutter-version") == 4
-    assert workflow.count("flutter-version: ${{ steps.flutter_version.outputs.value }}") == 4
+    # 装 Flutter 的作业数会随流水线收敛增减，绑死数量只会把测试变成待改的常量；
+    # 真正的约束是「每一次装 Flutter 都从仓库 pin 读版本」，两侧计数必须相等且非零。
+    pinned_reads = workflow.count("quwoquan_app/.flutter-version")
+    assert pinned_reads > 0
+    assert workflow.count("subosito/flutter-action") == pinned_reads
+    assert (
+        workflow.count("flutter-version: '${{ steps.flutter_version.outputs.value }}'")
+        == pinned_reads
+    )
     assert "channel: stable" not in workflow
     assert (ROOT / "quwoquan_app/.flutter-version").read_text(encoding="utf-8") == "3.47.0\n"
 
@@ -444,6 +487,7 @@ def test_delivery_gate_has_bounded_jobs() -> None:
         "quwoquan_app_static": 20,
         "quwoquan_app_tests": 40,
         "quwoquan_app_serial": 40,
+        "quwoquan_service_coverage": 40,
         "quwoquan_app_coverage": 40,
         "quwoquan_app": 10,
         "quwoquan_data": 10,
@@ -526,7 +570,8 @@ def test_hosted_delivery_budgets_match_observed_parallel_shape() -> None:
     assert delivery["hardFailSeconds"] == 1800
     assert delivery["machinePath"] == (
         "topology_regression + max(quwoquan_service, "
-        "quwoquan_service_packaging, search_contract_smoke, "
+        "quwoquan_service_packaging, quwoquan_service_coverage, "
+        "search_contract_smoke, "
         "quwoquan_app_static, quwoquan_app_tests, "
         "quwoquan_app_serial, quwoquan_app_coverage, quwoquan_data, ops_portal)"
     )

@@ -204,9 +204,18 @@ abstract final class CloudRuntimeConfig {
     return resolvedPackage.runtimeDefineSummary;
   }
 
-  static RuntimeFailure? runtimeAvailabilityFailure() {
-    final summary = runtimeDefineSummary;
-    final configurationState = summary['configurationState'] ?? 'invalid';
+  /// runtime package 未水合或非法时的 typed unavailable；配置完整时返回 null。
+  ///
+  /// 业务请求不得在配置不可用时抛裸异常或拼装半份配置，故此处只返回脱敏的
+  /// configurationSource 与 configurationState，绝不返回 URL。
+  ///
+  /// [summary] 只替换被判读的那份摘要，不碰全局水合状态。判读规则必须能被
+  /// 独立喂数，否则未水合与非法两态只能靠测试之间的全局副作用制造。
+  static RuntimeFailure? runtimeAvailabilityFailure({
+    Map<String, String>? summary,
+  }) {
+    final resolved = summary ?? runtimeDefineSummary;
+    final configurationState = resolved['configurationState'] ?? 'invalid';
     if (configurationState == 'complete') {
       return null;
     }
@@ -226,7 +235,7 @@ abstract final class CloudRuntimeConfig {
         attributes: <RuntimeContextAttribute>[
           RuntimeContextAttribute(
             key: 'configurationSource',
-            value: summary['configurationSource'] ?? 'signed-runtime-package',
+            value: resolved['configurationSource'] ?? 'signed-runtime-package',
           ),
           RuntimeContextAttribute(
             key: 'configurationState',

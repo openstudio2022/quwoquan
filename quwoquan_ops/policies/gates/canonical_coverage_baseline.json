@@ -14,142 +14,62 @@
     "tolerance_reason": "只吸收同一测试调度的微小覆盖率噪声，不吸收真实回归。"
   },
   "receipts": {
-    "sha256:16d8f2eab6f748446d2069f1fd20248030752392e321065927ee582bbe7de511": {
-      "artifactDigest": "sha256:4739548ad3c37b0fd6bef2dcc1fdfa0909b062d1c1bf4912ac3a3590eafdeb9e",
-      "artifactRef": ".qwq_output/env/repo/local/coverage/cache/quwoquan_service__services__recommendation-service.python-trace.json",
-      "attributionDigest": "sha256:145ef924b323aa3407a0d5fa1727c8d90060a4129e4e23b09af5a61ced1293b4",
-      "collectionScopeDigest": "sha256:3d0a878068c41e8aa56c6612123e9da0af73a39593ea73510bc0ae2c9608eba1",
-      "configDigest": "sha256:3b6e8d5d2560680ec731e833175c369f01275fa4697106a10756885c319cf5a3",
-      "headCommit": "c6d5301936041ff314613bbc359d1df653776cfa",
-      "headTree": "79e7ce878a0108291d4c276807eb14af72c0b19f",
-      "ruleId": "canonical-coverage-rule",
-      "schema": "canonical-coverage-receipt",
-      "sourceTreeDigest": "sha256:32ae10dd7c6eb7ac9cb19443b21157f0ba39d5554126e200be25634d195133a5",
-      "target": "quwoquan_service/services/recommendation-service",
-      "testTreeDigest": "sha256:f3bc867b22a16e8cd8f7ce7d05c423253c1db660f388f862eb54bcb576f1a839",
-      "testsGreen": true,
-      "toolchainDigest": "sha256:44c6f852d6418b206d8cc761aa88f2045992db48c75cb6f0b6bf2c51731b29b7"
-    },
-    "sha256:176d80526d9fb89e23b771005717e4870f7ebe6b6fd49845bdd14e42fe333404": {
-      "artifactDigest": "sha256:6dfbe672eb6a3860186724ef4cf03eb309133f9bdcbf9b123945682be811c85a",
-      "artifactRef": ".qwq_output/env/repo/local/coverage/cache/quwoquan_service__services__assistant-service.coverprofile",
-      "attributionDigest": "sha256:145ef924b323aa3407a0d5fa1727c8d90060a4129e4e23b09af5a61ced1293b4",
-      "collectionScopeDigest": "sha256:125946f95f791bd72f590c8373f16321c75d51d986a3f460b2b9269d5f550831",
+    "sha256:08c7062e7d07dfa720bcbec41db3a1340399a4641c59023edde4156e35ed00ee": {
+      "artifactDigest": "sha256:73466eca51fd59c651e5a1c636fb3420b7530d813c646aacbc2f61f75d2556d2",
+      "artifactRef": ".qwq_output/env/repo/local/coverage/cache/quwoquan_service__services__realtime-gateway.coverprofile",
+      "attributionDigest": "sha256:349ea56ed8ae37425272a2377539262b08889cb0abb0ae52b753453a03516923",
+      "collectionScopeDigest": "sha256:2f2c8f6d1771286ea375e81b37cc130a6eea81b310e82fe99eea3e1b589ac297",
       "configDigest": "sha256:2075a67c5be0bfc081041cbe277b9c18309a1a31fc4d546e77e7fc44dd00ab3e",
-      "headCommit": "c6d5301936041ff314613bbc359d1df653776cfa",
-      "headTree": "79e7ce878a0108291d4c276807eb14af72c0b19f",
+      "headCommit": "74eb5ca12648edeb08a77e17e20311ff3747be1e",
+      "headTree": "36bb758deae11438c7baa65a8341b58e92e11750",
       "ruleId": "canonical-coverage-rule",
       "schema": "canonical-coverage-receipt",
-      "sourceTreeDigest": "sha256:d605b02a46c7495de8aff9abeccf9c11bdc06d79885449797e814d0f6b8011f9",
-      "target": "quwoquan_service/services/assistant-service",
-      "testTreeDigest": "sha256:bddb61b8bb18766f87d4c5c9b5bd931ad6e0a3bf31d5392d53500adf661a72c9",
+      "sourceTreeDigest": "sha256:8f0bb55f31de4123d0e815391b2b1e50b88dcda3b4572eacdf83bdee00591742",
+      "target": "quwoquan_service/services/realtime-gateway",
+      "testTreeDigest": "sha256:a03eaf508446ffd6444805d71cd5b00c6c28d4e06b3c72946d69234bac956244",
       "testsGreen": true,
       "toolchainDigest": "sha256:14a18ddbd450ca381985a1019d8497d2472b340a9519fdc2beb77d0fb8057ebe"
     },
-    "sha256:36ed0b8db3396154b2132f14edaa9e465591ab8658c6cf147367ffaccb84484e": {
-      "artifactDigest": "sha256:15dbe94ecee49adaf2a36bf75e8bde6956bd451ac340b7eec1a09284a91c4112",
-      "artifactRef": ".qwq_output/env/repo/local/coverage/cache/quwoquan_service__services__integration-service.coverprofile",
-      "attributionDigest": "sha256:145ef924b323aa3407a0d5fa1727c8d90060a4129e4e23b09af5a61ced1293b4",
-      "collectionScopeDigest": "sha256:67d49207ca2802100ae97dc0f4eb1c8d7a7dac7e0e9b066c3734c3458c921174",
-      "configDigest": "sha256:2075a67c5be0bfc081041cbe277b9c18309a1a31fc4d546e77e7fc44dd00ab3e",
-      "headCommit": "c6d5301936041ff314613bbc359d1df653776cfa",
-      "headTree": "79e7ce878a0108291d4c276807eb14af72c0b19f",
-      "ruleId": "canonical-coverage-rule",
-      "schema": "canonical-coverage-receipt",
-      "sourceTreeDigest": "sha256:53982e0d2726c955a7f30cd9f97c7712bb64dbc652a732e84ca113216c4be3ae",
-      "target": "quwoquan_service/services/integration-service",
-      "testTreeDigest": "sha256:140ac40b0b3942a0a03acb6e654f0f34e07d24eb7a82a2a4cea9afd5280388e9",
-      "testsGreen": true,
-      "toolchainDigest": "sha256:14a18ddbd450ca381985a1019d8497d2472b340a9519fdc2beb77d0fb8057ebe"
-    },
-    "sha256:452bfb599bc2479a171b16e0fff7ace044a059bccdaec098c7124b20d6ea5812": {
-      "artifactDigest": "sha256:2b7eab6df6f4a577d77e2da1d69750dcdbadc6ededba1c60269893da28b6da19",
-      "artifactRef": ".qwq_output/env/repo/local/coverage/cache/quwoquan_service__services__circle-service.coverprofile",
-      "attributionDigest": "sha256:145ef924b323aa3407a0d5fa1727c8d90060a4129e4e23b09af5a61ced1293b4",
-      "collectionScopeDigest": "sha256:37e81738502c7570ce6823de2014895c3594778b55030cdcc50e39549d83a33e",
-      "configDigest": "sha256:2075a67c5be0bfc081041cbe277b9c18309a1a31fc4d546e77e7fc44dd00ab3e",
-      "headCommit": "c6d5301936041ff314613bbc359d1df653776cfa",
-      "headTree": "79e7ce878a0108291d4c276807eb14af72c0b19f",
-      "ruleId": "canonical-coverage-rule",
-      "schema": "canonical-coverage-receipt",
-      "sourceTreeDigest": "sha256:7bd5bfa6f94102fa66dd1a4b2c089dda1272d5c7d3c6373b5902cfd7b9f35a3f",
-      "target": "quwoquan_service/services/circle-service",
-      "testTreeDigest": "sha256:a4dc9e172e9c70271455c01c10b593a416cf834903c6a69f1461aa6a82899c97",
-      "testsGreen": true,
-      "toolchainDigest": "sha256:14a18ddbd450ca381985a1019d8497d2472b340a9519fdc2beb77d0fb8057ebe"
-    },
-    "sha256:45f0c7941392376d96314a395dac32192e886343ac1f9fe6af4a8d144ea9c5c1": {
-      "artifactDigest": "sha256:85a30592eea9dabc4c64a5e9443f10b5a1ccd9626d6b6d20d47507d6ac8ff12a",
-      "artifactRef": ".qwq_output/env/repo/local/coverage/cache/quwoquan_service__services__notification-service.coverprofile",
-      "attributionDigest": "sha256:145ef924b323aa3407a0d5fa1727c8d90060a4129e4e23b09af5a61ced1293b4",
-      "collectionScopeDigest": "sha256:8b244801d52b4063c7ce8866b923d528d5954f52581923aa7160ed1006eef270",
-      "configDigest": "sha256:2075a67c5be0bfc081041cbe277b9c18309a1a31fc4d546e77e7fc44dd00ab3e",
-      "headCommit": "c6d5301936041ff314613bbc359d1df653776cfa",
-      "headTree": "79e7ce878a0108291d4c276807eb14af72c0b19f",
-      "ruleId": "canonical-coverage-rule",
-      "schema": "canonical-coverage-receipt",
-      "sourceTreeDigest": "sha256:438c9f727a1f38ca59234fcfa9fd48af7eb0d750b52460520fe637f7c3232d0f",
-      "target": "quwoquan_service/services/notification-service",
-      "testTreeDigest": "sha256:038eff70bba57fb20ccdbd6d01983d8a8d06ccaa48814d1b843fb23ca1d21452",
-      "testsGreen": true,
-      "toolchainDigest": "sha256:14a18ddbd450ca381985a1019d8497d2472b340a9519fdc2beb77d0fb8057ebe"
-    },
-    "sha256:62dcacb5c27509de77e9787ad4e756298df2314f1ecc8deabb63bdc77c92f314": {
-      "artifactDigest": "sha256:b08f0984491e658dcc5079f6cc6a7804a753e6a644144f122ef00dec4d21f66a",
+    "sha256:0ff5752d82fd36f020d072053349eba30aba313aa6e5c55210c92c19eb6c4222": {
+      "artifactDigest": "sha256:f803ce7ceb569ec5b0f15e52ceced84de8309d5b2a3b186a382615e8524a241d",
       "artifactRef": ".qwq_output/env/repo/local/coverage/cache/quwoquan_service__services__user-service.coverprofile",
-      "attributionDigest": "sha256:145ef924b323aa3407a0d5fa1727c8d90060a4129e4e23b09af5a61ced1293b4",
+      "attributionDigest": "sha256:349ea56ed8ae37425272a2377539262b08889cb0abb0ae52b753453a03516923",
       "collectionScopeDigest": "sha256:343206ee2f85a6749c961c826d6db5abbd6402c4556c1cb66d9fb4df090161fd",
       "configDigest": "sha256:2075a67c5be0bfc081041cbe277b9c18309a1a31fc4d546e77e7fc44dd00ab3e",
-      "headCommit": "c6d5301936041ff314613bbc359d1df653776cfa",
-      "headTree": "79e7ce878a0108291d4c276807eb14af72c0b19f",
+      "headCommit": "74eb5ca12648edeb08a77e17e20311ff3747be1e",
+      "headTree": "36bb758deae11438c7baa65a8341b58e92e11750",
       "ruleId": "canonical-coverage-rule",
       "schema": "canonical-coverage-receipt",
-      "sourceTreeDigest": "sha256:050c23954aa9a582a56fd6e5acf56c36fd91d6e9a1ce76a37d99a0c6b7c59b16",
+      "sourceTreeDigest": "sha256:fd31dc04e45dd4ac78bee951cb39fb0b4eee3905a2023f06573e43744362f189",
       "target": "quwoquan_service/services/user-service",
-      "testTreeDigest": "sha256:5c4d644a2a1024122ff4f351008d0df8312420e4556c724ea89de2c2c75f23a4",
+      "testTreeDigest": "sha256:9bf0ebc3ec1ab9856a88b5c23934f17f9fef5fada4e7bc7ebca16b38c435d7e2",
       "testsGreen": true,
       "toolchainDigest": "sha256:14a18ddbd450ca381985a1019d8497d2472b340a9519fdc2beb77d0fb8057ebe"
     },
-    "sha256:6561668124c73a0cf4c9b94c7afde131003b9f952b124233d905a6aed287e3df": {
-      "artifactDigest": "sha256:8aee28fbd14e824d5ec52a6bad4b9a7c2364a8dce9aaa3483c90d738709a2f02",
-      "artifactRef": ".qwq_output/env/repo/local/coverage/cache/quwoquan_service__services__content-service.coverprofile",
-      "attributionDigest": "sha256:145ef924b323aa3407a0d5fa1727c8d90060a4129e4e23b09af5a61ced1293b4",
-      "collectionScopeDigest": "sha256:b6f9c0e5d46f2eb5c1e685845c4b01ee617a4a00665bad0f0c010760a0b715df",
+    "sha256:18021e7fc4a890f5212bf66315c54bcdb070c2aa173a4fe428588877f8b9c3e1": {
+      "artifactDigest": "sha256:ce52b69f7c4482de1c4c16c1f4b33988be40c53fbc5756610ea849757c9a6bb0",
+      "artifactRef": ".qwq_output/env/repo/local/coverage/cache/quwoquan_service__services__search-service.coverprofile",
+      "attributionDigest": "sha256:349ea56ed8ae37425272a2377539262b08889cb0abb0ae52b753453a03516923",
+      "collectionScopeDigest": "sha256:e6b16931b887fc3d126933d4d5e657bbf823e302b87ee55e58c45a5dafe1ef8a",
       "configDigest": "sha256:2075a67c5be0bfc081041cbe277b9c18309a1a31fc4d546e77e7fc44dd00ab3e",
-      "headCommit": "c6d5301936041ff314613bbc359d1df653776cfa",
-      "headTree": "79e7ce878a0108291d4c276807eb14af72c0b19f",
+      "headCommit": "74eb5ca12648edeb08a77e17e20311ff3747be1e",
+      "headTree": "36bb758deae11438c7baa65a8341b58e92e11750",
       "ruleId": "canonical-coverage-rule",
       "schema": "canonical-coverage-receipt",
-      "sourceTreeDigest": "sha256:935a9b1056755b5d4e962bfcc4f57212645bbb0d2c41de17928993f364a6d875",
-      "target": "quwoquan_service/services/content-service",
-      "testTreeDigest": "sha256:ed7e68089eef007a56b05b59c7c9535d8b823923b8c7def48b66e368b66090dd",
+      "sourceTreeDigest": "sha256:eeb18b8469d1bd2a9ec6bfe964b410cc3a9dfc91f55d80a3b6a24bf22a8f1196",
+      "target": "quwoquan_service/services/search-service",
+      "testTreeDigest": "sha256:546bcd20abe0adbf381b964af75c196c5ac88014cde346bcefa3d9453a8b9c72",
       "testsGreen": true,
       "toolchainDigest": "sha256:14a18ddbd450ca381985a1019d8497d2472b340a9519fdc2beb77d0fb8057ebe"
     },
-    "sha256:72a1fccbaca6f31d5af37be1ca1760d8d062063282a406928632bf22ce2caaf7": {
-      "artifactDigest": "sha256:b4022f12d1d0a054e07e14fad88cff8b759da628d280f5b9f222a0447010bb6c",
-      "artifactRef": ".qwq_output/env/repo/local/coverage/cache/quwoquan_service__services__tag-service.coverprofile",
-      "attributionDigest": "sha256:145ef924b323aa3407a0d5fa1727c8d90060a4129e4e23b09af5a61ced1293b4",
-      "collectionScopeDigest": "sha256:a88483fbb29214c167ac97cadb71a55713f95d2b3e8957aa46ee68759633f052",
-      "configDigest": "sha256:2075a67c5be0bfc081041cbe277b9c18309a1a31fc4d546e77e7fc44dd00ab3e",
-      "headCommit": "c6d5301936041ff314613bbc359d1df653776cfa",
-      "headTree": "79e7ce878a0108291d4c276807eb14af72c0b19f",
-      "ruleId": "canonical-coverage-rule",
-      "schema": "canonical-coverage-receipt",
-      "sourceTreeDigest": "sha256:d2ed1efd6691ee5cf65987be3d509b81fd3ea8b0023b25062c8f48007a345911",
-      "target": "quwoquan_service/services/tag-service",
-      "testTreeDigest": "sha256:57217eb785e8654e7dcf6501741f2fd94bdc22eea3c5c8ac67e95c5a2ba2ce16",
-      "testsGreen": true,
-      "toolchainDigest": "sha256:14a18ddbd450ca381985a1019d8497d2472b340a9519fdc2beb77d0fb8057ebe"
-    },
-    "sha256:756d84d5677e677f6a4bd39923c34a6b532fb5ff0e161fe34470b34ee1c1830a": {
-      "artifactDigest": "sha256:958ea6ca18e10d49acac968ef3dbbdd20977acd3cfc4c6ee3adef37ccb3accd0",
+    "sha256:48a14c19aba1c764b2f4d839fd09a52082438b1500e4c9ded0c4bdb40cd1a629": {
+      "artifactDigest": "sha256:0639ce9500920c2876bf85bd40b5c98e31d9c42022948f56cb2a6cebcfe48092",
       "artifactRef": ".qwq_output/env/repo/local/coverage/cache/quwoquan_service__services__api-edge.coverprofile",
-      "attributionDigest": "sha256:145ef924b323aa3407a0d5fa1727c8d90060a4129e4e23b09af5a61ced1293b4",
+      "attributionDigest": "sha256:349ea56ed8ae37425272a2377539262b08889cb0abb0ae52b753453a03516923",
       "collectionScopeDigest": "sha256:63900c41c8072db486be267542ef0e4a21a96324faba9150a9d17b183cabc8cf",
       "configDigest": "sha256:2075a67c5be0bfc081041cbe277b9c18309a1a31fc4d546e77e7fc44dd00ab3e",
-      "headCommit": "c6d5301936041ff314613bbc359d1df653776cfa",
-      "headTree": "79e7ce878a0108291d4c276807eb14af72c0b19f",
+      "headCommit": "74eb5ca12648edeb08a77e17e20311ff3747be1e",
+      "headTree": "36bb758deae11438c7baa65a8341b58e92e11750",
       "ruleId": "canonical-coverage-rule",
       "schema": "canonical-coverage-receipt",
       "sourceTreeDigest": "sha256:0e1fadb8aa52fc829bb0bb1e6f2e68b7fe082e990e3bc0c1689adc4b89e6bdd0",
@@ -158,147 +78,227 @@
       "testsGreen": true,
       "toolchainDigest": "sha256:14a18ddbd450ca381985a1019d8497d2472b340a9519fdc2beb77d0fb8057ebe"
     },
-    "sha256:80eb4d8736d1910e62c3c9a9f49be9c6a2eb59b251b7fa9560bf75c8a0cf693f": {
-      "artifactDigest": "sha256:33acb84b0507b6fd41a850bafc8f0ebb8295c115bc741674fd0b386ccbcfc2b8",
-      "artifactRef": ".qwq_output/env/repo/local/coverage/cache/quwoquan_service__shared-runtime.coverprofile",
-      "attributionDigest": "sha256:145ef924b323aa3407a0d5fa1727c8d90060a4129e4e23b09af5a61ced1293b4",
-      "collectionScopeDigest": "sha256:761339b42c92c742d592c825deb08c0ffc57d47889f6449c40202dc96fbf79c0",
-      "configDigest": "sha256:2075a67c5be0bfc081041cbe277b9c18309a1a31fc4d546e77e7fc44dd00ab3e",
-      "headCommit": "c6d5301936041ff314613bbc359d1df653776cfa",
-      "headTree": "79e7ce878a0108291d4c276807eb14af72c0b19f",
-      "ruleId": "canonical-coverage-rule",
-      "schema": "canonical-coverage-receipt",
-      "sourceTreeDigest": "sha256:c6ac88d4a128f05ed132e13d6e16a86017e87ba0d23ec5788768c0e772464af7",
-      "target": "quwoquan_service/shared-runtime",
-      "testTreeDigest": "sha256:98391f2515e3974628c4ab7a113a9f397432cd7e08bee4fd7a1a5c86ddcb3bea",
-      "testsGreen": true,
-      "toolchainDigest": "sha256:14a18ddbd450ca381985a1019d8497d2472b340a9519fdc2beb77d0fb8057ebe"
-    },
-    "sha256:83d4294eca9b725d8ba03cdafeb4feda7680d0782a92b1f599615dc82ab0fd18": {
-      "artifactDigest": "sha256:0edf72cd507609c31e3774c5f082ab82836bc4408aab2e3c488fdf836cd0a154",
-      "artifactRef": ".qwq_output/env/repo/local/coverage/cache/quwoquan_service__services__rtc-service.coverprofile",
-      "attributionDigest": "sha256:145ef924b323aa3407a0d5fa1727c8d90060a4129e4e23b09af5a61ced1293b4",
-      "collectionScopeDigest": "sha256:0ef60cac820e6e6866770abfe5c387f162e7e8b42933ee6a4633a9a2f424b384",
-      "configDigest": "sha256:2075a67c5be0bfc081041cbe277b9c18309a1a31fc4d546e77e7fc44dd00ab3e",
-      "headCommit": "c6d5301936041ff314613bbc359d1df653776cfa",
-      "headTree": "79e7ce878a0108291d4c276807eb14af72c0b19f",
-      "ruleId": "canonical-coverage-rule",
-      "schema": "canonical-coverage-receipt",
-      "sourceTreeDigest": "sha256:12423b9abc36d7a61d60440cd7eacd5b59dc24985887aded7d65db4f10701bff",
-      "target": "quwoquan_service/services/rtc-service",
-      "testTreeDigest": "sha256:170b5cf673b0a6ec68ca12f1b131836146c9c9ed3c701ede91b662a104ef8b26",
-      "testsGreen": true,
-      "toolchainDigest": "sha256:14a18ddbd450ca381985a1019d8497d2472b340a9519fdc2beb77d0fb8057ebe"
-    },
-    "sha256:9178cd6599dec41253bd2b09e642f735a248b6a034d6fc07ea160fe27de390d8": {
-      "artifactDigest": "sha256:9260e178c2fdac10a9c6e1b1d6b779e45e81cb1139ba82ed80e23922e2423f56",
-      "artifactRef": ".qwq_output/env/repo/local/coverage/cache/quwoquan_service__services__entity-service.coverprofile",
-      "attributionDigest": "sha256:145ef924b323aa3407a0d5fa1727c8d90060a4129e4e23b09af5a61ced1293b4",
-      "collectionScopeDigest": "sha256:87154b083f4c0e41276cd021c3f0f6183ec824ec6070473830c8899814cf10dc",
-      "configDigest": "sha256:2075a67c5be0bfc081041cbe277b9c18309a1a31fc4d546e77e7fc44dd00ab3e",
-      "headCommit": "c6d5301936041ff314613bbc359d1df653776cfa",
-      "headTree": "79e7ce878a0108291d4c276807eb14af72c0b19f",
-      "ruleId": "canonical-coverage-rule",
-      "schema": "canonical-coverage-receipt",
-      "sourceTreeDigest": "sha256:07f966da356b86cbff7aff4f640b4cf212b9ebebc90dd7058f6990ff0dc58e74",
-      "target": "quwoquan_service/services/entity-service",
-      "testTreeDigest": "sha256:89049e819236788494fee7c9c623a8f3321ce46d5ea1dea091120524698260c3",
-      "testsGreen": true,
-      "toolchainDigest": "sha256:14a18ddbd450ca381985a1019d8497d2472b340a9519fdc2beb77d0fb8057ebe"
-    },
-    "sha256:bb26b3949513807c64e118ce80fa796dc97fc5c93a176af4b9fb31fa0a94b822": {
-      "artifactDigest": "sha256:349327e20495e03e22679e6563cb14554fdee2be3628b4cc492a032ebabaa675",
-      "artifactRef": ".qwq_output/env/repo/local/coverage/cache/quwoquan_service__services__realtime-gateway.coverprofile",
-      "attributionDigest": "sha256:145ef924b323aa3407a0d5fa1727c8d90060a4129e4e23b09af5a61ced1293b4",
-      "collectionScopeDigest": "sha256:2f2c8f6d1771286ea375e81b37cc130a6eea81b310e82fe99eea3e1b589ac297",
-      "configDigest": "sha256:2075a67c5be0bfc081041cbe277b9c18309a1a31fc4d546e77e7fc44dd00ab3e",
-      "headCommit": "c6d5301936041ff314613bbc359d1df653776cfa",
-      "headTree": "79e7ce878a0108291d4c276807eb14af72c0b19f",
-      "ruleId": "canonical-coverage-rule",
-      "schema": "canonical-coverage-receipt",
-      "sourceTreeDigest": "sha256:b6907723b46e201c3dd34894b68483139d25ee263d0e4739fb456f46e51eca8c",
-      "target": "quwoquan_service/services/realtime-gateway",
-      "testTreeDigest": "sha256:a03eaf508446ffd6444805d71cd5b00c6c28d4e06b3c72946d69234bac956244",
-      "testsGreen": true,
-      "toolchainDigest": "sha256:14a18ddbd450ca381985a1019d8497d2472b340a9519fdc2beb77d0fb8057ebe"
-    },
-    "sha256:c430ff77a3cd0c1f0c099fc2e4efe0506a1eae0730c26b6a5fead5d5aa85e09c": {
-      "artifactDigest": "sha256:07dcdb07eea51be819ad88340c8cc5154c6f978110108c8ebea780d5ea9d2d50",
-      "artifactRef": ".qwq_output/env/repo/local/coverage/cache/quwoquan_service__services__search-service.coverprofile",
-      "attributionDigest": "sha256:145ef924b323aa3407a0d5fa1727c8d90060a4129e4e23b09af5a61ced1293b4",
-      "collectionScopeDigest": "sha256:e6b16931b887fc3d126933d4d5e657bbf823e302b87ee55e58c45a5dafe1ef8a",
-      "configDigest": "sha256:2075a67c5be0bfc081041cbe277b9c18309a1a31fc4d546e77e7fc44dd00ab3e",
-      "headCommit": "c6d5301936041ff314613bbc359d1df653776cfa",
-      "headTree": "79e7ce878a0108291d4c276807eb14af72c0b19f",
-      "ruleId": "canonical-coverage-rule",
-      "schema": "canonical-coverage-receipt",
-      "sourceTreeDigest": "sha256:356787bbefe8d48e32e808e92518ee0d7db59e9f8ba69ac6aad7cc939c5f924f",
-      "target": "quwoquan_service/services/search-service",
-      "testTreeDigest": "sha256:546bcd20abe0adbf381b964af75c196c5ac88014cde346bcefa3d9453a8b9c72",
-      "testsGreen": true,
-      "toolchainDigest": "sha256:14a18ddbd450ca381985a1019d8497d2472b340a9519fdc2beb77d0fb8057ebe"
-    },
-    "sha256:c68d54b09fffe78f0d8edf565269d2308aab200c70ea9a22c9dd756fcc0422a8": {
-      "artifactDigest": "sha256:2f193e1447be76c90f1f6eeaf1e28de89e3e64b45cc92b445c4806e5b73e229c",
+    "sha256:662c544d4ef61f27de56f458d7a936ad06da33df63bbbe11d0c5da6ca733e69e": {
+      "artifactDigest": "sha256:5aae3ee55a74e2baa68a1b99cc6ec4ae4561e62c8c24559c9c1c5bf3000454f0",
       "artifactRef": ".qwq_output/env/repo/local/coverage/cache/quwoquan_service__services__chat-service.coverprofile",
-      "attributionDigest": "sha256:145ef924b323aa3407a0d5fa1727c8d90060a4129e4e23b09af5a61ced1293b4",
+      "attributionDigest": "sha256:349ea56ed8ae37425272a2377539262b08889cb0abb0ae52b753453a03516923",
       "collectionScopeDigest": "sha256:d942fbd3283d245d14cdf980090f0f22619064aa93347db8a3158c330f3a5d55",
       "configDigest": "sha256:2075a67c5be0bfc081041cbe277b9c18309a1a31fc4d546e77e7fc44dd00ab3e",
-      "headCommit": "c6d5301936041ff314613bbc359d1df653776cfa",
-      "headTree": "79e7ce878a0108291d4c276807eb14af72c0b19f",
+      "headCommit": "74eb5ca12648edeb08a77e17e20311ff3747be1e",
+      "headTree": "36bb758deae11438c7baa65a8341b58e92e11750",
       "ruleId": "canonical-coverage-rule",
       "schema": "canonical-coverage-receipt",
-      "sourceTreeDigest": "sha256:18b6712d3fcc1609eb380ea9bdfa9ae7663c198f8abdce6ec22ce8b0a257fd07",
+      "sourceTreeDigest": "sha256:c20c567d89f151c052bfe14c4148c3c68aae5fe432f8b8d5359fd6e7da09e06f",
       "target": "quwoquan_service/services/chat-service",
       "testTreeDigest": "sha256:1b2b769f1143a3db4e0481424863e57035e5b6914d0251c4774acc28da4a36e8",
       "testsGreen": true,
       "toolchainDigest": "sha256:14a18ddbd450ca381985a1019d8497d2472b340a9519fdc2beb77d0fb8057ebe"
     },
-    "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6": {
-      "artifactDigest": "sha256:851840a35368144de9bc230ae5e242042abe21ef6babf3be953e5264f03c6e26",
-      "artifactRef": ".qwq_output/env/repo/local/coverage/cache/app.lcov.info",
-      "attributionDigest": "sha256:145ef924b323aa3407a0d5fa1727c8d90060a4129e4e23b09af5a61ced1293b4",
-      "collectionScopeDigest": "sha256:2969a8c7f072e12860f65a432f2a1eb16a29c8f48372478901d0f1c66bb9e5c6",
-      "configDigest": "sha256:4ae00d4bb51fa539dc35c9a038f06ca9bccf9f226c07ac52fe50194e13fbcfba",
-      "headCommit": "c6d5301936041ff314613bbc359d1df653776cfa",
-      "headTree": "79e7ce878a0108291d4c276807eb14af72c0b19f",
+    "sha256:7d44d6f10104bec4f3351b3368e8113de12b0085716542d8e35e0c036f9a499b": {
+      "artifactDigest": "sha256:c52d332edfe5a16da23ace0eea2755c31fac530bf3f29b67da480dd40c26f60c",
+      "artifactRef": ".qwq_output/env/repo/local/coverage/cache/quwoquan_service__services__content-service.coverprofile",
+      "attributionDigest": "sha256:349ea56ed8ae37425272a2377539262b08889cb0abb0ae52b753453a03516923",
+      "collectionScopeDigest": "sha256:b6f9c0e5d46f2eb5c1e685845c4b01ee617a4a00665bad0f0c010760a0b715df",
+      "configDigest": "sha256:2075a67c5be0bfc081041cbe277b9c18309a1a31fc4d546e77e7fc44dd00ab3e",
+      "headCommit": "74eb5ca12648edeb08a77e17e20311ff3747be1e",
+      "headTree": "36bb758deae11438c7baa65a8341b58e92e11750",
       "ruleId": "canonical-coverage-rule",
       "schema": "canonical-coverage-receipt",
-      "sourceTreeDigest": "sha256:36f5b0bb9572283ad5df597980ce93977835bad1910ef61f8f5ee13716365d91",
+      "sourceTreeDigest": "sha256:3e7643156572f6e4708877c4a0d46f5e73d95b9621d4510af195464323de40f9",
+      "target": "quwoquan_service/services/content-service",
+      "testTreeDigest": "sha256:33c72776cc5edcd0484fcc5b5bab0c497781706fac784ea79e02d016700d9af2",
+      "testsGreen": true,
+      "toolchainDigest": "sha256:14a18ddbd450ca381985a1019d8497d2472b340a9519fdc2beb77d0fb8057ebe"
+    },
+    "sha256:9a251c74e7e51254fe96321a3fe7bb725c4bbb8463447f086c73465872a148d4": {
+      "artifactDigest": "sha256:a778abcefe58e8d60e17eca7ae43bbce7a6eb5cab6b9550c9296a98ef33c92a3",
+      "artifactRef": ".qwq_output/env/repo/local/coverage/cache/quwoquan_service__services__notification-service.coverprofile",
+      "attributionDigest": "sha256:349ea56ed8ae37425272a2377539262b08889cb0abb0ae52b753453a03516923",
+      "collectionScopeDigest": "sha256:8b244801d52b4063c7ce8866b923d528d5954f52581923aa7160ed1006eef270",
+      "configDigest": "sha256:2075a67c5be0bfc081041cbe277b9c18309a1a31fc4d546e77e7fc44dd00ab3e",
+      "headCommit": "74eb5ca12648edeb08a77e17e20311ff3747be1e",
+      "headTree": "36bb758deae11438c7baa65a8341b58e92e11750",
+      "ruleId": "canonical-coverage-rule",
+      "schema": "canonical-coverage-receipt",
+      "sourceTreeDigest": "sha256:a4371848f1dab99430544e4e4126ece2fe941c83a21a5b1f89da68cc2b87f137",
+      "target": "quwoquan_service/services/notification-service",
+      "testTreeDigest": "sha256:038eff70bba57fb20ccdbd6d01983d8a8d06ccaa48814d1b843fb23ca1d21452",
+      "testsGreen": true,
+      "toolchainDigest": "sha256:14a18ddbd450ca381985a1019d8497d2472b340a9519fdc2beb77d0fb8057ebe"
+    },
+    "sha256:a314f050c123ac71ba8f886d45a3c4e547fceb60e42337232436f17a05ff0457": {
+      "artifactDigest": "sha256:dee64d287841e258e34dfbf591016ac4b207043123c6e02375dcd52231e39f7a",
+      "artifactRef": ".qwq_output/env/repo/local/coverage/cache/quwoquan_service__services__circle-service.coverprofile",
+      "attributionDigest": "sha256:349ea56ed8ae37425272a2377539262b08889cb0abb0ae52b753453a03516923",
+      "collectionScopeDigest": "sha256:37e81738502c7570ce6823de2014895c3594778b55030cdcc50e39549d83a33e",
+      "configDigest": "sha256:2075a67c5be0bfc081041cbe277b9c18309a1a31fc4d546e77e7fc44dd00ab3e",
+      "headCommit": "74eb5ca12648edeb08a77e17e20311ff3747be1e",
+      "headTree": "36bb758deae11438c7baa65a8341b58e92e11750",
+      "ruleId": "canonical-coverage-rule",
+      "schema": "canonical-coverage-receipt",
+      "sourceTreeDigest": "sha256:d6ee352e6b7e78d267fb7ee2d75c9932d57f2839a0615a94c2bfee06d382a007",
+      "target": "quwoquan_service/services/circle-service",
+      "testTreeDigest": "sha256:a4dc9e172e9c70271455c01c10b593a416cf834903c6a69f1461aa6a82899c97",
+      "testsGreen": true,
+      "toolchainDigest": "sha256:14a18ddbd450ca381985a1019d8497d2472b340a9519fdc2beb77d0fb8057ebe"
+    },
+    "sha256:adb2207257e707d31cd4922f1ccdaa6b55f36aaf4e5d421d77e8d3fd83277c67": {
+      "artifactDigest": "sha256:0fcdac9e3ee535f42ee7119e0ff57976c6dfae2deeffe49f92364e3725f512f1",
+      "artifactRef": ".qwq_output/env/repo/local/coverage/cache/quwoquan_service__services__rtc-service.coverprofile",
+      "attributionDigest": "sha256:349ea56ed8ae37425272a2377539262b08889cb0abb0ae52b753453a03516923",
+      "collectionScopeDigest": "sha256:0ef60cac820e6e6866770abfe5c387f162e7e8b42933ee6a4633a9a2f424b384",
+      "configDigest": "sha256:2075a67c5be0bfc081041cbe277b9c18309a1a31fc4d546e77e7fc44dd00ab3e",
+      "headCommit": "74eb5ca12648edeb08a77e17e20311ff3747be1e",
+      "headTree": "36bb758deae11438c7baa65a8341b58e92e11750",
+      "ruleId": "canonical-coverage-rule",
+      "schema": "canonical-coverage-receipt",
+      "sourceTreeDigest": "sha256:1b1a79cdf6e836804c8dbb7e6d4aacccc13fe3bfb94bcaca76a618c4605405e8",
+      "target": "quwoquan_service/services/rtc-service",
+      "testTreeDigest": "sha256:26f5a0a633a83d7ba9f5a6b4f022aa8cbf869771170f78cc7e329f6ac07123ae",
+      "testsGreen": true,
+      "toolchainDigest": "sha256:14a18ddbd450ca381985a1019d8497d2472b340a9519fdc2beb77d0fb8057ebe"
+    },
+    "sha256:b40e2c7bac800c74adb14be5d87003ad3aca838889a82446bb1bc35bb481dd5b": {
+      "artifactDigest": "sha256:b19341b2edb6f6d0048dd2edbaf74dd1f2d3fae9c43665879cc7edfe533fdb3e",
+      "artifactRef": ".qwq_output/env/repo/local/coverage/cache/quwoquan_service__services__integration-service.coverprofile",
+      "attributionDigest": "sha256:349ea56ed8ae37425272a2377539262b08889cb0abb0ae52b753453a03516923",
+      "collectionScopeDigest": "sha256:67d49207ca2802100ae97dc0f4eb1c8d7a7dac7e0e9b066c3734c3458c921174",
+      "configDigest": "sha256:2075a67c5be0bfc081041cbe277b9c18309a1a31fc4d546e77e7fc44dd00ab3e",
+      "headCommit": "74eb5ca12648edeb08a77e17e20311ff3747be1e",
+      "headTree": "36bb758deae11438c7baa65a8341b58e92e11750",
+      "ruleId": "canonical-coverage-rule",
+      "schema": "canonical-coverage-receipt",
+      "sourceTreeDigest": "sha256:ecbe0140396d7e8871b1d0e25785189cfad101e4322bed275cd043a26c70dfc2",
+      "target": "quwoquan_service/services/integration-service",
+      "testTreeDigest": "sha256:4a11fe09dd310bf20751f8c10b3236bc9738a3fd40fe7b60e90706d1444319fd",
+      "testsGreen": true,
+      "toolchainDigest": "sha256:14a18ddbd450ca381985a1019d8497d2472b340a9519fdc2beb77d0fb8057ebe"
+    },
+    "sha256:b75954f19f5aa9a696fcb8d72d53fff98d716a42533f73de4c296d8397e1294e": {
+      "artifactDigest": "sha256:24ab9cc5bf839d3c2470f458af8824fae4510ddc31bef5864eb26c606eed4120",
+      "artifactRef": ".qwq_output/env/repo/local/coverage/cache/quwoquan_service__services__assistant-service.coverprofile",
+      "attributionDigest": "sha256:349ea56ed8ae37425272a2377539262b08889cb0abb0ae52b753453a03516923",
+      "collectionScopeDigest": "sha256:125946f95f791bd72f590c8373f16321c75d51d986a3f460b2b9269d5f550831",
+      "configDigest": "sha256:2075a67c5be0bfc081041cbe277b9c18309a1a31fc4d546e77e7fc44dd00ab3e",
+      "headCommit": "74eb5ca12648edeb08a77e17e20311ff3747be1e",
+      "headTree": "36bb758deae11438c7baa65a8341b58e92e11750",
+      "ruleId": "canonical-coverage-rule",
+      "schema": "canonical-coverage-receipt",
+      "sourceTreeDigest": "sha256:be013ef10e419ea4bc64502c43a0ded44eac95b09b6f7813b35c9b8f18a2819e",
+      "target": "quwoquan_service/services/assistant-service",
+      "testTreeDigest": "sha256:d40ce13b16c5a2a74f9c4f9a364d932caa1abca223204c2e0b72845d74056316",
+      "testsGreen": true,
+      "toolchainDigest": "sha256:14a18ddbd450ca381985a1019d8497d2472b340a9519fdc2beb77d0fb8057ebe"
+    },
+    "sha256:c6cbbd801ae721f1aefe1d8e20adf607c5bdfe3e583dfbafd049898fb7702a5e": {
+      "artifactDigest": "sha256:e682e0875c9791fa2e72f6c09c3316159c645c9ef8e2fb2d4482027b99187320",
+      "artifactRef": ".qwq_output/env/repo/local/coverage/cache/quwoquan_service__services__tag-service.coverprofile",
+      "attributionDigest": "sha256:349ea56ed8ae37425272a2377539262b08889cb0abb0ae52b753453a03516923",
+      "collectionScopeDigest": "sha256:a88483fbb29214c167ac97cadb71a55713f95d2b3e8957aa46ee68759633f052",
+      "configDigest": "sha256:2075a67c5be0bfc081041cbe277b9c18309a1a31fc4d546e77e7fc44dd00ab3e",
+      "headCommit": "74eb5ca12648edeb08a77e17e20311ff3747be1e",
+      "headTree": "36bb758deae11438c7baa65a8341b58e92e11750",
+      "ruleId": "canonical-coverage-rule",
+      "schema": "canonical-coverage-receipt",
+      "sourceTreeDigest": "sha256:1e4d50652f70514e66aea2342fe0f5dc4b4f14918d29b6a21be3ba11002ada43",
+      "target": "quwoquan_service/services/tag-service",
+      "testTreeDigest": "sha256:57217eb785e8654e7dcf6501741f2fd94bdc22eea3c5c8ac67e95c5a2ba2ce16",
+      "testsGreen": true,
+      "toolchainDigest": "sha256:14a18ddbd450ca381985a1019d8497d2472b340a9519fdc2beb77d0fb8057ebe"
+    },
+    "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa": {
+      "artifactDigest": "sha256:0bbedc3c7a7fb8bd46fafd18da5653066010a25fef9dc1efafd9f5b2c03b3285",
+      "artifactRef": ".qwq_output/env/repo/local/coverage/cache/app.lcov.info",
+      "attributionDigest": "sha256:349ea56ed8ae37425272a2377539262b08889cb0abb0ae52b753453a03516923",
+      "collectionScopeDigest": "sha256:905f5cc70ef7ec6903fc30f302e6c9f49da278012de530b4ace0cf6453a00b2b",
+      "configDigest": "sha256:e349a043fdc28ffe1369193e35eccd83699dfda43ea9a97d56d0ee8457493f85",
+      "headCommit": "74eb5ca12648edeb08a77e17e20311ff3747be1e",
+      "headTree": "36bb758deae11438c7baa65a8341b58e92e11750",
+      "ruleId": "canonical-coverage-rule",
+      "schema": "canonical-coverage-receipt",
+      "sourceTreeDigest": "sha256:1b44e36924515add73ffc8d0c4efc82e65448bc3a400190bc1b72f880248d359",
       "target": "app",
-      "testTreeDigest": "sha256:ae4a434360e31429b4bf5560ea3d8ad7e5e57cb712bf767c67dfe4a5c7fbff6c",
+      "testTreeDigest": "sha256:335ea23fed8b0bc9c5d979fbabaea93465fcc279e457c3946a5ecbf137120b05",
       "testsGreen": true,
       "toolchainDigest": "sha256:7c31583a974c10725adc67763d8828926cc8cfa9d33342d50d4a63f5b7da0ef8"
     },
-    "sha256:e0e38b7e382b592c78bea553d2136ce24ca4e780600ee35aa6b04af578d5d298": {
-      "artifactDigest": "sha256:4ac8320849edde8df61e1446b08942e08607639cfbb4c48e2cc3d5b180abb8cf",
-      "artifactRef": ".qwq_output/env/repo/local/coverage/cache/quwoquan_service__control-plane__platform-ops.coverprofile",
-      "attributionDigest": "sha256:145ef924b323aa3407a0d5fa1727c8d90060a4129e4e23b09af5a61ced1293b4",
-      "collectionScopeDigest": "sha256:76cceb5c17e0d988e8ace4c2cebf0d4c16896a66c06a4b92c83da9593ce34b28",
+    "sha256:cb1a9f678bc9b2904c5e2defd85f0c5fa5c77fc673b4a13e8307254e68873d53": {
+      "artifactDigest": "sha256:42ae5016c00bf20d1c8d86a6189e4b544ce95f74153e77478d469cc2522e8dda",
+      "artifactRef": ".qwq_output/env/repo/local/coverage/cache/quwoquan_service__services__entity-service.coverprofile",
+      "attributionDigest": "sha256:349ea56ed8ae37425272a2377539262b08889cb0abb0ae52b753453a03516923",
+      "collectionScopeDigest": "sha256:87154b083f4c0e41276cd021c3f0f6183ec824ec6070473830c8899814cf10dc",
       "configDigest": "sha256:2075a67c5be0bfc081041cbe277b9c18309a1a31fc4d546e77e7fc44dd00ab3e",
-      "headCommit": "c6d5301936041ff314613bbc359d1df653776cfa",
-      "headTree": "79e7ce878a0108291d4c276807eb14af72c0b19f",
+      "headCommit": "74eb5ca12648edeb08a77e17e20311ff3747be1e",
+      "headTree": "36bb758deae11438c7baa65a8341b58e92e11750",
       "ruleId": "canonical-coverage-rule",
       "schema": "canonical-coverage-receipt",
-      "sourceTreeDigest": "sha256:c14c8fd16ad71ebd4411cf4b3ac5beb6b59bc775d4a0b90e44c989e2bf60de5b",
+      "sourceTreeDigest": "sha256:ae3968ff3238a092e6094dc45f8cb614232e1b18ad1690ded042c6cf296ed52c",
+      "target": "quwoquan_service/services/entity-service",
+      "testTreeDigest": "sha256:89049e819236788494fee7c9c623a8f3321ce46d5ea1dea091120524698260c3",
+      "testsGreen": true,
+      "toolchainDigest": "sha256:14a18ddbd450ca381985a1019d8497d2472b340a9519fdc2beb77d0fb8057ebe"
+    },
+    "sha256:cc4c9090e6a05d8af00894c0a2bce16eca3e9a818f4d41b87d1e076659eb1cad": {
+      "artifactDigest": "sha256:c4fb39dade754498ea66d00635cb721ffdea33f16c37bf61b9ffcdeca91ee17b",
+      "artifactRef": ".qwq_output/env/repo/local/coverage/cache/quwoquan_service__control-plane__platform-ops.coverprofile",
+      "attributionDigest": "sha256:349ea56ed8ae37425272a2377539262b08889cb0abb0ae52b753453a03516923",
+      "collectionScopeDigest": "sha256:76cceb5c17e0d988e8ace4c2cebf0d4c16896a66c06a4b92c83da9593ce34b28",
+      "configDigest": "sha256:2075a67c5be0bfc081041cbe277b9c18309a1a31fc4d546e77e7fc44dd00ab3e",
+      "headCommit": "74eb5ca12648edeb08a77e17e20311ff3747be1e",
+      "headTree": "36bb758deae11438c7baa65a8341b58e92e11750",
+      "ruleId": "canonical-coverage-rule",
+      "schema": "canonical-coverage-receipt",
+      "sourceTreeDigest": "sha256:711de14a0e1c0b815958b0677e2fb79cee6964f9683531bef4a7531bab14ee09",
       "target": "quwoquan_service/control-plane/platform-ops",
       "testTreeDigest": "sha256:6d6c7b4a0f9d7c16b001edfabe16270b6abb8987d432bee9cc70d34a702dce9f",
       "testsGreen": true,
       "toolchainDigest": "sha256:14a18ddbd450ca381985a1019d8497d2472b340a9519fdc2beb77d0fb8057ebe"
     },
-    "sha256:eb23b623091f1db2aeb554702259eb54d0a23ae966a3401b71150c5c522bd181": {
-      "artifactDigest": "sha256:55d808e7c15a5d284b6198cf2d39c38ac776495fdf6465ced15e2169f6368f83",
-      "artifactRef": ".qwq_output/env/repo/local/coverage/cache/quwoquan_service__services__product-ops-service.coverprofile",
-      "attributionDigest": "sha256:145ef924b323aa3407a0d5fa1727c8d90060a4129e4e23b09af5a61ced1293b4",
-      "collectionScopeDigest": "sha256:e25324b89ec10ad378a0fb5b5fda1b977fdf8e087132c36c722f74d5089f29ac",
+    "sha256:d0fa015b19e7b700547386da09410a4a1d030bb01dc1f1a7c802b5d6eed3ef43": {
+      "artifactDigest": "sha256:db8c3ceba032e8ab14d194cf304d931f895f02983872f42c4231f587977ac51f",
+      "artifactRef": ".qwq_output/env/repo/local/coverage/cache/quwoquan_service__shared-runtime.coverprofile",
+      "attributionDigest": "sha256:349ea56ed8ae37425272a2377539262b08889cb0abb0ae52b753453a03516923",
+      "collectionScopeDigest": "sha256:761339b42c92c742d592c825deb08c0ffc57d47889f6449c40202dc96fbf79c0",
       "configDigest": "sha256:2075a67c5be0bfc081041cbe277b9c18309a1a31fc4d546e77e7fc44dd00ab3e",
-      "headCommit": "c6d5301936041ff314613bbc359d1df653776cfa",
-      "headTree": "79e7ce878a0108291d4c276807eb14af72c0b19f",
+      "headCommit": "74eb5ca12648edeb08a77e17e20311ff3747be1e",
+      "headTree": "36bb758deae11438c7baa65a8341b58e92e11750",
       "ruleId": "canonical-coverage-rule",
       "schema": "canonical-coverage-receipt",
-      "sourceTreeDigest": "sha256:ceb2d697811a244923ce422ea4f21993dbff7873cbe6a7810d23100591e8af50",
+      "sourceTreeDigest": "sha256:32b27c0be840c80e7ea5d93b0967d7440bf907a92a9234efb1e64f7bf0ec1d3d",
+      "target": "quwoquan_service/shared-runtime",
+      "testTreeDigest": "sha256:7ff704b349da7b0291eedb064011f5fc3d797478215bf85fdbf8bbfec3f8406c",
+      "testsGreen": true,
+      "toolchainDigest": "sha256:14a18ddbd450ca381985a1019d8497d2472b340a9519fdc2beb77d0fb8057ebe"
+    },
+    "sha256:d17707f89844a7a8f99359b676b3ca3c6077a5ee18e488b3deb754cf2277a876": {
+      "artifactDigest": "sha256:c3d1116a5d602d1fb1d2c5c52a91533ed4e6801ae3e7c56181819509d8bc38c9",
+      "artifactRef": ".qwq_output/env/repo/local/coverage/cache/quwoquan_service__services__recommendation-service.python-trace.json",
+      "attributionDigest": "sha256:349ea56ed8ae37425272a2377539262b08889cb0abb0ae52b753453a03516923",
+      "collectionScopeDigest": "sha256:3d0a878068c41e8aa56c6612123e9da0af73a39593ea73510bc0ae2c9608eba1",
+      "configDigest": "sha256:3b6e8d5d2560680ec731e833175c369f01275fa4697106a10756885c319cf5a3",
+      "headCommit": "74eb5ca12648edeb08a77e17e20311ff3747be1e",
+      "headTree": "36bb758deae11438c7baa65a8341b58e92e11750",
+      "ruleId": "canonical-coverage-rule",
+      "schema": "canonical-coverage-receipt",
+      "sourceTreeDigest": "sha256:8f08ba736bca8a3b9a52590a3563c66121f4938f269982718e44d2d2a33807bb",
+      "target": "quwoquan_service/services/recommendation-service",
+      "testTreeDigest": "sha256:815ca42bddc92016454b4e00c38e3bbc8d4f5658bfc428944786a046caceb525",
+      "testsGreen": true,
+      "toolchainDigest": "sha256:44c6f852d6418b206d8cc761aa88f2045992db48c75cb6f0b6bf2c51731b29b7"
+    },
+    "sha256:dbc220460b65ecc526a2bce0cf3d3dd593cfa9b89d30fbaa79c7e3f2fde6ad56": {
+      "artifactDigest": "sha256:54d76fd35ea46f5afbb0fe3236db3db2b8c53842be5b1f82bf52d583a2a3ad81",
+      "artifactRef": ".qwq_output/env/repo/local/coverage/cache/quwoquan_service__services__product-ops-service.coverprofile",
+      "attributionDigest": "sha256:349ea56ed8ae37425272a2377539262b08889cb0abb0ae52b753453a03516923",
+      "collectionScopeDigest": "sha256:e25324b89ec10ad378a0fb5b5fda1b977fdf8e087132c36c722f74d5089f29ac",
+      "configDigest": "sha256:2075a67c5be0bfc081041cbe277b9c18309a1a31fc4d546e77e7fc44dd00ab3e",
+      "headCommit": "74eb5ca12648edeb08a77e17e20311ff3747be1e",
+      "headTree": "36bb758deae11438c7baa65a8341b58e92e11750",
+      "ruleId": "canonical-coverage-rule",
+      "schema": "canonical-coverage-receipt",
+      "sourceTreeDigest": "sha256:4c882c0efcb3c929c03201c6fd211d7df41d23d1269d43eab27cc0924b322657",
       "target": "quwoquan_service/services/product-ops-service",
-      "testTreeDigest": "sha256:b9c77ee8eecd02fb1b9e7cfd3ea0ddf72731f20ecb063bc35eb1c5d0fd30f6e4",
+      "testTreeDigest": "sha256:d7ba756d57a1d9efc14e6b005755352d95045bb818d20ce8d1a339d0a43c1740",
       "testsGreen": true,
       "toolchainDigest": "sha256:14a18ddbd450ca381985a1019d8497d2472b340a9519fdc2beb77d0fb8057ebe"
     }
@@ -327,7 +327,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=api_edge/graphql_read/persisted_query_execution attribution=object-path-map/v2"
     },
@@ -352,7 +352,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=assistant_service/assistant/assistant_entry_view attribution=object-path-map/v2"
     },
@@ -377,7 +377,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=assistant_service/assistant/assistant_learning_fact attribution=object-path-map/v2"
     },
@@ -402,7 +402,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=assistant_service/assistant/assistant_preference attribution=object-path-map/v2"
     },
@@ -427,7 +427,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=assistant_service/assistant/assistant_run attribution=object-path-map/v2"
     },
@@ -452,7 +452,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=assistant_service/assistant/assistant_session attribution=object-path-map/v2"
     },
@@ -477,7 +477,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=assistant_service/assistant/assistant_task_view attribution=object-path-map/v2"
     },
@@ -502,7 +502,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=assistant_service/assistant/assistant_turn_view attribution=object-path-map/v2"
     },
@@ -527,7 +527,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=assistant_service/assistant/page_context attribution=object-path-map/v2"
     },
@@ -552,7 +552,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=assistant_service/assistant/skill_activity_view attribution=object-path-map/v2"
     },
@@ -561,8 +561,8 @@
       "measuredFromGreenTests": true,
       "metrics": {
         "branch": {
-          "covered": 228,
-          "percent": 73.08,
+          "covered": 227,
+          "percent": 72.76,
           "total": 312
         },
         "file": {
@@ -577,7 +577,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=assistant_service/assistant/skill_catalog attribution=object-path-map/v2"
     },
@@ -602,7 +602,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=assistant_service/assistant/skill_consent attribution=object-path-map/v2"
     },
@@ -627,7 +627,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=assistant_service/assistant/skill_data_control_request attribution=object-path-map/v2"
     },
@@ -652,7 +652,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=assistant_service/assistant/skill_subscription attribution=object-path-map/v2"
     },
@@ -677,7 +677,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=assistant_service/assistant/skill_surface_placement attribution=object-path-map/v2"
     },
@@ -702,7 +702,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=assistant_service/assistant/skill_user_setting attribution=object-path-map/v2"
     },
@@ -727,7 +727,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=chat_service/chat/chat_inbox_view attribution=object-path-map/v2"
     },
@@ -752,7 +752,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=chat_service/chat/conversation attribution=object-path-map/v2"
     },
@@ -777,7 +777,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=chat_service/chat/conversation_membership attribution=object-path-map/v2"
     },
@@ -802,7 +802,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=chat_service/chat/conversation_user_state attribution=object-path-map/v2"
     },
@@ -827,7 +827,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=chat_service/chat/message attribution=object-path-map/v2"
     },
@@ -852,7 +852,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=chat_service/chat/message_receipt_fact attribution=object-path-map/v2"
     },
@@ -871,13 +871,13 @@
           "total": 50
         },
         "line": {
-          "covered": 3153,
-          "percent": 84.08,
-          "total": 3750
+          "covered": 3155,
+          "percent": 84.04,
+          "total": 3754
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=circle_service/circle_management/circle attribution=object-path-map/v2"
     },
@@ -902,7 +902,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=circle_service/circle_management/circle_behavior_fact attribution=object-path-map/v2"
     },
@@ -927,7 +927,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=circle_service/circle_management/circle_file attribution=object-path-map/v2"
     },
@@ -952,7 +952,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=circle_service/circle_management/circle_group attribution=object-path-map/v2"
     },
@@ -977,7 +977,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=circle_service/circle_management/circle_group_membership attribution=object-path-map/v2"
     },
@@ -1002,7 +1002,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=circle_service/circle_management/circle_membership attribution=object-path-map/v2"
     },
@@ -1027,7 +1027,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=circle_service/circle_management/circle_post_placement attribution=object-path-map/v2"
     },
@@ -1036,23 +1036,23 @@
       "measuredFromGreenTests": true,
       "metrics": {
         "branch": {
-          "covered": 462,
-          "percent": 66.57,
-          "total": 694
+          "covered": 463,
+          "percent": 66.62,
+          "total": 695
         },
         "file": {
-          "covered": 16,
+          "covered": 17,
           "percent": 100.0,
-          "total": 16
+          "total": 17
         },
         "line": {
-          "covered": 1868,
-          "percent": 78.92,
-          "total": 2367
+          "covered": 1869,
+          "percent": 78.93,
+          "total": 2368
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=circle_service/circle_management/gathering attribution=object-path-map/v2"
     },
@@ -1077,7 +1077,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=content_service/content/comment attribution=object-path-map/v2"
     },
@@ -1086,8 +1086,8 @@
       "measuredFromGreenTests": true,
       "metrics": {
         "branch": {
-          "covered": 180,
-          "percent": 63.38,
+          "covered": 186,
+          "percent": 65.49,
           "total": 284
         },
         "file": {
@@ -1096,13 +1096,13 @@
           "total": 11
         },
         "line": {
-          "covered": 556,
-          "percent": 66.83,
+          "covered": 569,
+          "percent": 68.39,
           "total": 832
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=content_service/content/content_behavior_fact attribution=object-path-map/v2"
     },
@@ -1127,7 +1127,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=content_service/content/content_reaction attribution=object-path-map/v2"
     },
@@ -1136,23 +1136,23 @@
       "measuredFromGreenTests": true,
       "metrics": {
         "branch": {
-          "covered": 14,
-          "percent": 93.33,
-          "total": 15
+          "covered": 25,
+          "percent": 96.15,
+          "total": 26
         },
         "file": {
-          "covered": 3,
-          "percent": 75.0,
-          "total": 4
+          "covered": 4,
+          "percent": 80.0,
+          "total": 5
         },
         "line": {
-          "covered": 60,
+          "covered": 82,
           "percent": 100.0,
-          "total": 60
+          "total": 82
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=content_service/content/feed_delivery_page attribution=object-path-map/v2"
     },
@@ -1177,7 +1177,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=content_service/content/intersection_visit_state attribution=object-path-map/v2"
     },
@@ -1202,7 +1202,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=content_service/content/outbound_share_fact attribution=object-path-map/v2"
     },
@@ -1211,9 +1211,9 @@
       "measuredFromGreenTests": true,
       "metrics": {
         "branch": {
-          "covered": 4529,
-          "percent": 67.49,
-          "total": 6711
+          "covered": 4533,
+          "percent": 67.47,
+          "total": 6719
         },
         "file": {
           "covered": 195,
@@ -1221,13 +1221,13 @@
           "total": 232
         },
         "line": {
-          "covered": 18206,
-          "percent": 79.82,
-          "total": 22809
+          "covered": 18178,
+          "percent": 79.71,
+          "total": 22805
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=content_service/content/post attribution=object-path-map/v2"
     },
@@ -1252,7 +1252,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=content_service/content/profile_interaction_activity_view attribution=object-path-map/v2"
     },
@@ -1277,7 +1277,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=content_service/content/profile_interaction_read_fact attribution=object-path-map/v2"
     },
@@ -1302,7 +1302,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=content_service/media/filter_catalog_release attribution=object-path-map/v2"
     },
@@ -1311,8 +1311,8 @@
       "measuredFromGreenTests": true,
       "metrics": {
         "branch": {
-          "covered": 1553,
-          "percent": 70.88,
+          "covered": 1554,
+          "percent": 70.93,
           "total": 2191
         },
         "file": {
@@ -1321,13 +1321,13 @@
           "total": 66
         },
         "line": {
-          "covered": 6073,
-          "percent": 81.68,
+          "covered": 6075,
+          "percent": 81.71,
           "total": 7435
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=content_service/media/media_asset attribution=object-path-map/v2"
     },
@@ -1352,7 +1352,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=content_service/media/media_upload_session attribution=object-path-map/v2"
     },
@@ -1377,7 +1377,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=content_service/media/original_access_quota attribution=object-path-map/v2"
     },
@@ -1402,7 +1402,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=content_service/trust_safety/report attribution=object-path-map/v2"
     },
@@ -1411,23 +1411,23 @@
       "measuredFromGreenTests": true,
       "metrics": {
         "branch": {
-          "covered": 1672,
-          "percent": 71.88,
-          "total": 2326
+          "covered": 1706,
+          "percent": 74.17,
+          "total": 2300
         },
         "file": {
-          "covered": 105,
-          "percent": 90.52,
-          "total": 116
+          "covered": 103,
+          "percent": 90.35,
+          "total": 114
         },
         "line": {
-          "covered": 7140,
-          "percent": 82.05,
-          "total": 8702
+          "covered": 7108,
+          "percent": 82.9,
+          "total": 8574
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=cross-cutting/design_system attribution=object-path-map/v2"
     },
@@ -1437,8 +1437,8 @@
       "metrics": {
         "branch": {
           "covered": 169,
-          "percent": 12.13,
-          "total": 1393
+          "percent": 12.06,
+          "total": 1401
         },
         "file": {
           "covered": 15,
@@ -1446,13 +1446,13 @@
           "total": 26
         },
         "line": {
-          "covered": 227,
-          "percent": 15.43,
-          "total": 1471
+          "covered": 225,
+          "percent": 15.21,
+          "total": 1479
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=cross-cutting/l10n attribution=object-path-map/v2"
     },
@@ -1461,23 +1461,23 @@
       "measuredFromGreenTests": true,
       "metrics": {
         "branch": {
-          "covered": 5461,
-          "percent": 62.76,
-          "total": 8701
+          "covered": 5420,
+          "percent": 62.96,
+          "total": 8609
         },
         "file": {
-          "covered": 372,
-          "percent": 91.63,
+          "covered": 371,
+          "percent": 91.38,
           "total": 406
         },
         "line": {
-          "covered": 15636,
-          "percent": 73.14,
-          "total": 21377
+          "covered": 15539,
+          "percent": 73.42,
+          "total": 21165
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=cross-cutting/runtime attribution=object-path-map/v2"
     },
@@ -1496,13 +1496,13 @@
           "total": 37
         },
         "line": {
-          "covered": 2299,
-          "percent": 75.95,
-          "total": 3027
+          "covered": 2301,
+          "percent": 75.97,
+          "total": 3029
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=entity_service/entity_homepage/homepage attribution=object-path-map/v2"
     },
@@ -1527,7 +1527,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=entity_service/entity_homepage/homepage_claim_request attribution=object-path-map/v2"
     },
@@ -1536,8 +1536,8 @@
       "measuredFromGreenTests": true,
       "metrics": {
         "branch": {
-          "covered": 7,
-          "percent": 100.0,
+          "covered": 6,
+          "percent": 85.71,
           "total": 7
         },
         "file": {
@@ -1546,13 +1546,13 @@
           "total": 2
         },
         "line": {
-          "covered": 17,
-          "percent": 100.0,
+          "covered": 16,
+          "percent": 94.12,
           "total": 17
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=entity_service/entity_homepage/homepage_review attribution=object-path-map/v2"
     },
@@ -1577,7 +1577,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=entity_service/entity_homepage/homepage_search_item_view attribution=object-path-map/v2"
     },
@@ -1602,7 +1602,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=entity_service/entity_homepage/homepage_status_report attribution=object-path-map/v2"
     },
@@ -1627,7 +1627,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=integration_service/external_integration/connector_connection attribution=object-path-map/v2"
     },
@@ -1652,7 +1652,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=integration_service/external_integration/connector_definition attribution=object-path-map/v2"
     },
@@ -1677,7 +1677,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=integration_service/external_integration/connector_invocation attribution=object-path-map/v2"
     },
@@ -1702,7 +1702,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=integration_service/external_integration/location attribution=object-path-map/v2"
     },
@@ -1727,7 +1727,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=notification_service/notification_delivery/notification attribution=object-path-map/v2"
     },
@@ -1752,7 +1752,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=notification_service/notification_delivery/notification_delivery_job attribution=object-path-map/v2"
     },
@@ -1777,7 +1777,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=product_ops_service/product_ops/app_release attribution=object-path-map/v2"
     },
@@ -1802,7 +1802,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=product_ops_service/product_ops/event_record attribution=object-path-map/v2"
     },
@@ -1827,7 +1827,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=product_ops_service/product_ops/recovery_failure attribution=object-path-map/v2"
     },
@@ -1852,7 +1852,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=product_ops_service/product_ops/visit_record attribution=object-path-map/v2"
     },
@@ -1877,7 +1877,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=realtime_gateway/realtime/connection attribution=object-path-map/v2"
     },
@@ -1902,7 +1902,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=recommendation_service/recommendation/recommendation_feature_profile_view attribution=object-path-map/v2"
     },
@@ -1927,7 +1927,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=rtc_service/rtc/call_session attribution=object-path-map/v2"
     },
@@ -1952,7 +1952,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=search_service/search/recent_search_state attribution=object-path-map/v2"
     },
@@ -1977,7 +1977,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=search_service/search/search_feedback_fact attribution=object-path-map/v2"
     },
@@ -1986,8 +1986,8 @@
       "measuredFromGreenTests": true,
       "metrics": {
         "branch": {
-          "covered": 973,
-          "percent": 65.61,
+          "covered": 970,
+          "percent": 65.41,
           "total": 1483
         },
         "file": {
@@ -1996,13 +1996,13 @@
           "total": 55
         },
         "line": {
-          "covered": 4074,
-          "percent": 80.74,
+          "covered": 4066,
+          "percent": 80.58,
           "total": 5046
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=search_service/search/search_index_view attribution=object-path-map/v2"
     },
@@ -2027,7 +2027,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=search_service/search/search_request_fact attribution=object-path-map/v2"
     },
@@ -2052,7 +2052,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=tag_service/tag/tag_feedback_fact attribution=object-path-map/v2"
     },
@@ -2077,7 +2077,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=tag_service/tag/tag_node_view attribution=object-path-map/v2"
     },
@@ -2086,9 +2086,9 @@
       "measuredFromGreenTests": true,
       "metrics": {
         "branch": {
-          "covered": 362,
-          "percent": 64.76,
-          "total": 559
+          "covered": 363,
+          "percent": 64.82,
+          "total": 560
         },
         "file": {
           "covered": 12,
@@ -2096,13 +2096,13 @@
           "total": 13
         },
         "line": {
-          "covered": 1659,
-          "percent": 82.74,
-          "total": 2005
+          "covered": 1661,
+          "percent": 82.76,
+          "total": 2007
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=user_service/account/account_session attribution=object-path-map/v2"
     },
@@ -2127,7 +2127,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=user_service/account/authentication_challenge attribution=object-path-map/v2"
     },
@@ -2152,7 +2152,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=user_service/account/credential_binding attribution=object-path-map/v2"
     },
@@ -2177,7 +2177,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=user_service/account/device_registration attribution=object-path-map/v2"
     },
@@ -2202,7 +2202,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=user_service/account/user_account attribution=object-path-map/v2"
     },
@@ -2227,7 +2227,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=user_service/account/user_settings attribution=object-path-map/v2"
     },
@@ -2236,9 +2236,9 @@
       "measuredFromGreenTests": true,
       "metrics": {
         "branch": {
-          "covered": 678,
+          "covered": 677,
           "percent": 51.44,
-          "total": 1318
+          "total": 1316
         },
         "file": {
           "covered": 42,
@@ -2246,13 +2246,13 @@
           "total": 49
         },
         "line": {
-          "covered": 3043,
-          "percent": 65.82,
-          "total": 4623
+          "covered": 3038,
+          "percent": 65.8,
+          "total": 4617
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=user_service/persona_management/persona attribution=object-path-map/v2"
     },
@@ -2277,7 +2277,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=user_service/persona_management/profile_update_proposal attribution=object-path-map/v2"
     },
@@ -2302,7 +2302,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=user_service/profile_projection/following_subject attribution=object-path-map/v2"
     },
@@ -2327,7 +2327,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=user_service/relationship/contact_discovery_record attribution=object-path-map/v2"
     },
@@ -2352,7 +2352,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=user_service/relationship/followed_subject_visit_state attribution=object-path-map/v2"
     },
@@ -2377,7 +2377,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=user_service/relationship/greeting_request attribution=object-path-map/v2"
     },
@@ -2402,7 +2402,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=user_service/relationship/persona_relationship attribution=object-path-map/v2"
     },
@@ -2427,7 +2427,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:d8a3c15e1ef1a101168a54973f7130e518025e4dd83cf0ab7399c0ef0d33cad6"
+        "sha256:c9fe05e16da3ff56910ffc4b04a4b41d028094319f9065453aa889d6c75cf0aa"
       ],
       "scope": "quwoquan_app: flutter test --coverage --branch-coverage test/local_contract; unit=user_service/relationship/subject_follow attribution=object-path-map/v2"
     },
@@ -2442,7 +2442,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:756d84d5677e677f6a4bd39923c34a6b532fb5ff0e161fe34470b34ee1c1830a"
+        "sha256:48a14c19aba1c764b2f4d839fd09a52082438b1500e4c9ded0c4bdb40cd1a629"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=api_edge/edge_security/rate_limit_bucket targets=quwoquan_service/services/api-edge collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -2457,7 +2457,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:756d84d5677e677f6a4bd39923c34a6b532fb5ff0e161fe34470b34ee1c1830a"
+        "sha256:48a14c19aba1c764b2f4d839fd09a52082438b1500e4c9ded0c4bdb40cd1a629"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=api_edge/edge_security/rollout_assignment targets=quwoquan_service/services/api-edge collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -2472,7 +2472,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:756d84d5677e677f6a4bd39923c34a6b532fb5ff0e161fe34470b34ee1c1830a"
+        "sha256:48a14c19aba1c764b2f4d839fd09a52082438b1500e4c9ded0c4bdb40cd1a629"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=api_edge/graphql_read/persisted_query_execution targets=quwoquan_service/services/api-edge collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -2487,7 +2487,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:176d80526d9fb89e23b771005717e4870f7ebe6b6fd49845bdd14e42fe333404"
+        "sha256:b75954f19f5aa9a696fcb8d72d53fff98d716a42533f73de4c296d8397e1294e"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=assistant_service/assistant/assistant_entry_view targets=quwoquan_service/services/assistant-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -2496,13 +2496,13 @@
       "measuredFromGreenTests": true,
       "metrics": {
         "statement": {
-          "covered": 430,
-          "percent": 46.39,
+          "covered": 431,
+          "percent": 46.49,
           "total": 927
         }
       },
       "receiptDigests": [
-        "sha256:176d80526d9fb89e23b771005717e4870f7ebe6b6fd49845bdd14e42fe333404"
+        "sha256:b75954f19f5aa9a696fcb8d72d53fff98d716a42533f73de4c296d8397e1294e"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=assistant_service/assistant/assistant_learning_fact targets=quwoquan_service/services/assistant-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -2517,7 +2517,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:176d80526d9fb89e23b771005717e4870f7ebe6b6fd49845bdd14e42fe333404"
+        "sha256:b75954f19f5aa9a696fcb8d72d53fff98d716a42533f73de4c296d8397e1294e"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=assistant_service/assistant/assistant_policy_release targets=quwoquan_service/services/assistant-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -2532,7 +2532,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:176d80526d9fb89e23b771005717e4870f7ebe6b6fd49845bdd14e42fe333404"
+        "sha256:b75954f19f5aa9a696fcb8d72d53fff98d716a42533f73de4c296d8397e1294e"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=assistant_service/assistant/assistant_policy_rollout targets=quwoquan_service/services/assistant-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -2547,7 +2547,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:176d80526d9fb89e23b771005717e4870f7ebe6b6fd49845bdd14e42fe333404"
+        "sha256:b75954f19f5aa9a696fcb8d72d53fff98d716a42533f73de4c296d8397e1294e"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=assistant_service/assistant/assistant_preference targets=quwoquan_service/services/assistant-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -2556,13 +2556,13 @@
       "measuredFromGreenTests": true,
       "metrics": {
         "statement": {
-          "covered": 9774,
-          "percent": 69.39,
+          "covered": 9760,
+          "percent": 69.29,
           "total": 14086
         }
       },
       "receiptDigests": [
-        "sha256:176d80526d9fb89e23b771005717e4870f7ebe6b6fd49845bdd14e42fe333404"
+        "sha256:b75954f19f5aa9a696fcb8d72d53fff98d716a42533f73de4c296d8397e1294e"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=assistant_service/assistant/assistant_run targets=quwoquan_service/services/assistant-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -2577,7 +2577,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:176d80526d9fb89e23b771005717e4870f7ebe6b6fd49845bdd14e42fe333404"
+        "sha256:b75954f19f5aa9a696fcb8d72d53fff98d716a42533f73de4c296d8397e1294e"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=assistant_service/assistant/assistant_session targets=quwoquan_service/services/assistant-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -2592,7 +2592,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:176d80526d9fb89e23b771005717e4870f7ebe6b6fd49845bdd14e42fe333404"
+        "sha256:b75954f19f5aa9a696fcb8d72d53fff98d716a42533f73de4c296d8397e1294e"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=assistant_service/assistant/assistant_task_view targets=quwoquan_service/services/assistant-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -2607,7 +2607,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:176d80526d9fb89e23b771005717e4870f7ebe6b6fd49845bdd14e42fe333404"
+        "sha256:b75954f19f5aa9a696fcb8d72d53fff98d716a42533f73de4c296d8397e1294e"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=assistant_service/assistant/assistant_turn_view targets=quwoquan_service/services/assistant-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -2622,7 +2622,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:176d80526d9fb89e23b771005717e4870f7ebe6b6fd49845bdd14e42fe333404"
+        "sha256:b75954f19f5aa9a696fcb8d72d53fff98d716a42533f73de4c296d8397e1294e"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=assistant_service/assistant/domain_reader_descriptor targets=quwoquan_service/services/assistant-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -2637,7 +2637,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:176d80526d9fb89e23b771005717e4870f7ebe6b6fd49845bdd14e42fe333404"
+        "sha256:b75954f19f5aa9a696fcb8d72d53fff98d716a42533f73de4c296d8397e1294e"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=assistant_service/assistant/page_context targets=quwoquan_service/services/assistant-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -2652,7 +2652,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:176d80526d9fb89e23b771005717e4870f7ebe6b6fd49845bdd14e42fe333404"
+        "sha256:b75954f19f5aa9a696fcb8d72d53fff98d716a42533f73de4c296d8397e1294e"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=assistant_service/assistant/skill_activity_view targets=quwoquan_service/services/assistant-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -2667,7 +2667,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:176d80526d9fb89e23b771005717e4870f7ebe6b6fd49845bdd14e42fe333404"
+        "sha256:b75954f19f5aa9a696fcb8d72d53fff98d716a42533f73de4c296d8397e1294e"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=assistant_service/assistant/skill_catalog targets=quwoquan_service/services/assistant-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -2682,7 +2682,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:176d80526d9fb89e23b771005717e4870f7ebe6b6fd49845bdd14e42fe333404"
+        "sha256:b75954f19f5aa9a696fcb8d72d53fff98d716a42533f73de4c296d8397e1294e"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=assistant_service/assistant/skill_consent targets=quwoquan_service/services/assistant-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -2697,7 +2697,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:176d80526d9fb89e23b771005717e4870f7ebe6b6fd49845bdd14e42fe333404"
+        "sha256:b75954f19f5aa9a696fcb8d72d53fff98d716a42533f73de4c296d8397e1294e"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=assistant_service/assistant/skill_data_control_request targets=quwoquan_service/services/assistant-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -2712,7 +2712,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:176d80526d9fb89e23b771005717e4870f7ebe6b6fd49845bdd14e42fe333404"
+        "sha256:b75954f19f5aa9a696fcb8d72d53fff98d716a42533f73de4c296d8397e1294e"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=assistant_service/assistant/skill_package_release targets=quwoquan_service/services/assistant-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -2727,7 +2727,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:176d80526d9fb89e23b771005717e4870f7ebe6b6fd49845bdd14e42fe333404"
+        "sha256:b75954f19f5aa9a696fcb8d72d53fff98d716a42533f73de4c296d8397e1294e"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=assistant_service/assistant/skill_subscription targets=quwoquan_service/services/assistant-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -2742,7 +2742,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:176d80526d9fb89e23b771005717e4870f7ebe6b6fd49845bdd14e42fe333404"
+        "sha256:b75954f19f5aa9a696fcb8d72d53fff98d716a42533f73de4c296d8397e1294e"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=assistant_service/assistant/skill_surface_placement targets=quwoquan_service/services/assistant-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -2757,7 +2757,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:176d80526d9fb89e23b771005717e4870f7ebe6b6fd49845bdd14e42fe333404"
+        "sha256:b75954f19f5aa9a696fcb8d72d53fff98d716a42533f73de4c296d8397e1294e"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=assistant_service/assistant/skill_user_setting targets=quwoquan_service/services/assistant-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -2772,7 +2772,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:c68d54b09fffe78f0d8edf565269d2308aab200c70ea9a22c9dd756fcc0422a8"
+        "sha256:662c544d4ef61f27de56f458d7a936ad06da33df63bbbe11d0c5da6ca733e69e"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=chat_service/chat/chat_inbox_view targets=quwoquan_service/services/chat-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -2787,7 +2787,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:c68d54b09fffe78f0d8edf565269d2308aab200c70ea9a22c9dd756fcc0422a8"
+        "sha256:662c544d4ef61f27de56f458d7a936ad06da33df63bbbe11d0c5da6ca733e69e"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=chat_service/chat/conversation targets=quwoquan_service/services/chat-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -2802,7 +2802,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:c68d54b09fffe78f0d8edf565269d2308aab200c70ea9a22c9dd756fcc0422a8"
+        "sha256:662c544d4ef61f27de56f458d7a936ad06da33df63bbbe11d0c5da6ca733e69e"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=chat_service/chat/conversation_membership targets=quwoquan_service/services/chat-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -2817,7 +2817,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:c68d54b09fffe78f0d8edf565269d2308aab200c70ea9a22c9dd756fcc0422a8"
+        "sha256:662c544d4ef61f27de56f458d7a936ad06da33df63bbbe11d0c5da6ca733e69e"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=chat_service/chat/conversation_user_state targets=quwoquan_service/services/chat-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -2832,7 +2832,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:c68d54b09fffe78f0d8edf565269d2308aab200c70ea9a22c9dd756fcc0422a8"
+        "sha256:662c544d4ef61f27de56f458d7a936ad06da33df63bbbe11d0c5da6ca733e69e"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=chat_service/chat/message targets=quwoquan_service/services/chat-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -2847,7 +2847,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:c68d54b09fffe78f0d8edf565269d2308aab200c70ea9a22c9dd756fcc0422a8"
+        "sha256:662c544d4ef61f27de56f458d7a936ad06da33df63bbbe11d0c5da6ca733e69e"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=chat_service/chat/message_receipt_fact targets=quwoquan_service/services/chat-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -2862,7 +2862,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:452bfb599bc2479a171b16e0fff7ace044a059bccdaec098c7124b20d6ea5812"
+        "sha256:a314f050c123ac71ba8f886d45a3c4e547fceb60e42337232436f17a05ff0457"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=circle_service/circle_management/circle targets=quwoquan_service/services/circle-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -2877,7 +2877,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:452bfb599bc2479a171b16e0fff7ace044a059bccdaec098c7124b20d6ea5812"
+        "sha256:a314f050c123ac71ba8f886d45a3c4e547fceb60e42337232436f17a05ff0457"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=circle_service/circle_management/circle_behavior_fact targets=quwoquan_service/services/circle-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -2892,7 +2892,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:452bfb599bc2479a171b16e0fff7ace044a059bccdaec098c7124b20d6ea5812"
+        "sha256:a314f050c123ac71ba8f886d45a3c4e547fceb60e42337232436f17a05ff0457"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=circle_service/circle_management/circle_file targets=quwoquan_service/services/circle-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -2907,7 +2907,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:452bfb599bc2479a171b16e0fff7ace044a059bccdaec098c7124b20d6ea5812"
+        "sha256:a314f050c123ac71ba8f886d45a3c4e547fceb60e42337232436f17a05ff0457"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=circle_service/circle_management/circle_group targets=quwoquan_service/services/circle-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -2922,7 +2922,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:452bfb599bc2479a171b16e0fff7ace044a059bccdaec098c7124b20d6ea5812"
+        "sha256:a314f050c123ac71ba8f886d45a3c4e547fceb60e42337232436f17a05ff0457"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=circle_service/circle_management/circle_group_membership targets=quwoquan_service/services/circle-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -2937,7 +2937,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:452bfb599bc2479a171b16e0fff7ace044a059bccdaec098c7124b20d6ea5812"
+        "sha256:a314f050c123ac71ba8f886d45a3c4e547fceb60e42337232436f17a05ff0457"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=circle_service/circle_management/circle_membership targets=quwoquan_service/services/circle-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -2952,7 +2952,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:452bfb599bc2479a171b16e0fff7ace044a059bccdaec098c7124b20d6ea5812"
+        "sha256:a314f050c123ac71ba8f886d45a3c4e547fceb60e42337232436f17a05ff0457"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=circle_service/circle_management/circle_post_placement targets=quwoquan_service/services/circle-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -2967,7 +2967,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:452bfb599bc2479a171b16e0fff7ace044a059bccdaec098c7124b20d6ea5812"
+        "sha256:a314f050c123ac71ba8f886d45a3c4e547fceb60e42337232436f17a05ff0457"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=circle_service/circle_management/circle_search_item_view targets=quwoquan_service/services/circle-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -2982,7 +2982,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:452bfb599bc2479a171b16e0fff7ace044a059bccdaec098c7124b20d6ea5812"
+        "sha256:a314f050c123ac71ba8f886d45a3c4e547fceb60e42337232436f17a05ff0457"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=circle_service/circle_management/gathering targets=quwoquan_service/services/circle-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -2997,7 +2997,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:452bfb599bc2479a171b16e0fff7ace044a059bccdaec098c7124b20d6ea5812"
+        "sha256:a314f050c123ac71ba8f886d45a3c4e547fceb60e42337232436f17a05ff0457"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=circle_service/circle_management/gathering_plan targets=quwoquan_service/services/circle-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3012,7 +3012,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:6561668124c73a0cf4c9b94c7afde131003b9f952b124233d905a6aed287e3df"
+        "sha256:7d44d6f10104bec4f3351b3368e8113de12b0085716542d8e35e0c036f9a499b"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=content_service/content/comment targets=quwoquan_service/services/content-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3027,7 +3027,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:6561668124c73a0cf4c9b94c7afde131003b9f952b124233d905a6aed287e3df"
+        "sha256:7d44d6f10104bec4f3351b3368e8113de12b0085716542d8e35e0c036f9a499b"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=content_service/content/content_account_closure_workflow targets=quwoquan_service/services/content-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3042,7 +3042,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:6561668124c73a0cf4c9b94c7afde131003b9f952b124233d905a6aed287e3df"
+        "sha256:7d44d6f10104bec4f3351b3368e8113de12b0085716542d8e35e0c036f9a499b"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=content_service/content/content_behavior_fact targets=quwoquan_service/services/content-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3057,7 +3057,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:6561668124c73a0cf4c9b94c7afde131003b9f952b124233d905a6aed287e3df"
+        "sha256:7d44d6f10104bec4f3351b3368e8113de12b0085716542d8e35e0c036f9a499b"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=content_service/content/content_reaction targets=quwoquan_service/services/content-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3072,7 +3072,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:6561668124c73a0cf4c9b94c7afde131003b9f952b124233d905a6aed287e3df"
+        "sha256:7d44d6f10104bec4f3351b3368e8113de12b0085716542d8e35e0c036f9a499b"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=content_service/content/deleted_post_tombstone targets=quwoquan_service/services/content-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3087,7 +3087,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:6561668124c73a0cf4c9b94c7afde131003b9f952b124233d905a6aed287e3df"
+        "sha256:7d44d6f10104bec4f3351b3368e8113de12b0085716542d8e35e0c036f9a499b"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=content_service/content/feed_delivery_page targets=quwoquan_service/services/content-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3096,13 +3096,13 @@
       "measuredFromGreenTests": true,
       "metrics": {
         "statement": {
-          "covered": 1209,
-          "percent": 77.25,
+          "covered": 1210,
+          "percent": 77.32,
           "total": 1565
         }
       },
       "receiptDigests": [
-        "sha256:6561668124c73a0cf4c9b94c7afde131003b9f952b124233d905a6aed287e3df"
+        "sha256:7d44d6f10104bec4f3351b3368e8113de12b0085716542d8e35e0c036f9a499b"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=content_service/content/intersection_visit_state targets=quwoquan_service/services/content-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3117,7 +3117,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:6561668124c73a0cf4c9b94c7afde131003b9f952b124233d905a6aed287e3df"
+        "sha256:7d44d6f10104bec4f3351b3368e8113de12b0085716542d8e35e0c036f9a499b"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=content_service/content/outbound_share_fact targets=quwoquan_service/services/content-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3126,13 +3126,13 @@
       "measuredFromGreenTests": true,
       "metrics": {
         "statement": {
-          "covered": 5450,
-          "percent": 55.89,
-          "total": 9752
+          "covered": 5501,
+          "percent": 55.86,
+          "total": 9847
         }
       },
       "receiptDigests": [
-        "sha256:6561668124c73a0cf4c9b94c7afde131003b9f952b124233d905a6aed287e3df"
+        "sha256:7d44d6f10104bec4f3351b3368e8113de12b0085716542d8e35e0c036f9a499b"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=content_service/content/post targets=quwoquan_service/services/content-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3147,7 +3147,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:6561668124c73a0cf4c9b94c7afde131003b9f952b124233d905a6aed287e3df"
+        "sha256:7d44d6f10104bec4f3351b3368e8113de12b0085716542d8e35e0c036f9a499b"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=content_service/content/profile_interaction_activity_view targets=quwoquan_service/services/content-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3162,7 +3162,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:6561668124c73a0cf4c9b94c7afde131003b9f952b124233d905a6aed287e3df"
+        "sha256:7d44d6f10104bec4f3351b3368e8113de12b0085716542d8e35e0c036f9a499b"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=content_service/content/profile_interaction_read_fact targets=quwoquan_service/services/content-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3177,7 +3177,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:6561668124c73a0cf4c9b94c7afde131003b9f952b124233d905a6aed287e3df"
+        "sha256:7d44d6f10104bec4f3351b3368e8113de12b0085716542d8e35e0c036f9a499b"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=content_service/media/filter_catalog_release targets=quwoquan_service/services/content-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3192,7 +3192,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:6561668124c73a0cf4c9b94c7afde131003b9f952b124233d905a6aed287e3df"
+        "sha256:7d44d6f10104bec4f3351b3368e8113de12b0085716542d8e35e0c036f9a499b"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=content_service/media/media_asset targets=quwoquan_service/services/content-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3207,7 +3207,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:6561668124c73a0cf4c9b94c7afde131003b9f952b124233d905a6aed287e3df"
+        "sha256:7d44d6f10104bec4f3351b3368e8113de12b0085716542d8e35e0c036f9a499b"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=content_service/media/media_image_reprocess_run targets=quwoquan_service/services/content-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3222,7 +3222,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:6561668124c73a0cf4c9b94c7afde131003b9f952b124233d905a6aed287e3df"
+        "sha256:7d44d6f10104bec4f3351b3368e8113de12b0085716542d8e35e0c036f9a499b"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=content_service/media/media_original_access_fact targets=quwoquan_service/services/content-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3237,7 +3237,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:6561668124c73a0cf4c9b94c7afde131003b9f952b124233d905a6aed287e3df"
+        "sha256:7d44d6f10104bec4f3351b3368e8113de12b0085716542d8e35e0c036f9a499b"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=content_service/media/media_upload_session targets=quwoquan_service/services/content-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3252,7 +3252,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:6561668124c73a0cf4c9b94c7afde131003b9f952b124233d905a6aed287e3df"
+        "sha256:7d44d6f10104bec4f3351b3368e8113de12b0085716542d8e35e0c036f9a499b"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=content_service/media/original_access_quota targets=quwoquan_service/services/content-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3261,13 +3261,13 @@
       "measuredFromGreenTests": true,
       "metrics": {
         "statement": {
-          "covered": 270,
-          "percent": 38.74,
+          "covered": 276,
+          "percent": 39.6,
           "total": 697
         }
       },
       "receiptDigests": [
-        "sha256:6561668124c73a0cf4c9b94c7afde131003b9f952b124233d905a6aed287e3df"
+        "sha256:7d44d6f10104bec4f3351b3368e8113de12b0085716542d8e35e0c036f9a499b"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=content_service/trust_safety/post_moderation_case targets=quwoquan_service/services/content-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3282,7 +3282,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:6561668124c73a0cf4c9b94c7afde131003b9f952b124233d905a6aed287e3df"
+        "sha256:7d44d6f10104bec4f3351b3368e8113de12b0085716542d8e35e0c036f9a499b"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=content_service/trust_safety/report targets=quwoquan_service/services/content-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3291,29 +3291,29 @@
       "measuredFromGreenTests": true,
       "metrics": {
         "statement": {
-          "covered": 261,
-          "percent": 2.31,
-          "total": 11299
+          "covered": 338,
+          "percent": 3.01,
+          "total": 11238
         }
       },
       "receiptDigests": [
-        "sha256:16d8f2eab6f748446d2069f1fd20248030752392e321065927ee582bbe7de511",
-        "sha256:176d80526d9fb89e23b771005717e4870f7ebe6b6fd49845bdd14e42fe333404",
-        "sha256:36ed0b8db3396154b2132f14edaa9e465591ab8658c6cf147367ffaccb84484e",
-        "sha256:452bfb599bc2479a171b16e0fff7ace044a059bccdaec098c7124b20d6ea5812",
-        "sha256:45f0c7941392376d96314a395dac32192e886343ac1f9fe6af4a8d144ea9c5c1",
-        "sha256:62dcacb5c27509de77e9787ad4e756298df2314f1ecc8deabb63bdc77c92f314",
-        "sha256:6561668124c73a0cf4c9b94c7afde131003b9f952b124233d905a6aed287e3df",
-        "sha256:72a1fccbaca6f31d5af37be1ca1760d8d062063282a406928632bf22ce2caaf7",
-        "sha256:756d84d5677e677f6a4bd39923c34a6b532fb5ff0e161fe34470b34ee1c1830a",
-        "sha256:80eb4d8736d1910e62c3c9a9f49be9c6a2eb59b251b7fa9560bf75c8a0cf693f",
-        "sha256:83d4294eca9b725d8ba03cdafeb4feda7680d0782a92b1f599615dc82ab0fd18",
-        "sha256:9178cd6599dec41253bd2b09e642f735a248b6a034d6fc07ea160fe27de390d8",
-        "sha256:bb26b3949513807c64e118ce80fa796dc97fc5c93a176af4b9fb31fa0a94b822",
-        "sha256:c430ff77a3cd0c1f0c099fc2e4efe0506a1eae0730c26b6a5fead5d5aa85e09c",
-        "sha256:c68d54b09fffe78f0d8edf565269d2308aab200c70ea9a22c9dd756fcc0422a8",
-        "sha256:e0e38b7e382b592c78bea553d2136ce24ca4e780600ee35aa6b04af578d5d298",
-        "sha256:eb23b623091f1db2aeb554702259eb54d0a23ae966a3401b71150c5c522bd181"
+        "sha256:08c7062e7d07dfa720bcbec41db3a1340399a4641c59023edde4156e35ed00ee",
+        "sha256:0ff5752d82fd36f020d072053349eba30aba313aa6e5c55210c92c19eb6c4222",
+        "sha256:18021e7fc4a890f5212bf66315c54bcdb070c2aa173a4fe428588877f8b9c3e1",
+        "sha256:48a14c19aba1c764b2f4d839fd09a52082438b1500e4c9ded0c4bdb40cd1a629",
+        "sha256:662c544d4ef61f27de56f458d7a936ad06da33df63bbbe11d0c5da6ca733e69e",
+        "sha256:7d44d6f10104bec4f3351b3368e8113de12b0085716542d8e35e0c036f9a499b",
+        "sha256:9a251c74e7e51254fe96321a3fe7bb725c4bbb8463447f086c73465872a148d4",
+        "sha256:a314f050c123ac71ba8f886d45a3c4e547fceb60e42337232436f17a05ff0457",
+        "sha256:adb2207257e707d31cd4922f1ccdaa6b55f36aaf4e5d421d77e8d3fd83277c67",
+        "sha256:b40e2c7bac800c74adb14be5d87003ad3aca838889a82446bb1bc35bb481dd5b",
+        "sha256:b75954f19f5aa9a696fcb8d72d53fff98d716a42533f73de4c296d8397e1294e",
+        "sha256:c6cbbd801ae721f1aefe1d8e20adf607c5bdfe3e583dfbafd049898fb7702a5e",
+        "sha256:cb1a9f678bc9b2904c5e2defd85f0c5fa5c77fc673b4a13e8307254e68873d53",
+        "sha256:cc4c9090e6a05d8af00894c0a2bce16eca3e9a818f4d41b87d1e076659eb1cad",
+        "sha256:d0fa015b19e7b700547386da09410a4a1d030bb01dc1f1a7c802b5d6eed3ef43",
+        "sha256:d17707f89844a7a8f99359b676b3ca3c6077a5ee18e488b3deb754cf2277a876",
+        "sha256:dbc220460b65ecc526a2bce0cf3d3dd593cfa9b89d30fbaa79c7e3f2fde6ad56"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=cross-cutting/cmd targets=quwoquan_service/control-plane/platform-ops,quwoquan_service/services/api-edge,quwoquan_service/services/assistant-service,quwoquan_service/services/chat-service,quwoquan_service/services/circle-service,quwoquan_service/services/content-service,quwoquan_service/services/entity-service,quwoquan_service/services/integration-service,quwoquan_service/services/notification-service,quwoquan_service/services/product-ops-service,quwoquan_service/services/realtime-gateway,quwoquan_service/services/recommendation-service,quwoquan_service/services/rtc-service,quwoquan_service/services/search-service,quwoquan_service/services/tag-service,quwoquan_service/services/user-service,quwoquan_service/shared-runtime collectors=go,python attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3322,13 +3322,13 @@
       "measuredFromGreenTests": true,
       "metrics": {
         "statement": {
-          "covered": 10714,
-          "percent": 63.75,
-          "total": 16805
+          "covered": 10784,
+          "percent": 63.92,
+          "total": 16872
         }
       },
       "receiptDigests": [
-        "sha256:80eb4d8736d1910e62c3c9a9f49be9c6a2eb59b251b7fa9560bf75c8a0cf693f"
+        "sha256:d0fa015b19e7b700547386da09410a4a1d030bb01dc1f1a7c802b5d6eed3ef43"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=cross-cutting/shared_runtime targets=quwoquan_service/shared-runtime collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3343,7 +3343,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:9178cd6599dec41253bd2b09e642f735a248b6a034d6fc07ea160fe27de390d8"
+        "sha256:cb1a9f678bc9b2904c5e2defd85f0c5fa5c77fc673b4a13e8307254e68873d53"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=entity_service/entity_homepage/homepage targets=quwoquan_service/services/entity-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3358,7 +3358,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:9178cd6599dec41253bd2b09e642f735a248b6a034d6fc07ea160fe27de390d8"
+        "sha256:cb1a9f678bc9b2904c5e2defd85f0c5fa5c77fc673b4a13e8307254e68873d53"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=entity_service/entity_homepage/homepage_claim_request targets=quwoquan_service/services/entity-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3373,7 +3373,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:9178cd6599dec41253bd2b09e642f735a248b6a034d6fc07ea160fe27de390d8"
+        "sha256:cb1a9f678bc9b2904c5e2defd85f0c5fa5c77fc673b4a13e8307254e68873d53"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=entity_service/entity_homepage/homepage_review targets=quwoquan_service/services/entity-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3388,7 +3388,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:9178cd6599dec41253bd2b09e642f735a248b6a034d6fc07ea160fe27de390d8"
+        "sha256:cb1a9f678bc9b2904c5e2defd85f0c5fa5c77fc673b4a13e8307254e68873d53"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=entity_service/entity_homepage/homepage_search_item_view targets=quwoquan_service/services/entity-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3403,7 +3403,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:9178cd6599dec41253bd2b09e642f735a248b6a034d6fc07ea160fe27de390d8"
+        "sha256:cb1a9f678bc9b2904c5e2defd85f0c5fa5c77fc673b4a13e8307254e68873d53"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=entity_service/entity_homepage/homepage_status_report targets=quwoquan_service/services/entity-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3418,7 +3418,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:36ed0b8db3396154b2132f14edaa9e465591ab8658c6cf147367ffaccb84484e"
+        "sha256:b40e2c7bac800c74adb14be5d87003ad3aca838889a82446bb1bc35bb481dd5b"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=integration_service/external_integration/capability_grant targets=quwoquan_service/services/integration-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3433,7 +3433,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:36ed0b8db3396154b2132f14edaa9e465591ab8658c6cf147367ffaccb84484e"
+        "sha256:b40e2c7bac800c74adb14be5d87003ad3aca838889a82446bb1bc35bb481dd5b"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=integration_service/external_integration/connector_authorization targets=quwoquan_service/services/integration-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3448,7 +3448,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:36ed0b8db3396154b2132f14edaa9e465591ab8658c6cf147367ffaccb84484e"
+        "sha256:b40e2c7bac800c74adb14be5d87003ad3aca838889a82446bb1bc35bb481dd5b"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=integration_service/external_integration/connector_connection targets=quwoquan_service/services/integration-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3463,7 +3463,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:36ed0b8db3396154b2132f14edaa9e465591ab8658c6cf147367ffaccb84484e"
+        "sha256:b40e2c7bac800c74adb14be5d87003ad3aca838889a82446bb1bc35bb481dd5b"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=integration_service/external_integration/connector_definition targets=quwoquan_service/services/integration-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3478,7 +3478,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:36ed0b8db3396154b2132f14edaa9e465591ab8658c6cf147367ffaccb84484e"
+        "sha256:b40e2c7bac800c74adb14be5d87003ad3aca838889a82446bb1bc35bb481dd5b"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=integration_service/external_integration/connector_invocation targets=quwoquan_service/services/integration-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3487,13 +3487,13 @@
       "measuredFromGreenTests": true,
       "metrics": {
         "statement": {
-          "covered": 628,
-          "percent": 50.28,
-          "total": 1249
+          "covered": 857,
+          "percent": 65.67,
+          "total": 1305
         }
       },
       "receiptDigests": [
-        "sha256:36ed0b8db3396154b2132f14edaa9e465591ab8658c6cf147367ffaccb84484e"
+        "sha256:b40e2c7bac800c74adb14be5d87003ad3aca838889a82446bb1bc35bb481dd5b"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=integration_service/external_integration/external_interaction targets=quwoquan_service/services/integration-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3508,7 +3508,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:36ed0b8db3396154b2132f14edaa9e465591ab8658c6cf147367ffaccb84484e"
+        "sha256:b40e2c7bac800c74adb14be5d87003ad3aca838889a82446bb1bc35bb481dd5b"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=integration_service/external_integration/external_interaction_attempt_fact targets=quwoquan_service/services/integration-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3523,7 +3523,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:36ed0b8db3396154b2132f14edaa9e465591ab8658c6cf147367ffaccb84484e"
+        "sha256:b40e2c7bac800c74adb14be5d87003ad3aca838889a82446bb1bc35bb481dd5b"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=integration_service/external_integration/external_interaction_dead_letter_fact targets=quwoquan_service/services/integration-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3532,13 +3532,13 @@
       "measuredFromGreenTests": true,
       "metrics": {
         "statement": {
-          "covered": 383,
-          "percent": 62.58,
+          "covered": 434,
+          "percent": 70.92,
           "total": 612
         }
       },
       "receiptDigests": [
-        "sha256:36ed0b8db3396154b2132f14edaa9e465591ab8658c6cf147367ffaccb84484e"
+        "sha256:b40e2c7bac800c74adb14be5d87003ad3aca838889a82446bb1bc35bb481dd5b"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=integration_service/external_integration/location targets=quwoquan_service/services/integration-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3553,7 +3553,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:36ed0b8db3396154b2132f14edaa9e465591ab8658c6cf147367ffaccb84484e"
+        "sha256:b40e2c7bac800c74adb14be5d87003ad3aca838889a82446bb1bc35bb481dd5b"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=integration_service/external_integration/push_delivery targets=quwoquan_service/services/integration-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3568,7 +3568,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:45f0c7941392376d96314a395dac32192e886343ac1f9fe6af4a8d144ea9c5c1"
+        "sha256:9a251c74e7e51254fe96321a3fe7bb725c4bbb8463447f086c73465872a148d4"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=notification_service/notification_delivery/notification targets=quwoquan_service/services/notification-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3583,7 +3583,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:45f0c7941392376d96314a395dac32192e886343ac1f9fe6af4a8d144ea9c5c1"
+        "sha256:9a251c74e7e51254fe96321a3fe7bb725c4bbb8463447f086c73465872a148d4"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=notification_service/notification_delivery/notification_delivery_job targets=quwoquan_service/services/notification-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3598,7 +3598,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:e0e38b7e382b592c78bea553d2136ce24ca4e780600ee35aa6b04af578d5d298"
+        "sha256:cc4c9090e6a05d8af00894c0a2bce16eca3e9a818f4d41b87d1e076659eb1cad"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=platform_ops/platform_ops/config_instance_report targets=quwoquan_service/control-plane/platform-ops collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3607,13 +3607,13 @@
       "measuredFromGreenTests": true,
       "metrics": {
         "statement": {
-          "covered": 359,
-          "percent": 72.23,
-          "total": 497
+          "covered": 371,
+          "percent": 72.32,
+          "total": 513
         }
       },
       "receiptDigests": [
-        "sha256:e0e38b7e382b592c78bea553d2136ce24ca4e780600ee35aa6b04af578d5d298"
+        "sha256:cc4c9090e6a05d8af00894c0a2bce16eca3e9a818f4d41b87d1e076659eb1cad"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=platform_ops/platform_ops/config_snapshot targets=quwoquan_service/control-plane/platform-ops collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3628,7 +3628,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:eb23b623091f1db2aeb554702259eb54d0a23ae966a3401b71150c5c522bd181"
+        "sha256:dbc220460b65ecc526a2bce0cf3d3dd593cfa9b89d30fbaa79c7e3f2fde6ad56"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=product_ops_service/product_ops/account_enforcement_case targets=quwoquan_service/services/product-ops-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3637,13 +3637,13 @@
       "measuredFromGreenTests": true,
       "metrics": {
         "statement": {
-          "covered": 156,
-          "percent": 81.25,
-          "total": 192
+          "covered": 163,
+          "percent": 83.16,
+          "total": 196
         }
       },
       "receiptDigests": [
-        "sha256:eb23b623091f1db2aeb554702259eb54d0a23ae966a3401b71150c5c522bd181"
+        "sha256:dbc220460b65ecc526a2bce0cf3d3dd593cfa9b89d30fbaa79c7e3f2fde6ad56"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=product_ops_service/product_ops/app_release targets=quwoquan_service/services/product-ops-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3658,7 +3658,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:eb23b623091f1db2aeb554702259eb54d0a23ae966a3401b71150c5c522bd181"
+        "sha256:dbc220460b65ecc526a2bce0cf3d3dd593cfa9b89d30fbaa79c7e3f2fde6ad56"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=product_ops_service/product_ops/event_record targets=quwoquan_service/services/product-ops-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3673,7 +3673,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:eb23b623091f1db2aeb554702259eb54d0a23ae966a3401b71150c5c522bd181"
+        "sha256:dbc220460b65ecc526a2bce0cf3d3dd593cfa9b89d30fbaa79c7e3f2fde6ad56"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=product_ops_service/product_ops/experiment targets=quwoquan_service/services/product-ops-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3688,7 +3688,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:eb23b623091f1db2aeb554702259eb54d0a23ae966a3401b71150c5c522bd181"
+        "sha256:dbc220460b65ecc526a2bce0cf3d3dd593cfa9b89d30fbaa79c7e3f2fde6ad56"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=product_ops_service/product_ops/experiment_assignment_fact targets=quwoquan_service/services/product-ops-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3703,7 +3703,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:eb23b623091f1db2aeb554702259eb54d0a23ae966a3401b71150c5c522bd181"
+        "sha256:dbc220460b65ecc526a2bce0cf3d3dd593cfa9b89d30fbaa79c7e3f2fde6ad56"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=product_ops_service/product_ops/premium_pool_entry targets=quwoquan_service/services/product-ops-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3718,7 +3718,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:eb23b623091f1db2aeb554702259eb54d0a23ae966a3401b71150c5c522bd181"
+        "sha256:dbc220460b65ecc526a2bce0cf3d3dd593cfa9b89d30fbaa79c7e3f2fde6ad56"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=product_ops_service/product_ops/recovery_failure targets=quwoquan_service/services/product-ops-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3733,7 +3733,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:eb23b623091f1db2aeb554702259eb54d0a23ae966a3401b71150c5c522bd181"
+        "sha256:dbc220460b65ecc526a2bce0cf3d3dd593cfa9b89d30fbaa79c7e3f2fde6ad56"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=product_ops_service/product_ops/visit_record targets=quwoquan_service/services/product-ops-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3742,13 +3742,13 @@
       "measuredFromGreenTests": true,
       "metrics": {
         "statement": {
-          "covered": 833,
-          "percent": 70.71,
+          "covered": 837,
+          "percent": 71.05,
           "total": 1178
         }
       },
       "receiptDigests": [
-        "sha256:bb26b3949513807c64e118ce80fa796dc97fc5c93a176af4b9fb31fa0a94b822"
+        "sha256:08c7062e7d07dfa720bcbec41db3a1340399a4641c59023edde4156e35ed00ee"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=realtime_gateway/realtime/connection targets=quwoquan_service/services/realtime-gateway collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3763,7 +3763,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:bb26b3949513807c64e118ce80fa796dc97fc5c93a176af4b9fb31fa0a94b822"
+        "sha256:08c7062e7d07dfa720bcbec41db3a1340399a4641c59023edde4156e35ed00ee"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=realtime_gateway/realtime/presence_view targets=quwoquan_service/services/realtime-gateway collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3778,7 +3778,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:16d8f2eab6f748446d2069f1fd20248030752392e321065927ee582bbe7de511"
+        "sha256:d17707f89844a7a8f99359b676b3ca3c6077a5ee18e488b3deb754cf2277a876"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=recommendation_service/recommendation/ranked_recommendation_window targets=quwoquan_service/services/recommendation-service collectors=python attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3793,7 +3793,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:16d8f2eab6f748446d2069f1fd20248030752392e321065927ee582bbe7de511"
+        "sha256:d17707f89844a7a8f99359b676b3ca3c6077a5ee18e488b3deb754cf2277a876"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=recommendation_service/recommendation/recommendation_candidate_index_view targets=quwoquan_service/services/recommendation-service collectors=python attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3808,7 +3808,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:16d8f2eab6f748446d2069f1fd20248030752392e321065927ee582bbe7de511"
+        "sha256:d17707f89844a7a8f99359b676b3ca3c6077a5ee18e488b3deb754cf2277a876"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=recommendation_service/recommendation/recommendation_exposure_fact targets=quwoquan_service/services/recommendation-service collectors=python attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3823,7 +3823,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:16d8f2eab6f748446d2069f1fd20248030752392e321065927ee582bbe7de511"
+        "sha256:d17707f89844a7a8f99359b676b3ca3c6077a5ee18e488b3deb754cf2277a876"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=recommendation_service/recommendation/recommendation_feature_profile_view targets=quwoquan_service/services/recommendation-service collectors=python attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3838,7 +3838,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:16d8f2eab6f748446d2069f1fd20248030752392e321065927ee582bbe7de511"
+        "sha256:d17707f89844a7a8f99359b676b3ca3c6077a5ee18e488b3deb754cf2277a876"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=recommendation_service/recommendation/recommendation_feedback_fact targets=quwoquan_service/services/recommendation-service collectors=python attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3853,7 +3853,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:16d8f2eab6f748446d2069f1fd20248030752392e321065927ee582bbe7de511"
+        "sha256:d17707f89844a7a8f99359b676b3ca3c6077a5ee18e488b3deb754cf2277a876"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=recommendation_service/recommendation/recommendation_model_release targets=quwoquan_service/services/recommendation-service collectors=python attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3868,7 +3868,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:16d8f2eab6f748446d2069f1fd20248030752392e321065927ee582bbe7de511"
+        "sha256:d17707f89844a7a8f99359b676b3ca3c6077a5ee18e488b3deb754cf2277a876"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=recommendation_service/recommendation/recommendation_subject_closure_fact targets=quwoquan_service/services/recommendation-service collectors=python attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3877,13 +3877,13 @@
       "measuredFromGreenTests": true,
       "metrics": {
         "statement": {
-          "covered": 929,
-          "percent": 52.37,
+          "covered": 956,
+          "percent": 53.89,
           "total": 1774
         }
       },
       "receiptDigests": [
-        "sha256:83d4294eca9b725d8ba03cdafeb4feda7680d0782a92b1f599615dc82ab0fd18"
+        "sha256:adb2207257e707d31cd4922f1ccdaa6b55f36aaf4e5d421d77e8d3fd83277c67"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=rtc_service/rtc/call_session targets=quwoquan_service/services/rtc-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3898,7 +3898,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:c430ff77a3cd0c1f0c099fc2e4efe0506a1eae0730c26b6a5fead5d5aa85e09c"
+        "sha256:18021e7fc4a890f5212bf66315c54bcdb070c2aa173a4fe428588877f8b9c3e1"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=search_service/search/recent_search_state targets=quwoquan_service/services/search-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3913,7 +3913,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:c430ff77a3cd0c1f0c099fc2e4efe0506a1eae0730c26b6a5fead5d5aa85e09c"
+        "sha256:18021e7fc4a890f5212bf66315c54bcdb070c2aa173a4fe428588877f8b9c3e1"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=search_service/search/recommendation_signal_fact targets=quwoquan_service/services/search-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3928,7 +3928,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:c430ff77a3cd0c1f0c099fc2e4efe0506a1eae0730c26b6a5fead5d5aa85e09c"
+        "sha256:18021e7fc4a890f5212bf66315c54bcdb070c2aa173a4fe428588877f8b9c3e1"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=search_service/search/search_feedback_fact targets=quwoquan_service/services/search-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3943,7 +3943,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:c430ff77a3cd0c1f0c099fc2e4efe0506a1eae0730c26b6a5fead5d5aa85e09c"
+        "sha256:18021e7fc4a890f5212bf66315c54bcdb070c2aa173a4fe428588877f8b9c3e1"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=search_service/search/search_index_view targets=quwoquan_service/services/search-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3958,7 +3958,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:c430ff77a3cd0c1f0c099fc2e4efe0506a1eae0730c26b6a5fead5d5aa85e09c"
+        "sha256:18021e7fc4a890f5212bf66315c54bcdb070c2aa173a4fe428588877f8b9c3e1"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=search_service/search/search_request_fact targets=quwoquan_service/services/search-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3973,7 +3973,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:72a1fccbaca6f31d5af37be1ca1760d8d062063282a406928632bf22ce2caaf7"
+        "sha256:c6cbbd801ae721f1aefe1d8e20adf607c5bdfe3e583dfbafd049898fb7702a5e"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=tag_service/tag/object_tag_index_view targets=quwoquan_service/services/tag-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -3988,7 +3988,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:72a1fccbaca6f31d5af37be1ca1760d8d062063282a406928632bf22ce2caaf7"
+        "sha256:c6cbbd801ae721f1aefe1d8e20adf607c5bdfe3e583dfbafd049898fb7702a5e"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=tag_service/tag/tag_feedback_fact targets=quwoquan_service/services/tag-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -4003,7 +4003,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:72a1fccbaca6f31d5af37be1ca1760d8d062063282a406928632bf22ce2caaf7"
+        "sha256:c6cbbd801ae721f1aefe1d8e20adf607c5bdfe3e583dfbafd049898fb7702a5e"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=tag_service/tag/tag_node_view targets=quwoquan_service/services/tag-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -4018,7 +4018,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:72a1fccbaca6f31d5af37be1ca1760d8d062063282a406928632bf22ce2caaf7"
+        "sha256:c6cbbd801ae721f1aefe1d8e20adf607c5bdfe3e583dfbafd049898fb7702a5e"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=tag_service/tag/tag_taxonomy_release targets=quwoquan_service/services/tag-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -4033,7 +4033,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:62dcacb5c27509de77e9787ad4e756298df2314f1ecc8deabb63bdc77c92f314"
+        "sha256:0ff5752d82fd36f020d072053349eba30aba313aa6e5c55210c92c19eb6c4222"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=user_service/account/account_appeal_intake targets=quwoquan_service/services/user-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -4048,7 +4048,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:62dcacb5c27509de77e9787ad4e756298df2314f1ecc8deabb63bdc77c92f314"
+        "sha256:0ff5752d82fd36f020d072053349eba30aba313aa6e5c55210c92c19eb6c4222"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=user_service/account/account_session targets=quwoquan_service/services/user-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -4063,7 +4063,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:62dcacb5c27509de77e9787ad4e756298df2314f1ecc8deabb63bdc77c92f314"
+        "sha256:0ff5752d82fd36f020d072053349eba30aba313aa6e5c55210c92c19eb6c4222"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=user_service/account/authentication_challenge targets=quwoquan_service/services/user-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -4078,7 +4078,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:62dcacb5c27509de77e9787ad4e756298df2314f1ecc8deabb63bdc77c92f314"
+        "sha256:0ff5752d82fd36f020d072053349eba30aba313aa6e5c55210c92c19eb6c4222"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=user_service/account/credential_binding targets=quwoquan_service/services/user-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -4093,7 +4093,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:62dcacb5c27509de77e9787ad4e756298df2314f1ecc8deabb63bdc77c92f314"
+        "sha256:0ff5752d82fd36f020d072053349eba30aba313aa6e5c55210c92c19eb6c4222"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=user_service/account/device_registration targets=quwoquan_service/services/user-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -4108,7 +4108,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:62dcacb5c27509de77e9787ad4e756298df2314f1ecc8deabb63bdc77c92f314"
+        "sha256:0ff5752d82fd36f020d072053349eba30aba313aa6e5c55210c92c19eb6c4222"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=user_service/account/invitation targets=quwoquan_service/services/user-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -4117,13 +4117,13 @@
       "measuredFromGreenTests": true,
       "metrics": {
         "statement": {
-          "covered": 2363,
-          "percent": 41.51,
-          "total": 5693
+          "covered": 2372,
+          "percent": 41.53,
+          "total": 5711
         }
       },
       "receiptDigests": [
-        "sha256:62dcacb5c27509de77e9787ad4e756298df2314f1ecc8deabb63bdc77c92f314"
+        "sha256:0ff5752d82fd36f020d072053349eba30aba313aa6e5c55210c92c19eb6c4222"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=user_service/account/user_account targets=quwoquan_service/services/user-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -4138,7 +4138,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:62dcacb5c27509de77e9787ad4e756298df2314f1ecc8deabb63bdc77c92f314"
+        "sha256:0ff5752d82fd36f020d072053349eba30aba313aa6e5c55210c92c19eb6c4222"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=user_service/account/user_settings targets=quwoquan_service/services/user-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -4153,7 +4153,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:62dcacb5c27509de77e9787ad4e756298df2314f1ecc8deabb63bdc77c92f314"
+        "sha256:0ff5752d82fd36f020d072053349eba30aba313aa6e5c55210c92c19eb6c4222"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=user_service/persona_management/persona targets=quwoquan_service/services/user-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -4168,7 +4168,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:62dcacb5c27509de77e9787ad4e756298df2314f1ecc8deabb63bdc77c92f314"
+        "sha256:0ff5752d82fd36f020d072053349eba30aba313aa6e5c55210c92c19eb6c4222"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=user_service/persona_management/profile_update_proposal targets=quwoquan_service/services/user-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -4183,7 +4183,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:62dcacb5c27509de77e9787ad4e756298df2314f1ecc8deabb63bdc77c92f314"
+        "sha256:0ff5752d82fd36f020d072053349eba30aba313aa6e5c55210c92c19eb6c4222"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=user_service/profile_projection/creator_runtime_profile targets=quwoquan_service/services/user-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -4198,7 +4198,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:62dcacb5c27509de77e9787ad4e756298df2314f1ecc8deabb63bdc77c92f314"
+        "sha256:0ff5752d82fd36f020d072053349eba30aba313aa6e5c55210c92c19eb6c4222"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=user_service/profile_projection/following_subject targets=quwoquan_service/services/user-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -4213,7 +4213,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:62dcacb5c27509de77e9787ad4e756298df2314f1ecc8deabb63bdc77c92f314"
+        "sha256:0ff5752d82fd36f020d072053349eba30aba313aa6e5c55210c92c19eb6c4222"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=user_service/relationship/contact_discovery_record targets=quwoquan_service/services/user-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -4228,7 +4228,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:62dcacb5c27509de77e9787ad4e756298df2314f1ecc8deabb63bdc77c92f314"
+        "sha256:0ff5752d82fd36f020d072053349eba30aba313aa6e5c55210c92c19eb6c4222"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=user_service/relationship/followed_subject_visit_state targets=quwoquan_service/services/user-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -4243,7 +4243,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:62dcacb5c27509de77e9787ad4e756298df2314f1ecc8deabb63bdc77c92f314"
+        "sha256:0ff5752d82fd36f020d072053349eba30aba313aa6e5c55210c92c19eb6c4222"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=user_service/relationship/greeting_request targets=quwoquan_service/services/user-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -4258,7 +4258,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:62dcacb5c27509de77e9787ad4e756298df2314f1ecc8deabb63bdc77c92f314"
+        "sha256:0ff5752d82fd36f020d072053349eba30aba313aa6e5c55210c92c19eb6c4222"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=user_service/relationship/persona_relationship targets=quwoquan_service/services/user-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     },
@@ -4273,7 +4273,7 @@
         }
       },
       "receiptDigests": [
-        "sha256:62dcacb5c27509de77e9787ad4e756298df2314f1ecc8deabb63bdc77c92f314"
+        "sha256:0ff5752d82fd36f020d072053349eba30aba313aa6e5c55210c92c19eb6c4222"
       ],
       "scope": "quwoquan_service: canonical local_contract statement coverage; unit=user_service/relationship/subject_follow targets=quwoquan_service/services/user-service collectors=go attribution=object-path-map/v2 (excluding /tests/api_integration)"
     }

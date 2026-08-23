@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -18,6 +19,10 @@ IOS_CONFIGURATIONS = (
     ("Release", "nonprod"),
     ("Release", "prod"),
 )
+# xcodebuild 只在装了 Xcode 的 macOS 上存在，Linux 门禁机上根本不可能有。
+# 缺席不是身份漂移，只是这台机器判不了 iOS 构建设置；装了就必须判，
+# 且判不过要红——所以只在可执行文件缺席时跳过，不吞任何失败。
+XCODEBUILD = shutil.which("xcodebuild")
 
 
 class AppIdentityFlavorMatrixTest(unittest.TestCase):
@@ -70,6 +75,7 @@ class AppIdentityFlavorMatrixTest(unittest.TestCase):
             wrapper = APP / f"ios/Flutter/{configuration}.xcconfig"
             self.assertTrue(wrapper.is_file(), wrapper)
 
+    @unittest.skipUnless(XCODEBUILD, "xcodebuild 不在本机 PATH 上")
     def test_all_iOS_build_settings_match_generated_identity(self) -> None:
         for mode, build_profile in IOS_CONFIGURATIONS:
             with self.subTest(build_profile=build_profile, mode=mode):
