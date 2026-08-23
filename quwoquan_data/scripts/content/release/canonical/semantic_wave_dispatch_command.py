@@ -16,6 +16,12 @@ def task_execute_argv(
 ) -> list[str]:
     binding = dict(request.scale_source_pool or {})
     selection = dict(request.source_pool_selection or {})
+    authority = dict(request.execution_authority)
+    if authority.get("mode") != "governed_calibration":
+        raise ValueError(
+            "GATE_BLOCK DATA.EXECUTION.AUTHORITY_INVALID: semantic wave "
+            "dispatch requires governed_calibration authority"
+        )
     argv = [
         "python3",
         "quwoquan_data/scripts/cli.py",
@@ -35,7 +41,7 @@ def task_execute_argv(
         str(request.count),
         "--capacity-calibration-receipt",
         str(
-            request.capacity_calibration["calibrationReceiptRef"]
+            authority["calibration"]["calibrationReceiptRef"]
         ),
         "--semantic-selection-id",
         "cursor_grok",

@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-"""阻断共享可写 App identity 状态与缺失的 flavor 选择。
+"""阻断共享可写 App identity 状态与退役环境 flavor。
 
 触发范围：App identity metadata/codegen、Android/iOS 原生配置、Flutter 启动入口。
-阻断条件：退役共享状态仍存在、运行时入口消费它、默认 Alpha 或显式 flavor 选择缺失。
-修复方式：删除共享状态，恢复静态 flavor/scheme，运行 `make codegen-app-identity` 后重跑
-`make verify-app-identity-state-isolation` 与 `make verify-app-identity`。
+阻断条件：退役共享状态或环境 flavor 仍存在、启动入口未选择 buildProfile、生成矩阵缺失。
+修复方式：删除共享状态和环境 flavor，恢复 nonprod/prod 静态 flavor/scheme，运行
+`make codegen-app-identity` 后重跑两道 App identity 门禁。
 """
 
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import sys
 from pathlib import Path
@@ -34,6 +35,40 @@ def _read_required(path: Path, root: Path, issues: list[str]) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def _executor_nonprod_build_drivers(source: str) -> set[str]:
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return set()
+    expected = {
+        "AndroidPlatformDriver",
+        "IOSSimulatorPlatformDriver",
+        "IOSPhysicalPlatformDriver",
+    }
+    compliant: set[str] = set()
+    for class_node in tree.body:
+        if not isinstance(class_node, ast.ClassDef) or class_node.name not in expected:
+            continue
+        profiles: set[str] = set()
+        for method in class_node.body:
+            if not isinstance(method, ast.FunctionDef) or method.name != "build_command":
+                continue
+            for child in ast.walk(method):
+                if not isinstance(child, (ast.List, ast.Tuple)):
+                    continue
+                values = [
+                    item.value
+                    for item in child.elts
+                    if isinstance(item, ast.Constant) and isinstance(item.value, str)
+                ]
+                for index, value in enumerate(values[:-1]):
+                    if value == "--flavor":
+                        profiles.add(values[index + 1])
+        if profiles == {"nonprod"}:
+            compliant.add(class_node.name)
+    return compliant
+
+
 def collect_issues(root: Path) -> list[str]:
     app = root / "quwoquan_app"
     issues: list[str] = []
@@ -50,6 +85,7 @@ def collect_issues(root: Path) -> list[str]:
     scanned_paths = (
         app / "run.sh",
         app / "scripts/device/run_app_instance.sh",
+        app / "scripts/device/run_app_instance.py",
         app / "scripts/device/verify_ios_hot_restart.py",
         app / "scripts/device/build_startup_environment_matrix.py",
         app / "scripts/ios/build_prepare_dart_defines.sh",
@@ -64,8 +100,22 @@ def collect_issues(root: Path) -> list[str]:
             )
 
     launcher = sources[app / "run.sh"]
-    if '--flavor "$QWQ_APP_RUNTIME_ENV"' not in launcher:
-        issues.append("run.sh must select the canonical Flutter flavor")
+    executor_path = app / "scripts/device/run_app_instance.py"
+    executor = sources[executor_path]
+    if str(executor_path.relative_to(app)) not in launcher:
+        issues.append("run.sh must delegate buildProfile selection to canonical executor")
+    if "flutter run" in launcher or "--flavor" in launcher:
+        issues.append("run.sh must not own a second Flutter buildProfile selection")
+    if '--flavor "$QWQ_APP_RUNTIME_ENV"' in launcher:
+        issues.append("run.sh must not select flavor from the runtime environment")
+    if _executor_nonprod_build_drivers(executor) != {
+        "AndroidPlatformDriver",
+        "IOSSimulatorPlatformDriver",
+        "IOSPhysicalPlatformDriver",
+    }:
+        issues.append(
+            "canonical executor Android/iOS build drivers must select only nonprod"
+        )
 
     app_instance = sources[app / "scripts/device/run_app_instance.sh"]
     if 'bash "$APP_DIR/run.sh"' not in app_instance or "flutter run" in app_instance:
@@ -73,13 +123,16 @@ def collect_issues(root: Path) -> list[str]:
             "run_app_instance.sh must delegate non-Prod flavor selection to run.sh"
         )
 
-    runner_scheme = app / "ios/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme"
-    if runner_scheme.exists():
+    schemes = app / "ios/Runner.xcodeproj/xcshareddata/xcschemes"
+    if (schemes / "Runner.xcscheme").exists():
         issues.append("unflavored shared Runner scheme must not remain selectable")
+    for environment in ("alpha", "beta", "gamma"):
+        if (schemes / f"{environment}.xcscheme").exists():
+            issues.append(f"retired environment scheme must not exist: {environment}")
 
     pubspec = _read_required(app / "pubspec.yaml", root, issues)
-    if "  default-flavor: alpha\n" not in pubspec:
-        issues.append("pubspec.yaml must make alpha the deterministic default flavor")
+    if "  default-flavor: nonprod\n" not in pubspec:
+        issues.append("pubspec.yaml must make nonprod the deterministic default flavor")
 
     identity_source = _read_required(
         app / "android/app/app_identity.generated.json", root, issues
@@ -90,8 +143,27 @@ def collect_issues(root: Path) -> list[str]:
         except json.JSONDecodeError as error:
             issues.append(f"generated App identity document is invalid: {error}")
         else:
-            if identity.get("environments") != ["alpha", "beta", "gamma", "prod"]:
-                issues.append("generated App identity environment matrix is incomplete")
+            if identity.get("buildProfiles") != ["nonprod", "prod"]:
+                issues.append("generated App identity buildProfile matrix is incomplete")
+            expected_profiles = {
+                "alpha": "nonprod",
+                "beta": "nonprod",
+                "gamma": "nonprod",
+                "prod": "prod",
+            }
+            if identity.get("environmentProfiles") != expected_profiles:
+                issues.append("generated App identity environmentProfiles mapping is incomplete")
+            for platform in ("android", "ios"):
+                identities = (identity.get("identities") or {}).get(platform) or {}
+                expected_keys = {
+                    f"{profile}/{mode}"
+                    for profile in ("nonprod", "prod")
+                    for mode in ("debug", "profile", "release")
+                }
+                if set(identities) != expected_keys:
+                    issues.append(
+                        f"generated {platform} identity keys must be buildProfile/buildMode"
+                    )
 
     return issues
 

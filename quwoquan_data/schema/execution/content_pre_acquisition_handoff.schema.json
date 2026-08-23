@@ -9,9 +9,12 @@
     "supersedes",
     "scale",
     "vertical",
+    "lifecycle",
+    "scopeType",
     "scope",
     "regionRef",
-    "topic",
+    "primaryTopicRef",
+    "relatedTopicRefs",
     "runDate",
     "campaignSequence",
     "campaignRetryOf",
@@ -21,6 +24,7 @@
     "entityCatalogDigest",
     "activeCarriers",
     "workloadTargets",
+    "sourceSelection",
     "sourceMutationPolicy",
     "carrierRequirements",
     "handoffDigest",
@@ -57,19 +61,43 @@
       "type": "string",
       "pattern": "^[a-z][a-z0-9-]*$"
     },
+    "lifecycle": {
+      "enum": ["research", "commercial"]
+    },
+    "scopeType": {
+      "enum": ["vertical", "region", "topic", "region_topic"]
+    },
     "scope": {
       "type": "string",
       "pattern": "^[a-z0-9][a-z0-9-]*$"
     },
     "regionRef": {
-      "type": "string",
-      "minLength": 1
-    },
-    "topic": {
-      "type": [
-        "string",
-        "null"
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "minLength": 1
+        }
       ]
+    },
+    "primaryTopicRef": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/topicRef"
+        }
+      ]
+    },
+    "relatedTopicRefs": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/topicRef"
+      }
     },
     "runDate": {
       "type": "string",
@@ -161,6 +189,25 @@
         }
       }
     },
+    "sourceSelection": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "homepage": {
+          "$ref": "#/$defs/carrierSourceSelection"
+        },
+        "article": {
+          "$ref": "#/$defs/carrierSourceSelection"
+        },
+        "image": {
+          "$ref": "#/$defs/carrierSourceSelection"
+        },
+        "video": {
+          "$ref": "#/$defs/carrierSourceSelection"
+        }
+      }
+    },
     "sourceMutationPolicy": {
       "type": "object",
       "required": [
@@ -212,6 +259,29 @@
     "sha256": {
       "type": "string",
       "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "topicRef": {
+      "type": "string",
+      "pattern": "^Topic/.+$"
+    },
+    "carrierSourceSelection": {
+      "type": "object",
+      "required": ["mode", "providers"],
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": ["site_primary", "search_supplement"]
+        },
+        "providers": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
     },
     "supersedes": {
       "type": "object",
@@ -358,6 +428,88 @@
           "campaignRetryOf": {
             "type": "string",
             "minLength": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "scopeType": {
+            "const": "vertical"
+          }
+        },
+        "required": ["scopeType"]
+      },
+      "then": {
+        "properties": {
+          "regionRef": {
+            "type": "null"
+          },
+          "primaryTopicRef": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "scopeType": {
+            "const": "region"
+          }
+        },
+        "required": ["scopeType"]
+      },
+      "then": {
+        "properties": {
+          "regionRef": {
+            "type": "string",
+            "minLength": 1
+          },
+          "primaryTopicRef": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "scopeType": {
+            "const": "topic"
+          }
+        },
+        "required": ["scopeType"]
+      },
+      "then": {
+        "properties": {
+          "regionRef": {
+            "type": "null"
+          },
+          "primaryTopicRef": {
+            "$ref": "#/$defs/topicRef"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "scopeType": {
+            "const": "region_topic"
+          }
+        },
+        "required": ["scopeType"]
+      },
+      "then": {
+        "properties": {
+          "regionRef": {
+            "type": "string",
+            "minLength": 1
+          },
+          "primaryTopicRef": {
+            "$ref": "#/$defs/topicRef"
           }
         }
       }

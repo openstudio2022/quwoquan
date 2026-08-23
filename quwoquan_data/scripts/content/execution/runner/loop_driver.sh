@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Ralph loop 驱动（boundary.md 豁免层，≤50 行）：阶段零感知、宿主零分支。
+# 只读最新 receipt 的 verdict/next 协议字段决定续/停；每轮起全新宿主会话。
+set -euo pipefail
+EXEC_ID="" HOST_CMD="" MAX_ROUNDS=20 ROUND_TIMEOUT=1800
+while [[ $# -gt 0 ]]; do case "$1" in
+  --execution-id) EXEC_ID="$2"; shift 2;;
+  --host-cmd) HOST_CMD="$2"; shift 2;;
+  --max-rounds) MAX_ROUNDS="$2"; shift 2;;
+  --round-timeout) ROUND_TIMEOUT="$2"; shift 2;;
+  *) echo "unknown arg: $1" >&2; exit 64;;
+esac; done
+if [[ -z "$EXEC_ID" || -z "$HOST_CMD" ]]; then
+  echo "usage: loop_driver.sh --execution-id <id> --host-cmd '<HOST_CMD>' [--max-rounds N] [--round-timeout S]" >&2
+  exit 64
+fi
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../../.." && pwd)"
+CLI=(python3 "$REPO_ROOT/quwoquan_data/scripts/cli.py")
+PROMPT_SRC="$REPO_ROOT/.agents/skills/content-production/references/loop-prompt.md"
+PROMPT="$(awk 'flag{print} /^---$/{flag=1}' "$PROMPT_SRC" | sed "s/<executionId>/$EXEC_ID/g")"
+run_round() { # 单轮 hard timeout：超时杀会话进程，不写假 receipt
+  bash -c "cd '$REPO_ROOT' && $HOST_CMD \"\$1\"" _ "$PROMPT" & local pid=$!
+  ( sleep "$ROUND_TIMEOUT" && kill -9 "$pid" 2>/dev/null ) & local watchdog=$!
+  local rc=0; wait "$pid" || rc=$?
+  kill "$watchdog" 2>/dev/null || true; wait "$watchdog" 2>/dev/null || true
+  return "$rc"
+}
+for ((round = 1; round <= MAX_ROUNDS; round++)); do
+  # claim 属于执行者（每轮宿主会话）；驱动只做只读预检，不得自己写 claim
+  "${CLI[@]}" task lane-claim --execution-id "$EXEC_ID" --check >/dev/null || {
+    echo "loop_driver: active claim held by an executor session, not taking over" >&2; exit 4; }
+  read -r VERDICT NEXT < <("${CLI[@]}" task fleet-status --execution-id "$EXEC_ID" --json \
+    | python3 -c 'import json,sys; e=json.load(sys.stdin)["executions"][0]; print(e["verdict"] or "none", e["next"] or "none")')
+  if [[ "$VERDICT" == "blocked" ]]; then echo "loop_driver: blocked, stopping"; exit 2; fi
+  if [[ "$NEXT" == "END" ]]; then echo "loop_driver: execution completed"; exit 0; fi
+  echo "loop_driver: round $round/$MAX_ROUNDS (next=$NEXT)"
+  run_round || echo "loop_driver: host session exited non-zero; receipt chain decides" >&2
+done
+echo "loop_driver: max rounds reached without terminal receipt" >&2
+exit 3

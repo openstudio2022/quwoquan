@@ -34,7 +34,6 @@ from .constants import (
 from .session import (
     _local_target_for_environment_alias,
     _resolved_media_base_urls,
-    _resolved_owner_id,
     _runtime_env_for_alias,
 )
 
@@ -189,8 +188,6 @@ def _canonical_test_live_launcher_handoff(
         "canonical_launcher",
         "--launch-policy",
         "test_live",
-        "--app-instance-namespace",
-        f"{runtime_env}-test-live",
         "--gateway-base-url",
         base_urls["gatewayBaseUrl"],
         "--legal-base-url",
@@ -206,9 +203,6 @@ def _canonical_test_live_launcher_handoff(
         "--rtc-media-connection-url",
         base_urls["rtcMediaConnectionUrl"],
     ]
-    current_user_id = _resolved_owner_id(args)
-    if current_user_id:
-        command.extend(("--current-user-id", current_user_id))
     is_android = str(device.get("targetPlatform") or "").lower().startswith(
         "android"
     )

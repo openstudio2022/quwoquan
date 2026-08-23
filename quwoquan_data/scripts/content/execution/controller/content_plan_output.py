@@ -7,6 +7,7 @@ from content.execution.workspace import execution_content_plan_packet_path
 from content.post.content_plan import CONTENT_PLAN_SCHEMA
 from core.io import write_json
 from core.paths import execution_root
+from core.schema import assert_valid
 
 
 def write_content_plan_diagnostics(
@@ -40,6 +41,12 @@ def write_content_plan_packet(
     }
     if source_site:
         packet["sourceSite"] = source_site
+    assert_valid(
+        packet,
+        "content",
+        "content_plan_packet",
+        label=f"content_plan_packet:{execution_id}",
+    )
     write_json(execution_content_plan_packet_path(execution_id), packet)
 
 

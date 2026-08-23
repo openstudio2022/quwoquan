@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import tempfile
 import unittest
@@ -21,44 +22,6 @@ def _load_verifier_module():
     module = util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
-
-
-def _write_prod_runtime_package(deploy_root: Path) -> None:
-    package = deploy_root / "prod-hosted" / "packages" / "app"
-    package.mkdir(parents=True, exist_ok=True)
-    (package / "app_runtime.yaml").write_text(
-        "\n".join(  # noqa: FLY002 - fixture remains readable as YAML lines.
-            [
-                "schema: app-runtime-config",
-                "runtime:",
-                "  appRuntimeEnv: prod",
-                "  gatewayBaseUrl: https://api.quwoquan.com",
-                "  legalBaseUrl: https://quwoquan.com/legal",
-                "  publicWebBaseUrl: https://quwoquan.com",
-                "  appDownloadBaseUrl: https://cdn.quwoquan.com/download",
-                "  realtimeBaseUrl: wss://api.quwoquan.com",
-                "  mediaAvatarCdnBaseUrl: https://cdn.quwoquan.com/media/avatar",
-                "  mediaImageCdnBaseUrl: https://cdn.quwoquan.com/media/image",
-                "  mediaVideoCdnBaseUrl: https://cdn.quwoquan.com/media/video",
-                "  mediaUploadBaseUrl: https://upload.quwoquan.com",
-                "  rtcMediaConnectionUrl: wss://rtc.quwoquan.com",
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    (package / "report.json").write_text(
-        json.dumps(
-            {
-                "status": "packaged",
-                "env": "prod",
-                "target": "prod-hosted",
-            }
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-
 
 class ProductionReleaseArtifactContractTest(unittest.TestCase):
     def test_ios_bundle_rejects_unembedded_rpath_framework(self) -> None:
@@ -118,73 +81,71 @@ class ProductionReleaseArtifactContractTest(unittest.TestCase):
             self.assertEqual(payload["status"], "failed")
             self.assertIn("quwoquan_cloud_mock", "\n".join(payload["findings"]))
 
-    def test_launcher_handoff_digest_must_be_embedded_in_artifact(self) -> None:
+    def test_release_artifact_keeps_runtime_configuration_external(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            deploy_root = root / "deploy"
-            _write_prod_runtime_package(deploy_root)
-            handoff = root / "handoff.json"
-            generated = subprocess.run(
-                [
-                    "python3",
-                    "scripts/device/build_launcher_handoff.py",
-                    "--env",
-                    "prod",
-                    "--target",
-                    "prod-hosted",
-                    "--launch-mode",
-                    "release_package",
-                ],
-                cwd=APP,
-                env={
-                    **os.environ,
-                    "PYTHONDONTWRITEBYTECODE": "1",
-                    "QWQ_DEPLOY_WORK_ROOT": str(deploy_root),
-                },
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-            handoff.write_text(generated.stdout, encoding="utf-8")
-            digest = json.loads(generated.stdout)[
-                "effectiveLaunchManifestDigest"
-            ]
-            artifact = root / "app-release.aab"
+            artifact = root / "app-release.apk"
             with zipfile.ZipFile(artifact, "w") as archive:
-                archive.writestr("base/dex/classes.dex", digest.encode("ascii"))
-            report = root / "report.json"
-
-            result = _run(artifact, report, handoff=handoff)
-
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            payload = json.loads(report.read_text(encoding="utf-8"))
-            self.assertEqual(
-                payload["provenance"]["effectiveLaunchManifestDigest"],
-                digest,
+                archive.writestr("classes.dex", b"production-only")
+                archive.writestr(
+                    "assets/qwq_runtime/runtime-config-trust.json",
+                    json.dumps(
+                        {
+                            "schema": "app-runtime-config-trust",
+                            "schemaVersion": "1",
+                            "buildProfile": "prod",
+                            "signatureAlgorithm": "ed25519",
+                            "trustedPublicKeys": {"prod-key": "public-key"},
+                        }
+                    ),
+                )
+            entries = dict(_load_verifier_module().iter_artifact_entries(artifact))
+            executable = entries["classes.dex"]
+            for retired in (
+                b"APP_RUNTIME_ENV=",
+                b"CLOUD_GATEWAY_BASE_URL=",
+                b"APP_LAUNCH_POLICY=",
+                b"QWQ_LAUNCH_TARGET=",
+                b"effectiveLaunchManifestDigest",
+            ):
+                self.assertNotIn(retired, executable)
+            self.assertNotIn(
+                "assets/qwq_runtime/runtime-config-package.json",
+                entries,
+            )
+            self.assertIn(
+                "assets/qwq_runtime/runtime-config-trust.json",
+                entries,
             )
 
-    def test_release_pipeline_builds_and_scans_all_supported_release_artifacts(self) -> None:
+    def test_release_pipeline_compiles_exactly_five_build_products(self) -> None:
         workflow = (ROOT / ".github/workflows/app_pipeline.yml").read_text(
             encoding="utf-8"
         )
-        for job_name in ("android:", "ios:", "web:"):
-            self.assertIn(job_name, workflow)
-        self.assertNotIn("macos:", workflow)
-        self.assertNotIn("flutter build", workflow)
-        # android/ios/web 三个面各打一份 app-artifact；prod 另有官方包 app-release
-        # 与 ops-portal 两种不同 kind。只数打包调用总数，会在新增一种合法 kind 时
-        # 假红，所以按 kind 逐项钉住，再用总数兜住「多出一条没登记的打包」。
-        self.assertEqual(workflow.count("--kind app-artifact"), 3)
-        self.assertEqual(workflow.count("--kind app-release"), 1)
-        self.assertEqual(workflow.count("--kind ops-portal"), 1)
+        build_products = re.findall(r"- buildProductId: ([a-z0-9-]+)", workflow)
         self.assertEqual(
-            workflow.count("stackctl.py --output-format json package"),
-            5,
+            build_products,
+            [
+                "android-nonprod-apk",
+                "android-prod-apk",
+                "ios-nonprod-app",
+                "ios-prod-app",
+                "web-shared",
+            ],
         )
-        for environment in ("alpha", "beta", "gamma", "prod"):
-            self.assertIn(environment, workflow)
-        for surface in ("android", "ios", "web"):
-            self.assertIn(f"--app-platform {surface}", workflow)
+        self.assertEqual(workflow.count("--kind app-artifact"), 1)
+        self.assertIn('--build-product-id "${{ matrix.buildProductId }}"', workflow)
+        for retired in (
+            "--app-platform",
+            "--app-build-mode",
+            "--distribution-class",
+            "QWQ_ANDROID_ALPHA_GOOGLE_SERVICES_JSON",
+            "QWQ_ANDROID_BETA_GOOGLE_SERVICES_JSON",
+            "QWQ_ANDROID_GAMMA_GOOGLE_SERVICES_JSON",
+        ):
+            self.assertNotIn(retired, workflow)
+        self.assertIn("QWQ_ANDROID_NONPROD_GOOGLE_SERVICES_JSON", workflow)
+        self.assertIn("QWQ_ANDROID_PROD_GOOGLE_SERVICES_JSON", workflow)
         self.assertIn("collect_stackctl_app_shard.py", workflow)
         self.assertIn("app_candidate_evidence.Dockerfile", workflow)
         self.assertIn("app_evidence_ref", workflow)
@@ -200,15 +161,15 @@ def _run(
     handoff: Path | None = None,
 ) -> subprocess.CompletedProcess[str]:
     command = [
-            "python3",
-            str(VERIFIER),
-            "--platform",
-            "android",
-            "--artifact",
-            str(artifact),
-            "--report",
-            str(report),
-        ]
+        "python3",
+        str(VERIFIER),
+        "--platform",
+        "android",
+        "--artifact",
+        str(artifact),
+        "--report",
+        str(report),
+    ]
     if handoff is not None:
         command.extend(["--launcher-handoff", str(handoff)])
     return subprocess.run(

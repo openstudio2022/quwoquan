@@ -18,6 +18,7 @@ from quwoquan_ops.cli.lib import provider_conformance
 from quwoquan_ops.cli.prod import collect_mainline_image_descriptors as image_collector
 from quwoquan_ops.cli.prod import collect_release_artifact_descriptors as evidence_collector
 from quwoquan_ops.cli.prod import finalize_mainline_release_artifact as finalizer
+from quwoquan_ops.cli.lib.app_identity import resolve_build_product
 from quwoquan_ops.tests.support.app_artifact_manifest_test_support import (
     app_artifact_manifest,
 )
@@ -84,11 +85,12 @@ class ReleaseEvidenceManifestFixtureMixin:
                         "images": {
                             "content-service": {
                                 "repository": (
-                                    "ghcr.io/owner/repo/content-service-" + environment
+                                    "ghcr.io/owner/repo/content-service-"
+                                    + ("prod" if environment == "prod" else "nonprod")
                                 ),
                                 "transportRef": (
                                     "ghcr.io/owner/repo/content-service-"
-                                    + environment
+                                    + ("prod" if environment == "prod" else "nonprod")
                                     + ":sha-"
                                     + ("b" * 40)
                                 ),
@@ -98,9 +100,8 @@ class ReleaseEvidenceManifestFixtureMixin:
                     }
                     for environment in finalizer.ENVIRONMENTS
                 },
-                "applicationPackages": {
-                    environment: {} for environment in finalizer.ENVIRONMENTS
-                },
+                "applicationPackages": {},
+                "opsPortal": None,
                 "contractGraphDigest": None,
                 "requiredEvidence": {
                     "environmentArtifacts": {
@@ -111,10 +112,8 @@ class ReleaseEvidenceManifestFixtureMixin:
                         environment: ["content-service"]
                         for environment in finalizer.ENVIRONMENTS
                     },
-                    "applicationPackages": {
-                        environment: list(finalizer.APPLICATION_PACKAGES[environment])
-                        for environment in finalizer.ENVIRONMENTS
-                    },
+                    "applicationPackages": list(finalizer.APPLICATION_PACKAGES),
+                    "opsPortal": True,
                     "contractGraphDigest": True,
                     "providerEvidence": True,
                     "testEvidence": list(finalizer.TEST_LAYERS),
@@ -137,10 +136,10 @@ class ReleaseEvidenceManifestFixtureMixin:
                         for environment in finalizer.ENVIRONMENTS
                     ),
                     *(
-                        f"applicationPackages.{environment}.{surface}"
-                        for environment in finalizer.ENVIRONMENTS
-                        for surface in finalizer.APPLICATION_PACKAGES[environment]
+                        f"applicationPackages.{build_product_id}"
+                        for build_product_id in finalizer.APPLICATION_PACKAGES
                     ),
+                    "opsPortal",
                     "contractGraphDigest",
                     "providerEvidence",
                     "testEvidence",
@@ -157,9 +156,7 @@ class ReleaseEvidenceManifestFixtureMixin:
 
     def _evidence_sources(self, root: Path) -> dict[str, Path]:
         payloads = self._application_package_payloads(root)
-        web_payload = payloads / "prod/web"
-        android_payload = payloads / "prod/android"
-        portal_payload = payloads / "prod/opsPortal"
+        portal_payload = payloads / "opsPortal"
         manifest = json.loads(
             (root / "release/manifest.json").read_text(encoding="utf-8")
         )
@@ -235,16 +232,6 @@ class ReleaseEvidenceManifestFixtureMixin:
                     "schema": "client-app.web.official-release",
                     "sourceGitSha": source["gitSha"],
                     "sourceTreeDigest": source["treeDigest"],
-                    "contentSHA256": finalizer.sha256_tree(web_payload).removeprefix(
-                        "sha256:"
-                    ),
-                    "artifactManifest": app_artifact_manifest(
-                        environment="prod",
-                        surface="web",
-                        source_git_sha=source["gitSha"],
-                        source_tree_digest=source["treeDigest"],
-                        artifact_digest=finalizer.sha256_tree(web_payload),
-                    ),
                 },
             ),
             "androidOfficialRelease": self._write_json(
@@ -253,19 +240,6 @@ class ReleaseEvidenceManifestFixtureMixin:
                     "schema": "client-app.android.official-release",
                     "sourceGitSha": source["gitSha"],
                     "sourceTreeDigest": source["treeDigest"],
-                    "packagedAPK": "quwoquan.apk",
-                    "apkSHA256": finalizer.sha256_file(
-                        android_payload / "quwoquan.apk"
-                    ).removeprefix("sha256:"),
-                    "artifactManifest": app_artifact_manifest(
-                        environment="prod",
-                        surface="android",
-                        source_git_sha=source["gitSha"],
-                        source_tree_digest=source["treeDigest"],
-                        artifact_digest=finalizer.sha256_file(
-                            android_payload / "quwoquan.apk"
-                        ),
-                    ),
                 },
             ),
             "opsPortal": self._write_json(
@@ -347,29 +321,12 @@ class ReleaseEvidenceManifestFixtureMixin:
         application_sources = self._application_package_sources(
             root, root / "release"
         )
-        special_sources = {
-            target: artifact_id
-            for artifact_id, target in evidence_collector.APPLICATION_SOURCE_TARGETS.items()
+        application_material = {
+            build_product_id: finalizer.application_package_digest(
+                json.loads(source_path.read_text(encoding="utf-8"))
+            )
+            for build_product_id, source_path in application_sources.items()
         }
-        application_material: dict[str, dict[str, str]] = {
-            environment: {} for environment in finalizer.ENVIRONMENTS
-        }
-        for environment in finalizer.ENVIRONMENTS:
-            for surface in finalizer.APPLICATION_PACKAGES[environment]:
-                key = (environment, surface)
-                artifact_id = special_sources.get(key)
-                source_path = (
-                    sources[artifact_id]
-                    if artifact_id is not None
-                    else application_sources[key]
-                )
-                application_material[environment][surface] = (
-                    finalizer.application_package_digest(
-                        json.loads(source_path.read_text(encoding="utf-8")),
-                        environment=environment,
-                        surface=surface,
-                    )
-                )
         test_payload = json.loads(sources["testEvidence"].read_text(encoding="utf-8"))
         test_payload["layers"]["user_acceptance"]["candidateMaterial"] = {
             "environmentArtifacts": {
@@ -393,6 +350,9 @@ class ReleaseEvidenceManifestFixtureMixin:
                 ].items()
             },
             "applicationPackages": application_material,
+            "opsPortal": finalizer.application_package_digest(
+                json.loads(sources["opsPortal"].read_text(encoding="utf-8"))
+            ),
             "contractGraphDigest": finalizer.sha256_file(contract_graph),
         }
         self._write_json(sources["testEvidence"], test_payload)
@@ -400,22 +360,14 @@ class ReleaseEvidenceManifestFixtureMixin:
 
     def _application_package_payloads(self, root: Path) -> Path:
         payloads = root / "application-payloads"
-        for environment in finalizer.ENVIRONMENTS:
-            for surface in finalizer.APPLICATION_PACKAGES[environment]:
-                package = payloads / environment / surface
-                package.mkdir(parents=True, exist_ok=True)
-                if environment == "prod" and surface == "android":
-                    (package / "quwoquan.apk").write_bytes(b"signed-apk")
-                elif environment == "prod" and surface == "opsPortal":
-                    self._write_json(package / "manifest.json", {"name": "ops"})
-                    (package / "dist").mkdir(exist_ok=True)
-                    (package / "dist/index.html").write_text(
-                        "ops portal", encoding="utf-8"
-                    )
-                else:
-                    (package / "payload.bin").write_bytes(
-                        f"{environment}/{surface}".encode("utf-8")
-                    )
+        for build_product_id in finalizer.APPLICATION_PACKAGES:
+            package = payloads / build_product_id
+            package.mkdir(parents=True, exist_ok=True)
+            (package / "payload.bin").write_bytes(build_product_id.encode("utf-8"))
+        portal = payloads / "opsPortal"
+        self._write_json(portal / "manifest.json", {"name": "ops"})
+        (portal / "dist").mkdir(exist_ok=True)
+        (portal / "dist/index.html").write_text("ops portal", encoding="utf-8")
         return payloads
 
     def _receipt(
@@ -473,30 +425,30 @@ class ReleaseEvidenceManifestFixtureMixin:
 
     def _application_package_sources(
         self, root: Path, artifact: Path
-    ) -> dict[tuple[str, str], Path]:
+    ) -> dict[str, Path]:
         manifest = json.loads(
             (artifact / "manifest.json").read_text(encoding="utf-8")
         )
         source = manifest["source"]
         payloads = self._application_package_payloads(root)
-        result: dict[tuple[str, str], Path] = {}
-        for environment, surface in sorted(
-            evidence_collector.GENERIC_APPLICATION_KEYS
-        ):
-            result[(environment, surface)] = self._write_json(
-                root / "application-sources" / f"{environment}--{surface}.json",
+        result: dict[str, Path] = {}
+        for build_product_id in sorted(evidence_collector.GENERIC_APPLICATION_KEYS):
+            package_digest = finalizer.sha256_tree(
+                payloads / build_product_id
+            )
+            product = resolve_build_product(build_product_id)
+            result[build_product_id] = self._write_json(
+                root / "application-sources" / f"{build_product_id}.json",
                 {
                     "schema": evidence_collector.GENERIC_APPLICATION_SCHEMA,
-                    "environment": environment,
-                    "surface": surface,
+                    "buildProductId": build_product_id,
+                    "buildProfile": product.build_profile,
+                    "platform": product.platform,
                     "sourceGitSha": source["gitSha"],
                     "sourceTreeDigest": source["treeDigest"],
-                    "packageDigest": (package_digest := finalizer.sha256_tree(
-                        payloads / environment / surface
-                    )),
+                    "packageDigest": package_digest,
                     "artifactManifest": app_artifact_manifest(
-                        environment=environment,
-                        surface=surface,
+                        build_product_id=build_product_id,
                         source_git_sha=source["gitSha"],
                         source_tree_digest=source["treeDigest"],
                         artifact_digest=package_digest,
@@ -508,13 +460,19 @@ class ReleaseEvidenceManifestFixtureMixin:
     def _candidate_manifest(self, root: Path) -> tuple[Path, dict[str, object]]:
         artifact = self._build_input(root)
         image_descriptors = root / "image-descriptors"
+
+        def resolve_digest(ref: str) -> str:
+            return (
+                f"sha256:{2:064x}"
+                if "-prod:" in ref
+                else f"sha256:{1:064x}"
+            )
+
         with (
             mock.patch.object(
                 image_collector,
                 "resolve_registry_digest",
-                side_effect=(
-                    f"sha256:{index:064x}" for index in range(1, 5)
-                ),
+                side_effect=resolve_digest,
             ),
             mock.patch.object(image_collector, "verify_oci_supply_chain"),
         ):

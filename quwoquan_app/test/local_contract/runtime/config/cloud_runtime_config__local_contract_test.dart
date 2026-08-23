@@ -1,371 +1,469 @@
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart' as crypto;
+import 'package:cryptography/cryptography.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
 import 'package:quwoquan_app/runtime/config/runtime_package_resolver.dart';
-import 'package:quwoquan_app/runtime/errors/generated/ops/ops_event_record_errors.g.dart';
-import 'package:quwoquan_runtime_errors/runtime_errors.dart';
+import 'package:quwoquan_app/runtime/platform/native_runtime_config_bridge.dart';
 
-Map<String, String> _nativeRuntimePackageFor(String environment) {
-  return <String, String>{
-    'APP_RUNTIME_ENV': environment,
-    'CLOUD_GATEWAY_BASE_URL': 'https://api.$environment.example.test',
-    'REALTIME_CONNECTION_URL': 'wss://api.$environment.example.test',
-    'PUBLIC_WEB_BASE_URL': 'https://www.$environment.example.test',
-    'APP_DOWNLOAD_BASE_URL': 'https://cdn.$environment.example.test/download',
-    'APP_LEGAL_BASE_URL': 'https://www.$environment.example.test/legal',
-    'MEDIA_AVATAR_CDN_BASE_URL':
-        'https://cdn.$environment.example.test/media/avatar',
-    'MEDIA_IMAGE_CDN_BASE_URL':
-        'https://cdn.$environment.example.test/media/image',
-    'MEDIA_VIDEO_CDN_BASE_URL':
-        'https://cdn.$environment.example.test/media/video',
-    'MEDIA_UPLOAD_BASE_URL': 'https://upload.$environment.example.test',
-    'RTC_MEDIA_CONNECTION_URL': 'wss://rtc.$environment.example.test',
-    'QWQ_APP_LAUNCH_MODE': 'stackctl_$environment',
-    'APP_LAUNCH_POLICY': 'test_live',
+const _now = '2026-08-22T12:00:00Z';
+
+Future<Map<String, Object?>> _signedPackage({
+  String environment = 'gamma',
+  String buildProfile = 'nonprod',
+  String target = 'gamma-local',
+  String launchPolicy = runtimePackageTestLiveLaunchPolicy,
+  bool deriveLaunchPolicy = false,
+  String issuedAt = '2026-08-22T11:55:00Z',
+  String expiresAt = '2026-08-22T13:00:00Z',
+  Map<String, String>? runtime,
+  SimpleKeyPair? signingKey,
+  String signatureKeyId = 'nonprod-2026-01',
+  String trustedKeyId = 'nonprod-2026-01',
+}) async {
+  final algorithm = Ed25519();
+  final keyPair = signingKey ?? await algorithm.newKeyPair();
+  final publicKey = await keyPair.extractPublicKey();
+  final trustedPublicKeys = <String, String>{
+    trustedKeyId: base64.encode(publicKey.bytes),
+  };
+  final payload = <String, Object?>{
+    'buildProfile': buildProfile,
+    'environment': environment,
+    'expiresAt': expiresAt,
+    'issuedAt': issuedAt,
+    'launchPolicy': deriveLaunchPolicy
+        ? '${environment}_release'
+        : launchPolicy,
+    'payloadDigest': '',
+    'runtime': runtime ?? _runtimeValues(environment),
+    'schema': runtimePackageSchema,
+    'schemaVersion': runtimePackageSchemaVersion,
+    'signatureAlgorithm': 'ed25519',
+    'signatureKeyId': signatureKeyId,
+    'sourceGitSha': 'a' * 40,
+    'sourceTreeDigest': 'sha256:${'b' * 64}',
+    'target': target,
+    'trustedPublicKeys': trustedPublicKeys,
+  };
+  final digest = crypto.sha256
+      .convert(utf8.encode(canonicalJsonEncode(payload)))
+      .toString();
+  payload['payloadDigest'] = 'sha256:$digest';
+  final signature = await algorithm.sign(
+    utf8.encode(canonicalJsonEncode(payload)),
+    keyPair: keyPair,
+  );
+  final runtimePackage = <String, Object?>{
+    ...payload,
+    'signature': base64.encode(signature.bytes),
+  };
+  final trustDocument = <String, Object?>{
+    'buildProfile': buildProfile,
+    'schema': 'app-runtime-config-trust',
+    'schemaVersion': runtimePackageSchemaVersion,
+    'signatureAlgorithm': 'ed25519',
+    'trustedPublicKeys': trustedPublicKeys,
+  };
+  return <String, Object?>{
+    'package': runtimePackage,
+    'trustedBuildProfile': buildProfile,
+    'trustedTarget': target,
+    'trustedPublicKeys': trustedPublicKeys,
+    'runtimeConfigPackageDigest':
+        'sha256:${crypto.sha256.convert(utf8.encode(canonicalJsonEncode(runtimePackage)))}',
+    'runtimeConfigTrustEnvelopeDigest':
+        'sha256:${crypto.sha256.convert(utf8.encode(canonicalJsonEncode(trustDocument)))}',
+    'effectiveLaunchManifestDigest': 'sha256:${'c' * 64}',
   };
 }
 
-ResolvedRuntimePackage _resolveRuntimePackage(
-  Map<String, String> nativeRuntimePackage, {
-  Map<String, String> compiledRuntimePackage = const <String, String>{},
-  bool nativeRuntimePackageHydrated = true,
-  bool enforceNativeLaunchBinding = true,
-}) {
-  return RuntimePackageResolver.resolve(
-    compiledPackage: compiledRuntimePackage,
-    nativeValues: nativeRuntimePackage,
-    nativeRuntimePackageHydrated: nativeRuntimePackageHydrated,
-    enforceNativeLaunchBinding: enforceNativeLaunchBinding,
-  );
+Map<String, String> _runtimeValues(String environment) => <String, String>{
+  'appRuntimeEnv': environment,
+  'gatewayBaseUrl': 'https://api.example.test',
+  'legalBaseUrl': 'https://www.example.test/legal',
+  'publicWebBaseUrl': 'https://www.example.test',
+  'appDownloadBaseUrl': 'https://cdn.example.test/download',
+  'realtimeBaseUrl': 'wss://api.example.test',
+  'mediaAvatarCdnBaseUrl': 'https://cdn.example.test/media/avatar',
+  'mediaImageCdnBaseUrl': 'https://cdn.example.test/media/image',
+  'mediaVideoCdnBaseUrl': 'https://cdn.example.test/media/video',
+  'mediaUploadBaseUrl': 'https://upload.example.test',
+  'rtcMediaConnectionUrl': 'wss://rtc.example.test',
+};
+
+RuntimePackageResolver _resolver() =>
+    RuntimePackageResolver(now: () => DateTime.parse(_now));
+
+final class _EnvelopeClient implements RuntimeConfigChannelClient {
+  const _EnvelopeClient(this.envelope);
+
+  final Map<String, Object?> envelope;
+
+  @override
+  Future<Object?> invokeMethod(String method) async => envelope;
 }
 
+Future<ResolvedRuntimePackage> _resolve(
+  Map<String, Object?> trustEnvelope, {
+  String target = 'gamma-local',
+  String trustedBuildProfile = 'nonprod',
+}) => _resolver().resolve(
+  runtimePackage: Map<String, Object?>.from(trustEnvelope['package']! as Map),
+  expectedTarget: target,
+  trustedBuildProfile: trustedBuildProfile,
+  trustedPublicKeys: Map<String, String>.from(
+    trustEnvelope['trustedPublicKeys']! as Map,
+  ),
+);
+
 void main() {
-  group('CloudRuntimeConfig environment package', () {
-    test('裸 Flutter Debug 从 native manifest 恢复 canonical Alpha 包', () {
-      final resolution = _resolveRuntimePackage(const <String, String>{
-        'APP_RUNTIME_ENV': 'alpha',
-        'CLOUD_GATEWAY_BASE_URL': 'https://api.example.test',
-        'REALTIME_CONNECTION_URL': 'wss://api.example.test',
-        'PUBLIC_WEB_BASE_URL': 'https://example.test',
-        'APP_DOWNLOAD_BASE_URL': 'https://cdn.example.test/download',
-        'APP_LEGAL_BASE_URL': 'https://example.test/legal',
-        'MEDIA_AVATAR_CDN_BASE_URL': 'https://cdn.example.test/media/avatar',
-        'MEDIA_IMAGE_CDN_BASE_URL': 'https://cdn.example.test/media/image',
-        'MEDIA_VIDEO_CDN_BASE_URL': 'https://cdn.example.test/media/video',
-        'MEDIA_UPLOAD_BASE_URL': 'https://upload.example.test',
-        'RTC_MEDIA_CONNECTION_URL': 'wss://rtc.example.test',
-        'QWQ_APP_LAUNCH_MODE': 'direct_flutter_run',
-        'APP_LAUNCH_POLICY': 'test_live',
-        'launchTarget': 'alpha-local',
-        'effectiveLaunchManifestDigest': 'sha256:3333333333333333333333333333333333333333333333333333333333333333',
-      });
+  test('合法 Ed25519 runtime package 通过并成为唯一配置来源', () async {
+    final resolved = await _resolve(await _signedPackage());
 
-      expect(resolution.source, RuntimePackageSource.native);
-      expect(resolution.shouldLoadNativeRuntimePackage, isTrue);
-      expect(resolution.appRuntimeEnv, 'alpha');
-      expect(resolution.launchMode, 'direct_flutter_run');
-      expect(resolution.runtimeDefineSummary['configurationState'], 'complete');
-      expect(resolution.missingRequiredDefineKeys, isEmpty);
-      expect(
-        resolution.runtimeDefineSummary,
-        isNot(contains('contentBindingState')),
-      );
-    });
-
-    test('runtime package 未水合或无效时业务请求得到 typed unavailable', () {
-      final pending = CloudRuntimeConfig.runtimeAvailabilityFailure();
-      expect(pending, isNotNull);
-      expect(pending!.kind, RuntimeFailureKind.unavailable);
-      expect(
-        pending.code,
-        OpsEventRecordErrorCode.startupConfigurationInvalid.code,
-      );
-      expect(pending.recovery.action, 'retry');
-
-      CloudRuntimeConfig.hydrateFromNativeRuntimePackage(<String, String>{
-        ..._nativeRuntimePackageFor('alpha'),
-        'CLOUD_GATEWAY_BASE_URL': '',
-      });
-      final invalid = CloudRuntimeConfig.runtimeAvailabilityFailure();
-      expect(invalid, isNotNull);
-      expect(invalid!.kind, RuntimeFailureKind.unavailable);
-      expect(
-        invalid.context.attributes.any(
-          (attribute) =>
-              attribute.key == 'configurationState' &&
-              attribute.value == 'invalid',
-        ),
-        isTrue,
-      );
-
-      CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
-        _nativeRuntimePackageFor('alpha'),
-      );
-      expect(CloudRuntimeConfig.runtimeAvailabilityFailure(), isNull);
-    });
-
-    test('runtime package 重新带入内容激活身份时拒绝启动', () {
-      final resolution = _resolveRuntimePackage(<String, String>{
-        ..._nativeRuntimePackageFor('alpha'),
-        'CONTENT_BINDING_STATE': 'bound',
-        'contentReleaseId': 'release-alpha',
-        'contentManifestDigest': 'sha256:1111111111111111111111111111111111111111111111111111111111111111',
-        'contentReadinessReceiptDigest': 'sha256:2222222222222222222222222222222222222222222222222222222222222222',
-      });
-
-      expect(
-        resolution.missingRequiredDefineKeys,
-        containsAll(<String>[
-          'CONTENT_BINDING_STATE',
-          'contentReleaseId',
-          'contentManifestDigest',
-          'contentReadinessReceiptDigest',
-        ]),
-      );
-      expect(
-        resolution.runtimeDefineSummary,
-        isNot(contains('contentReleaseId')),
-      );
-    });
-
-    test('裸 direct Flutter Debug 未绑定内容时进入 no_active_release 安全壳', () {
-      final resolution = _resolveRuntimePackage(<String, String>{
-        ..._nativeRuntimePackageFor('alpha'),
-        'QWQ_APP_LAUNCH_MODE': 'direct_flutter_run',
-      });
-
-      expect(resolution.missingRequiredDefineKeys, isEmpty);
-    });
-
-    test('canonical ui-only 未绑定内容仍可进入 Remote no_active_release 终态', () {
-      final resolution = _resolveRuntimePackage(<String, String>{
-        ..._nativeRuntimePackageFor('alpha'),
-        'QWQ_APP_LAUNCH_MODE': 'canonical_launcher',
-      });
-
-      expect(resolution.missingRequiredDefineKeys, isEmpty);
-    });
-
-    test('Prod runtime package 只要求 launch identity，不要求内容 identity', () {
-      final resolution = _resolveRuntimePackage(<String, String>{
-        ..._nativeRuntimePackageFor('prod'),
-        'APP_LAUNCH_POLICY': CloudRuntimeConfig.prodReleaseLaunchPolicy,
-        'launchTarget': 'prod-hosted',
-        'effectiveLaunchManifestDigest': 'sha256:3333333333333333333333333333333333333333333333333333333333333333',
-      });
-
-      expect(resolution.missingRequiredDefineKeys, isEmpty);
-      expect(resolution.runtimeDefineSummary['configurationState'], 'complete');
-    });
-
-    test('Prod launch policy 缺少 launch identity 时仍 fail-closed', () {
-      final resolution = _resolveRuntimePackage(<String, String>{
-        ..._nativeRuntimePackageFor('prod'),
-        'APP_LAUNCH_POLICY': CloudRuntimeConfig.prodReleaseLaunchPolicy,
-      });
-
-      expect(
-        resolution.missingRequiredDefineKeys,
-        containsAll(<String>['launchTarget', 'effectiveLaunchManifestDigest']),
-      );
-    });
-
-    test('不具备 native launch binding 的平台不伪造 release 绑定要求', () {
-      final resolution = _resolveRuntimePackage(<String, String>{
-        ..._nativeRuntimePackageFor('alpha'),
-        'QWQ_APP_LAUNCH_MODE': 'direct_flutter_run',
-      }, enforceNativeLaunchBinding: false);
-
-      expect(resolution.missingRequiredDefineKeys, isEmpty);
-    });
-
-    test('Alpha、Beta、Gamma native 包不会混合 endpoint 或启动上下文', () {
-      for (final environment in <String>['alpha', 'beta', 'gamma']) {
-        final resolution = _resolveRuntimePackage(
-          _nativeRuntimePackageFor(environment),
-        );
-
-        expect(resolution.appRuntimeEnv, environment);
-        expect(
-          resolution.gatewayBaseUrl,
-          'https://api.$environment.example.test',
-        );
-        expect(
-          resolution.mediaUploadBaseUrl,
-          'https://upload.$environment.example.test',
-        );
-        expect(resolution.launchMode, 'stackctl_$environment');
-        expect(resolution.missingRequiredDefineKeys, isEmpty);
-      }
-    });
-
-    test('guarded compile-time 包优先且 native 漂移不会被测试后门隐藏', () {
-      final compiled = _nativeRuntimePackageFor('alpha');
-      final resolution = _resolveRuntimePackage(
-        _nativeRuntimePackageFor('beta'),
-        compiledRuntimePackage: compiled,
-      );
-
-      expect(resolution.source, RuntimePackageSource.compileTime);
-      expect(resolution.appRuntimeEnv, 'alpha');
-      expect(
-        resolution.missingRequiredDefineKeys,
-        contains('NATIVE_RUNTIME_PACKAGE.APP_RUNTIME_ENV'),
-      );
-    });
-
-    test('部分 compile-time 包保持 fail-closed，不从完整 native 包补键', () {
-      final resolution = _resolveRuntimePackage(
-        _nativeRuntimePackageFor('alpha'),
-        compiledRuntimePackage: const <String, String>{
-          'APP_RUNTIME_ENV': 'alpha',
-        },
-      );
-
-      expect(resolution.source, RuntimePackageSource.compileTime);
-      expect(resolution.gatewayBaseUrl, isEmpty);
-      expect(
-        resolution.missingRequiredDefineKeys,
-        contains('CLOUD_GATEWAY_BASE_URL'),
-      );
-    });
-
-    test('完整业务 endpoint 包通过且只要求 canonical telemetry endpoint', () {
-      expect(
-        () => CloudRuntimeConfig.validateRuntimePackage(
-          runtimeEnv: 'gamma',
-          gatewayBaseUrl: 'https://api.example.test',
-          realtimeConnectionUrl: 'wss://api.example.test',
-          publicWebBaseUrl: 'https://example.test',
-          appDownloadBaseUrl: 'https://cdn.example.test/download',
-          legalBaseUrl: 'https://example.test/legal',
-          mediaAvatarCdnBaseUrl: 'https://cdn.example.test/media/avatar',
-          mediaImageCdnBaseUrl: 'https://cdn.example.test/media/image',
-          mediaVideoCdnBaseUrl: 'https://cdn.example.test/media/video',
-          mediaUploadBaseUrl: 'https://upload.example.test',
-          rtcMediaConnectionUrl: 'wss://rtc.example.test',
-        ),
-        returnsNormally,
-      );
-    });
-
-    test('环境名或业务 endpoint 缺失时 fail-closed', () {
-      expect(
-        () => CloudRuntimeConfig.validateRuntimePackage(
-          runtimeEnv: 'staging',
-          gatewayBaseUrl: '',
-          realtimeConnectionUrl: 'wss://api.example.test',
-          publicWebBaseUrl: 'https://example.test',
-          appDownloadBaseUrl: 'https://cdn.example.test/download',
-          legalBaseUrl: 'https://example.test/legal',
-          mediaAvatarCdnBaseUrl: 'https://cdn.example.test/media/avatar',
-          mediaImageCdnBaseUrl: 'https://cdn.example.test/media/image',
-          mediaVideoCdnBaseUrl: 'https://cdn.example.test/media/video',
-          mediaUploadBaseUrl: 'https://upload.example.test',
-          rtcMediaConnectionUrl: 'wss://rtc.example.test',
-        ),
-        throwsA(
-          isA<CloudRuntimeConfigurationException>().having(
-            (error) => error.invalidKeys,
-            'invalidKeys',
-            allOf(
-              contains('APP_RUNTIME_ENV'),
-              contains('CLOUD_GATEWAY_BASE_URL'),
-            ),
-          ),
-        ),
-      );
-    });
-
-    test('非 HTTPS 或带 query 的业务 endpoint 被拒绝', () {
-      expect(
-        () => CloudRuntimeConfig.validateRuntimePackage(
-          runtimeEnv: 'beta',
-          gatewayBaseUrl: 'http://api.example.test',
-          realtimeConnectionUrl: 'wss://api.example.test',
-          publicWebBaseUrl: 'https://example.test',
-          appDownloadBaseUrl: 'https://cdn.example.test/download',
-          legalBaseUrl: 'https://example.test/legal',
-          mediaAvatarCdnBaseUrl:
-              'https://cdn.example.test/media/avatar?size=small',
-          mediaImageCdnBaseUrl: 'https://cdn.example.test/media/image',
-          mediaVideoCdnBaseUrl: 'https://cdn.example.test/media/video',
-          mediaUploadBaseUrl: 'https://upload.example.test',
-          rtcMediaConnectionUrl: 'wss://rtc.example.test',
-        ),
-        throwsA(isA<CloudRuntimeConfigurationException>()),
-      );
-    });
-
-    test('RTC endpoint 缺失时返回配置错误而非固定列表异常', () {
-      expect(
-        () => CloudRuntimeConfig.validateRuntimePackage(
-          runtimeEnv: 'beta',
-          gatewayBaseUrl: 'https://api.example.test',
-          realtimeConnectionUrl: 'wss://api.example.test',
-          publicWebBaseUrl: 'https://example.test',
-          appDownloadBaseUrl: 'https://cdn.example.test/download',
-          legalBaseUrl: 'https://example.test/legal',
-          mediaAvatarCdnBaseUrl: 'https://cdn.example.test/media/avatar',
-          mediaImageCdnBaseUrl: 'https://cdn.example.test/media/image',
-          mediaVideoCdnBaseUrl: 'https://cdn.example.test/media/video',
-          mediaUploadBaseUrl: 'https://upload.example.test',
-          rtcMediaConnectionUrl: '',
-        ),
-        throwsA(
-          isA<CloudRuntimeConfigurationException>().having(
-            (error) => error.invalidKeys,
-            'invalidKeys',
-            contains('RTC_MEDIA_CONNECTION_URL'),
-          ),
-        ),
-      );
-    });
-
-    test('媒体、Legal、下载和上传 role 发生 authority/path 串用时拒绝启动', () {
-      expect(
-        () => CloudRuntimeConfig.validateRuntimePackage(
-          runtimeEnv: 'gamma',
-          gatewayBaseUrl: 'https://api.example.test',
-          realtimeConnectionUrl: 'wss://api.example.test',
-          publicWebBaseUrl: 'https://example.test',
-          appDownloadBaseUrl: 'https://example.test/download',
-          legalBaseUrl: 'https://api.example.test/legal',
-          mediaAvatarCdnBaseUrl: 'https://cdn.example.test/media/image',
-          mediaImageCdnBaseUrl: 'https://cdn.example.test/media/image',
-          mediaVideoCdnBaseUrl: 'https://cdn.example.test/media/video',
-          mediaUploadBaseUrl: 'https://cdn.example.test',
-          rtcMediaConnectionUrl: 'wss://rtc.example.test',
-        ),
-        throwsA(
-          isA<CloudRuntimeConfigurationException>().having(
-            (error) => error.invalidKeys,
-            'invalidKeys',
-            containsAll(<String>[
-              'APP_LEGAL_BASE_URL',
-              'APP_DOWNLOAD_BASE_URL',
-              'MEDIA_AVATAR_CDN_BASE_URL',
-              'MEDIA_UPLOAD_BASE_URL',
+    expect(resolved.environment, 'gamma');
+    expect(resolved.buildProfile, 'nonprod');
+    expect(resolved.runtimeValue('gatewayBaseUrl'), 'https://api.example.test');
+    expect(
+      resolved.runtimeDefineSummary['configurationSource'],
+      'signed-runtime-package',
+    );
+    expect(
+      resolved.runtimeDefineSummary.values,
+      isNot(contains('https://api.example.test')),
+    );
+    expect(
+      () => resolved.runtimeValue('unknownRuntimeKey'),
+      throwsA(
+        isA<RuntimePackageValidationException>()
+            .having((error) => error.reason, 'reason', 'runtime-value-missing')
+            .having((error) => error.invalidKeys, 'invalidKeys', <String>[
+              'unknownRuntimeKey',
             ]),
+      ),
+    );
+  });
+
+  test('篡改 payload 在 digest 校验处 fail closed', () async {
+    final package = await _signedPackage();
+    final payload = package['package']! as Map<String, Object?>;
+    final runtime = Map<String, String>.from(payload['runtime']! as Map)
+      ..['gatewayBaseUrl'] = 'https://tampered.example.test';
+    payload['runtime'] = runtime;
+
+    await expectLater(
+      _resolve(package),
+      throwsA(
+        isA<RuntimePackageValidationException>().having(
+          (error) => error.invalidKeys,
+          'invalidKeys',
+          equals(<String>['payloadDigest']),
+        ),
+      ),
+    );
+  });
+
+  test('错误 key id 与错误签名均拒绝', () async {
+    final unknownKey = await _signedPackage(signatureKeyId: 'unknown');
+    await expectLater(
+      _resolve(unknownKey),
+      throwsA(
+        isA<RuntimePackageValidationException>().having(
+          (error) => error.invalidKeys,
+          'invalidKeys',
+          equals(<String>['signatureKeyId']),
+        ),
+      ),
+    );
+
+    final package = await _signedPackage();
+    final payload = package['package']! as Map<String, Object?>;
+    final signatureBytes = base64.decode(payload['signature']! as String);
+    signatureBytes[0] ^= 1;
+    payload['signature'] = base64.encode(signatureBytes);
+    await expectLater(
+      _resolve(package),
+      throwsA(
+        isA<RuntimePackageValidationException>().having(
+          (error) => error.invalidKeys,
+          'invalidKeys',
+          equals(<String>['signature']),
+        ),
+      ),
+    );
+  });
+
+  test('package 自带 keyring 不能替代独立信任根', () async {
+    final package = await _signedPackage();
+    final wrongKey = await Ed25519().newKeyPair();
+    final wrongPublicKey = await wrongKey.extractPublicKey();
+
+    await expectLater(
+      _resolver().resolve(
+        runtimePackage: Map<String, Object?>.from(package['package']! as Map),
+        expectedTarget: 'gamma-local',
+        trustedBuildProfile: 'nonprod',
+        trustedPublicKeys: <String, String>{
+          'nonprod-2026-01': base64.encode(wrongPublicKey.bytes),
+        },
+      ),
+      throwsA(
+        isA<RuntimePackageValidationException>().having(
+          (error) => error.invalidKeys,
+          'invalidKeys',
+          equals(<String>['trustedPublicKeys']),
+        ),
+      ),
+    );
+  });
+
+  test('过期、未来签发与过长 freshness 均拒绝', () async {
+    for (final testCase in <Map<String, String>>[
+      <String, String>{
+        'issuedAt': '2026-08-22T10:00:00Z',
+        'expiresAt': '2026-08-22T11:59:59Z',
+        'invalid': 'expiresAt',
+      },
+      <String, String>{
+        'issuedAt': '2026-08-22T12:06:00Z',
+        'expiresAt': '2026-08-22T13:00:00Z',
+        'invalid': 'issuedAt',
+      },
+      <String, String>{
+        'issuedAt': '2026-08-21T00:00:00Z',
+        'expiresAt': '2026-08-23T00:00:00Z',
+        'invalid': 'expiresAt',
+      },
+    ]) {
+      await expectLater(
+        _resolve(
+          await _signedPackage(
+            issuedAt: testCase['issuedAt']!,
+            expiresAt: testCase['expiresAt']!,
+          ),
+        ),
+        throwsA(
+          isA<RuntimePackageValidationException>().having(
+            (error) => error.invalidKeys,
+            'invalidKeys',
+            contains(testCase['invalid']),
           ),
         ),
       );
-    });
+    }
+  });
 
-    test('配置摘要只暴露环境、入口和缺失键，不暴露 endpoint', () {
-      final summary = _resolveRuntimePackage(_nativeRuntimePackageFor('alpha'))
-          .runtimeDefineSummary;
+  test('schema、target 与 profile trust domain 不一致时拒绝', () async {
+    final schemaMismatch = await _signedPackage();
+    (schemaMismatch['package']! as Map<String, Object?>)['schemaVersion'] =
+        '99';
+    await expectLater(
+      _resolve(schemaMismatch),
+      throwsA(
+        isA<RuntimePackageValidationException>().having(
+          (error) => error.invalidKeys,
+          'invalidKeys',
+          contains('schemaVersion'),
+        ),
+      ),
+    );
 
-      expect(
-        summary.keys,
-        containsAll(<String>[
-          'runtimeEnv',
-          'launchMode',
-          'configurationState',
-          'missingKeys',
-        ]),
+    await expectLater(
+      _resolve(await _signedPackage(target: 'alpha-local')),
+      throwsA(
+        isA<RuntimePackageValidationException>().having(
+          (error) => error.invalidKeys,
+          'invalidKeys',
+          containsAll(<String>['target', 'environment']),
+        ),
+      ),
+    );
+
+    await expectLater(
+      _resolve(
+        await _signedPackage(
+          environment: 'prod',
+          buildProfile: 'nonprod',
+          target: 'prod-hosted',
+          deriveLaunchPolicy: true,
+          runtime: _runtimeValues('prod'),
+        ),
+      ),
+      throwsA(
+        isA<RuntimePackageValidationException>().having(
+          (error) => error.invalidKeys,
+          'invalidKeys',
+          containsAll(<String>['environment', 'buildProfile']),
+        ),
+      ),
+    );
+  });
+
+  test('gray、channel、内容 release 与 secret 键只暴露键名后拒绝', () async {
+    for (final forbiddenKey in <String>[
+      'grayStage',
+      'channel',
+      'contentReleaseId',
+      'apiSecret',
+    ]) {
+      final runtime = <String, String>{
+        ..._runtimeValues('gamma'),
+        forbiddenKey: 'do-not-expose-this-value',
+      };
+      await expectLater(
+        _resolve(await _signedPackage(runtime: runtime)),
+        throwsA(
+          isA<RuntimePackageValidationException>()
+              .having(
+                (error) => error.invalidKeys,
+                'invalidKeys',
+                contains(forbiddenKey),
+              )
+              .having(
+                (error) => error.toString(),
+                'redacted',
+                isNot(contains('do-not-expose-this-value')),
+              ),
+        ),
       );
-      expect(summary.values, everyElement(isA<String>()));
-    });
+    }
+  });
+
+  test('宿主 trust envelope 只接受精确字段且 keyring 必须是严格 Ed25519 公钥', () async {
+    final extraFieldEnvelope = await _signedPackage();
+    extraFieldEnvelope['unexpectedTrust'] = 'forbidden';
+    await expectLater(
+      CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
+        bridge: NativeRuntimeConfigBridge(
+          client: _EnvelopeClient(extraFieldEnvelope),
+          maxAttempts: 1,
+        ),
+        resolver: _resolver(),
+      ),
+      throwsA(
+        isA<CloudRuntimeConfigurationException>().having(
+          (error) => error.invalidKeys,
+          'invalidKeys',
+          equals(<String>['unexpectedTrust']),
+        ),
+      ),
+    );
+
+    final malformedKeyEnvelope = await _signedPackage();
+    malformedKeyEnvelope['trustedPublicKeys'] = const <String, String>{
+      'nonprod-2026-01': 'not-base64',
+    };
+    await expectLater(
+      CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
+        bridge: NativeRuntimeConfigBridge(
+          client: _EnvelopeClient(malformedKeyEnvelope),
+          maxAttempts: 1,
+        ),
+        resolver: _resolver(),
+      ),
+      throwsA(
+        isA<CloudRuntimeConfigurationException>().having(
+          (error) => error.invalidKeys,
+          'invalidKeys',
+          equals(<String>['trustedPublicKeys']),
+        ),
+      ),
+    );
+  });
+
+  test('CloudRuntimeConfig 水合 Web 暴露的 package JSON 后读取外置 runtime values', () async {
+    final trustEnvelope = await _signedPackage();
+    final runtimePackage = Map<String, Object?>.from(
+      trustEnvelope['package']! as Map,
+    );
+    await CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
+      bridge: NativeRuntimeConfigBridge(
+        client: _EnvelopeClient(runtimePackage),
+        maxAttempts: 1,
+      ),
+      resolver: _resolver(),
+    );
+
+    expect(runtimePackage, isNot(contains('package')));
+    expect(runtimePackage, isNot(contains('trustedBuildProfile')));
+    expect(runtimePackage, isNot(contains('trustedTarget')));
+    expect(CloudRuntimeConfig.appRuntimeEnv, 'gamma');
+    expect(CloudRuntimeConfig.gatewayBaseUrl, 'https://api.example.test');
+    expect(
+      CloudRuntimeConfig.graphqlEndpoint,
+      'https://api.example.test/graphql',
+    );
+    expect(CloudRuntimeConfig.runtimeAvailabilityFailure(), isNull);
+    expect(CloudRuntimeConfig.effectiveLaunchManifestDigest, isNull);
+    expect(CloudRuntimeConfig.runtimeConfigTrustEnvelopeDigest, isNull);
+    expect(
+      CloudRuntimeConfig.runtimeConfigPackageDigest,
+      'sha256:${crypto.sha256.convert(utf8.encode(canonicalJsonEncode(runtimePackage)))}',
+    );
+  });
+
+  test('移动端 manifest digest 只读取原生 verified receipt identity', () async {
+    final trustEnvelope = await _signedPackage();
+    await CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
+      bridge: NativeRuntimeConfigBridge(
+        client: _EnvelopeClient(trustEnvelope),
+        maxAttempts: 1,
+      ),
+      resolver: _resolver(),
+    );
+
+    expect(
+      CloudRuntimeConfig.effectiveLaunchManifestDigest,
+      'sha256:${'c' * 64}',
+    );
+    expect(
+      CloudRuntimeConfig.effectiveLaunchManifestDigest,
+      isNot((trustEnvelope['package']! as Map)['sourceTreeDigest']),
+    );
+    expect(
+      CloudRuntimeConfig.runtimeConfigPackageDigest,
+      trustEnvelope['runtimeConfigPackageDigest'],
+    );
+    expect(
+      CloudRuntimeConfig.runtimeConfigTrustEnvelopeDigest,
+      trustEnvelope['runtimeConfigTrustEnvelopeDigest'],
+    );
+  });
+
+  test('移动端 verified package/trust digest 漂移时 fail closed', () async {
+    for (final field in <String>[
+      'runtimeConfigPackageDigest',
+      'runtimeConfigTrustEnvelopeDigest',
+      'effectiveLaunchManifestDigest',
+    ]) {
+      final trustEnvelope = await _signedPackage();
+      trustEnvelope[field] = field == 'effectiveLaunchManifestDigest'
+          ? 'not-a-digest'
+          : 'sha256:${'f' * 64}';
+
+      await expectLater(
+        CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
+          bridge: NativeRuntimeConfigBridge(
+            client: _EnvelopeClient(trustEnvelope),
+            maxAttempts: 1,
+          ),
+          resolver: _resolver(),
+        ),
+        throwsA(
+          isA<CloudRuntimeConfigurationException>()
+              .having(
+                (error) => error.reason,
+                'reason',
+                'runtime-verified-identity-invalid',
+              )
+              .having(
+                (error) => error.invalidKeys,
+                'invalidKeys',
+                contains(field),
+              ),
+        ),
+      );
+    }
   });
 }

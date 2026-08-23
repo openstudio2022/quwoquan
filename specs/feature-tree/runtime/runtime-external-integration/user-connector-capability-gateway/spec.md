@@ -120,3 +120,16 @@
 - 尚缺验收证据：缺「执行中取消到达 `cancelled` 并释放 lease、清理 protected payloadRef」与「Provider 瞬时故障后受控重放且不重复产生外部副作用」两条路径的 local_contract 与真实 adapter api_integration。
 - 完成判定：`cancelled` 由至少一个声明入口可达，`failed` 具备声明的恢复入口或显式不可恢复裁定，两条路径各有 `spec_ref` 直接绑定的 local_contract 与 api_integration 收据。
 - 依赖：正式 Provider adapter（本节点 `OPEN-001`），补偿语义取决于 Provider 是否提供可撤销的调用面。
+
+<a id="open-003"></a>
+### OPEN-003 系统日历 device bridge 的宿主测试缺显式权限前置
+
+- 类型：`external_blocker`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：`RunnerTests.testDeviceCalendarCreateUpdateDeleteAndReplayAreIdempotent` 在未授予 EventKit 权限的 Simulator 上以异步等待超时失败。
+- 该失败不表达日历 bridge 的幂等语义缺陷：它只说明这台宿主机判不了真实日历写入。
+- 未显式前置的后果：真实语义回归与宿主权限缺席混在同一条红灯里，无法区分。
+- 尚缺实现：宿主测试需要按 EventKit 授权状态显式前置（授权缺席即跳过，授权具备则照旧逐条判、判不过照旧红），与仓内 `xcodebuild`/CocoaPods 缺席同一口径。
+- 完成判定：`GWT-001` 的日历动作路径在具备 EventKit 授权的宿主上由 `spec_ref` 直接绑定的 user_acceptance 收据覆盖；缺授权时该用例显式跳过而非失败。
+- 依赖：iOS 宿主 EventKit 授权装配，属 App 宿主测试环境能力，不阻塞 Connector 契约面。

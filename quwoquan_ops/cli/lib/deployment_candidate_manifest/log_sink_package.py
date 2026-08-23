@@ -133,12 +133,12 @@ def _canonical_observability_log_sink_binding(
             )
     elif env_name in {"alpha", "beta", "gamma"}:
         if (
-            binding.get("endpointRef")
-            != f"local_topology:{env_name}.elasticsearch"
+            binding.get("endpointRef") != "local_topology:elasticsearch"
             or binding.get("secretEnvironmentKeys") != []
         ):
             raise ValueError(
-                f"{env_name} Product Ops Binding is not target-local Elasticsearch"
+                f"{env_name} Product Ops Binding does not use the shared "
+                "nonprod Elasticsearch authority"
             )
     else:
         raise ValueError(f"unsupported Product Ops log-sink environment: {env_name}")
@@ -428,8 +428,7 @@ def validate_observability_log_sink_package(
         expected_environment not in {"alpha", "beta", "gamma"}
         or expected_target != f"{expected_environment}-local"
         or payload.get("deploymentMode") != "package-bound-local"
-        or payload.get("endpointRef")
-        != f"local_topology:{expected_environment}.elasticsearch"
+        or payload.get("endpointRef") != "local_topology:elasticsearch"
         or payload.get("secretEnvironmentKeys") != []
         or payload.get("platform") not in {"arm64", "amd64"}
         or payload.get("runtimeEndpoint") != "http://elasticsearch:9200"

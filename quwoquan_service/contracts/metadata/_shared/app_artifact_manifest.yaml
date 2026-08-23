@@ -14,6 +14,60 @@ digest_contract:
 environments: [alpha, beta, gamma, prod]
 platforms: [android, ios, web]
 build_modes: [debug, profile, release]
+web_application_id: com.leadwise.quwoquan.web
+
+# 制品封装格式（deliver-deploy-prod-pipeline DEC-005）。构建请求显式声明或按
+# 平台默认推导：android→apk、ios→设备类 ipa / 模拟器与编译证据 app、web→web。
+# artifactFormat 不得由 distributionClass 推导；aab 仅允许 android × release，
+# 且仅当已启用渠道的 capability 硬性要求 AAB 时构建一次，不是渠道专包。
+artifact_formats: [apk, aab, ipa, app, web]
+
+# 可执行字节的信任域冻结（deliver-deploy-prod-pipeline DEC-005/DEC-006）：
+# 二进制只按 nonprod/prod 信任域分叉，运行环境是部署与激活期的数据输入。
+# prod binary 只接受 prod，nonprod binary 只接受 alpha/beta/gamma；环境到
+# buildProfile 的映射由本段唯一拥有，原生构建图、packager 与启动握手只消费它。
+build_profiles:
+  nonprod:
+    environments: [alpha, beta, gamma]
+    launch_policy: test_live
+  prod:
+    environments: [prod]
+    launch_policy: prod_release
+
+# App Pipeline baseline 产品集合（DEC-005）。这五项是 producer、OCI transport、
+# ReleaseEvidence validator 与 Jobs API timing 的共同输入；消费方不得按四环境扩张。
+# Android AAB 是 capability 驱动的可选附加产品，不属于 baseline 五分片。
+build_products:
+  android-nonprod-apk:
+    platform: android
+    build_profile: nonprod
+    build_mode: release
+    artifact_format: apk
+    distribution_class: dev_direct
+  android-prod-apk:
+    platform: android
+    build_profile: prod
+    build_mode: release
+    artifact_format: apk
+    distribution_class: store
+  ios-nonprod-app:
+    platform: ios
+    build_profile: nonprod
+    build_mode: release
+    artifact_format: app
+    distribution_class: dev_direct
+  ios-prod-app:
+    platform: ios
+    build_profile: prod
+    build_mode: release
+    artifact_format: app
+    distribution_class: store
+  web-shared:
+    platform: web
+    build_profile: shared
+    build_mode: release
+    artifact_format: web
+    distribution_class: hosted_web
 
 # distributionClass 与 BuildMode 的合法组合。Debug 签名制品仅限开发者本机、
 # Simulator/Emulator 与登记设备；TestFlight、市场与官网只接受 Release。
@@ -64,31 +118,30 @@ distribution_classes:
     launch_provenances: [icon_cold_launch]
     promotable: true
 
-# 四环境 × BuildMode 的包身份映射（唯一真相源）。规则：
-#   applicationId = base + environment_suffix + build_mode_suffix
-#   displayName   = display_name_base + environment_mark + build_mode_mark
-# prod × release 使用 base 本身；任何两个 (environment, buildMode) 组合的
-# applicationId 不得相同，保证同一设备上互不覆盖安装。
+# BuildProfile × BuildMode 的原生包身份映射（唯一真相源）。规则：
+#   applicationId = base + build_profile_suffix + build_mode_suffix
+#   displayName   = display_name_base + build_profile_mark + build_mode_mark
+# prod × release 使用 base 本身；nonprod 与 prod 可以在同一设备并存，但
+# Alpha/Beta/Gamma 复用同一个 nonprod 安装实例，运行环境由签名配置集合选择。
 # registered=false 表示该平台 Prod 正式 ID 尚未取得已登记外部事实，
 # store 渠道 promotable 必须阻断（GATE_BLOCK/OPEN），不得用占位 ID 上架。
 application_identity:
   display_name_base: 趣我圈
   base_application_ids:
     android:
-      value: com.quwoquan.quwoquan_app
+      # 正式 Android 应用身份（vivo 开放平台已登记外部事实）；Java namespace
+      # 保持 com.quwoquan.quwoquan_app，微信回调按 applicationId 约定落
+      # com/leadwise/quwoquan/wxapi/。
+      value: com.leadwise.quwoquan
       registered: true
     ios:
       value: com.example.quwoquanApp
       registered: false
-  environment_suffixes:
-    alpha: .alpha
-    beta: .beta
-    gamma: .gamma
+  build_profile_suffixes:
+    nonprod: .nonprod
     prod: ""
-  environment_display_marks:
-    alpha: α
-    beta: β
-    gamma: γ
+  build_profile_display_marks:
+    nonprod: ·N
     prod: ""
   build_mode_suffixes:
     debug: .debug
@@ -192,43 +245,55 @@ schemas:
     additional_fields: false
     required_fields:
       - schema
-      - environment
+      - buildProductId
+      - buildProfile
       - platform
       - buildMode
       - distributionClass
+      - artifactFormat
       - applicationId
       - displayVersion
       - buildNumber
       - signingIdentityDigest
       - sourceGitSha
       - sourceTreeDigest
+      - buildProvenanceDigest
       - artifactDigest
-      - launchManifestDigest
       - promotable
     fields:
       schema: { type: string, const: app-artifact-manifest }
-      environment: { type: string, allowed_values: [alpha, beta, gamma, prod] }
+      buildProductId: { type: string, allowed_values_ref: build_products }
+      buildProfile: { type: string, allowed_values: [nonprod, prod, shared] }
       platform: { type: string, allowed_values: [android, ios, web] }
       buildMode: { type: string, allowed_values: [debug, profile, release] }
       distributionClass:
         type: string
         allowed_values:
           [dev_direct, simulator, registered_device, store, official_web, hosted_web]
+      artifactFormat:
+        type: string
+        allowed_values: [apk, aab, ipa, app, web]
       applicationId: { type: string, min_length: 1 }
       displayVersion: { type: string, min_length: 1 }
       buildNumber: { type: string, min_length: 1 }
       signingIdentityDigest: { type: string, format: sha256_identity }
       sourceGitSha: { type: string, format: git_object_sha }
       sourceTreeDigest: { type: string, format: git_tree_digest }
+      buildProvenanceDigest: { type: string, format: sha256_identity }
       artifactDigest: { type: string, format: sha256_identity }
-      launchManifestDigest: { type: string, format: sha256_identity }
+      runtimeConfigTrustEnvelopeDigest: { type: string, format: sha256_identity }
       promotable: { type: boolean }
     constraints:
+      - buildProductId 必须引用 build_products；buildProfile/platform/buildMode/artifactFormat 必须逐字段等于该产品声明。
       - distributionClass 与 buildMode 的组合必须满足 distribution_classes 声明；store/official_web/hosted_web 只接受 release。
+      - artifactFormat 由打包请求显式声明或按平台默认（android→apk、ios→设备类 ipa/其余 app、web→web）；不得由 distributionClass 推导，官网与全部 APK 市场引用同一 release APK source digest。
+      - aab 仅允许 android × release，且仅当已启用渠道 capability 硬性要求 AAB 时构建一次；渠道 upload_format 只声明渠道接受能力，不驱动构建。
       - simulator 的 platform_build_modes 是平台特有硬边界；iOS 仅允许 Debug，iOS Release 必须生成 iphoneos AOT 制品且不得以 Debug simulator 冒充。
       - promotable 必须等于 distribution_classes 中该 class 的 promotability 且 buildMode 为 release。
-      - 本清单不携带内容 release 身份；内容激活身份只由 Content API 响应在运行时下发。
-      - alpha/beta/gamma/prod 与 Debug/Release 的 applicationId 必须互不覆盖；Prod 正式 ID 只取已登记外部事实。
+      - 本清单不携带 environment、target、endpoint、runtimeConfigDigest、launchManifestDigest 或内容 release 身份；这些事实只属于签名 runtime config package、launch handoff 或服务端运行时响应。
+      - Android/iOS AppArtifact 必须携带 runtimeConfigTrustEnvelopeDigest，且等于制品内 build-profile trust envelope 的 canonical 摘要；Web AppArtifact 禁止携带该字段，Web trust envelope 只由各环境 hosting composition 同源提供。
+      - 本清单不携带 channelId、灰度阶段或分发回执字段；渠道与灰度只出现在部署/分发与激活期对象（DEC-006/DEC-007）。
+      - buildProfile × BuildMode 的 applicationId 必须互不覆盖；Alpha/Beta/Gamma 必须解析为同一 nonprod identity，Prod 正式 ID 只取已登记外部事实。
 
   app_install_receipt:
     schema_value: app-install-receipt
@@ -294,23 +359,88 @@ schemas:
       - channelId 必须与 distribution_channels 或非市场 distributionClass 对应；一个渠道的回执不得替代另一渠道。
       - artifactDigest/sourceGitSha 必须绑定同一 reviewed candidate；市场重签或优化后仍以 source 身份与 store 官方 receipt 验证，不比对二进制逐字节。
 
-  # 既有 ReleaseEvidenceManifest 内的通用 App 包证据；render/validate 工具消费本段，
-  # 不得在脚本内自持字段集合。
+  # 渠道分发回执（DEC-007）：CI/CD release/distribution control plane 拥有
+  # 上传/审核/发布事实；Product Ops 只消费只读投影。每渠道独立回执，
+  # 官网与全部 APK 市场引用同一 reviewed Prod release APK source digest。
+  app_distribution_receipt:
+    schema_value: app-distribution-receipt
+    additional_fields: false
+    append_only: true
+    required_fields:
+      - schema
+      - channelId
+      - candidateId
+      - artifactDigest
+      - applicationId
+      - displayVersion
+      - buildNumber
+      - phase
+      - platformRecordId
+      - readbackMethod
+      - readbackDigest
+      - recordedAt
+    fields:
+      schema: { type: string, const: app-distribution-receipt }
+      channelId:
+        type: string
+        allowed_values:
+          [
+            apple_app_store,
+            apple_testflight,
+            huawei_appgallery,
+            xiaomi_getapps,
+            oppo_market,
+            vivo_market,
+            tencent_myapp,
+            official_web,
+          ]
+      candidateId: { type: string, format: sha256_identity }
+      artifactDigest: { type: string, format: sha256_identity }
+      applicationId: { type: string, min_length: 1 }
+      displayVersion: { type: string, min_length: 1 }
+      buildNumber: { type: string, min_length: 1 }
+      phase:
+        type: string
+        allowed_values:
+          [uploaded, review_submitted, approved, published, rejected]
+      platformRecordId: { type: string, min_length: 1 }
+      readbackMethod:
+        type: string
+        allowed_values:
+          [
+            app_store_connect_api,
+            agc_api,
+            manual_with_machine_receipt,
+            cdn_receipt,
+          ]
+      readbackDigest: { type: string, format: sha256_identity }
+      recordedAt: { type: string, format: rfc3339_utc }
+    constraints:
+      - 回执 append-only 且逐渠道独立；一个渠道的回执不得替代另一渠道，失败/驳回回执不得被后续成功覆盖。
+      - 同一 candidateId 下所有 android 渠道回执必须引用同一 release APK artifactDigest；fan-out 只复用 reviewed 制品，不复制、不重签、不重编。
+      - channelId、phase 与 readback 均为部署/分发期事实，不进入 AppArtifactManifest 或候选身份（DEC-005/DEC-006）。
+      - readbackMethod 必须与 distribution_channels 中该渠道声明的 readback 一致；platformRecordId 只保留平台侧脱敏 ID，凭据与平台原始响应不入回执。
+      - 非 uploaded 的 phase 回执要求同渠道同 candidateId 已存在 uploaded 回执；分发状态链必须可追溯到一次真实上传。
+
+  # ReleaseEvidenceManifest 内的 App build-product 证据；render/validate 工具消费本段，
+  # 不得在脚本内自持字段集合或按四环境复制同一可执行字节。
   release_application_package:
     schema_value: release-application-package
     additional_fields: false
     required_fields:
       - schema
-      - environment
-      - surface
+      - buildProductId
+      - buildProfile
+      - platform
       - sourceGitSha
       - sourceTreeDigest
       - packageDigest
       - artifactManifest
     fields:
       schema: { type: string, const: release-application-package }
-      environment: { type: string, allowed_values: [alpha, beta, gamma, prod] }
-      surface: { type: string, allowed_values: [android, ios, web] }
+      buildProductId: { type: string, allowed_values_ref: build_products }
+      buildProfile: { type: string, allowed_values: [nonprod, prod, shared] }
+      platform: { type: string, allowed_values: [android, ios, web] }
       sourceGitSha: { type: string, format: git_object_sha }
       sourceTreeDigest: { type: string, format: git_tree_digest }
       packageDigest: { type: string, format: sha256_identity }
@@ -318,4 +448,5 @@ schemas:
     constraints:
       - packageDigest 必须是对 canonical payload 目录的不可变 sha256 树摘要。
       - sourceGitSha/sourceTreeDigest 必须与检出的 reviewed candidate 完全一致。
-      - artifactManifest 必须逐字段保留 canonical AppArtifactManifest；environment/platform/source 必须与外层一致，artifactDigest 必须与真实 payload 制品一致，distributionClass/promotable 不得降维或改写。
+      - artifactManifest 必须逐字段保留 canonical AppArtifactManifest；buildProductId/buildProfile/platform/source 必须与外层一致，artifactDigest 必须与真实 payload 制品一致，distributionClass/promotable 不得降维或改写。
+      - baseline 集合必须恰好等于 build_products 五项；同一 product 不得按 environment 复制，AAB 只作为 capability 驱动的可选第六项。

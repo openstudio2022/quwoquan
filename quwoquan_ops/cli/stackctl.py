@@ -78,6 +78,9 @@ from quwoquan_ops.cli.alpha import content_release_runtime as alpha_content_rele
 from quwoquan_ops.cli.lib import active_content_release_outbox_repair
 from quwoquan_ops.cli.lib.compose_layout import compose_file_args, gamma_compose_files
 from quwoquan_ops.cli.lib.fault_drill_orchestration import FAULT_PROFILES, run_drill
+from quwoquan_ops.cli.lib.local_runtime_capacity import (
+    CAPACITY_BLOCKER, is_disk_exhausted, local_runtime_capacity_evidence,
+)
 from quwoquan_ops.cli.lib.loadtest_orchestration import run_loadtest
 from quwoquan_ops.cli.lib.patrol_execution_lock import acquire_patrol_execution_lock
 from quwoquan_ops.cli.lib.environment_topology import (
@@ -312,6 +315,7 @@ from quwoquan_ops.cli.commands import research_isolation_probe as research_isola
 from quwoquan_ops.cli.commands import roll as roll_commands
 from quwoquan_ops.cli.commands import status as status_commands
 from quwoquan_ops.cli.commands import store_channels as store_channels_commands
+from quwoquan_ops.cli.commands import store_distribution as store_distribution_commands
 from quwoquan_ops.cli.commands import test_data_surface as test_data_surface_commands
 from quwoquan_ops.cli.commands import tls as tls_commands
 from quwoquan_ops.cli.commands import up_domain as up_domain_commands
@@ -452,10 +456,14 @@ from quwoquan_ops.cli.commands.provider_runtime_binding import (
     _fixed_candidate_identity, _observability_log_sink_launch_environment, _provider_config,
     _provider_runtime_launch_environment,
 )
+from quwoquan_ops.cli.commands.runtime_artifact_identity_mount import (
+    _bind_artifact_identity_mount_material,
+)
 from quwoquan_ops.cli.commands.runtime_image_composition import (
-    _apply_gamma_image_composition, _bind_gamma_build_service_image_refs,
-    _bind_gamma_packaged_configuration_digest, _bind_gamma_packaged_service_image_refs,
-    _bind_gamma_release_image_refs, _bind_gamma_release_teardown_image_refs,
+    _apply_gamma_image_composition,
+    _bind_gamma_build_service_image_refs, _bind_gamma_packaged_configuration_digest,
+    _bind_gamma_packaged_service_image_refs, _bind_gamma_release_image_refs,
+    _bind_gamma_release_teardown_image_refs,
     _build_missing_runtime_images,
     _build_provider_runtime_images, _load_gamma_runtime_image_composition,
     _load_package_bound_local_image_composition,
@@ -470,10 +478,12 @@ from quwoquan_ops.cli.commands.runtime_progress_output import (
     _tail_file_for_startup, _tail_gamma_container_logs, _tail_multiple_logs_for_startup,
     _write_stdout_markdown, _write_summary_bundle,
 )
-from quwoquan_ops.cli.commands.dev_session_domain import (
+from quwoquan_ops.cli.commands.dev_session_content_binding import (
     _command_dev_session_bind_content, _dev_session_content_binding_request,
-    _dev_session_launcher_handoff, _dev_session_test_live_content_binding_readiness_issues,
-    _run_dev_session_target, command_dev_session,
+    _dev_session_test_live_content_binding_readiness_issues,
+)
+from quwoquan_ops.cli.commands.dev_session_domain import (
+    _dev_session_launcher_handoff, _run_dev_session_target, command_dev_session,
 )
 from quwoquan_ops.cli.commands.dev_session_live import (
     _dev_session_regular_json, _dev_session_resume_running_mutable_runtime,
@@ -483,8 +493,11 @@ from quwoquan_ops.cli.commands.dev_session_runtime import (
     _dev_session_active_receipts, _dev_session_child_args, _dev_session_compose_project,
     _dev_session_materialize_compose_files, _dev_session_phase, _dev_session_render_runtime_inputs,
     _dev_session_runtime_preflight, _dev_session_source_compose_files,
-    _dev_session_target_media_root, _dev_session_workload_conflict, _materialize_local_portal_root,
+    _dev_session_target_media_root, _dev_session_workload_conflict,
     _mutable_test_live_operation_identity_environment, _mutable_workspace_snapshot,
+)
+from quwoquan_ops.cli.lib.local_portal_materialization import (
+    materialize_local_portal_root as _materialize_local_portal_root,
 )
 from quwoquan_ops.cli.commands.dev_session_public_web import (
     _load_dev_session_public_web_package, _resolve_dev_session_public_web_package,
@@ -533,6 +546,7 @@ from quwoquan_ops.cli.commands.repair_undownable_startup_receipt import (
 from quwoquan_ops.cli.commands.roll import command_roll
 from quwoquan_ops.cli.commands.status import command_status
 from quwoquan_ops.cli.commands.store_channels import command_store_channels
+from quwoquan_ops.cli.commands.store_distribution import command_store_distribution
 from quwoquan_ops.cli.commands.test_data_surface import (
     command_test_data_evidence, command_test_data_request,
 )
@@ -709,6 +723,8 @@ def build_parser() -> argparse.ArgumentParser:
     device_trust_commands.register_parser(subparsers)
 
     store_channels_commands.register_parser(subparsers)
+
+    store_distribution_commands.register_parser(subparsers)
 
     provider_conformance_domain_commands.register_parser(subparsers)
     provider_config_commands.register_parser(subparsers)
@@ -903,6 +919,7 @@ def main() -> int:
         "tls": command_tls,
         "device-trust": command_device_trust,
         "store-channels": command_store_channels,
+        "store-distribution": command_store_distribution,
         "provider-conformance": command_provider_conformance,
         "provider-config": command_provider_config,
         "assistant-skill-package": command_assistant_skill_package,

@@ -15,7 +15,10 @@ from content.execution.planning.source_pool_policy import (
 from content.execution.request import RuntimeExecutionRequest
 from core.schema import assert_valid
 from core.source_digest import ExecutionBundleIdentity
-from support.capacity_calibration_fixture import synthetic_capacity_source_binding
+from support.capacity_calibration_fixture import (
+    synthetic_capacity_source_binding,
+    synthetic_governed_execution_authority,
+)
 
 DIGEST = "sha256:" + "a" * 64
 BINDING = {
@@ -90,7 +93,7 @@ def test_runtime_request_round_trip_preserves_source_pool_exactly() -> None:
             "selector": "source-ready-priority",
             "count": 2,
             "quota": 1,
-            "capacityCalibration": synthetic_capacity_source_binding(),
+            "executionAuthority": synthetic_governed_execution_authority(),
             "workerHostSetBinding": None,
             "topic": None,
             "sourceProviders": [],
@@ -133,7 +136,7 @@ def test_campaign_plan_scale_pool_matches_frozen_active_workload() -> None:
         "executionBundle": EXECUTION_BUNDLE,
         "entityCatalogDigest": BINDING["entityCatalogDigest"],
         "semanticSelectionId": "not_applicable",
-        "capacityCalibration": synthetic_capacity_source_binding(),
+        "executionAuthority": synthetic_governed_execution_authority(),
         "scaleSourcePool": BINDING,
         "sourcePoolEvidenceRootRef": "data/local/workspace/source-pool/evidence",
         "laneSourcePoolSelections": {
@@ -202,7 +205,7 @@ def test_explicit_plan_allows_no_pool_but_m10000_preset_requires_one() -> None:
         "executionBundle": EXECUTION_BUNDLE,
         "entityCatalogDigest": "sha256:" + "c" * 64,
         "semanticSelectionId": "not_applicable",
-        "capacityCalibration": synthetic_capacity_source_binding(),
+        "executionAuthority": synthetic_governed_execution_authority(),
         "laneExternalInputs": lane_inputs,
         "externalInputsDigest": DIGEST,
         "submissionDigests": {carrier: DIGEST for carrier in execution_ids},

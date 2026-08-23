@@ -415,4 +415,27 @@ abstract final class ChatText {
   static String permissionRestrictedMessage(String permissionLabel) =>
       '$permissionLabel 权限受系统限制，暂不可用';
   static const String timeFormatAM = '上午', timeFormatPM = '下午';
+
+  // Gathering 看板协作计划区：数据来自 circle.gathering_plan 的只读 current
+  // Revision；Board 不写入 Plan（Story Out of Scope），文案只描述读取结果。
+  static const String boardPlanNotConfigured = '未创建协作计划';
+  static const String boardPlanPermissionDenied = '暂无查看计划权限';
+  static const String boardPlanUnavailable = '计划暂时无法加载';
+  static const String boardPlanPlaceItem = '地点安排';
+  static const String boardPlanRouteItem = '路线安排';
+  static const String boardPlanChecklistItem = '清单';
+  static const String boardPlanGenericItem = '计划项';
+  static const String boardPlanTravelWalk = '步行';
+  static const String boardPlanTravelBicycle = '骑行';
+  static const String boardPlanTravelTransit = '公共交通';
+  static const String boardPlanTravelDrive = '驾车';
+  static const String boardPlanTravelFerry = '轮渡';
+  static const String boardPlanTravelOther = '其他方式';
+  static String boardPlanSummary(int revisionNumber, int itemCount) =>
+      '第 $revisionNumber 版 · $itemCount 项';
+  static String boardPlanChecklistProgress(int checked, int total) =>
+      '已完成 $checked/$total';
+  static String boardPlanDuration(int minutes) => '$minutes 分钟';
+  static String boardPlanTravelDuration(int minutes) => '约 $minutes 分钟';
+  static String boardPlanDueAt(String dateLabel) => '截止 $dateLabel';
 }

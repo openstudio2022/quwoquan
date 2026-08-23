@@ -1,7 +1,7 @@
-# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-015.t3
-# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-015.t4
-# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-015.t5
-# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-015.t2
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/work-request-compilation/spec.md#gwt-001.t3
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/work-request-compilation/spec.md#gwt-001.t4
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/work-request-compilation/spec.md#gwt-001.t5
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/work-request-compilation/spec.md#gwt-001.t2
 from __future__ import annotations
 
 from pathlib import Path
@@ -9,6 +9,9 @@ from pathlib import Path
 import pytest
 import content.execution.campaign.request_envelope as _request_envelope_owner  # noqa: F401
 from content.execution.campaign import request_envelope_build, request_envelope_writer
+from content.execution.controller.execute import (
+    pre_acquisition_handoff as handoff_api,
+)
 from content.execution.planning import work_request_contract
 from content.execution.planning.work_request import (
     WorkRequestCommandWriter,
@@ -16,7 +19,10 @@ from content.execution.planning.work_request import (
 )
 from content.execution.planning.work_request_contract import WorkRequestPreviewQuery
 from core.io import read_json, write_json
-from support.campaign_request_envelope_fixture import _patch_envelope_deps
+from support.campaign_request_envelope_fixture import (
+    _expected_count,
+    _patch_envelope_deps,
+)
 
 DIGEST = "sha256:" + "a" * 64
 
@@ -27,19 +33,36 @@ def _test_ref(path: Path) -> str:
     return marker if text.endswith(marker) else text
 
 
-def _intent(
-    tmp_path: Path,
+def _install_handoff(
+    monkeypatch: pytest.MonkeyPatch,
     *,
     workloads: dict[str, int] | None = None,
-) -> dict[str, object]:
-    return {
+) -> None:
+    """demand facts 由 confirmed handoff 拥有；测试以文档桩表达 workloads。"""
+    targets = dict(workloads or {"homepage": 1})
+    document = {
+        "vertical": "travel",
         "regionRef": "china",
         "lifecycle": "research",
+        "scopeType": "region",
+        "scope": "china",
+        "primaryTopicRef": None,
+        "relatedTopicRefs": [],
+        "scale": f"M{max(targets.values())}",
+        "workloadTargets": targets,
+    }
+    monkeypatch.setattr(
+        handoff_api,
+        "load_pre_acquisition_handoff",
+        lambda _path: dict(document),
+    )
+
+
+def _intent(tmp_path: Path) -> dict[str, object]:
+    # bounded policy 内的小批 workload 不携带 governed receipt，
+    # 由互斥 executionAuthority 的 bounded_explicit 分支授权。
+    return {
         "mode": "fresh",
-        "workloads": workloads or {"homepage": 1},
-        "capacityCalibrationReceiptRef": (
-            "data/local/tests/capacity/local-contract-capacity.json"
-        ),
         "preAcquisitionHandoffRef": str(tmp_path / "handoff.json"),
         "scaleSourcePoolPlanRef": str(tmp_path / "pool.json"),
         "sourcePoolEvidenceRootRef": str(tmp_path / "evidence"),
@@ -98,6 +121,7 @@ def _prepare(
     monkeypatch: pytest.MonkeyPatch,
 ) -> tuple[dict[str, object], str, list[int]]:
     _patch_envelope_deps(monkeypatch)
+    _install_handoff(monkeypatch)
     monkeypatch.setattr(work_request_contract, "_dependency_bindings", _dependencies)
     monkeypatch.setattr(
         work_request_contract, "_canonical_ref", _test_ref
@@ -134,7 +158,8 @@ def test_confirm_publishes_one_atomic_package_and_replays_same_digest(
     assert first["replayed"] is False
     assert replay["outcome"] == "confirmed" and replay["replayed"] is True
     assert queried["compileReceiptDigest"] == first["compileReceiptDigest"]
-    assert selected_counts == [1]
+    # 三轴单义：SourcePool selection 绑定 oversampled 候选数，quota 只是下限。
+    assert selected_counts == [_expected_count(1)]
     work_request_path = output_root / first["workRequestRef"]
     batch_root = work_request_path.parent
     assert {path.name for path in batch_root.iterdir()} == {
@@ -189,6 +214,10 @@ def test_four_carrier_build_failure_leaves_zero_visible_batch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _patch_envelope_deps(monkeypatch)
+    _install_handoff(
+        monkeypatch,
+        workloads={"homepage": 1, "article": 2, "image": 3, "video": 4},
+    )
     monkeypatch.setattr(work_request_contract, "_dependency_bindings", _dependencies)
     monkeypatch.setattr(work_request_contract, "_canonical_ref", _test_ref)
     original_build = request_envelope_writer.build_envelope
@@ -199,10 +228,7 @@ def test_four_carrier_build_failure_leaves_zero_visible_batch(
         return original_build(*args, **kwargs)
 
     monkeypatch.setattr(request_envelope_writer, "build_envelope", fail_image)
-    intent = _intent(
-        tmp_path,
-        workloads={"homepage": 1, "article": 2, "image": 3, "video": 4},
-    )
+    intent = _intent(tmp_path)
     preview = WorkRequestPreviewQuery().preview(intent)
     output_root = tmp_path / "four-carrier-failed-output"
 
@@ -223,6 +249,7 @@ def test_confirm_rechecks_preview_dependency_digest_before_allocating_sequence(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _patch_envelope_deps(monkeypatch)
+    _install_handoff(monkeypatch)
     generation = {"digest": "sha256:" + "1" * 64}
 
     def dependencies(*args: object, **kwargs: object) -> dict[str, object]:
@@ -399,15 +426,11 @@ def test_direct_batch_writer_recomputes_existing_envelope_digest_on_replay(
     output_root = tmp_path / "direct-writer-output"
     arguments = {
         "scale": "M1",
-        "region_ref": "china",
         "carriers": ("homepage",),
         "workloads": {"homepage": 1},
         "output_root": output_root,
         "day": "20260820",
         "sequence": 1,
-        "capacity_calibration_receipt": Path(
-            "data/local/tests/capacity/local-contract-capacity.json"
-        ),
         "pre_acquisition_handoff": tmp_path / "handoff.json",
         "scale_source_pool": tmp_path / "pool.json",
         "source_pool_evidence_root": tmp_path / "evidence",
@@ -431,12 +454,8 @@ def test_four_carrier_confirm_preserves_each_heterogeneous_exact_quantity(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _patch_envelope_deps(monkeypatch)
-    monkeypatch.setattr(work_request_contract, "_dependency_bindings", _dependencies)
-    monkeypatch.setattr(
-        work_request_contract, "_canonical_ref", _test_ref
-    )
-    intent = _intent(
-        tmp_path,
+    _install_handoff(
+        monkeypatch,
         workloads={
             "homepage": 1,
             "article": 2,
@@ -444,6 +463,11 @@ def test_four_carrier_confirm_preserves_each_heterogeneous_exact_quantity(
             "video": 4,
         },
     )
+    monkeypatch.setattr(work_request_contract, "_dependency_bindings", _dependencies)
+    monkeypatch.setattr(
+        work_request_contract, "_canonical_ref", _test_ref
+    )
+    intent = _intent(tmp_path)
     preview = WorkRequestPreviewQuery().preview(intent)
     result = WorkRequestCommandWriter(output_root=tmp_path / "four-output").confirm(
         intent,
@@ -469,4 +493,7 @@ def test_four_carrier_confirm_preserves_each_heterogeneous_exact_quantity(
     for carrier, quantity in work_request["workloads"].items():
         envelope = read_json(batch_root / f"{carrier}.json")
         assert envelope["quota"] == quantity
-        assert envelope["sourcePoolSelection"]["candidateCount"] == quantity
+        assert envelope["count"] == _expected_count(quantity)
+        assert envelope["sourcePoolSelection"]["candidateCount"] == (
+            _expected_count(quantity)
+        )

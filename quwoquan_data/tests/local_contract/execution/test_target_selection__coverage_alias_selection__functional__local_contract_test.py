@@ -16,7 +16,10 @@ from content.execution.planning.source_selection import (
 )
 from content.source.contracts import HomepageAuthorityProvider, QualifiedHomepageSource
 from core.control_types import TargetSelector
-from support.capacity_calibration_fixture import synthetic_capacity_source_binding
+from support.capacity_calibration_fixture import (
+    synthetic_capacity_source_binding,
+    synthetic_governed_execution_authority,
+)
 from support.target_selection_fixture import _coverage_file
 
 

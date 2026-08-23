@@ -244,6 +244,9 @@ EXECUTION_SHARED_AUTHORITATIVE_ENTRIES = frozenset({
     # bytes and are the only authority that permits global gates to ignore a
     # non-resumable work package.
     "reconciliation",
+    # DEC-005 阶段交接回执链（stage_receipt.schema.json）：跨会话交接与恢复的
+    # 唯一状态源，由 `task stage-record` create-once 原子写入，不可重算。
+    "receipts",
     # 执行级真相源（人工决策记录 / 放弃归因 / 账本，均不可重算）
     "source_catalog.json",
     "asset_id_registry.json",
@@ -286,6 +289,9 @@ EXECUTION_SHARED_RECLAIMABLE_ENTRIES = frozenset({
     "controller_lease.json",
     "controller_lease.lock",
     "execution_state.lock",
+    # single-writer lane claim（orchestration.md）：心跳过 TTL 即死 lane，
+    # 删除后按 receipt 链重新 claim 即可重建。
+    "claims",
 })
 
 

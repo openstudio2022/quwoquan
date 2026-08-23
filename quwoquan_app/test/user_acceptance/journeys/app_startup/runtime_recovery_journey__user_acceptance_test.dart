@@ -18,7 +18,7 @@ import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import '../../../support/runtime/patrol/patrol_test_support.dart';
 
-const _homeFirstFrame = ValueKey<String>('home-search-chrome');
+const _homeFirstFrame = ValueKey<String>('home-primary-tab-chrome');
 
 void main() {
   patrolTest(

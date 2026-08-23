@@ -19,8 +19,7 @@ def _exact_active_release(
 ) -> tuple[str, str]:
     """Return the exact ``(releaseId, manifestSHA256)`` selected by the writer.
 
-    指针缺席（尚未迁移的包目录）返回空对，让调用方回落到 current 兼容投影；
-    指针在场但不可解析则是失败，不得降级。
+    指针缺席返回空对，由调用方判失败；指针在场但不可解析同样是失败，不得降级。
     """
     from quwoquan_ops.cli.lib.web_official_release import (
         ACTIVE_POINTER_NAME,
@@ -68,6 +67,7 @@ def _load_dev_session_public_web_package(
         WebOfficialReleaseError,
         _tree_sha256,
         _trusted_web_origin,
+        _verify_runtime_config_is_external,
         _verify_web_build,
     )
 
@@ -79,45 +79,27 @@ def _load_dev_session_public_web_package(
         ) from exc
 
     canonical_package_root = package_root.expanduser().resolve()
-    # 身份真相源是 writer 落下的 exact 指针；current 只是兼容投影，
-    # 两者同时存在时必须指向同一 release，否则按失败处理。
+    # 身份只有一个读者：writer 落下的 exact 指针。current 只是给挂载与脚本的投影，
+    # 不得参与身份判定；指针缺席按失败处理，由调用方重跑 package 重建指针。
     expected_release_id, expected_manifest_digest = _exact_active_release(
         package_root=package_root,
         environment=environment,
         public_origin=expected_origin,
     )
+    if not expected_release_id:
+        raise ValueError(
+            "mutable test_live public Web active release pointer is missing; "
+            "re-run stackctl package --kind web to rebuild it"
+        )
+    release_root = canonical_package_root / expected_release_id
+    if not release_root.is_dir() or release_root.is_symlink():
+        raise ValueError("mutable test_live public Web active release is missing")
     current = package_root.expanduser() / "current"
-    if expected_release_id:
-        release_root = canonical_package_root / expected_release_id
-        if not release_root.is_dir() or release_root.is_symlink():
-            raise ValueError(
-                "mutable test_live public Web active release is missing"
-            )
-        if current.is_symlink() and os.readlink(current) != expected_release_id:
-            raise ValueError(
-                "mutable test_live public Web current projection contradicts the "
-                "active release pointer"
-            )
-    else:
-        if not current.is_symlink():
-            raise ValueError(
-                "mutable test_live public Web package current symlink is missing"
-            )
-        raw_link = os.readlink(current)
-        link_path = Path(raw_link)
-        if link_path.is_absolute() or ".." in link_path.parts:
-            raise ValueError(
-                "mutable test_live public Web package current symlink is unsafe"
-            )
-        try:
-            release_root = current.resolve(strict=True)
-            release_root.relative_to(canonical_package_root)
-        except (FileNotFoundError, RuntimeError, ValueError) as exc:
-            raise ValueError(
-                "mutable test_live public Web package current symlink escapes its package root"
-            ) from exc
-        if not release_root.is_dir() or release_root.is_symlink():
-            raise ValueError("mutable test_live public Web release root is unsafe")
+    if current.is_symlink() and os.readlink(current) != expected_release_id:
+        raise ValueError(
+            "mutable test_live public Web current projection contradicts the "
+            "active release pointer"
+        )
 
     manifest_path = release_root / "manifest.json"
     public_root = release_root / "public"
@@ -160,6 +142,7 @@ def _load_dev_session_public_web_package(
         )
     try:
         _verify_web_build(public_root)
+        _verify_runtime_config_is_external(public_root)
     except WebOfficialReleaseError as exc:
         raise ValueError(
             f"mutable test_live public Web build is invalid: {exc}"

@@ -31,28 +31,24 @@ def freeze_carrier_pre_acquisition_inputs(
     acquisition_root: Path,
     handoff_ref: Path | None,
     scale: str,
-    vertical: str,
-    scope: str,
-    region_ref: str,
-    topic: str | None,
     run_date: str,
     campaign_sequence: int,
     source_revision: str,
     source_digest: str,
     entity_catalog_digest: str,
     handoff_output_root: Path | None = None,
-) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Freeze external refs against the canonical handoff binding."""
+) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
+    """Freeze external refs against the canonical handoff binding.
+
+    Returns ``(frozen_external_refs, handoff, binding)``; demand facts must be
+    read from the returned handoff document, never supplied by the caller.
+    """
     return _freeze_carrier_pre_acquisition_inputs(
         carrier,
         declarations,
         acquisition_root=acquisition_root,
         handoff_ref=handoff_ref,
         scale=scale,
-        vertical=vertical,
-        scope=scope,
-        region_ref=region_ref,
-        topic=topic,
         run_date=run_date,
         campaign_sequence=campaign_sequence,
         source_revision=source_revision,

@@ -22,6 +22,7 @@ from content.execution.planning.recipe import model as recipe  # noqa: E402
 from support.capacity_calibration_fixture import (  # noqa: E402
     SYNTHETIC_FROZEN_AT_EPOCH_SECONDS,
     synthetic_capacity_source_binding,
+    synthetic_governed_execution_authority,
     write_synthetic_capacity_receipt,
 )
 
@@ -78,7 +79,7 @@ def test_capacity_source_is_bound_before_exact_workload_derivation(
         target_names=(),
     )
     request = recipe.RuntimeExecutionRequest.from_args(args)
-    assert request.capacity_calibration["frozenCapacity"][
+    assert request.capacity_binding()["frozenCapacity"][
         "fleetMaxConcurrentWorkers"
     ] == 2
 
@@ -86,7 +87,7 @@ def test_capacity_source_is_bound_before_exact_workload_derivation(
         target_scale="pilot",
         carrier="article",
         work_unit_count=7,
-        capacity_calibration=request.capacity_calibration,
+        capacity_calibration=request.capacity_binding(),
         frozen_at_epoch_seconds=SYNTHETIC_FROZEN_AT_EPOCH_SECONDS,
     )
     assert derived["capacityPlanDigest"] == workload_plan_digest(
@@ -94,7 +95,7 @@ def test_capacity_source_is_bound_before_exact_workload_derivation(
             target_scale="pilot",
             carrier="article",
             work_unit_count=7,
-            capacity_calibration=request.capacity_calibration,
+            capacity_calibration=request.capacity_binding(),
         )
     )
     assert derived["partitionCount"] == 16
@@ -103,22 +104,32 @@ def test_capacity_source_is_bound_before_exact_workload_derivation(
 
 
 def test_capacity_receipt_absence_stays_fail_closed() -> None:
-    args = argparse.Namespace(
-        execution_id="20260722--travel-article-supply--test-region-b--pilot-001",
-        family="content/travel/article/article",
-        region_ref="test-region-b",
-        selector="priority",
-        count=1,
-        quota=1,
-        capacity_calibration_receipt=None,
-        disable_capacity_fixture=True,
-        semantic_selection_id="default",
-        topic=None,
-        source_providers=(),
-        target_names=(),
-    )
-    with pytest.raises(SystemExit, match="capacity-calibration-receipt"):
-        recipe.RuntimeExecutionRequest.from_args(args)
+    """无 receipt 时唯一出路是 bounded policy 内的小批授权，越界仍 fail-closed。"""
+
+    def _args(quota: int) -> argparse.Namespace:
+        return argparse.Namespace(
+            execution_id=(
+                "20260722--travel-article-supply--test-region-b--pilot-001"
+            ),
+            family="content/travel/article/article",
+            region_ref="test-region-b",
+            selector="priority",
+            count=quota,
+            quota=quota,
+            capacity_calibration_receipt=None,
+            disable_capacity_fixture=True,
+            semantic_selection_id="default",
+            topic=None,
+            source_providers=(),
+            target_names=(),
+        )
+
+    bounded = recipe.RuntimeExecutionRequest.from_args(_args(1))
+    assert bounded.execution_authority["mode"] == "bounded_explicit"
+    assert bounded.execution_authority["maxWorkers"] == 1
+
+    with pytest.raises(SystemExit, match="AUTHORITY_OUT_OF_BOUNDS"):
+        recipe.RuntimeExecutionRequest.from_args(_args(100))
 
 
 def test_frozen_runtime_request_rejects_unknown_or_unordered_fields() -> None:
@@ -128,7 +139,7 @@ def test_frozen_runtime_request_rejects_unknown_or_unordered_fields() -> None:
         "selector": "all",
         "count": 1,
         "quota": 1,
-        "capacityCalibration": synthetic_capacity_source_binding(),
+        "executionAuthority": synthetic_governed_execution_authority(),
         "workerHostSetBinding": None,
         "topic": None,
         "sourceProviders": ["provider-b", "provider-a"],

@@ -17,7 +17,10 @@ from content.execution.planning.selection import (
 )
 from content.execution.spec_contract import ExecutionSpec
 from core.control_types import TargetSelector
-from support.capacity_calibration_fixture import synthetic_capacity_source_binding
+from support.capacity_calibration_fixture import (
+    synthetic_capacity_source_binding,
+    synthetic_governed_execution_authority,
+)
 
 DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
 EXECUTION_ID = "20260711--travel-homepage-coverage--test-region-a--pilot-001"

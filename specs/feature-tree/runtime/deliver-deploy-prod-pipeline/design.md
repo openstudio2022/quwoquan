@@ -44,7 +44,7 @@
 - 被否决方案：`main` 同时承担日常集成、创建任何临时或第三长期分支、非 `dev1.0 -> main` PR 直达发布、人工 `main -> dev1.0`、force backsync、用环境变量自报 system identity，或由 hook/workflow复制分支规则。
 - 约束与影响：GitHub 原生保护不可用时，仓内 gate 只能阻断 eligibility 而不能声称远端 direct push 未发生。`dev1.0` 异常只允许在同一分支追加修复提交，禁止临时 reconcile 分支、自动 merge、force push 或历史改写。
 - 合法 main promotion 入库后自动启动同一 DAG，完成不可变 OCI `ReleaseEvidenceManifest` 的 `component-ready -> candidate-ready` 总装与 Alpha/Beta/Gamma 阻断验证；正式 Prod apply 不由 workflow_run 或 push 静默执行，必须由人工 dispatch 绑定可达 `main` 的精确 Git SHA、显式设置非 dry-run，并通过 production environment approval。
-- `candidate-ready` 必须绑定四环境配置包、四环境 App 真实 payload、ContractGraph、真实 Provider readiness 与三层测试；按序接受 Alpha/Beta/Gamma 回执并绑定 rollback readiness 后才成为 `deployable`，Prod 全量验证后才成为 `released`。
+- `candidate-ready` 必须绑定四环境配置包、Android/iOS 的 nonprod/prod 组件、单一 Web bundle、ContractGraph、真实 Provider readiness 与三层测试。Alpha、Beta、Gamma 环境 composition 引用同一 nonprod App bytes digest，按序接受回执并绑定 rollback readiness 后才成为 `deployable`，Prod 全量验证后才成为 `released`。
 - 同一候选制品就绪后，Alpha、Beta、Gamma-local 在隔离运行面并行执行；聚合器仍按 `alpha -> beta -> gamma` 验证回执，任一失败均不得申请 Prod approval。
 - Prod 只保留一个 production environment approval 与一个事务 job；checkout、OIDC/registry login、ReleaseEvidenceManifest 验签、治理校验和配置包物化只执行一次，随后由 `stackctl` 依次推进 `canary、5、20、50、100`。
 - push 与默认 dispatch 均保持 dry-run；dry-run 不提交 hosted ledger，因此只执行 `canary` 只读校验并明确标记边界，禁止伪造 `5/20/50/100` 回执。
@@ -86,7 +86,9 @@
 - 包身份隔离：alpha/beta/gamma/prod 与 Debug/Release 使用不覆盖的 application/bundle ID、显示名与签名映射。
 - 正式身份来源：Prod 正式 ID 只取已登记外部事实，非 Prod/Debug 使用隔离后缀并同步 Universal/App Links、OAuth、推送与 Keychain/App Group。
 - 签名分发边界：Debug 签名制品仅限开发者本机、Simulator/Emulator 与登记设备；TestFlight、市场与官网只接受 Release。
-- 渠道逐项声明：每渠道登记 `channelId`、`uploadFormat(ipa/aab/apk)`、package/bundle ID、store product ID、track、version/build、developer signing identity、store signing custodian、可能的 split/optimize/re-sign transformation、source candidate/artifact/launch-manifest digest、upload/review/release receipt 与安装后 signature/receipt 校验方式。市场可能重签或优化，准出不要求下载二进制逐字节相同，而以 source digest、version/build、store 官方签名/receipt、嵌入 launch manifest 与启动 telemetry 绑定；一个渠道的回执不得替代另一渠道。
+- 制品格式与渠道解耦：`AppArtifactManifest` 携带显式 `artifactFormat(apk/aab/ipa/app/web)`，由打包请求声明或按平台默认推导，禁止由 distributionClass 推导（原 `store → AAB` 耦合废除）；官网与全部 APK 市场引用同一 release APK source digest，`aab` 仅当已启用渠道 capability 硬性要求时按 DEC-005 构建一次。
+- 正式 Android 身份：`com.leadwise.quwoquan`（vivo 开放平台已登记外部事实）；Java namespace 与 applicationId 分离，微信回调 Activity 按 applicationId 约定放置。iOS 正式 Bundle ID 仍缺已登记外部事实，store 渠道保持阻断。
+- 渠道逐项声明：每渠道登记 `channelId`、`uploadFormat(ipa/aab/apk)`、package/bundle ID、store product ID、track、version/build、developer signing identity、store signing custodian、可能的 split/optimize/re-sign transformation、source candidate/artifact/launch-manifest digest、upload/review/release receipt 与安装后 signature/receipt 校验方式。`uploadFormat` 只声明渠道接受能力，不驱动构建。市场可能重签或优化，准出不要求下载二进制逐字节相同，而以 source digest、version/build、store 官方签名/receipt、嵌入 launch manifest 与启动 telemetry 绑定；一个渠道的回执不得替代另一渠道。
 - 官网分发：Android 官网 APK 复用 official distribution 部署到不可变 CDN 对象并出带 SHA-256 的 receipt，发布前通过包名/签名证书摘要/Build/SHA-256 预验证门禁；`app_release` 契约字段是恢复页、更新提示与网页安装组件共用的唯一下载真相源。iOS 网页版不提供二进制下载。
 - 灰度顺序：先内测或分阶段，再公开发布。
 - 快速止损：内容 active pointer、Web current pointer 与远端配置的止损在 300 秒内完成，且不要求重新打包或再次审核。
@@ -95,6 +97,39 @@
 - 关联要求：`REQ-001`
 - 影响 Story：[`gray-release-to-prod`](./gray-release-to-prod/spec.md)、[`multi-environment-wave-deployment`](./multi-environment-wave-deployment/spec.md)
 - 关联验收：[`environment-topology-and-packaging GWT-003`](../runtime-config/environment-topology-and-packaging/spec.md#gwt-003)、[`app-release-recovery-routing GWT-004`](../../product-ops-growth/product-control-plane-foundation/app-release-recovery-routing/spec.md#gwt-004)、[`cold-start-performance GWT-005`](../runtime-client-foundation/cold-start-performance/spec.md#gwt-005)
+
+<a id="dec-005"></a>
+### DEC-005 组件构建身份：build once、环境无关、按 digest 复用
+- 决策：打包的唯一职责是把一份受审源码闭包变成一份带可验证身份（真实 bytes digest + 签名 + provenance：源码依赖闭包、工具链、签名身份）的不可变字节；选环境、选渠道、选灰度阶段、注入 endpoint 都不属于构建。可执行字节只按 `nonprod/prod` 两个信任域分叉（applicationId、签名、entitlements、三方 SDK 注册身份），环境是部署与激活期的数据输入。
+- 最小构建矩阵：Android `nonprod.apk` + `prod.apk`（`com.leadwise.quwoquan`，同一签名 APK 复用官网与全部 APK 市场）；`prod.aab` 仅当已启用渠道 capability 硬性要求时构建一次。iOS `nonprod/prod` 两个身份/签名档位，不按环境重编译。Web 一份 immutable bundle。云侧每组件/OS/arch 按 `nonprod/prod` 两个信任域各构建一次：alpha/beta/gamma 复用同一 nonprod digest，prod 独立 digest。环境名、config digest 与 rollout stage 不得写入镜像字节。
+- 云侧信任域裁决：external Provider binding 经编译期 overlay 固化为 Go 二进制内的单环境 `CompiledBindingFor` 视图，是防止 provider substitute 进入 prod 的最强供应链阻断，本决策保留该编译期固化而不改为运行时挂载数据。代价是云镜像不能四环境同 digest，只能按信任域二分——与 App 侧 nonprod/prod 档位完全对称。前提是 alpha/beta/gamma 三环境的 `externalBindings` 声明收敛为同一 nonprod 档内容；环境身份文件（`artifact-identity.json`）与 platform-ops 环境配置树改为部署面挂载物料，从镜像字节中移除。
+- 配置外置三层通道：编译与制品封装层不接受 endpoint 类 define，也不携带 target runtime package；AppArtifact 只内置 build-profile 级信任根。安装后 activation 层由 stackctl/canonical launcher 将带 schema 版本的签名 runtime config package 原子写入平台私有容器，可独立重发与回滚而不重编、不重签 AppArtifact。服务端 bootstrap 层下发内容绑定身份、最低支持版本与 feature flag 等运行时事实，灰度阶段不在此列。cache/tag 不授予准出资格，复用时仍 100% 验证 exact digest、producer、SBOM、provenance 与签名。
+- 被否决方案：按环境重复编译（12 份 App 制品、4 套云镜像）、按渠道打不同 APK、嵌入渠道号或渠道 SDK 分支、把 rollout stage 写入制品、自建 APK 差分（商店差分由渠道免费提供，开发者永远上传全量包）。
+- 约束与影响：身份后缀与 flavor 的 `nonprod` 统一切换必须与 producer/reader 同增量原子完成，切换前 `environment_suffixes` 仍是唯一现行身份派生轨，不得双轨；`app_artifact_manifest.yaml` 的 `build_profiles` 是本决策的 metadata 冻结面。
+- 关联要求：`REQ-001`
+- 影响 Story：[`multi-environment-wave-deployment`](./multi-environment-wave-deployment/spec.md)、[`gray-release-to-prod`](./gray-release-to-prod/spec.md)
+- 关联验收：`SIT-001`
+
+<a id="dec-006"></a>
+### DEC-006 发布组合身份 releaseCompositionId 与重建指令解耦
+- 决策：候选身份（沿用字段名 `candidateId`，语义收窄为 releaseCompositionId）是对有序组件摘要、环境配置摘要与 ContractGraph/迁移兼容摘要求出的 digest，排除 OCI 仓库/tag、transport locator、channelId、分发回执、灰度阶段与运行时审核状态。候选不是重建指令：App-only change 的新候选引用原 Cloud 组件摘要，Cloud builder invocation 必须为 0，反之亦然；渠道回执、审核状态与灰度阶段变化均不产生新候选。
+- OCI 边界：`repository@sha256:...` 只用于 CI 内部不可变搬运与 provenance，不进入候选身份，也不强制进入分发回执。
+- 被否决方案：把全仓 transport locator、channel/receipt/stage 混入候选摘要（任何分发事件都会伪造“新候选”并触发全量重建）、端云双交付单元各自持有第二套身份、为每用途生成独立制品身份。
+- 约束与影响：`canonical_digests.py` 及聚合器、校验器、timing gate 必须在同一受审增量原子切换，不保留双 publisher/双 reader/运行时 flag；失败只允许 Git revert 后继续使用上一 immutable candidate。
+- 关联要求：`REQ-001`
+- 影响 Story：[`multi-environment-wave-deployment`](./multi-environment-wave-deployment/spec.md)
+- 关联验收：`SIT-001`
+
+<a id="dec-007"></a>
+### DEC-007 部署/分发执行与回执 owner 边界
+- 决策：CI/CD release/distribution control plane 是渠道分发动作与原始回执的唯一 owner。渠道分发回执只保留 `releaseCompositionId`、source artifact digest、`channelId`、version/build、平台侧脱敏 ID/状态、权威 readback 摘要与时间，每渠道独立且不复制 APK。灰度激活是 Platform Ops 拥有的流量策略：激活回执单独绑定 `releaseCompositionId`、策略 revision、stage、SLO 判定与时间，`policyDigest` 只属于激活决策。`canary/5/20/50/100` 不改变 APK、镜像、配置包或候选身份，App 全程无感知灰度阶段。Product Ops 只消费“最低可用版本、更新/恢复入口、当前公开版本”等只读投影，无分发执行权、不保存市场 Attempt、不持有市场凭据。
+- 指针条件更新：Web `current` 与 Android `latest` 的 compare-and-swap 只是“预期当前值一致才切换”的部署并发保护，不属于打包，不进入候选身份。
+- 数据边界：数据不是交付物，从不进入任何包。内容只经 canonical immutable content release activation 进入四环境；行为数据只允许非生产由测试数据控制面经领域公开 command/event 构造，Prod 在首条 mutation 前拒绝。
+- 被否决方案：Product Ops PostgreSQL 保存分发 Attempt/Receipt、Integration runtime 代理应用市场发布、把审核/回执/CAS/OCI/policy 塞进打包身份、灰度 stage 写入 IaC 制品。
+- 约束与影响：应用市场分发只消费“Cloud 已达到允许公开的稳定状态”，不拥有也不推进灰度；市场安装事实在首个商用闭环前不得以静态渠道登记、side-load 或官网安装替代。
+- 关联要求：`REQ-001`
+- 影响 Story：[`gray-release-to-prod`](./gray-release-to-prod/spec.md)
+- 关联验收：`SIT-001`
 
 ## 5. 失败与恢复
 
@@ -110,5 +145,5 @@
 - `prod-hosted` 的正式灰度 workflow 必须人工 dispatch 并保留 approval；在 Provider、SFU、真实数据、观测、灾备或回滚证据缺失时只允许不可提升 prevalidate，且 post-deploy probe 置信度仍须单独验收。
 - 运行装配从各服务 `environments/<env>/deploy`、Ops 同名环境入口和真实 Compose/Kustomize 扫描推导；本地端口保留 `local_env_port_manifest`，prod rollout 保留 `gray_rollout_stages`，服务配置由自治 package 的 provenance 摘要证明。
 - 每个 Prod rollout stage 必须执行 `stackctl health + inspect + doctor + integration probes + slo gate`；任一失败写入 GATE_BLOCK/rollback 证据，不得由 workflow 合成成功。
-- App 四分片耗时必须读取四个实际 Jobs API 节点并取最大值；任何 shard 缺失时 timing gate 失败，不允许回退到 static/serial 近似值。
+- App 构建耗时必须读取 Android nonprod/prod、iOS nonprod/prod 与 Web shared 五个实际 Jobs API 节点并取最大值。任何 shard 缺失时 timing gate 失败，不允许回退到 static/serial 近似值。
 - 独立可观测：每域 `service.name` + 指标维度独立，使“逻辑独立”在合并部署时依然成立，并为拆分提供数据依据。

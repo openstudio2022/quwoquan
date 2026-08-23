@@ -100,6 +100,7 @@ dependencies:
   firebase_core: ^4.12.1
   firebase_messaging: ^16.4.3
   image: ^4.8.0
+  cryptography: ^2.9.0
 
 dev_dependencies:
   flutter_test:
@@ -164,7 +165,7 @@ dependency_overrides:
   material_color_utilities: ^0.13.1
 
 flutter:
-  default-flavor: alpha
+  default-flavor: nonprod
   config:
     # video_thumbnail 等插件在 vendored 形态下仍走 CocoaPods；livekit_client 已补 iOS Package.swift
     enable-swift-package-manager: false

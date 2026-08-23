@@ -37,7 +37,7 @@
 - [`gray-release-to-prod`](./gray-release-to-prod/spec.md)：**统一入口**：workflow 与人工命令最终都收敛到 `stackctl deploy --target prod-hosted ...`。
 - [`local-gamma-mirror`](./local-gamma-mirror/spec.md)：gamma-local 是开发与提交前的主验证链，统一本机模拟器/浏览器接入同一组域级入口。
 - [`multi-environment-instance-isolation`](./multi-environment-instance-isolation/spec.md)：beta 云侧本地集成栈始终只允许**一套**，启动新实例前必须先停止旧实例再重启。
-- [`multi-environment-wave-deployment`](./multi-environment-wave-deployment/spec.md)：同一 source release train 预先封存四份环境专属 artifact，按 alpha、beta、gamma、prod 的准入顺序验证，任一波次失败即停止晋级。
+- [`multi-environment-wave-deployment`](./multi-environment-wave-deployment/spec.md)：同一 source release train 预先封存 nonprod/prod 组件与四环境配置 composition，按 alpha、beta、gamma、prod 的准入顺序验证，任一波次失败即停止晋级。
 - [`service-core-composition`](./service-core-composition/spec.md)：以同一 Go host 组合 11 个核心服务而不改变领域契约、数据归属或独立实时/模型故障域。
 - [`workflow-naming-consolidation`](./workflow-naming-consolidation/spec.md)：**约束**：不得保留重复名称（如 05/05b、08b/08b）或依赖旧的 `workflow_run` 定时合流链。
 
@@ -88,7 +88,7 @@
 - `gamma-local` 阶段必须完成 package、up、full health、release verify 与 inspect，并以同一候选摘要回执阻断 Prod。
 - Prod 在一个保留 production approval 的事务 job 内只拉取、验签、解包一次，再执行 `canary -> 5 -> 20 -> 50 -> 100`；任一阶段失败由 `stackctl` 自动回滚到上一稳定候选并恢复 ready 状态。
 - dry-run 保持只读：只验证 `canary` 及全部前置门禁，不伪造 `5/20/50/100` ledger 状态，也不得形成正式发布成功事实。
-- `CiTimingSummary` 的 600/1800 秒预算只读取 GitHub workflow `created_at -> candidate/prod completed_at` 的官方日历时长；job DAG 仅保留为 `machineCriticalPath` 诊断。App matrix 必须计入四个 shard 的真实最长时长，不允许用静态/串行阶段近似。
+- `CiTimingSummary` 的 600/1800 秒预算只读取 GitHub workflow `created_at -> candidate/prod completed_at` 的官方日历时长。job DAG 仅保留为 `machineCriticalPath` 诊断。App matrix 必须计入 Android nonprod/prod、iOS nonprod/prod 与 Web shared 五个 shard 的真实最长时长，不允许用静态或串行阶段近似。
 - mainline `CiTimingSummary` 必须作为 `ghcr.io/.../ci-timing-summary@sha256:...` 精确 OCI 证据发布，并按 candidate digest 与 workflow run 写入独立、append-only 的 hosted timing authority；写后必须从 hosted 索引查询并逐字段匹配。未初始化、不可达、写入失败或回读漂移均保持 `GATE_BLOCK`，Actions Artifact 只允许作为可丢失诊断副本。
 - production approval 的请求、批准与等待时长只能来自绑定 repository、workflow run、head SHA 与 `production` environment 的显式 durable review event。Deployment/Deployment Status 的 `pending/queued/in_progress` 只表示部署或作业状态，不能替代 reviewer decision，也不得与 runner/concurrency queue 混算。
 - 任一 job `created_at`、queue、候选、Prod 回执或显式 review event 证据缺失时状态必须为 `historical_incomplete` 并保持 `GATE_BLOCK`，不得用 `started_at` 替代、填零或进入 10/30 分钟 SLO 达成统计。
@@ -150,6 +150,40 @@
 - 影响或价值：仓内已具备多 host/replica plan、渲染 identity、部署迭代与聚合 CAS 合同；真实第二台 ECS、平面 SSH 凭据与一次完整 `canary → 5 → 20 → 50 → 100` 仍缺。
 - 目标：在声明 ≥2 个 `management.hosts` 与匹配 replica placement 的前提下，用真实 SSH 完成多 member 发布、逐 host receipt 与 ledger 聚合 CAS。
 - 完成判定：`SIT-002` 对应 live 行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-004"></a>
+### OPEN-004 正式 Android 身份外部登记同步
+
+- 类型：`external_blocker`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：正式 Android applicationId 已冻结为 `com.leadwise.quwoquan`（vivo 开放平台已登记）；微信/QQ/支付宝开放平台回调、Firebase/推送、App Links/OAuth、其余市场后台与签名证书登记仍需按新身份同步。任一外部平台存在其他 applicationId 登记时保持 `GATE_BLOCK`，禁止同时发布两个身份。iOS 正式 Bundle ID 仍缺已登记外部事实。
+- 目标：完成全部外部平台对 `com.leadwise.quwoquan` + 生产签名证书摘要的登记，并以渠道 readback 证明一致。
+- 完成判定：`SIT-001` 下 `stackctl store-channels` 对已启用渠道的身份 readback 与 `app_artifact_manifest.yaml` 一致，且 DEC-004 正式身份条目无冲突登记
+
+<a id="open-005"></a>
+### OPEN-005 build-once 构建矩阵原子切换未完成
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：当前流水线仍按四环境重复编译 App（12 份）与云镜像（4 套），`environment_suffixes` 仍是唯一现行 App 身份派生轨，`candidateId` 摘要仍混入环境专属制品输入；DEC-005/DEC-006 已冻结目标身份但尚缺实现与验收证据。
+- 目标：按 DEC-005/DEC-006 完成统一 nonprod 包身份切换、runtime config 外置、组件按 digest 复用与 producer/reader 原子 cutover，删除四环境重复编译路径且不保留双轨。
+- 实现约束：Android native runtime package 现由 Gradle 从 `dart-defines` property 抄写生成（iOS plist 由 build phase 同理派生），endpoint define 的移除必须与原生注入通道改造、nonprod/prod flavor 收敛及 pipeline producer 在同一受审增量内原子切换，不得先行单独删除 define 造成注入源断供。注入通道改造时 runtime config package 一并携带 schema 版本、签发时间与 source tree digest，App 启动握手校验 staleness，过期即进入阻断式配置错误页而不是继续裸跑。
+- 云侧实现约束：镜像环境分叉的物理来源有三。其一，所有一方 Dockerfile 把 `QWQ_ARTIFACT_ENVIRONMENT`/`QWQ_ARTIFACT_CONFIG_DIGEST` 烤入 `/etc/quwoquan/artifact-identity.json`（`runtime/artifactidentity/identity.go` 启动时用 `APP_ENV` 断言匹配，reader 已支持 `QWQ_ARTIFACT_IDENTITY_FILE` 挂载路径覆盖）。其二，platform-ops 把整棵环境配置树拷进镜像 `/app` 并以 `REPO_ROOT=/app` 消费。其三也是最深的一处：external Provider binding 按环境选择（非生产 provider substitute 与 prod 真实三方互斥），经 `QWQ_PROVIDER_BINDING_MANIFEST_DIGEST` overlay 在编译期固化为 Go 二进制内的 `CompiledBindingFor` 单环境视图，`verify_cloud_environment_artifact_binding.py` 门禁同时强制这三处存在且禁止生产源码做运行时环境选择。
+- 云侧信任域裁决（DEC-005 已定）：保留 Provider binding 编译期固化这一防 substitute 进 prod 的最强供应链阻断，云镜像收敛为 `nonprod/prod` 两档而不是四环境同 digest，与 App 档位对称。实施前提：alpha/beta/gamma 的 `externalBindings` 声明先收敛为同一 nonprod 档内容（当前 integration-service 与 product-ops-service 存在个别能力 enabled/not_required 差异）。落地时须同一受审增量内：身份文件与环境配置树改为部署面挂载物料、binding overlay 输入从每环境改为每信任域、反转 `environment_artifact_identity.yaml` 与 `manifest_validation.py` 的"repository 环境绑定 + 跨环境 digest 禁令"为"nonprod 三环境同 owner 必须同 digest、prod 独立"、收敛 `plan_service_release_images.py` 矩阵与 `service_pipeline.yml` 计数 gate，并同步 stackctl 本地环境装配与全部 release local_contract fixture。
+- 完成判定：`SIT-001` 下同一候选的 App 构建为 nonprod/prod 两档、Cloud 组件按信任域两档且 alpha/beta/gamma 同 owner 同 digest，App-only change 的 Cloud builder invocation 为 0
+
+<a id="open-006"></a>
+### OPEN-006 Vivo 首链真实市场分发闭环
+
+- 类型：`external_blocker`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：当前分发编排工具链已就位——`stackctl store-channels` 渠道准入门、`stackctl store-distribution` 逐渠道 append-only 分发回执（fan-out 强制同一 candidate 的全部 android 渠道引用同一 release APK digest）、`InstallReceipt` 契约与官网 latest 指针条件更新；仍缺 vivo 开发者凭据在位后的一次真实上传、审核、上架、市场客户端下载安装与首启兼容闭环。静态渠道登记、side-load 或官网安装不得替代市场安装事实。
+- 目标：以同一 reviewed Prod APK 完成 vivo 首链：上传与审核回执经 `store-distribution` 登记，上架后从 vivo 市场客户端安装并产出 `channelId=vivo_market` 的 InstallReceipt 与启动 telemetry。其他市场复用同一分发编排与同一 source digest，仅凭据、审核与公开能力按平台独立，不新增渠道专包。
+- 依赖：`QWQ_VIVO_DEV_CREDENTIAL_PATH` 凭据文件、vivo 开放平台审核通过、真机市场安装通道。
+- 完成判定：`SIT-001` 下 vivo_market 存在 uploaded→published 完整回执链与 verified InstallReceipt，且回执 artifactDigest 与官网 latest 指针引用同一 release APK source digest
 
 <a id="open-003"></a>
 ### OPEN-003 300 秒止损演练执行证据

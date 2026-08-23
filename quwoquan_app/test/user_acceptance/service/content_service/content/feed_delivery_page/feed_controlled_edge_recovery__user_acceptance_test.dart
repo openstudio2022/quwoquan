@@ -161,10 +161,7 @@ void main() {
 List<String> _visibleFeedCardKeys() {
   final visible = <String>[];
   for (var index = 0; index < 20; index += 1) {
-    for (final prefix in const <String>[
-      'home-feed-card-',
-      'dual-discovery-card-',
-    ]) {
+    for (final prefix in const <String>['home-feed-card-']) {
       final key = '$prefix$index';
       if (find.byKey(ValueKey<String>(key)).evaluate().isNotEmpty) {
         visible.add(key);

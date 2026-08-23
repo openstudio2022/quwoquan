@@ -9,6 +9,9 @@ from content.execution.campaign import (
     request_envelope_build as campaign_request_envelope_build,
 )
 from content.execution.campaign import submission as campaign_submission
+from content.execution.campaign import (
+    submission_identity as campaign_submission_identity,
+)
 from content.execution.campaign.external_inputs import (
     CampaignExternalInputError,
     bind_external_input_refs,
@@ -17,7 +20,7 @@ from content.execution.campaign.external_inputs import (
 )
 from core.io import write_json
 from core.source_digest import ExecutionBundleIdentity, SourceDefinitionSnapshot
-from support.capacity_calibration_fixture import synthetic_capacity_source_binding
+from core.paths import REPO_ROOT
 from support.campaign_external_inputs_fixture import (  # noqa: F401
     CATALOG_DIGEST,
     SOURCE_DIGEST,
@@ -47,17 +50,12 @@ def _bind_observed_identities(
     """Pin what the repository currently observes for both frozen identities."""
 
     monkeypatch.setattr(
-        campaign_submission,
+        campaign_submission_identity,
         "current_source_definition_snapshot",
         lambda **_kwargs: _FrozenSourceDigest(source),
     )
     monkeypatch.setattr(
-        campaign_submission,
-        "current_execution_bundle_identity",
-        lambda **_kwargs: _FrozenSourceDigest(bundle),
-    )
-    monkeypatch.setattr(
-        campaign_submission,
+        campaign_submission_identity,
         "current_execution_bundle_identity",
         lambda **_kwargs: _FrozenSourceDigest(bundle),
     )
@@ -187,6 +185,7 @@ def test_professional_image_input_is_limited_to_homepage_and_image(
 def test_request_envelope_freezes_content_addressed_external_refs(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    _governed_acquisition_handoff: None,
 ) -> None:
     acquisition_root, refs = _acquisition(tmp_path)
     repo = tmp_path / "repo"
@@ -223,24 +222,28 @@ def test_request_envelope_freezes_content_addressed_external_refs(
         "_git_commit",
         lambda _repo: "c" * 40,
     )
-    capacity_ref = Path("data/local/tests/capacity/local-contract-capacity.json")
+    # quota=1 落在 bounded policy 内：不携带 governed receipt，
+    # demand 事实由 confirmed handoff 拥有（vertical/regionRef/scope）。
     monkeypatch.setattr(
         campaign_request_envelope_build,
-        "resolve_capacity_calibration_ref",
-        lambda ref: Path(ref),
+        "load_pre_acquisition_handoff",
+        lambda _path: {
+            "vertical": "travel",
+            "regionRef": "china",
+            "scope": "china",
+            "primaryTopicRef": None,
+        },
     )
-    monkeypatch.setattr(
-        campaign_request_envelope_build,
-        "bind_capacity_calibration_source",
-        lambda **_kwargs: synthetic_capacity_source_binding(),
-    )
+    policy_ref = "quwoquan_data/control_plane/_shared/catalogs/bounded_execution_authority_policy.json"
+    policy_copy = repo / policy_ref
+    policy_copy.parent.mkdir(parents=True, exist_ok=True)
+    policy_copy.write_bytes((REPO_ROOT / policy_ref).read_bytes())
     envelope = campaign_request_envelope.build_envelope(
         quota=1,
         carrier="image",
-        region_ref="china",
         repo_root=repo,
         day="20260805",
-        capacity_calibration_receipt=capacity_ref,
+        pre_acquisition_handoff=tmp_path / "handoff.json",
         external_input_refs=[
             {
                 "kind": refs[0]["kind"],

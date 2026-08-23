@@ -1,11 +1,9 @@
-"""stackctl `dev-session` 子命令域主入口: 目标执行、launcher handoff
-与 test-live 内容绑定。
+"""stackctl `dev-session` 子命令域主入口: 目标执行与 launcher handoff。
 
 从 stackctl.py 逐字迁出（改写规则与 down_domain 相同）:
-`_dev_session_test_live_content_binding_readiness_issues` /
-`_dev_session_content_binding_request` / `_dev_session_launcher_handoff` /
-`_run_dev_session_target` / `_command_dev_session_bind_content` /
-`command_dev_session`。
+`_dev_session_launcher_handoff` / `_run_dev_session_target` /
+`command_dev_session`。test-live 内容绑定自成一条职责，见
+`dev_session_content_binding`。
 
 测试经 ``mock.patch.object(stackctl, ...)`` patch 本模块符号与协作符号，
 因此函数体内一律经函数内延迟导入 `_stackctl` 属性访问（含本模块符号互调），
@@ -17,7 +15,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import shlex
 import subprocess
 import sys
@@ -35,71 +32,24 @@ from quwoquan_ops.cli.lib.dev_up import summarize_output
 from typing import Mapping
 
 
-def _dev_session_test_live_content_binding_readiness_issues(
+def _dev_session_rot_watch(
     *,
-    environment: str,
-    startup_receipt: Mapping[str, Any],
-    preflight: Mapping[str, Any],
-) -> list[str]:
-    """Require the live App/API/Provider edge before using a content binding."""
+    target_name: str,
+    startup: Mapping[str, Any],
+) -> Any:
+    """构造运行期腐烂观测器；preflight 已证明健康，故以 healthy 起步。"""
+    import quwoquan_ops.cli.stackctl as _stackctl
 
-    issues: list[str] = []
-    tls = preflight.get("tls")
-    if not isinstance(tls, Mapping) or (
-        tls.get("profile") != "local-managed" or tls.get("status") != "ready"
-    ):
-        issues.append("target local-managed TLS is not ready")
-    provider = preflight.get("provider")
-    expected_provider = {
-        "adapterId": "ext.sms.local_capture",
-        "environment": environment,
-        "configurationDigest": startup_receipt.get("configurationDigest"),
-        "nonPromotable": True,
-        "ready": True,
-    }
-    if not isinstance(provider, Mapping) or any(
-        provider.get(field) != value for field, value in expected_provider.items()
-    ):
-        issues.append("target SMS capture Provider is not ready or identity-bound")
-    checks = preflight.get("runtimeChecks")
-    observed = {
-        str(item.get("name") or ""): item.get("ready") is True
-        for item in checks
-        if isinstance(item, Mapping)
-    } if isinstance(checks, list) else {}
-    if observed.get("user-service") is not True:
-        issues.append("user-service is not ready")
-    for name, ready in observed.items():
-        if name and not ready:
-            issues.append(f"{name} is not ready")
-    return list(dict.fromkeys(issues))
+    from quwoquan_ops.cli.lib.local_runtime_rot_watch import LocalRuntimeRotWatch
 
-
-def _dev_session_content_binding_request(args: argparse.Namespace) -> dict[str, str]:
-    """Return one explicit test-live content identity or fail on partial input."""
-
-    values = {
-        "releaseId": str(getattr(args, "release_id", "") or "").strip(),
-        "verifyRunId": str(getattr(args, "verify_run_id", "") or "").strip(),
-        "manifestDigest": str(getattr(args, "manifest_digest", "") or "").strip(),
-        "lifecycleExitRef": str(
-            getattr(args, "lifecycle_exit_ref", "") or ""
-        ).strip(),
-    }
-    mandatory = ("releaseId", "verifyRunId", "manifestDigest")
-    populated = [field for field in mandatory if values[field]]
-    if not populated and not values["lifecycleExitRef"]:
-        return {}
-    if len(populated) != len(mandatory):
-        missing = sorted(field for field in mandatory if not values[field])
-        raise ValueError(
-            "test-live content identity is partial; missing " + ", ".join(missing)
-        )
-    if re.fullmatch(r"sha256:[0-9a-f]{64}", values["manifestDigest"]) is None:
-        raise ValueError(
-            "test-live content manifestDigest must be sha256:<64 lowercase hex>"
-        )
-    return values
+    return LocalRuntimeRotWatch(
+        target=_stackctl.get_target(
+            _stackctl.load_environment_topology(),
+            target_name,
+        ),
+        startup=startup,
+        runner=_stackctl.run,
+    )
 
 
 def _dev_session_launcher_handoff(
@@ -125,8 +75,6 @@ def _dev_session_launcher_handoff(
         "canonical_launcher",
         "--launch-policy",
         "test_live",
-        "--app-instance-namespace",
-        f"{environment}-test-live",
     ]
     try:
         result = subprocess.run(
@@ -483,10 +431,33 @@ def _run_dev_session_target(
                 text=True,
                 start_new_session=True,
             )
+        # 编译安装启动这段窗口可达十几分钟，依赖在窗口内退出不会回写任何
+        # receipt。运行期复验让降级在窗口内就被报出，而不是留给用户从界面发现。
+        rot_watch = _dev_session_rot_watch(
+            target_name=target,
+            startup=dict(runtime_payload.get("startupAttempt") or {}),
+        )
+
+        def report_rot_transition() -> None:
+            transition = rot_watch.observe()
+            if transition is None:
+                return
+            message = transition.describe()
+            warnings.append(message)
+            phases.append(
+                {
+                    "name": "runtime-rot-watch",
+                    "exitCode": 0 if transition.recovered else 1,
+                    "summary": message,
+                    "details": list(transition.details),
+                }
+            )
+
         try:
             launch_attempt = wait_for_app_launch_attempt(
                 launch_receipt,
                 timeout_seconds=900,
+                watchdog=report_rot_transition,
             )
         except TimeoutError as exc:
             process.terminate()
@@ -521,6 +492,9 @@ def _run_dev_session_target(
             }
         if launch_status == "runtime_degraded":
             warnings.extend(str(item) for item in launch_attempt["warnings"])
+        # 窗口结束时再复验一次：App 已就位但依赖刚断的情况必须在会话结论里
+        # 出现，否则「启动成功」会被读成「现在可用」。
+        report_rot_transition()
         phases.append(
             {
                 "name": "app-launch",
@@ -587,176 +561,6 @@ def _run_dev_session_target(
         "contentBinding": content_binding,
         "launcherHandoff": handoff_payload,
         "phases": phases,
-    }
-
-
-def _command_dev_session_bind_content(args: argparse.Namespace) -> dict[str, Any]:
-    """Bind exact Data evidence to one running attempt without materialization."""
-    import quwoquan_ops.cli.stackctl as _stackctl
-
-
-    started_monotonic, started_at = _stackctl._start_timing()
-    requested_env = str(getattr(args, "env", "") or "").strip()
-    target = str(getattr(args, "target", "") or "").strip()
-    # 与 start 同一套 env/target 互推：两个子命令作用于同一个 attempt，选择语义
-    # 分叉会让「start 能用的参数 bind-content 不能用」。且选择无效时必须在这里
-    # 就返回 typed 阻断——报告目录本身要按 target 落盘，拿无效 target 去算路径
-    # 会先抛 ValueError，把选择错误伪装成内部故障。
-    if bool(requested_env) == bool(target):
-        timing = _stackctl._finish_timing(started_monotonic, started_at)
-        return {
-            "exitCode": 2,
-            "summary": "stackctl dev-session bind-content is GATE_BLOCK",
-            "details": ["provide exactly one of --env or --target"],
-            "blockerKind": "environment_missing",
-            **timing,
-        }
-    if requested_env:
-        target = _stackctl.DEV_UP_STACK_TARGETS[requested_env]
-    elif target not in {"alpha-local", "beta-local", "gamma-local"}:
-        timing = _stackctl._finish_timing(started_monotonic, started_at)
-        return {
-            "exitCode": 2,
-            "summary": "stackctl dev-session bind-content is GATE_BLOCK",
-            "details": [
-                "--target must select alpha-local, beta-local, or gamma-local"
-            ],
-            "blockerKind": "invalid_content_binding_selection",
-            **timing,
-        }
-    attempt_id = str(getattr(args, "startup_attempt_id", "") or "").strip()
-    release_id = str(getattr(args, "release_id", "") or "").strip()
-    verify_run_id = str(getattr(args, "verify_run_id", "") or "").strip()
-    manifest_digest = str(getattr(args, "manifest_digest", "") or "").strip()
-    readiness_digest = str(getattr(args, "readiness_digest", "") or "").strip()
-    lifecycle_exit_ref = str(
-        getattr(args, "lifecycle_exit_ref", "") or ""
-    ).strip()
-    invalid: list[str] = []
-    for option, value in (
-        ("--startup-attempt-id", attempt_id),
-        ("--release-id", release_id),
-        ("--verify-run-id", verify_run_id),
-        ("--manifest-digest", manifest_digest),
-        ("--readiness-digest", readiness_digest),
-    ):
-        if not value:
-            invalid.append(f"{option} is required")
-    for option, value in (
-        ("--manifest-digest", manifest_digest),
-        ("--readiness-digest", readiness_digest),
-    ):
-        if value and re.fullmatch(r"sha256:[0-9a-f]{64}", value) is None:
-            invalid.append(f"{option} must be sha256:<64 lowercase hex>")
-    environment = target.removesuffix("-local")
-    report_dir = _stackctl.resolve_report_dir(args, environment, target)
-    if invalid:
-        timing = _stackctl._finish_timing(started_monotonic, started_at)
-        result = {
-            "exitCode": 2,
-            "summary": "stackctl dev-session bind-content is GATE_BLOCK",
-            "details": invalid,
-            "blockerKind": "invalid_content_binding_selection",
-            **timing,
-        }
-        report_dir.mkdir(parents=True, exist_ok=True)
-        _stackctl.write_json(report_dir / "report.json", result)
-        return {**result, "reportDir": _stackctl.relpath(report_dir)}
-
-    try:
-        with _stackctl._local_stack_operation_lock(target):
-            workspace = _stackctl._mutable_workspace_snapshot()
-            before_runtime, before_warnings = (
-                _stackctl._dev_session_resume_running_mutable_runtime(
-                    environment=environment,
-                    target=target,
-                    workspace_snapshot=workspace,
-                    required_running_services=(
-                        _stackctl._TEST_LIVE_CONTENT_BINDING_REQUIRED_SERVICES
-                    ),
-                )
-            )
-            before_attempt = dict(
-                (before_runtime or {}).get("startupAttempt") or {}
-            )
-            if before_runtime is None or before_attempt.get("attemptId") != attempt_id:
-                raise ValueError(
-                    "bind-content requires the exact current running startup attempt"
-                )
-            binding = _stackctl.create_test_live_content_binding(
-                environment=environment,
-                target=target,
-                startup_attempt_id=attempt_id,
-                release_id=release_id,
-                verify_run_id=verify_run_id,
-                manifest_digest=manifest_digest,
-                expected_readiness_receipt_digest=readiness_digest,
-                lifecycle_exit_ref=lifecycle_exit_ref,
-            )
-            after_runtime, after_warnings = (
-                _stackctl._dev_session_resume_running_mutable_runtime(
-                    environment=environment,
-                    target=target,
-                    workspace_snapshot=workspace,
-                    required_running_services=(
-                        _stackctl._TEST_LIVE_CONTENT_BINDING_REQUIRED_SERVICES
-                    ),
-                )
-            )
-            after_attempt = dict((after_runtime or {}).get("startupAttempt") or {})
-            if (
-                after_runtime is None
-                or after_attempt.get("attemptId") != attempt_id
-                or after_attempt != before_attempt
-            ):
-                raise ValueError(
-                    "running mutable runtime identity changed during content binding"
-                )
-            handoff = _stackctl._dev_session_launcher_handoff(
-                environment=environment,
-                target=target,
-                content_binding=binding,
-            )
-    except (OSError, RuntimeError, TypeError, ValueError) as exc:
-        timing = _stackctl._finish_timing(started_monotonic, started_at)
-        result = {
-            "exitCode": 2,
-            "summary": "stackctl dev-session bind-content is GATE_BLOCK",
-            "details": [str(exc)],
-            "blockerKind": "test_live_content_binding_invalid",
-            **timing,
-        }
-        report_dir.mkdir(parents=True, exist_ok=True)
-        _stackctl.write_json(report_dir / "report.json", result)
-        return {**result, "reportDir": _stackctl.relpath(report_dir)}
-
-    report_dir.mkdir(parents=True, exist_ok=True)
-    _stackctl.write_json(report_dir / "test-live-launcher-handoff.json", handoff)
-    timing = _stackctl._finish_timing(started_monotonic, started_at)
-    warnings = sorted(set([*before_warnings, *after_warnings]))
-    report = {
-        "command": "dev-session bind-content",
-        "target": target,
-        "status": "warning" if warnings else "passed",
-        "startupAttempt": after_attempt,
-        "contentBinding": binding,
-        "launcherHandoff": handoff,
-        "warnings": warnings,
-        "details": [
-            f"attemptId={attempt_id}",
-            f"releaseId={binding['releaseId']}",
-            f"verifyRunId={binding['verifyRunId']}",
-            f"readinessReceiptDigest={binding['readinessReceiptDigest']}",
-        ],
-        "blockerKind": "",
-        **timing,
-    }
-    _stackctl.write_json(report_dir / "report.json", report)
-    return {
-        "exitCode": 0,
-        "summary": f"stackctl dev-session bind-content completed for {target}",
-        "reportDir": _stackctl.relpath(report_dir),
-        **report,
     }
 
 
@@ -828,6 +632,24 @@ def command_dev_session(args: argparse.Namespace) -> dict[str, Any]:
     terminal_exit = 0
     blocker_kind = ""
     details: list[str] = []
+
+    # 会话要跑打包、启动与 App 编译，全都写 Docker 数据盘与宿主盘。在入口
+    # 判一次容量，省掉「跑了十几分钟才在某个环节炸开」的无效等待。
+    for _, capacity_target in selections:
+        capacity = _stackctl.local_runtime_capacity_evidence(
+            _stackctl.get_target(topology, capacity_target)
+        )
+        if capacity["issues"]:
+            timing = _stackctl._finish_timing(started_monotonic, started_at)
+            return {
+                "exitCode": 2,
+                "summary": "stackctl dev-session is GATE_BLOCK",
+                "details": capacity["issues"],
+                "blockerKind": "local_runtime_capacity_exhausted",
+                "firstBlocker": capacity["blocker"],
+                "capacity": capacity["evidence"],
+                **timing,
+            }
 
     if terminal_exit == 0:
         try:

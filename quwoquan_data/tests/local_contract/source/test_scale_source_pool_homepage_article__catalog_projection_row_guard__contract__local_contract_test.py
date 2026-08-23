@@ -207,11 +207,23 @@ def test_projected_refs_are_physically_reverified_by_scale_validator(
     ]
     image_providers = ["Pinterest"] * 80 + ["图虫"] * 20 + ["Pexels"] * 50 + ["Wikimedia Commons"] * 30
     candidates.extend(
-        _clone_row(base["article"], carrier="image", index=index, provider=provider)
+        _clone_row(
+            base["article"],
+            carrier="image",
+            index=index,
+            provider=provider,
+            evidence_root=tmp_path,
+        )
         for index, provider in enumerate(image_providers)
     )
     candidates.extend(
-        _clone_row(base["article"], carrier="video", index=index, provider="Pexels Videos")
+        _clone_row(
+            base["article"],
+            carrier="video",
+            index=index,
+            provider="Pexels Videos",
+            evidence_root=tmp_path,
+        )
         for index in range(18)
     )
     plan = build_scale_source_pool_plan(
@@ -225,8 +237,8 @@ def test_projected_refs_are_physically_reverified_by_scale_validator(
     )
     evidence = validate_scale_source_pool_evidence(plan, evidence_root=tmp_path)
     assert evidence["evidenceFileSha256Verified"] is True
-    assert evidence["evidenceFileCount"] == 2
-    assert evidence["evidenceBindingCount"] == 2250
+    assert evidence["evidenceFileCount"] == 200
+    assert evidence["evidenceBindingCount"] == 1638
 
 
 def test_projection_rejects_cross_catalog_identity(tmp_path: Path) -> None:

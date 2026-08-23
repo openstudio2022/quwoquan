@@ -27,12 +27,20 @@ quwoquan_data/schema/
   execution_manifest.json
   0.plan/
   sources/
-  entities/**/1.content.source..5.review/
-  posts/<kind>/**/1.content.source..5.review/
+  entities/**/<1.download..5.review>/
+  posts/<kind>/**/<1.download..5.review>/
   _shared/
+    execution_state.json          # 唯一状态快照，只经 save_execution_state 写
+    receipts/<seq>-<stage>.json   # 阶段交接回执链（权威条目，create-once）
+    claims/                       # lane claim（可清理过程层，心跳 + TTL）
   evidence/
   publish_ref.json
 ```
+
+- 工作包根条目 allowlist 由 `quwoquan_data/scripts/core/paths.py` 拥有；
+  `_shared` 条目必须先登记角色（authoritative/reclaimable）再写入。
+- 对象级五阶段目录名与每阶段必需产物清单的真相源是
+  `quwoquan_data/scripts/core/stage_artifact_contract.py`，本 skill 不复制。
 
 `executionId` 必须符合：
 
@@ -69,6 +77,4 @@ canonical 只含最终业务对象，不得包含 raw source、草稿、prompt�
 导入回执、API 核验、回滚与重放证据写环境 run；禁止修改 canonical，
 禁止 dual-read 或旧路径 fallback。
 
-`task execute` 是唯一任务门面：组合 family、运行 request、target selection、执行、
-review、publish 与 ship，不建立独立 schema、runner 或输出根。
 禁止暴露阶段角色命令、退役的双层运行身份或第二运行根。

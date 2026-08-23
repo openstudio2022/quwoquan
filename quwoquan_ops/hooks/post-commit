@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$ROOT"
+export QWQ_OUTPUT_ROOT="${QWQ_OUTPUT_ROOT:-$ROOT/.qwq_output}"
+export PYTHONDONTWRITEBYTECODE=1
+
+# 提交完成后提醒未合入的工作副本。提交已经落盘，post-commit 的退出码改变不了它，
+# 因此探测异常一律吞掉：把一次偶发失败变成每次提交都刷红，只会让人很快忽略这条提醒。
+python3 quwoquan_ops/hooks/worktree_merge_reminder.py --harness git --reason commit || true

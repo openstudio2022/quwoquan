@@ -15,6 +15,7 @@ services:
       APP_ENV: "${QWQ_COMPOSE_ENV:-gamma}"
       QWQ_WORKLOAD: "${QWQ_WORKLOAD:-full}"
       CONFIG_ROOT: /etc/qwq-config
+      QWQ_ARTIFACT_IDENTITY_FILE: /etc/quwoquan/artifact-identity.json
       RECOMMENDATION_POLICY_FILE: /etc/qwq-rec-policy/policy.yaml
       MONGODB_URI: "${QWQ_COMPOSE_MONGODB_URI:-mongodb://mongodb:27017/?directConnection=true}"
       MONGODB_DATABASE: quwoquan_recommendation
@@ -41,6 +42,7 @@ services:
       - "${QWQ_COMPOSE_REC_MODEL_PORT:-19240}:8000"
     volumes:
       - ${QWQ_COMPOSE_CONFIG_ROOT:?QWQ_COMPOSE_CONFIG_ROOT is required}:/etc/qwq-config:ro
+      - ${QWQ_COMPOSE_ARTIFACT_IDENTITY_FILE:?artifact identity mount is required}:/etc/quwoquan/artifact-identity.json:ro
       - ${QWQ_COMPOSE_REC_POLICY_SOURCE:?QWQ_COMPOSE_REC_POLICY_SOURCE is required}:/etc/qwq-rec-policy/policy.yaml:ro
       - recommendation-model-cache:/app/cache
     healthcheck:

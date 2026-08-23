@@ -22,6 +22,7 @@ def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) ->
     """Build exact per-entity content plans from validated source units."""
     from content.execution.controller.content_plan_prep import _article_source_quality_sort_key, _assess_content_plan_publish_image, _clean_content_plan_outputs
     from content.execution.planning.source_ready_scope import source_ready_runtime_spec
+    from content.post.article.article_media_contract import article_plan_media_rejection
     from content.post.article.base_draft import load_base_draft_text
     from content.post.article.base_draft_source import extract_source_title
     from core.quality_gates import derive_writing_intent
@@ -226,6 +227,7 @@ def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) ->
                         "writingIntent": derive_writing_intent(base_body),
                         "entityTags": entity_tags,
                         "sourceUseMode": str(meta.get("sourceUseMode") or "factual_reference_only"),
+                        "publishMediaMode": str(meta.get("publishMediaMode") or "").strip(),
                         "sourceClass": str(meta.get("sourceClass") or meta.get("category") or ""),
                         "sourceQualityScore": float(
                             meta.get("sourceQualityScore")
@@ -341,12 +343,10 @@ def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) ->
                 rejects.reject_article("source_ref_reused", str(candidate["sourceId"]))
                 continue
             refs, shas, collections, asset_refs = _article_asset_claims(ctx, root, candidate)
-            if len(asset_refs) < 2:
-                rejects.reject_article(
-                    "same_source_cover_body_missing",
-                    str(candidate["sourceId"]),
-                    "article requires at least two publishable images from its base source unit",
-                )
+            publish_media_mode = str(candidate.get("publishMediaMode") or "").strip()
+            media_rejection = article_plan_media_rejection(publish_media_mode, len(asset_refs))
+            if media_rejection is not None:
+                rejects.reject_article(media_rejection[0], str(candidate["sourceId"]), media_rejection[1])
                 continue
             if _claims_conflict(
                 refs,

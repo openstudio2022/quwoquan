@@ -331,6 +331,10 @@ class PreprodFormalReleaseRuntimeTest(unittest.TestCase):
                     "packaged_configuration_digest",
                     return_value="sha256:" + "c" * 64,
                 ),
+                mock.patch.object(
+                    stackctl,
+                    "_bind_artifact_identity_mount_material",
+                ),
                 mock.patch.object(stackctl, "run", side_effect=concurrent_pull),
             ):
                 composition = stackctl._bind_gamma_release_image_refs(

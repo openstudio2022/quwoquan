@@ -48,10 +48,6 @@ def freeze_carrier_pre_acquisition_inputs(
     acquisition_root: Path,
     handoff_ref: Path | None,
     scale: str,
-    vertical: str,
-    scope: str,
-    region_ref: str,
-    topic: str | None,
     run_date: str,
     campaign_sequence: int,
     source_revision: str,
@@ -59,7 +55,7 @@ def freeze_carrier_pre_acquisition_inputs(
     entity_catalog_digest: str,
     handoff_output_root: Path | None = None,
     bind_handoff: Callable[..., tuple[dict[str, Any], dict[str, Any]]],
-) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
     """Freeze external refs only while their governed handoff identity matches."""
     from content.execution.campaign.external_inputs import bind_external_input_refs
 
@@ -74,10 +70,6 @@ def freeze_carrier_pre_acquisition_inputs(
     handoff, binding = bind_handoff(
         handoff_ref,
         scale=scale,
-        vertical=vertical,
-        scope=scope,
-        region_ref=region_ref,
-        topic=topic,
         run_date=run_date,
         campaign_sequence=campaign_sequence,
         source_revision=source_revision,
@@ -90,4 +82,4 @@ def freeze_carrier_pre_acquisition_inputs(
         carrier=carrier,
         external_input_refs=frozen,
     )
-    return frozen, binding
+    return frozen, handoff, binding

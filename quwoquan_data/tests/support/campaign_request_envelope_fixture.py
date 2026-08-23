@@ -12,6 +12,7 @@ from content.execution.campaign import (
     request_envelope_writer,
 )
 from content.execution.campaign.external_inputs import content_source_revision
+from content.execution.campaign.scale import resolve_campaign_scale
 from core.source_digest import SourceDefinitionSnapshot
 from content.release.canonical.research_scale_capacity import throughput_basis_digest
 from core.io import write_json
@@ -74,21 +75,45 @@ def _patch_envelope_deps(monkeypatch) -> None:
             provider_tier=str(kwargs["provider_tier"]),
         ),
     )
+    fixture_handoff_document = {
+        "vertical": "travel",
+        "regionRef": "china",
+        "lifecycle": "research",
+        "scopeType": "region",
+        "scope": "china",
+        "primaryTopicRef": None,
+        "relatedTopicRefs": [],
+        "handoffId": "local-contract",
+        "handoffRevision": 1,
+        "handoffDigest": "sha256:" + "9" * 64,
+    }
+    fixture_handoff_binding = {
+        "handoffId": "local-contract",
+        "handoffRevision": 1,
+        "handoffRef": (
+            "data/local/workspace/content-pre-acquisition-handoffs/"
+            "local-contract/revision-001.json"
+        ),
+        "handoffDigest": "sha256:" + "9" * 64,
+        "handoffFileDigest": "sha256:" + "8" * 64,
+    }
+    monkeypatch.setattr(
+        request_envelope_build,
+        "load_pre_acquisition_handoff",
+        lambda _path: dict(fixture_handoff_document),
+    )
+    monkeypatch.setattr(
+        request_envelope_writer,
+        "load_pre_acquisition_handoff",
+        lambda _path: dict(fixture_handoff_document),
+    )
     monkeypatch.setattr(
         request_envelope_build,
         "freeze_carrier_pre_acquisition_inputs",
         lambda *_args, **_kwargs: (
             [],
-            {
-                "handoffId": "local-contract",
-                "handoffRevision": 1,
-                "handoffRef": (
-                    "data/local/workspace/content-pre-acquisition-handoffs/"
-                    "local-contract/revision-001.json"
-                ),
-                "handoffDigest": "sha256:" + "9" * 64,
-                "handoffFileDigest": "sha256:" + "8" * 64,
-            },
+            dict(fixture_handoff_document),
+            dict(fixture_handoff_binding),
         ),
     )
     def bind_pool(_path: Path, **kwargs: object):
@@ -122,16 +147,53 @@ def _patch_envelope_deps(monkeypatch) -> None:
     monkeypatch.setattr(request_envelope_build, "bind_scale_source_pool", bind_pool)
     original_build = request_envelope_build.build_envelope
 
+    def _governed_workload(kwargs: dict[str, object]) -> bool:
+        """Mirror the builder's authority split: bounded covers small explicit."""
+        if str(kwargs.get("workload_mode") or "explicit") != "explicit":
+            return True
+        resolved = resolve_campaign_scale(
+            scale=kwargs.get("scale"),  # type: ignore[arg-type]
+            quota=kwargs.get("quota"),  # type: ignore[arg-type]
+        )
+        active = tuple(kwargs.get("active_carriers") or (kwargs["carrier"],))
+        workloads = kwargs.get("workloads")
+        if workloads is None:
+            total = resolved.quota * len(active)
+        else:
+            total = sum(int(value) for value in dict(workloads).values())  # type: ignore[call-overload]
+        return total > 10
+
     def build_with_capacity(**kwargs: object):
-        if not kwargs.get("capacity_calibration_receipt"):
+        if not kwargs.get("capacity_calibration_receipt") and _governed_workload(
+            kwargs
+        ):
             kwargs["capacity_calibration_receipt"] = Path(
                 "data/local/tests/capacity/local-contract-capacity.json"
+            )
+        if not kwargs.get("pre_acquisition_handoff"):
+            kwargs["pre_acquisition_handoff"] = Path(
+                "data/local/workspace/content-pre-acquisition-handoffs/"
+                "local-contract/revision-001.json"
             )
         return original_build(**kwargs)
 
     monkeypatch.setattr(request_envelope_build, "build_envelope", build_with_capacity)
     monkeypatch.setattr(request_envelope_writer, "build_envelope", build_with_capacity)
     monkeypatch.setattr(envelopes, "build_envelope", build_with_capacity)
+    original_write = request_envelope_writer.write_scale_envelopes
+
+    def write_with_handoff(*args: object, **kwargs: object):
+        if not kwargs.get("pre_acquisition_handoff"):
+            kwargs["pre_acquisition_handoff"] = Path(
+                "data/local/workspace/content-pre-acquisition-handoffs/"
+                "local-contract/revision-001.json"
+            )
+        return original_write(*args, **kwargs)
+
+    monkeypatch.setattr(
+        request_envelope_writer, "write_scale_envelopes", write_with_handoff
+    )
+    monkeypatch.setattr(envelopes, "write_scale_envelopes", write_with_handoff)
     monkeypatch.setattr(m100_alpha_acceptance, "assert_valid", lambda *_args, **_kwargs: None)
 
 

@@ -14,6 +14,7 @@ from content.execution.campaign.source_pool_binding_io import (
     digest as _digest,
     file_sha256 as _file_sha256,
     link_evidence_surface_from_library,
+    media_source_admission_refs,
     relative_to_output as _relative,
     safe_evidence_directory as _safe_evidence_directory,
     safe_evidence_file as _safe_evidence_file,
@@ -171,6 +172,26 @@ def _nested_source_ready_refs(
         provenance["discoveryEvidenceRef"],
         provenance["discoveryEvidenceFileSha256"],
     )
+    # 胶囊重校验（_verify_raw_source_evidence）要求 acquisition evidence 内
+    # sourceUnit.rawEvidenceRef 指向的原始抓取字节在场；复制清单必须与该
+    # 校验对称，否则 materialize 后的 capsule 永远缺 raw 证据而被拒。
+    discovery_path = _safe_evidence_file(
+        candidate_root, str(provenance.get("discoveryEvidenceRef") or "")
+    )
+    discovery = read_json(discovery_path)
+    if (
+        isinstance(discovery, Mapping)
+        and discovery.get("schema")
+        == "quwoquan_data.homepage_article_source_ready_acquisition_evidence"
+    ):
+        source_unit = discovery.get("sourceUnit")
+        if isinstance(source_unit, Mapping) and source_unit.get("rawEvidenceRef"):
+            _add_member_ref(
+                refs,
+                candidate,
+                source_unit["rawEvidenceRef"],
+                source_unit["rawEvidenceFileSha256"],
+            )
     for field in (
         "acquisitionEvidenceRefs", "rightsEvidenceRefs", "qualityEvidenceRefs"
     ):
@@ -183,10 +204,13 @@ def _selected_evidence_refs(
 ) -> dict[str, str]:
     refs: dict[str, str] = {}
     for candidate in candidates:
-        prefixes = ["sourceUnit", "acquisition", "rights", "quality"]
-        if candidate["carrier"] == "video":
-            prefixes.append("playability")
-        for prefix in prefixes:
+        if candidate["carrier"] in {"image", "video"}:
+            for ref, sha in media_source_admission_refs(
+                candidate, evidence_root=evidence_root
+            ).items():
+                _add_ref(refs, ref, sha)
+            continue
+        for prefix in ("sourceUnit", "acquisition", "rights", "quality"):
             _add_member_ref(
                 refs,
                 candidate,

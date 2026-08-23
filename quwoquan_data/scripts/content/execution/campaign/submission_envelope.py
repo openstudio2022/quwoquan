@@ -44,7 +44,7 @@ def validate_envelope_identity(
         "selector": request.selector.value,
         "quota": request.quota,
         "count": request.count,
-        "capacityCalibration": dict(request.capacity_calibration),
+        "executionAuthority": dict(request.execution_authority),
         "workerHostSetBinding": (
             dict(request.worker_host_set_binding)
             if request.worker_host_set_binding is not None

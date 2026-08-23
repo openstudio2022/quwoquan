@@ -197,7 +197,7 @@ def write_submission(
             "selector": request.selector.value,
             "quota": request.quota,
             "count": request.count,
-            "capacityCalibration": dict(request.capacity_calibration),
+            "executionAuthority": dict(request.execution_authority),
             "workerHostSetBinding": (
                 dict(request.worker_host_set_binding)
                 if request.worker_host_set_binding is not None
@@ -262,7 +262,6 @@ def write_submission(
                 semantic_preflight_receipt,
                 semantic_selection_id=frozen_semantic_selection_id,
                 output_root=(semantic_preflight_output_root or paths.OUTPUT_ROOT),
-                require_fresh=False,
             )
             if requested_preflight_binding != semantic_preflight_binding:
                 raise ValueError(
@@ -383,7 +382,7 @@ def write_submission(
         "selector": request.selector.value,
         "quota": request.quota,
         "count": request.count,
-        "capacityCalibration": dict(request.capacity_calibration),
+        "executionAuthority": dict(request.execution_authority),
         "workerHostSetBinding": (
             dict(request.worker_host_set_binding)
             if request.worker_host_set_binding is not None

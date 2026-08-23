@@ -60,7 +60,7 @@ class DeploymentCandidateManifestContractBase(unittest.TestCase):
                     "runtime.log.sink": {
                         "state": "enabled",
                         "adapter_id": "ext.obs.elasticsearch",
-                        "endpoint_ref": "local_topology:alpha.elasticsearch",
+                        "endpoint_ref": "local_topology:elasticsearch",
                         "endpoint_envs": {
                             "endpoint": "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT",
                         },

@@ -34,6 +34,7 @@ from core.control_types import (
     ContentType,
     ExecutionStage,
     ExecutionStateStatus,
+    QueueBackend,
     SelectionPolicy,
 )
 
@@ -59,6 +60,7 @@ class ExecutionFixtureBuilder:
     semantic_preflight_binding: Mapping[str, object] | None = None
     # 过采场景：候选池大于准出配额。省略时候选池与配额相同（不过采）。
     approved_quota: int | None = None
+    queue_backend: QueueBackend = QueueBackend.RELIABLE_TASK
 
     def _normalized_targets(self) -> list[dict[str, object]]:
         identity = parse_execution_id(self.execution_id)
@@ -107,7 +109,10 @@ class ExecutionFixtureBuilder:
                     if self.approved_quota is not None
                     else len(normalized)
                 ),
-                "capacityCalibration": capacity_source,
+                "executionAuthority": {
+                    "mode": "governed_calibration",
+                    "calibration": capacity_source,
+                },
                 "workerHostSetBinding": None,
                 "topic": None,
                 "sourceProviders": [],
@@ -212,7 +217,7 @@ class ExecutionFixtureBuilder:
                 "gitCommitSha": "local-contract-fixture",
             },
             "queuePolicy": {
-                "backend": "reliabletask",
+                "backend": self.queue_backend.value,
                 "reliableTask": {
                     "taskType": "data.content_object.execute",
                     "queue": "reliabletask.data.content_supply",

@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 9ef2ea4f420bf7bbdfc789b9120c97d1309087a2c440dd35894074a0e9fecbd5
+// ContractGraph SHA256: e1ab11a794ec2c40267fa9f217db7841a15176dd0fe692c983f7fcf0cb7a180e
 
 part of '../../../circle/circle_operation_contracts.g.dart';
 
@@ -872,6 +872,58 @@ final class CircleStatsQuery {
   };
 }
 
+final class CommitGatheringPlanProposalCommand {
+  CommitGatheringPlanProposalCommand({
+    required String planId,
+    required String proposalId,
+    required int expectedPlanVersion,
+    required String expectedProposalDigest,
+    required String expectedBaseRevisionDigest,
+  }) : planId = planId,
+       proposalId = proposalId,
+       expectedPlanVersion = expectedPlanVersion,
+       expectedProposalDigest = expectedProposalDigest,
+       expectedBaseRevisionDigest = expectedBaseRevisionDigest {
+    if (this.planId.isEmpty) {
+      throw ArgumentError.value(this.planId, "planId", 'must not be blank');
+    }
+    if (this.proposalId.isEmpty) {
+      throw ArgumentError.value(this.proposalId, "proposalId", 'must not be blank');
+    }
+    if (this.expectedProposalDigest.isEmpty) {
+      throw ArgumentError.value(this.expectedProposalDigest, "expectedProposalDigest", 'must not be blank');
+    }
+    if (this.expectedBaseRevisionDigest.isEmpty) {
+      throw ArgumentError.value(this.expectedBaseRevisionDigest, "expectedBaseRevisionDigest", 'must not be blank');
+    }
+  }
+
+  final String planId;
+  final String proposalId;
+  final int expectedPlanVersion;
+  final String expectedProposalDigest;
+  final String expectedBaseRevisionDigest;
+
+  factory CommitGatheringPlanProposalCommand.fromWire(Map<String, Object?> map, [String path = "CommitGatheringPlanProposalCommand"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"planId", "proposalId", "expectedPlanVersion", "expectedProposalDigest", "expectedBaseRevisionDigest"}, path);
+    return CommitGatheringPlanProposalCommand(
+      planId: _generatedRequestString(map["planId"], '$path.planId'),
+      proposalId: _generatedRequestString(map["proposalId"], '$path.proposalId'),
+      expectedPlanVersion: _generatedRequestInt(map["expectedPlanVersion"], '$path.expectedPlanVersion'),
+      expectedProposalDigest: _generatedRequestString(map["expectedProposalDigest"], '$path.expectedProposalDigest'),
+      expectedBaseRevisionDigest: _generatedRequestString(map["expectedBaseRevisionDigest"], '$path.expectedBaseRevisionDigest'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "planId": this.planId,
+    "proposalId": this.proposalId,
+    "expectedPlanVersion": this.expectedPlanVersion,
+    "expectedProposalDigest": this.expectedProposalDigest,
+    "expectedBaseRevisionDigest": this.expectedBaseRevisionDigest,
+  };
+}
+
 final class CreateCircleCommand {
   CreateCircleCommand({
     required String name,
@@ -1149,6 +1201,44 @@ final class CreateGatheringDraftCommand {
     "schedule": this.schedule.toWire(),
     "place": this.place.toWire(),
     "policySet": this.policySet.toWire(),
+  };
+}
+
+final class CreateGatheringPlanCommand {
+  CreateGatheringPlanCommand({
+    required String gatheringId,
+    required List<PlanItem> items,
+    required PlanAcknowledgementPolicy acknowledgementPolicy,
+    required List<GatheringPlanParticipationRef> affectedParticipationRefs,
+  }) : gatheringId = gatheringId,
+       items = List.unmodifiable(items),
+       acknowledgementPolicy = acknowledgementPolicy,
+       affectedParticipationRefs = List.unmodifiable(affectedParticipationRefs) {
+    if (this.gatheringId.isEmpty) {
+      throw ArgumentError.value(this.gatheringId, "gatheringId", 'must not be blank');
+    }
+  }
+
+  final String gatheringId;
+  final List<PlanItem> items;
+  final PlanAcknowledgementPolicy acknowledgementPolicy;
+  final List<GatheringPlanParticipationRef> affectedParticipationRefs;
+
+  factory CreateGatheringPlanCommand.fromWire(Map<String, Object?> map, [String path = "CreateGatheringPlanCommand"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"gatheringId", "items", "acknowledgementPolicy", "affectedParticipationRefs"}, path);
+    return CreateGatheringPlanCommand(
+      gatheringId: _generatedRequestString(map["gatheringId"], '$path.gatheringId'),
+      items: List<PlanItem>.unmodifiable(_generatedRequestList(map["items"], '$path.items').asMap().entries.map((entry) => PlanItem.fromWire(_generatedRequestObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
+      acknowledgementPolicy: PlanAcknowledgementPolicy.fromWire(_generatedRequestObject(map["acknowledgementPolicy"], '$path.acknowledgementPolicy'), '$path.acknowledgementPolicy'),
+      affectedParticipationRefs: List<GatheringPlanParticipationRef>.unmodifiable(_generatedRequestList(map["affectedParticipationRefs"], '$path.affectedParticipationRefs').asMap().entries.map((entry) => GatheringPlanParticipationRef.fromWire(_generatedRequestObject(entry.value, '$path.affectedParticipationRefs' + '[${entry.key}]'), '$path.affectedParticipationRefs' + '[${entry.key}]'))),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "gatheringId": this.gatheringId,
+    "items": this.items.map((value) => value.toWire()).toList(growable: false),
+    "acknowledgementPolicy": this.acknowledgementPolicy.toWire(),
+    "affectedParticipationRefs": this.affectedParticipationRefs.map((value) => value.toWire()).toList(growable: false),
   };
 }
 
@@ -1580,6 +1670,62 @@ final class GatheringParticipationVersionCommand {
   };
 }
 
+final class GatheringPlanByGatheringQuery {
+  GatheringPlanByGatheringQuery({
+    required String gatheringId,
+  }) : gatheringId = gatheringId {
+    if (this.gatheringId.isEmpty) {
+      throw ArgumentError.value(this.gatheringId, "gatheringId", 'must not be blank');
+    }
+  }
+
+  final String gatheringId;
+
+  factory GatheringPlanByGatheringQuery.fromWire(Map<String, Object?> map, [String path = "GatheringPlanByGatheringQuery"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"gatheringId"}, path);
+    return GatheringPlanByGatheringQuery(
+      gatheringId: _generatedRequestString(map["gatheringId"], '$path.gatheringId'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "gatheringId": this.gatheringId,
+  };
+}
+
+final class GatheringPlanRevisionPageQuery {
+  GatheringPlanRevisionPageQuery({
+    required String planId,
+    String? cursor,
+    int? limit,
+  }) : planId = planId,
+       cursor = cursor,
+       limit = limit {
+    if (this.planId.isEmpty) {
+      throw ArgumentError.value(this.planId, "planId", 'must not be blank');
+    }
+  }
+
+  final String planId;
+  final String? cursor;
+  final int? limit;
+
+  factory GatheringPlanRevisionPageQuery.fromWire(Map<String, Object?> map, [String path = "GatheringPlanRevisionPageQuery"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"planId", "cursor", "limit"}, path);
+    return GatheringPlanRevisionPageQuery(
+      planId: _generatedRequestString(map["planId"], '$path.planId'),
+      cursor: map["cursor"] == null ? null : _generatedRequestString(map["cursor"], '$path.cursor'),
+      limit: map["limit"] == null ? null : _generatedRequestInt(map["limit"], '$path.limit'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "planId": this.planId,
+    if (this.cursor != null) "cursor": this.cursor!,
+    if (this.limit != null) "limit": this.limit!,
+  };
+}
+
 final class GatheringReasonCommand {
   GatheringReasonCommand({
     required String gatheringId,
@@ -1984,6 +2130,70 @@ final class PlaceCirclePostCommand {
     "circleId": this.circleId,
     "postId": this.postId,
     if (this.groupId != null) "groupId": this.groupId!,
+  };
+}
+
+final class ProposeGatheringPlanCommand {
+  ProposeGatheringPlanCommand({
+    required String planId,
+    required int expectedPlanVersion,
+    required String baseRevisionId,
+    required int baseRevisionNumber,
+    required String baseRevisionDigest,
+    required List<PlanItem> items,
+    required PlanAcknowledgementPolicy acknowledgementPolicy,
+    required List<GatheringPlanParticipationRef> affectedParticipationRefs,
+  }) : planId = planId,
+       expectedPlanVersion = expectedPlanVersion,
+       baseRevisionId = baseRevisionId,
+       baseRevisionNumber = baseRevisionNumber,
+       baseRevisionDigest = baseRevisionDigest,
+       items = List.unmodifiable(items),
+       acknowledgementPolicy = acknowledgementPolicy,
+       affectedParticipationRefs = List.unmodifiable(affectedParticipationRefs) {
+    if (this.planId.isEmpty) {
+      throw ArgumentError.value(this.planId, "planId", 'must not be blank');
+    }
+    if (this.baseRevisionId.isEmpty) {
+      throw ArgumentError.value(this.baseRevisionId, "baseRevisionId", 'must not be blank');
+    }
+    if (this.baseRevisionDigest.isEmpty) {
+      throw ArgumentError.value(this.baseRevisionDigest, "baseRevisionDigest", 'must not be blank');
+    }
+  }
+
+  final String planId;
+  final int expectedPlanVersion;
+  final String baseRevisionId;
+  final int baseRevisionNumber;
+  final String baseRevisionDigest;
+  final List<PlanItem> items;
+  final PlanAcknowledgementPolicy acknowledgementPolicy;
+  final List<GatheringPlanParticipationRef> affectedParticipationRefs;
+
+  factory ProposeGatheringPlanCommand.fromWire(Map<String, Object?> map, [String path = "ProposeGatheringPlanCommand"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"planId", "expectedPlanVersion", "baseRevisionId", "baseRevisionNumber", "baseRevisionDigest", "items", "acknowledgementPolicy", "affectedParticipationRefs"}, path);
+    return ProposeGatheringPlanCommand(
+      planId: _generatedRequestString(map["planId"], '$path.planId'),
+      expectedPlanVersion: _generatedRequestInt(map["expectedPlanVersion"], '$path.expectedPlanVersion'),
+      baseRevisionId: _generatedRequestString(map["baseRevisionId"], '$path.baseRevisionId'),
+      baseRevisionNumber: _generatedRequestInt(map["baseRevisionNumber"], '$path.baseRevisionNumber'),
+      baseRevisionDigest: _generatedRequestString(map["baseRevisionDigest"], '$path.baseRevisionDigest'),
+      items: List<PlanItem>.unmodifiable(_generatedRequestList(map["items"], '$path.items').asMap().entries.map((entry) => PlanItem.fromWire(_generatedRequestObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
+      acknowledgementPolicy: PlanAcknowledgementPolicy.fromWire(_generatedRequestObject(map["acknowledgementPolicy"], '$path.acknowledgementPolicy'), '$path.acknowledgementPolicy'),
+      affectedParticipationRefs: List<GatheringPlanParticipationRef>.unmodifiable(_generatedRequestList(map["affectedParticipationRefs"], '$path.affectedParticipationRefs').asMap().entries.map((entry) => GatheringPlanParticipationRef.fromWire(_generatedRequestObject(entry.value, '$path.affectedParticipationRefs' + '[${entry.key}]'), '$path.affectedParticipationRefs' + '[${entry.key}]'))),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "planId": this.planId,
+    "expectedPlanVersion": this.expectedPlanVersion,
+    "baseRevisionId": this.baseRevisionId,
+    "baseRevisionNumber": this.baseRevisionNumber,
+    "baseRevisionDigest": this.baseRevisionDigest,
+    "items": this.items.map((value) => value.toWire()).toList(growable: false),
+    "acknowledgementPolicy": this.acknowledgementPolicy.toWire(),
+    "affectedParticipationRefs": this.affectedParticipationRefs.map((value) => value.toWire()).toList(growable: false),
   };
 }
 
@@ -3385,6 +3595,70 @@ CloudOperationRequestPayload encodeCircleGatheringWatchGatheringAvailabilityGene
     body: <String, Object?>{
       "expectedGatheringVersion": request.expectedGatheringVersion,
       "expectedWatchVersion": request.expectedWatchVersion,
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeCircleGatheringPlanCommitGatheringPlanProposalGeneratedRequest(CommitGatheringPlanProposalCommand request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "planId": request.planId,
+    },
+    body: <String, Object?>{
+      "proposalId": request.proposalId,
+      "expectedPlanVersion": request.expectedPlanVersion,
+      "expectedProposalDigest": request.expectedProposalDigest,
+      "expectedBaseRevisionDigest": request.expectedBaseRevisionDigest,
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeCircleGatheringPlanCreateGatheringPlanGeneratedRequest(CreateGatheringPlanCommand request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "gatheringId": request.gatheringId,
+    },
+    body: <String, Object?>{
+      "items": request.items.map((value) => value.toWire()).toList(growable: false),
+      "acknowledgementPolicy": request.acknowledgementPolicy.toWire(),
+      "affectedParticipationRefs": request.affectedParticipationRefs.map((value) => value.toWire()).toList(growable: false),
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeCircleGatheringPlanGetGatheringPlanGeneratedRequest(GatheringPlanByGatheringQuery request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "gatheringId": request.gatheringId,
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeCircleGatheringPlanListGatheringPlanRevisionsGeneratedRequest(GatheringPlanRevisionPageQuery request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "planId": request.planId,
+    },
+    queryParameters: <String, String>{
+      if (request.cursor != null) "cursor": request.cursor!,
+      if (request.limit != null) "limit": (request.limit!).toString(),
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeCircleGatheringPlanProposeGatheringPlanGeneratedRequest(ProposeGatheringPlanCommand request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "planId": request.planId,
+    },
+    body: <String, Object?>{
+      "expectedPlanVersion": request.expectedPlanVersion,
+      "baseRevisionId": request.baseRevisionId,
+      "baseRevisionNumber": request.baseRevisionNumber,
+      "baseRevisionDigest": request.baseRevisionDigest,
+      "items": request.items.map((value) => value.toWire()).toList(growable: false),
+      "acknowledgementPolicy": request.acknowledgementPolicy.toWire(),
+      "affectedParticipationRefs": request.affectedParticipationRefs.map((value) => value.toWire()).toList(growable: false),
     },
   );
 }

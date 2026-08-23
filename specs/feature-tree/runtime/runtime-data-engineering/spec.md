@@ -158,6 +158,15 @@
 - 影响或价值：当前发布物虽已按 REQ-003 为每个节点声明采集通道，但该声明止步于 taxonomy，没有随标签进入在线特征。排序侧对一篇内容的全部标签施加同一个由停留深度与来源渠道推导的权重，因此拍摄元数据测量出的机身与焦段、地点选择解析出的行政区、创作者自行勾选的风格三者在召回与排序中完全等价。自填标签的噪声因此被当作实测证据参与分发，而实测证据也拿不到应有的置信优势。对象标签倒排只存扁平 tagRef 数组，不承载单条赋值的权重与置信度，所以该信息在存储层同样缺位。
 - 完成判定：单条标签赋值的采集通道与置信度可从发布物经倒排索引到达排序侧，排序按该置信度区分实测标签与自填标签。置信度只有发布物声明这一个来源，Go 侧不得按 tagRef 路径前缀推测采集通道。倒排索引改造后，反查与子树前缀反查的命中集合与改造前等价，并有真实存储证据。
 
+<a id="open-006"></a>
+### OPEN-006 旧执行编排层退役中，删除需以 skill 驱动稳产证据为准入
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：当前旧编排层（`quwoquan_data/scripts/content/execution/` 的 `agent/`、`queue/`、`controller` 自动推进与 checkpoint 循环、`recovery/` rewind、campaign fleet 调度，约 4~5 万行）已按 [`DEC-005`](./design.md#dec-005) 判定为退役中存量，但尚缺 skill 驱动主线任何一次 M1 全链路 `succeeded` 的真实运行证据（stage receipt 链、immutable release 与环境导入回执均未产生），也缺删除编排层后治理门与测试全绿的证据（import 闭包影响面未验证）。保留原因是 verify/测试仍有 import 依赖且删除需与并发流协调；退役完成前它们不得作为新内容任务的执行入口，新任务一律走阶段契约 + 宿主 agent 主线。
+- 完成判定：skill 驱动的 M1 全链路按 [`SIT-001`](#sit-001) 的同源输入与 release/导入证据连续 3 次以上 `succeeded`（恢复语义仍满足 [`SIT-002`](#sit-002) 的 terminal replay 约束）后，删除上述编排代码及其专属测试并原子更新受影响 import（无旧路径 shim）；删除后 `verify script-architecture`、`verify python-symbols`、`verify all` 与仓库 Python 治理门全绿。
+
 <a id="open-005"></a>
 ### OPEN-005 作废 canonical 内容的受治理 reset 与 exact replay
 

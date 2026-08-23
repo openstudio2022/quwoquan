@@ -30,10 +30,13 @@ from content.execution.campaign.request_envelope_identity import (
     assert_one_source_identity as _assert_one_source_identity,
 )
 from content.execution.campaign.scale import campaign_workload_targets, resolve_campaign_scale
+from content.execution.controller.execute.pre_acquisition_handoff import (
+    load_pre_acquisition_handoff,
+)
 from content.execution.identity import parse_execution_id
 from content.execution.model_contract import DEFAULT_SEMANTIC_SELECTION_ID
-from content.execution.planning.capacity_calibration import (
-    assert_capacity_source_binding,
+from content.execution.planning.execution_authority import (
+    assert_execution_authority,
 )
 
 
@@ -129,26 +132,26 @@ def _reconciliation_inputs(
 def _assert_workload_plans(
     payloads: Mapping[str, Mapping[str, Any]],
 ) -> None:
-    """Hold every carrier of one campaign on a single capacity source.
+    """Hold every carrier of one campaign on a single execution authority.
 
     `DEC-002` moved partition count and `capacityPlanDigest` to the execution
     freeze, so the envelope no longer carries them. What the envelope must still
-    guarantee is that all carriers were admitted against the same receipt and
-    that no host slice was pre-bound here.
+    guarantee is that all carriers were admitted against the same mutually
+    exclusive authority and that no host slice was pre-bound here.
     """
-    bindings = set()
+    authorities = set()
     for payload in payloads.values():
-        binding = payload.get("capacityCalibration")
-        if not isinstance(binding, Mapping):
-            raise ValueError("campaign envelope capacity calibration is missing")
-        assert_capacity_source_binding(binding)
-        bindings.add(
-            json.dumps(dict(binding), sort_keys=True, separators=(",", ":"))
+        authority = payload.get("executionAuthority")
+        if not isinstance(authority, Mapping):
+            raise ValueError("campaign envelope execution authority is missing")
+        assert_execution_authority(authority)
+        authorities.add(
+            json.dumps(dict(authority), sort_keys=True, separators=(",", ":"))
         )
         if payload.get("workerHostSetBinding") is not None:
             raise ValueError("campaign envelope must not pre-bind a worker host set")
-    if len(bindings) > 1:
-        raise ValueError("campaign carriers disagree on the capacity calibration")
+    if len(authorities) > 1:
+        raise ValueError("campaign carriers disagree on the execution authority")
 
 
 def _assert_one_scale_source_pool(
@@ -198,9 +201,6 @@ def write_scale_envelopes(
     scale: str | None = None,
     *,
     quota: int | None = None,
-    region_ref: str = "china",
-    vertical: str = "travel",
-    topic: str | None = None,
     target_names: Iterable[str] | None = None,
     source_providers: Iterable[str] | None = None,
     family_ref: str | None = None,
@@ -235,6 +235,15 @@ def write_scale_envelopes(
 ) -> dict[str, Path]:
     """Write immutable envelopes for selected carriers at one resolved scale."""
 
+    if pre_acquisition_handoff is None:
+        raise ValueError(
+            "GATE_BLOCK DATA.CAMPAIGN.HANDOFF_REQUIRED: campaign envelopes "
+            "require a confirmed pre-acquisition handoff"
+        )
+    handoff_document = load_pre_acquisition_handoff(
+        pre_acquisition_handoff.expanduser().resolve()
+    )
+    vertical = str(handoff_document["vertical"])
     requested_workloads = dict(workloads or {})
     resolved = resolve_campaign_scale(
         scale=scale,
@@ -298,9 +307,6 @@ def write_scale_envelopes(
             scale=resolved.scale,
             quota=None,
             carrier=carrier,
-            region_ref=region_ref,
-            vertical=vertical,
-            topic=topic,
             target_names=target_input,
             source_providers=source_providers,
             family_ref=family_ref,

@@ -197,23 +197,32 @@ def main() -> int:
         if token in build_gradle:
             issues.append(f"android build must use system public CA only; retired token: {token}")
     if "tasks.withType<FlutterTask>()" not in build_gradle:
-        issues.append("android debug build must patch FlutterTask dart-defines for plain flutter run")
-    if "verifyAndroidLocalLauncherContract" not in build_gradle:
         issues.append(
-            "android debug/profile must fail-closed unless start_app_instance/run.sh leases the device"
+            "android build must reject runtime configuration from FlutterTask dart-defines"
         )
-    if "requireCompleteRuntimeDartDefines" not in build_gradle:
-        issues.append(
-            "android FlutterTask must require complete runtime dart-defines from the canonical launcher"
-        )
-    if 'runtimeEnvironment in setOf("alpha", "beta", "gamma", "prod")' not in build_gradle:
-        issues.append(
-            "android debug/profile launcher contract must accept all four QWQ_APP_RUNTIME_ENV values"
-        )
-    if "QWQ_CONSUMER_LEASE_ACQUIRED" not in build_gradle or "QWQ_ANDROID_LOCAL_PORTS" not in build_gradle:
-        issues.append(
-            "android debug/profile must require consumer lease and adb reverse ports from the launcher"
-        )
+    for retired_authority in (
+        "verifyAndroidLocalLauncherContract",
+        "requireCompleteRuntimeDartDefines",
+        "QWQ_APP_RUNTIME_ENV",
+        "QWQ_CONSUMER_LEASE_ACQUIRED",
+        "QWQ_ANDROID_LOCAL_PORTS",
+    ):
+        if retired_authority in build_gradle:
+            issues.append(
+                "Android Gradle must not own runtime package, target, lease, or transport "
+                f"authority after canonical executor cutover: {retired_authority}"
+            )
+    for launcher_token in (
+        "consumer-lease acquire",
+        "QWQ_ANDROID_REVERSE_RECEIPT_DIGEST",
+        'python3 "$APP_DIR/scripts/device/build_launcher_handoff.py"',
+        'python3 "$APP_DIR/scripts/device/run_app_instance.py"',
+    ):
+        if launcher_token not in alpha_run:
+            issues.append(
+                "canonical run.sh must own lease, transport handoff, and executor launch: "
+                f"missing {launcher_token}"
+            )
     for retired in (
         "alphaLocalTransportDartDefineKeys",
         "shouldForceTransport",
@@ -336,13 +345,13 @@ def main() -> int:
                 "quwoquan_ops.tests.local_contract.environment."
                 "test_local_runtime_consumer_lease__local_contract_test."
                 "LocalRuntimeConsumerLeaseTest."
-                "test_launcher_warning_policy_reaches_flutter_run_without_runtime_lease"
+                "test_launcher_warning_policy_reaches_canonical_executor_without_runtime_lease"
             ),
             (
                 "quwoquan_ops.tests.local_contract.environment."
                 "test_local_runtime_consumer_lease__local_contract_test."
                 "LocalRuntimeConsumerLeaseTest."
-                "test_launcher_hard_safety_blocker_stops_before_flutter_run"
+                "test_launcher_hard_safety_blocker_stops_before_canonical_executor"
             ),
         ]
     )
@@ -364,29 +373,29 @@ def main() -> int:
             (
                 "quwoquan_app.test.local_contract.runtime."
                 "ios_runtime_dart_defines__direct_debug__local_contract_test."
-                "IosRuntimeDartDefinesContractTest."
-                "test_direct_ios_debug_selects_canonical_nonprod_handoff"
+                "IosRuntimeDartDefinesDirectDebugContractTest."
+                "test_direct_debug_embeds_profile_trust_without_runtime_defines_or_package"
             ),
             (
                 "quwoquan_app.test.local_contract.runtime."
                 "ios_runtime_dart_defines__direct_debug__local_contract_test."
-                "IosRuntimeDartDefinesContractTest."
-                "test_direct_ios_debug_reports_the_first_hard_safety_blocker"
+                "IosRuntimeDartDefinesDirectDebugContractTest."
+                "test_xcode_wrapper_stops_before_backend_without_trust_envelope"
             ),
         ]
     )
     if ios_policy_contract.returncode != 0:
         issues.append(
-            "iOS direct Debug must continue on test_live readiness warnings and "
-            "stop on hard safety blockers: "
+            "iOS direct Debug must embed only profile trust and fail before the "
+            "backend when trust is absent: "
             + summarize_output(
                 ios_policy_contract.stdout + ios_policy_contract.stderr,
                 max_lines=12,
             )
         )
-    if "use ./run.sh -d <device>" not in ios_prepare_defines:
+    if "Debug and Profile use Debug-nonprod/Profile-nonprod" not in ios_prepare_defines:
         issues.append(
-            "iOS bare build failure must point to the canonical run.sh launcher"
+            "iOS non-Release build failure must point to canonical nonprod configurations"
         )
     if (
         "PROVIDER_CONFORMANCE_EVIDENCE_ENVIRONMENTS"

@@ -26,10 +26,14 @@ from quwoquan_ops.ci.release_bound_data_evidence import (
     DataEvidenceError,
     validate_data_evidence,
 )
+from quwoquan_ops.ci.render_release_application_package import validate_package
+from quwoquan_ops.cli.lib.app_identity import (
+    build_profile_for_environment,
+    supported_build_products,
+)
 from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
     canonical_candidate_digest,
     canonical_manifest_digest,
-    validate_application_package_evidence,
     validate_manifest,
     validate_manifest_files,
 )
@@ -47,6 +51,17 @@ EXPECTED_DEVICE_PROFILES = {
     "gamma": {"android-simulator", "android-physical", "ios-simulator"},
     "prod": {"android-physical", "ios-physical"},
 }
+
+
+def _build_product_ids_for_environment(environment: str) -> tuple[str, ...]:
+    profile = build_profile_for_environment(environment)
+    return tuple(
+        product.build_product_id
+        for product in supported_build_products()
+        if product.build_profile in {profile, "shared"}
+    )
+
+
 SPEC_REFS = (
     "specs/feature-tree/spec.md#uat-003",
     "specs/feature-tree/runtime/runtime-data-engineering/spec.md#sit-001",
@@ -220,10 +235,9 @@ def _validate_manifest(
             "ReleaseEvidenceManifest source identity is invalid"
         )
     packages = value.get("applicationPackages")
-    if not isinstance(packages, Mapping) or not isinstance(
-        packages.get(environment), Mapping
-    ):
-        raise IdentityEvidenceError("ReleaseEvidenceManifest App packages are missing")
+    required_products = set(_build_product_ids_for_environment(environment))
+    if not isinstance(packages, Mapping) or not required_products.issubset(packages):
+        raise IdentityEvidenceError("ReleaseEvidenceManifest App products are missing")
     return candidate, git_sha, tree
 
 
@@ -480,45 +494,45 @@ def _validate_app_receipts(
 ) -> tuple[dict[str, str], list[dict[str, str]]]:
     artifacts: dict[str, str] = {}
     evidence: list[dict[str, str]] = []
-    descriptors = manifest["applicationPackages"][environment]
+    descriptors = manifest["applicationPackages"]
+    required_products = set(_build_product_ids_for_environment(environment))
     for path, value in zip(paths, values, strict=True):
-        surface = (
-            "android"
-            if environment == "prod"
-            and value.get("schema") == "client-app.android.official-release"
-            else str(value.get("surface") or "")
-        )
-        if surface not in {"android", "ios"} or surface in artifacts:
+        build_product_id = str(value.get("buildProductId") or "")
+        if build_product_id not in required_products or build_product_id in artifacts:
             raise IdentityEvidenceError(
-                "App artifact surface is unsupported or duplicated"
+                "App build product is unsupported or duplicated for the environment"
             )
         try:
-            package_digest = validate_application_package_evidence(
-                value, manifest=manifest, environment=environment, surface=surface
+            package = validate_package(
+                value,
+                build_product_id=build_product_id,
+                source_git_sha=manifest["source"]["gitSha"],
+                source_tree_digest=manifest["source"]["treeDigest"],
             )
         except ValueError as exc:
             raise IdentityEvidenceError(
                 f"App artifact receipt is invalid: {exc}"
             ) from exc
+        package_digest = str(package["packageDigest"])
         receipt_digest = _file_digest(path)
-        descriptor = descriptors.get(surface)
+        descriptor = descriptors.get(build_product_id)
         if (
             not isinstance(descriptor, Mapping)
             or descriptor.get("digest") != receipt_digest
             or descriptor.get("packageDigest") != package_digest
         ):
             raise IdentityEvidenceError("App artifact differs from sealed manifest")
-        artifacts[surface] = package_digest
+        artifacts[build_product_id] = package_digest
         evidence.append(
             {
-                "surface": surface,
+                "buildProductId": build_product_id,
                 "ref": path.resolve().as_posix(),
                 "sha256": receipt_digest,
             }
         )
-    if set(artifacts) != {"android", "ios"}:
-        raise IdentityEvidenceError("Android and iOS App receipts are required")
-    return artifacts, sorted(evidence, key=lambda item: item["surface"])
+    if set(artifacts) != required_products:
+        raise IdentityEvidenceError("environment App build product receipts are required")
+    return artifacts, sorted(evidence, key=lambda item: item["buildProductId"])
 
 
 def _require_counts(value: Mapping[str, Any], *, label: str) -> None:

@@ -390,7 +390,10 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     acquire_content.add_argument("--coverage-run-dir", required=True)
     acquire_content.add_argument("--source-set-id", required=True)
     acquire_content.add_argument(
-        "--target-scale", choices=("M100", "M1000", "M10000"), required=True
+        "--target-scale",
+        choices=("WORKLOAD", "M100", "M1000", "M10000"),
+        required=True,
+        help="WORKLOAD 表示 explicit 按需小批采集；M100+ 为 milestone preset",
     )
     acquire_content.add_argument("--source-revision", required=True)
     acquire_content.add_argument("--source-digest", required=True)
@@ -413,7 +416,9 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     merge_content.add_argument("--source-ready-manifest", action="append", required=True)
     merge_content.add_argument("--source-set-id", required=True)
     merge_content.add_argument(
-        "--target-scale", choices=("M100", "M1000", "M10000"), required=True
+        "--target-scale",
+        choices=("WORKLOAD", "M100", "M1000", "M10000"),
+        required=True,
     )
     merge_content.add_argument("--source-revision", required=True)
     merge_content.add_argument("--source-digest", required=True)

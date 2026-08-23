@@ -39,12 +39,12 @@
 - 关联验收：`SIT-001`
 
 <a id="dec-002"></a>
-### DEC-002 四环境星型继承
+### DEC-002 四环境星型 authoring 与信任域构建分离
 
-- 决策：每个服务的 `environments/alpha|beta|gamma|prod` 是环境唯一 authoring 入口；四环境只共同依赖服务公共 `config/schema.yaml`、`resources/` 和 `deploy/base`，彼此不得继承。package 从当前环境入口与只读 capsule 生成环境专属 config、binding、resource 和 image closure。
-- 理由：环境间继承或运行时选环境都会隐藏实际生效值并形成第五种组合状态；星型 authoring 加构建期绑定使差异和准出边界可审计。
-- 被否决方案：将环境差异散落到 `config/environments`、`resources/seeds/<env>`、`deploy/overlays`，引入 `environments/common` 伪环境，让 beta/gamma/prod 逐级继承，或让 `APP_ENV` 在进程启动后选择环境实现。
-- 约束与影响：config/image/resource/binding/authority version 均从当前环境 capsule 的精确字节派生；环境文件只保存差异、secret reference、external binding 和资源引用。`APP_ENV` 迁移期只校验内嵌环境，缺失或错配即失败，不得反向选择制品。
+- 决策：每个服务的 `environments/alpha|beta|gamma|prod` 是环境唯一 authoring 入口。四环境只共同依赖服务公共 `config/schema.yaml`、`resources/` 和 `deploy/base`，彼此不得继承。package 从当前环境入口与只读 capsule 生成环境专属 config、SecretRef、endpoint、resource、topology 与 activation closure，可执行镜像按 `nonprod/prod` 信任域从同一 capsule 构建并由环境 composition 引用。
+- 理由：环境间继承会隐藏实际生效值，按环境重复编译则把配置差异错误地升级成字节差异。星型 authoring 保证四环境差异可审计，信任域构建保证未变组件可按 digest 复用并维持 Prod 与非生产供应链隔离。
+- 被否决方案：将环境差异散落到 `config/environments`、`resources/seeds/<env>` 或 `deploy/overlays`，引入 `environments/common` 伪环境，让 beta/gamma/prod 逐级继承，按四环境生成最终镜像，或让 `APP_ENV` 在进程启动后选择 Adapter、数据源或策略。
+- 约束与影响：config/resource/authority version 从当前环境 capsule 的精确字节派生。image 与编译期 Provider binding 按信任域派生，Alpha、Beta、Gamma 的 external binding 必须先收敛为同一 nonprod 视图。环境文件只保存差异、secret reference、external binding 和资源引用。`APP_ENV` 只校验部署面挂载配置，缺失或错配即失败，不得反向选择制品。
 - 关联要求：`REQ-003`
 
 <a id="dec-003"></a>
@@ -339,6 +339,21 @@
 - 影响 Story：[`absent-empty-failure-nullability`](./absent-empty-failure-nullability/spec.md) 承接四态定义、跨管线单义与三道门禁。
 - 关联要求：`REQ-001`、`REQ-002`
 - 关联验收：`SIT-001`
+
+<a id="dec-026"></a>
+### DEC-026 本地工作副本治理由单一策略驱动三个执行面，判定实时派生且边界诚实
+
+- 决策：worktree 与 clone 的创建授权、滞留提醒与 hooks 自检共用唯一策略文件 `quwoquan_ops/policies/worktree_policy.yaml` 和唯一派生实现；Cursor、Codex 与 git hooks 三个执行面只做协议适配，不各自实现判定规则。三处规则一旦分写，最先漂移的总是最少被触发的那一处。
+- 决策：两个 AI 执行面的能力不对等，适配层必须按执行面输出不同结果，而不是取交集或并集。Cursor 的 `beforeShellExecution` 支持 `permission: "ask"`，可把动作升级为人工批准；Codex 的 `PreToolUse` 明确不支持 `ask`——返回该值会被判为 hook 运行失败并继续执行工具调用——只能 `deny` 并在理由中给出授权方式。取交集会让 Cursor 侧退化成同样生硬的拒绝，按 Cursor 的能力写死则会让 Codex 侧静默失效。
+- 决策：提醒的投递事件按执行面各自的输出能力选择，而不是统一挂在会话开始。Codex 的 `SessionStart` 支持 `additionalContext`，直接使用；Cursor 的 `sessionStart` 不声明任何输出字段，提醒改挂在支持 `user_message` 的 `beforeShellExecution` 上。挂在不支持输出的事件上，hook 会正常退出却什么也不投递，这种静默失效正是本机制要治理的那类问题。回落到高频事件后，未到提醒时点的短路必须在 shell 内完成且只读一个 epoch sentinel，使间隔参数仍然只有策略文件一个来源。
+- 决策：工作副本清单只实时派生，不落台账。授权是随命令传递的一次性凭据，不产生「已授权清单」；滞留判定由 `git worktree list`、发现根扫描与 `git rev-list` 现算。任何形式的 registry、allowlist 或滞留基线，在下一次意外发生时正好会是过期的那一份。
+- 决策：git hooks 是三个执行面唯一的公共底座，因此 `core.hooksPath` 的安装状态本身是被治理对象。自检不得只挂在 pre-commit——hooks 失效时 pre-commit 恰好不会运行，而那正是最需要发现问题的时刻；判定改由聚合门禁与执行面会话开始交叉承担。
+- 理由：`branch_policy.yaml` 只约束分支名，而实际失控的工作副本没有一个违反分支禁令（临时探针为 detached HEAD，独立 clone 均在 `dev1.0`）。真正的失控维度是工作副本的数量以及其中滞留的未合入工作，这个维度没有任何策略覆盖，也没有任何一道门禁会因它变红。
+- 约束：本机制只能阻断意外，不能阻断刻意绕过。执行体有权自行设置环境变量与改写仓内文件，Cursor 的人工批准弹窗是其中唯一执行体无法自行绕过的一环。实现与回执必须如实声明该边界，不得表述为强制保护。
+- 被否决方案：为「已授权 worktree」维护受版本控制的 allowlist（与仓库禁止 registry/inventory 冲突，且必然过期）、仅用 git hooks 覆盖全部执行面（git 没有 worktree 创建前置 hook，`post-checkout` 触发时已无法撤销）、仅用执行面 hook 而不修 git hooks（clone 目标不继承 hooks，人工终端完全失管）、引入常驻守护进程做每日提醒（仓外状态，与仓库自治边界冲突）。
+- 影响 Story：[`local-worktree-lifecycle-governance`](./local-worktree-lifecycle-governance/spec.md) 承接授权闸、滞留提醒、hooks 自检与无台账约束。
+- 关联要求：`REQ-005`
+- 关联验收：`SIT-005`
 
 ## 5. 失败与恢复
 

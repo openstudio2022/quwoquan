@@ -18,10 +18,10 @@ externalBindings:
     state: enabled
     adapter: ext.map.protocol_fixture
     endpointRef: local_topology:provider-protocol-substitute
+  # poi.search 与 beta/gamma/prod 对齐为 not_required：nonprod 三环境必须共享同
+  # 一 binding 档（DEC-005 信任域裁决），启用时需四环境同步声明。
   location.poi.search:
-    state: enabled
-    adapter: ext.map.nominatim.protocol_substitute
-    endpointRef: local_topology:provider-protocol-substitute
+    state: not_required
   # route.read 保持未启用：App 当前无路线消费页面，user_acceptance 层无法提供
   # 真实 user journey，三层 conformance source 无法闭环；替身 /osrm 协议面与
   # ext.route.osrm.protocol_substitute adapter 契约已就绪，待消费点落地再翻牌。

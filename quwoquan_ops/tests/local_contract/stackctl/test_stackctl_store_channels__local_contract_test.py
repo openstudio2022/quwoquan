@@ -115,7 +115,7 @@ class StoreChannelMatrixTest(unittest.TestCase):
         self.assertEqual(result["exitCode"], 0)
         self.assertEqual(result["channel"]["status"], "ready")
         self.assertEqual(
-            result["channel"]["applicationId"], "com.quwoquan.quwoquan_app"
+            result["channel"]["applicationId"], "com.leadwise.quwoquan"
         )
 
     def test_unregistered_ios_production_id_blocks_store_even_with_credential(

@@ -21,6 +21,8 @@ import unittest
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 DATA_ROOT = next(
     parent
     for parent in Path(__file__).resolve().parents
@@ -83,31 +85,20 @@ def _self_digest(receipt: dict[str, Any]) -> str:
     return "sha256:" + hashlib.sha256(encoded).hexdigest()
 
 
-def test_repository_capacity_calibration_receipt_is_self_contained() -> None:
-    path = (
-        DATA_ROOT
-        / "control_plane/_shared/capacity_calibration/"
-        / "m100-wave-soak-20260818-v4/receipt.json"
+def test_repository_carries_no_governed_receipt_and_loader_fails_closed() -> None:
+    # 失效的 m100-wave-soak-20260818-v4 已按 L2 design 从当前事实删除；
+    # OPEN-006 由未来真实 M100 soak 承接，本用例守护两件事：
+    # 1) 仓库不携带任何伪造/过期 governed receipt；
+    # 2) governed 路径对缺失 receipt fail-closed，不回落 bounded authority。
+    calibration_root = DATA_ROOT / "control_plane/_shared/capacity_calibration"
+    assert not any(calibration_root.glob("*/receipt.json")), (
+        "governed capacity calibration receipts must come from a real M100 "
+        "soak (multi-carrier-release OPEN-006); found unexpected receipt(s) "
+        f"under {calibration_root}"
     )
-    # OPEN-006 要求缺 receipt 时在干净检出上 GATE_BLOCK。动态 skip 会把这个
-    # P0 证据缺口变成静默通过，因此这里断言 receipt 在场：它只能由真实 M100
-    # soak 经 capacity_calibration_cli 产出并入库，用规格复述的数值反向合成
-    # receipt 恰好会伪造本用例要证的自包含闭包。
-    assert path.is_file(), (
-        f"governed capacity calibration receipt is missing: {path}. "
-        "multi-carrier-release OPEN-006 blocks until a real M100 soak produces it"
-    )
-    receipt = load_capacity_calibration_receipt(path)
-    assert receipt["frozenCapacity"] == {
-        "autoResearchMaxConcurrentWorkers": 8,
-        "fleetMaxConcurrentWorkers": 3,
-        "objectWallClockSeconds": 660,
-        "completionGraceSeconds": 60,
-    }
-    assert receipt["supersedesCalibrationId"] is None
-    assert receipt["receiptDigest"] == (
-        "sha256:653180ed007d37bd01644f5d19e27b406532cf026a701086a0e06b2beda744f0"
-    )
+    missing = calibration_root / "m100-wave-soak-20260818-v4/receipt.json"
+    with pytest.raises(CapacityCalibrationError):
+        load_capacity_calibration_receipt(missing)
 
 
 class CapacityCalibrationLoaderTest(unittest.TestCase):

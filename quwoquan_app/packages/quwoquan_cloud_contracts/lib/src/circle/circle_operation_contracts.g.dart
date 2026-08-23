@@ -1,5 +1,5 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: 9ef2ea4f420bf7bbdfc789b9120c97d1309087a2c440dd35894074a0e9fecbd5
+// ContractGraph SHA256: e1ab11a794ec2c40267fa9f217db7841a15176dd0fe692c983f7fcf0cb7a180e
 
 library;
 
@@ -617,6 +617,23 @@ enum GatheringPlaceMode {
   }
 }
 
+enum GatheringPlanProposalStatus {
+  pending("pending"),
+  committed("committed");
+
+  const GatheringPlanProposalStatus(this.wireName);
+
+  final String wireName;
+
+  static GatheringPlanProposalStatus fromWire(Object? value, String path) {
+    return switch (value) {
+      "pending" => GatheringPlanProposalStatus.pending,
+      "committed" => GatheringPlanProposalStatus.committed,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
 enum GatheringRoomBindingStatus {
   pending("pending"),
   ready("ready"),
@@ -713,6 +730,92 @@ enum OrganizationNodeType {
       "classroom" => OrganizationNodeType.classroom,
       "department" => OrganizationNodeType.department,
       "team" => OrganizationNodeType.team,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum PlanAcknowledgementMode {
+  none("none"),
+  affectedParticipations("affected_participations");
+
+  const PlanAcknowledgementMode(this.wireName);
+
+  final String wireName;
+
+  static PlanAcknowledgementMode fromWire(Object? value, String path) {
+    return switch (value) {
+      "none" => PlanAcknowledgementMode.none,
+      "affected_participations" => PlanAcknowledgementMode.affectedParticipations,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum PlanAcknowledgementStatus {
+  pending("pending"),
+  acknowledged("acknowledged"),
+  declined("declined");
+
+  const PlanAcknowledgementStatus(this.wireName);
+
+  final String wireName;
+
+  static PlanAcknowledgementStatus fromWire(Object? value, String path) {
+    return switch (value) {
+      "pending" => PlanAcknowledgementStatus.pending,
+      "acknowledged" => PlanAcknowledgementStatus.acknowledged,
+      "declined" => PlanAcknowledgementStatus.declined,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum PlanItemKind {
+  agenda("agenda"),
+  place("place"),
+  routeSegment("route_segment"),
+  task("task"),
+  checklist("checklist"),
+  note("note");
+
+  const PlanItemKind(this.wireName);
+
+  final String wireName;
+
+  static PlanItemKind fromWire(Object? value, String path) {
+    return switch (value) {
+      "agenda" => PlanItemKind.agenda,
+      "place" => PlanItemKind.place,
+      "route_segment" => PlanItemKind.routeSegment,
+      "task" => PlanItemKind.task,
+      "checklist" => PlanItemKind.checklist,
+      "note" => PlanItemKind.note,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum PlanTravelMode {
+  walk("walk"),
+  bicycle("bicycle"),
+  transit("transit"),
+  drive("drive"),
+  ferry("ferry"),
+  other("other");
+
+  const PlanTravelMode(this.wireName);
+
+  final String wireName;
+
+  static PlanTravelMode fromWire(Object? value, String path) {
+    return switch (value) {
+      "walk" => PlanTravelMode.walk,
+      "bicycle" => PlanTravelMode.bicycle,
+      "transit" => PlanTravelMode.transit,
+      "drive" => PlanTravelMode.drive,
+      "ferry" => PlanTravelMode.ferry,
+      "other" => PlanTravelMode.other,
       _ => throw FormatException('$path has an invalid enum value'),
     };
   }
@@ -2461,6 +2564,260 @@ final class GatheringPlace {
   };
 }
 
+final class GatheringPlan {
+  const GatheringPlan({
+    required this.id,
+    required this.gatheringId,
+    required this.version,
+    required this.currentRevisionId,
+    required this.currentRevisionNumber,
+    required this.currentRevisionDigest,
+    required this.revisions,
+    required this.proposals,
+    required this.acknowledgements,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  final String id;
+  final String gatheringId;
+  final int version;
+  final String currentRevisionId;
+  final int currentRevisionNumber;
+  final String currentRevisionDigest;
+  final List<PlanRevision> revisions;
+  final List<GatheringPlanProposal> proposals;
+  final List<PlanRevisionAcknowledgement> acknowledgements;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  factory GatheringPlan.fromWire(Map<String, Object?> map, [String path = "GatheringPlan"]) {
+    _rejectUnknownFields(map, const <String>{"id", "gatheringId", "version", "currentRevisionId", "currentRevisionNumber", "currentRevisionDigest", "revisions", "proposals", "acknowledgements", "createdAt", "updatedAt"}, path);
+    return GatheringPlan(
+      id: _requiredString(map["id"], '$path.id'),
+      gatheringId: _requiredNonBlankString(map["gatheringId"], '$path.gatheringId'),
+      version: _requiredInt(map["version"], '$path.version'),
+      currentRevisionId: _requiredNonBlankString(map["currentRevisionId"], '$path.currentRevisionId'),
+      currentRevisionNumber: _requiredInt(map["currentRevisionNumber"], '$path.currentRevisionNumber'),
+      currentRevisionDigest: _requiredNonBlankString(map["currentRevisionDigest"], '$path.currentRevisionDigest'),
+      revisions: List<PlanRevision>.unmodifiable(_requiredList(map["revisions"], '$path.revisions').asMap().entries.map((entry) => PlanRevision.fromWire(_requiredObject(entry.value, '$path.revisions' + '[${entry.key}]'), '$path.revisions' + '[${entry.key}]'))),
+      proposals: List<GatheringPlanProposal>.unmodifiable(_requiredList(map["proposals"], '$path.proposals').asMap().entries.map((entry) => GatheringPlanProposal.fromWire(_requiredObject(entry.value, '$path.proposals' + '[${entry.key}]'), '$path.proposals' + '[${entry.key}]'))),
+      acknowledgements: List<PlanRevisionAcknowledgement>.unmodifiable(_requiredList(map["acknowledgements"], '$path.acknowledgements').asMap().entries.map((entry) => PlanRevisionAcknowledgement.fromWire(_requiredObject(entry.value, '$path.acknowledgements' + '[${entry.key}]'), '$path.acknowledgements' + '[${entry.key}]'))),
+      createdAt: _requiredTimestamp(map["createdAt"], '$path.createdAt'),
+      updatedAt: _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "id": id,
+    "gatheringId": gatheringId,
+    "version": version,
+    "currentRevisionId": currentRevisionId,
+    "currentRevisionNumber": currentRevisionNumber,
+    "currentRevisionDigest": currentRevisionDigest,
+    "revisions": revisions.map((value) => value.toWire()).toList(growable: false),
+    "proposals": proposals.map((value) => value.toWire()).toList(growable: false),
+    "acknowledgements": acknowledgements.map((value) => value.toWire()).toList(growable: false),
+    "createdAt": createdAt.toUtc().toIso8601String(),
+    "updatedAt": updatedAt.toUtc().toIso8601String(),
+  };
+}
+
+final class GatheringPlanCommandResult {
+  const GatheringPlanCommandResult({
+    required this.planId,
+    required this.gatheringId,
+    required this.planVersion,
+    required this.currentRevisionId,
+    required this.currentRevisionNumber,
+    required this.currentRevisionDigest,
+    this.proposalId,
+    this.proposalDigest,
+    required this.replayed,
+  });
+
+  final String planId;
+  final String gatheringId;
+  final int planVersion;
+  final String currentRevisionId;
+  final int currentRevisionNumber;
+  final String currentRevisionDigest;
+  final String? proposalId;
+  final String? proposalDigest;
+  final bool replayed;
+
+  factory GatheringPlanCommandResult.fromWire(Map<String, Object?> map, [String path = "GatheringPlanCommandResult"]) {
+    _rejectUnknownFields(map, const <String>{"planId", "gatheringId", "planVersion", "currentRevisionId", "currentRevisionNumber", "currentRevisionDigest", "proposalId", "proposalDigest", "replayed"}, path);
+    return GatheringPlanCommandResult(
+      planId: _requiredNonBlankString(map["planId"], '$path.planId'),
+      gatheringId: _requiredNonBlankString(map["gatheringId"], '$path.gatheringId'),
+      planVersion: _requiredInt(map["planVersion"], '$path.planVersion'),
+      currentRevisionId: _requiredNonBlankString(map["currentRevisionId"], '$path.currentRevisionId'),
+      currentRevisionNumber: _requiredInt(map["currentRevisionNumber"], '$path.currentRevisionNumber'),
+      currentRevisionDigest: _requiredNonBlankString(map["currentRevisionDigest"], '$path.currentRevisionDigest'),
+      proposalId: map["proposalId"] == null ? null : _requiredString(map["proposalId"], '$path.proposalId'),
+      proposalDigest: map["proposalDigest"] == null ? null : _requiredString(map["proposalDigest"], '$path.proposalDigest'),
+      replayed: _requiredBool(map["replayed"], '$path.replayed'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "planId": planId,
+    "gatheringId": gatheringId,
+    "planVersion": planVersion,
+    "currentRevisionId": currentRevisionId,
+    "currentRevisionNumber": currentRevisionNumber,
+    "currentRevisionDigest": currentRevisionDigest,
+    if (proposalId != null) "proposalId": proposalId!,
+    if (proposalDigest != null) "proposalDigest": proposalDigest!,
+    "replayed": replayed,
+  };
+}
+
+final class GatheringPlanParticipationRef {
+  const GatheringPlanParticipationRef({
+    required this.gatheringId,
+    required this.personaId,
+  });
+
+  final String gatheringId;
+  final String personaId;
+
+  factory GatheringPlanParticipationRef.fromWire(Map<String, Object?> map, [String path = "GatheringPlanParticipationRef"]) {
+    _rejectUnknownFields(map, const <String>{"gatheringId", "personaId"}, path);
+    return GatheringPlanParticipationRef(
+      gatheringId: _requiredNonBlankString(map["gatheringId"], '$path.gatheringId'),
+      personaId: _requiredNonBlankString(map["personaId"], '$path.personaId'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "gatheringId": gatheringId,
+    "personaId": personaId,
+  };
+}
+
+final class GatheringPlanProposal {
+  const GatheringPlanProposal({
+    required this.proposalId,
+    required this.basePlanVersion,
+    required this.baseRevisionId,
+    required this.baseRevisionNumber,
+    required this.baseRevisionDigest,
+    required this.proposalDigest,
+    required this.proposedByPersonaId,
+    required this.items,
+    required this.acknowledgementPolicy,
+    required this.affectedParticipationRefs,
+    required this.status,
+    required this.proposedAt,
+    this.committedRevisionId,
+    this.committedAt,
+  });
+
+  final String proposalId;
+  final int basePlanVersion;
+  final String baseRevisionId;
+  final int baseRevisionNumber;
+  final String baseRevisionDigest;
+  final String proposalDigest;
+  final String proposedByPersonaId;
+  final List<PlanItem> items;
+  final PlanAcknowledgementPolicy acknowledgementPolicy;
+  final List<GatheringPlanParticipationRef> affectedParticipationRefs;
+  final GatheringPlanProposalStatus status;
+  final DateTime proposedAt;
+  final String? committedRevisionId;
+  final DateTime? committedAt;
+
+  factory GatheringPlanProposal.fromWire(Map<String, Object?> map, [String path = "GatheringPlanProposal"]) {
+    _rejectUnknownFields(map, const <String>{"proposalId", "basePlanVersion", "baseRevisionId", "baseRevisionNumber", "baseRevisionDigest", "proposalDigest", "proposedByPersonaId", "items", "acknowledgementPolicy", "affectedParticipationRefs", "status", "proposedAt", "committedRevisionId", "committedAt"}, path);
+    return GatheringPlanProposal(
+      proposalId: _requiredNonBlankString(map["proposalId"], '$path.proposalId'),
+      basePlanVersion: _requiredInt(map["basePlanVersion"], '$path.basePlanVersion'),
+      baseRevisionId: _requiredNonBlankString(map["baseRevisionId"], '$path.baseRevisionId'),
+      baseRevisionNumber: _requiredInt(map["baseRevisionNumber"], '$path.baseRevisionNumber'),
+      baseRevisionDigest: _requiredNonBlankString(map["baseRevisionDigest"], '$path.baseRevisionDigest'),
+      proposalDigest: _requiredNonBlankString(map["proposalDigest"], '$path.proposalDigest'),
+      proposedByPersonaId: _requiredNonBlankString(map["proposedByPersonaId"], '$path.proposedByPersonaId'),
+      items: List<PlanItem>.unmodifiable(_requiredBoundedList(map["items"], '$path.items', max: 256).asMap().entries.map((entry) => PlanItem.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
+      acknowledgementPolicy: PlanAcknowledgementPolicy.fromWire(_requiredObject(map["acknowledgementPolicy"], '$path.acknowledgementPolicy'), '$path.acknowledgementPolicy'),
+      affectedParticipationRefs: List<GatheringPlanParticipationRef>.unmodifiable(_requiredBoundedList(map["affectedParticipationRefs"], '$path.affectedParticipationRefs', max: 512).asMap().entries.map((entry) => GatheringPlanParticipationRef.fromWire(_requiredObject(entry.value, '$path.affectedParticipationRefs' + '[${entry.key}]'), '$path.affectedParticipationRefs' + '[${entry.key}]'))),
+      status: GatheringPlanProposalStatus.fromWire(map["status"], '$path.status'),
+      proposedAt: _requiredTimestamp(map["proposedAt"], '$path.proposedAt'),
+      committedRevisionId: map["committedRevisionId"] == null ? null : _requiredString(map["committedRevisionId"], '$path.committedRevisionId'),
+      committedAt: map["committedAt"] == null ? null : _requiredTimestamp(map["committedAt"], '$path.committedAt'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "proposalId": proposalId,
+    "basePlanVersion": basePlanVersion,
+    "baseRevisionId": baseRevisionId,
+    "baseRevisionNumber": baseRevisionNumber,
+    "baseRevisionDigest": baseRevisionDigest,
+    "proposalDigest": proposalDigest,
+    "proposedByPersonaId": proposedByPersonaId,
+    "items": items.map((value) => value.toWire()).toList(growable: false),
+    "acknowledgementPolicy": acknowledgementPolicy.toWire(),
+    "affectedParticipationRefs": affectedParticipationRefs.map((value) => value.toWire()).toList(growable: false),
+    "status": status.wireName,
+    "proposedAt": proposedAt.toUtc().toIso8601String(),
+    if (committedRevisionId != null) "committedRevisionId": committedRevisionId!,
+    if (committedAt != null) "committedAt": committedAt!.toUtc().toIso8601String(),
+  };
+}
+
+final class GatheringPlanRevisionPageSlice {
+  const GatheringPlanRevisionPageSlice({
+    required this.items,
+    this.nextCursor,
+    required this.hasMore,
+  });
+
+  final List<PlanRevision> items;
+  final String? nextCursor;
+  final bool hasMore;
+
+  factory GatheringPlanRevisionPageSlice.fromWire(Map<String, Object?> map, [String path = "GatheringPlanRevisionPageSlice"]) {
+    _rejectUnknownFields(map, const <String>{"items", "nextCursor", "hasMore"}, path);
+    return GatheringPlanRevisionPageSlice(
+      items: List<PlanRevision>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => PlanRevision.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
+      nextCursor: map["nextCursor"] == null ? null : _requiredString(map["nextCursor"], '$path.nextCursor'),
+      hasMore: _requiredBool(map["hasMore"], '$path.hasMore'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "items": items.map((value) => value.toWire()).toList(growable: false),
+    if (nextCursor != null) "nextCursor": nextCursor!,
+    "hasMore": hasMore,
+  };
+}
+
+final class GatheringPlanSourceRef {
+  const GatheringPlanSourceRef({
+    required this.objectTypeRef,
+    required this.objectId,
+  });
+
+  final String objectTypeRef;
+  final String objectId;
+
+  factory GatheringPlanSourceRef.fromWire(Map<String, Object?> map, [String path = "GatheringPlanSourceRef"]) {
+    _rejectUnknownFields(map, const <String>{"objectTypeRef", "objectId"}, path);
+    return GatheringPlanSourceRef(
+      objectTypeRef: _requiredNonBlankString(map["objectTypeRef"], '$path.objectTypeRef'),
+      objectId: _requiredNonBlankString(map["objectId"], '$path.objectId'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "objectTypeRef": objectTypeRef,
+    "objectId": objectId,
+  };
+}
+
 final class GatheringPolicySet {
   const GatheringPolicySet({
     required this.audiencePolicy,
@@ -3213,6 +3570,363 @@ final class PersonaCircleSlice {
   };
 }
 
+final class PlanAcknowledgementPolicy {
+  const PlanAcknowledgementPolicy({
+    required this.mode,
+    this.deadlineAt,
+  });
+
+  final PlanAcknowledgementMode mode;
+  final DateTime? deadlineAt;
+
+  factory PlanAcknowledgementPolicy.fromWire(Map<String, Object?> map, [String path = "PlanAcknowledgementPolicy"]) {
+    _rejectUnknownFields(map, const <String>{"mode", "deadlineAt"}, path);
+    return PlanAcknowledgementPolicy(
+      mode: PlanAcknowledgementMode.fromWire(map["mode"], '$path.mode'),
+      deadlineAt: map["deadlineAt"] == null ? null : _requiredTimestamp(map["deadlineAt"], '$path.deadlineAt'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "mode": mode.wireName,
+    if (deadlineAt != null) "deadlineAt": deadlineAt!.toUtc().toIso8601String(),
+  };
+}
+
+final class PlanAgendaItem {
+  const PlanAgendaItem({
+    required this.content,
+    this.startsAt,
+    this.durationMinutes,
+  });
+
+  final String content;
+  final DateTime? startsAt;
+  final int? durationMinutes;
+
+  factory PlanAgendaItem.fromWire(Map<String, Object?> map, [String path = "PlanAgendaItem"]) {
+    _rejectUnknownFields(map, const <String>{"content", "startsAt", "durationMinutes"}, path);
+    return PlanAgendaItem(
+      content: _requiredNonBlankString(map["content"], '$path.content'),
+      startsAt: map["startsAt"] == null ? null : _requiredTimestamp(map["startsAt"], '$path.startsAt'),
+      durationMinutes: map["durationMinutes"] == null ? null : _requiredInt(map["durationMinutes"], '$path.durationMinutes'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "content": content,
+    if (startsAt != null) "startsAt": startsAt!.toUtc().toIso8601String(),
+    if (durationMinutes != null) "durationMinutes": durationMinutes!,
+  };
+}
+
+final class PlanChecklistEntry {
+  const PlanChecklistEntry({
+    required this.entryId,
+    required this.content,
+    required this.checked,
+  });
+
+  final String entryId;
+  final String content;
+  final bool checked;
+
+  factory PlanChecklistEntry.fromWire(Map<String, Object?> map, [String path = "PlanChecklistEntry"]) {
+    _rejectUnknownFields(map, const <String>{"entryId", "content", "checked"}, path);
+    return PlanChecklistEntry(
+      entryId: _requiredNonBlankString(map["entryId"], '$path.entryId'),
+      content: _requiredNonBlankString(map["content"], '$path.content'),
+      checked: _requiredBool(map["checked"], '$path.checked'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "entryId": entryId,
+    "content": content,
+    "checked": checked,
+  };
+}
+
+final class PlanChecklistItem {
+  const PlanChecklistItem({
+    required this.entries,
+  });
+
+  final List<PlanChecklistEntry> entries;
+
+  factory PlanChecklistItem.fromWire(Map<String, Object?> map, [String path = "PlanChecklistItem"]) {
+    _rejectUnknownFields(map, const <String>{"entries"}, path);
+    return PlanChecklistItem(
+      entries: List<PlanChecklistEntry>.unmodifiable(_requiredBoundedList(map["entries"], '$path.entries', max: 100).asMap().entries.map((entry) => PlanChecklistEntry.fromWire(_requiredObject(entry.value, '$path.entries' + '[${entry.key}]'), '$path.entries' + '[${entry.key}]'))),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "entries": entries.map((value) => value.toWire()).toList(growable: false),
+  };
+}
+
+final class PlanItem {
+  const PlanItem({
+    required this.itemId,
+    required this.kind,
+    required this.order,
+    this.agenda,
+    this.place,
+    this.routeSegment,
+    this.task,
+    this.checklist,
+    this.note,
+    this.assigneeRef,
+    required this.sourceRefs,
+  });
+
+  final String itemId;
+  final PlanItemKind kind;
+  final int order;
+  final PlanAgendaItem? agenda;
+  final PlanPlaceItem? place;
+  final PlanRouteSegmentItem? routeSegment;
+  final PlanTaskItem? task;
+  final PlanChecklistItem? checklist;
+  final PlanNoteItem? note;
+  final GatheringPlanParticipationRef? assigneeRef;
+  final List<GatheringPlanSourceRef> sourceRefs;
+
+  factory PlanItem.fromWire(Map<String, Object?> map, [String path = "PlanItem"]) {
+    _rejectUnknownFields(map, const <String>{"itemId", "kind", "order", "agenda", "place", "routeSegment", "task", "checklist", "note", "assigneeRef", "sourceRefs"}, path);
+    return PlanItem(
+      itemId: _requiredNonBlankString(map["itemId"], '$path.itemId'),
+      kind: PlanItemKind.fromWire(map["kind"], '$path.kind'),
+      order: _requiredInt(map["order"], '$path.order'),
+      agenda: map["agenda"] == null ? null : PlanAgendaItem.fromWire(_requiredObject(map["agenda"], '$path.agenda'), '$path.agenda'),
+      place: map["place"] == null ? null : PlanPlaceItem.fromWire(_requiredObject(map["place"], '$path.place'), '$path.place'),
+      routeSegment: map["routeSegment"] == null ? null : PlanRouteSegmentItem.fromWire(_requiredObject(map["routeSegment"], '$path.routeSegment'), '$path.routeSegment'),
+      task: map["task"] == null ? null : PlanTaskItem.fromWire(_requiredObject(map["task"], '$path.task'), '$path.task'),
+      checklist: map["checklist"] == null ? null : PlanChecklistItem.fromWire(_requiredObject(map["checklist"], '$path.checklist'), '$path.checklist'),
+      note: map["note"] == null ? null : PlanNoteItem.fromWire(_requiredObject(map["note"], '$path.note'), '$path.note'),
+      assigneeRef: map["assigneeRef"] == null ? null : GatheringPlanParticipationRef.fromWire(_requiredObject(map["assigneeRef"], '$path.assigneeRef'), '$path.assigneeRef'),
+      sourceRefs: List<GatheringPlanSourceRef>.unmodifiable(_requiredBoundedList(map["sourceRefs"], '$path.sourceRefs', max: 32).asMap().entries.map((entry) => GatheringPlanSourceRef.fromWire(_requiredObject(entry.value, '$path.sourceRefs' + '[${entry.key}]'), '$path.sourceRefs' + '[${entry.key}]'))),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "itemId": itemId,
+    "kind": kind.wireName,
+    "order": order,
+    if (agenda != null) "agenda": agenda!.toWire(),
+    if (place != null) "place": place!.toWire(),
+    if (routeSegment != null) "routeSegment": routeSegment!.toWire(),
+    if (task != null) "task": task!.toWire(),
+    if (checklist != null) "checklist": checklist!.toWire(),
+    if (note != null) "note": note!.toWire(),
+    if (assigneeRef != null) "assigneeRef": assigneeRef!.toWire(),
+    "sourceRefs": sourceRefs.map((value) => value.toWire()).toList(growable: false),
+  };
+}
+
+final class PlanNoteItem {
+  const PlanNoteItem({
+    required this.content,
+  });
+
+  final String content;
+
+  factory PlanNoteItem.fromWire(Map<String, Object?> map, [String path = "PlanNoteItem"]) {
+    _rejectUnknownFields(map, const <String>{"content"}, path);
+    return PlanNoteItem(
+      content: _requiredNonBlankString(map["content"], '$path.content'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "content": content,
+  };
+}
+
+final class PlanPlaceItem {
+  const PlanPlaceItem({
+    required this.placeRef,
+    this.instruction,
+  });
+
+  final GatheringPlanSourceRef placeRef;
+  final String? instruction;
+
+  factory PlanPlaceItem.fromWire(Map<String, Object?> map, [String path = "PlanPlaceItem"]) {
+    _rejectUnknownFields(map, const <String>{"placeRef", "instruction"}, path);
+    return PlanPlaceItem(
+      placeRef: GatheringPlanSourceRef.fromWire(_requiredObject(map["placeRef"], '$path.placeRef'), '$path.placeRef'),
+      instruction: map["instruction"] == null ? null : _requiredString(map["instruction"], '$path.instruction'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "placeRef": placeRef.toWire(),
+    if (instruction != null) "instruction": instruction!,
+  };
+}
+
+final class PlanRevision {
+  const PlanRevision({
+    required this.revisionId,
+    required this.revisionNumber,
+    this.baseRevisionId,
+    required this.baseRevisionNumber,
+    required this.baseRevisionDigest,
+    required this.revisionDigest,
+    this.committedProposalId,
+    required this.committedByPersonaId,
+    required this.items,
+    required this.acknowledgementPolicy,
+    required this.affectedParticipationRefs,
+    required this.committedAt,
+  });
+
+  final String revisionId;
+  final int revisionNumber;
+  final String? baseRevisionId;
+  final int baseRevisionNumber;
+  final String baseRevisionDigest;
+  final String revisionDigest;
+  final String? committedProposalId;
+  final String committedByPersonaId;
+  final List<PlanItem> items;
+  final PlanAcknowledgementPolicy acknowledgementPolicy;
+  final List<GatheringPlanParticipationRef> affectedParticipationRefs;
+  final DateTime committedAt;
+
+  factory PlanRevision.fromWire(Map<String, Object?> map, [String path = "PlanRevision"]) {
+    _rejectUnknownFields(map, const <String>{"revisionId", "revisionNumber", "baseRevisionId", "baseRevisionNumber", "baseRevisionDigest", "revisionDigest", "committedProposalId", "committedByPersonaId", "items", "acknowledgementPolicy", "affectedParticipationRefs", "committedAt"}, path);
+    return PlanRevision(
+      revisionId: _requiredNonBlankString(map["revisionId"], '$path.revisionId'),
+      revisionNumber: _requiredInt(map["revisionNumber"], '$path.revisionNumber'),
+      baseRevisionId: map["baseRevisionId"] == null ? null : _requiredString(map["baseRevisionId"], '$path.baseRevisionId'),
+      baseRevisionNumber: _requiredInt(map["baseRevisionNumber"], '$path.baseRevisionNumber'),
+      baseRevisionDigest: _requiredString(map["baseRevisionDigest"], '$path.baseRevisionDigest'),
+      revisionDigest: _requiredNonBlankString(map["revisionDigest"], '$path.revisionDigest'),
+      committedProposalId: map["committedProposalId"] == null ? null : _requiredString(map["committedProposalId"], '$path.committedProposalId'),
+      committedByPersonaId: _requiredNonBlankString(map["committedByPersonaId"], '$path.committedByPersonaId'),
+      items: List<PlanItem>.unmodifiable(_requiredBoundedList(map["items"], '$path.items', max: 256).asMap().entries.map((entry) => PlanItem.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
+      acknowledgementPolicy: PlanAcknowledgementPolicy.fromWire(_requiredObject(map["acknowledgementPolicy"], '$path.acknowledgementPolicy'), '$path.acknowledgementPolicy'),
+      affectedParticipationRefs: List<GatheringPlanParticipationRef>.unmodifiable(_requiredBoundedList(map["affectedParticipationRefs"], '$path.affectedParticipationRefs', max: 512).asMap().entries.map((entry) => GatheringPlanParticipationRef.fromWire(_requiredObject(entry.value, '$path.affectedParticipationRefs' + '[${entry.key}]'), '$path.affectedParticipationRefs' + '[${entry.key}]'))),
+      committedAt: _requiredTimestamp(map["committedAt"], '$path.committedAt'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "revisionId": revisionId,
+    "revisionNumber": revisionNumber,
+    if (baseRevisionId != null) "baseRevisionId": baseRevisionId!,
+    "baseRevisionNumber": baseRevisionNumber,
+    "baseRevisionDigest": baseRevisionDigest,
+    "revisionDigest": revisionDigest,
+    if (committedProposalId != null) "committedProposalId": committedProposalId!,
+    "committedByPersonaId": committedByPersonaId,
+    "items": items.map((value) => value.toWire()).toList(growable: false),
+    "acknowledgementPolicy": acknowledgementPolicy.toWire(),
+    "affectedParticipationRefs": affectedParticipationRefs.map((value) => value.toWire()).toList(growable: false),
+    "committedAt": committedAt.toUtc().toIso8601String(),
+  };
+}
+
+final class PlanRevisionAcknowledgement {
+  const PlanRevisionAcknowledgement({
+    required this.revisionId,
+    required this.participationRef,
+    required this.status,
+    this.evidenceRef,
+    this.recordedAt,
+  });
+
+  final String revisionId;
+  final GatheringPlanParticipationRef participationRef;
+  final PlanAcknowledgementStatus status;
+  final GatheringPlanSourceRef? evidenceRef;
+  final DateTime? recordedAt;
+
+  factory PlanRevisionAcknowledgement.fromWire(Map<String, Object?> map, [String path = "PlanRevisionAcknowledgement"]) {
+    _rejectUnknownFields(map, const <String>{"revisionId", "participationRef", "status", "evidenceRef", "recordedAt"}, path);
+    return PlanRevisionAcknowledgement(
+      revisionId: _requiredNonBlankString(map["revisionId"], '$path.revisionId'),
+      participationRef: GatheringPlanParticipationRef.fromWire(_requiredObject(map["participationRef"], '$path.participationRef'), '$path.participationRef'),
+      status: PlanAcknowledgementStatus.fromWire(map["status"], '$path.status'),
+      evidenceRef: map["evidenceRef"] == null ? null : GatheringPlanSourceRef.fromWire(_requiredObject(map["evidenceRef"], '$path.evidenceRef'), '$path.evidenceRef'),
+      recordedAt: map["recordedAt"] == null ? null : _requiredTimestamp(map["recordedAt"], '$path.recordedAt'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "revisionId": revisionId,
+    "participationRef": participationRef.toWire(),
+    "status": status.wireName,
+    if (evidenceRef != null) "evidenceRef": evidenceRef!.toWire(),
+    if (recordedAt != null) "recordedAt": recordedAt!.toUtc().toIso8601String(),
+  };
+}
+
+final class PlanRouteSegmentItem {
+  const PlanRouteSegmentItem({
+    required this.fromPlaceRef,
+    required this.toPlaceRef,
+    required this.travelMode,
+    this.estimatedMinutes,
+    this.instruction,
+  });
+
+  final GatheringPlanSourceRef fromPlaceRef;
+  final GatheringPlanSourceRef toPlaceRef;
+  final PlanTravelMode travelMode;
+  final int? estimatedMinutes;
+  final String? instruction;
+
+  factory PlanRouteSegmentItem.fromWire(Map<String, Object?> map, [String path = "PlanRouteSegmentItem"]) {
+    _rejectUnknownFields(map, const <String>{"fromPlaceRef", "toPlaceRef", "travelMode", "estimatedMinutes", "instruction"}, path);
+    return PlanRouteSegmentItem(
+      fromPlaceRef: GatheringPlanSourceRef.fromWire(_requiredObject(map["fromPlaceRef"], '$path.fromPlaceRef'), '$path.fromPlaceRef'),
+      toPlaceRef: GatheringPlanSourceRef.fromWire(_requiredObject(map["toPlaceRef"], '$path.toPlaceRef'), '$path.toPlaceRef'),
+      travelMode: PlanTravelMode.fromWire(map["travelMode"], '$path.travelMode'),
+      estimatedMinutes: map["estimatedMinutes"] == null ? null : _requiredInt(map["estimatedMinutes"], '$path.estimatedMinutes'),
+      instruction: map["instruction"] == null ? null : _requiredString(map["instruction"], '$path.instruction'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "fromPlaceRef": fromPlaceRef.toWire(),
+    "toPlaceRef": toPlaceRef.toWire(),
+    "travelMode": travelMode.wireName,
+    if (estimatedMinutes != null) "estimatedMinutes": estimatedMinutes!,
+    if (instruction != null) "instruction": instruction!,
+  };
+}
+
+final class PlanTaskItem {
+  const PlanTaskItem({
+    required this.content,
+    this.dueAt,
+    required this.completed,
+  });
+
+  final String content;
+  final DateTime? dueAt;
+  final bool completed;
+
+  factory PlanTaskItem.fromWire(Map<String, Object?> map, [String path = "PlanTaskItem"]) {
+    _rejectUnknownFields(map, const <String>{"content", "dueAt", "completed"}, path);
+    return PlanTaskItem(
+      content: _requiredNonBlankString(map["content"], '$path.content'),
+      dueAt: map["dueAt"] == null ? null : _requiredTimestamp(map["dueAt"], '$path.dueAt'),
+      completed: _requiredBool(map["completed"], '$path.completed'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "content": content,
+    if (dueAt != null) "dueAt": dueAt!.toUtc().toIso8601String(),
+    "completed": completed,
+  };
+}
+
 AppendResult decodeAppendResult(Object? response) =>
     AppendResult.fromWire(_requiredObject(response, "AppendResult"), "AppendResult");
 
@@ -3287,6 +4001,15 @@ GatheringBySourcePageSlice decodeGatheringBySourcePageSlice(Object? response) =>
 
 GatheringCommandResult decodeGatheringCommandResult(Object? response) =>
     GatheringCommandResult.fromWire(_requiredObject(response, "GatheringCommandResult"), "GatheringCommandResult");
+
+GatheringPlan decodeGatheringPlan(Object? response) =>
+    GatheringPlan.fromWire(_requiredObject(response, "GatheringPlan"), "GatheringPlan");
+
+GatheringPlanCommandResult decodeGatheringPlanCommandResult(Object? response) =>
+    GatheringPlanCommandResult.fromWire(_requiredObject(response, "GatheringPlanCommandResult"), "GatheringPlanCommandResult");
+
+GatheringPlanRevisionPageSlice decodeGatheringPlanRevisionPageSlice(Object? response) =>
+    GatheringPlanRevisionPageSlice.fromWire(_requiredObject(response, "GatheringPlanRevisionPageSlice"), "GatheringPlanRevisionPageSlice");
 
 GatheringPrivateDetailSlice decodeGatheringPrivateDetailSlice(Object? response) =>
     GatheringPrivateDetailSlice.fromWire(_requiredObject(response, "GatheringPrivateDetailSlice"), "GatheringPrivateDetailSlice");

@@ -13,17 +13,27 @@ func TestAppIdentityCodegenRendersCompletePlatformMatrix(t *testing.T) {
 		Environments: []string{"alpha", "beta", "gamma", "prod"},
 		Platforms:    []string{"android", "ios", "web"},
 		BuildModes:   []string{"debug", "profile", "release"},
+		BuildProfiles: map[string]appBuildProfileContract{
+			"nonprod": {
+				Environments: []string{"alpha", "beta", "gamma"},
+				LaunchPolicy: "test_live",
+			},
+			"prod": {
+				Environments: []string{"prod"},
+				LaunchPolicy: "prod_release",
+			},
+		},
 		ApplicationIdentity: appIdentityContract{
 			DisplayNameBase: "趣我圈",
 			BaseApplicationIDs: map[string]appIdentityBaseID{
-				"android": {Value: "com.quwoquan.quwoquan_app", Registered: true},
+				"android": {Value: "com.leadwise.quwoquan", Registered: true},
 				"ios":     {Value: "com.example.quwoquanApp", Registered: false},
 			},
-			EnvironmentSuffixes: map[string]string{
-				"alpha": ".alpha", "beta": ".beta", "gamma": ".gamma", "prod": "",
+			BuildProfileSuffixes: map[string]string{
+				"nonprod": ".nonprod", "prod": "",
 			},
-			EnvironmentMarks: map[string]string{
-				"alpha": "α", "beta": "β", "gamma": "γ", "prod": "",
+			BuildProfileMarks: map[string]string{
+				"nonprod": "·N", "prod": "",
 			},
 			BuildModeSuffixes: map[string]string{
 				"debug": ".debug", "profile": ".profile", "release": "",
@@ -38,8 +48,8 @@ func TestAppIdentityCodegenRendersCompletePlatformMatrix(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(artifacts) != 17 {
-		t.Fatalf("artifact count = %d, want 17", len(artifacts))
+	if len(artifacts) != 9 {
+		t.Fatalf("artifact count = %d, want 9", len(artifacts))
 	}
 
 	byPath := map[string]string{}
@@ -48,22 +58,23 @@ func TestAppIdentityCodegenRendersCompletePlatformMatrix(t *testing.T) {
 	}
 	android := byPath["android/app/app_identity.generated.json"]
 	for _, expected := range []string{
-		`"alpha/debug"`, `"beta/profile"`, `"gamma/release"`, `"prod/release"`,
+		`"nonprod/debug"`, `"nonprod/profile"`, `"nonprod/release"`, `"prod/release"`,
+		`"alpha": "nonprod"`, `"beta": "nonprod"`, `"gamma": "nonprod"`,
 	} {
 		if !strings.Contains(android, expected) {
 			t.Fatalf("generated Android identity document misses %s", expected)
 		}
 	}
-	debugAlpha := byPath["ios/Flutter/Debug-alpha.xcconfig"]
+	debugNonprod := byPath["ios/Flutter/Debug-nonprod.xcconfig"]
 	for _, expected := range []string{
 		`#include "Base/Debug.xcconfig"`,
-		`#include "Identity/alpha.xcconfig"`,
-		`QWQ_EXPECTED_CONFIGURATION = Debug-alpha`,
+		`#include "Identity/nonprod.xcconfig"`,
+		`QWQ_EXPECTED_CONFIGURATION = Debug-nonprod`,
 		`QWQ_MODE_BUNDLE_ID_SUFFIX = .debug`,
 		`FLUTTER_TARGET = lib/main_prod.dart`,
 	} {
-		if !strings.Contains(debugAlpha, expected) {
-			t.Fatalf("Debug-alpha.xcconfig misses %q", expected)
+		if !strings.Contains(debugNonprod, expected) {
+			t.Fatalf("Debug-nonprod.xcconfig misses %q", expected)
 		}
 	}
 }
@@ -80,13 +91,20 @@ func TestAppIdentityCodegenCheckRejectsStaleArtifact(t *testing.T) {
 environments: [alpha, beta, gamma, prod]
 platforms: [android, ios, web]
 build_modes: [debug, profile, release]
+build_profiles:
+  nonprod:
+    environments: [alpha, beta, gamma]
+    launch_policy: test_live
+  prod:
+    environments: [prod]
+    launch_policy: prod_release
 application_identity:
   display_name_base: 趣我圈
   base_application_ids:
-    android: {value: com.quwoquan.quwoquan_app, registered: true}
+    android: {value: com.leadwise.quwoquan, registered: true}
     ios: {value: com.example.quwoquanApp, registered: false}
-  environment_suffixes: {alpha: .alpha, beta: .beta, gamma: .gamma, prod: ""}
-  environment_display_marks: {alpha: α, beta: β, gamma: γ, prod: ""}
+  build_profile_suffixes: {nonprod: .nonprod, prod: ""}
+  build_profile_display_marks: {nonprod: ·N, prod: ""}
   build_mode_suffixes: {debug: .debug, profile: .profile, release: ""}
   build_mode_display_marks: {debug: ·D, profile: ·P, release: ""}
 `
@@ -96,7 +114,7 @@ application_identity:
 	if err := runAppIdentityMode(metadataDir, appDir, manifestPath, false); err != nil {
 		t.Fatal(err)
 	}
-	artifactPath := filepath.Join(appDir, "ios", "Flutter", "Debug-alpha.xcconfig")
+	artifactPath := filepath.Join(appDir, "ios", "Flutter", "Debug-nonprod.xcconfig")
 	if err := os.WriteFile(artifactPath, []byte("stale\n"), 0644); err != nil {
 		t.Fatal(err)
 	}

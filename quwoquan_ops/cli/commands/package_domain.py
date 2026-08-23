@@ -37,7 +37,7 @@ def register_parser(
 
     package_parser = subparsers.add_parser("package")
     package_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
-    package_parser.add_argument("--env", choices=_stackctl.ENVIRONMENTS, required=True)
+    package_parser.add_argument("--env", choices=_stackctl.ENVIRONMENTS, default="")
     package_parser.add_argument(
         "--kind",
         choices=[
@@ -51,8 +51,9 @@ def register_parser(
         ],
         default="runtime",
     )
-    # app-artifact（DEC-004 canonical App 制品入口）：显式接收
-    # platform/build-mode/distribution-class/device，按 metadata 裁决身份。
+    # app-artifact 原子消费 canonical build product；平台、profile、模式、格式与
+    # 分发类全部从 metadata 解析，旧环境/分项构建参数不得作为兼容入口。
+    package_parser.add_argument("--build-product-id", default="")
     package_parser.add_argument(
         "--app-platform", choices=["android", "ios", "web"], default=""
     )
@@ -72,6 +73,11 @@ def register_parser(
         default="",
     )
     package_parser.add_argument("--device", default="")
+    # artifactFormat 由请求显式声明或按平台默认推导（DEC-005）；
+    # 禁止由 distribution-class 推导，aab 仅限 android × release 硬需求。
+    package_parser.add_argument(
+        "--artifact-format", choices=["apk", "aab"], default=""
+    )
     package_parser.add_argument("--service", default="")
     package_parser.add_argument("--include-services", action="store_true")
     package_parser.add_argument(
@@ -144,18 +150,24 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
             return _stackctl._command_package_unlocked(args, package_snapshot=None)
         env_name = str(getattr(args, "env", "") or "").strip()
         target_name = str(getattr(args, "target", "") or "").strip()
+        if package_kind == "app-artifact":
+            # build product producer 属于仓库级构建面，不挂靠任一部署环境/target；
+            # 完整旧接口拒绝与结构化 decision 由 canonical writer 统一返回。
+            return _stackctl._command_package_unlocked(args, package_snapshot=None)
+        if not env_name:
+            return {
+                "exitCode": 2,
+                "summary": f"stackctl {package_kind} package requires --env",
+                "details": ["--env is required for deployment-scoped package kinds"],
+            }
         if not target_name and env_name in _stackctl.DEFAULT_TARGET_BY_ENV:
             target_name = _stackctl.DEFAULT_TARGET_BY_ENV[env_name]
         previous_override = os.environ.get(_stackctl.PACKAGE_ROOT_OVERRIDE_ENV)
-        isolated_root = (
-            _stackctl.deployment_target_path(target_name, "packages")
-            if package_kind == "app-artifact"
-            else _stackctl.deployment_target_path(
-                target_name,
-                "standalone-packages",
-                package_kind,
-                "packages",
-            )
+        isolated_root = _stackctl.deployment_target_path(
+            target_name,
+            "standalone-packages",
+            package_kind,
+            "packages",
         )
         os.environ[_stackctl.PACKAGE_ROOT_OVERRIDE_ENV] = str(isolated_root)
         try:
@@ -180,6 +192,19 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
             ],
         }
     args.include_services = True
+    # 打包会把服务镜像层写进 Docker 数据盘；容量不足时构建会以镜像层写失败、
+    # 拉取中断等形态失败，前置判定让报告直接指向容量。
+    capacity = _stackctl.local_runtime_capacity_evidence(
+        _stackctl.get_target(_stackctl.load_environment_topology(), target_name)
+    )
+    if capacity["issues"]:
+        return {
+            "exitCode": 2,
+            "summary": f"stackctl runtime package is GATE_BLOCK for {env_name}",
+            "details": capacity["issues"],
+            "firstBlocker": capacity["blocker"],
+            "capacity": capacity["evidence"],
+        }
     try:
         requested_release_bindings = _stackctl.validate_release_attestations(
             str(getattr(args, "release_attestation", "") or ""),

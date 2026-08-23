@@ -14,6 +14,7 @@ services:
       SERVICE_NAME: assistant-service
       APP_ENV: "${QWQ_COMPOSE_ENV:-gamma}"
       CONFIG_ROOT: /etc/qwq-config
+      QWQ_ARTIFACT_IDENTITY_FILE: /etc/quwoquan/artifact-identity.json
       CONFIG_VERSION: "${QWQ_COMPOSE_ASSISTANT_SERVICE_CONFIG_VERSION:?QWQ_COMPOSE_ASSISTANT_SERVICE_CONFIG_VERSION is required}"
       IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:?immutable image version is required}"
       ASSISTANT_SERVICE_ADDR: ":18087"
@@ -60,6 +61,7 @@ services:
         condition: service_healthy
     volumes:
       - ${QWQ_COMPOSE_CONFIG_ROOT:?QWQ_COMPOSE_CONFIG_ROOT is required}:/etc/qwq-config:ro
+      - ${QWQ_COMPOSE_ARTIFACT_IDENTITY_FILE:?artifact identity mount is required}:/etc/quwoquan/artifact-identity.json:ro
     ports:
       - "${QWQ_COMPOSE_ASSISTANT_PORT:-19230}:18087"
     healthcheck:

@@ -34,6 +34,7 @@ from content.execution.campaign.scale import CampaignScaleError, resolve_campaig
 from content.execution.campaign.source_pool_binding import bind_scale_source_pool
 from content.execution.controller.execute.pre_acquisition_handoff import (
     freeze_carrier_pre_acquisition_inputs,
+    load_pre_acquisition_handoff,
 )
 from content.execution.identity import parse_execution_id
 from content.execution.model_contract import (
@@ -53,6 +54,11 @@ from content.execution.planning.capacity_calibration import (
     current_host_class,
     resolve_capacity_calibration_ref,
 )
+from content.execution.planning.execution_authority import (
+    build_bounded_execution_authority,
+    governed_execution_authority,
+    load_bounded_authority_policy,
+)
 from content.execution.request import resolve_candidate_pool
 from content.execution.workspace import entity_catalog_digest
 
@@ -62,9 +68,6 @@ def build_envelope(
     scale: str | None = None,
     quota: int | None = None,
     carrier: str,
-    region_ref: str,
-    vertical: str = "travel",
-    topic: str | None = None,
     target_names: Iterable[str] | None = None,
     source_providers: Iterable[str] | None = None,
     family_ref: str | None = None,
@@ -95,7 +98,23 @@ def build_envelope(
 ) -> dict[str, Any]:
     execution_policy = carrier_execution_policy(carrier)
     resolved = resolve_campaign_scale(scale=scale, quota=quota)
-    vertical_id = owner._normalize_vertical(vertical)
+    if pre_acquisition_handoff is None:
+        raise ValueError(
+            "GATE_BLOCK DATA.CAMPAIGN.HANDOFF_REQUIRED: campaign envelope "
+            "requires a confirmed pre-acquisition handoff"
+        )
+    handoff_document = load_pre_acquisition_handoff(
+        pre_acquisition_handoff.expanduser().resolve()
+    )
+    vertical_id = owner._normalize_vertical(str(handoff_document["vertical"]))
+    region_ref = str(handoff_document.get("regionRef") or "").strip()
+    if not region_ref:
+        raise ValueError(
+            "GATE_BLOCK DATA.CAMPAIGN.SCOPE_UNSUPPORTED: envelope execution "
+            "requires a region-scoped handoff; region-less scopes stay typed blocked"
+        )
+    scope = str(handoff_document["scope"])
+    topic = str(handoff_document.get("primaryTopicRef") or "").strip() or None
     source_repo = (repo_root or paths.REPO_ROOT).resolve()
     active = normalize_active_carriers(active_carriers or (carrier,))
     if carrier not in active:
@@ -184,8 +203,11 @@ def build_envelope(
     except SystemExit as exc:
         raise CampaignScaleError(str(exc)) from exc
     stamp = day or datetime.now(timezone.utc).strftime("%Y%m%d")
-    scope = owner.normalize_execution_scope(region_ref, topic)
-    frozen_external_refs, handoff_binding = freeze_carrier_pre_acquisition_inputs(
+    (
+        frozen_external_refs,
+        bound_handoff,
+        handoff_binding,
+    ) = freeze_carrier_pre_acquisition_inputs(
         carrier,
         external_input_refs,
         acquisition_root=(
@@ -193,10 +215,6 @@ def build_envelope(
         ).resolve(),
         handoff_ref=pre_acquisition_handoff,
         scale=resolved.scale,
-        vertical=vertical_id,
-        scope=scope,
-        region_ref=region_ref,
-        topic=topic,
         run_date=stamp,
         campaign_sequence=sequence,
         source_revision=source_revision,
@@ -204,6 +222,10 @@ def build_envelope(
         entity_catalog_digest=catalog_digest,
         handoff_output_root=pre_acquisition_handoff_output_root,
     )
+    if bound_handoff.get("handoffDigest") != handoff_document.get("handoffDigest"):
+        raise ValueError(
+            "GATE_BLOCK DATA.CAMPAIGN.HANDOFF_DRIFT: handoff changed during freeze"
+        )
     ids = owner._execution_ids(
         intent=owner.workload_intent(
             scale=resolved.scale,
@@ -268,19 +290,43 @@ def build_envelope(
         if semantic_preflight_receipt is not None
         else None
     )
-    if capacity_calibration_receipt is None:
-        raise ValueError(
-            "GATE_BLOCK DATA.CAPACITY.CALIBRATION_REQUIRED: "
-            "campaign envelope requires a governed capacity calibration receipt"
-        )
-    capacity_ref = capacity_calibration_receipt.as_posix()
-    capacity_path = resolve_capacity_calibration_ref(capacity_ref)
-    capacity_binding = bind_capacity_calibration_source(
-        receipt_path=capacity_path,
-        receipt_ref=capacity_ref,
-        host_class=current_host_class(),
-        provider_tier=frozen_semantic_selection_id,
+    # 执行授权互斥判定：explicit 且总量落在受版本控制 bounded policy 内时
+    # 必须走 bounded_explicit（此时禁止提供 calibration receipt），否则必须
+    # 携带受治理容量标定；不存在双供给或 fallback。
+    total_campaign_objects = sum(exact_workloads.values())
+    bounded_policy = load_bounded_authority_policy(repo_root=source_repo)
+    bounded_eligible = (
+        workload_mode == "explicit"
+        and 1 <= total_campaign_objects <= int(bounded_policy["maxTotalObjects"])
     )
+    if bounded_eligible:
+        if capacity_calibration_receipt is not None:
+            raise ValueError(
+                "GATE_BLOCK DATA.EXECUTION.AUTHORITY_CONFLICT: workloads within "
+                "the bounded policy must use bounded_explicit authority; a "
+                "governed calibration receipt is not accepted here"
+            )
+        execution_authority = build_bounded_execution_authority(
+            total_objects=total_campaign_objects,
+            repo_root=source_repo,
+        )
+    else:
+        if capacity_calibration_receipt is None:
+            raise ValueError(
+                "GATE_BLOCK DATA.CAPACITY.CALIBRATION_REQUIRED: "
+                "campaign envelope beyond the bounded policy requires a "
+                "governed capacity calibration receipt"
+            )
+        capacity_ref = capacity_calibration_receipt.as_posix()
+        capacity_path = resolve_capacity_calibration_ref(capacity_ref)
+        execution_authority = governed_execution_authority(
+            bind_capacity_calibration_source(
+                receipt_path=capacity_path,
+                receipt_ref=capacity_ref,
+                host_class=current_host_class(),
+                provider_tier=frozen_semantic_selection_id,
+            )
+        )
     reconciliation = (
         dict(predecessor_reconciliation)
         if predecessor_reconciliation is not None
@@ -327,7 +373,9 @@ def build_envelope(
                 "WORKLOAD" if workload_mode == "explicit" else resolved.scale
             ),
             carrier=carrier,
-            count=quota_value,
+            # Quantity axes are single-meaning: the SourcePool selection binds
+            # the oversampled candidate count, never the user quota floor.
+            count=count,
             source_revision=source_revision,
             source_digest=str(source["digest"]),
             entity_catalog_digest=catalog_digest,
@@ -356,7 +404,7 @@ def build_envelope(
         "selector": execution_policy["defaultSelector"],
         "quota": quota_value,
         "count": count,
-        "capacityCalibration": capacity_binding,
+        "executionAuthority": execution_authority,
         "workerHostSetBinding": None,
         "topic": topic_value,
         "targetNames": names,

@@ -75,6 +75,17 @@
 - 每次动作必须记录 candidate/release/receipt、受管命令、修复事件摘要与 teardown readback；首次修复与期望零修复的幂等复核分别生成稳定 receipt。
 - runtime health 与 `stackctl health` 必须保留确定排序的失败 check、完整失败详情摘要与 body digest，不得只保存 middleware 泛化后的错误。
 
+<a id="req-004"></a>
+### REQ-004 环境可用性判据必须覆盖依赖就绪、必需容器现况与容量水位
+
+- `stackctl health` 的服务探针必须按各服务真实探针形态判定：声明独立就绪端点的服务必须同时探存活与就绪，两者作为可分别定位的 check 上报；只声明单一深探针的服务不得被补一个恒真的浅探针充数。
+- 就绪失败必须与存活失败可区分，并向上传导为 `stackctl health` 与 `up` 的失败；任何环境不得因存活探针返回成功而判定为可用。
+- startup receipt 的 `running` 只表达启动时刻的事实，不表达当前可用。消费 receipt 判定环境可用时必须复验该 target 必需容器的当前状态与健康：任一必需容器已退出或 unhealthy 必须返回 typed blocker，并落到 `runtimeHealthStatus` 的降级态。
+- App 编译安装前的 preflight 必须消费上述复验结果，依赖未就绪时在安装前阻断，不得以 ui-only 或 test-live 的告警档放行。
+- 本地容器运行时的容量水位必须成为 `doctor`、`up`、`package`、`dev-session` 与 App preflight 的前置判定：宿主可用空间与容器存储可用空间任一低于声明阈值必须 `GATE_BLOCK`，报告给出实测可用量、阈值、可回收量与精确回收命令。
+- 容量耗尽必须表达为 typed blocker，不得只依赖对底层 `no space left on device` 文本的字符串匹配。
+- 容量不足或候选身份漂移不得阻断本领域白名单恢复动作本身；恢复路径必须在环境已经不可用时仍然可执行。
+
 ## 6. 领域验收
 
 <a id="dom-001"></a>
@@ -96,6 +107,17 @@
 - 可观察结果：显式确认的修复只启动 owning store 与 candidate-packaged importer；首次修复精确收敛已知 legacy 负载，随后期望零修复的重放零写且字节幂等，两次均输出可读回的稳定 receipt。
 - 可观察结果：修复后业务 API 才可启动；若启动或健康仍失败，受管报告包含精确失败 check、完整详情摘要和 body digest。
 - 禁止结果：candidate/release/receipt/期望数量/CAS/cleanup 任一漂移不得写成功事实；不得启动 API/relay/consumer、删除 named volume、推进 release 或绕过 owning importer 直写数据库。
+
+<a id="dom-003"></a>
+### DOM-003 依赖就绪、必需容器现况与容量水位的可用性证据
+
+- 条件：某 local target 已有 running startup receipt，其必需容器集合与容量阈值均由该 target 的 canonical 声明派生。
+- 可观察结果：服务探针矩阵对声明独立就绪端点的服务同时产出存活与就绪两个 check；就绪失败时 `stackctl health` 失败，且失败 check 可定位到具体服务与被探端点。
+- 可观察结果：必需容器已退出或 unhealthy 时，环境可用性判定返回 typed blocker 与降级 `runtimeHealthStatus`，App preflight 在编译安装前阻断。
+- 可观察结果：宿主或容器存储可用空间低于阈值时，`doctor`、`up`、`package`、`dev-session` 与 App preflight 在执行前 `GATE_BLOCK`，报告含实测可用量、阈值、可回收量与回收命令。
+- 可观察结果：容量耗尽以 typed blocker 表达，同一判定在容量恢复后不再阻断。
+- 禁止结果：不得因存活探针成功、receipt 仍为 `running` 或容量检查缺席而判定环境可用。
+- 禁止结果：不得把容量耗尽降级为无类型错误或纯字符串匹配，也不得让容量不足阻断白名单恢复动作本身。
 
 ## 7. 工程归属
 

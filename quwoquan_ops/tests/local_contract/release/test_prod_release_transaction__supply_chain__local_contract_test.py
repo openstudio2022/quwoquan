@@ -73,10 +73,12 @@ def _write_build_input(
             "images": {
                 service: {
                     "repository": (
-                        f"ghcr.io/example/quwoquan/{service}-{environment}"
+                        "ghcr.io/example/quwoquan/"
+                        f"{service}-{'prod' if environment == 'prod' else 'nonprod'}"
                     ),
                     "transportRef": (
-                        f"ghcr.io/example/quwoquan/{service}-{environment}:"
+                        "ghcr.io/example/quwoquan/"
+                        f"{service}-{'prod' if environment == 'prod' else 'nonprod'}:"
                         f"{transport_tag}"
                     ),
                 }
@@ -102,9 +104,8 @@ def _write_build_input(
             },
             "artifactDigest": None,
             "environmentArtifacts": environment_artifacts,
-            "applicationPackages": {
-                environment: {} for environment in finalizer.ENVIRONMENTS
-            },
+            "applicationPackages": {},
+            "opsPortal": None,
             "contractGraphDigest": None,
             "requiredEvidence": {
                 "environmentArtifacts": {
@@ -115,10 +116,8 @@ def _write_build_input(
                     environment: list(generator.RELEASE_SERVICES)
                     for environment in finalizer.ENVIRONMENTS
                 },
-                "applicationPackages": {
-                    environment: list(finalizer.APPLICATION_PACKAGES[environment])
-                    for environment in finalizer.ENVIRONMENTS
-                },
+                "applicationPackages": list(finalizer.APPLICATION_PACKAGES),
+                "opsPortal": True,
                 "contractGraphDigest": True,
                 "providerEvidence": True,
                 "testEvidence": list(finalizer.TEST_LAYERS),
@@ -142,10 +141,10 @@ def _write_build_input(
                     for service in services
                 ),
                 *(
-                    f"applicationPackages.{environment}.{surface}"
-                    for environment in finalizer.ENVIRONMENTS
-                    for surface in finalizer.APPLICATION_PACKAGES[environment]
+                    f"applicationPackages.{build_product_id}"
+                    for build_product_id in finalizer.APPLICATION_PACKAGES
                 ),
+                "opsPortal",
                 "contractGraphDigest",
                 "providerEvidence",
                 "testEvidence",
@@ -163,14 +162,15 @@ def _write_image_descriptors(
     directory: Path,
     manifest: dict[str, object],
 ) -> None:
-    index = 0
     for environment, artifact_value in manifest["environmentArtifacts"].items():
         artifact = dict(artifact_value)
+        trust_domain = "prod" if environment == "prod" else "nonprod"
         for service, image_value in artifact["images"].items():
-            index += 1
             image = dict(image_value)
             repository = str(image["repository"])
-            digest = f"sha256:{index:064x}"
+            digest = "sha256:" + hashlib.sha256(
+                f"{service}:{trust_domain}".encode("utf-8")
+            ).hexdigest()
             ref = f"{repository}@{digest}"
             generator.write_json(
                 directory / environment / f"{service}.json",
@@ -335,8 +335,10 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
             self.assertEqual(finalized["status"], "deployable")
             self.assertEqual(
                 set(finalized["applicationPackages"]),
-                set(finalizer.ENVIRONMENTS),
+                set(finalizer.APPLICATION_PACKAGES),
             )
+            self.assertIn("opsPortal", finalized)
+            self.assertNotIn("opsPortal", finalized["applicationPackages"])
             generator.write_json(
                 artifact / "governance-receipt.json",
                 {

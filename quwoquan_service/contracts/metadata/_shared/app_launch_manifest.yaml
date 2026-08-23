@@ -29,8 +29,45 @@ local_transport_targets:
 launch_policies:
   test_live:
     environments: [alpha, beta, gamma]
+    build_profiles: [nonprod]
   prod_release:
     environments: [prod]
+    build_profiles: [prod]
+
+runtime_config_package:
+  schema_version: "1"
+  signature_algorithm: ed25519
+  max_lifetime_seconds: 86400
+  max_future_skew_seconds: 300
+  signed_payload_excludes: [signature]
+  source_identity:
+    git_sha_format: lowercase_40_hex
+    tree_digest_formats: [sha1, sha256]
+    accepted_authorities: [package_input_capsule, audited_git_identity]
+  forbidden_runtime_categories: [content_release, rollout_stage, channel, secret]
+
+# AppArtifact/Web bootstrap 内置的独立信任根。一个 profile 一份 envelope；它不携带
+# environment、target、endpoint 或 package。runtime package 自带公钥只能与本 envelope
+# 做完全一致性校验，不能建立信任。信任根轮换会产生新的 App/Web artifact。
+runtime_config_trust:
+  schema_version: "1"
+  signature_algorithm: ed25519
+  build_profiles: [nonprod, prod]
+
+# 运行值只允许本段声明的 string-only endpoint/launch keys。内容 release、灰度、渠道与
+# secret 不进入 runtime package；消费方不得从 app_runtime.yaml 自行扩张字段集合。
+runtime_value_keys:
+  appRuntimeEnv: { type: string, category: launch, required: true }
+  gatewayBaseUrl: { type: string, category: endpoint, required: true }
+  legalBaseUrl: { type: string, category: endpoint, required: true }
+  publicWebBaseUrl: { type: string, category: endpoint, required: true }
+  appDownloadBaseUrl: { type: string, category: endpoint, required: true }
+  realtimeBaseUrl: { type: string, category: endpoint, required: true }
+  mediaAvatarCdnBaseUrl: { type: string, category: endpoint, required: true }
+  mediaImageCdnBaseUrl: { type: string, category: endpoint, required: true }
+  mediaVideoCdnBaseUrl: { type: string, category: endpoint, required: true }
+  mediaUploadBaseUrl: { type: string, category: endpoint, required: true }
+  rtcMediaConnectionUrl: { type: string, category: endpoint, required: true }
 
 # launcher 侧 typed blocker 的唯一真相源。这些码由 launcher、packager 与恢复面产生，
 # 不经过服务端请求，因此不进任何服务 errors.yaml；消费方只允许引用本枚举。
@@ -47,9 +84,231 @@ launch_blockers:
   APP.LAUNCH.platform_unsupported: 目标平台不属于 android、ios。
   APP.LAUNCH.receipt_invalid: attempt receipt 不满足本 schema。
   APP.LAUNCH.receipt_timeout: 等待终态超时且未观测到 typed failure。
+  APP.LAUNCH.runtime_dependency_unavailable: 目标 runtime 的必需容器已退出或 unhealthy，编译安装前即阻断。
+  APP.LAUNCH.runtime_config_missing: 安装后平台私有容器没有可激活或可读取的 runtime package。
+  APP.LAUNCH.runtime_config_activation_failed: runtime package 验证、原子写入或 active readback 未完成。
   APP.WEB.recovery_unavailable: 恢复 Web 静态面不可达，不得据此生成 launched 或 ready 假证据。
 
+# 原生 runtime config 面（MethodChannel、activation receipt、原生日志）可见错误码的唯一
+# 闭集。双端原生实现与 Dart mapper 只允许产生和消费本枚举；不在册的码一律视为契约漂移。
+# runtime_config_internal_failure 仅允许包装非 typed 的未预期异常，且必须伴随原生错误日志，
+# 不得用作任何 typed 失败路径的替代。
+runtime_config_error_codes:
+  runtime_config_trust_missing: 制品内 build-profile trust envelope 缺失。
+  runtime_config_trust_path_invalid: trust envelope 路径非法。
+  runtime_config_trust_read_failed: trust envelope 读取 IO 失败。
+  runtime_config_trust_empty: trust envelope 内容为空。
+  runtime_config_trust_too_large: trust envelope 超出尺寸上限。
+  runtime_config_trust_malformed: trust envelope 解码或结构非法。
+  runtime_config_trust_keyring_invalid: trust keyring 不是非空 canonical Ed25519 集合。
+  runtime_config_trust_digest_mismatch: trust envelope 摘要与请求声明不一致。
+  runtime_config_package_missing: 私有容器没有 active runtime package。
+  runtime_config_package_path_invalid: runtime package 路径非法。
+  runtime_config_package_read_failed: runtime package 读取 IO 失败。
+  runtime_config_package_empty: runtime package 内容为空。
+  runtime_config_package_too_large: runtime package 超出尺寸上限。
+  runtime_config_package_malformed: runtime package 解码或结构非法。
+  runtime_config_schema_mismatch: package schema/schemaVersion 与契约不符。
+  runtime_config_profile_mismatch: package buildProfile 与消费方 profile 不符。
+  runtime_config_target_mismatch: package target 与请求 target 不符。
+  runtime_config_launch_policy_mismatch: package launchPolicy 与 manifest 不符。
+  runtime_config_endpoint_invalid: runtime endpoint 值非法。
+  runtime_config_runtime_values_invalid: runtime 字段集合或值类型违反 runtime_value_keys。
+  runtime_config_freshness_invalid: issuedAt/expiresAt 生命周期校验失败。
+  runtime_config_source_identity_invalid: sourceGitSha/sourceTreeDigest 身份非法。
+  runtime_config_signature_algorithm_mismatch: 签名算法不是 ed25519。
+  runtime_config_keyring_mismatch: package 自带公钥与 trust envelope 不一致。
+  runtime_config_signature_key_untrusted: 签名 key 不在 trust keyring 内。
+  runtime_config_signature_invalid: Ed25519 验签失败。
+  runtime_config_payload_digest_mismatch: payloadDigest 与签名载荷不符。
+  runtime_config_package_digest_mismatch: packageDigest 与 canonical JSON 摘要不符。
+  runtime_config_digest_unavailable: 平台摘要原语不可用。
+  runtime_config_activation_request_missing: activation request 文件缺失。
+  runtime_config_activation_request_read_failed: activation request 读取 IO 失败。
+  runtime_config_activation_request_malformed: activation request 解码或字段集非法。
+  runtime_config_activation_request_digest_invalid: host 传入的 request digest 格式非法。
+  runtime_config_activation_request_digest_mismatch: request canonical 摘要与 host 声明不一致。
+  runtime_config_activation_identity_mismatch: request/package/manifest 三方身份不一致。
+  runtime_config_effective_manifest_malformed: effectiveLaunchManifest 结构非法。
+  runtime_config_effective_manifest_digest_mismatch: effectiveLaunchManifest 摘要不一致。
+  runtime_config_activation_requires_cold_start: activation 只允许冷启动原生 gate 消费。
+  runtime_config_active_digest_conflict: expectedActiveDigest 与当前 active digest CAS 冲突。
+  runtime_config_activation_write_failed: active package 原子写入失败。
+  runtime_config_activation_readback_failed: 写入后 active readback 校验失败。
+  runtime_config_activation_rollback_failed: 失败回滚未完成或 CAS 后状态未知。
+  runtime_config_activation_receipt_missing: active receipt 文件缺失。
+  runtime_config_activation_receipt_read_failed: active receipt 读取 IO 失败。
+  runtime_config_activation_receipt_malformed: active receipt 解码或结构非法。
+  runtime_config_activation_receipt_mismatch: active receipt 与 active package 身份不一致。
+  runtime_config_activation_receipt_write_failed: receipt 原子写入失败。
+  runtime_config_internal_failure: 原生实现未预期异常的 fail-closed 包装码。
+
 schemas:
+  runtime_config_trust_envelope:
+    schema_value: app-runtime-config-trust
+    additional_fields: false
+    required_fields:
+      - schema
+      - schemaVersion
+      - buildProfile
+      - signatureAlgorithm
+      - trustedPublicKeys
+    fields:
+      schema: { type: string, const: app-runtime-config-trust }
+      schemaVersion: { type: string, const: "1" }
+      buildProfile: { type: string, allowed_values: [nonprod, prod] }
+      signatureAlgorithm: { type: string, const: ed25519 }
+      trustedPublicKeys: { type: object, value_type: string }
+    constraints:
+      - envelope 是 AppArtifact/Web bootstrap 的 build-profile 级只读输入，由 App/Web artifact 完整性保护；不得携带 environment、target、endpoint、runtime package、private key、secret 或 rollout/channel/content 字段。
+      - trustedPublicKeys 必须是非空 canonical Ed25519 keyring；nonprod envelope 只信任 Alpha/Beta/Gamma 共用签发域，prod envelope 只信任 Prod 签发域。
+      - envelope digest 使用 digest_contract 对完整 canonical JSON 求摘要；runtime package 的 trustedPublicKeys 必须与本 envelope 完全一致，package 自带公钥不得独立成为信任根。
+
+  runtime_config_package:
+    schema_value: app-runtime-config-package
+    additional_fields: false
+    required_fields:
+      - schema
+      - schemaVersion
+      - environment
+      - buildProfile
+      - target
+      - launchPolicy
+      - issuedAt
+      - expiresAt
+      - sourceGitSha
+      - sourceTreeDigest
+      - runtime
+      - payloadDigest
+      - signatureAlgorithm
+      - signatureKeyId
+      - trustedPublicKeys
+      - signature
+    fields:
+      schema: { type: string, const: app-runtime-config-package }
+      schemaVersion: { type: string, const: "1" }
+      environment: { type: string, allowed_values: [alpha, beta, gamma, prod] }
+      buildProfile: { type: string, allowed_values: [nonprod, prod] }
+      target: { type: string, allowed_values: [alpha-local, beta-local, gamma-local, prod-sim, prod-hosted] }
+      launchPolicy: { type: string, allowed_values: [test_live, prod_release] }
+      issuedAt: { type: string, format: rfc3339_utc }
+      expiresAt: { type: string, format: rfc3339_utc }
+      sourceGitSha: { type: string, format: git_object_sha }
+      sourceTreeDigest: { type: string, format: git_tree_digest }
+      runtime:
+        type: object
+        additional_fields: false
+        required_fields:
+          - appRuntimeEnv
+          - gatewayBaseUrl
+          - legalBaseUrl
+          - publicWebBaseUrl
+          - appDownloadBaseUrl
+          - realtimeBaseUrl
+          - mediaAvatarCdnBaseUrl
+          - mediaImageCdnBaseUrl
+          - mediaVideoCdnBaseUrl
+          - mediaUploadBaseUrl
+          - rtcMediaConnectionUrl
+        fields:
+          appRuntimeEnv: { type: string, min_length: 1 }
+          gatewayBaseUrl: { type: string, min_length: 1 }
+          legalBaseUrl: { type: string, min_length: 1 }
+          publicWebBaseUrl: { type: string, min_length: 1 }
+          appDownloadBaseUrl: { type: string, min_length: 1 }
+          realtimeBaseUrl: { type: string, min_length: 1 }
+          mediaAvatarCdnBaseUrl: { type: string, min_length: 1 }
+          mediaImageCdnBaseUrl: { type: string, min_length: 1 }
+          mediaVideoCdnBaseUrl: { type: string, min_length: 1 }
+          mediaUploadBaseUrl: { type: string, min_length: 1 }
+          rtcMediaConnectionUrl: { type: string, min_length: 1 }
+      payloadDigest: { type: string, format: sha256_identity }
+      signatureAlgorithm: { type: string, const: ed25519 }
+      signatureKeyId: { type: string, min_length: 1 }
+      trustedPublicKeys: { type: object, value_type: string }
+      signature: { type: string, format: strict_base64_ed25519_signature }
+    constraints:
+      - canonical signed payload 是排除 signature 后按 digest_contract canonical JSON 编码的完整 package；payloadDigest 必须等于将 payloadDigest 置为空字符串后的同一 canonical payload 摘要，signature 对最终 payload（包含 payloadDigest）签名。
+      - sourceGitSha/sourceTreeDigest 必须来自 package input capsule 或受审 Git identity；当前时间与路径不得充当 source identity。
+      - environment/target 必须满足 target_environment；environment/buildProfile/launchPolicy 必须满足 launch_policies 与 app_artifact_manifest.build_profiles 的单轨映射。
+      - expiresAt 必须晚于 issuedAt，生命周期不得超过 max_lifetime_seconds；验证时 issuedAt 不得超过 max_future_skew_seconds，expiresAt 已过期必须拒绝。
+      - runtime 字段集合必须恰好来自 runtime_value_keys，值全部为非空 string；内容 release、灰度 stage、channel 与 secret 字段一律拒绝。
+      - trustedPublicKeys 是签名覆盖的 canonical Ed25519 公钥投影且必须包含 signatureKeyId；验签时还必须与消费方独立配置的 trusted keyring 完全一致，package 自带公钥不得独立成为信任根。私钥引用、私钥字节与 secret 不得进入 package。
+
+  runtime_config_activation_request:
+    schema_value: app-runtime-config-activation-request
+    additional_fields: false
+    required_fields:
+      - schema
+      - schemaVersion
+      - environment
+      - buildProfile
+      - target
+      - package
+      - packageDigest
+      - trustEnvelopeDigest
+      - effectiveLaunchManifest
+      - effectiveLaunchManifestDigest
+      - expectedActiveDigest
+    fields:
+      schema: { type: string, const: app-runtime-config-activation-request }
+      schemaVersion: { type: string, const: "1" }
+      environment: { type: string, allowed_values: [alpha, beta, gamma, prod] }
+      buildProfile: { type: string, allowed_values: [nonprod, prod] }
+      target: { type: string, allowed_values: [alpha-local, beta-local, gamma-local, prod-sim, prod-hosted] }
+      package: { type: object, schema_ref: runtime_config_package }
+      packageDigest: { type: string, format: sha256_identity }
+      trustEnvelopeDigest: { type: string, format: sha256_identity }
+      effectiveLaunchManifest: { type: object, schema_ref: app_effective_launch_manifest }
+      effectiveLaunchManifestDigest: { type: string, format: sha256_identity }
+      expectedActiveDigest: { type: string, format: optional_sha256_identity }
+    constraints:
+      - request digest 使用 digest_contract 对完整 request canonical JSON 求摘要，并由 host 通过平台启动参数独立传给原生 gate；原生必须重算并一致后才可处理。
+      - packageDigest、trustEnvelopeDigest 与 effectiveLaunchManifestDigest 必须分别匹配 package、AppArtifact 内 profile trust envelope 与 effectiveLaunchManifest；environment/buildProfile/target/launchPolicy 必须在三者之间完全一致。
+      - expectedActiveDigest 为空只表示私有容器当前没有 active package；非空时必须是当前 active package digest。原生 activation 仅允许 CAS 条件更新，不得猜测或覆盖冲突值。
+
+  runtime_config_activation_receipt:
+    schema_value: app-runtime-config-activation-receipt
+    additional_fields: false
+    required_fields:
+      - schema
+      - schemaVersion
+      - status
+      - requestDigest
+      - environment
+      - buildProfile
+      - target
+      - packageDigest
+      - trustEnvelopeDigest
+      - effectiveLaunchManifestDigest
+      - previousActiveDigest
+      - activePackageDigest
+      - errorCode
+      - validationIssues
+    fields:
+      schema: { type: string, const: app-runtime-config-activation-receipt }
+      schemaVersion: { type: string, const: "1" }
+      status: { type: string, allowed_values: [activated, failed] }
+      requestDigest: { type: string, format: sha256_identity }
+      environment: { type: string, allowed_values: ["", alpha, beta, gamma, prod] }
+      buildProfile: { type: string, allowed_values: ["", nonprod, prod] }
+      target: { type: string, allowed_values: ["", alpha-local, beta-local, gamma-local, prod-sim, prod-hosted] }
+      packageDigest: { type: string, format: optional_sha256_identity }
+      trustEnvelopeDigest: { type: string, format: optional_sha256_identity }
+      effectiveLaunchManifestDigest: { type: string, format: optional_sha256_identity }
+      previousActiveDigest: { type: string, format: optional_sha256_identity }
+      activePackageDigest: { type: string, format: optional_sha256_identity }
+      errorCode: { type: string }
+      validationIssues:
+        type: array
+        items: { type: string, min_length: 1 }
+    constraints:
+      - receipt 只能由原生 gate 在读取制品内 trust、验证 request/package/manifest/profile/target、完成 CAS 原子写入并回读 active package 后生成；host 回显不构成证据。
+      - status=activated 时 errorCode 与 validationIssues 必须为空、previousActiveDigest 必须等于 request.expectedActiveDigest、activePackageDigest 必须等于 packageDigest，且 environment/buildProfile/target/packageDigest/trustEnvelopeDigest/effectiveLaunchManifestDigest 必须全部非空并与 request 逐字段一致。
+      - status=failed 时 errorCode 必须非空且 validationIssues 必须至少包含该稳定错误码；request 尚可安全解码时身份字段必须与 request 一致，request 缺失或无法解码时身份字段为空，不得伪造；失败不得覆盖上一份成功 active receipt，私有 active package必须保持 CAS 前状态或由 installer 原子回滚。
+      - errorCode 与 validationIssues 的每个成员必须来自 runtime_config_error_codes 闭集。active receipt 自身的缺失、读取 IO 失败与解码失败分别使用 runtime_config_activation_receipt_missing、runtime_config_activation_receipt_read_failed 与 runtime_config_activation_receipt_malformed，不得归入 activation request 错误语义。
+      - 记录 failed receipt 时若当前 active digest 读取失败，activePackageDigest 必须保持最后已知 CAS 值（previousActiveDigest），且 validationIssues 必须追加 runtime_config_activation_rollback_failed 表示 CAS 后状态未知；读取失败不得折叠为空 digest 或宣称 active 缺席。
+
   app_launch_attempt:
     schema_value: app-launch-attempt
     additional_fields: false
@@ -88,7 +347,7 @@ schemas:
       launchDigest: { type: string }
       status:
         type: string
-        allowed_values: [prepared, compiling, compiled, installing, installed, launching, launched, runtime_degraded, failed, stopped]
+        allowed_values: [prepared, compiling, compiled, installing, installed, configuring, configured, launching, launched, runtime_degraded, failed, stopped]
       transitions:
         type: array
         items: { type: object }
@@ -113,9 +372,9 @@ schemas:
       updatedAt: { type: string, format: rfc3339_utc }
       nonPromotable: { type: boolean }
     constraints:
-      - transitions 只能按 prepared → compiling → compiled → installing → installed → launching → launched 前进；failed、runtime_degraded 与 stopped 是显式终态，不得倒推或补写 launched。
-      - 编译、安装和启动失败的 firstBlocker 分别为 APP.LAUNCH.compile_failed、APP.LAUNCH.install_failed 与 APP.LAUNCH.launch_failed；Prod Debug 必须在 prepared 后以 APP.LAUNCH.prod_debug_forbidden 失败。
-      - ui-only 允许把 runtime、Provider、TLS、transport 与 content readiness 记入 warnings 后继续；content-live 与 release-artifact 不得把同一问题降级为 warning。
+      - transitions 只能按 prepared → compiling → compiled → installing → installed → configuring → configured → launching → launched 前进；failed、runtime_degraded 与 stopped 是显式终态，不得倒推或补写 launched。
+      - 编译、安装和启动失败的 firstBlocker 分别为 APP.LAUNCH.compile_failed、APP.LAUNCH.install_failed 与 APP.LAUNCH.launch_failed；无 active package 使用 APP.LAUNCH.runtime_config_missing，runtime package 验证、原子写入或 readback 失败使用 APP.LAUNCH.runtime_config_activation_failed；Prod Debug 必须在 prepared 后以 APP.LAUNCH.prod_debug_forbidden 失败。
+      - ui-only 允许把 runtime、Provider、TLS、transport 与 content readiness 记入 warnings 后继续，但 runtime package/trust 缺失或 activation 失败仍须阻断；content-live 与 release-artifact 不得把同一问题降级为 warning。
       - stopped 只表示用户或父进程正常停止已启动会话，不得解释为编译失败，也不得清理 App 或环境数据。
       - prod-sim 的 release-artifact 只允许 Android exact Release emulator artifact；Flutter iOS Simulator 只支持 Debug，iOS Release/Profile 必须以 APP.LAUNCH.ios_release_simulator_unsupported 阻断，不能生成或消费伪 Release 启动回执。
       - firstBlocker 非空时只允许取 launch_blockers 声明的码；不得写入自由文本或服务端错误码。
@@ -130,29 +389,25 @@ schemas:
     required_fields:
       - schema
       - environment
+      - buildProfile
       - target
       - entrypoint
       - launchMode
       - launchPolicy
-      - dartDefinesDigest
-      - runtimeConfigDigest
-      - recoveryBaseUrl
-      - publicWebBaseUrl
-      - appDownloadBaseUrl
+      - runtimeConfigPackageDigest
+      - runtimeConfigTrustEnvelopeDigest
       - requiresLocalTransport
       - transport
     fields:
       schema: { type: string, const: app-effective-launch-manifest }
       environment: { type: string, allowed_values: [alpha, beta, gamma, prod] }
+      buildProfile: { type: string, allowed_values: [nonprod, prod] }
       target: { type: string, allowed_values: [alpha-local, beta-local, gamma-local, prod-sim, prod-hosted] }
       entrypoint: { type: string, const: lib/main_prod.dart }
       launchMode: { type: string, min_length: 1 }
       launchPolicy: { type: string, allowed_values: [test_live, prod_release] }
-      dartDefinesDigest: { type: string, format: sha256_identity }
-      runtimeConfigDigest: { type: string, format: sha256_identity }
-      recoveryBaseUrl: { type: string, format: https_origin }
-      publicWebBaseUrl: { type: string, format: https_origin }
-      appDownloadBaseUrl: { type: string, format: https_url_no_query_fragment_credentials }
+      runtimeConfigPackageDigest: { type: string, format: sha256_identity }
+      runtimeConfigTrustEnvelopeDigest: { type: string, format: sha256_identity }
       requiresLocalTransport: { type: boolean }
       transport:
         type: object
@@ -175,8 +430,9 @@ schemas:
       - transport.required=true 只允许 local_transport_targets，且端口集合必须相等，receipt digest 与 consumer lease ID 必须是 sha256 identity。
       - transport.required=false 时端口和本地 transport identity 必须为空；这种 package-only 或未附带设备 transport 的 handoff 不得成为 runtime UAT 证据。
       - prod-hosted 必须令 local transport 为 false，且全部端口与本地 transport identity 为空。
-      - recoveryBaseUrl 与 publicWebBaseUrl 必须是 HTTPS origin；appDownloadBaseUrl 允许 path，但三个 URL 都不得包含 query、fragment 或凭据。
-      - launchPolicy 必须与 environment 满足 launch_policies 声明的映射；launchMode 只记录启动来源（launch provenance），任何消费方不得据此改变业务行为。
+      - buildProfile、launchPolicy 必须与 environment 满足 launch_policies 和 app_artifact_manifest.build_profiles 的映射；launchMode 只记录启动来源（launch provenance），任何消费方不得据此改变业务行为。
+      - runtimeConfigPackageDigest 必须等于 handoff 所携带 runtimeConfigPackage 的 digest_contract canonical JSON 摘要。
+      - runtimeConfigTrustEnvelopeDigest 必须等于已安装 AppArtifact/Web bootstrap 内匹配 buildProfile 的 runtime_config_trust_envelope 摘要；handoff 只携带摘要，不复制 keyring。
       - 本清单不携带内容 release 身份；内容激活身份只由 Content API 响应在运行时下发。
 
   app_launcher_handoff:
@@ -185,38 +441,38 @@ schemas:
     required_fields:
       - schema
       - environment
+      - buildProfile
       - target
       - entrypoint
       - launchMode
       - launchPolicy
-      - dartDefinesDigest
-      - runtimeConfigDigest
-      - recoveryBaseUrl
-      - publicWebBaseUrl
-      - appDownloadBaseUrl
+      - runtimeConfigPackageDigest
+      - runtimeConfigTrustEnvelopeDigest
       - requiresLocalTransport
       - transport
-      - dartDefines
+      - compileDiagnostics
+      - runtimeConfigPackage
       - effectiveLaunchManifest
       - effectiveLaunchManifestDigest
     fields:
       schema: { type: string, const: app-launcher-handoff }
       environment: { type: string, source: app_effective_launch_manifest.environment }
+      buildProfile: { type: string, source: app_effective_launch_manifest.buildProfile }
       target: { type: string, source: app_effective_launch_manifest.target }
       entrypoint: { type: string, source: app_effective_launch_manifest.entrypoint }
       launchMode: { type: string, source: app_effective_launch_manifest.launchMode }
       launchPolicy: { type: string, source: app_effective_launch_manifest.launchPolicy }
-      dartDefinesDigest: { type: string, source: app_effective_launch_manifest.dartDefinesDigest }
-      runtimeConfigDigest: { type: string, source: app_effective_launch_manifest.runtimeConfigDigest }
-      recoveryBaseUrl: { type: string, source: app_effective_launch_manifest.recoveryBaseUrl }
-      publicWebBaseUrl: { type: string, source: app_effective_launch_manifest.publicWebBaseUrl }
-      appDownloadBaseUrl: { type: string, source: app_effective_launch_manifest.appDownloadBaseUrl }
+      runtimeConfigPackageDigest: { type: string, source: app_effective_launch_manifest.runtimeConfigPackageDigest }
+      runtimeConfigTrustEnvelopeDigest: { type: string, source: app_effective_launch_manifest.runtimeConfigTrustEnvelopeDigest }
       requiresLocalTransport: { type: boolean, source: app_effective_launch_manifest.requiresLocalTransport }
       transport: { type: object, source: app_effective_launch_manifest.transport }
-      dartDefines: { type: object, value_type: string }
+      compileDiagnostics: { type: object, value_type: string }
+      runtimeConfigPackage: { type: object, schema_ref: runtime_config_package }
       effectiveLaunchManifest: { type: object, schema_ref: app_effective_launch_manifest }
       effectiveLaunchManifestDigest: { type: string, format: sha256_identity }
     constraints:
       - 顶层 launch identity 字段必须与 effectiveLaunchManifest 完全一致。
       - effectiveLaunchManifestDigest 必须是 digest_contract 对 effectiveLaunchManifest canonical JSON 的摘要。
-      - dartDefinesDigest 必须是 digest_contract 对规范化 string-only dartDefines 的摘要。
+      - runtimeConfigPackageDigest 必须是 digest_contract 对完整 runtimeConfigPackage canonical JSON 的摘要，并与 effectiveLaunchManifest 完全一致。
+      - runtimeConfigTrustEnvelopeDigest 必须与 effectiveLaunchManifest 完全一致，并在安装后 activation 前与 AppArtifact/Web bootstrap 回读的实际 envelope digest 相等；handoff 不携带 trust envelope 或 keyring 原文。
+      - compileDiagnostics 只允许非环境、非 endpoint、非 secret 的 string-only 编译诊断；不得携带 APP_RUNTIME_ENV、CLOUD_GATEWAY、RTC、CDN 或其等价环境配置。

@@ -44,10 +44,15 @@ def _build_input_manifest(
                     "images": {
                         "content-service": {
                             "repository": repository.replace(
-                                "/content-service", f"/content-service-{environment}"
+                                "/content-service",
+                                "/content-service-"
+                                + ("prod" if environment == "prod" else "nonprod"),
                             ),
                             "transportRef": transport_ref.replace(
-                                "/content-service:", f"/content-service-{environment}:"
+                                "/content-service:",
+                                "/content-service-"
+                                + ("prod" if environment == "prod" else "nonprod")
+                                + ":",
                             ),
                         }
                     },
@@ -63,9 +68,8 @@ def _build_input_manifest(
                 }
                 for environment in finalizer.ENVIRONMENTS
             },
-            "applicationPackages": {
-                environment: {} for environment in finalizer.ENVIRONMENTS
-            },
+            "applicationPackages": {},
+            "opsPortal": None,
             "contractGraphDigest": None,
             "requiredEvidence": {
                 "environmentArtifacts": {
@@ -76,10 +80,8 @@ def _build_input_manifest(
                     environment: ["content-service"]
                     for environment in finalizer.ENVIRONMENTS
                 },
-                "applicationPackages": {
-                    environment: list(finalizer.APPLICATION_PACKAGES[environment])
-                    for environment in finalizer.ENVIRONMENTS
-                },
+                "applicationPackages": list(finalizer.APPLICATION_PACKAGES),
+                "opsPortal": True,
                 "contractGraphDigest": True,
                 "providerEvidence": True,
                 "testEvidence": list(finalizer.TEST_LAYERS),
@@ -102,10 +104,10 @@ def _build_input_manifest(
                     for environment in finalizer.ENVIRONMENTS
                 ),
                 *(
-                    f"applicationPackages.{environment}.{surface}"
-                    for environment in finalizer.ENVIRONMENTS
-                    for surface in finalizer.APPLICATION_PACKAGES[environment]
+                    f"applicationPackages.{build_product_id}"
+                    for build_product_id in finalizer.APPLICATION_PACKAGES
                 ),
+                "opsPortal",
                 "contractGraphDigest",
                 "providerEvidence",
                 "testEvidence",
@@ -126,11 +128,14 @@ def _component_manifest(config_bytes: bytes) -> dict[str, object]:
         transport_ref=transport_ref,
     )
     manifest["status"] = "component-ready"
-    for index, environment in enumerate(finalizer.ENVIRONMENTS, start=1):
+    # DEC-005：alpha/beta/gamma 共享 nonprod digest，prod digest 分叉。
+    for environment in finalizer.ENVIRONMENTS:
         image = manifest["environmentArtifacts"][environment]["images"][
             "content-service"
         ]
-        environment_digest = f"sha256:{index:064x}"
+        environment_digest = (
+            f"sha256:{2:064x}" if environment == "prod" else f"sha256:{1:064x}"
+        )
         environment_repository = image["repository"]
         environment_ref = f"{environment_repository}@{environment_digest}"
         manifest["environmentArtifacts"][environment]["images"] = {
@@ -151,10 +156,10 @@ def _component_manifest(config_bytes: bytes) -> dict[str, object]:
     manifest["blockers"] = ["whole-application-evidence-pending"]
     manifest["missingEvidence"] = [
         *(
-            f"applicationPackages.{environment}.{surface}"
-            for environment in finalizer.ENVIRONMENTS
-            for surface in finalizer.APPLICATION_PACKAGES[environment]
+            f"applicationPackages.{build_product_id}"
+            for build_product_id in finalizer.APPLICATION_PACKAGES
         ),
+        "opsPortal",
         "contractGraphDigest",
         "providerEvidence",
         "testEvidence",
@@ -231,14 +236,17 @@ class MainlineReleaseOCITransportContractTest(unittest.TestCase):
     def test_collector_resolves_ghcr_tag_to_digest_descriptor(self) -> None:
         manifest = _build_input_manifest()
         digest = "sha256:" + f"{1:064x}"
+
+        def resolve(ref: str) -> str:
+            # DEC-005：nonprod 三环境同一 digest，prod 分叉。
+            return f"sha256:{2:064x}" if "-prod:" in ref else digest
+
         with (
             tempfile.TemporaryDirectory() as tmp,
             mock.patch.object(
                 collector,
                 "resolve_registry_digest",
-                side_effect=(
-                    f"sha256:{index:064x}" for index in range(1, 5)
-                ),
+                side_effect=resolve,
             ),
             mock.patch.object(collector, "verify_oci_supply_chain") as verify,
         ):
@@ -250,11 +258,11 @@ class MainlineReleaseOCITransportContractTest(unittest.TestCase):
         self.assertEqual(descriptors["alpha"]["content-service"]["digest"], digest)
         self.assertEqual(
             recorded["ref"],
-            f"ghcr.io/owner/repo/content-service-alpha@{digest}",
+            f"ghcr.io/owner/repo/content-service-nonprod@{digest}",
         )
         self.assertEqual(verify.call_count, 4)
         verify.assert_any_call(
-            f"ghcr.io/owner/repo/content-service-alpha@{digest}",
+            f"ghcr.io/owner/repo/content-service-nonprod@{digest}",
             repository="owner/repo",
             signer_workflow="owner/repo/.github/workflows/service_pipeline.yml",
         )
@@ -262,14 +270,10 @@ class MainlineReleaseOCITransportContractTest(unittest.TestCase):
     def test_collector_resolves_independent_images_concurrently(self) -> None:
         manifest = _build_input_manifest()
         rendezvous = threading.Barrier(4, timeout=2)
-        counter = iter(range(1, 5))
-        lock = threading.Lock()
 
-        def resolve(_ref: str) -> str:
+        def resolve(ref: str) -> str:
             rendezvous.wait()
-            with lock:
-                index = next(counter)
-            return f"sha256:{index:064x}"
+            return f"sha256:{2:064x}" if "-prod:" in ref else f"sha256:{1:064x}"
 
         with (
             tempfile.TemporaryDirectory() as tmp,

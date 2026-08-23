@@ -19,7 +19,7 @@ import '../../../support/runtime/patrol/patrol_test_support.dart';
 import '../../../support/runtime/patrol/patrol_account_enforcement_support.dart';
 import '../../../support/runtime/patrol/patrol_environment_harness.dart';
 
-const _homeFirstFrame = ValueKey<String>('home-search-chrome');
+const _homeFirstFrame = ValueKey<String>('home-primary-tab-chrome');
 const _suspendedFeedback = ValueKey<String>(
   'loginFeedback-loginAccountSuspended',
 );

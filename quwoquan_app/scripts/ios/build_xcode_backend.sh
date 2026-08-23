@@ -9,13 +9,13 @@ prepared_exports="$(bash "$PREPARE_SCRIPT")"
 status=$?
 set -e
 if [[ "$status" -ne 0 ]]; then
-  echo "[ios-build] GATE_BLOCK: runtime package preparation failed; resolve the first typed blocker reported above, then retry the same Flutter command." >&2
+  echo "[ios-build] GATE_BLOCK: trust envelope preparation failed; resolve the first typed blocker reported above, then retry the same Flutter command." >&2
   exit "$status"
 fi
 
 eval "$prepared_exports"
 if [[ "${QWQ_IOS_DART_DEFINES_READY:-}" != "1" || -z "${DART_DEFINES:-}" ]]; then
-  echo "[ios-build] GATE_BLOCK: runtime package preparation did not produce verified Dart defines." >&2
+  echo "[ios-build] GATE_BLOCK: trust envelope preparation did not produce verified compile inputs." >&2
   exit 3
 fi
 

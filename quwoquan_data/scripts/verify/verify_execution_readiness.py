@@ -318,7 +318,10 @@ def execution_readiness_outcome(
 
     合格率与配图率只作为持续改进的统计量随 outcome 返回，不参与判定。
     """
-    issues = content_execution_layout_issues(execution_id=execution_id)
+    issues = content_execution_layout_issues(
+        execution_id=execution_id,
+        allow_succeeded_terminal=True,
+    )
     if mode not in READINESS_MODES:
         return _blocked(issues, f"readiness mode is invalid: {mode}")
     if mode in _LIFECYCLE_MODES and not require_reviewed:

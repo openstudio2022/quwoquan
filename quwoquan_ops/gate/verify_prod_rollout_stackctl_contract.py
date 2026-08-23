@@ -383,7 +383,7 @@ def main() -> int:
         'DOCKER_BUILD_RECORD_UPLOAD: "false"',
         "plan_service_release_images.py",
         "matrix: ${{ fromJSON(needs.prepare-release.outputs.image_matrix) }}",
-        "${{ matrix.environment }}",
+        "${{ matrix.trust_domain }}",
         "${{ matrix.runtime_image_owner }}",
         "${{ matrix.image_name }}",
         "BUILD_IMAGE_COUNT: ${{ needs.prepare-release.outputs.build_count }}",

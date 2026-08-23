@@ -56,6 +56,7 @@ def _failure_code(kind: AgentFailureKind) -> DataIssueCode:
         AgentFailureKind.CREDENTIAL_INVALID: DataIssueCode.AGENT_CREDENTIAL_INVALID,
         AgentFailureKind.AUTHENTICATION_REJECTED: DataIssueCode.AGENT_CREDENTIAL_INVALID,
         AgentFailureKind.PROVIDER_REJECTED: DataIssueCode.AGENT_PROVIDER_REJECTED,
+        AgentFailureKind.BUDGET_EXCEEDED: DataIssueCode.AGENT_PROVIDER_REJECTED,
         AgentFailureKind.SUBPROCESS_TIMEOUT: DataIssueCode.AGENT_TIMEOUT,
         AgentFailureKind.FUTURE_TIMEOUT: DataIssueCode.AGENT_TIMEOUT,
         AgentFailureKind.SUBPROCESS_OUTPUT_INVALID: DataIssueCode.AGENT_RESULT_INVALID,

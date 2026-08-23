@@ -509,10 +509,10 @@ def _validate_nonprod_isolation_policy(
                 )
             continue
         if adapter_id == "ext.obs.elasticsearch":
-            if endpoint_ref != f"local_topology:{environment}.elasticsearch":
+            if endpoint_ref != "local_topology:elasticsearch":
                 raise ValueError(
-                    "non-production Elasticsearch endpoint crosses target isolation: "
-                    f"{capability_id}"
+                    "non-production Elasticsearch endpoint must use the shared "
+                    f"trust-domain authority: {capability_id}"
                 )
             continue
         allowed_infrastructure_endpoints = _NONPROD_INFRASTRUCTURE_ENDPOINTS.get(

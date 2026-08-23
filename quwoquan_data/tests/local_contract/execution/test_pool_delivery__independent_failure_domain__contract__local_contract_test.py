@@ -1,6 +1,10 @@
 """Pool delivery preserves reviewed truth across transport outages.
 
-spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-001
+spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/on-demand-content-pool-admission/spec.md#gwt-005.t1
+spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/on-demand-content-pool-admission/spec.md#gwt-005.t2
+spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/on-demand-content-pool-admission/spec.md#gwt-005.t3
+spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/on-demand-content-pool-admission/spec.md#gwt-005.t4
+spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/on-demand-content-pool-admission/spec.md#gwt-005.t5
 """
 from __future__ import annotations
 
@@ -225,12 +229,21 @@ def test_pool_delivery_drain__pre_capsule_promotes_only_qualified_reviewed_objec
     intent = {"intentId": "sha256:" + "8" * 64}
     writes: list[tuple[str, str]] = []
     promotions: list[str] = []
+    pool_record = {
+        "recordRef": "posts/article/china/travel/qualified-post/_pool/versions/1.json",
+        "recordSha256": "sha256:" + "b" * 64,
+        "contentVersion": 1,
+        "recordSequence": 1,
+        "payloadDigest": "sha256:" + "c" * 64,
+    }
     canonical = {
         "transactionId": "transaction-qualified",
         "applyReportRef": "data/local/qualified/apply_report.json",
         "canonicalObjectRef": "posts/article/china/travel/qualified-post",
         "canonicalObjectSha256": "sha256:" + "9" * 64,
         "objectClosureDigest": "sha256:" + "a" * 64,
+        "admissionResult": "appended",
+        "poolRecord": pool_record,
     }
 
     monkeypatch.setattr(
@@ -281,6 +294,33 @@ def test_pool_delivery_drain__pre_capsule_promotes_only_qualified_reviewed_objec
     assert result["qualifiedCount"] == result["attemptedCount"] == 1
     assert result["discardedCount"] == 1
     assert result["completedCount"] == 1
+    assert result["total"] == 2
+    assert result["appendedCount"] == result["poolDelta"] == 1
+    assert result["replayedCount"] == 0
+    assert result["pendingCount"] == 0
+    assert result["excludedCount"] == 1
+    assert result["blockedCount"] == 0
+    assert result["total"] == sum(
+        result[key]
+        for key in (
+            "appendedCount",
+            "replayedCount",
+            "pendingCount",
+            "excludedCount",
+            "blockedCount",
+        )
+    )
+    assert result["nextAction"] == "none"
+    assert result["reentryRef"] == {
+        "executionId": EXECUTION_ID,
+        "batchInputDigest": result["batchInputDigest"],
+        "intentIds": [intent["intentId"]],
+    }
+    assert [row["result"] for row in result["objectResults"]] == [
+        "excluded",
+        "appended",
+    ]
+    assert result["objectResults"][1]["canonicalObject"]["poolRecord"] == pool_record
     assert writes == [(qualified.object_ref, qualified.publish_ref)]
     assert promotions == [qualified.publish_ref]
     assert result["canonicalObjects"] == [canonical]

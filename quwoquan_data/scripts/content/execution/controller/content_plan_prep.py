@@ -110,11 +110,11 @@ def _content_capacity_gate_for_entity(
         _canonical_image_asset_issue,
         article_asset_claims,
         claims_conflict,
-        normalize_article_media_claims,
     )
     from content.execution.controller.content_plan_assets import (
         claim as claim_assets,
     )
+    from content.post.article.article_media_contract import article_plan_media_rejection
     from content.post.article.base_draft import (
         base_draft_readiness,
         load_base_draft_text,
@@ -289,11 +289,6 @@ def _content_capacity_gate_for_entity(
                     article_image_soft_warnings["asset_semantic_mismatch"] += 1
                     continue
                 admitted_rows.append(row)
-            if len(admitted_rows) < 2:
-                # Research Article 的正文 readiness 与配图 readiness 是两个独立
-                # 维度。少于 cover+body 两张图时不得把单图冒充 illustrated，
-                # 但已通过正文/来源质量门的 base source 可作为 text_only 对象。
-                admitted_rows = []
             candidate = {
                 "sourceDir": source_dir,
                 "sourceRef": source_ref,
@@ -317,24 +312,25 @@ def _content_capacity_gate_for_entity(
                     or ""
                 ),
                 "rows": admitted_rows,
+                "publishMediaMode": str(meta.get("publishMediaMode") or "").strip(),
                 "targetEntity": entity_id,
                 "targetAliases": list(entity_aliases),
                 "articleAnchorText": base_body,
                 **entity_anchor.candidate_fields(),
             }
-            refs, shas, collections, asset_refs, media_mode = (
-                normalize_article_media_claims(
-                    article_asset_claims(
-                        ctx,
-                        root,
-                        candidate,
-                    )
-                )
+            refs, shas, collections, asset_refs = article_asset_claims(
+                ctx,
+                root,
+                candidate,
             )
+            media_mode = str(candidate.get("publishMediaMode") or "").strip()
+            media_rejection = article_plan_media_rejection(media_mode, len(asset_refs))
+            if media_rejection is not None:
+                article_rejects[media_rejection[0]] += 1
+                continue
             if media_mode == "text_only":
                 article_image_soft_warnings["no_publishable_source_asset"] += 1
                 candidate["rows"] = []
-            candidate["publishMediaMode"] = media_mode
             candidate["assetClaimRefs"] = refs
             candidate["assetClaimShas"] = shas
             candidate["assetClaimCollections"] = collections

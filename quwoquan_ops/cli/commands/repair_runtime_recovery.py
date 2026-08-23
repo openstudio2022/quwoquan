@@ -278,15 +278,21 @@ def _normal_down_structurally_impossible(
     target_name: str,
     startup: Mapping[str, Any],
 ) -> str:
-    """Name the sealed-topology defect that makes candidate-bound down unusable.
+    """Name the defect that makes candidate-bound down unusable for this receipt.
 
     Normal down replays the receipt's own candidate topology under the receipt's
-    own workload. If that projection merges into a service carrying neither an
-    image nor a build context and no gating profile, `docker compose` rejects
-    the whole project, so down can never converge and up refuses to run before
-    down. Returning a non-empty reason is the objective evidence that the
-    orphan path is the only remaining governed exit; returning "" keeps the
-    normal path mandatory.
+    own workload, so it is objectively impossible in two shapes. The candidate
+    may be gone or unreadable, which is what a reclaim of the candidate store
+    leaves behind. Or the candidate may still project into a service carrying
+    neither an image nor a build context and no gating profile, which makes
+    `docker compose` reject the whole project. Either way down can never
+    converge while up refuses to run before down, so the receipt is frozen
+    evidence no governed path can retire.
+
+    A non-empty reason is the objective evidence that the orphan path is the
+    only remaining governed exit; "" keeps the normal path mandatory. An
+    unreadable candidate must never collapse into "": that would report the
+    normal path as usable precisely when it cannot work.
     """
 
     import yaml
@@ -306,22 +312,41 @@ def _normal_down_structurally_impossible(
             target_name,
             candidate_digest,
         ).resolve()
+    except ValueError:
+        # 非法 digest 说明回执自身损坏，而不是 candidate 被回收；这不是本出口的
+        # 判据，仍然交给 normal down 报出它自己的身份校验失败。
+        return ""
+    if not candidate_root.is_dir():
+        return (
+            f"candidate {candidate_digest} is no longer present at "
+            f"{candidate_root}; the receipt's own topology cannot be replayed"
+        )
+    try:
         topology = load_runtime_topology_package(
             candidate_root,
             environment=target_name.removesuffix("-local"),
             target=target_name,
             workload=workload,
         )
-    except (OSError, RuntimeTopologyPackageError, ValueError):
-        return ""
+    except (OSError, RuntimeTopologyPackageError, ValueError) as exc:
+        return (
+            f"candidate {candidate_digest} cannot project workload={workload} "
+            f"into a runtime topology: {exc}"
+        )
     merged: dict[str, dict[str, Any]] = {}
     for path in topology["composeFiles"]:
         try:
             document = yaml.safe_load(path.read_text(encoding="utf-8"))
-        except (OSError, yaml.YAMLError):
-            return ""
+        except (OSError, yaml.YAMLError) as exc:
+            return (
+                f"candidate {candidate_digest} carries an unreadable Compose "
+                f"file {path}: {exc}"
+            )
         if not isinstance(document, Mapping):
-            return ""
+            return (
+                f"candidate {candidate_digest} Compose file {path} is not a "
+                "mapping document"
+            )
         for name, definition in (document.get("services") or {}).items():
             if isinstance(definition, Mapping):
                 merged.setdefault(str(name), {}).update(definition)
@@ -348,10 +373,11 @@ def _close_orphan_reclaimed_startup_receipt(
     """Retire a non-stopped receipt whose runtime the orphan path just removed.
 
     A receipt admitted through the structurally-impossible-down exit still
-    claims live resources after teardown removed them. Leaving it non-stopped
-    would keep blocking every later up, so the receipt is transitioned to
-    stopped with the reclaim named as its failure. Already-stopped receipts and
-    absent receipts need nothing.
+    claims live resources after teardown removed them, whether the exit was
+    taken because the candidate is gone or because it projected an invalid
+    Compose project. Leaving it non-stopped would keep blocking every later up,
+    so the receipt is transitioned to stopped with the reclaim named as its
+    failure. Already-stopped receipts and absent receipts need nothing.
     """
 
     import quwoquan_ops.cli.stackctl as _stackctl
@@ -370,15 +396,22 @@ def _close_orphan_reclaimed_startup_receipt(
         attempt_id=attempt_id,
         status="stopped",
         failure=(
-            "reclaimed by governed orphan Compose teardown; the receipt's own "
-            "candidate topology could not produce a valid Compose project"
+            "reclaimed by governed orphan Compose teardown; candidate-bound "
+            "down was structurally impossible for this receipt"
         ),
     )
     return f"retired startup receipt status={status} attempt={attempt_id}"
 
 
 def _orphan_compose_runtime_gate(target_name: str) -> dict[str, Any] | None:
-    """Return the stopped receipt when normal candidate-bound down cannot apply."""
+    """Return the receipt when normal candidate-bound down cannot apply.
+
+    An absent or stopped receipt claims nothing, so exact-resource recovery owns
+    the residue outright. A non-stopped receipt still claims the runtime, and it
+    keeps priority: recovery is admitted only when that receipt's own candidate
+    is objectively unusable, never on an operator's word. Otherwise the residue
+    belongs to candidate-bound normal down.
+    """
     import quwoquan_ops.cli.stackctl as _stackctl
 
 
@@ -400,7 +433,10 @@ def _orphan_compose_runtime_gate(target_name: str) -> dict[str, Any] | None:
     if startup is None:
         return None
     status = str(startup.get("status") or "").strip()
-    if status != "stopped":
+    if status != "stopped" and not _stackctl._normal_down_structurally_impossible(
+        target_name,
+        startup,
+    ):
         raise _stackctl.orphan_compose_teardown.OrphanComposeTeardownError(
             "orphan Compose teardown requires an absent or stopped startup receipt; "
             f"status={status or '<missing>'} must use candidate-bound normal down"
@@ -486,6 +522,9 @@ def _complete_orphan_compose_audit_convergence(
         f"partialConsumptionDigest={consumption['consumptionDigest']}",
         f"convergence={_stackctl.relpath(convergence_path)}",
     ]
+    closure = _stackctl._close_orphan_reclaimed_startup_receipt(target_name, startup)
+    if closure:
+        details.append(closure)
     _stackctl.write_json(
         report_dir / "report.json",
         {
@@ -752,6 +791,14 @@ def _repair_orphaned_compose(
                 ),
                 f"consumption={_stackctl.relpath(consumption_path)}",
             ]
+            # 删除已经把 receipt 声称拥有的资源移走；留着非 stopped 回执只会让下一次
+            # up 继续被一份再也无法执行的凭据挡住。
+            closure = _stackctl._close_orphan_reclaimed_startup_receipt(
+                target_name,
+                startup,
+            )
+            if closure:
+                details.append(closure)
             _stackctl.write_json(
                 report_dir / "report.json",
                 {

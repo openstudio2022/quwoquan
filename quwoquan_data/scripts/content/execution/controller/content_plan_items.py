@@ -144,14 +144,21 @@ def append_article_plan_items(
             topic_tag_refs=topic_tag_refs,
         )
         publish_schedule = scheduler.schedule(creator_assignment)
+        publish_media_mode = str(candidate.get("publishMediaMode") or "").strip()
         asset_refs = list(candidate.get("assetRefs") or [])
+        if publish_media_mode not in {"text_only", "illustrated"}:
+            raise ValueError("article candidate publishMediaMode must be text_only|illustrated")
+        if publish_media_mode == "text_only" and asset_refs:
+            raise ValueError("text_only article candidate cannot carry source assets")
+        if publish_media_mode == "illustrated" and len(asset_refs) < 2:
+            raise ValueError("illustrated article candidate requires at least two source assets")
         source_unit_freeze = (
             write_article_source_unit_freeze(
                 execution_id=ctx.execution_id,
                 source_dir=candidate["sourceDir"],
                 asset_refs=asset_refs,
             )
-            if asset_refs
+            if publish_media_mode == "illustrated"
             else None
         )
         brief = {
@@ -164,14 +171,13 @@ def append_article_plan_items(
             "writingIntent": intent,
             "evidenceRequirements": {"emotion": {"required": False}},
             "baseSourceRef": candidate["sourceRef"],
+            "publishMediaMode": publish_media_mode,
             "assetRefs": asset_refs,
             "publishSchedule": publish_schedule,
             **creator_assignment,
         }
         if source_unit_freeze is not None:
             brief["articleSourceUnitFreeze"] = source_unit_freeze
-        else:
-            brief["publishMediaMode"] = "text_only"
         item = {
             "ref": ref,
             "kind": "entity",
@@ -189,6 +195,7 @@ def append_article_plan_items(
             "writingIntent": intent,
             "evidenceRequirements": brief["evidenceRequirements"],
             "baseSourceRef": candidate["sourceRef"],
+            "publishMediaMode": publish_media_mode,
             "assetRefs": asset_refs,
             "sourceUseMode": candidate["sourceUseMode"],
             "entityFocusScore": float(candidate.get("entityFocusScore") or 0.0),
@@ -206,8 +213,6 @@ def append_article_plan_items(
         write_brief_object(ctx.execution_id, ref, brief, content_type="article")
         if source_unit_freeze is not None:
             item["articleSourceUnitFreeze"] = source_unit_freeze
-        else:
-            item["publishMediaMode"] = "text_only"
         items.append(item)
 
 

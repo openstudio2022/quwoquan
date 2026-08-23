@@ -447,7 +447,7 @@ void main() {
   });
 
   group('HomePage', () {
-    testWidgets('展示八个首页文本频道并删除移动搜索栏', (tester) async {
+    testWidgets('展示八个首页文本频道并在频道条右侧保留全局搜索与小趣入口', (tester) async {
       _suppressExpectedErrors();
       await tester.pumpWidget(_buildApp());
       await tester.pump(const Duration(milliseconds: 300));
@@ -461,12 +461,15 @@ void main() {
       expect(find.text(DiscoveryText.homeTabPhotography), findsWidgets);
       expect(find.text(DiscoveryText.homeTabTech), findsWidgets);
       expect(find.text(DiscoveryText.homeTabCarFriends), findsWidgets);
-      expect(find.byType(GlobalXiaoquSearchBar), findsNothing);
-      expect(find.byKey(TestKeys.globalSearchLauncherButton), findsNothing);
       expect(
-        find.byKey(const ValueKey<String>('home-search-chrome')),
-        findsNothing,
+        find.byKey(const ValueKey<String>('home-primary-tab-chrome')),
+        findsOneWidget,
       );
+      // 首页是发现主入口，AppRoot REQ-001 的统一搜索入口与 REQ-008 的首页小趣入口
+      // 必须与聊天页、个人页同源；缺任一入口即为 Journey 断点。
+      expect(find.byType(GlobalTopActions), findsOneWidget);
+      expect(find.byKey(TestKeys.globalSearchLauncherButton), findsOneWidget);
+      expect(find.byKey(TestKeys.globalAssistantEntryMark), findsOneWidget);
     });
 
     testWidgets('首页文本频道栏避开安全区且状态栏跟随主题', (tester) async {
@@ -984,11 +987,14 @@ void main() {
         find.byKey(const ValueKey<String>('works-top-back')),
         findsOneWidget,
       );
+      // 视频书只作为文本频道存在，不再有顶栏专用入口图标；
+      // 沉浸正文接管的是频道 body，顶栏的搜索与小趣入口必须保持可达。
       expect(
         find.byKey(const ValueKey<String>('home-featured-entry')),
         findsNothing,
       );
-      expect(find.byType(GlobalXiaoquSearchBar), findsNothing);
+      expect(find.byKey(TestKeys.globalSearchLauncherButton), findsOneWidget);
+      expect(find.byKey(TestKeys.globalAssistantEntryMark), findsOneWidget);
     });
 
     testWidgets('横滑校园内容切到旅行频道', (tester) async {

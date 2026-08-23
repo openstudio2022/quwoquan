@@ -9,8 +9,20 @@ import tempfile
 from pathlib import Path
 from urllib.parse import quote, unquote, urlparse
 
+from quwoquan_ops.cli.lib.app_launch_manifest_contract import (
+    load_launch_manifest_contract,
+    runtime_config_package_digest,
+    runtime_config_trust_envelope_digest,
+    validate_runtime_config_package,
+    validate_runtime_config_trust_envelope,
+)
+
 ACTIVE_POINTER_NAME = "active.json"
 ACTIVE_POINTER_SCHEMA = "client-app.web.active-release"
+WEB_RUNTIME_CONFIG_FILENAMES = (
+    "runtime-config-trust.json",
+    "runtime-config-package.json",
+)
 
 
 class WebOfficialReleaseError(RuntimeError):
@@ -33,33 +45,13 @@ def package_web_official_release(
     if not flutter:
         raise WebOfficialReleaseError("flutter is required to package the Web application")
 
-    defines = _runtime_defines(
-        repo_root,
-        environment,
-        target=target,
-        launch_policy="prod_release" if environment == "prod" else "test_live",
-    )
-    defines["CLOUD_GATEWAY_BASE_URL"] = public_origin + "/api"
-    defines["APP_LEGAL_BASE_URL"] = public_origin + "/legal"
-    defines["PUBLIC_WEB_BASE_URL"] = public_origin
     package_root.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(
         prefix="web-build-",
         dir=str(package_root),
     ) as temporary:
         build_root = Path(temporary) / "public"
-        command = [
-            flutter,
-            "build",
-            "web",
-            "--release",
-            "--pwa-strategy=offline-first",
-            f"--output={build_root}",
-        ]
-        command.extend(
-            f"--dart-define={key}={value}"
-            for key, value in sorted(defines.items())
-        )
+        command = _web_build_command(flutter, build_root)
         result = subprocess.run(
             command,
             cwd=repo_root / "quwoquan_app",
@@ -72,8 +64,7 @@ def package_web_official_release(
             detail = (result.stderr or result.stdout).strip()
             raise WebOfficialReleaseError(f"flutter build web failed: {detail}")
         _verify_web_build(build_root)
-        if environment != "prod":
-            _inject_noindex(build_root / "index.html")
+        _verify_runtime_config_is_external(build_root)
         digest = _tree_sha256(build_root)
         release_id = digest[:20]
         release_root = package_root / release_id
@@ -137,42 +128,15 @@ def package_web_official_release(
     }
 
 
-def _runtime_defines(
-    repo_root: Path,
-    environment: str,
-    *,
-    target: str,
-    launch_policy: str,
-) -> dict[str, str]:
-    command = [
-        "python3",
-        str(repo_root / "quwoquan_app/scripts/env/print_app_env_dart_defines.py"),
-        "--env",
-        environment,
-        "--target",
-        target,
-        "--launch-mode",
-        "web_official_release",
-        "--launch-policy",
-        launch_policy,
-        "--format",
-        "json",
+def _web_build_command(flutter: str, build_root: Path) -> list[str]:
+    return [
+        flutter,
+        "build",
+        "web",
+        "--release",
+        "--pwa-strategy=offline-first",
+        f"--output={build_root}",
     ]
-    result = subprocess.run(
-        command,
-        cwd=repo_root,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise WebOfficialReleaseError(
-            "read Web runtime package failed: " + (result.stderr or result.stdout).strip()
-        )
-    decoded = json.loads(result.stdout)
-    if not isinstance(decoded, dict):
-        raise WebOfficialReleaseError("Web runtime defines must be a JSON object")
-    return {str(key): str(value) for key, value in decoded.items()}
 
 
 def _trusted_web_origin(environment: str, raw: str) -> str:
@@ -186,7 +150,7 @@ def _trusted_web_origin(environment: str, raw: str) -> str:
     }[environment]
     expected_host, expected_port = expected
     try:
-        parsed.port
+        parsed_port = parsed.port
     except ValueError as error:
         raise WebOfficialReleaseError(
             f"{environment} Web origin must be "
@@ -195,7 +159,7 @@ def _trusted_web_origin(environment: str, raw: str) -> str:
     if (
         parsed.scheme != "https"
         or parsed.hostname != expected_host
-        or parsed.port != expected_port
+        or parsed_port != expected_port
         or parsed.username is not None
         or parsed.password is not None
         or parsed.path not in {"", "/"}
@@ -251,6 +215,95 @@ def _verify_web_build(build_root: Path) -> None:
     _verify_font_manifest(build_root)
 
 
+def _verify_runtime_config_is_external(build_root: Path) -> None:
+    embedded = [
+        name for name in WEB_RUNTIME_CONFIG_FILENAMES if (build_root / name).exists()
+    ]
+    if embedded:
+        raise WebOfficialReleaseError(
+            "Web shared artifact must not contain hosting runtime configuration: "
+            + ", ".join(embedded)
+        )
+
+
+def materialize_web_runtime_config(
+    *,
+    hosting_root: Path,
+    trust_envelope: dict[str, object],
+    runtime_package: dict[str, object],
+    expected_environment: str,
+    expected_target: str,
+) -> dict[str, str]:
+    """将环境配置写入 hosting composition，而非 immutable Web artifact。"""
+
+    if expected_environment not in {"alpha", "beta", "gamma", "prod"}:
+        raise WebOfficialReleaseError(
+            f"unsupported Web hosting environment: {expected_environment}"
+        )
+    if hosting_root.is_symlink() or not hosting_root.is_dir():
+        raise WebOfficialReleaseError(
+            "Web hosting root must be an existing regular directory"
+        )
+    expected_profile = "prod" if expected_environment == "prod" else "nonprod"
+    contract = load_launch_manifest_contract()
+    trust_issues = validate_runtime_config_trust_envelope(
+        trust_envelope,  # type: ignore[arg-type]
+        contract,
+    )
+    if trust_issues or trust_envelope.get("buildProfile") != expected_profile:
+        detail = "; ".join(trust_issues) or "buildProfile does not match environment"
+        raise WebOfficialReleaseError(
+            "Web hosting runtime trust envelope is missing or invalid: " + detail
+        )
+    package_issues = validate_runtime_config_package(
+        runtime_package,  # type: ignore[arg-type]
+        trust_envelope,  # type: ignore[arg-type]
+        contract,
+    )
+    if (
+        package_issues
+        or runtime_package.get("environment") != expected_environment
+        or runtime_package.get("target") != expected_target
+        or runtime_package.get("buildProfile") != expected_profile
+    ):
+        detail = "; ".join(package_issues) or "target/environment/profile mismatch"
+        raise WebOfficialReleaseError(
+            "Web hosting runtime package does not match its composition: " + detail
+        )
+
+    payloads = {
+        "runtime-config-trust.json": trust_envelope,
+        "runtime-config-package.json": runtime_package,
+    }
+    file_digests: dict[str, str] = {}
+    for name, payload in payloads.items():
+        encoded = (
+            json.dumps(
+                payload,
+                ensure_ascii=False,
+                separators=(",", ":"),
+                sort_keys=True,
+            )
+            + "\n"
+        ).encode("utf-8")
+        destination = hosting_root / name
+        temporary = hosting_root / f".{name}.tmp"
+        temporary.write_bytes(encoded)
+        os.replace(temporary, destination)
+        file_digests[name] = "sha256:" + hashlib.sha256(encoded).hexdigest()
+    return {
+        **file_digests,
+        "runtimeConfigTrustEnvelopeDigest": runtime_config_trust_envelope_digest(
+            trust_envelope,  # type: ignore[arg-type]
+            contract,
+        ),
+        "runtimeConfigPackageDigest": runtime_config_package_digest(
+            runtime_package,  # type: ignore[arg-type]
+            contract,
+        ),
+    }
+
+
 def _verify_font_manifest(build_root: Path) -> None:
     # 静态服务器会先对请求 URL 做百分号解码再查磁盘，因此字体 asset 路径必须
     # 全程 URL-safe：解码后指向产物内唯一的常规文件，且不含需要编码的字符
@@ -293,19 +346,6 @@ def _verify_font_manifest(build_root: Path) -> None:
         raise WebOfficialReleaseError(
             "Web font assets are not URL-safe: " + "; ".join(problems)
         )
-
-
-def _inject_noindex(index_path: Path) -> None:
-    text = index_path.read_text(encoding="utf-8")
-    marker = '  <meta name="description"'
-    if marker not in text:
-        raise WebOfficialReleaseError("Web index description marker is unavailable")
-    text = text.replace(
-        marker,
-        '  <meta name="robots" content="noindex,nofollow">\n' + marker,
-        1,
-    )
-    index_path.write_text(text, encoding="utf-8")
 
 
 def _tree_sha256(root: Path) -> str:

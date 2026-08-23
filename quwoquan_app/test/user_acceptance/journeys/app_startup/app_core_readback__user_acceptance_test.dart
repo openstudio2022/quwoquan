@@ -55,8 +55,10 @@ const _videoAttribution = String.fromEnvironment(
 const _videoPageCount = int.fromEnvironment('DATA_RELEASE_VIDEO_PAGE_COUNT');
 
 const _homeFeedKey = ValueKey<String>('home-feed-recommend');
-const _homeFeaturedEntryKey = ValueKey<String>('home-featured-entry');
-const _homeSearchChromeKey = ValueKey<String>('home-search-chrome');
+// 视频书不再有顶栏专用入口图标，改为首页一级文本频道。Journey 断言的始终是
+// 「从首页可达视频书沉浸消费」，锚点随实现落到频道 Tab。
+const _homeFeaturedEntryKey = ValueKey<String>('home-primary-tab-featured');
+const _homeSearchChromeKey = ValueKey<String>('home-primary-tab-chrome');
 const _worksTopBackKey = ValueKey<String>('works-top-back');
 const _videoErrorKey = ValueKey<String>('video-player-error');
 const _feedCardProbeKeys = <ValueKey<String>>[
@@ -64,7 +66,6 @@ const _feedCardProbeKeys = <ValueKey<String>>[
   ValueKey<String>('home-feed-card-1'),
   ValueKey<String>('home-feed-card-2'),
   ValueKey<String>('feed-patch-reporter-0'),
-  ValueKey<String>('dual-discovery-card-0'),
 ];
 const _homeContentTapKeys = <ValueKey<String>>[
   ValueKey<String>('home-moment-grid-tile-0'),

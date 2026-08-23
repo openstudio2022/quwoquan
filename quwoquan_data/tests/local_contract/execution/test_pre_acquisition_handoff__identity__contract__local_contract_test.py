@@ -23,7 +23,7 @@ from core.source_digest import (
     SourceDefinitionSnapshot,
     content_source_revision,
 )
-from support.capacity_calibration_fixture import synthetic_capacity_source_binding
+from core.paths import REPO_ROOT
 
 SOURCE_A = "sha256:" + "a" * 64
 SOURCE_B = "sha256:" + "b" * 64
@@ -45,6 +45,18 @@ def _execution_bundle_document() -> dict[str, object]:
     return ExecutionBundleIdentity(digest="sha256:" + "d" * 64).to_document()
 
 
+_SELECTION_BY_CARRIER: dict[str, dict[str, object]] = {
+    "homepage": {"mode": "site_primary", "providers": ["wikipedia"]},
+    "article": {"mode": "site_primary", "providers": ["mafengwo"]},
+    "image": {"mode": "search_supplement", "providers": ["adobe_stock"]},
+    "video": {"mode": "site_primary", "providers": ["bilibili"]},
+}
+
+
+def _source_selection(carriers: dict[str, int]) -> dict[str, dict[str, object]]:
+    return {carrier: dict(_SELECTION_BY_CARRIER[carrier]) for carrier in carriers}
+
+
 def _write_handoff(
     output_root: Path,
     *,
@@ -53,22 +65,26 @@ def _write_handoff(
     scale: str = "M100",
     workload_targets: dict[str, int] | None = None,
 ) -> tuple[dict[str, object], Path]:
+    targets = workload_targets or campaign_workload_targets(scale)
     return handoffs.write_pre_acquisition_handoff(
         handoff_id="travel-m100-20260807",
         handoff_revision=revision,
         supersedes_handoff=supersedes,
         scale=scale,
         vertical="travel",
-        scope="china",
+        lifecycle="research",
+        scope_type="region",
         region_ref="china",
-        topic=None,
+        primary_topic_ref=None,
+        related_topic_refs=(),
+        source_selection=_source_selection(targets),
         run_date="20260807",
         campaign_sequence=1,
         campaign_retry_of=None,
         source_digest=_source_document(),
         execution_bundle=_execution_bundle_document(),
         entity_catalog_digest=CATALOG,
-        workload_targets=workload_targets or campaign_workload_targets(scale),
+        workload_targets=targets,
         output_root=output_root,
     )
 
@@ -264,6 +280,11 @@ def test_handoff_revision_is_create_once_and_preserves_superseded_bytes(
         "handoffFileDigest": handoffs._file_digest(revision_one_path),
     }
 
+    collision_selection = _source_selection(TARGETS)
+    collision_selection["homepage"] = {
+        "mode": "site_primary",
+        "providers": ["baidu_baike"],
+    }
     with pytest.raises(
         handoffs.PreAcquisitionHandoffError,
         match="COLLISION",
@@ -274,9 +295,12 @@ def test_handoff_revision_is_create_once_and_preserves_superseded_bytes(
             supersedes_handoff=revision_one_path,
             scale="M100",
             vertical="travel",
-            scope="china",
+            lifecycle="research",
+            scope_type="region",
             region_ref="china",
-            topic="collision-probe",
+            primary_topic_ref=None,
+            related_topic_refs=(),
+            source_selection=collision_selection,
             run_date="20260807",
             campaign_sequence=1,
             campaign_retry_of=None,
@@ -404,46 +428,37 @@ def test_envelopes_bind_handoff_and_derive_article_no_acquisition(
             else [{"kind": "professional_image_acquisition"}]
         ),
     )
-    # Every envelope now freezes a governed capacity source; this test is about
-    # handoff identity, so it binds the synthetic calibration rather than the
-    # governed M100 receipt.
-    capacity_ref = Path("data/local/tests/capacity/local-contract-capacity.json")
-    monkeypatch.setattr(
-        envelope_build,
-        "resolve_capacity_calibration_ref",
-        lambda ref: Path(ref),
+    # 每 lane workload=1 落在 bounded policy 内：授权走 bounded_explicit，
+    # 假 repo 需携带受版本控制的 bounded policy 文件。
+    policy_ref = (
+        "quwoquan_data/control_plane/_shared/catalogs/"
+        "bounded_execution_authority_policy.json"
     )
-    monkeypatch.setattr(
-        envelope_build,
-        "bind_capacity_calibration_source",
-        lambda **_kwargs: synthetic_capacity_source_binding(),
-    )
+    policy_copy = repo / policy_ref
+    policy_copy.parent.mkdir(parents=True, exist_ok=True)
+    policy_copy.write_bytes((REPO_ROOT / policy_ref).read_bytes())
 
     wave_targets = ("测试实体",)
     homepage = envelopes.build_envelope(
         scale="M100",
         carrier="homepage",
-        region_ref="china",
         repo_root=repo,
         day="20260807",
         target_names=wave_targets,
         workloads={"homepage": 1},
         pre_acquisition_handoff=handoff_path,
         pre_acquisition_handoff_output_root=output_root,
-        capacity_calibration_receipt=capacity_ref,
         external_input_refs=[{"kind": "professional_image_acquisition"}],
     )
     article = envelopes.build_envelope(
         scale="M100",
         carrier="article",
-        region_ref="china",
         repo_root=repo,
         day="20260807",
         target_names=wave_targets,
         workloads={"article": 1},
         pre_acquisition_handoff=handoff_path,
         pre_acquisition_handoff_output_root=output_root,
-        capacity_calibration_receipt=capacity_ref,
     )
 
     assert homepage["preAcquisitionHandoff"]["handoffId"] == (
@@ -462,15 +477,13 @@ def test_envelopes_bind_handoff_and_derive_article_no_acquisition(
         envelopes.build_envelope(
             scale="M100",
             carrier="article",
-            region_ref="china",
             repo_root=repo,
             day="20260808",
             target_names=wave_targets,
             workloads={"article": 1},
             pre_acquisition_handoff=handoff_path,
             pre_acquisition_handoff_output_root=output_root,
-            capacity_calibration_receipt=capacity_ref,
-        )
+            )
 
 
 def test_shared_guard_accepts_exact_identity_and_rejects_stale_source(

@@ -68,6 +68,7 @@
 - [`domain-service-directory-ownership`](./domain-service-directory-ownership/spec.md)：从每个服务的 `contracts/domain.yaml` 和 L1 工程归属直接定位唯一责任领域。
 - [`repository-layout-hygiene-and-retirement`](./repository-layout-hygiene-and-retirement/spec.md)：报告包含固定九类分类、WIP 清单、候选引用证据和最小验证命令。
 - [`absent-empty-failure-nullability`](./absent-empty-failure-nullability/spec.md)：缺席、空值与失败在端云保持三种不可互换的结果状态。
+- [`local-worktree-lifecycle-governance`](./local-worktree-lifecycle-governance/spec.md)：新建工作副本需显式授权，未合入工作按滞留时长分级提醒。
 
 ## 5. 能力要求
 

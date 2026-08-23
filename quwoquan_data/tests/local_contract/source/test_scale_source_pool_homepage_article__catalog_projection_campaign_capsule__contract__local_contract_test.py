@@ -16,6 +16,7 @@ from content.execution.campaign.external_input_runtime import (
     bind_runtime_external_input_context,
 )
 from content.execution.campaign.source_pool_binding import (
+    _selected_evidence_refs,
     bind_scale_source_pool,
     materialize_bound_scale_source_pool,
     validate_capsule_scale_source_pool,
@@ -34,6 +35,9 @@ from content.source.research.scale_source_pool_runtime import (
 )
 from core.carrier_contract import research_plan_files
 
+from quwoquan_data.tests.local_contract.source.test_media_source_admission__portable_bridge__contract__local_contract_test import (
+    _admit,
+)
 from support.scale_source_pool_catalog_fixture import (
     IDENTITY,
     _article_candidate,
@@ -45,6 +49,110 @@ from support.scale_source_pool_projection_fixture import (
     _clone_row,
     _project,
 )
+
+
+def test_campaign_capsule_collects_media_admission_receipt_evidence_and_asset_bytes(
+    tmp_path: Path,
+) -> None:
+    candidates = []
+    expected_refs: set[str] = set()
+    for carrier in ("image", "video"):
+        receipt, receipt_ref, _ = _admit(tmp_path, kind=carrier)
+        candidates.append(
+            {
+                "carrier": carrier,
+                "objectRef": receipt["objectRef"],
+                "sourceAdmissionRef": receipt_ref,
+                "sourceAdmissionDigest": receipt["receiptDigest"],
+            }
+        )
+        expected_refs.add(receipt_ref)
+        expected_refs.add(str(receipt["assetSnapshot"]["assetRef"]))
+        expected_refs.update(
+            str(binding["ref"]) for binding in receipt["evidenceBindings"]
+        )
+
+    refs = _selected_evidence_refs(candidates, evidence_root=tmp_path)
+
+    assert set(refs) == expected_refs
+    assert all(value.startswith("sha256:") for value in refs.values())
+
+
+def test_article_workload_campaign_capsule_copies_nested_raw_evidence(
+    tmp_path: Path,
+) -> None:
+    output_root = tmp_path / "output"
+    evidence_root = output_root / "evidence"
+    projection = _project(
+        evidence_root,
+        homepage_candidates=[_homepage_candidate(0)],
+        article_candidates=[_article_candidate(0), _article_candidate(1)],
+        per_member_roots=True,
+    )
+    article_rows = [
+        copy.deepcopy(row)
+        for row in projection["rows"]
+        if row["carrier"] == "article"
+    ]
+    plan = build_scale_source_pool_plan(
+        pool_id="article-workload-raw-evidence",
+        target_scale="WORKLOAD",
+        created_at="2026-08-08T00:00:00Z",
+        candidates=article_rows,
+        workload_targets={"article": 1},
+        source_revision=IDENTITY["sourceRevision"],
+        source_digest=IDENTITY["sourceDigest"],
+        entity_catalog_digest=IDENTITY["entityCatalogDigest"],
+    )
+    plan_path = output_root / "pool/plan.json"
+    _write_json(plan_path, plan)
+    binding, evidence_ref, selection = bind_scale_source_pool(
+        plan_path,
+        evidence_root=evidence_root,
+        output_root=output_root,
+        target_scale="WORKLOAD",
+        carrier="article",
+        count=1,
+        source_revision=IDENTITY["sourceRevision"],
+        source_digest=IDENTITY["sourceDigest"],
+        entity_catalog_digest=IDENTITY["entityCatalogDigest"],
+    )
+    snapshot_root = tmp_path / "capsule/scale-source-pool"
+    snapshot_digest = materialize_bound_scale_source_pool(
+        binding,
+        evidence_root_ref=evidence_ref,
+        output_root=output_root,
+        destination=snapshot_root,
+        lane_selections={"article": selection},
+    )
+    validate_capsule_scale_source_pool(
+        binding,
+        snapshot_root=snapshot_root,
+        lane_selections={"article": selection},
+        expected_snapshot_digest=snapshot_digest,
+    )
+
+    selected_id = str(selection["candidateIds"][0])
+    unselected_id = next(
+        str(row["candidateId"])
+        for row in article_rows
+        if row["candidateId"] != selected_id
+    )
+    selected_raw = (
+        snapshot_root
+        / "evidence"
+        / "members"
+        / "article"
+        / selected_id
+        / "raw"
+        / "article"
+        / f"{selected_id}.json"
+    )
+    assert selected_raw.is_file()
+    assert not any(
+        unselected_id in path.as_posix()
+        for path in (snapshot_root / "evidence").rglob("*")
+    )
 
 
 def test_campaign_capsule_copies_only_selected_candidate_capsules_and_cas(
@@ -84,12 +192,22 @@ def test_campaign_capsule_copies_only_selected_candidate_capsules_and_cas(
         + ["Pexels"] * 50 + ["Wikimedia Commons"] * 30
     )
     candidates.extend(
-        _clone_row(article_rows[0], carrier="image", index=index, provider=provider)
+        _clone_row(
+            article_rows[0],
+            carrier="image",
+            index=index,
+            provider=provider,
+            evidence_root=evidence_root,
+        )
         for index, provider in enumerate(image_providers)
     )
     candidates.extend(
         _clone_row(
-            article_rows[0], carrier="video", index=index, provider="Pexels Videos"
+            article_rows[0],
+            carrier="video",
+            index=index,
+            provider="Pexels Videos",
+            evidence_root=evidence_root,
         )
         for index in range(18)
     )
@@ -163,6 +281,8 @@ def test_campaign_capsule_copies_only_selected_candidate_capsules_and_cas(
     assert f"{article_member}/capsule.json" in copied
     assert f"{homepage_member}/provenance/discovery.json" in copied
     assert f"{article_member}/provenance/discovery.json" in copied
+    assert f"{homepage_member}/raw/homepage/homepage-west-lake-0.json" in copied
+    assert f"{article_member}/raw/article/article-hangzhou-0.json" in copied
     assert "members/homepage/homepage-west-lake-1/capsule.json" not in copied
     assert "members/article/article-hangzhou-1/capsule.json" not in copied
     assert not any("west-lake-1" in ref or "hangzhou-1" in ref for ref in copied)

@@ -15,7 +15,6 @@ from content.execution.campaign.carrier_execution_policy import (
 )
 from content.execution.campaign.request_envelope import (
     envelopes_root,
-    normalize_execution_scope,
     scale_root,
 )
 from content.execution.identity import parse_execution_id
@@ -130,9 +129,7 @@ def next_sequence(
         if any(identity.run_date != day for identity in identities):
             raise ValueError("retry predecessors disagree on run date")
         return day, sequence
-    scope = normalize_execution_scope(
-        str(normalized["regionRef"]), normalized.get("topic")
-    )
+    scope = str(normalized["scope"])
     parent = scale_root(
         str(normalized["scale"]),
         scope=scope,
@@ -283,7 +280,9 @@ def batch_documents_factory(
             "intent": {
                 "vertical": normalized["vertical"],
                 "regionRef": normalized["regionRef"],
-                "topic": normalized["topic"],
+                "scopeType": normalized["scopeType"],
+                "primaryTopicRef": normalized["primaryTopicRef"],
+                "relatedTopicRefs": normalized["relatedTopicRefs"],
             },
             "lifecycle": normalized["lifecycle"],
             "executionMode": normalized["executionMode"],

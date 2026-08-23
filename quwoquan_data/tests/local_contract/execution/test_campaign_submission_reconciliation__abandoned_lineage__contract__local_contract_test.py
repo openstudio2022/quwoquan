@@ -8,6 +8,7 @@ import pytest
 from content.execution.campaign import submission_reconciliation as reconciliation
 from content.execution.campaign import failed_execution_reconciliation
 from content.execution.planning.recipe import request as recipe_request
+from content.execution.planning.recipe import request_retry_scope
 from content.execution.campaign.external_inputs import payload_digest
 from core.io import read_json, write_json
 from core.schema import assert_valid
@@ -366,7 +367,7 @@ def test_retry_target_names_use_reconciliation_when_target_set_never_existed(
 ) -> None:
     names = ("乌镇", "成都大熊猫繁育研究基地", "西湖")
     monkeypatch.setattr(
-        recipe_request,
+        request_retry_scope,
         "submission_only_predecessor_target_names",
         lambda _retry_of: names,
     )

@@ -10,7 +10,6 @@ from content.execution.context import ExecutionContext
 from content.execution.controller.content_plan import _auto_content_plan
 from content.execution.controller.content_plan_assets import (
     _canonical_image_asset_issue,
-    normalize_article_media_claims,
 )
 from content.execution.controller.content_plan_prep import (
     _content_capacity_gate_for_entity,
@@ -33,24 +32,6 @@ EXECUTION_ID = (
     "20260810--travel-image-m1--test-canonical-admission--scale-901"
 )
 ENTITY = "图片去重测试景区"
-
-
-def test_article_media_claims_downgrade_atomically_to_text_only() -> None:
-    single = normalize_article_media_claims(
-        (["assets/cover.jpg"], ["cover-sha"], ["source"], ["assets/cover.jpg"])
-    )
-    illustrated = normalize_article_media_claims(
-        (
-            ["assets/cover.jpg", "assets/body.jpg"],
-            ["cover-sha", "body-sha"],
-            ["source"],
-            ["assets/cover.jpg", "assets/body.jpg"],
-        )
-    )
-
-    assert single == ([], [], [], [], "text_only")
-    assert illustrated[-1] == "illustrated"
-    assert illustrated[3] == ["assets/cover.jpg", "assets/body.jpg"]
 
 
 @pytest.fixture(autouse=True)

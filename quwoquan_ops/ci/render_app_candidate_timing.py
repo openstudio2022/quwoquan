@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Calculate the reusable App candidate machine path from GitHub Jobs API facts."""
 
 from __future__ import annotations
@@ -6,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 import time
 import urllib.parse
 import urllib.request
@@ -13,14 +13,18 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-SHARD_JOB_PATTERNS = (
-    "App package shard / Android",
-    "App package shard / iOS",
-    "App package shard / Web",
-    "App package shard / macOS",
+from quwoquan_ops.cli.lib.app_identity import supported_build_products
+
+BUILD_PRODUCT_IDS = tuple(
+    product.build_product_id for product in supported_build_products()
 )
-ENVIRONMENTS = ("alpha", "beta", "gamma", "prod")
+if len(BUILD_PRODUCT_IDS) != 5 or len(set(BUILD_PRODUCT_IDS)) != 5:
+    raise ValueError("baseline App build product set must contain exactly five products")
+SHARD_JOB_PATTERN = "App package product"
 AGGREGATE_JOB_PATTERN = "App candidate OCI / aggregate"
 READY_STEP = "Expose immutable App OCI identity"
 
@@ -48,19 +52,17 @@ def _one(jobs: list[dict[str, Any]], pattern: str) -> dict[str, Any]:
 def calculate(jobs: list[dict[str, Any]]) -> dict[str, Any]:
     shard_seconds: dict[str, int] = {}
     shard_completed: list[datetime] = []
-    for pattern in SHARD_JOB_PATTERNS:
-        platform = pattern.rsplit("/", 1)[-1].strip().lower()
-        for environment in ENVIRONMENTS:
-            job_pattern = f"{pattern} / {environment}"
-            job = _one(jobs, job_pattern)
-            if job.get("conclusion") != "success":
-                raise ValueError(f"App shard is not successful: {job_pattern}")
-            shard_seconds[f"{platform}/{environment}"] = _seconds(
-                job.get("started_at"), job.get("completed_at"), job_pattern
-            )
-            shard_completed.append(
-                _timestamp(job.get("completed_at"), job_pattern + ".completed_at")
-            )
+    for build_product_id in BUILD_PRODUCT_IDS:
+        job_pattern = f"{SHARD_JOB_PATTERN} / {build_product_id}"
+        job = _one(jobs, job_pattern)
+        if job.get("conclusion") != "success":
+            raise ValueError(f"App build-product shard is not successful: {job_pattern}")
+        shard_seconds[build_product_id] = _seconds(
+            job.get("started_at"), job.get("completed_at"), job_pattern
+        )
+        shard_completed.append(
+            _timestamp(job.get("completed_at"), job_pattern + ".completed_at")
+        )
 
     aggregate = _one(jobs, AGGREGATE_JOB_PATTERN)
     ready_steps = [
@@ -103,7 +105,7 @@ def _jobs(repository: str, run_id: str, token: str) -> list[dict[str, Any]]:
             payload = json.load(response)
         batch = payload.get("jobs") if isinstance(payload, dict) else None
         if not isinstance(batch, list):
-            raise ValueError("GitHub Jobs API returned an invalid payload")
+            raise TypeError("GitHub Jobs API returned an invalid payload")
         jobs.extend(item for item in batch if isinstance(item, dict))
         if len(batch) < 100:
             return jobs

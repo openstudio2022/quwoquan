@@ -60,25 +60,22 @@ class ProviderRuntimeCompositionContractTest(unittest.TestCase):
                 )
                 self.assertEqual(
                     len(by_role["provider-protocol-substitute"]["capabilityIds"]),
-                    10 if environment == "alpha" else 9,
+                    9,
                 )
-                if environment == "alpha":
-                    binding_by_capability = {
-                        binding["capabilityId"]: binding
-                        for binding in result["bindings"]
-                    }
+                binding_by_capability = {
+                    binding["capabilityId"]: binding
+                    for binding in result["bindings"]
+                }
+                for capability_id in (
+                    "location.poi.search",
+                    "location.route.read",
+                ):
                     self.assertEqual(
-                        binding_by_capability["location.poi.search"]["adapterId"],
-                        "ext.map.nominatim.protocol_substitute",
-                    )
-                    # route.read 保持未启用（App 无路线消费页面），不进入
-                    # alpha substitute workload。
-                    self.assertEqual(
-                        binding_by_capability["location.route.read"]["state"],
+                        binding_by_capability[capability_id]["state"],
                         "not_required",
                     )
                     self.assertEqual(
-                        binding_by_capability["location.route.read"]["adapterId"],
+                        binding_by_capability[capability_id]["adapterId"],
                         "",
                     )
                 self.assertIn(
@@ -278,15 +275,15 @@ class ProviderRuntimeCompositionContractTest(unittest.TestCase):
                 compiled=compiled,
             )
 
-    def test_nonprod_elasticsearch_cannot_cross_environment(self) -> None:
+    def test_nonprod_elasticsearch_requires_shared_trust_domain_authority(self) -> None:
         compiled = deepcopy(self.compiled)
         compiled["selectedBindings"]["beta"]["runtime.log.sink"][
             "endpoint_ref"
-        ] = "local_topology:alpha.elasticsearch"
+        ] = "local_topology:beta.elasticsearch"
 
         with self.assertRaisesRegex(
             ValueError,
-            "Elasticsearch endpoint crosses target isolation",
+            "Elasticsearch endpoint must use the shared trust-domain authority",
         ):
             compile_provider_runtime_composition(
                 environment="beta",

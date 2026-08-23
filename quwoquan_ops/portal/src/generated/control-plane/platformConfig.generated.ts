@@ -4782,7 +4782,7 @@ export const platformConfig = {
       "key": "sys.product-ops-service.app_release.android.apk_package_name",
       "type": "string",
       "owner": "",
-      "default": "com.quwoquan.quwoquan_app",
+      "default": "com.leadwise.quwoquan",
       "scope": "workload",
       "reload": "restart",
       "rollout": "progressive",

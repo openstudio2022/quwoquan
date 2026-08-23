@@ -204,8 +204,10 @@ def _write_acquired_candidate(
         **identity,
         "capturedAt": captured_at,
         "sourceAttribution": dict(candidate["sourceAttribution"]),
-        "publishMediaMode": str(
-            candidate.get("publishMediaMode") or "illustrated"
+        "publishMediaMode": (
+            "illustrated"
+            if acquired.carrier == "homepage"
+            else str(candidate["publishMediaMode"])
         ),
         "seedSelection": dict(seed_selection_binding),
         "seed": seed_binding,

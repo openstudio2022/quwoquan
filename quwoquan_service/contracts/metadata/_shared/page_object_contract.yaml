@@ -2370,6 +2370,23 @@ pages:
       - lib/runtime/di/navigation/app_router_recovery_page.dart
       - lib/runtime/shell/composition/quwoquan_app_shell.dart
 
+  - page_id: app.startup_configuration_error
+    source_path: lib/runtime/shell/recovery/startup_configuration_error_page.dart
+    page_kind: shell
+    surface_ids: [welcome]
+    experience_owner: app
+    data_owners: [app]
+    object_ids: []
+    query_slices: none
+    typed_presentation: none
+    data_contract_reason: runtime package 缺失或失效时的阻断页，只呈现本地失败码与本地诊断复制；配置不可信时不得发起任何业务查询或依赖 runtime 配置的外部跳转。
+    auth_requirement: public
+    capability_requirements: { all_of: [], any_of: [] }
+    telemetry_descriptor: { event_namespace: page.app.startup_configuration_error, lifecycle: [enter, failure] }
+    entry_widget: StartupConfigurationErrorPage
+    mount_evidence:
+      - lib/runtime/shell/recovery/bootstrap_recovery.dart
+
   - page_id: welcome.screen
     source_path: lib/runtime/shell/welcome/welcome_screen.dart
     page_kind: routed

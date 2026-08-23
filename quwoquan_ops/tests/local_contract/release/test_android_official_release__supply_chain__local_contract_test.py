@@ -26,7 +26,7 @@ class AndroidOfficialReleaseTest(unittest.TestCase):
                 tmp_path / "apkanalyzer",
                 """#!/bin/sh
 case "$2" in
-  application-id) echo com.quwoquan.quwoquan_app ;;
+  application-id) echo com.leadwise.quwoquan ;;
   version-name) echo 1.8.2 ;;
   version-code) echo 18201 ;;
   min-sdk) echo 26 ;;
@@ -46,7 +46,7 @@ echo 'Signer #1 certificate SHA-256 digest: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
                 package_root=tmp_path / "package",
                 public_origin="https://quwoquan.com",
                 download_origin="https://cdn.quwoquan.com",
-                expected_package="com.quwoquan.quwoquan_app",
+                expected_package="com.leadwise.quwoquan",
                 expected_signing_certificate_sha256="a" * 64,
                 minimum_supported_version="1.7.0",
                 minimum_supported_build="17000",
@@ -89,7 +89,7 @@ echo 'Signer #1 certificate SHA-256 digest: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
                 tmp_path / "apkanalyzer",
                 """#!/bin/sh
 case "$2" in
-  application-id) echo com.quwoquan.quwoquan_app ;;
+  application-id) echo com.leadwise.quwoquan ;;
   version-name) echo 1.8.2 ;;
   version-code) echo 18201 ;;
   min-sdk) echo 26 ;;
@@ -111,7 +111,7 @@ echo 'Signer #1 certificate SHA-256 digest: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
                     package_root=tmp_path / "package",
                     public_origin="https://quwoquan.com",
                     download_origin="http://cdn.quwoquan.com",
-                    expected_package="com.quwoquan.quwoquan_app",
+                    expected_package="com.leadwise.quwoquan",
                     expected_signing_certificate_sha256="b" * 64,
                     minimum_supported_version="1.7.0",
                     minimum_supported_build="17000",
@@ -128,7 +128,7 @@ echo 'Signer #1 certificate SHA-256 digest: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
                 tmp_path / "apkanalyzer",
                 """#!/bin/sh
 case "$2" in
-  application-id) echo com.quwoquan.quwoquan_app ;;
+  application-id) echo com.leadwise.quwoquan ;;
   version-name) echo 1.8.2 ;;
   version-code) echo 18201 ;;
   min-sdk) echo 26 ;;
@@ -150,7 +150,7 @@ echo 'Signer #1 certificate SHA-256 digest: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
                     package_root=tmp_path / "package",
                     public_origin="https://quwoquan.com",
                     download_origin="https://cdn.quwoquan.com",
-                    expected_package="com.quwoquan.quwoquan_app",
+                    expected_package="com.leadwise.quwoquan",
                     expected_signing_certificate_sha256="b" * 64,
                     minimum_supported_version="1.7.0",
                     minimum_supported_build="17000",

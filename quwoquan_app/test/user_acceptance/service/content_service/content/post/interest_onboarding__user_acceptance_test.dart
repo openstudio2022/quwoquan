@@ -16,7 +16,7 @@ import '../../../../../support/runtime/patrol/patrol_test_support.dart';
 
 const _pageKey = ValueKey<String>('interest-onboarding-page');
 const _submitKey = ValueKey<String>('interest-onboarding-submit');
-const _homeSearchKey = ValueKey<String>('home-search-chrome');
+const _homeSearchKey = ValueKey<String>('home-primary-tab-chrome');
 
 void main() {
   patrolTest(

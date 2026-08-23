@@ -10,6 +10,13 @@
       {
         "command": "python3 quwoquan_ops/hooks/shell_cli_first_guard.py",
         "matcher": "python"
+      },
+      {
+        "command": "python3 quwoquan_ops/hooks/worktree_authz_guard.py --harness cursor",
+        "matcher": "worktree\\s+add|git\\s+clone|checkout\\s+-[bB]|switch\\s+-[cC]|git\\s+branch"
+      },
+      {
+        "command": "bash quwoquan_ops/hooks/worktree_session_reminder_gate.sh"
       }
     ],
     "afterFileEdit": [

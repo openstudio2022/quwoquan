@@ -56,7 +56,10 @@ def handle_verify(args: argparse.Namespace) -> None:
     if cmd == "content-execution-layout":
         from verify.verify_content_execution_layout import main as execution_layout_main
 
-        raise SystemExit(execution_layout_main())
+        argv = []
+        if getattr(args, "execution_id", None):
+            argv = ["--execution-id", str(args.execution_id)]
+        raise SystemExit(execution_layout_main(argv))
     if cmd == "execution-readiness":
         from verify.verify_execution_readiness import main as execution_readiness_main
 
@@ -185,6 +188,7 @@ def handle_verify(args: argparse.Namespace) -> None:
             publish_root=Path(args.publish_root) if args.publish_root else paths.PUBLISH_ROOT,
             release_root=Path(args.release_root) if args.release_root else paths.RELEASE_ROOT,
             commercial=not bool(args.trial),
+            through=args.through,
         )
         print(json.dumps(report, ensure_ascii=False, indent=2))
         if not report["passed"]:
@@ -300,7 +304,7 @@ def handle_all() -> None:
         ("tag-tree", lambda: verify_tag_tree.main([])),
         ("source-digest", lambda: verify_source_digest.main([])),
         ("execution-identity-purity", verify_execution_identity_purity.main),
-        ("content-execution-layout", verify_content_execution_layout.main),
+        ("content-execution-layout", lambda: verify_content_execution_layout.main([])),
         ("reusable-data-contract", verify_reusable_data_contract.main),
         ("runtime-input-ownership", verify_runtime_input_ownership.main),
         ("cursor-credential-contract", verify_cursor_credential_contract.main),
@@ -477,7 +481,8 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     sub.add_parser("single-contract-source", help="校验内容供给生产契约只有一个无版本真源")
     sub.add_parser("works-classification", help="校验作品 vs 随记判定 schema/config/registry 一致性 + 判定 smoke")
     sub.add_parser("output-root-isolation", help="仓外输出根隔离门：repo allowlist/阶段树/批次轴/摘要索引")
-    sub.add_parser("content-execution-layout", help="校验唯一 execution 工作包与五阶段目录")
+    cel = sub.add_parser("content-execution-layout", help="校验唯一 execution 工作包与五阶段目录")
+    cel.add_argument("--execution-id", help="只校验一个显式命名的 execution 工作包")
     per = sub.add_parser("execution-readiness", help="校验单个 execution 工作包的准出证据")
     per.add_argument("--execution-id", required=True)
     per.add_argument("--require-reviewed", action="store_true")
@@ -555,6 +560,11 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     psa.add_argument("--publish-root")
     psa.add_argument("--release-root")
     psa.add_argument("--trial", action="store_true", help="trial 允许 independent reviewer 尚未通过")
+    psa.add_argument(
+        "--through",
+        choices=("1.download", "2.quality", "3.compose", "4.draft", "5.review"),
+        help="进行式校验：只要求到该阶段为止的产物齐全；缺省为完成型全量校验",
+    )
     pri = sub.add_parser("release-integrity", help="校验 release 级证据链、一稿一用与跨作品资产溯源完整性")
     pri.add_argument("--release", required=True, help="Release ID under release/")
     p.set_defaults(handler=handle_verify)

@@ -4,7 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -18,9 +18,15 @@ from core.source_digest import (
     content_source_revision,
 )
 from content.execution.campaign.lane import normalize_workloads
+from content.execution.controller.execute.pre_acquisition_handoff_validation import (
+    validate_document_carrier_alignment,
+    validated_scope_fields,
+    validated_source_selection,
+)
 
 HANDOFF_SCHEMA = "quwoquan_data.content_pre_acquisition_handoff"
 HANDOFFS_RELATIVE_ROOT = Path("data/local/workspace/content-pre-acquisition-handoffs")
+LIFECYCLES = ("research", "commercial")
 _CARRIER_REQUIREMENTS: dict[str, dict[str, Any]] = {
     "homepage": {
         "externalInputMode": "external_acquisition",
@@ -240,9 +246,12 @@ def build_pre_acquisition_handoff(
     supersedes_handoff: Path | None,
     scale: str,
     vertical: str,
-    scope: str,
-    region_ref: str,
-    topic: str | None,
+    lifecycle: str,
+    scope_type: str,
+    region_ref: str | None,
+    primary_topic_ref: str | None,
+    related_topic_refs: Sequence[str] = (),
+    source_selection: Mapping[str, Any],
     run_date: str,
     campaign_sequence: int,
     campaign_retry_of: str | None,
@@ -255,6 +264,23 @@ def build_pre_acquisition_handoff(
     """Build one canonical handoff without writing execution or campaign state."""
     resolved_output = (output_root or paths.OUTPUT_ROOT).expanduser().resolve()
     handoff_id_value = _safe_handoff_id(handoff_id)
+    vertical_value = str(vertical or "").strip().lower()
+    if not vertical_value:
+        raise _typed(
+            "VERTICAL_REQUIRED",
+            "vertical is an explicit demand input; silent defaults are forbidden",
+        )
+    lifecycle_value = str(lifecycle or "").strip()
+    if lifecycle_value not in LIFECYCLES:
+        raise _typed("LIFECYCLE_INVALID", f"lifecycle must be one of {LIFECYCLES}")
+    scope_fields = validated_scope_fields(
+        scope_type=str(scope_type or "").strip(),
+        vertical=vertical_value,
+        region_ref=region_ref,
+        primary_topic_ref=primary_topic_ref,
+        related_topic_refs=related_topic_refs,
+        error_factory=_typed,
+    )
     source = SourceDefinitionSnapshot.from_document(source_digest)
     bundle = ExecutionBundleIdentity.from_document(execution_bundle)
     catalog_digest = str(entity_catalog_digest or "").strip()
@@ -267,6 +293,12 @@ def build_pre_acquisition_handoff(
     except ValueError as exc:
         raise _typed("WORKLOAD_INVALID", str(exc)) from exc
     active_carriers = list(targets)
+    selection = validated_source_selection(
+        source_selection,
+        vertical=vertical_value,
+        active_carriers=active_carriers,
+        error_factory=_typed,
+    )
     retry_of = str(campaign_retry_of or "").strip() or None
     if campaign_sequence == 1 and retry_of is not None:
         raise _typed(
@@ -289,10 +321,9 @@ def build_pre_acquisition_handoff(
             output_root=resolved_output,
         ),
         "scale": str(scale),
-        "vertical": str(vertical),
-        "scope": str(scope),
-        "regionRef": str(region_ref),
-        "topic": str(topic).strip() if topic is not None and str(topic).strip() else None,
+        "vertical": vertical_value,
+        "lifecycle": lifecycle_value,
+        **scope_fields,
         "runDate": str(run_date),
         "campaignSequence": campaign_sequence,
         "campaignRetryOf": retry_of,
@@ -302,6 +333,7 @@ def build_pre_acquisition_handoff(
         "entityCatalogDigest": catalog_digest,
         "activeCarriers": active_carriers,
         "workloadTargets": targets,
+        "sourceSelection": selection,
         "sourceMutationPolicy": {
             "mode": "immutable_after_handoff",
             "driftAction": "GATE_BLOCK",
@@ -353,11 +385,11 @@ def load_pre_acquisition_handoff(path: Path) -> dict[str, Any]:
         )
     except (TypeError, ValueError) as exc:
         raise _typed("WORKLOAD_INVALID", str(exc)) from exc
-    if set(handoff.get("carrierRequirements", {})) != set(targets):
-        raise _typed(
-            "WORKLOAD_INVALID",
-            "carrierRequirements must match activeCarriers exactly",
-        )
+    validate_document_carrier_alignment(
+        handoff,
+        targets,
+        error_factory=_typed,
+    )
     _require_canonical_handoff_location(path, handoff)
     return handoff
 
@@ -434,10 +466,6 @@ def bind_pre_acquisition_handoff(
     handoff_ref: Path | None,
     *,
     scale: str,
-    vertical: str,
-    scope: str,
-    region_ref: str,
-    topic: str | None,
     run_date: str,
     campaign_sequence: int,
     source_revision: str,
@@ -445,6 +473,12 @@ def bind_pre_acquisition_handoff(
     entity_catalog_digest: str,
     output_root: Path | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Bind one confirmed handoff by identity only.
+
+    Demand facts (vertical, lifecycle, scope, topic refs, sourceSelection)
+    are owned by the handoff itself and must be read from the returned
+    document; callers cannot supply independent expectations for them.
+    """
     if handoff_ref is None:
         raise _typed("HANDOFF_REQUIRED", "explicit handoffRef is required")
     resolved_output = (output_root or paths.OUTPUT_ROOT).expanduser().resolve()
@@ -457,10 +491,6 @@ def bind_pre_acquisition_handoff(
     )
     expected = {
         "scale": scale,
-        "vertical": vertical,
-        "scope": scope,
-        "regionRef": region_ref,
-        "topic": str(topic).strip() if topic is not None and str(topic).strip() else None,
         "runDate": run_date,
         "campaignSequence": campaign_sequence,
     }

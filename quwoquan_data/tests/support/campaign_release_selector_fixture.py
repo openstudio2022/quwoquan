@@ -9,7 +9,10 @@ from content.release.canonical.campaign_release import CampaignReleaseRoots
 from core.runtime_policy import runtime_profile_digest
 from core.schema import assert_valid
 from core.source_digest import ExecutionBundleIdentity, SourceDefinitionSnapshot
-from support.capacity_calibration_fixture import synthetic_capacity_source_binding
+from support.capacity_calibration_fixture import (
+    synthetic_capacity_source_binding,
+    synthetic_governed_execution_authority,
+)
 from support.semantic_preflight_fixture import ready_semantic_preflight
 
 
@@ -348,7 +351,7 @@ def _fixture(
             "selector": "auto",
             "quota": exact_workloads[carrier],
             "count": exact_workloads[carrier],
-            "capacityCalibration": synthetic_capacity_source_binding(),
+            "executionAuthority": synthetic_governed_execution_authority(),
             "workerHostSetBinding": None,
             "topic": None,
             "targetNames": ["测试实体"],
@@ -407,7 +410,7 @@ def _fixture(
         "entityCatalogDigest": CATALOG_DIGEST,
         "semanticSelectionId": "default",
         "semanticPreflightReceipt": semantic_preflight_binding,
-        "capacityCalibration": synthetic_capacity_source_binding(),
+        "executionAuthority": synthetic_governed_execution_authority(),
         "scaleSourcePool": pool_binding,
         "sourcePoolEvidenceRootRef": pool_evidence_ref,
         "laneSourcePoolSelections": pool_selections,

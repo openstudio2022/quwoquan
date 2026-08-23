@@ -27,6 +27,22 @@ SMOKE_STATIC = [
     "verify-app-assistant-search-weak-typing-ratchet",
 ]
 
+# 就绪路由与 readinessProbe 分处两棵树，任一侧单独改动都能造成探针错配，
+# 因此两侧任一被触及都必须跑同源门禁（纯静态，亚秒级）。
+SERVICE_PROBE_SUFFIXES = (
+    "deploy/base/deployment.yaml",
+    "quwoquan_ops/cli/lib/service_runtime_probes.py",
+    ".go",
+)
+
+# UAT key 与实现侧 key 分处两棵树，任一侧单独改动都能造成 UAT 引用不存在的
+# widget（find.byKey 永远 findsNothing），因此两侧任一被触及都跑同源门禁。
+UAT_WIDGET_KEY_PREFIXES = (
+    "quwoquan_app/lib/",
+    "quwoquan_app/test/user_acceptance/",
+    "quwoquan_app/test/support/runtime/patrol/",
+)
+
 PAGEFLIP_PREFIXES = (
     "quwoquan_app/lib/design_system/pageflip/",
     "quwoquan_app/lib/service/content_service/content/post/presentation/article_reader/pageflip/",
@@ -103,6 +119,8 @@ def classify(paths: list[str]) -> dict[str, bool]:
         "has_service_scripts": False,
         "has_ops_scripts": False,
         "has_data_scripts": False,
+        "has_service_probes": False,
+        "has_app_uat_widget_keys": False,
     }
     for path in paths:
         if path.startswith("quwoquan_service/"):
@@ -141,11 +159,17 @@ def classify(paths: list[str]) -> dict[str, bool]:
             flags["has_portal"] = True
         if any(path.startswith(prefix) for prefix in PAGEFLIP_PREFIXES):
             flags["has_pageflip"] = True
+        if any(path.endswith(suffix) for suffix in SERVICE_PROBE_SUFFIXES):
+            flags["has_service_probes"] = True
+        if path.endswith(".dart") and any(
+            path.startswith(prefix) for prefix in UAT_WIDGET_KEY_PREFIXES
+        ):
+            flags["has_app_uat_widget_keys"] = True
     return flags
 
 
 def static_checks(flags: dict[str, bool]) -> list[str]:
-    checks = ["branch_policy", "entrypoint_script_paths"]
+    checks = ["branch_policy", "local_worktree_lifecycle", "entrypoint_script_paths"]
     if flags["has_specs"]:
         checks.append("feature_tree")
     for scope in ("app", "service", "ops", "data"):
@@ -153,6 +177,8 @@ def static_checks(flags: dict[str, bool]) -> list[str]:
             checks.append(f"python_script_governance_{scope}")
     if flags["has_service"] or flags["has_ops"]:
         checks.append("service_architecture")
+    if flags["has_service_probes"]:
+        checks.append("service_probe_homology")
     if flags["has_app_contracts"] or flags["has_contracts"]:
         checks.append("app_generated_manifest")
     if flags["has_app"] or flags["has_app_contracts"]:
@@ -161,6 +187,8 @@ def static_checks(flags: dict[str, bool]) -> list[str]:
         checks.extend(SMOKE_STATIC)
     if flags["has_contracts"]:
         checks.extend(["metadata_contract", "commercial_contract"])
+    if flags["has_app_uat_widget_keys"]:
+        checks.append("app_uat_widget_key_references")
     if flags["has_pageflip"]:
         checks.append("pageflip_backward_mainline")
     if flags["has_data"]:
@@ -254,7 +282,18 @@ def select_go_services(paths: list[str]) -> list[str]:
 def select_pytest_paths(paths: list[str]) -> list[str]:
     selected: list[str] = []
     seen: set[str] = set()
+    # worktree 生命周期治理的实现散在 hooks、cli/lib 与 policies 三处，决策表却只有一份。
+    # 不显式映射的话，改 hook 或改阈值都不会触发它——最需要回归的两类改动恰好都漏掉。
+    worktree_lifecycle_tests = (
+        "quwoquan_ops/tests/local_contract/gate/"
+        "test_local_worktree_lifecycle__gate__local_contract_test.py",
+    )
     source_mappings = (
+        ("quwoquan_ops/hooks/worktree_", worktree_lifecycle_tests),
+        ("quwoquan_ops/hooks/post-commit", worktree_lifecycle_tests),
+        ("quwoquan_ops/hooks/run_install_hooks.sh", worktree_lifecycle_tests),
+        ("quwoquan_ops/cli/lib/local_worktree_inventory.py", worktree_lifecycle_tests),
+        ("quwoquan_ops/policies/worktree_policy.yaml", worktree_lifecycle_tests),
         (
             "quwoquan_ops/gate/commit_gate",
             (

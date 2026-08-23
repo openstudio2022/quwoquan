@@ -1,0 +1,31 @@
+{
+  "description": "quwoquan 本地工作副本治理：创建授权闸与未合入滞留提醒。判定实现与 Cursor 侧同源，只有输出协议不同。",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^Bash$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/quwoquan_ops/hooks/worktree_authz_guard.py\" --harness codex",
+            "timeout": 20,
+            "statusMessage": "检查工作副本创建授权"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/quwoquan_ops/hooks/worktree_merge_reminder.py\" --harness codex --reason session",
+            "timeout": 30,
+            "statusMessage": "检查未合入工作副本"
+          }
+        ]
+      }
+    ]
+  }
+}

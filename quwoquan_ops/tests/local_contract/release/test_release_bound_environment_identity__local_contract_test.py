@@ -97,7 +97,8 @@ class ReleaseBoundEnvironmentIdentityContractTest(unittest.TestCase):
                 _document_digest(payload["identity"]["activationEnvelope"]),
             )
             self.assertEqual(
-                set(payload["identity"]["appArtifacts"]), {"android", "ios"}
+                set(payload["identity"]["appArtifacts"]),
+                {"android-nonprod-apk", "ios-nonprod-app", "web-shared"},
             )
             self.assertEqual(
                 payload["identity"]["objectIds"]["entityRefs"],

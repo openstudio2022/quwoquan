@@ -24,6 +24,21 @@ from content.execution.model_contract import governed_cursor_grok_model
 
 
 EXECUTION_ID = "20260713--travel-homepage-coverage--test-region-a--pilot-901"
+
+
+def _readiness_layout_issues(expected_execution_id: str):
+    def issues(
+        *,
+        execution_id: str | None = None,
+        allow_succeeded_terminal: bool = False,
+    ) -> list[str]:
+        assert execution_id == expected_execution_id
+        assert allow_succeeded_terminal is True
+        return []
+
+    return issues
+
+
 OBJECT_REF = "/entity/地点/景区/验收景区"
 
 
@@ -101,7 +116,11 @@ def _write_transaction(
 def _fixture(monkeypatch, tmp_path: Path) -> Path:
     root = tmp_path / EXECUTION_ID
     monkeypatch.setattr(gate, "DATA_EXECUTIONS_ROOT", tmp_path)
-    monkeypatch.setattr(gate, "content_execution_layout_issues", lambda **_kwargs: [])
+    monkeypatch.setattr(
+        gate,
+        "content_execution_layout_issues",
+        _readiness_layout_issues(EXECUTION_ID),
+    )
     monkeypatch.setattr(gate, "load_execution_manifest", lambda execution_id: {"executionId": execution_id})
     monkeypatch.setattr(
         gate,
@@ -409,7 +428,11 @@ def _article_fixture(monkeypatch, tmp_path: Path) -> tuple[str, Path]:
     execution_id = "20260722--travel-article-supply--test-region-a--pilot-902"
     root = tmp_path / execution_id
     monkeypatch.setattr(gate, "DATA_EXECUTIONS_ROOT", tmp_path)
-    monkeypatch.setattr(gate, "content_execution_layout_issues", lambda **_kwargs: [])
+    monkeypatch.setattr(
+        gate,
+        "content_execution_layout_issues",
+        _readiness_layout_issues(execution_id),
+    )
     monkeypatch.setattr(
         gate,
         "load_execution_manifest",

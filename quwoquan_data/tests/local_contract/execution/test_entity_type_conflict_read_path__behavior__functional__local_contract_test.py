@@ -37,6 +37,7 @@ from content.execution.planning.selection import build_execution_spec  # noqa: E
 from core.control_types import ExecutionStateStatus  # noqa: E402
 from support.capacity_calibration_fixture import (  # noqa: E402
     synthetic_capacity_source_binding,
+    synthetic_governed_execution_authority,
 )
 
 _EXECUTIONS = {

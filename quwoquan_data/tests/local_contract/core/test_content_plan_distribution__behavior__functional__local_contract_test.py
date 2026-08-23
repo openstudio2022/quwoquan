@@ -33,13 +33,11 @@ def test_content_plan_separated_research_enforces_per_target_quota_count():
             (f"四姑娘山来源证据 {index}，这是一段包含交通、季节、游览动线和体验判断的图文底稿。" * 45),
             encoding="utf-8",
         )
-        article_asset = None
-        if carrier != "image":
-            article_asset = _write_article_source_asset(source_dir, label=f"article_{index}")
         write_json(
             source_dir / "meta.json",
             {
                 "sourceUseMode": "factual_reference_only",
+                "publishMediaMode": "text_only",
                 "researchLane": "article",
                 "sourceRole": "base",
                 "category": "travelogue",
@@ -97,8 +95,9 @@ def test_content_plan_separated_research_enforces_per_target_quota_count():
                     "sourceUseMode": "",
                 }
             )
-        elif article_asset is not None:
-            item["assetRefs"] = [article_asset.relative_to(root).as_posix()]
+        else:
+            item["publishMediaMode"] = "text_only"
+            item["assetRefs"] = []
         items_by_execution[execution_id].append(item)
     for execution_id, items in items_by_execution.items():
         write_json(
@@ -252,11 +251,11 @@ def test_content_plan_separated_research_keeps_image_lane_without_angle_coverage
             (f"九寨沟 {intent} 来源证据，含图文混合底稿 {index}，补充路线、季节、停留时长和风险提示。" * 45),
             encoding="utf-8",
         )
-        article_asset = _write_article_source_asset(source_dir, label=f"jiuzhaigou_{index}")
         write_json(
             source_dir / "meta.json",
             {
                 "sourceUseMode": "factual_reference_only",
+                "publishMediaMode": "text_only",
                 "researchLane": "article",
                 "sourceRole": "base",
                 "category": "travelogue",
@@ -284,7 +283,8 @@ def test_content_plan_separated_research_keeps_image_lane_without_angle_coverage
                 "rationale": f"{intent} 主线证据",
                     "writingIntent": intent,
                     "baseSourceRef": rel,
-                    "assetRefs": [article_asset.relative_to(execution_root(EXECUTION_ID)).as_posix()],
+                    "publishMediaMode": "text_only",
+                    "assetRefs": [],
                     "sourceUseMode": "factual_reference_only",
                 }
             )

@@ -1,30 +1,26 @@
 #!/usr/bin/env python3
-"""Project one stackctl App result into the immutable candidate shard layout."""
+"""Project one stackctl App result into the immutable build-product shard layout."""
 
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import shutil
 import sys
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.ci.render_release_application_package import (
+    PAYLOAD_NAMES,
     _package_digest,
     _sha256_tree,
     render,
 )
-
-PAYLOAD_NAMES = {
-    "android": "app-release.apk",
-    "ios": "quwoquan.app",
-    "web": "public-web",
-}
+from quwoquan_ops.cli.lib.app_identity import resolve_build_product
 
 
 def _copy(source: Path, destination: Path) -> None:
@@ -37,7 +33,7 @@ def _copy(source: Path, destination: Path) -> None:
         shutil.copy2(source, destination)
 
 
-def _write_json(path: Path, payload: dict[str, object]) -> None:
+def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
@@ -45,27 +41,22 @@ def _write_json(path: Path, payload: dict[str, object]) -> None:
     )
 
 
-def _collect_prod_web(
+def _collect_public_web_manifest(
     *,
-    artifact: Path,
-    manifest: dict[str, object],
-    handoff: dict[str, object],
+    payload_dir: Path,
+    manifest: dict[str, Any],
+    handoff: dict[str, Any],
     bundle_dir: Path,
 ) -> Path:
-    if manifest.get("distributionClass") != "hosted_web" or manifest.get(
-        "promotable"
-    ) is not True:
-        raise ValueError("prod Web candidate is not a promotable hosted_web artifact")
-    payload_dir = bundle_dir / "payloads/prod/web"
-    _copy(artifact, payload_dir)
-    content_digest = _sha256_tree(payload_dir).removeprefix("sha256:")
     public_origin = str(handoff.get("publicWebBaseUrl") or "").strip().rstrip("/")
     if public_origin != "https://quwoquan.com":
-        raise ValueError("prod Web launcher handoff does not bind the official origin")
+        raise ValueError("shared Web launcher handoff does not bind the official origin")
+    artifact = payload_dir / PAYLOAD_NAMES["web-shared"]
     required = ("index.html", "main.dart.js", "manifest.json", "flutter_service_worker.js")
-    missing = [name for name in required if not (payload_dir / name).is_file()]
+    missing = [name for name in required if not (artifact / name).is_file()]
     if missing:
-        raise ValueError("prod Web artifact is incomplete: " + ", ".join(missing))
+        raise ValueError("shared Web artifact is incomplete: " + ", ".join(missing))
+    content_digest = _sha256_tree(artifact).removeprefix("sha256:")
     output = bundle_dir / "public-web-manifest.json"
     _write_json(
         output,
@@ -88,24 +79,21 @@ def _collect_prod_web(
     return output
 
 
-def _collect_prod_android(
+def _collect_android_official_manifest(
     *,
-    artifact: Path,
-    manifest: dict[str, object],
+    manifest: dict[str, Any],
     official_manifest_path: Path,
     bundle_dir: Path,
 ) -> Path:
-    if manifest.get("distributionClass") != "official_web" or manifest.get(
-        "promotable"
-    ) is not True:
-        raise ValueError("prod Android candidate is not a promotable official_web artifact")
     official = json.loads(official_manifest_path.read_text(encoding="utf-8"))
-    if not isinstance(official, dict) or official.get("schema") != "client-app.android.official-release":
+    if (
+        not isinstance(official, dict)
+        or official.get("schema") != "client-app.android.official-release"
+    ):
         raise ValueError("prod Android official manifest is invalid")
     expected_digest = "sha256:" + str(official.get("apkSHA256") or "")
     if (
-        _package_digest(artifact) != expected_digest
-        or manifest.get("artifactDigest") != expected_digest
+        manifest.get("artifactDigest") != expected_digest
         or manifest.get("signingIdentityDigest")
         != "sha256:" + str(official.get("apkSigningCertificateSHA256") or "")
     ):
@@ -113,7 +101,6 @@ def _collect_prod_android(
     filename = str(official.get("packagedAPK") or "")
     if not filename or Path(filename).name != filename:
         raise ValueError("prod Android packagedAPK is not a canonical filename")
-    _copy(artifact, bundle_dir / "payloads/prod/android" / filename)
     official.update(
         {
             "sourceGitSha": str(manifest["sourceGitSha"]),
@@ -138,10 +125,23 @@ def collect(
     manifest = result.get("manifest")
     if not isinstance(manifest, dict) or manifest.get("schema") != "app-artifact-manifest":
         raise ValueError("stackctl App result manifest is invalid")
-    environment = str(manifest.get("environment") or "")
-    platform = str(manifest.get("platform") or "")
-    if platform not in PAYLOAD_NAMES:
-        raise ValueError(f"unsupported App shard platform: {platform}")
+    build_product_id = str(manifest.get("buildProductId") or "")
+    product = resolve_build_product(build_product_id)
+    expected_identity = {
+        "buildProfile": product.build_profile,
+        "platform": product.platform,
+        "buildMode": product.build_mode,
+        "artifactFormat": product.artifact_format,
+        "distributionClass": product.distribution_class,
+    }
+    mismatches = [
+        field for field, expected in expected_identity.items() if manifest.get(field) != expected
+    ]
+    if mismatches:
+        raise ValueError(
+            f"{build_product_id} stackctl manifest identity mismatch: {', '.join(mismatches)}"
+        )
+
     attempt_dir = Path(str(result.get("attemptDir") or "")).resolve()
     build_receipt_path = attempt_dir / "build-receipt.json"
     build_receipt = json.loads(build_receipt_path.read_text(encoding="utf-8"))
@@ -149,7 +149,8 @@ def collect(
     manifest_path = Path(str(build_receipt.get("manifestPath") or "")).resolve()
     if manifest_path != (attempt_dir / "manifest.json").resolve():
         raise ValueError("stackctl build receipt escaped its attempt directory")
-    evidence_dir = bundle_dir / "evidence" / environment / platform
+
+    evidence_dir = bundle_dir / "evidence" / build_product_id
     for source in (
         manifest_path,
         build_receipt_path,
@@ -160,43 +161,53 @@ def collect(
         _copy(source, evidence_dir / source.name)
     if _package_digest(artifact) != str(manifest.get("artifactDigest") or ""):
         raise ValueError("stackctl artifact digest does not match AppArtifactManifest")
-    handoff = json.loads((attempt_dir / "launcher-handoff.json").read_text(encoding="utf-8"))
-    special_path: Path | None = None
-    if environment == "prod" and platform == "web":
-        special_path = _collect_prod_web(
-            artifact=artifact,
-            manifest=manifest,
-            handoff=handoff,
-            bundle_dir=bundle_dir,
+
+    payload_dir = bundle_dir / "payloads" / build_product_id
+    _copy(artifact, payload_dir / PAYLOAD_NAMES[build_product_id])
+    package = render(
+        build_product_id=build_product_id,
+        package=payload_dir,
+        source_git_sha=str(manifest["sourceGitSha"]),
+        source_tree_digest=str(manifest["sourceTreeDigest"]),
+        artifact_manifest=manifest,
+    )
+    package_path = bundle_dir / "application-packages" / f"{build_product_id}.json"
+    _write_json(package_path, package)
+
+    special_paths: list[Path] = []
+    if build_product_id == "web-shared":
+        handoff = json.loads(
+            (attempt_dir / "launcher-handoff.json").read_text(encoding="utf-8")
         )
-    elif environment == "prod" and platform == "android":
+        if not isinstance(handoff, dict):
+            raise ValueError("stackctl App launcher handoff is invalid")
+        special_paths.append(
+            _collect_public_web_manifest(
+                payload_dir=payload_dir,
+                manifest=manifest,
+                handoff=handoff,
+                bundle_dir=bundle_dir,
+            )
+        )
+    elif build_product_id == "android-prod-apk":
         if android_release_manifest is None:
-            raise ValueError("prod Android shard requires its stackctl official manifest")
-        special_path = _collect_prod_android(
-            artifact=artifact,
-            manifest=manifest,
-            official_manifest_path=android_release_manifest,
-            bundle_dir=bundle_dir,
+            raise ValueError("prod Android product requires its stackctl official manifest")
+        special_paths.append(
+            _collect_android_official_manifest(
+                manifest=manifest,
+                official_manifest_path=android_release_manifest,
+                bundle_dir=bundle_dir,
+            )
         )
-    else:
-        payload_dir = bundle_dir / "payloads" / environment / platform
-        _copy(artifact, payload_dir / PAYLOAD_NAMES[platform])
-        package = render(
-            environment=environment,
-            surface=platform,
-            package=payload_dir,
-            source_git_sha=str(manifest["sourceGitSha"]),
-            source_tree_digest=str(manifest["sourceTreeDigest"]),
-            artifact_manifest=manifest,
-        )
-        package_path = bundle_dir / "application-packages" / f"{environment}--{platform}.json"
-        _write_json(package_path, package)
-    return {
-        "environment": environment,
-        "platform": platform,
+
+    value = {
+        "buildProductId": build_product_id,
         "artifactDigest": str(manifest["artifactDigest"]),
-        "package": str(special_path or package_path),
+        "package": str(package_path),
     }
+    if special_paths:
+        value["specialEvidence"] = ",".join(str(path) for path in special_paths)
+    return value
 
 
 def main() -> int:

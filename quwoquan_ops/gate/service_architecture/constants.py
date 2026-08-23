@@ -61,6 +61,7 @@ ALLOWED_OPS_ENVIRONMENT_ROOT_FILES = {
     "data_execution_fleet.json",
     "domain_governance.yaml",
     "local_env_port_manifest.yaml",
+    "local_runtime_capacity.yaml",
     "output_layout_manifest.yaml",
     "output_layout_reconciliation_plan.schema.json",
     "pr_gate_timing_budgets.json",

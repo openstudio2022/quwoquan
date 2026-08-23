@@ -43,19 +43,21 @@
 - 关联验收：[`environment-topology-and-packaging/GWT-004`](./environment-topology-and-packaging/spec.md#gwt-004)
 
 <a id="dec-002"></a>
-### DEC-002 App 原生包身份由静态 flavor/scheme 在构建图解析前选择
+### DEC-002 App 原生制品与目标运行配置按静态信任域和安装后激活分离
 
-- 决策：`app_artifact_manifest.yaml` 是 environment × BuildMode 包身份与显示名的唯一值真相源。
-- 投影：确定性 codegen 将真相源投影为 Android productFlavor 与 iOS environment-specific xcconfig。
-- 入口选择：Flutter CLI 使用同名 flavor，Xcode Run/Profile/Archive 使用提交的 shared scheme 与 `Debug|Profile|Release-<environment>` configuration。默认 flavor 固定为 Alpha。
-- 决策：App identity 投影是只读构建输入。`run.sh`、stackctl 与 IDE profile 只选择 flavor/scheme 并校验 canonical handoff，不生成或改写共享“当前环境”文件。
-- 构建边界：原生 build phase 不拥有 application/bundle ID、显示名、签名或 capability 的写入权。
-- 理由：Xcode 在执行 build phase 前已经解析 `PRODUCT_BUNDLE_IDENTIFIER` 等 build settings。构建中刷新共享 xcconfig 只能影响下一次构建，导致首次环境切换失败，并在同 checkout 并发时产生跨环境覆盖。
-- 被否决方案：共享 `QWQEnvironment.xcconfig`、修改 `Generated.xcconfig`、build phase 自愈后要求重试、以 `--dart-define` 反向决定原生 identity、按当前工作树动态写 Xcode project，以及以 clean/DerivedData 删除掩盖身份漂移。
-- 失败恢复：flavor、scheme、handoff、target、environment 或 BuildMode 任一不一致时必须在编译/安装前返回 typed blocker，且不得写入源码树。重新选择一致 flavor 即可重试，不依赖修复上一次构建遗留状态。
-- 可测试观察面：local_contract 比对 metadata 与全部生成 identity、Xcode scheme/configuration/Podfile 和 Gradle variant。
-- 可测试观察面：平台构建集成执行无 clean 的 `alpha → beta → gamma → alpha` 首次成功与独立 worktree 并发。
-- 可测试观察面：user_acceptance 回读 Android/iOS 安装身份、runtime package、Hot Restart 与图标冷启动指纹。
+- 对象边界：`AppArtifact`、不可变 `RuntimeConfigPackage` 与平台私有容器中的单槽 `ActiveRuntimeConfigPointer` 是三个独立事实。runtime package 不作为 AppArtifact 的 owned entity，也不得进入 APK、AAB、IPA、`.app`、Flutter kernel、Mach-O 或 DEX；active pointer 只引用一份已验证 package digest，不内嵌历史或无界 ACK 集合。
+- 构建身份：`app_artifact_manifest.yaml` 是 `buildProfile(nonprod|prod) × BuildMode` 包身份与显示名的唯一值真相源。运行环境继续是 Alpha、Beta、Gamma、Prod，但不参与 application/bundle ID 或二进制编译身份。确定性 codegen 只投影 Android `nonprod/prod` productFlavor 与 iOS profile-specific xcconfig、scheme 和 configuration；默认 Debug 固定为 nonprod，Prod 只允许 prod Release。
+- 信任边界：每个 build profile 的独立 `runtime_config_trust_envelope` 是 AppArtifact 的只读构建输入，由平台 App 签名保护，只含 schema、build profile、Ed25519 算法与非空可信公钥环，不含 environment、target、endpoint、package、公钥私钥引用或 secret。nonprod 信任根只接受 Alpha、Beta、Gamma 的签发者，prod 信任根只接受 Prod 签发者；信任根轮换属于新的 AppArtifact 构建，不通过 runtime package 自举。
+- 写路径：stackctl/canonical launcher 是目标配置 activation 的唯一外部 owner，在安装后把完整 activation request 写入 App 私有容器，由冷启动原生 activation coordinator 在首个业务 Shell 前消费。coordinator 先用制品内信任根验证 schema、profile、environment、target、签名、摘要和 freshness，再以临时文件、同步落盘和原子替换推进 active pointer；不得改写源码树、构建输出或已签名 AppArtifact，Flutter channel 不提供任何安装 command。
+- 读路径：原生 `RuntimeConfigPackageReader` query 只返回平台私有容器中的 active package 与制品内 trust envelope，Dart resolver 再执行同一契约验证。读者不读取 bundle/asset 中的 target package，不接受 Dart define、环境变量、手写 JSON keyring或 package 自带公钥作为 fallback。冷启动、Hot Restart 与图标启动均消费同一 active digest。
+- 首次启动：新安装若尚无 active package，原生层返回 typed absent，Dart 进入阻断式配置页；它不得降级为空 map、零配置、通用网络错误或业务 Shell。Prod 可从制品内稳定 bootstrap authority 获取受签 package，但获取结果仍经同一 installer 激活，bootstrap authority 不携带 rollout stage 或业务配置。
+- 失败恢复：新 package 无效、过期、写入失败或 readback 不一致时 activation 失败且 active pointer 保持上一份已验证 digest；首次安装无上一份时保持 absent。回滚只把 pointer 条件更新到仍在保留窗内的上一份已验证 package，目标 5 分钟内完成，不 clean、不重编、不重签 AppArtifact。
+- 被否决方案：environment-specific flavor/scheme、endpoint `--dart-define`、把 target package 注入 asset/plist 后重签，以及 bundle package 与私有容器双读。
+- 被否决方案：package 携带并自证 trusted keyring、手写 JSON keyring 环境变量、共享“当前环境”文件、build phase 自愈，以及旧环境 flavor 或旧 handoff 字段 fallback。
+- 可测试观察面：local_contract 由 metadata 驱动覆盖 trust envelope、package、installer、reader 和 resolver 的必填字段、签名、profile/target、原子替换及 absent/failed 四态，并比对生成的 profile identity，证明旧环境 flavor 和 target package bundle writer 数量为零。
+- 可测试观察面：api_integration 只构建一次 nonprod APK/`.app`，记录完整 AppArtifact digest，安装后顺序激活 Alpha、Beta、Gamma package；每次 activation 仅 package/active digest 改变，AppArtifact digest、签名和可执行文件 digest全部不变，失败 activation 保留上一 active digest。
+- 可测试观察面：user_acceptance 回读 Android/iOS 安装 identity、trust envelope digest、active package digest、runtime environment 与 target，并证明冷启动、连续 Hot Restart、图标启动和配置回滚保持同一规范化身份；首次无 package 显示配置阻断页。
+- SLI/SLO：activation attempt 必须记录 profile、target、package digest、old/new active digest、status、typed reason 与耗时，禁止记录 endpoint、密钥或 package 原文。有效 package 的本地 activation 在 5 秒内成功率目标为 99.9%；无 active package、签名失败、过期、profile/target 错配与原子 readback 失败均立即告警，配置回滚目标为 5 分钟内完成。
 - 关联要求：[`environment-topology-and-packaging/REQ-003`](./environment-topology-and-packaging/spec.md#req-003)、[`REQ-004`](./environment-topology-and-packaging/spec.md#req-004)
 - 关联验收：[`environment-topology-and-packaging/GWT-002`](./environment-topology-and-packaging/spec.md#gwt-002)、[`GWT-003`](./environment-topology-and-packaging/spec.md#gwt-003)
 

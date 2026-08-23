@@ -16,4 +16,5 @@ externalBindings:
   runtime.log.sink:
     state: enabled
     adapter: ext.obs.elasticsearch
-    endpointRef: local_topology:alpha.elasticsearch
+    # 逻辑键环境无关：实际 endpoint 由运行时 PRODUCT_OPS_ELASTICSEARCH_ENDPOINT 解析。
+    endpointRef: local_topology:elasticsearch

@@ -152,9 +152,12 @@ class IosHotRestartLauncherContractTest(unittest.TestCase):
 
     def test_canonical_launcher_preflights_and_marks_compile_time_launch_mode(self) -> None:
         source = LAUNCHER.read_text(encoding="utf-8")
-        self.assertIn("verify_flutter_run_defines.py", source)
         self.assertIn("--launch-mode canonical_launcher", source)
-        self.assertIn("--dart-define", source)
+        # runtime config 走签名 package 的安装后激活，不进编译期 define；构建输入的
+        # 所有权也整体归 canonical executor，因此 launcher 既不写 dart define，
+        # 也不自持第二处 define 校验。
+        self.assertNotIn("--dart-define", source)
+        self.assertNotIn("verify_flutter_run_defines.py", source)
         self.assertIn('export QWQ_APP_LAUNCH_MODE="$LAUNCH_MODE"', source)
         self.assertNotIn('stackctl.py" up', source)
         self.assertIn(

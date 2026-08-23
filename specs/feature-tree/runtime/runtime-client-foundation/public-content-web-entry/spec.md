@@ -224,3 +224,12 @@
 - 准出影响：`block`
 - 影响或价值：仓内已有响应式 Flutter Web 主 Shell 和核心业务路由，但尚缺四环境 DNS/TLS、真实同源 API、Safari/Android 浏览器、PWA 安装、Web Push/RTC 与完整业务矩阵的公网证据。
 - 完成判定：`GWT-003`、`GWT-004`、`GWT-005`、`GWT-006` 与 `GWT-007` 在四环境公网真实通过，且 Alpha/Beta/Gamma/Prod 分别通过 UTF-8、字体可读性五状态、登录、浏览、发布、互动、聊天、PWA 安装、Android 下载横幅和同源 API 的 `api_integration` 与 `user_acceptance`；缺项必须保留明确降级，不得宣称完整等价。
+
+<a id="open-005"></a>
+### OPEN-005 API 面停机时静态恢复面的真实 HTTP 证据
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：当前 `health` 已把 API 面与 publicWeb 静态面拆成互不掩盖的两个 surface，静态面失败以 `APP.WEB.recovery_unavailable` 表达，但当前只有以 `fetch_url` 替身驱动的 `local_contract`。「API 全停时 HTML、CSS、字体与离线 Shell 仍返回成功」这一行为按 [runtime-client-foundation design](../design.md) 的「Web 恢复面证据分工」归 `api_integration`，尚无真实 HTTP 回执，因此不得据 `local_contract` 结论宣称 `GWT-006` 的恢复面部分已达成。
+- 完成判定：`GWT-006` 的恢复面部分由 `api_integration` 直接覆盖——Ops public-Web runner 从 exact `AppArtifactManifest` 启动真实静态服务，在 API plane 全停条件下回读 `index.html`、`main.dart.js`、`flutter_service_worker.js` 与字体的真实状态码、content-type 与 digest；静态面缺失时返回 `APP.WEB.recovery_unavailable` 且不生成 launched/ready 证据。

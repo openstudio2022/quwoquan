@@ -14,6 +14,9 @@ from quwoquan_ops.cli.lib.official_distribution_release import (
     prevalidate_android_distribution_candidate,
 )
 from quwoquan_ops.cli.prod import finalize_mainline_release_artifact as finalizer
+from quwoquan_ops.tests.support.app_artifact_manifest_test_support import (
+    app_artifact_manifest,
+)
 
 
 APP_EVIDENCE_REF = (
@@ -197,6 +200,13 @@ def _web_package(root: Path) -> Path:
         "releaseId": content_digest[:20],
         "contentSHA256": content_digest,
         "noindex": False,
+        "artifactManifest": app_artifact_manifest(
+            environment="prod",
+            surface="web",
+            source_git_sha="b" * 40,
+            source_tree_digest="sha1:" + ("c" * 40),
+            artifact_digest="sha256:" + content_digest,
+        ),
     }
     path = root / "manifest.json"
     _write_json(path, manifest)
@@ -215,7 +225,7 @@ def _android_package(root: Path, *, build: str) -> Path:
         "versionName": "1.8.2",
         "buildNumber": build,
         "minAndroidVersion": "26",
-        "packageName": "com.quwoquan.quwoquan_app",
+        "packageName": "com.leadwise.quwoquan",
         "apkUrl": (
             "https://cdn.quwoquan.com/download/android/1.8.2/"
             f"{build}/quwoquan-{build}.apk"
@@ -233,6 +243,13 @@ def _android_package(root: Path, *, build: str) -> Path:
         "minimumSupportedVersion": "1.7.0",
         "minimumSupportedBuild": "17000",
         "packagedAPK": apk.name,
+        "artifactManifest": app_artifact_manifest(
+            environment="prod",
+            surface="android",
+            source_git_sha="b" * 40,
+            source_tree_digest="sha1:" + ("c" * 40),
+            artifact_digest="sha256:" + hashlib.sha256(apk.read_bytes()).hexdigest(),
+        ),
     }
     path = root / "manifest.json"
     _write_json(path, manifest)
@@ -288,6 +305,13 @@ def _release_manifest(
                             "sourceGitSha": "b" * 40,
                             "sourceTreeDigest": "sha1:" + ("c" * 40),
                             "packageDigest": "sha256:" + ("d" * 64),
+                            "artifactManifest": app_artifact_manifest(
+                                environment=environment,
+                                surface=surface,
+                                source_git_sha="b" * 40,
+                                source_tree_digest="sha1:" + ("c" * 40),
+                                artifact_digest="sha256:" + ("d" * 64),
+                            ),
                         }
                     ),
                     encoding="utf-8",
@@ -413,35 +437,42 @@ def _release_manifest(
                 "environmentArtifactDigest": None,
                 "images": {
                     "content-service": {
-                        "repository": repository + "-" + environment,
-                        "transportRef": (
-                            repository + "-" + environment + ":sha-candidate"
+                        "repository": (
+                            repository
+                            + "-"
+                            + ("prod" if environment == "prod" else "nonprod")
                         ),
-                        "digest": f"sha256:{index:064x}",
+                        "transportRef": (
+                            repository
+                            + "-"
+                            + ("prod" if environment == "prod" else "nonprod")
+                            + ":sha-candidate"
+                        ),
+                        "digest": f"sha256:{(2 if environment == 'prod' else 1):064x}",
                         "ref": (
                             repository
                             + "-"
-                            + environment
+                            + ("prod" if environment == "prod" else "nonprod")
                             + "@"
-                            + f"sha256:{index:064x}"
+                            + f"sha256:{(2 if environment == 'prod' else 1):064x}"
                         ),
                         "attestations": {
                             "spdxSbom": (
                                 "oci://"
                                 + repository
                                 + "-"
-                                + environment
+                                + ("prod" if environment == "prod" else "nonprod")
                                 + "@"
-                                + f"sha256:{index:064x}"
+                                + f"sha256:{(2 if environment == 'prod' else 1):064x}"
                                 + "#spdxSbom"
                             ),
                             "slsaProvenance": (
                                 "oci://"
                                 + repository
                                 + "-"
-                                + environment
+                                + ("prod" if environment == "prod" else "nonprod")
                                 + "@"
-                                + f"sha256:{index:064x}"
+                                + f"sha256:{(2 if environment == 'prod' else 1):064x}"
                                 + "#slsaProvenance"
                             ),
                         },

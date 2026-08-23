@@ -54,28 +54,19 @@ def _environment_artifact_projection(
         raise ValueError(
             f"environment configuration material is incomplete: {environment}"
         )
+    # 身份摘要只吃组件内容 digest。repository/transportRef/ref/attestations 属于
+    # OCI 运输与 provenance 通道，保留在 manifest 里但不得进入组合身份（DEC-006），
+    # 否则同一 bytes 换仓库或换 tag 会伪造出新候选。
     projected_images: dict[str, Any] = {}
     for owner, descriptor in sorted(images.items()):
-        if not isinstance(descriptor, dict) or not {
-            "repository",
-            "transportRef",
-        }.issubset(descriptor):
+        if (
+            not isinstance(descriptor, dict)
+            or DIGEST_PATTERN.fullmatch(str(descriptor.get("digest") or "")) is None
+        ):
             raise ValueError(
-                f"environment image material is incomplete: {environment}/{owner}"
+                f"environment image material is not immutable: {environment}/{owner}"
             )
-        projected = {
-            "repository": descriptor["repository"],
-            "transportRef": descriptor["transportRef"],
-        }
-        if {"digest", "ref", "attestations"}.issubset(descriptor):
-            projected.update(
-                {
-                    "digest": descriptor["digest"],
-                    "ref": descriptor["ref"],
-                    "attestations": descriptor["attestations"],
-                }
-            )
-        projected_images[owner] = projected
+        projected_images[owner] = {"digest": descriptor["digest"]}
     projected_configurations = {
         service: {"digest": descriptor.get("digest")}
         for service, descriptor in sorted(configurations.items())
@@ -126,8 +117,10 @@ def _candidate_projection(payload: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("candidate source or environment artifacts are incomplete")
     if set(artifacts) != set(ENVIRONMENTS):
         raise ValueError("candidate environment artifact material is incomplete")
-    if not isinstance(applications, dict) or set(applications) != set(ENVIRONMENTS):
-        raise ValueError("candidate application material is incomplete")
+    if not isinstance(applications, dict) or set(applications) != set(
+        APPLICATION_PACKAGES
+    ):
+        raise ValueError("candidate App build product material is incomplete")
     if not isinstance(provider, dict) or not isinstance(test, dict):
         raise ValueError("candidate qualification material is incomplete")
     if DIGEST_PATTERN.fullmatch(str(contract_graph or "")) is None:
@@ -151,27 +144,24 @@ def _candidate_projection(payload: dict[str, Any]) -> dict[str, Any]:
             "environmentArtifactDigest": environment_digest,
         }
 
-    projected_applications: dict[str, Any] = {}
-    for environment in ENVIRONMENTS:
-        packages = applications.get(environment)
-        if not isinstance(packages, dict) or set(packages) != set(
-            APPLICATION_PACKAGES[environment]
+    # sourceRef 是 CI 运输位置，不是内容身份；候选摘要只保留五产品内容 digest。
+    projected_applications = {
+        build_product_id: {
+            "digest": descriptor.get("digest"),
+            "packageDigest": descriptor.get("packageDigest"),
+        }
+        for build_product_id, descriptor in sorted(applications.items())
+        if isinstance(descriptor, dict)
+    }
+    if len(projected_applications) != len(APPLICATION_PACKAGES):
+        raise ValueError("candidate App build product material is invalid")
+    for build_product_id, descriptor in projected_applications.items():
+        if any(
+            DIGEST_PATTERN.fullmatch(str(descriptor.get(field) or "")) is None
+            for field in ("digest", "packageDigest")
         ):
             raise ValueError(
-                f"candidate application material is incomplete: {environment}"
-            )
-        projected_applications[environment] = {
-            surface: {
-                "digest": descriptor.get("digest"),
-                "packageDigest": descriptor.get("packageDigest"),
-                "sourceRef": descriptor.get("sourceRef"),
-            }
-            for surface, descriptor in sorted(packages.items())
-            if isinstance(descriptor, dict)
-        }
-        if len(projected_applications[environment]) != len(packages):
-            raise ValueError(
-                f"candidate application material is invalid: {environment}"
+                f"candidate App build product material is not immutable: {build_product_id}"
             )
 
     return {

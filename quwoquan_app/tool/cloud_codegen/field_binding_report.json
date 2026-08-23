@@ -1,6 +1,6 @@
 {
   "generator": "app-only-emitter",
-  "contractGraphSha256": "9ef2ea4f420bf7bbdfc789b9120c97d1309087a2c440dd35894074a0e9fecbd5",
+  "contractGraphSha256": "e1ab11a794ec2c40267fa9f217db7841a15176dd0fe692c983f7fcf0cb7a180e",
   "bindings": [
     {
       "generatedPath": "lib/service/assistant_service/assistant/assistant_run/domain/generated/aggregation_state.g.dart",
@@ -1214,6 +1214,17 @@
     },
     {
       "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/circle/circle_operation_contracts.g.dart",
+      "dartClass": "GatheringPlanProposal",
+      "dartField": "status",
+      "dartType": "GatheringPlanProposalStatus",
+      "enumRef": "GatheringPlanProposalStatus",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/circle/circle_operation_contracts.g.dart",
       "dartClass": "GatheringPolicySet",
       "dartField": "admissionPolicy",
       "dartType": "GatheringAdmissionPolicy",
@@ -1438,6 +1449,50 @@
       "dartField": "visibility",
       "dartType": "CircleVisibility",
       "enumRef": "CircleVisibility",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/circle/circle_operation_contracts.g.dart",
+      "dartClass": "PlanAcknowledgementPolicy",
+      "dartField": "mode",
+      "dartType": "PlanAcknowledgementMode",
+      "enumRef": "PlanAcknowledgementMode",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/circle/circle_operation_contracts.g.dart",
+      "dartClass": "PlanItem",
+      "dartField": "kind",
+      "dartType": "PlanItemKind",
+      "enumRef": "PlanItemKind",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/circle/circle_operation_contracts.g.dart",
+      "dartClass": "PlanRevisionAcknowledgement",
+      "dartField": "status",
+      "dartType": "PlanAcknowledgementStatus",
+      "enumRef": "PlanAcknowledgementStatus",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/circle/circle_operation_contracts.g.dart",
+      "dartClass": "PlanRouteSegmentItem",
+      "dartField": "travelMode",
+      "dartType": "PlanTravelMode",
+      "enumRef": "PlanTravelMode",
       "contractType": "enum",
       "contractSource": "",
       "clientDartType": "",

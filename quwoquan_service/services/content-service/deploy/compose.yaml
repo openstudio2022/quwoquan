@@ -13,6 +13,7 @@ services:
       SERVICE_NAME: content-service
       APP_ENV: "${QWQ_COMPOSE_ENV:-gamma}"
       CONFIG_ROOT: /etc/qwq-config
+      QWQ_ARTIFACT_IDENTITY_FILE: /etc/quwoquan/artifact-identity.json
       CONFIG_VERSION: "${QWQ_COMPOSE_CONTENT_SERVICE_CONFIG_VERSION:?QWQ_COMPOSE_CONTENT_SERVICE_CONFIG_VERSION is required}"
       IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:?immutable image version is required}"
       QWQ_WORKLOAD: "${QWQ_WORKLOAD:-full}"
@@ -73,6 +74,7 @@ services:
       - "${QWQ_COMPOSE_CONTENT_PORT:-19220}:18080"
     volumes:
       - ${QWQ_COMPOSE_CONFIG_ROOT:?QWQ_COMPOSE_CONFIG_ROOT is required}:/etc/qwq-config:ro
+      - ${QWQ_COMPOSE_ARTIFACT_IDENTITY_FILE:?artifact identity mount is required}:/etc/quwoquan/artifact-identity.json:ro
       - ${QWQ_COMPOSE_REC_POLICY_SOURCE:?QWQ_COMPOSE_REC_POLICY_SOURCE is required}:/etc/qwq-rec-policy/policy.yaml:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18080/healthz >/dev/null 2>&1"]

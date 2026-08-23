@@ -6,6 +6,7 @@ import json
 from typing import Any, Iterable, Mapping
 import yaml
 
+from core.content_source_registry_projection import registry_sources
 from core.paths import CONTROL_PLANE_CATALOGS_ROOT
 
 CONTENT_SOURCE_REGISTRY_PATH = CONTROL_PLANE_CATALOGS_ROOT / "content_source_registry.yaml"
@@ -126,7 +127,7 @@ def _structured_facts_policy_issues(
     # 放开的来源必须显式声明 structuredFactsRole，且仍不得进入任何 lane。
     declared_evidence = {
         str(row.get("sourceClass") or "").strip()
-        for _, row in _registry_sources(data)
+        for _, row in registry_sources(data)
         if str(row.get("structuredFactsRole") or "").strip() == "audited_evidence"
     }
     for source_class in ("official_site", "government_tourism"):
@@ -134,7 +135,7 @@ def _structured_facts_policy_issues(
             issues.append(
                 f"{prefix}: sourceClass {source_class} must declare structuredFactsRole=audited_evidence"
             )
-    for scope, row in _registry_sources(data):
+    for scope, row in registry_sources(data):
         if str(row.get("structuredFactsRole") or "").strip() != "audited_evidence":
             continue
         if str(row.get("sourceClass") or "").strip() not in STRUCTURED_FACTS_SOURCE_CLASSES:
@@ -201,7 +202,7 @@ def resolve_source_class(
     registry = data if data is not None else load_content_source_registry()
     by_id: dict[str, str] = {}
     by_platform: dict[str, str] = {}
-    for _, row in _registry_sources(registry):
+    for _, row in registry_sources(registry):
         cls = str(row.get("sourceClass") or "").strip()
         if not cls:
             continue
@@ -222,24 +223,6 @@ def resolve_source_class(
             if known and (known in plat or plat in known):
                 return cls
     return ""
-
-
-def _registry_sources(data: Mapping[str, Any]) -> list[tuple[str, dict[str, Any]]]:
-    rows: list[tuple[str, dict[str, Any]]] = []
-    common = data.get("common") if isinstance(data.get("common"), dict) else {}
-    for bucket, items in common.items():
-        for item in _as_list(items):
-            if isinstance(item, dict):
-                rows.append((f"common.{bucket}", item))
-    verticals = data.get("verticals") if isinstance(data.get("verticals"), dict) else {}
-    for vertical, lanes in verticals.items():
-        if not isinstance(lanes, dict):
-            continue
-        for lane, items in lanes.items():
-            for item in _as_list(items):
-                if isinstance(item, dict):
-                    rows.append((f"verticals.{vertical}.{lane}", item))
-    return rows
 
 
 def resolve_homepage_source_role(
@@ -307,7 +290,7 @@ def verify_content_source_registry(
         "promptFacts",
     }
     seen_ids: set[str] = set()
-    for scope, row in _registry_sources(data):
+    for scope, row in registry_sources(data):
         source_id = str(row.get("sourceId") or "").strip()
         prefix = f"{scope}.{source_id or '<missing>'}"
         missing = sorted(
@@ -418,7 +401,7 @@ def verify_content_source_registry(
                 _check_tier_row(f"bySourceClass.{cls}", row)
             else:
                 issues.append(f"sourceTierSignals.bySourceClass.{cls}: must be a mapping")
-        seen_classes = {str(row.get("sourceClass") or "").strip() for _, row in _registry_sources(data)}
+        seen_classes = {str(row.get("sourceClass") or "").strip() for _, row in registry_sources(data)}
         for cls in sorted(c for c in seen_classes if c):
             if cls not in by_class:
                 issues.append(
@@ -439,7 +422,7 @@ def _lane_sources(
     vertical: str = "",
 ) -> list[dict[str, Any]]:
     sources: list[dict[str, Any]] = []
-    for scope, row in _registry_sources(data):
+    for scope, row in registry_sources(data):
         lanes = [str(item).strip() for item in _as_list(row.get("lanes")) if str(item).strip()]
         if lane not in lanes:
             continue
@@ -447,6 +430,16 @@ def _lane_sources(
             continue
         sources.append({**row, "scope": scope})
     return sources
+
+
+def lane_source_id_closure(lane: str, *, vertical: str) -> frozenset[str]:
+    """Return the closed set of registry sourceIds admitted for one lane."""
+    data = load_content_source_registry()
+    return frozenset(
+        str(row.get("sourceId") or "").strip()
+        for row in _lane_sources(data, lane, vertical=vertical)
+        if str(row.get("sourceId") or "").strip()
+    )
 
 
 def _names(rows: Iterable[Mapping[str, Any]], *, role: str | None = None) -> list[str]:

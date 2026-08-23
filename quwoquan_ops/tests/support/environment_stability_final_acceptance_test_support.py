@@ -26,6 +26,7 @@ from quwoquan_ops.tests.support.rollout_stage_promotion_evidence_test_support im
     promotion_evidence,
 )
 from quwoquan_ops.cli.lib import external_provider_governance, provider_conformance
+from quwoquan_ops.cli.lib.app_identity import resolve_build_product
 from quwoquan_ops.cli.lib.environment_stability_final_acceptance import (
     GITHUB_ATTESTED_WORKFLOW_BY_KIND,
     REQUIRED_SOAK_CLAIMS,
@@ -75,15 +76,14 @@ def _environment_image_descriptor(
     environment: str,
     index: int,
 ) -> dict[str, Any]:
-    """Build one environment-bound immutable image descriptor.
+    """构造由环境视图引用的信任域不可变镜像描述符。
 
-    Each environment builds its own image from the shared source capsule, so the
-    repository carries the environment and no two environments may share a
-    digest.
+    alpha/beta/gamma 共享 nonprod 字节，prod 使用独立字节；环境差异只进入配置包。
     """
 
-    repository = f"ghcr.io/owner/{owner}-{environment}"
-    digest = f"sha256:{index:064x}"
+    trust_domain = "prod" if environment == "prod" else "nonprod"
+    repository = f"ghcr.io/owner/{owner}-{trust_domain}"
+    digest = f"sha256:{(2 if environment == 'prod' else 1):064x}"
     return {
         "repository": repository,
         "transportRef": f"{repository}:candidate-100",
@@ -366,75 +366,53 @@ class FinalAcceptanceFixture:
         path = _write(self.artifact / "evidence/provider/readiness.json", provider)
         return path, provider
 
-    def _build_applications(self) -> dict[str, dict[str, dict[str, str]]]:
-        applications: dict[str, dict[str, dict[str, str]]] = {}
+    def _build_applications(self) -> dict[str, dict[str, str]]:
+        """App 包证据按 build product 身份组织，与环境无关（build once, promote many）。"""
+        applications: dict[str, dict[str, str]] = {}
         source_ref = f"oci://ghcr.io/owner/app-evidence@{OCI_DIGEST}"
-        for environment in ENVIRONMENTS:
-            applications[environment] = {}
-            for surface in APPLICATION_PACKAGES[environment]:
-                if environment == "prod" and surface == "web":
-                    payload = {
-                        "schema": "client-app.web.official-release",
-                        "sourceGitSha": COMMIT,
-                        "sourceTreeDigest": TREE,
-                        "contentSHA256": TEST_DIGEST.removeprefix("sha256:"),
-                        "artifactManifest": app_artifact_manifest(
-                            environment=environment,
-                            surface=surface,
-                            source_git_sha=COMMIT,
-                            source_tree_digest=TREE,
-                            artifact_digest=TEST_DIGEST,
-                        ),
-                    }
-                elif environment == "prod" and surface == "android":
-                    payload = {
-                        "schema": "client-app.android.official-release",
-                        "sourceGitSha": COMMIT,
-                        "sourceTreeDigest": TREE,
-                        "packagedAPK": "quwoquan.apk",
-                        "apkSHA256": TEST_DIGEST.removeprefix("sha256:"),
-                        "artifactManifest": app_artifact_manifest(
-                            environment=environment,
-                            surface=surface,
-                            source_git_sha=COMMIT,
-                            source_tree_digest=TREE,
-                            artifact_digest=TEST_DIGEST,
-                        ),
-                    }
-                elif environment == "prod" and surface == "opsPortal":
-                    payload = {
-                        "schema": "qwq.ops_portal_package",
-                        "sourceGitSha": COMMIT,
-                        "sourceTreeDigest": TREE,
-                        "packageDigest": TEST_DIGEST,
-                    }
-                else:
-                    payload = {
-                        "schema": "release-application-package",
-                        "environment": environment,
-                        "surface": surface,
-                        "sourceGitSha": COMMIT,
-                        "sourceTreeDigest": TREE,
-                        "packageDigest": TEST_DIGEST,
-                        "artifactManifest": app_artifact_manifest(
-                            environment=environment,
-                            surface=surface,
-                            source_git_sha=COMMIT,
-                            source_tree_digest=TREE,
-                            artifact_digest=TEST_DIGEST,
-                        ),
-                    }
-                relative = (
-                    f"packages/applications/{environment}/{surface}/receipt.json"
-                )
-                path = _write(self.artifact / relative, payload)
-                applications[environment][surface] = {
-                    "path": relative,
-                    "digest": sha256_file(path),
-                    "packageDigest": TEST_DIGEST,
-                    "sourceRef": source_ref,
-                }
+        for build_product_id in APPLICATION_PACKAGES:
+            product = resolve_build_product(build_product_id)
+            payload = {
+                "schema": "release-application-package",
+                "buildProductId": product.build_product_id,
+                "buildProfile": product.build_profile,
+                "platform": product.platform,
+                "sourceGitSha": COMMIT,
+                "sourceTreeDigest": TREE,
+                "packageDigest": TEST_DIGEST,
+                "artifactManifest": app_artifact_manifest(
+                    build_product_id=product.build_product_id,
+                    source_git_sha=COMMIT,
+                    source_tree_digest=TREE,
+                    artifact_digest=TEST_DIGEST,
+                ),
+            }
+            relative = f"packages/applications/{build_product_id}/receipt.json"
+            path = _write(self.artifact / relative, payload)
+            applications[build_product_id] = {
+                "path": relative,
+                "digest": sha256_file(path),
+                "packageDigest": TEST_DIGEST,
+                "sourceRef": source_ref,
+            }
         return applications
+
+    def _build_ops_portal(self) -> dict[str, str]:
+        """opsPortal 不是 App build product，独立成为一等证据面。"""
+        payload = {
+            "schema": "qwq.ops_portal_package",
+            "sourceGitSha": COMMIT,
+            "sourceTreeDigest": TREE,
+            "packageDigest": TEST_DIGEST,
+        }
+        relative = "packages/applications/opsPortal/receipt.json"
+        path = _write(self.artifact / relative, payload)
+        return {
+            "path": relative,
+            "digest": sha256_file(path),
+            "packageDigest": TEST_DIGEST,
+            "sourceRef": f"oci://ghcr.io/owner/app-evidence@{OCI_DIGEST}",
+        }
 
     def _build_configs(self) -> dict[str, dict[str, dict[str, str]]]:
         configurations: dict[str, dict[str, dict[str, str]]] = {}
@@ -638,6 +616,7 @@ class FinalAcceptanceFixture:
 
         configurations = self._build_configs()
         applications = self._build_applications()
+        ops_portal = self._build_ops_portal()
         manifest: dict[str, Any] = {
             "schema": "release-evidence-manifest",
             "releaseTrainId": None,
@@ -668,6 +647,7 @@ class FinalAcceptanceFixture:
                 for index, environment in enumerate(ENVIRONMENTS, start=1)
             },
             "applicationPackages": applications,
+            "opsPortal": ops_portal,
             "contractGraphDigest": contract_digest,
             "requiredEvidence": {
                 "environmentArtifacts": {
@@ -676,10 +656,8 @@ class FinalAcceptanceFixture:
                 "configurationPackages": {
                     environment: ["content-service"] for environment in ENVIRONMENTS
                 },
-                "applicationPackages": {
-                    environment: list(APPLICATION_PACKAGES[environment])
-                    for environment in ENVIRONMENTS
-                },
+                "applicationPackages": list(APPLICATION_PACKAGES),
+                "opsPortal": True,
                 "contractGraphDigest": True,
                 "providerEvidence": True,
                 "testEvidence": [

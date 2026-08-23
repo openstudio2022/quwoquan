@@ -1,5 +1,6 @@
-# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-015.t1
-# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-015.t2
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/work-request-compilation/spec.md#gwt-001.t1
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/work-request-compilation/spec.md#gwt-001.t2
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/work-request-compilation/spec.md#gwt-002.t1
 from __future__ import annotations
 
 import json
@@ -7,6 +8,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from content.execution.controller.execute import (
+    pre_acquisition_handoff as handoff_api,
+)
 from content.execution.planning import work_request_contract
 from content.execution.planning.work_request import WorkRequestCommandWriter
 from content.execution.planning.work_request_contract import WorkRequestPreviewQuery
@@ -16,13 +20,38 @@ from core.source_digest import content_source_revision
 DIGEST = "sha256:" + "a" * 64
 
 
+def _handoff_document(**overrides: object) -> dict[str, object]:
+    document: dict[str, object] = {
+        "vertical": "travel",
+        "regionRef": "china",
+        "lifecycle": "research",
+        "scopeType": "region",
+        "scope": "china",
+        "primaryTopicRef": None,
+        "relatedTopicRefs": [],
+        "scale": "M1",
+        "workloadTargets": {"homepage": 1},
+    }
+    document.update(overrides)
+    return document
+
+
+def _install_handoff(
+    monkeypatch: pytest.MonkeyPatch,
+    documents: dict[str, dict[str, object]],
+) -> None:
+    """Serve fake confirmed handoffs keyed by file name."""
+
+    def _load(path: Path) -> dict[str, object]:
+        return dict(documents[Path(path).name])
+
+    monkeypatch.setattr(handoff_api, "load_pre_acquisition_handoff", _load)
+
+
 def _intent(tmp_path: Path, **overrides: object) -> dict[str, object]:
     document: dict[str, object] = {
         "intentText": "生成一个区域主页",
-        "regionRef": "china",
-        "lifecycle": "research",
         "mode": "fresh",
-        "workloads": {"homepage": 1},
         "capacityCalibrationReceiptRef": str(tmp_path / "capacity.json"),
         "preAcquisitionHandoffRef": str(tmp_path / "handoff.json"),
         "scaleSourcePoolPlanRef": str(tmp_path / "pool.json"),
@@ -77,18 +106,42 @@ def test_preview_modify_needs_input_blocked_and_cancel_are_mutually_exclusive(
     monkeypatch.setattr(
         work_request_contract, "_canonical_ref", lambda path: path.name
     )
+    _install_handoff(
+        monkeypatch,
+        {
+            "handoff.json": _handoff_document(),
+            "handoff-2.json": _handoff_document(
+                scale="M2", workloadTargets={"homepage": 2}
+            ),
+            "handoff-broken.json": _handoff_document(workloadTargets={}),
+        },
+    )
     preview_query = WorkRequestPreviewQuery()
     first = preview_query.preview(_intent(tmp_path))
-    modified = preview_query.preview(_intent(tmp_path, workloads={"homepage": 2}))
-    missing = preview_query.preview(_intent(tmp_path, workloads={}))
+    modified = preview_query.preview(
+        _intent(
+            tmp_path,
+            preAcquisitionHandoffRef=str(tmp_path / "handoff-2.json"),
+        )
+    )
+    broken = preview_query.preview(
+        _intent(
+            tmp_path,
+            preAcquisitionHandoffRef=str(tmp_path / "handoff-broken.json"),
+        )
+    )
 
     assert first["outcome"] == "preview"
     assert first["normalizedRequest"]["scale"] == "M1"
+    assert first["normalizedRequest"]["workloads"] == {"homepage": 1}
+    assert first["normalizedRequest"]["scopeType"] == "region"
     assert first["normalizedRequest"]["sourcePool"]["targetScale"] == "WORKLOAD"
     assert modified["outcome"] == "preview"
     assert modified["requestDigest"] != first["requestDigest"]
-    assert missing["outcome"] == "needs_input"
-    assert missing["missingFields"] == ["workloads"]
+    # Demand facts live only in the confirmed handoff: a handoff without a
+    # usable workload is an unavailable dependency, never a silent default.
+    assert broken["outcome"] == "blocked"
+    assert broken["error"]["code"] == "DATA.WORK_REQUEST.DEPENDENCY_UNAVAILABLE"
 
     def unavailable(*_args: object, **_kwargs: object) -> dict[str, object]:
         raise FileNotFoundError("source-ready evidence is missing")
@@ -107,9 +160,42 @@ def test_preview_modify_needs_input_blocked_and_cancel_are_mutually_exclusive(
     assert not (tmp_path / "output/workspace/content-campaign-envelopes").exists()
 
 
+def test_demand_facts_are_owned_by_handoff_not_by_caller_inputs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(work_request_contract, "_dependency_bindings", _dependencies)
+    monkeypatch.setattr(
+        work_request_contract, "_canonical_ref", lambda path: path.name
+    )
+    _install_handoff(monkeypatch, {"handoff.json": _handoff_document()})
+    query = WorkRequestPreviewQuery()
+
+    for field in ("vertical", "regionRef", "topic", "lifecycle", "workloads"):
+        rejected = query.preview(_intent(tmp_path, **{field: "anything"}))
+        assert rejected["outcome"] == "needs_input"
+        assert f"unknown:{field}" in rejected["missingFields"]
+
+    derived = query.preview(_intent(tmp_path))
+    assert derived["outcome"] == "preview"
+    assert derived["normalizedRequest"]["vertical"] == "travel"
+    assert derived["normalizedRequest"]["regionRef"] == "china"
+    assert derived["normalizedRequest"]["lifecycle"] == "research"
+
+
 def test_fresh_retry_conflict_and_unknown_carrier_remain_needs_input(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    _install_handoff(
+        monkeypatch,
+        {
+            "handoff.json": _handoff_document(),
+            "handoff-unknown-region.json": _handoff_document(
+                regionRef="__unknown_region__", scope="unknown-region"
+            ),
+        },
+    )
     query = WorkRequestPreviewQuery()
     conflict = query.preview(
         _intent(
@@ -117,9 +203,16 @@ def test_fresh_retry_conflict_and_unknown_carrier_remain_needs_input(
             predecessorExecutionIdsByCarrier={"homepage": "old"},
         )
     )
-    unknown = query.preview(_intent(tmp_path, workloads={"podcast": 1}))
+    unknown = query.preview(
+        _intent(tmp_path, externalInputRefsByCarrier={"podcast": []})
+    )
     unknown_region = query.preview(
-        _intent(tmp_path, regionRef="__unknown_region__")
+        _intent(
+            tmp_path,
+            preAcquisitionHandoffRef=str(
+                tmp_path / "handoff-unknown-region.json"
+            ),
+        )
     )
     inactive_external = query.preview(
         _intent(
@@ -156,6 +249,28 @@ def test_fresh_retry_conflict_and_unknown_carrier_remain_needs_input(
         "predecessorExecutionIdsByCarrier",
         "predecessorReconciliationReceiptRef",
     ]
+
+
+def test_undeclared_source_provider_fails_closed_at_preview(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(work_request_contract, "_dependency_bindings", _dependencies)
+    monkeypatch.setattr(
+        work_request_contract, "_canonical_ref", lambda path: path.name
+    )
+    _install_handoff(monkeypatch, {"handoff.json": _handoff_document()})
+    query = WorkRequestPreviewQuery()
+
+    undeclared = query.preview(
+        _intent(tmp_path, sourceProviders=["__undeclared_provider__"])
+    )
+
+    assert undeclared["outcome"] == "needs_input"
+    assert any(
+        issue.startswith("undeclaredSourceProvider:")
+        for issue in undeclared["missingFields"]
+    )
 
 
 def test_dependency_set_binds_source_revision_and_external_inputs(
@@ -281,6 +396,7 @@ def test_preview_digest_uses_portable_governed_dependency_refs(
         parents=True
     )
     monkeypatch.setattr(work_request_contract, "_dependency_bindings", _dependencies)
+    _install_handoff(monkeypatch, {"handoff.json": _handoff_document()})
     relative_refs = {
         "capacityCalibrationReceiptRef": "quwoquan_data/capacity.json",
         "preAcquisitionHandoffRef": "quwoquan_data/handoff.json",
@@ -291,10 +407,7 @@ def test_preview_digest_uses_portable_governed_dependency_refs(
         key: str(tmp_path / value) for key, value in relative_refs.items()
     }
     base = {
-        "regionRef": "china",
-        "lifecycle": "research",
         "mode": "fresh",
-        "workloads": {"homepage": 1},
     }
 
     relative = WorkRequestPreviewQuery().preview({**base, **relative_refs})

@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from pathlib import Path
 import unittest
+from pathlib import Path
 
 import yaml
-
 
 ROOT = Path(__file__).resolve().parents[4]
 WORKFLOWS = (
@@ -50,7 +49,7 @@ class ReusableWorkflowJobTimeoutContractTest(unittest.TestCase):
                     self.assertLessEqual(timeout, 5, f"{relative}:{job_name}")
                 checked.add((relative, str(job_name)))
 
-        self.assertEqual(len(checked), 22)
+        self.assertEqual(len(checked), 20)
 
 
 if __name__ == "__main__":

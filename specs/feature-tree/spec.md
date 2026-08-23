@@ -616,6 +616,23 @@
 - 领域交接：circle-community → travel-journey → assistant-run-learning → discovery-content → user-identity-profile-relationship → chat-conversation
 - 对应验收：`UAT-012`
 
+<a id="jny-014"></a>
+### JNY-014 内容运营者按需生成内容并入池
+
+- 用户目标：内容运营者用一份可确认的按需请求声明范围（垂类/区域/主题及相关主题）、载体组合与逐载体数量，让系统经真实来源发现与生产审核，把合格唯一对象幂等增量写入 canonical 内容池，并能按 typed 终态恢复失败。
+- 起点：内容运营者通过受治理 Data CLI 或 typed preview 入口提交按需内容请求。
+- 成功终态：同一已确认请求的每个 active 载体各有可复核的池内 canonical record，数量、来源、权利、review 与实体/标签引用全部闭合；未达数量部分保留 typed shortfall 与可执行恢复动作。
+- 失败恢复：任一阶段失败停在 typed 终态并携带 nextAction 与 reentry 引用；已入池对象不被撤销，修复输入或引擎再资格化后凭同一请求身份恢复或重放。
+- 参与领域：
+  - [discovery-content](./discovery-content/spec.md)
+
+<a id="scn-035"></a>
+#### SCN-035 按需请求经来源发现与四载体生产入池
+
+- 场景目标：内容运营者确认按需请求后，系统依次完成来源发现、SourcePool 固化、WorkRequest 派生编译、所选载体生产与独立审核，把合格对象经唯一 reviewed delivery 路径原子入池，运营者只读 typed 终态即可复核数量与恢复方式。
+- 领域交接：discovery-content
+- 对应验收：`UAT-013`
+
 ## 5. 全局验收
 
 <a id="uat-001"></a>
@@ -772,6 +789,16 @@
 - THEN 行程结束生成可编辑 LocalPostDraft；发布与分段分享均经所属领域公开 command，公开结果不包含私人住宿、联系人、参与者名单或实时精确位置。
 - AND Android/iPhone 真机完成日历确认、地图跳转、Adaptive Presentation、离线降级、后台恢复与变化通知，所有结果绑定同一候选、Skill package digest、Gathering 与 Plan revision。
 
+<a id="uat-013"></a>
+### UAT-013 内容运营者按需生成内容并入池
+
+- GIVEN 内容运营者持有可确认的按需请求：范围为 `vertical | region | topic | region_topic` 之一、canonical 主题引用、`homepage|article|image|video` 的非空载体组合与逐载体正整数数量，以及已声明的来源策略。
+- WHEN 运营者确认请求，系统依次执行来源发现、SourcePool 固化、WorkRequest 派生编译、载体生产、独立审核与 canonical 池准入。
+- THEN 每个 active 载体的合格对象经唯一 reviewed delivery 路径以单对象事务幂等入池，池 record 可沿同一 execution 身份回溯到 confirmed 请求，来源、权利、review、实体与标签引用全部闭合。
+- THEN 同一已冻结请求 exact replay 时池增量为零、既有 record 字节不变；漂移返回 typed conflict 且零写入。
+- THEN 任一非成功终态（needs_input、blocked、partial、pending）携带结构化 nextAction 与绑定原请求摘要的 reentry 引用，运营者只读终态即可决定补输入、修来源、恢复交付或换载体，已入池对象不被撤销。
+- THEN 数量语义为「至少 N 个合格唯一对象」；未达数量时如实报告 shortfall 与原因分布，不静默下调、不以重复或未审核对象凑数。
+
 ## 6. 开放事项
 
 <a id="open-001"></a>
@@ -886,3 +913,13 @@
 - 影响或价值：尚缺验收证据：alpha、beta、gamma、prod 真实历史 Trip 对象的 source inventory、canonical owner import/readback、parity、cutover 与 target-only rollback receipt。服务源码、契约、生成客户端、路由和运行拓扑已归零，现有仓内证据只验证合成快照上的迁移控制面合同。
 - 完成判定：四环境分别完成真实 source inventory、owner-command import、target readback、100% parity 与永久 target-only cutover；Prod 另有目标备份和不恢复源服务的 rollback 演练。全部历史对象计数守恒、orphan/collision 为零、原始 PII 零输出，receipt 绑定同一 crosswalk、ContractGraph、mapping、候选、审批和配置激活摘要。切流后 `UAT-012` 的「旅行能力不创建长期公共独立 Trip 根，也不复制成员或会话」结果在真实环境仍成立。
 - 依赖：[`travel-journey OPEN-001`](./travel-journey/spec.md#open-001)、Circle/Chat/Content target owner、四环境受保护 inventory 与审批证据。
+
+<a id="open-012"></a>
+### OPEN-012 内容运营者按需入池旅程尚无端到端真实证据
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：当前从未有一份按需请求经来源发现、四载体任选生产与审核后可复证地进入 canonical 内容池；意图入口、来源发现、数量守恒、恢复面与入池单轨的契约阻断由 `discovery-content` 下 `object-homepage-coverage-scaling` 的各 Story OPEN 分别承接。
+- 完成判定：`UAT-013` 全部结果子句由真实 Data operator 旅程 user_acceptance 直接 `spec_ref`：先以 typed 单载体 M1 首次真实入池与 exact replay 零增量，再以同一 confirmed 请求完成四载体 M1 各一入池；证据不得使用 fixture、seed 或旧 receipt 冒充。
+- 依赖：[`work-request-compilation`](./discovery-content/object-homepage-coverage-scaling/work-request-compilation/spec.md)、[`on-demand-content-pool-admission`](./discovery-content/object-homepage-coverage-scaling/on-demand-content-pool-admission/spec.md)、[`source-discovery-scale-reliability`](./discovery-content/object-homepage-coverage-scaling/source-discovery-scale-reliability/spec.md)、[`canonical-content-identity-recovery`](./discovery-content/object-homepage-coverage-scaling/canonical-content-identity-recovery/spec.md) 与收窄后 [`multi-carrier-release`](./discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md) 的最低节点 OPEN。

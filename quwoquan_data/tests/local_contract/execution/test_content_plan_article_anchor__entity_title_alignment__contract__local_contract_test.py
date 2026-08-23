@@ -1,4 +1,4 @@
-# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-012
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/on-demand-content-pool-admission/spec.md#gwt-001
 """Article entity/title anchoring evidence for the pre-freeze source prescreen.
 
 `REQ-007` splits `在场不足` into two sub-reasons that must stay distinguishable:

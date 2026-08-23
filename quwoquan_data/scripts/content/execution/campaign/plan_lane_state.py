@@ -43,9 +43,6 @@ from content.execution.closure.adoption_campaign_contract import (
     validate_adoption_target_identity,
     validate_campaign_adoption_binding,
 )
-from content.execution.planning.capacity_calibration import (
-    assert_capacity_source_binding,
-)
 from content.execution.planning.semantic_preflight_admission import (
     bind_semantic_preflight_receipt,
     validate_semantic_preflight_binding_at,

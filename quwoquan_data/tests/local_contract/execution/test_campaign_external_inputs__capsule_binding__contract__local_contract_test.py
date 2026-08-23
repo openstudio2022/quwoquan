@@ -25,7 +25,10 @@ from content.execution.request import RuntimeExecutionRequest
 from content.source import source_inputs
 from core.control_types import TargetSelector
 from core.io import read_json, write_json
-from support.capacity_calibration_fixture import synthetic_capacity_source_binding
+from support.capacity_calibration_fixture import (
+    synthetic_capacity_source_binding,
+    synthetic_governed_execution_authority,
+)
 from support.campaign_external_inputs_fixture import (  # noqa: F401
     CATALOG_DIGEST,
     EXECUTION_IDS,
@@ -79,7 +82,7 @@ def _submission(
         else "priority",
         "quota": 100,
         "count": 150,
-        "capacityCalibration": synthetic_capacity_source_binding(),
+        "executionAuthority": synthetic_governed_execution_authority(),
         "workerHostSetBinding": None,
         "topic": None,
         "targetNames": [],
@@ -218,7 +221,7 @@ def _frozen_documents(
         "entityCatalogDigest": CATALOG_DIGEST,
         "semanticSelectionId": "default",
         "semanticPreflightReceipt": semantic_preflight_binding,
-        "capacityCalibration": synthetic_capacity_source_binding(),
+        "executionAuthority": synthetic_governed_execution_authority(),
         "scaleSourcePool": pool_binding,
         "sourcePoolEvidenceRootRef": pool_evidence_ref,
         "laneSourcePoolSelections": pool_selections,
@@ -553,7 +556,7 @@ def test_same_execution_cannot_replace_external_inputs_without_new_retry(
         selector=TargetSelector.PRIORITY,
         count=100,
         quota=100,
-        capacity_calibration=synthetic_capacity_source_binding(),
+        execution_authority=synthetic_governed_execution_authority(),
         topic=None,
         source_providers=(),
         target_names=(),

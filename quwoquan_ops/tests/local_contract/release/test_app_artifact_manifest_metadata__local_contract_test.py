@@ -23,9 +23,13 @@ if str(ROOT) not in sys.path:
 from quwoquan_ops.ci import render_release_application_package as render_module
 from quwoquan_ops.cli.lib.app_identity import (
     AppIdentityError,
+    application_id_for_build_product,
+    build_profile_for_environment,
     enumerate_valid_install_launch_paths,
     resolve_app_identity,
     supported_build_modes,
+    supported_build_products,
+    supported_build_profiles,
     supported_environments,
     supported_identity_platforms,
 )
@@ -70,6 +74,23 @@ class AppArtifactManifestMetadataTest(unittest.TestCase):
         for schema in self.document["schemas"].values():
             for field in schema["required_fields"]:
                 self.assertNotIn("content", str(field).lower())
+
+    def test_mobile_artifact_manifest_binds_only_profile_trust_envelope(self) -> None:
+        contract = self.document["schemas"]["app_artifact_manifest"]
+        self.assertNotIn(
+            "runtimeConfigTrustEnvelopeDigest",
+            contract["required_fields"],
+        )
+        self.assertEqual(
+            contract["fields"]["runtimeConfigTrustEnvelopeDigest"],
+            {"type": "string", "format": "sha256_identity"},
+        )
+        constraints = "\n".join(contract["constraints"])
+        self.assertIn(
+            "Android/iOS AppArtifact 必须携带 runtimeConfigTrustEnvelopeDigest",
+            constraints,
+        )
+        self.assertIn("Web AppArtifact 禁止携带该字段", constraints)
 
     def test_store_and_web_channels_only_accept_release(self) -> None:
         classes = self.document["distribution_classes"]
@@ -166,7 +187,7 @@ class AppArtifactManifestMetadataTest(unittest.TestCase):
         self.assertEqual(payload["schema"], "app_artifact_manifest")
         self.assertEqual(
             payload["applicationId"],
-            "com.example.quwoquanApp.alpha.debug",
+            "com.example.quwoquanApp.nonprod.debug",
         )
         self.assertGreater(payload["pathCount"], 0)
 
@@ -203,94 +224,118 @@ class AppArtifactManifestMetadataTest(unittest.TestCase):
             set(render_module.GENERIC_FIELDS), set(contract["required_fields"])
         )
         self.assertEqual(
-            list(render_module.ENVIRONMENTS),
-            contract["fields"]["environment"]["allowed_values"],
+            list(render_module.BUILD_PRODUCT_IDS),
+            list(self.document["build_products"]),
+        )
+
+    def test_baseline_build_products_are_exactly_the_five_product_model(self) -> None:
+        products = supported_build_products()
+        self.assertEqual(
+            tuple(product.build_product_id for product in products),
+            (
+                "android-nonprod-apk",
+                "android-prod-apk",
+                "ios-nonprod-app",
+                "ios-prod-app",
+                "web-shared",
+            ),
         )
         self.assertEqual(
-            list(render_module.SURFACES),
-            contract["fields"]["surface"]["allowed_values"],
+            application_id_for_build_product("web-shared"),
+            "com.leadwise.quwoquan.web",
+        )
+        self.assertEqual(
+            next(
+                product.distribution_class
+                for product in products
+                if product.build_product_id == "android-prod-apk"
+            ),
+            "store",
         )
 
-    def test_application_identity_matrix_never_overwrites_across_env_and_mode(
-        self,
-    ) -> None:
-        """四环境 × BuildMode 的 applicationId 互不覆盖（DEC-004）。"""
+    def test_application_identity_matrix_isolated_by_profile_and_mode(self) -> None:
+        """同 profile 环境共享身份，不同 profile/mode 互不覆盖。"""
 
+        self.assertEqual(supported_build_profiles(), ("nonprod", "prod"))
+        self.assertEqual(build_profile_for_environment("alpha"), "nonprod")
+        self.assertEqual(build_profile_for_environment("beta"), "nonprod")
+        self.assertEqual(build_profile_for_environment("gamma"), "nonprod")
+        self.assertEqual(build_profile_for_environment("prod"), "prod")
         for platform in supported_identity_platforms():
             seen: dict[str, tuple[str, str]] = {}
-            for environment in supported_environments():
+            for build_profile in supported_build_profiles():
                 for build_mode in supported_build_modes():
                     identity = resolve_app_identity(
                         platform=platform,
-                        environment=environment,
+                        build_profile=build_profile,
                         build_mode=build_mode,
                     )
                     self.assertNotIn(
                         identity.application_id,
                         seen,
-                        f"{platform} {environment}/{build_mode} collides with "
+                        f"{platform} {build_profile}/{build_mode} collides with "
                         f"{seen.get(identity.application_id)}",
                     )
-                    seen[identity.application_id] = (environment, build_mode)
+                    seen[identity.application_id] = (build_profile, build_mode)
                     self.assertTrue(identity.display_name)
+            for build_mode in supported_build_modes():
+                nonprod_ids = {
+                    resolve_app_identity(
+                        platform=platform,
+                        environment=environment,
+                        build_mode=build_mode,
+                    ).application_id
+                    for environment in ("alpha", "beta", "gamma")
+                }
+                self.assertEqual(len(nonprod_ids), 1)
 
-    def test_native_build_identity_projection_matches_metadata(self) -> None:
+    def test_generated_identity_projection_matches_metadata(self) -> None:
         contract = self.document["application_identity"]
-        android = ANDROID_BUILD_PATH.read_text(encoding="utf-8")
         generated = json.loads(
             (ROOT / "quwoquan_app/android/app/app_identity.generated.json").read_text(
                 encoding="utf-8"
             )
         )
-        self.assertIn('projectDir.resolve("app_identity.generated.json")', android)
-        self.assertIn('flavorDimensions += "environment"', android)
-        for environment in contract["environment_suffixes"]:
+        self.assertEqual(generated["buildProfiles"], ["nonprod", "prod"])
+        self.assertEqual(
+            generated["environmentProfiles"],
+            {
+                "alpha": "nonprod",
+                "beta": "nonprod",
+                "gamma": "nonprod",
+                "prod": "prod",
+            },
+        )
+        for build_profile in contract["build_profile_suffixes"]:
             for build_mode in contract["build_mode_suffixes"]:
                 identity = generated["identities"]["android"][
-                    f"{environment}/{build_mode}"
+                    f"{build_profile}/{build_mode}"
                 ]
                 self.assertEqual(
                     identity["applicationId"],
                     contract["base_application_ids"]["android"]["value"]
-                    + contract["environment_suffixes"][environment]
+                    + contract["build_profile_suffixes"][build_profile]
                     + contract["build_mode_suffixes"][build_mode],
                 )
-        self.assertIn('generatedModeApplicationIdSuffix("debug")', android)
-        self.assertIn('generatedModeApplicationIdSuffix("profile")', android)
-        self.assertNotIn('applicationIdSuffix = ".debug"', android)
-        self.assertNotIn('applicationIdSuffix = ".profile"', android)
         android_manifest = ANDROID_MANIFEST_PATH.read_text(encoding="utf-8")
         self.assertNotIn("android:taskAffinity", android_manifest)
 
-        ios_project = IOS_PROJECT_PATH.read_text(encoding="utf-8")
-        self.assertNotIn("QWQEnvironment.xcconfig", ios_project)
-        self.assertNotIn("RunnerUITests", ios_project)
-        self.assertEqual(ios_project.count("/* Debug-alpha */"), 6)
-        for base_config in (
-            IOS_DEBUG_CONFIG_PATH,
-            IOS_PROFILE_CONFIG_PATH,
-            IOS_RELEASE_CONFIG_PATH,
-        ):
-            base_source = base_config.read_text(encoding="utf-8")
-            self.assertNotIn("Pods-Runner.debug.xcconfig", base_source)
-            self.assertNotIn("Pods-Runner.profile.xcconfig", base_source)
-            self.assertNotIn("Pods-Runner.release.xcconfig", base_source)
-        for environment in contract["environment_suffixes"]:
+        for build_profile in contract["build_profile_suffixes"]:
             identity_source = (
-                ROOT / f"quwoquan_app/ios/Flutter/Identity/{environment}.xcconfig"
+                ROOT / f"quwoquan_app/ios/Flutter/Identity/{build_profile}.xcconfig"
             ).read_text(encoding="utf-8")
             self.assertIn(
-                "QWQ_ENV_BUNDLE_ID_SUFFIX = "
-                + contract["environment_suffixes"][environment],
+                "QWQ_PROFILE_BUNDLE_ID_SUFFIX = "
+                + contract["build_profile_suffixes"][build_profile],
                 identity_source,
             )
             for build_mode in contract["build_mode_suffixes"]:
-                configuration = f"{build_mode.title()}-{environment}"
+                configuration = f"{build_mode.title()}-{build_profile}"
                 source = (
                     ROOT / f"quwoquan_app/ios/Flutter/{configuration}.xcconfig"
                 ).read_text(encoding="utf-8")
                 self.assertIn(
-                    f"Pods-Runner.{build_mode}-{environment}.xcconfig",
+                    f"Pods-Runner.{build_mode}-{build_profile}.xcconfig",
                     source,
                 )
                 self.assertNotIn("Pods-RunnerTests", source)
@@ -325,7 +370,7 @@ class AppArtifactManifestMetadataTest(unittest.TestCase):
             platform="android", environment="prod", build_mode="release"
         )
         self.assertTrue(android.registered)
-        self.assertEqual(android.application_id, "com.quwoquan.quwoquan_app")
+        self.assertEqual(android.application_id, "com.leadwise.quwoquan")
         # iOS App Store 正式 bundle ID 尚未登记外部事实：registered 必须为
         # False，store promotable 由消费方阻断（OPEN 承接，不得占位上架）。
         ios = resolve_app_identity(

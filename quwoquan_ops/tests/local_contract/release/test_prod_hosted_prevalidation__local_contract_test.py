@@ -12,6 +12,9 @@ from quwoquan_ops.cli import stackctl
 from quwoquan_ops.cli.prod import finalize_mainline_release_artifact as finalizer
 from quwoquan_ops.cli.prod import inspect_prod_plane_runtime as inspect_runtime
 from quwoquan_ops.cli.prod import prevalidate_prod_hosted as prevalidate
+from quwoquan_ops.tests.support.app_artifact_manifest_test_support import (
+    app_artifact_manifest,
+)
 
 
 APP_EVIDENCE_REF = (
@@ -56,20 +59,36 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
                     "digest": "sha256:"
                     + hashlib.sha256(path.read_bytes()).hexdigest(),
                 }
-        digest = "sha256:" + ("c" * 64)
-        images = {
-            service: {
-                "repository": f"ghcr.io/owner/repo/{service}",
-                "transportRef": f"ghcr.io/owner/repo/{service}:{image_version}",
-                "digest": digest,
-                "ref": f"ghcr.io/owner/repo/{service}@{digest}",
-                "attestations": {
-                    "spdxSbom": f"oci://ghcr.io/owner/repo/{service}@{digest}#spdxSbom",
-                    "slsaProvenance": f"oci://ghcr.io/owner/repo/{service}@{digest}#slsaProvenance",
-                },
+        # DEC-005：alpha/beta/gamma 共享 nonprod 镜像，prod 使用独立信任域。
+        # 环境差异只存在于 configurationPackages。
+        environment_images: dict[str, dict[str, dict[str, object]]] = {}
+        for environment in finalizer.ENVIRONMENTS:
+            trust_domain = "prod" if environment == "prod" else "nonprod"
+            digest = (
+                "sha256:"
+                + hashlib.sha256(f"image-{trust_domain}".encode("utf-8")).hexdigest()
+            )
+            environment_images[environment] = {
+                service: {
+                    "repository": f"ghcr.io/owner/repo/{service}-{trust_domain}",
+                    "transportRef": (
+                        f"ghcr.io/owner/repo/{service}-{trust_domain}:{image_version}"
+                    ),
+                    "digest": digest,
+                    "ref": f"ghcr.io/owner/repo/{service}-{trust_domain}@{digest}",
+                    "attestations": {
+                        "spdxSbom": (
+                            f"oci://ghcr.io/owner/repo/{service}-{trust_domain}"
+                            f"@{digest}#spdxSbom"
+                        ),
+                        "slsaProvenance": (
+                            f"oci://ghcr.io/owner/repo/{service}-{trust_domain}"
+                            f"@{digest}#slsaProvenance"
+                        ),
+                    },
+                }
+                for service in services
             }
-            for service in services
-        }
         application_packages: dict[str, dict[str, dict[str, str]]] = {
             environment: {} for environment in finalizer.ENVIRONMENTS
         }
@@ -80,6 +99,13 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
                 )
                 package_path = root / relative
                 package_path.parent.mkdir(parents=True, exist_ok=True)
+                artifact_manifest = app_artifact_manifest(
+                    environment=environment,
+                    surface=surface,
+                    source_git_sha="a" * 40,
+                    source_tree_digest="sha1:" + ("b" * 40),
+                    artifact_digest="sha256:" + ("d" * 64),
+                )
                 if environment == "prod" and surface in {
                     "web",
                     "android",
@@ -93,8 +119,10 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
                     }
                     if surface == "web":
                         package_payload["contentSHA256"] = "d" * 64
+                        package_payload["artifactManifest"] = artifact_manifest
                     elif surface == "android":
                         package_payload["apkSHA256"] = "d" * 64
+                        package_payload["artifactManifest"] = artifact_manifest
                     else:
                         package_payload["packageDigest"] = "sha256:" + ("d" * 64)
                 else:
@@ -105,6 +133,7 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
                         "sourceGitSha": "a" * 40,
                         "sourceTreeDigest": "sha1:" + ("b" * 40),
                         "packageDigest": "sha256:" + ("d" * 64),
+                        "artifactManifest": artifact_manifest,
                     }
                 package_path.write_text(json.dumps(package_payload), encoding="utf-8")
                 application_packages[environment][surface] = {
@@ -174,11 +203,12 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
                 "path": relative,
                 "digest": "sha256:" + hashlib.sha256(source.read_bytes()).hexdigest(),
             }
+        evidence_layer_digest = "sha256:" + ("c" * 64)
         test_evidence = {
             "schema": "qwq.three-layer-case-results",
             "status": "passed",
             "layers": {
-                layer: {"status": "passed", "artifactDigest": digest}
+                layer: {"status": "passed", "artifactDigest": evidence_layer_digest}
                 for layer in finalizer.TEST_LAYERS
             },
             "evidence": {"files": test_evidence_files},
@@ -187,6 +217,7 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
         test.write_text(json.dumps(test_evidence), encoding="utf-8")
         payload = finalizer.seal_manifest({
             "schema": finalizer.SCHEMA,
+            "releaseTrainId": None,
             "candidateId": None,
             "status": "candidate-ready",
             "generatedAt": "2026-07-28T00:00:00Z",
@@ -198,13 +229,22 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
                 "sourceArchiveDigest": None,
             },
             "artifactDigest": None,
-            "images": images,
-            "configurationPackages": configuration_packages,
+            "environmentArtifacts": {
+                environment: {
+                    "environment": environment,
+                    "environmentArtifactDigest": None,
+                    "images": environment_images[environment],
+                    "configurationPackages": configuration_packages[environment],
+                }
+                for environment in finalizer.ENVIRONMENTS
+            },
             "applicationPackages": application_packages,
             "contractGraphDigest": "sha256:"
             + hashlib.sha256(contract_graph.read_bytes()).hexdigest(),
             "requiredEvidence": {
-                "images": services,
+                "environmentArtifacts": {
+                    environment: services for environment in finalizer.ENVIRONMENTS
+                },
                 "configurationPackages": {
                     environment: services for environment in finalizer.ENVIRONMENTS
                 },
@@ -224,7 +264,7 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
                 "digest": "sha256:" + hashlib.sha256(test.read_bytes()).hexdigest(),
                 "status": "passed",
                 "layers": {
-                    layer: {"status": "passed", "artifactDigest": digest}
+                    layer: {"status": "passed", "artifactDigest": evidence_layer_digest}
                     for layer in finalizer.TEST_LAYERS
                 },
                 "evidence": test_evidence["evidence"],

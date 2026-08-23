@@ -47,6 +47,7 @@
 
 - Flutter Engine、根组件、必要数据库、核心资源或配置、无安全降级的必要依赖、根路由或主容器确认无法创建时停止后续初始化并进入 S0。
 - 受支持构建入口必须在安装前验证完整 runtime package；缺失环境、Gateway、Media、RTC 或 native runtime identity 是构建失败，不得把可预防的开发/打包错误包装成一次“成功启动到恢复页”。运行时配置校验仅是畸形或被篡改制品的最后防线。
+- 运行时配置校验最后防线触发时，App 进入独立的阻断式配置错误页并拒绝进入业务壳。该页面写明脱敏的缺失或非法配置键名与重新安装/重新构建指令，不复用启动版本恢复页，也不提供依赖失效配置的更新或网页版跳转。配置失效不得呈现为网络或服务不可用。
 - Android 的 exported launcher 必须是 Flutter Engine、`FlutterFragmentActivity` 和插件装配之前的原生 gate：先完成平台强证据与制品身份核对，有确认致命异常时直接承载原生恢复页，无确认致命异常时才单向进入 Flutter 主 Activity。恢复分支不得创建 Flutter Engine，正常分支不得并行保留第二套启动状态机。
 - iOS 必须在 `FlutterAppDelegate` 的 `willFinish`/`didFinish` 主线和 implicit Flutter Engine 之前核对同制品致命证据；恢复分支必须在 `configurationForConnecting` 阶段移除 `Main.storyboard` 并改用纯原生 recovery scene，且不得调用 Flutter AppDelegate 生命周期或注册插件，正常分支才进入唯一 Flutter 主线。
 - Android 只依据同一制品身份的 Java 未处理异常或 `ApplicationExitInfo` 最近一次退出明确为 crash/native crash；iOS 当前只依据同一制品身份的未处理 NSException 判定上一进程启动崩溃。无法与上轮启动窗口可靠关联的 MetricKit signal/crash diagnostic 不得直接触发恢复，边界由 `OPEN-002` 持续跟踪。
@@ -128,6 +129,7 @@
 - THEN 无确认致命异常时 gate 只进入 Flutter 主 Activity 且不显示恢复页。
 - AND iOS 在调用 Flutter AppDelegate 启动生命周期和创建 implicit Flutter Engine 前进入原生恢复 root；恢复分支不初始化 Flutter 或商业插件。
 - AND 缺失 runtime package 的 Android/iOS 构建在安装前失败；恢复页、safeRecovery 或 Flutter 首帧均不得作为构建入口可用性的成功证据。
+- AND 安装后运行时配置校验失败（例如旧构建派生物携带被禁止或缺失的 runtime package 键）时，App 呈现阻断式配置错误页并列出脱敏键名，不进入业务壳，不显示网络或版本恢复文案。
 - AND 连续冷启动、Hot Restart 与再次冷启动中，每个 attempt 的 `launchMode` 均与本次入口绑定为 `canonical_launcher` 或 `direct_flutter_run`，且 `configurationState=complete`；Hot Restart 的 fatal 请求被拒绝，安全 Shell 与 fatal 矛盾 marker 在 Flutter Engine 创建前自愈清理。
 - AND 首帧立即提供网页版。有新版且存在当前平台可安装通道时，Android 经官网 HTTPS 端点下载正式签名 APK，公众 iOS 继续使用 PWA/网页版。已最新、没有合规原生通道或检查未完成时提供网页版且不存在启动重试。
 

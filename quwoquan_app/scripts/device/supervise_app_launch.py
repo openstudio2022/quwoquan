@@ -19,6 +19,9 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from quwoquan_app.scripts.device.startup_first_frame import (
+    extract_dart_startup_attempts,
+)
 from quwoquan_ops.cli.lib.app_launch_attempt import (
     CONFIGURATION_STATES,
     create_app_launch_attempt,
@@ -27,8 +30,6 @@ from quwoquan_ops.cli.lib.app_launch_attempt import (
     record_app_launch_attempt_warning,
     transition_app_launch_attempt,
 )
-
-_CONFIGURATION_STATE_MARKER = "startup_configuration_state state="
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -54,15 +55,22 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+_PHASE_MARKER = re.compile(
+    r"^QWQ_APP_LAUNCH_PHASE status="
+    r"(compiled|installing|installed|configuring|configured|launching|launched)$"
+)
+
+
 def _advance(receipt: Path, target: str) -> None:
-    current = read_app_launch_attempt(receipt)["status"]
-    order = ("prepared", "compiling", "compiled", "installing", "installed", "launching", "launched")
-    if current not in order or order.index(current) >= order.index(target):
+    current = str(read_app_launch_attempt(receipt)["status"])
+    if current == target:
         return
-    while current != target:
-        next_state = order[order.index(current) + 1]
-        transition_app_launch_attempt(receipt, next_state)
-        current = next_state
+    transition_app_launch_attempt(receipt, target)
+
+
+def _observed_phase_from(line: str) -> str:
+    match = _PHASE_MARKER.fullmatch(line.strip())
+    return match.group(1) if match is not None else ""
 
 
 def _failure_for(status: str) -> str:
@@ -70,17 +78,25 @@ def _failure_for(status: str) -> str:
         return "APP.LAUNCH.compile_failed"
     if status in {"compiled", "installing"}:
         return "APP.LAUNCH.install_failed"
+    if status == "installed":
+        return "APP.LAUNCH.runtime_config_missing"
+    if status == "configuring":
+        return "APP.LAUNCH.runtime_config_activation_failed"
     return "APP.LAUNCH.launch_failed"
 
 
 def _configuration_state_from(line: str) -> str:
-    """Read the App-reported configuration state; unknown text stays unobserved."""
+    """Read configurationState off the canonical dart startup attempt line.
 
-    if _CONFIGURATION_STATE_MARKER not in line:
-        return ""
-    tail = line.split(_CONFIGURATION_STATE_MARKER, 1)[1].strip().split()
-    state = tail[0] if tail else ""
-    return state if state in CONFIGURATION_STATES else ""
+    文法只有一处定义：`(android|ios)_dart_startup_attempt`。这里复用
+    startup_log 的解析器，不为同一事实另立第二条 marker。
+    """
+
+    for attempt in extract_dart_startup_attempts(line):
+        state = str(attempt.get("configurationState") or "")
+        if state in CONFIGURATION_STATES:
+            return state
+    return ""
 
 
 def _settle_runtime_health(receipt: Path) -> None:
@@ -106,79 +122,6 @@ def _settle_runtime_health(receipt: Path) -> None:
         receipt,
         runtime_health_status="degraded" if degraded else "healthy",
     )
-
-
-def _installation_snapshot(
-    platform: str,
-    device: str,
-    application_id: str,
-) -> str:
-    """Return a reinstall-sensitive package identity without changing device state."""
-
-    if not application_id:
-        return ""
-    if platform == "ios":
-        command = [
-            "xcrun",
-            "simctl",
-            "get_app_container",
-            device,
-            application_id,
-            "app",
-        ]
-    else:
-        command = [
-            "adb",
-            "-s",
-            device,
-            "shell",
-            "dumpsys",
-            "package",
-            application_id,
-        ]
-    try:
-        result = subprocess.run(
-            command,
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return ""
-    if result.returncode != 0:
-        return ""
-    output = result.stdout.strip()
-    if platform == "ios":
-        path = Path(output)
-        try:
-            return f"{path.resolve()}\0{path.stat().st_mtime_ns}"
-        except OSError:
-            return ""
-    values = []
-    for pattern in (
-        r"^\s*codePath=(.+)$",
-        r"^\s*versionCode=(\S+)",
-        r"^\s*lastUpdateTime=(.+)$",
-    ):
-        match = re.search(pattern, output, re.MULTILINE)
-        values.append(match.group(1).strip() if match else "")
-    return "\0".join(values) if any(values) else ""
-
-
-def _advance_fresh_install(
-    receipt: Path,
-    *,
-    before: str,
-    platform: str,
-    device: str,
-    application_id: str,
-) -> bool:
-    after = _installation_snapshot(platform, device, application_id)
-    if not after or after == before:
-        return False
-    _advance(receipt, "launching")
-    return True
 
 
 def main() -> int:
@@ -214,11 +157,6 @@ def main() -> int:
     interrupted = False
     timed_out = False
     observed_launch_error = False
-    installation_before = _installation_snapshot(
-        args.platform,
-        args.device,
-        args.application_id,
-    )
 
     def forward(signum: int, _frame: object) -> None:
         nonlocal interrupted
@@ -276,16 +214,9 @@ def main() -> int:
                 handle.write(line)
                 handle.flush()
             lowered = line.lower()
-            if (
-                "built " in lowered
-                or "build succeeded" in lowered
-                or "xcode build done." in lowered
-            ):
-                _advance(args.receipt, "compiled")
-            if "installing" in lowered:
-                _advance(args.receipt, "installing")
-            if "installing and launching" in lowered:
-                _advance(args.receipt, "launching")
+            observed_phase = _observed_phase_from(line)
+            if observed_phase:
+                _advance(args.receipt, observed_phase)
             if "error launching application" in lowered:
                 observed_launch_error = True
             if "[bootstrap] source=bootstrap_failure" in lowered:
@@ -299,14 +230,8 @@ def main() -> int:
                     args.receipt,
                     configuration_state=configuration_state,
                 )
-            if "syncing files" in lowered or "install complete" in lowered:
-                _advance(args.receipt, "launching")
-            if (
-                "flutter run key commands" in lowered
-                or "a dart vm service" in lowered
-                or "the flutter devtools debugger" in lowered
-            ):
-                _advance(args.receipt, "launched")
+            # Flutter/Xcode 的人类可读文案会随工具版本变化，不能作为状态事实。
+            # compile/install/configure/launch 只能由 executor 发出的规范 marker 推进。
         try:
             exit_code = child.wait(timeout=5 if timed_out else None)
         except subprocess.TimeoutExpired:
@@ -332,13 +257,6 @@ def main() -> int:
         _settle_runtime_health(args.receipt)
         return 130
     if timed_out:
-        _advance_fresh_install(
-            args.receipt,
-            before=installation_before,
-            platform=args.platform,
-            device=args.device,
-            application_id=args.application_id,
-        )
         current = read_app_launch_attempt(args.receipt)["status"]
         transition_app_launch_attempt(
             args.receipt,
@@ -349,13 +267,6 @@ def main() -> int:
         _settle_runtime_health(args.receipt)
         return 124
     if exit_code != 0:
-        _advance_fresh_install(
-            args.receipt,
-            before=installation_before,
-            platform=args.platform,
-            device=args.device,
-            application_id=args.application_id,
-        )
         current = read_app_launch_attempt(args.receipt)["status"]
         if current == "launched":
             transition_app_launch_attempt(

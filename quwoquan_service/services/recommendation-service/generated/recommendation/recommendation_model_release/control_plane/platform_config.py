@@ -3522,7 +3522,7 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "list"
     },
     {
-      "default": "com.quwoquan.quwoquan_app",
+      "default": "com.leadwise.quwoquan",
       "key": "sys.product-ops-service.app_release.android.apk_package_name",
       "reload": "restart",
       "rollout": "progressive",

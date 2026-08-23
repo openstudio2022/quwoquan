@@ -33,6 +33,8 @@ EXECUTION_ROOT_MODULES = frozenset(
         "runtime_contract.py",
         "runtime_state.py",
         "spec_contract.py",
+        "stage_receipt.py",
+        "stage_receipt_cli.py",
         "stage_reports.py",
         "store.py",
         "support.py",

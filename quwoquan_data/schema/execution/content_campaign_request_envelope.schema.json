@@ -16,7 +16,7 @@
     "selector",
     "quota",
     "count",
-    "capacityCalibration",
+    "executionAuthority",
     "workerHostSetBinding",
     "targetNames",
     "sourceProviders",
@@ -81,8 +81,8 @@
     "selector": { "type": "string", "minLength": 1 },
     "quota": { "type": "integer", "minimum": 1, "maximum": 100000 },
     "count": { "type": "integer", "minimum": 1 },
-    "capacityCalibration": {
-      "$ref": "governed_capacity_calibration_receipt.schema.json#/$defs/sourceBinding"
+    "executionAuthority": {
+      "$ref": "execution_authority.schema.json"
     },
     "workerHostSetBinding": {
       "oneOf": [

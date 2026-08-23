@@ -28,13 +28,19 @@ class ReleaseEvidenceManifestCanonicalContractTest(
             root = Path(temporary)
             artifact = self._build_input(root)
             image_descriptors = root / "image-descriptors"
+
+            def resolve_digest(ref: str) -> str:
+                return (
+                    f"sha256:{2:064x}"
+                    if "-prod:" in ref
+                    else f"sha256:{1:064x}"
+                )
+
             with (
                 mock.patch.object(
                     image_collector,
                     "resolve_registry_digest",
-                    side_effect=(
-                        f"sha256:{index:064x}" for index in range(1, 5)
-                    ),
+                    side_effect=resolve_digest,
                 ),
                 mock.patch.object(image_collector, "verify_oci_supply_chain"),
             ):
@@ -85,13 +91,15 @@ class ReleaseEvidenceManifestCanonicalContractTest(
             )
             self.assertEqual(
                 set(candidate["applicationPackages"]),
-                set(finalizer.ENVIRONMENTS),
+                set(finalizer.APPLICATION_PACKAGES),
             )
-            for environment in finalizer.ENVIRONMENTS:
-                self.assertEqual(
-                    set(candidate["applicationPackages"][environment]),
-                    set(finalizer.APPLICATION_PACKAGES[environment]),
-                )
+            self.assertIn("opsPortal", candidate)
+            self.assertNotIn("opsPortal", candidate["applicationPackages"])
+            self.assertEqual(
+                candidate["requiredEvidence"]["applicationPackages"],
+                list(finalizer.APPLICATION_PACKAGES),
+            )
+            self.assertIs(candidate["requiredEvidence"]["opsPortal"], True)
             changed_configuration = json.loads(json.dumps(candidate))
             changed_configuration["environmentArtifacts"]["gamma"][
                 "configurationPackages"
@@ -106,7 +114,7 @@ class ReleaseEvidenceManifestCanonicalContractTest(
                 candidate["candidateId"],
             )
             changed_application = json.loads(json.dumps(candidate))
-            changed_application["applicationPackages"]["beta"]["ios"][
+            changed_application["applicationPackages"]["ios-nonprod-app"][
                 "digest"
             ] = "sha256:" + ("e" * 64)
             self.assertNotEqual(
@@ -114,19 +122,60 @@ class ReleaseEvidenceManifestCanonicalContractTest(
                 candidate["candidateId"],
             )
             changed_payload = json.loads(json.dumps(candidate))
-            changed_payload["applicationPackages"]["beta"]["ios"][
+            changed_payload["applicationPackages"]["ios-nonprod-app"][
                 "packageDigest"
             ] = "sha256:" + ("f" * 64)
             self.assertNotEqual(
                 finalizer.canonical_candidate_digest(changed_payload),
                 candidate["candidateId"],
             )
+            # 运输位置不是内容身份：换 sourceRef 或换镜像仓库/tag 不得产生新候选
+            # （DEC-006 组合身份排除 OCI 仓库/tag 与 transport locator）。
             changed_locator = json.loads(json.dumps(candidate))
-            changed_locator["applicationPackages"]["beta"]["ios"][
+            changed_locator["applicationPackages"]["ios-nonprod-app"][
                 "sourceRef"
             ] = "oci://ghcr.io/owner/repo/other-app@" + DIGEST
-            self.assertNotEqual(
+            self.assertEqual(
                 finalizer.canonical_candidate_digest(changed_locator),
+                candidate["candidateId"],
+            )
+            changed_portal = json.loads(json.dumps(candidate))
+            changed_portal["opsPortal"]["digest"] = "sha256:" + ("9" * 64)
+            changed_portal["opsPortal"]["packageDigest"] = "sha256:" + ("8" * 64)
+            self.assertEqual(
+                finalizer.canonical_candidate_digest(changed_portal),
+                candidate["candidateId"],
+            )
+            changed_transport = json.loads(json.dumps(candidate))
+            gamma_image = changed_transport["environmentArtifacts"]["gamma"][
+                "images"
+            ]["content-service"]
+            gamma_image["repository"] = "ghcr.io/mirror/repo/content-service-gamma"
+            gamma_image["transportRef"] = (
+                "ghcr.io/mirror/repo/content-service-gamma:sha-" + ("c" * 40)
+            )
+            changed_transport["environmentArtifacts"]["gamma"][
+                "environmentArtifactDigest"
+            ] = finalizer.canonical_environment_artifact_digest(
+                changed_transport, "gamma"
+            )
+            self.assertEqual(
+                finalizer.canonical_candidate_digest(changed_transport),
+                candidate["candidateId"],
+            )
+            # 灰度阶段、campaign、渠道回执是部署/激活期事实（DEC-007）：
+            # 候选摘要投影结构性排除它们，附加这些字段不得产生新候选。
+            changed_activation = json.loads(json.dumps(candidate))
+            changed_activation["environment"] = "gamma"
+            changed_activation["stage"] = "canary"
+            changed_activation["rolloutStage"] = "canary"
+            changed_activation["campaignId"] = "release-2026-08-22-001"
+            changed_activation["channelId"] = "vivo_market"
+            changed_activation["channelReceipts"] = [
+                {"channelId": "vivo_market", "phase": "published"}
+            ]
+            self.assertEqual(
+                finalizer.canonical_candidate_digest(changed_activation),
                 candidate["candidateId"],
             )
             self.assertEqual(candidate["providerEvidence"]["status"], "passed")
@@ -352,11 +401,15 @@ class ReleaseEvidenceManifestCanonicalContractTest(
             ]["transportRef"]
             ref = f"{repository}@{digest}"
             descriptor_dir = root / "images"
-            for index, environment in enumerate(finalizer.ENVIRONMENTS, start=1):
+            for environment in finalizer.ENVIRONMENTS:
                 image = manifest["environmentArtifacts"][environment]["images"][
                     "content-service"
                 ]
-                environment_digest = f"sha256:{index:064x}"
+                environment_digest = (
+                    f"sha256:{2:064x}"
+                    if environment == "prod"
+                    else f"sha256:{1:064x}"
+                )
                 environment_ref = f"{image['repository']}@{environment_digest}"
                 self._write_json(
                     descriptor_dir / environment / "content-service.json",
@@ -405,11 +458,15 @@ class ReleaseEvidenceManifestCanonicalContractTest(
                 (artifact / "manifest.json").read_text(encoding="utf-8")
             )
             descriptor_dir = root / "images"
-            for index, environment in enumerate(finalizer.ENVIRONMENTS, start=1):
+            for environment in finalizer.ENVIRONMENTS:
                 image = manifest["environmentArtifacts"][environment]["images"][
                     "content-service"
                 ]
-                environment_digest = f"sha256:{index:064x}"
+                environment_digest = (
+                    f"sha256:{2:064x}"
+                    if environment == "prod"
+                    else f"sha256:{1:064x}"
+                )
                 environment_ref = f"{image['repository']}@{environment_digest}"
                 self._write_json(
                     descriptor_dir / environment / "content-service.json",

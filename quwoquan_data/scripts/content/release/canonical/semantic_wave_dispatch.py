@@ -12,6 +12,9 @@ from typing import Any
 from content.execution.campaign.lane import normalize_workloads
 from content.execution.campaign.request_envelope import workload_intent
 from content.execution.identity import build_execution_id, parse_execution_id
+from content.execution.planning.execution_authority import (
+    governed_execution_authority,
+)
 from content.execution.planning.capacity_calibration import (
     bind_capacity_calibration_source,
     current_host_class,
@@ -340,7 +343,9 @@ def build_semantic_wave_dispatch(
                 selector=_selector(carrier),
                 count=len(chunk),
                 quota=len(chunk),
-                capacity_calibration=capacity_calibration,
+                execution_authority=governed_execution_authority(
+                    capacity_calibration
+                ),
                 worker_host_set_binding=None,
                 topic=f"{intent}-{carrier}-wave",
                 source_providers=(),

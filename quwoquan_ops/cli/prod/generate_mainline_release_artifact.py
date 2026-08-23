@@ -184,11 +184,14 @@ def main() -> int:
     repository = args.repository.strip("/")
     environment_artifacts: dict[str, dict[str, Any]] = {}
     for environment in ENVIRONMENTS:
+        # DEC-005 信任域裁决：镜像按 nonprod/prod 两档构建，alpha/beta/gamma
+        # 复用同一 nonprod 镜像 repo 与 digest，环境差异只存在于配置包。
+        trust_domain = "prod" if environment == "prod" else "nonprod"
         images = {
             owner: {
-                "repository": f"{registry}/{repository}/{owner}-{environment}",
+                "repository": f"{registry}/{repository}/{owner}-{trust_domain}",
                 "transportRef": (
-                    f"{registry}/{repository}/{owner}-{environment}:{transport_tag}"
+                    f"{registry}/{repository}/{owner}-{trust_domain}:{transport_tag}"
                 ),
             }
             for owner in DEPLOYED_SERVICES
@@ -206,10 +209,8 @@ def main() -> int:
         "configurationPackages": {
             environment: list(RELEASE_SERVICES) for environment in ENVIRONMENTS
         },
-        "applicationPackages": {
-            environment: list(APPLICATION_PACKAGES[environment])
-            for environment in ENVIRONMENTS
-        },
+        "applicationPackages": list(APPLICATION_PACKAGES),
+        "opsPortal": True,
         "contractGraphDigest": True,
         "providerEvidence": True,
         "testEvidence": list(TEST_LAYERS),
@@ -233,7 +234,8 @@ def main() -> int:
             },
             "artifactDigest": None,
             "environmentArtifacts": environment_artifacts,
-            "applicationPackages": {environment: {} for environment in ENVIRONMENTS},
+            "applicationPackages": {},
+            "opsPortal": None,
             "contractGraphDigest": None,
             "requiredEvidence": required_evidence,
             "testEvidence": {},
@@ -252,10 +254,10 @@ def main() -> int:
                     for owner in DEPLOYED_SERVICES
                 ),
                 *(
-                    f"applicationPackages.{environment}.{surface}"
-                    for environment in ENVIRONMENTS
-                    for surface in APPLICATION_PACKAGES[environment]
+                    f"applicationPackages.{build_product_id}"
+                    for build_product_id in APPLICATION_PACKAGES
                 ),
+                "opsPortal",
                 "contractGraphDigest",
                 "providerEvidence",
                 "testEvidence",

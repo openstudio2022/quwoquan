@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/startup/app_startup_runtime.dart';
+import 'package:quwoquan_app/runtime/shell/actions/global_surface_actions.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/home_featured_immersive_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/home_primary_tab_strip.dart';
@@ -512,12 +513,22 @@ class _HomePageState extends ConsumerState<HomePage>
                     padding: EdgeInsets.symmetric(
                       horizontal: AppSpacing.feedContentHorizontal(context),
                     ),
-                    child: HomePrimaryTabStrip(
-                      activeChannelId: effectiveActiveChannelId,
-                      onChannelChanged: _handleChannelChange,
-                      onHorizontalDragEnd: _handleTabSwipeDragEnd,
-                      isDark: isDark,
-                      channels: channels,
+                    child: Row(
+                      children: [
+                        // 频道条自身横向滚动，因此让出右侧固定宽度给全局搜索与小趣，
+                        // 频道再多也不会把这两个入口挤出屏幕。
+                        Expanded(
+                          child: HomePrimaryTabStrip(
+                            activeChannelId: effectiveActiveChannelId,
+                            onChannelChanged: _handleChannelChange,
+                            onHorizontalDragEnd: _handleTabSwipeDragEnd,
+                            isDark: isDark,
+                            channels: channels,
+                          ),
+                        ),
+                        SizedBox(width: AppSpacing.intraGroupXs),
+                        const GlobalTopActions(),
+                      ],
                     ),
                   ),
                 ),

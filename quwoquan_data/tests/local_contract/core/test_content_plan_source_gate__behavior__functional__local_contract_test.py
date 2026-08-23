@@ -2,8 +2,18 @@ from __future__ import annotations
 
 
 
+from support.article_source_registry_fixture import (
+    ARTICLE_SOURCE_UNIT_IDENTITY,
+    article_source_registry_binding,
+)
 from support.content_plan_source_reject_fixtures import *  # noqa: F401,F403
+from content.execution.context import ExecutionContext
+from content.execution.controller.content_plan import _auto_content_plan
 from content.execution.production_contracts import sha256_file
+from content.execution.store import load_spec_model
+from content.post.content_plan_state import load_content_plan_packet
+from core.data_issue import DataIssueCode
+from core.io import read_json
 
 
 
@@ -480,6 +490,7 @@ def test_content_plan_allows_text_only_article_base_source_without_source_assets
         {
             "sourceId": "no_image_article",
             "sourceUseMode": "factual_reference_only",
+            "publishMediaMode": "text_only",
             "researchLane": "article",
             "sourceRole": "base",
             "category": "travelogue",
@@ -511,6 +522,7 @@ def test_content_plan_allows_text_only_article_base_source_without_source_assets
                     "baseSourceRef": source_ref,
                     "sourceUseMode": "factual_reference_only",
                     "publishMediaMode": "text_only",
+                    "assetRefs": [],
                 }
             ],
         },
@@ -529,6 +541,102 @@ def test_content_plan_allows_text_only_article_base_source_without_source_assets
     }
     issues = cp.validate_content_plan(EXECUTION_ID, spec)
     assert issues == []
+
+
+@pytest.mark.parametrize(
+    ("publish_media_mode", "expected_issue"),
+    [("text_only", None), ("illustrated", DataIssueCode.SOURCE_RETAINED_SHORTFALL)],
+)
+def test_auto_content_plan_preserves_declared_article_media_mode_when_assets_are_absent(
+    publish_media_mode: str,
+    expected_issue: DataIssueCode | None,
+):
+    entity = "九寨沟"
+    object_dir = resolve_entity_object_dir(
+        EXECUTION_ID,
+        entity,
+        etype_hint="地点/景区",
+    )
+    source_url = "https://travel.qunar.com/p-cs299878-jiuzhaigou-jingdian"
+    write_source_unit(
+        object_dir,
+        ordinal=1,
+        source_id=f"{publish_media_mode}_article",
+        source_md=(
+            f"# {entity}行前攻略\n\n"
+            + (
+                "九寨沟的开放时间、交通方式、沟内换乘、季节差异、预约规则、"
+                "亲子老人同行与雨雪天气替代安排都需要在出发前确认。"
+            )
+            * 80
+        ),
+        quality={
+            "sourceId": f"{publish_media_mode}_article",
+            "quality": "High",
+            "score": 100,
+        },
+        platform="去哪儿旅行",
+        source_category="travelogue",
+        **ARTICLE_SOURCE_UNIT_IDENTITY,
+        publish_media_mode=publish_media_mode,
+        source_role="base",
+        research_lane="article",
+        url=source_url,
+        title=f"{entity}行前攻略",
+        target_ref=f"/entity/地点/景区/{entity}",
+        execution_id=EXECUTION_ID,
+        build_variants=False,
+        source=article_source_registry_binding(
+            platform="去哪儿旅行",
+            url=source_url,
+        ),
+    )
+    spec = load_spec_model(EXECUTION_ID)
+    spec_payload = spec.to_dict()
+    spec_payload["scope"]["coverageTargets"] = [
+        {"entityType": "地点/景区", "name": entity}
+    ]
+    spec_payload["scope"]["entityTypes"] = ["地点/景区"]
+    spec_payload["executionPolicy"]["articleCommercialClosure"] = False
+    context = ExecutionContext(
+        execution_id=EXECUTION_ID,
+        entity_ids=(entity,),
+        spec=type(spec).from_mapping(spec_payload),
+    )
+
+    issues = _auto_content_plan(context, spec_payload)
+    packet = load_content_plan_packet(EXECUTION_ID)
+
+    if expected_issue is None:
+        assert issues == []
+        assert packet is not None
+        assert len(packet["items"]) == 1
+        item = packet["items"][0]
+        assert item["publishMediaMode"] == "text_only"
+        assert item["assetRefs"] == []
+        brief = read_json(
+            content_object.content_object_stage_dir(
+                EXECUTION_ID,
+                item["ref"],
+                STAGE_COMPOSE,
+            )
+            / content_object.BRIEF_FILE
+        )
+        assert brief["publishMediaMode"] == "text_only"
+        assert brief["assetRefs"] == []
+        return
+
+    assert [issue.code for issue in issues] == [expected_issue]
+    assert packet is None
+    diagnostics = read_json(
+        execution_root(EXECUTION_ID)
+        / "_shared"
+        / "content_plan_source_diagnostics.json"
+    )
+    assert diagnostics["targets"][entity]["articleRejects"] == {
+        "same_source_cover_body_missing": 1
+    }
+
 
 def test_content_plan_rejects_travel_asset_without_required_rights_fields():
     entity = "九寨沟"

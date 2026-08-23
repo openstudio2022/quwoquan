@@ -30,6 +30,7 @@ from core.schema import assert_valid, load_schema
 from support.capacity_calibration_fixture import (
     synthetic_capacity_execution_binding,
     synthetic_capacity_source_binding,
+    synthetic_governed_execution_authority,
 )
 
 EXECUTION_ID = "20260805--travel-image-m100--china--scale-101"

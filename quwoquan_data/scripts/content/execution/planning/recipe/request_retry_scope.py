@@ -47,7 +47,7 @@ def resolve_frozen_selection(
             "intentLabel": intent,
             "limit": request.count,
             "approvedQuota": request.quota,
-            "capacityCalibration": dict(request.capacity_calibration),
+            "capacityCalibration": request.capacity_binding(),
             "workerHostSetBinding": (
                 dict(request.worker_host_set_binding)
                 if request.worker_host_set_binding is not None

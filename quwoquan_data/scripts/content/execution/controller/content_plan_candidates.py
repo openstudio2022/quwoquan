@@ -147,6 +147,7 @@ def collect_target_candidates(
                     "topicTagRefs": list(meta.get("topicTagRefs") or []),
                     "entityTags": entity_tags,
                     "sourceUseMode": str(meta.get("sourceUseMode") or "factual_reference_only"),
+                    "publishMediaMode": str(meta.get("publishMediaMode") or "").strip(),
                     "sourceClass": str(meta.get("sourceClass") or meta.get("category") or ""),
                     "sourceQualityScore": float(
                         meta.get("sourceQualityScore")

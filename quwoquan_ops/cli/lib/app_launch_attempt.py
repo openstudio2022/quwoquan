@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 import time
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -18,6 +18,8 @@ FORWARD_STATES = (
     "compiled",
     "installing",
     "installed",
+    "configuring",
+    "configured",
     "launching",
     "launched",
 )
@@ -40,6 +42,9 @@ LAUNCH_BLOCKERS = frozenset(
         "APP.LAUNCH.platform_unsupported",
         "APP.LAUNCH.receipt_invalid",
         "APP.LAUNCH.receipt_timeout",
+        "APP.LAUNCH.runtime_dependency_unavailable",
+        "APP.LAUNCH.runtime_config_missing",
+        "APP.LAUNCH.runtime_config_activation_failed",
         "APP.WEB.recovery_unavailable",
     }
 )
@@ -305,11 +310,23 @@ def wait_for_app_launch_attempt(
     *,
     timeout_seconds: float = 900,
     poll_seconds: float = 0.2,
+    watchdog: Callable[[], None] | None = None,
+    watchdog_interval_seconds: float = 30,
 ) -> dict[str, Any]:
+    """等待启动回执进入终态。
+
+    编译、安装与启动可以占用十几分钟，运行时依赖在这段窗口里退出不会回写
+    任何 receipt。`watchdog` 让调用方在等待期间按间隔复验运行期健康，从而
+    把降级在窗口内就报出来，而不是等窗口结束后由用户从界面上发现。
+    """
     deadline = time.monotonic() + timeout_seconds
     receipt_path = Path(path)
     last: dict[str, Any] | None = None
+    next_watch = time.monotonic() + watchdog_interval_seconds
     while time.monotonic() < deadline:
+        if watchdog is not None and time.monotonic() >= next_watch:
+            watchdog()
+            next_watch = time.monotonic() + watchdog_interval_seconds
         try:
             last = read_app_launch_attempt(receipt_path)
         except (FileNotFoundError, json.JSONDecodeError, ValueError):

@@ -47,12 +47,15 @@
           },
           "assetRefs": {
             "type": "array",
-            "minItems": 1,
+            "minItems": 0,
             "maxItems": 20,
             "uniqueItems": true,
             "items": {
               "type": "string"
             }
+          },
+          "publishMediaMode": {
+            "enum": ["illustrated", "text_only"]
           },
           "articleSourceUnitFreeze": {
             "$ref": "#/$defs/articleSourceUnitFreezeBinding"
@@ -147,6 +150,9 @@
                 },
                 "researchLane": {
                   "const": "image"
+                },
+                "assetRefs": {
+                  "minItems": 1
                 }
               }
             }
@@ -172,6 +178,9 @@
               "properties": {
                 "researchLane": {
                   "const": "video"
+                },
+                "assetRefs": {
+                  "minItems": 1
                 }
               }
             }
@@ -189,13 +198,46 @@
             },
             "then": {
               "required": [
-                "title"
+                "title",
+                "researchLane",
+                "publishMediaMode",
+                "assetRefs"
               ],
               "properties": {
                 "researchLane": {
                   "const": "article"
                 }
-              }
+              },
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "publishMediaMode": {
+                        "const": "illustrated"
+                      }
+                    },
+                    "required": ["publishMediaMode"]
+                  },
+                  "then": {
+                    "required": ["articleSourceUnitFreeze"],
+                    "properties": {
+                      "assetRefs": {
+                        "minItems": 2
+                      }
+                    }
+                  },
+                  "else": {
+                    "properties": {
+                      "assetRefs": {
+                        "maxItems": 0
+                      }
+                    },
+                    "not": {
+                      "required": ["articleSourceUnitFreeze"]
+                    }
+                  }
+                }
+              ]
             }
           }
         ]
@@ -226,6 +268,7 @@
     }
   },
   "required": [
+    "schema",
     "items"
   ]
 }

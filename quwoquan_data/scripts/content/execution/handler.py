@@ -67,6 +67,7 @@ from content.execution.preflight.handler import register_task_preflight_parser
 from content.execution.runtime_evidence.cli import (
     register_runtime_evidence_parser,
 )
+from content.execution.stage_receipt_cli import register_stage_receipt_parsers
 
 
 def register_parser(subparsers: argparse._SubParsersAction) -> None:
@@ -103,3 +104,4 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     register_reconcile_failed_campaign_parser(commands)
     register_reconcile_submissions_parser(commands)
     register_runtime_evidence_parser(commands)
+    register_stage_receipt_parsers(commands)

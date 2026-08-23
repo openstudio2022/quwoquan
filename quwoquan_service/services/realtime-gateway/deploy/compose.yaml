@@ -14,6 +14,7 @@ services:
       SERVICE_NAME: realtime-gateway
       APP_ENV: "${QWQ_COMPOSE_ENV:-gamma}"
       CONFIG_ROOT: /etc/qwq-config
+      QWQ_ARTIFACT_IDENTITY_FILE: /etc/quwoquan/artifact-identity.json
       CONFIG_VERSION: "${QWQ_COMPOSE_REALTIME_GATEWAY_CONFIG_VERSION:?QWQ_COMPOSE_REALTIME_GATEWAY_CONFIG_VERSION is required}"
       IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:?immutable image version is required}"
       REALTIME_GATEWAY_ADDR: ":18090"
@@ -34,6 +35,7 @@ services:
       - "${QWQ_COMPOSE_REALTIME_PORT:-19340}:18090"
     volumes:
       - ${QWQ_COMPOSE_CONFIG_ROOT:?QWQ_COMPOSE_CONFIG_ROOT is required}:/etc/qwq-config:ro
+      - ${QWQ_COMPOSE_ARTIFACT_IDENTITY_FILE:?artifact identity mount is required}:/etc/quwoquan/artifact-identity.json:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18090/readyz >/dev/null 2>&1"]
       interval: 10s

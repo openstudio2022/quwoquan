@@ -259,7 +259,7 @@ def _entity_catalog(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-017.t1
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/on-demand-content-pool-admission/spec.md#gwt-004.t1
 def test_source_admission_is_create_once_and_revalidates_one_portable_root(
     tmp_path: Path,
 ) -> None:
@@ -282,7 +282,7 @@ def test_source_admission_is_create_once_and_revalidates_one_portable_root(
     assert result["receiptDigest"] == receipt["receiptDigest"]
 
 
-# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-017.t1
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/on-demand-content-pool-admission/spec.md#gwt-004.t1
 def test_source_admission_rejects_root_drift_absolute_parent_and_symlink_refs(
     tmp_path: Path,
 ) -> None:
@@ -331,7 +331,7 @@ def test_source_admission_rejects_root_drift_absolute_parent_and_symlink_refs(
     assert symlinked.value.code == MEDIA_SOURCE_ADMISSION_INVALID
 
 
-# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-017.t2
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/on-demand-content-pool-admission/spec.md#gwt-004.t2
 def test_media_projection_accepts_only_source_admission_and_has_no_review_fallback(
     tmp_path: Path,
 ) -> None:
@@ -378,7 +378,7 @@ def test_media_projection_accepts_only_source_admission_and_has_no_review_fallba
     assert plan["candidates"] == projected["candidates"]
 
 
-# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-017.t4
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/on-demand-content-pool-admission/spec.md#gwt-004.t4
 def test_video_entity_mismatch_remains_typed_source_safety_blocker(
     tmp_path: Path,
 ) -> None:
@@ -395,7 +395,7 @@ def test_video_entity_mismatch_remains_typed_source_safety_blocker(
     assert blocked.value.code == MEDIA_SOURCE_SAFETY_REVIEW_BLOCKED
 
 
-# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-017.t5
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/on-demand-content-pool-admission/spec.md#gwt-004.t5
 def test_source_admission_same_identity_different_bytes_collides_before_write(
     tmp_path: Path,
 ) -> None:

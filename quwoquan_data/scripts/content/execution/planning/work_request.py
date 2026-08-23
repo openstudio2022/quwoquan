@@ -87,9 +87,6 @@ class WorkRequestCommandWriter:
                 )
                 envelope_paths = write_scale_envelopes(
                     str(normalized["scale"]),
-                    region_ref=str(normalized["regionRef"]),
-                    vertical=str(normalized["vertical"]),
-                    topic=normalized.get("topic"),
                     target_names=normalized["targetNames"],
                     source_providers=normalized["sourceProviders"],
                     carriers=normalized["activeCarriers"],
@@ -103,8 +100,10 @@ class WorkRequestCommandWriter:
                         if normalized["semanticPreflightReceiptRef"]
                         else None
                     ),
-                    capacity_calibration_receipt=Path(
-                        str(normalized["capacityCalibrationReceiptRef"])
+                    capacity_calibration_receipt=(
+                        Path(str(normalized["capacityCalibrationReceiptRef"]))
+                        if normalized["capacityCalibrationReceiptRef"]
+                        else None
                     ),
                     predecessor_execution_ids_by_carrier=normalized[
                         "predecessorExecutionIdsByCarrier"

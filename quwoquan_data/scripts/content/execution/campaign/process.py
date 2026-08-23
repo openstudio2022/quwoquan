@@ -14,6 +14,7 @@ from core.io import read_json
 from core.runtime_policy import active_runtime_policy
 
 from content.execution.campaign.external_inputs import verify_external_input_refs
+from content.execution.campaign.lane_command import lane_argv as _lane_argv
 from content.execution.campaign.lane_process_result import (
     lane_process_evidence as _lane_process_evidence,
 )
@@ -65,51 +66,6 @@ def _verify_workspace_external_inputs(workspace: CampaignLaneWorkspace) -> None:
         source_digest=workspace.capsule.source_digest,
         entity_catalog_digest=workspace.capsule.entity_catalog_digest,
     )
-
-
-def _lane_argv(submission: dict[str, Any], *, stage: str) -> list[str]:
-    argv = [
-        "task",
-        "execute",
-        "--execution-id",
-        str(submission["executionId"]),
-        "--campaign-root-execution-id",
-        str(submission["rootExecutionId"]),
-        "--family",
-        str(submission["familyRef"]),
-        "--region-ref",
-        str(submission["regionRef"]),
-        "--selector",
-        str(submission["selector"]),
-        "--quota",
-        str(submission["quota"]),
-        "--count",
-        str(submission["count"]),
-        "--stage",
-        stage,
-        "--semantic-selection-id",
-        str(submission["semanticSelectionId"]),
-    ]
-    retry_of = str(submission.get("retryOf") or "").strip()
-    if retry_of:
-        argv.extend(["--retry-of", retry_of])
-    semantic_preflight = submission.get("semanticPreflightReceipt")
-    if isinstance(semantic_preflight, dict):
-        argv.extend(
-            [
-                "--semantic-preflight-receipt",
-                str(semantic_preflight["receiptRef"]),
-            ]
-        )
-    topic = str(submission.get("topic") or "").strip()
-    if topic:
-        argv.extend(["--topic", topic])
-    for provider in submission.get("sourceProviders") or []:
-        argv.extend(["--source-provider", str(provider)])
-    for name in submission.get("targetNames") or []:
-        argv.extend(["--target", str(name)])
-    return argv
-
 
 def _process_group_rss_bytes(pgid: int) -> int:
     """Sample the exact lane process group without a shell."""

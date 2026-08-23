@@ -116,6 +116,20 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
     env_name = str(target["env"])
     report_target = args.env or requested_target
     report_dir = _stackctl.resolve_report_dir(args, env_name, report_target)
+    # 容量先于一切：数据盘写满时构建、启动与 healthcheck 都会以互不相干的
+    # 形态失败，先判容量才能让失败消息指向真正的原因。
+    capacity = _stackctl.local_runtime_capacity_evidence(target)
+    if capacity["issues"]:
+        timing = _stackctl._finish_timing(started_monotonic, started_at)
+        return {
+            "exitCode": 2,
+            "summary": f"stackctl up is GATE_BLOCK for {report_target}",
+            "details": capacity["issues"],
+            "firstBlocker": capacity["blocker"],
+            "capacity": capacity["evidence"],
+            "reportDir": _stackctl.relpath(report_dir),
+            **timing,
+        }
     fixed_candidate_snapshot: dict[str, Any] | None = None
     if requested_target in {"alpha-local", "beta-local", "gamma-local"}:
         if build_only:

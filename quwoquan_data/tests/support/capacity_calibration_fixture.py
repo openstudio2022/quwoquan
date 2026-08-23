@@ -172,6 +172,19 @@ def write_synthetic_capacity_receipt(
     return path
 
 
+def synthetic_governed_execution_authority(
+    *,
+    provider_tier: str = "default",
+) -> dict[str, Any]:
+    """One governed executionAuthority wrapping the synthetic source binding."""
+    return {
+        "mode": "governed_calibration",
+        "calibration": synthetic_capacity_source_binding(
+            provider_tier=provider_tier
+        ),
+    }
+
+
 def synthetic_capacity_execution_binding(
     *,
     work_unit_count: int,
@@ -188,5 +201,6 @@ __all__ = [
     "SYNTHETIC_FROZEN_AT_EPOCH_SECONDS",
     "synthetic_capacity_execution_binding",
     "synthetic_capacity_source_binding",
+    "synthetic_governed_execution_authority",
     "write_synthetic_capacity_receipt",
 ]

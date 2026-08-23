@@ -1,5 +1,5 @@
-# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-015.t1
-# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-015.t2
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/work-request-compilation/spec.md#gwt-001.t1
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/work-request-compilation/spec.md#gwt-001.t2
 from __future__ import annotations
 
 import json
@@ -47,7 +47,10 @@ def test_real_cli_returns_typed_needs_input_without_artifacts(tmp_path: Path) ->
     assert result.returncode == 0, result.stderr
     document = json.loads(result.stdout)
     assert document["outcome"] == "needs_input"
-    assert "lifecycle" in document["missingFields"]
+    # demand facts 归 confirmed handoff 所有：调用方独立提供即 unknown 输入。
+    assert "unknown:regionRef" in document["missingFields"]
+    assert "unknown:workloads" in document["missingFields"]
+    assert "preAcquisitionHandoffRef" in document["missingFields"]
     assert "mode" in document["missingFields"]
     assert not (output_root / "data/local/workspace/content-campaign-envelopes").exists()
 

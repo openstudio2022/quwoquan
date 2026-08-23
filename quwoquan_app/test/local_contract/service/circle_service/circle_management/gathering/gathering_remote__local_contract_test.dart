@@ -28,6 +28,7 @@ import 'package:quwoquan_app/runtime/observability/cloud_operation_telemetry.dar
 import 'package:quwoquan_app/runtime/transport/executor/cloud_operation_client_factory.dart';
 import 'package:quwoquan_app/runtime/transport/generated/circle/circle_request_page_ids.g.dart';
 import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/gathering_board_ports.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/adapters/gathering_remote.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/application/public/gathering_presentation_models.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/domain/gathering_models.dart';
@@ -81,21 +82,44 @@ void main() {
       'GetGathering uses private owner read and preserves access failure',
       () async {
         final captured = <http.Request>[];
-        final remote = _remote(captured, (_) => _privateDetailResponse);
+        // 看板同时读活动主体与可选 Plan；此处 Plan 未创建，走 optional 缺席路径。
+        final remote = _remote(captured, (request) {
+          if (request.headers['X-Client-Operation-Id'] ==
+              cloud.AppCloudOperationIds.circleGatheringPlanGetGatheringPlan) {
+            return _failureResponse(
+              statusCode: 404,
+              code: 'CIRCLE.USER.gathering_plan_not_found',
+            );
+          }
+          return _privateDetailResponse;
+        });
 
         final detail = await remote.loadCircle('gathering-1');
 
+        expect(captured, hasLength(2));
         _expectQueryRequest(
-          captured.single,
+          captured.first,
           method: 'GET',
           path: '/gatherings/gathering-1',
           operationId: cloud.AppCloudOperationIds.circleGatheringGetGathering,
+        );
+        _expectQueryRequest(
+          captured.last,
+          method: 'GET',
+          path: '/gatherings/gathering-1/plan',
+          operationId:
+              cloud.AppCloudOperationIds.circleGatheringPlanGetGatheringPlan,
         );
         expect(detail.activity.gatheringId, 'gathering-1');
         expect(detail.activity.title, 'Canonical Gathering');
         expect(detail.activity.placeLabel, 'Shanghai');
         expect(detail.participation.activeCount, 2);
         expect(detail.participation.remainingSeats, 2);
+        // Plan 缺席不得拖垮活动主体读取，只把 Plan 区标记为未创建。
+        expect(
+          detail.plan.capability.unavailableReason,
+          GatheringBoardCapabilityUnavailableReason.notConfigured,
+        );
 
         final deniedRequests = <http.Request>[];
         final denied = _remote(

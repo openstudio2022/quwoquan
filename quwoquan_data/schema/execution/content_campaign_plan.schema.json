@@ -45,8 +45,8 @@
         "video": { "type": "integer", "minimum": 1 }
       }
     },
-    "capacityCalibration": {
-      "$ref": "governed_capacity_calibration_receipt.schema.json#/$defs/sourceBinding"
+    "executionAuthority": {
+      "$ref": "execution_authority.schema.json"
     },
     "laneRetryUnfinishedRefs": {
       "type": "object",
@@ -254,10 +254,10 @@
       ]
     },
     {
-      "$comment": "reviewed-closure adoption 只重发已审对象，不作者也不派发 fleet，因此没有受治理容量事实可绑；其余 campaign 必须携带 calibration 来源绑定。",
+      "$comment": "reviewed-closure adoption 只重发已审对象，不作者也不派发 fleet，因此没有执行授权事实可绑；其余 campaign 必须携带互斥 executionAuthority。",
       "if": {"required": ["reviewedClosureAdoption"]},
-      "then": {"not": {"required": ["capacityCalibration"]}},
-      "else": {"required": ["capacityCalibration"]}
+      "then": {"not": {"required": ["executionAuthority"]}},
+      "else": {"required": ["executionAuthority"]}
     },
     {
       "if": {

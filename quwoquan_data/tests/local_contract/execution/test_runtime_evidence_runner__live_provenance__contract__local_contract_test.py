@@ -43,7 +43,10 @@ from content.execution.runtime_evidence.sampling import (
 from core.io import read_json, write_json
 from core.runtime_policy import active_runtime_policy
 from core.schema import assert_valid
-from support.capacity_calibration_fixture import synthetic_capacity_source_binding
+from support.capacity_calibration_fixture import (
+    synthetic_capacity_source_binding,
+    synthetic_governed_execution_authority,
+)
 from support.semantic_preflight_fixture import ready_semantic_preflight
 
 ROOT_ID = "20260805--travel-homepage-p3--china--scale-901"
@@ -257,7 +260,7 @@ def _fixture(tmp_path: Path) -> Fixture:
         "entityCatalogDigest": entity_digest,
         "semanticSelectionId": "default",
         "semanticPreflightReceipt": preflight_binding,
-        "capacityCalibration": synthetic_capacity_source_binding(),
+        "executionAuthority": synthetic_governed_execution_authority(),
         "laneExternalInputs": lane_inputs,
         "externalInputsDigest": canonical_digest(
             {

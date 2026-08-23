@@ -23,6 +23,7 @@ MODULE_PATH = (
 SCANNED_RUNTIME_PATHS = (
     "run.sh",
     "scripts/device/run_app_instance.sh",
+    "scripts/device/run_app_instance.py",
     "scripts/device/verify_ios_hot_restart.py",
     "scripts/device/build_startup_environment_matrix.py",
     "scripts/ios/build_prepare_dart_defines.sh",
@@ -37,11 +38,24 @@ RETIRED_STATE_MARKERS = (
 
 _LAUNCHER = """#!/usr/bin/env bash
 set -euo pipefail
-flutter run --flavor "$QWQ_APP_RUNTIME_ENV" --dart-define-from-file=defines.json
+python3 "$APP_DIR/scripts/device/run_app_instance.py" "$@"
 """
 
-# 非 Prod flavor 只能由 run.sh 单点决定；这里刻意不出现 `flutter run`，
-# 一旦本文件自己拉起 flutter，环境选择就分叉成两处真相。
+_EXECUTOR = '''#!/usr/bin/env python3
+class AndroidPlatformDriver:
+    def build_command(self):
+        return ["flutter", "build", "apk", "--debug", "--flavor", "nonprod"]
+
+class IOSSimulatorPlatformDriver:
+    def build_command(self):
+        return ["flutter", "build", "ios", "--debug", "--flavor", "nonprod"]
+
+class IOSPhysicalPlatformDriver:
+    def build_command(self):
+        return ["flutter", "build", "ios", "--debug", "--flavor", "nonprod"]
+'''
+
+# 兼容入口只委派给 canonical launcher；它本身不得拉起 Flutter。
 _APP_INSTANCE = """#!/usr/bin/env bash
 set -euo pipefail
 exec bash "$APP_DIR/run.sh" "$@"
@@ -62,16 +76,35 @@ echo "prepare dart defines"
 
 _PUBSPEC = """name: quwoquan_app
 flutter:
-  default-flavor: alpha
+  default-flavor: nonprod
 """
 
 _IDENTITY = {
     "environments": ["alpha", "beta", "gamma", "prod"],
-    "applicationIdSuffixByEnvironment": {
-        "alpha": ".alpha",
-        "beta": ".beta",
-        "gamma": ".gamma",
-        "prod": "",
+    "buildProfiles": ["nonprod", "prod"],
+    "environmentProfiles": {
+        "alpha": "nonprod",
+        "beta": "nonprod",
+        "gamma": "nonprod",
+        "prod": "prod",
+    },
+    "identities": {
+        "android": {
+            "nonprod/debug": {},
+            "nonprod/profile": {},
+            "nonprod/release": {},
+            "prod/debug": {},
+            "prod/profile": {},
+            "prod/release": {},
+        },
+        "ios": {
+            "nonprod/debug": {},
+            "nonprod/profile": {},
+            "nonprod/release": {},
+            "prod/debug": {},
+            "prod/profile": {},
+            "prod/release": {},
+        },
     },
 }
 
@@ -97,6 +130,7 @@ def _write_canonical_tree(root: Path) -> Path:
     app = root / "quwoquan_app"
     _write(app / "run.sh", _LAUNCHER)
     _write(app / "scripts/device/run_app_instance.sh", _APP_INSTANCE)
+    _write(app / "scripts/device/run_app_instance.py", _EXECUTOR)
     _write(app / "scripts/device/verify_ios_hot_restart.py", _HOT_RESTART)
     _write(app / "scripts/device/build_startup_environment_matrix.py", _STARTUP_MATRIX)
     _write(app / "scripts/ios/build_prepare_dart_defines.sh", _DART_DEFINES)
@@ -160,8 +194,8 @@ class AppIdentityStateIsolationGateTest(unittest.TestCase):
                             module.collect_issues(root),
                         )
 
-    def test_launcher_must_select_the_canonical_flavor(self) -> None:
-        """flavor 必须由 run.sh 显式静态选择；靠环境变量隐式生效就退回了共享状态。"""
+    def test_launcher_delegates_build_profile_to_canonical_executor(self) -> None:
+        """run.sh 只负责委派；三平台 Debug flavor 由 executor 固定为 nonprod。"""
 
         module = _load_module()
         with tempfile.TemporaryDirectory() as tmp:
@@ -169,12 +203,46 @@ class AppIdentityStateIsolationGateTest(unittest.TestCase):
             app = _write_canonical_tree(root)
             _write(
                 app / "run.sh",
-                "#!/usr/bin/env bash\nset -euo pipefail\nflutter run\n",
+                "#!/usr/bin/env bash\nset -euo pipefail\nflutter run --flavor nonprod\n",
+            )
+            issues = module.collect_issues(root)
+            self.assertIn(
+                "run.sh must delegate buildProfile selection to canonical executor",
+                issues,
             )
             self.assertIn(
-                "run.sh must select the canonical Flutter flavor",
-                module.collect_issues(root),
+                "run.sh must not own a second Flutter buildProfile selection",
+                issues,
             )
+
+        artifacts = {
+            "AndroidPlatformDriver": "apk",
+            "IOSSimulatorPlatformDriver": "ios",
+            "IOSPhysicalPlatformDriver": "ios",
+        }
+        for class_name, artifact in artifacts.items():
+            with self.subTest(class_name=class_name):
+                with tempfile.TemporaryDirectory() as tmp:
+                    root = Path(tmp).resolve()
+                    app = _write_canonical_tree(root)
+                    old_block = (
+                        f"class {class_name}:\n"
+                        "    def build_command(self):\n"
+                        f'        return ["flutter", "build", "{artifact}", '
+                        '"--debug", "--flavor", "nonprod"]\n'
+                    )
+                    new_block = old_block.replace(
+                        '"--flavor", "nonprod"', '"--flavor", "prod"'
+                    )
+                    self.assertIn(old_block, _EXECUTOR)
+                    _write(
+                        app / "scripts/device/run_app_instance.py",
+                        _EXECUTOR.replace(old_block, new_block),
+                    )
+                    self.assertIn(
+                        "canonical executor Android/iOS build drivers must select only nonprod",
+                        module.collect_issues(root),
+                    )
 
     def test_app_instance_must_delegate_flavor_selection_to_launcher(self) -> None:
         """自己拉起 flutter 或不再委派，都会让 flavor 选择出现第二份真相源。"""
@@ -230,27 +298,41 @@ class AppIdentityStateIsolationGateTest(unittest.TestCase):
                     app = _write_canonical_tree(root)
                     _write(app / "pubspec.yaml", source)
                     self.assertIn(
-                        "pubspec.yaml must make alpha the deterministic default flavor",
+                        "pubspec.yaml must make nonprod the deterministic default flavor",
                         module.collect_issues(root),
                     )
 
-    def test_generated_identity_matrix_must_cover_four_environments(self) -> None:
-        """四环境是闭集且有序：少一个或换顺序都说明 codegen 输入已经漂移。"""
+    def test_generated_identity_matrix_must_cover_build_profiles(self) -> None:
+        """codegen 身份只能按 buildProfile/buildMode 建索引，环境只映射 profile。"""
 
         module = _load_module()
-        expected = "generated App identity environment matrix is incomplete"
-        for environments in (
-            ["alpha", "beta", "prod"],
-            ["alpha", "beta", "gamma", "prod", "prod-gray"],
-            ["prod", "gamma", "beta", "alpha"],
-        ):
-            with self.subTest(environments=environments):
+        cases = (
+            (
+                "buildProfiles",
+                ["nonprod"],
+                "generated App identity buildProfile matrix is incomplete",
+            ),
+            (
+                "environmentProfiles",
+                {"alpha": "nonprod", "prod": "prod"},
+                "generated App identity environmentProfiles mapping is incomplete",
+            ),
+            (
+                "identities",
+                {"android": {"alpha/debug": {}}, "ios": {"nonprod/debug": {}}},
+                "generated android identity keys must be buildProfile/buildMode",
+            ),
+        )
+        for field, value, expected in cases:
+            with self.subTest(field=field):
                 with tempfile.TemporaryDirectory() as tmp:
                     root = Path(tmp).resolve()
                     app = _write_canonical_tree(root)
+                    document = json.loads(json.dumps(_IDENTITY))
+                    document[field] = value
                     _write(
                         app / "android/app/app_identity.generated.json",
-                        json.dumps({"environments": environments}) + "\n",
+                        json.dumps(document) + "\n",
                     )
                     self.assertIn(expected, module.collect_issues(root))
 

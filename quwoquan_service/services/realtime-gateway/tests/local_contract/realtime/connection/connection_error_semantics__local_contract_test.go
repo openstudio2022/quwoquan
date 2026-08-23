@@ -1,8 +1,9 @@
 // spec_ref: specs/feature-tree/runtime/runtime-test-pyramid/spec.md#sit-002
+// spec_ref: specs/feature-tree/gateway-orchestrator-foundation/realtime-gateway/realtime-channel-delivery/spec.md#gwt-002
 //
-// Connection 声明错误码的负例断言：经真实 gateway harness（内存 redis +
-// httptest server + 真实 handler 组合）驱动身份不完整、非法游标、票据无效/
-// 重放与票据签发存储失败路径，以字面 wire code 锁定端云契约。
+// Connection fail-closed 负例断言：application guard 保证非法输入不触达
+// Redis/安全依赖；真实 gateway harness（内存 Redis + httptest server + 真实
+// handler 组合）以字面 wire code 锁定端云错误契约。
 package local_contract
 
 import (
@@ -17,8 +18,8 @@ import (
 	"time"
 
 	rtauth "quwoquan_service/runtime/auth"
-	"quwoquan_service/services/realtime-gateway/internal/realtime/connection/application"
 	wsadapter "quwoquan_service/services/realtime-gateway/internal/realtime/connection/adapters/inbound/ws"
+	"quwoquan_service/services/realtime-gateway/internal/realtime/connection/application"
 )
 
 func requireConnectionErrorCode(
@@ -43,6 +44,158 @@ func requireConnectionErrorCode(
 	}
 	if envelope.Code != wantCode {
 		t.Fatalf("expected code %s, got %s", wantCode, envelope.Code)
+	}
+}
+
+type errSemCountingTicketStore struct {
+	issueCalls   int
+	consumeCalls int
+	revokeCalls  int
+}
+
+func (store *errSemCountingTicketStore) Issue(
+	context.Context,
+	application.TicketClaims,
+	time.Duration,
+) (string, error) {
+	store.issueCalls++
+	return "unexpected-ticket", nil
+}
+
+func (store *errSemCountingTicketStore) Consume(
+	context.Context,
+	string,
+) (application.TicketClaims, error) {
+	store.consumeCalls++
+	return application.TicketClaims{}, nil
+}
+
+func (store *errSemCountingTicketStore) Revoke(
+	context.Context,
+	string,
+	string,
+) error {
+	store.revokeCalls++
+	return nil
+}
+
+type errSemCountingAccountSecurityAuthority struct {
+	readCalls int
+}
+
+func (authority *errSemCountingAccountSecurityAuthority) ReadAccountSecurity(
+	context.Context,
+	string,
+) (rtauth.AccountSecuritySnapshot, error) {
+	authority.readCalls++
+	return rtauth.AccountSecuritySnapshot{
+		AccountState: "active",
+		AuthEpoch:    1,
+	}, nil
+}
+
+type errSemCountingAccountSecurityGate struct {
+	application.AccountSecurityGate
+	admitCalls int
+}
+
+func (gate *errSemCountingAccountSecurityGate) Admit(
+	context.Context,
+	application.TrustedIdentity,
+	int64,
+) error {
+	gate.admitCalls++
+	return nil
+}
+
+func TestTicketServiceRequiresEveryCollaborator(t *testing.T) {
+	store := &errSemCountingTicketStore{}
+	authority := &errSemCountingAccountSecurityAuthority{}
+	security := &errSemCountingAccountSecurityGate{}
+
+	for _, testCase := range []struct {
+		name      string
+		store     application.TicketStore
+		authority rtauth.AccountSecurityAuthority
+		security  application.AccountSecurityGate
+	}{
+		{name: "store", authority: authority, security: security},
+		{name: "authority", store: store, security: security},
+		{name: "security gate", store: store, authority: authority},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			service, err := application.NewTicketService(
+				testCase.store,
+				testCase.authority,
+				testCase.security,
+			)
+			if service != nil {
+				t.Fatalf("service=%#v want nil", service)
+			}
+			const want = "realtime ticket service requires store, account security authority and gate"
+			if err == nil || err.Error() != want {
+				t.Fatalf("error=%v want=%q", err, want)
+			}
+		})
+	}
+}
+
+func TestTicketServiceRejectsInvalidInputBeforeDependencies(t *testing.T) {
+	store := &errSemCountingTicketStore{}
+	authority := &errSemCountingAccountSecurityAuthority{}
+	security := &errSemCountingAccountSecurityGate{}
+	service, err := application.NewTicketService(store, authority, security)
+	if err != nil {
+		t.Fatalf("new ticket service: %v", err)
+	}
+	ctx := context.Background()
+
+	issued, err := service.Issue(ctx, application.TrustedIdentity{
+		AccountID: " ",
+		PersonaID: "persona-errsem",
+		DeviceID:  "device-errsem",
+	}, 1)
+	if issued != (application.IssuedTicket{}) {
+		t.Fatalf("issued=%#v want zero value", issued)
+	}
+	const wantIdentityError = "realtime ticket requires trusted account, persona and device identities"
+	if err == nil || err.Error() != wantIdentityError {
+		t.Fatalf("identity error=%v want=%q", err, wantIdentityError)
+	}
+
+	issued, err = service.Issue(ctx, application.TrustedIdentity{
+		AccountID: "acct-errsem",
+		PersonaID: "persona-errsem",
+		DeviceID:  "device-errsem",
+	}, 0)
+	if issued != (application.IssuedTicket{}) {
+		t.Fatalf("issued=%#v want zero value", issued)
+	}
+	if !errors.Is(err, application.ErrAccountSecurityDenied) {
+		t.Fatalf("auth epoch error=%v want=%v", err, application.ErrAccountSecurityDenied)
+	}
+
+	claims, err := service.Consume(ctx, " ")
+	if claims != (application.TicketClaims{}) {
+		t.Fatalf("claims=%#v want zero value", claims)
+	}
+	if !errors.Is(err, application.ErrTicketInvalid) {
+		t.Fatalf("ticket error=%v want=%v", err, application.ErrTicketInvalid)
+	}
+
+	if store.issueCalls != 0 || store.consumeCalls != 0 || store.revokeCalls != 0 {
+		t.Fatalf(
+			"ticket store calls issue=%d consume=%d revoke=%d want all zero",
+			store.issueCalls,
+			store.consumeCalls,
+			store.revokeCalls,
+		)
+	}
+	if authority.readCalls != 0 {
+		t.Fatalf("account security authority reads=%d want=0", authority.readCalls)
+	}
+	if security.admitCalls != 0 {
+		t.Fatalf("account security gate admits=%d want=0", security.admitCalls)
 	}
 }
 

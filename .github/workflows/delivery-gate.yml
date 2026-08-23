@@ -423,7 +423,7 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
           path: ~/.pub-cache
-          key: "pub-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('quwoquan_app/pubspec.lock') }}"
+          key: "pub-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('quwoquan_app/pubspec.lock', 'quwoquan_app/test_host/patrol/pubspec.lock') }}"
           restore-keys: |
             pub-${{ runner.os }}-${{ runner.arch }}-
       - name: Install verified Flutter SDK
@@ -438,6 +438,11 @@ jobs:
             --sha256 "$FLUTTER_SHA256"
       - name: Resolve locked App dependencies
         working-directory: quwoquan_app
+        run: flutter pub get --enforce-lockfile
+      # canonical UAT 的静态分析归 test host，phase=static 会在该目录跑 flutter
+      # analyze；它的 patrol 依赖不在主 App lock 里，必须单独按锁解析。
+      - name: Resolve locked Patrol test host dependencies
+        working-directory: quwoquan_app/test_host/patrol
         run: flutter pub get --enforce-lockfile
       - name: Gate (quwoquan_app static + PA core)
         env:

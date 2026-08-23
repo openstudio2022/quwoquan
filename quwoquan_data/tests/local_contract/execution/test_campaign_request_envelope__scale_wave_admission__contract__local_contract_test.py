@@ -130,7 +130,6 @@ def test_travel_video_m1000_dispatch_does_not_require_predecessor_or_alpha(
     envelope = envelopes.build_envelope(
         scale="M1000",
         carrier="video",
-        region_ref="china",
         repo_root=repo,
         day="20260731",
     )
@@ -162,7 +161,6 @@ def test_m100_and_m1000_are_create_once_current_waves_without_campaign_wide_pool
 
     m100 = envelopes.write_scale_envelopes(
         "M100",
-        region_ref="china",
         repo_root=repo,
         output_root=tmp_path / "m100-wave",
         day="20260811",
@@ -176,7 +174,6 @@ def test_m100_and_m1000_are_create_once_current_waves_without_campaign_wide_pool
         assert payload["quota"] == m100_targets[carrier]
 
     common = {
-        "region_ref": "china",
         "repo_root": repo,
         "day": "20260811",
     }
@@ -209,11 +206,11 @@ def test_m100_and_m1000_are_create_once_current_waves_without_campaign_wide_pool
             == m1000_targets[carrier]
         )
         # DEC-002：capacityPlanDigest 只在 execution freeze 落地，信封只保证两个
-        # wave 是同一份 calibration receipt admitted 出来的。
+        # wave 是同一份互斥 executionAuthority admitted 出来的。
         assert "capacityPlanDigest" not in first_payload
         assert (
-            first_payload["capacityCalibration"]
-            == second_payload["capacityCalibration"]
+            first_payload["executionAuthority"]
+            == second_payload["executionAuthority"]
         )
         assert first_payload["executionId"] != second_payload["executionId"]
         assert first_payload["requestDigest"] != second_payload["requestDigest"]
@@ -231,7 +228,6 @@ def test_selected_carriers_get_independent_workload_plans_without_host_binding(
     _patch_envelope_deps(monkeypatch)
     paths = envelopes.write_scale_envelopes(
         "M100",
-        region_ref="china",
         repo_root=repo,
         output_root=tmp_path / "selected",
         day="20260811",
@@ -243,11 +239,14 @@ def test_selected_carriers_get_independent_workload_plans_without_host_binding(
     assert set(payloads) == {"homepage", "video"}
     for payload in payloads.values():
         assert payload["workerHostSetBinding"] is None
-        # DEC-002：并发上限与分区数由 execution freeze 从 calibration receipt 推导，
-        # 信封只携带被 admit 的 calibration 来源。
+        # DEC-002：并发上限与分区数由 execution freeze 从 authority 推导，
+        # 信封只携带互斥 executionAuthority；M100 走 governed calibration。
         assert "requiredWorkers" not in payload
         assert "partitionCount" not in payload
-        assert payload["capacityCalibration"]["calibrationReceiptDigest"]
+        assert payload["executionAuthority"]["mode"] == "governed_calibration"
+        assert payload["executionAuthority"]["calibration"][
+            "calibrationReceiptDigest"
+        ]
 
 
 def test_travel_image_m1000_dispatch_does_not_require_predecessor_or_alpha(
@@ -260,7 +259,6 @@ def test_travel_image_m1000_dispatch_does_not_require_predecessor_or_alpha(
     envelope = envelopes.build_envelope(
         scale="M1000",
         carrier="image",
-        region_ref="china",
         repo_root=repo,
         day="20260731",
     )
@@ -287,7 +285,6 @@ def test_m10000_consumes_m1000_cumulative_counts_as_delta(
     homepage = envelopes.build_envelope(
         scale="M10000",
         carrier="homepage",
-        region_ref="china",
         repo_root=repo,
         day="20260731",
         promotion_receipt=approved,
@@ -300,7 +297,6 @@ def test_m10000_consumes_m1000_cumulative_counts_as_delta(
     video = envelopes.build_envelope(
         scale="M10000",
         carrier="video",
-        region_ref="china",
         repo_root=repo,
         day="20260731",
         promotion_receipt=approved,

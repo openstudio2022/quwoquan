@@ -780,13 +780,23 @@ def test_adoption_campaign_aggregates_byte_exact_source_closure_to_new_release(
             "assets": [],
         }
 
-    monkeypatch.setattr(
-        aggregate_release_module,
-        "build_release_asset_admission",
-        _admission,
+    # aggregate_release 已拆分为 builder/pool_closure 等模块；
+    # 替身按符号实际所在命名空间安装。
+    from content.release.canonical import (
+        aggregate_release_builder as aggregate_builder_module,
     )
+    from content.release.canonical import (
+        aggregate_release_pool_closure as aggregate_pool_closure_module,
+    )
+
+    for module in (aggregate_builder_module, aggregate_pool_closure_module):
+        monkeypatch.setattr(
+            module,
+            "build_release_asset_admission",
+            _admission,
+        )
     monkeypatch.setattr(
-        aggregate_release_module,
+        aggregate_builder_module,
         "scan_release_contract",
         lambda *_args, **_kwargs: {
             "status": "passed",
@@ -800,13 +810,18 @@ def test_adoption_campaign_aggregates_byte_exact_source_closure_to_new_release(
     for helper in (
         "execution_publish_closure",
         "validate_publish_invariants",
-        "build_release_media_manifest",
         "bind_release_object_media_assets",
         "copy_release_media_objects",
     ):
         monkeypatch.setattr(
-            aggregate_release_module,
+            aggregate_builder_module,
             helper,
+            _mutable_publish_path_forbidden,
+        )
+    for module in (aggregate_builder_module, aggregate_pool_closure_module):
+        monkeypatch.setattr(
+            module,
+            "build_release_media_manifest",
             _mutable_publish_path_forbidden,
         )
     roots = CampaignReleaseRoots(

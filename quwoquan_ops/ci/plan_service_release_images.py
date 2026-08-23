@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Build the four-environment Service Pipeline runtime-image plan."""
+"""Build the trust-domain Service Pipeline runtime-image plan (DEC-005).
+
+镜像字节环境无关，只按 nonprod/prod 两个信任域分叉（编译期 Provider binding
+不同）；alpha/beta/gamma 复用同一 nonprod digest。构建矩阵是 2 × runtime image
+owner，不再按四环境展开。
+"""
 
 from __future__ import annotations
 
@@ -27,6 +32,8 @@ from quwoquan_ops.cli.lib.service_core_composition import (
 
 
 ENVIRONMENTS = ("alpha", "beta", "gamma", "prod")
+TRUST_DOMAINS = ("nonprod", "prod")
+NONPROD_ENVIRONMENTS = ("alpha", "beta", "gamma")
 LOGICAL_SERVICES = frozenset(first_party_service_names(ROOT))
 RUNTIME_IMAGE_OWNERS = runtime_image_owner_names(ROOT)
 ALL_SERVICES = frozenset(RUNTIME_IMAGE_OWNERS)
@@ -236,8 +243,9 @@ def reusable_refs(path: Path | None) -> dict[tuple[str, str], str]:
     artifacts = payload.get("environmentArtifacts")
     if not isinstance(artifacts, dict) or set(artifacts) != set(ENVIRONMENTS):
         raise ValueError("previous evidence environmentArtifacts are incomplete")
+    # DEC-005 信任域裁决：nonprod 三环境同 owner 必须同 digest（复用同一 ref），
+    # prod 独立信任域 digest 必须与 nonprod 分叉；违背任一约束的 evidence 不可复用。
     refs: dict[tuple[str, str], str] = {}
-    seen_digests: dict[str, str] = {}
     for environment in ENVIRONMENTS:
         artifact = artifacts.get(environment)
         images = artifact.get("images") if isinstance(artifact, dict) else None
@@ -245,6 +253,7 @@ def reusable_refs(path: Path | None) -> dict[tuple[str, str], str]:
             raise ValueError(
                 f"previous evidence runtime image owner set is incomplete: {environment}"
             )
+        domain = "prod" if environment == "prod" else "nonprod"
         for owner in RUNTIME_IMAGE_OWNERS:
             descriptor = images.get(owner)
             ref = str((descriptor or {}).get("ref") or "")
@@ -253,13 +262,18 @@ def reusable_refs(path: Path | None) -> dict[tuple[str, str], str]:
                 raise ValueError(
                     f"previous evidence image is not immutable: {environment}/{owner}"
                 )
-            previous_environment = seen_digests.setdefault(digest, environment)
-            if previous_environment != environment:
+            existing = refs.setdefault((domain, owner), ref)
+            if existing != ref:
                 raise ValueError(
-                    "previous evidence reuses an image digest across environments: "
-                    f"{previous_environment}/{environment}"
+                    "previous evidence nonprod environments do not share one "
+                    f"image digest: {owner}"
                 )
-            refs[(environment, owner)] = ref
+    for owner in RUNTIME_IMAGE_OWNERS:
+        if refs[("prod", owner)] == refs[("nonprod", owner)]:
+            raise ValueError(
+                "previous evidence prod image reuses the nonprod trust-domain "
+                f"digest: {owner}"
+            )
     return refs
 
 
@@ -268,23 +282,23 @@ def build_plan(
 ) -> tuple[list[dict[str, str]], list[str]]:
     affected, reasons = affected_services(paths)
     previous = reusable_refs(previous_manifest)
-    expected_previous = len(ENVIRONMENTS) * len(RUNTIME_IMAGE_OWNERS)
+    expected_previous = len(TRUST_DOMAINS) * len(RUNTIME_IMAGE_OWNERS)
     if affected != ALL_SERVICES and len(previous) != expected_previous:
         affected = ALL_SERVICES
         reasons = [*reasons, "previous-canonical-evidence-unavailable"]
     plan: list[dict[str, str]] = []
-    for environment in ENVIRONMENTS:
+    for trust_domain in TRUST_DOMAINS:
         for definition in SERVICE_BUILD_DEFINITIONS:
             owner = definition["runtime_image_owner"]
             action = "build" if owner in affected else "reuse"
             plan.append(
                 {
                     **definition,
-                    "environment": environment,
-                    "image_name": f"{owner}-{environment}",
+                    "trust_domain": trust_domain,
+                    "image_name": f"{owner}-{trust_domain}",
                     "action": action,
                     "source_ref": (
-                        previous.get((environment, owner), "")
+                        previous.get((trust_domain, owner), "")
                         if action == "reuse"
                         else ""
                     ),

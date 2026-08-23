@@ -19,6 +19,7 @@ if str(ROOT) not in sys.path:
 from quwoquan_ops.ci.render_provider_conformance_source import (  # noqa: F401
     expected_required_cell_count_from_readiness,
 )
+from quwoquan_ops.cli.lib.app_identity import supported_build_products
 
 
 SCHEMA = "release-evidence-manifest"
@@ -38,15 +39,14 @@ STATUSES = frozenset(
         "rollback-failed",
     }
 )
-APPLICATION_PLATFORMS = ("android", "ios", "web")
-APPLICATION_PACKAGES = {
-    environment: (
-        *APPLICATION_PLATFORMS,
-        *(("opsPortal",) if environment == "prod" else ()),
-    )
-    for environment in ENVIRONMENTS
-}
+APPLICATION_BUILD_PRODUCTS = supported_build_products()
+APPLICATION_PACKAGES = tuple(
+    product.build_product_id for product in APPLICATION_BUILD_PRODUCTS
+)
+if len(APPLICATION_PACKAGES) != 5 or len(set(APPLICATION_PACKAGES)) != 5:
+    raise ValueError("ReleaseEvidence App baseline must contain exactly five products")
 REQUIRED_RELEASE_EVIDENCE = ("contractGraph", "providerEvidence", "testEvidence")
+OPTIONAL_RELEASE_EVIDENCE = ("publicWeb", "androidOfficialRelease")
 TEST_LAYERS = ("local_contract", "api_integration", "user_acceptance")
 RELEASE_CLOSURE_PATHS = {
     "pilot-release": "evidence/release/pilot-release-attestation.json",
@@ -71,6 +71,7 @@ ROOT_FIELDS = frozenset(
         "artifactDigest",
         "environmentArtifacts",
         "applicationPackages",
+        "opsPortal",
         "contractGraphDigest",
         "requiredEvidence",
         "testEvidence",
@@ -115,8 +116,9 @@ APPLICATION_PACKAGE_SCHEMA = "release-application-package"
 APPLICATION_PACKAGE_FIELDS = frozenset(
     {
         "schema",
-        "environment",
-        "surface",
+        "buildProductId",
+        "buildProfile",
+        "platform",
         "sourceGitSha",
         "sourceTreeDigest",
         "packageDigest",
@@ -126,14 +128,14 @@ APPLICATION_PACKAGE_FIELDS = frozenset(
 APPLICATION_DESCRIPTOR_FIELDS = frozenset(
     {"path", "digest", "packageDigest", "sourceRef"}
 )
+APPLICATION_SOURCE_DESCRIPTOR_FIELDS = APPLICATION_DESCRIPTOR_FIELDS | {
+    "buildProductId"
+}
+OPS_PORTAL_SCHEMA = "qwq.ops_portal_package"
+OPS_PORTAL_SOURCE_DESCRIPTOR_FIELDS = APPLICATION_DESCRIPTOR_FIELDS | {"evidenceKey"}
 OCI_DIGEST_REF_PATTERN = re.compile(
     r"oci://ghcr\.io/[A-Za-z0-9._/-]+@sha256:[0-9a-f]{64}"
 )
-PROD_APPLICATION_SOURCE_SCHEMAS = {
-    "web": "client-app.web.official-release",
-    "android": "client-app.android.official-release",
-    "opsPortal": "qwq.ops_portal_package",
-}
 
 if __name__ == "__main__":
     # 直接以脚本运行时本模块名是 __main__；先把它注册为规范模块名，

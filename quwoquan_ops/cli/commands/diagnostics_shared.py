@@ -26,6 +26,7 @@ from quwoquan_ops.cli.lib.read_only_user_availability import (
     read_only_user_availability_report as _read_only_user_availability_report,
     validate_read_only_user_availability_report,
 )
+from quwoquan_ops.cli.lib.service_runtime_probes import service_probe_matrix
 
 
 def _diagnostic_aggregation_boundary() -> None:
@@ -67,11 +68,24 @@ def _media_edge_health_url(public_bases: dict[str, Any]) -> str:
 PUBLIC_WEB_STATIC_SCOPE = "public-web"
 
 # 恢复面是纯静态资源，必须与 API 平面独立观测：API 全停时 Shell、脚本、
-# Service Worker 与中文字体仍须 200，否则「使用网页版」这条恢复路径就是断的。
+# Service Worker、hosting runtime config 与中文字体仍须 200，否则「使用网页版」
+# 这条恢复路径就是断的。
 _PUBLIC_WEB_STATIC_PROBES = (
     ("public-web-shell", "/index.html", 200, "text/html"),
     ("public-web-main", "/main.dart.js", 200, ""),
     ("public-web-service-worker", "/flutter_service_worker.js", 200, ""),
+    (
+        "public-web-runtime-config-trust",
+        "/runtime-config-trust.json",
+        200,
+        "application/json",
+    ),
+    (
+        "public-web-runtime-config-package",
+        "/runtime-config-package.json",
+        200,
+        "application/json",
+    ),
     (
         "public-web-font",
         "/assets/assets/fonts/noto_sans_sc/NotoSansSC%5Bwght%5D.ttf",
@@ -115,6 +129,7 @@ def _health_checks_for_target(
     env_cfg = topology["environments"][env_name]
     public_bases = target.get("publicBases") or {}
     checks: list[dict[str, Any]] = []
+    edge_probes = service_probe_matrix()
     if scope in {
         "edge",
         "full",
@@ -122,21 +137,43 @@ def _health_checks_for_target(
         "content-consumer",
         "content-commercial",
     }:
+        api_base = str(public_bases["api"]).rstrip("/")
+        api_edge = edge_probes["api-edge"]
         checks.append(
             {
                 "name": "api-health",
                 "scope": "edge",
-                "url": f"{str(public_bases['api']).rstrip('/')}/healthz",
+                "url": f"{api_base}{api_edge.liveness}",
             }
         )
+        if api_edge.readiness_is_distinct:
+            # api-edge 承载 App 全部流量，且声明了独立就绪探针：存活 200
+            # 只说明网关进程活着，上游依赖断裂只在就绪端点上可见。
+            checks.append(
+                {
+                    "name": "api-readiness",
+                    "scope": "edge",
+                    "url": f"{api_base}{api_edge.readiness}",
+                }
+            )
     if scope in {"edge", "full", "content-commercial"}:
+        product_ops_base = str(public_bases["productOps"]).rstrip("/")
+        product_ops = edge_probes["product-ops-service"]
         checks.append(
             {
                 "name": "product-ops-health",
                 "scope": "edge",
-                "url": f"{str(public_bases['productOps']).rstrip('/')}/healthz",
+                "url": f"{product_ops_base}{product_ops.liveness}",
             }
         )
+        if product_ops.readiness_is_distinct:
+            checks.append(
+                {
+                    "name": "product-ops-readiness",
+                    "scope": "edge",
+                    "url": f"{product_ops_base}{product_ops.readiness}",
+                }
+            )
     if scope in {
         "media",
         "full",
@@ -305,6 +342,25 @@ def _service_health_checks_for_target(target_name: str) -> list[dict[str, Any]]:
         "livekit-http": "/",
         "livekit-metrics": "/metrics",
     }
+    probe_matrix = service_probe_matrix()
+
+    def _probe_check(name: str, role: str, port: int, path: str) -> dict[str, Any]:
+        check: dict[str, Any] = {
+            "name": name,
+            "scope": "service",
+            "url": f"http://127.0.0.1:{port}{path}",
+            # service-core 虚拟 HTTP 路由按 Host 头分发合并模块;独立监听的
+            # 服务忽略该头,因此对全部 service 角色统一携带服务名 Host。
+            "headers": {"Host": role},
+        }
+        if role in provider_roles:
+            check["url"] = f"https://127.0.0.1:{port}{path}"
+            try:
+                check["caFile"] = str(_stackctl.root_certificate_path(target_name))
+            except _stackctl.PublicDomainTlsError:
+                check["caFile"] = ""
+        return check
+
     for role_name in _stackctl._expected_local_roles(target_name):
         if (
             not role_name.endswith("-service")
@@ -313,24 +369,26 @@ def _service_health_checks_for_target(target_name: str) -> list[dict[str, Any]]:
         ):
             continue
         port = _stackctl.canonical_port(manifest, str(profile_name), role_name)
-        path = non_service_paths.get(role_name, "/healthz")
-        if role_name == "recommendation-service":
-            path = "/health"
-        check = {
-            "name": role_name,
-            "scope": "service",
-            "url": f"http://127.0.0.1:{port}{path}",
-            # service-core 虚拟 HTTP 路由按 Host 头分发合并模块;独立监听的
-            # 服务忽略该头,因此对全部 service 角色统一携带服务名 Host。
-            "headers": {"Host": role_name},
-        }
-        if role_name in provider_roles:
-            check["url"] = f"https://127.0.0.1:{port}{path}"
-            try:
-                check["caFile"] = str(_stackctl.root_certificate_path(target_name))
-            except _stackctl.PublicDomainTlsError:
-                check["caFile"] = ""
-        checks.append(check)
+        # 第一方服务的探针形态由其 deploy 清单声明；Provider 与外部
+        # workload 不拥有该声明，沿用本地拓扑的固定路径。
+        probes = probe_matrix.get(role_name)
+        liveness_path = (
+            probes.liveness
+            if probes is not None
+            else non_service_paths.get(role_name, "/healthz")
+        )
+        checks.append(_probe_check(role_name, role_name, port, liveness_path))
+        if probes is not None and probes.readiness_is_distinct:
+            # 存活与就绪独立上报：进程活着但依赖断裂时，失败必须能定位到
+            # 具体服务的就绪端点，而不是被存活探针的 200 掩盖。
+            checks.append(
+                _probe_check(
+                    f"{role_name}-readiness",
+                    role_name,
+                    port,
+                    probes.readiness,
+                )
+            )
     return checks
 
 

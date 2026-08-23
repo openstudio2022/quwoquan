@@ -51,8 +51,9 @@
               android:resource="@style/NormalTheme"
               />
         </activity>
+        <!-- 微信回调按 applicationId 约定使用全限定名，与 Java namespace 分离。 -->
         <activity
-            android:name=".wxapi.WXEntryActivity"
+            android:name="com.leadwise.quwoquan.wxapi.WXEntryActivity"
             android:exported="true"
             android:launchMode="singleTop"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />

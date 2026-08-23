@@ -79,7 +79,7 @@ class RuntimeExecutionRequest:
     selector: TargetSelector
     count: int
     quota: int
-    capacity_calibration: Mapping[str, Any]
+    execution_authority: Mapping[str, Any]
     topic: str | None
     source_providers: tuple[str, ...]
     target_names: tuple[str, ...]
@@ -99,11 +99,11 @@ class RuntimeExecutionRequest:
             raise ValueError("count must be a positive integer")
         if isinstance(self.quota, bool) or self.quota < 1:
             raise ValueError("quota must be a positive integer")
-        from content.execution.planning.capacity_calibration import (
-            assert_capacity_source_binding,
+        from content.execution.planning.execution_authority import (
+            assert_execution_authority,
         )
 
-        assert_capacity_source_binding(self.capacity_calibration)
+        assert_execution_authority(self.execution_authority)
         if self.worker_host_set_binding is not None:
             from core.schema import assert_valid
 
@@ -165,6 +165,14 @@ class RuntimeExecutionRequest:
                 count=self.count,
             )
 
+    def capacity_binding(self) -> dict[str, Any]:
+        """Project the execution-layer capacity source binding deterministically."""
+        from content.execution.planning.execution_authority import (
+            capacity_binding_from_authority,
+        )
+
+        return capacity_binding_from_authority(self.execution_authority)
+
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> "RuntimeExecutionRequest":
         quota, count = resolve_candidate_pool(
@@ -201,39 +209,53 @@ class RuntimeExecutionRequest:
         raw_capacity_receipt = str(
             getattr(args, "capacity_calibration_receipt", "") or ""
         ).strip()
-        if not raw_capacity_receipt:
-            raise SystemExit(
-                "[task execute] GATE_BLOCK --capacity-calibration-receipt is required"
-            )
-        from content.execution.planning.capacity_calibration import (
-            CapacityCalibrationError,
-            bind_capacity_calibration_source,
-            current_host_class,
-            resolve_capacity_calibration_ref,
+        from content.execution.planning.execution_authority import (
+            ExecutionAuthorityError,
+            build_bounded_execution_authority,
+            governed_execution_authority,
         )
 
-        receipt_ref = raw_capacity_receipt
-        try:
-            receipt_path = resolve_capacity_calibration_ref(receipt_ref)
-        except CapacityCalibrationError as exc:
-            raise SystemExit(
-                f"[task execute] GATE_BLOCK capacity calibration: {exc}"
-            ) from exc
-
-        provider_tier = str(
-            getattr(args, "semantic_selection_id", "") or "default"
-        ).strip()
-        try:
-            capacity_calibration = bind_capacity_calibration_source(
-                receipt_path=receipt_path,
-                receipt_ref=receipt_ref,
-                host_class=current_host_class(),
-                provider_tier=provider_tier,
+        if raw_capacity_receipt:
+            from content.execution.planning.capacity_calibration import (
+                CapacityCalibrationError,
+                bind_capacity_calibration_source,
+                current_host_class,
+                resolve_capacity_calibration_ref,
             )
-        except CapacityCalibrationError as exc:
-            raise SystemExit(
-                f"[task execute] GATE_BLOCK capacity calibration: {exc}"
-            ) from exc
+
+            receipt_ref = raw_capacity_receipt
+            try:
+                receipt_path = resolve_capacity_calibration_ref(receipt_ref)
+            except CapacityCalibrationError as exc:
+                raise SystemExit(
+                    f"[task execute] GATE_BLOCK capacity calibration: {exc}"
+                ) from exc
+
+            provider_tier = str(
+                getattr(args, "semantic_selection_id", "") or "default"
+            ).strip()
+            try:
+                execution_authority = governed_execution_authority(
+                    bind_capacity_calibration_source(
+                        receipt_path=receipt_path,
+                        receipt_ref=receipt_ref,
+                        host_class=current_host_class(),
+                        provider_tier=provider_tier,
+                    )
+                )
+            except CapacityCalibrationError as exc:
+                raise SystemExit(
+                    f"[task execute] GATE_BLOCK capacity calibration: {exc}"
+                ) from exc
+        else:
+            # 无 receipt 只有一条确定性出路：quota 落在受版本控制 bounded
+            # policy 内的 explicit 小批请求。越界仍是 typed blocked。
+            try:
+                execution_authority = build_bounded_execution_authority(
+                    total_objects=quota,
+                )
+            except ExecutionAuthorityError as exc:
+                raise SystemExit(f"[task execute] GATE_BLOCK {exc}") from exc
         raw_host_binding = str(
             getattr(args, "worker_host_set_binding_json", "") or ""
         ).strip()
@@ -294,6 +316,37 @@ class RuntimeExecutionRequest:
                     "[task execute] GATE_BLOCK DATA.SOURCE.POOL_SHORTFALL: "
                     "scale source pool runtime binding is incomplete"
                 )
+            # workloadMode/activeCarriers/workloadTargets 是 plan 的确定性投影：
+            # 调用方已用 planFileSha256 把 plan 字节绑定进请求，这里按该摘要
+            # 复验后读取补齐，不构成第二可写真相源。
+            from content.execution.campaign.source_pool_binding_io import (
+                file_sha256,
+            )
+            from core.io import read_json
+            from core.paths import OUTPUT_ROOT
+
+            plan_path = (OUTPUT_ROOT / pool_fields["planRef"]).resolve()
+            if (
+                not plan_path.is_file()
+                or file_sha256(plan_path) != pool_fields["planFileSha256"]
+            ):
+                raise SystemExit(
+                    "[task execute] GATE_BLOCK DATA.SOURCE.POOL_SHORTFALL: "
+                    f"scale source pool plan bytes drift or missing: {plan_path}"
+                )
+            plan_document = read_json(plan_path)
+            if not isinstance(plan_document, Mapping):
+                raise SystemExit(
+                    "[task execute] GATE_BLOCK DATA.SOURCE.POOL_SHORTFALL: "
+                    "scale source pool plan must be an object"
+                )
+            pool_fields.update(
+                {
+                    "workloadMode": str(plan_document["workloadMode"]),
+                    "activeCarriers": list(plan_document["activeCarriers"]),
+                    "workloadTargets": dict(plan_document["workloadTargets"]),
+                }
+            )
             scale_source_pool = pool_fields
             source_pool_selection = {
                 "carrier": str(getattr(args, "source_pool_carrier", "") or ""),
@@ -336,7 +389,7 @@ class RuntimeExecutionRequest:
             selector=selector,
             count=count,
             quota=quota,
-            capacity_calibration=capacity_calibration,
+            execution_authority=execution_authority,
             worker_host_set_binding=worker_host_set_binding,
             topic=topic,
             source_providers=providers,
@@ -358,7 +411,7 @@ class RuntimeExecutionRequest:
                 "selector",
                 "count",
                 "quota",
-                "capacityCalibration",
+                "executionAuthority",
                 "workerHostSetBinding",
                 "topic",
                 "sourceProviders",
@@ -387,8 +440,8 @@ class RuntimeExecutionRequest:
                 selector=TargetSelector(document.string("selector")),
                 count=document.integer("count"),
                 quota=document.integer("quota"),
-                capacity_calibration=document.object(
-                    "capacityCalibration"
+                execution_authority=document.object(
+                    "executionAuthority"
                 ).to_document(),
                 worker_host_set_binding=(
                     dict(raw["workerHostSetBinding"])
@@ -434,7 +487,7 @@ class RuntimeExecutionRequest:
             "selector": self.selector.value,
             "count": self.count,
             "quota": self.quota,
-            "capacityCalibration": dict(self.capacity_calibration),
+            "executionAuthority": dict(self.execution_authority),
             "workerHostSetBinding": (
                 dict(self.worker_host_set_binding)
                 if self.worker_host_set_binding is not None

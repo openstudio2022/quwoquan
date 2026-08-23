@@ -24,7 +24,10 @@ from content.execution.identity import build_execution_id
 from content.execution.request import RuntimeExecutionRequest
 from core.control_types import TargetSelector
 from core.io import read_json
-from support.capacity_calibration_fixture import synthetic_capacity_source_binding
+from support.capacity_calibration_fixture import (
+    synthetic_capacity_source_binding,
+    synthetic_governed_execution_authority,
+)
 from support.semantic_preflight_fixture import ready_semantic_preflight
 
 ROOT_ID = "20260728--travel-homepage-workload-homepage-1--china--scale-001"
@@ -441,7 +444,7 @@ def _request(
         ),
         count=count,
         quota=quota,
-        capacity_calibration=synthetic_capacity_source_binding(),
+        execution_authority=synthetic_governed_execution_authority(),
         topic=None,
         source_providers=(),
         target_names=(),

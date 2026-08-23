@@ -4,13 +4,15 @@ import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
 import android.util.Log;
+import java.util.Map;
 
 /** 原生恢复与 Flutter bridge 共用的受信 HTTPS URL 解析器。 */
 final class TrustedRecoveryUrls {
   private TrustedRecoveryUrls() {}
 
-  static boolean open(Activity activity, String rawUrl, String logTag) {
-    Uri uri = parse(rawUrl);
+  static boolean open(
+      Activity activity, String rawUrl, Map<String, String> configuredBases, String logTag) {
+    Uri uri = parse(rawUrl, configuredBases);
     if (uri == null) {
       return false;
     }
@@ -25,11 +27,11 @@ final class TrustedRecoveryUrls {
     }
   }
 
-  static boolean isTrusted(String rawUrl) {
-    return parse(rawUrl) != null;
+  static boolean isTrusted(String rawUrl, Map<String, String> configuredBases) {
+    return parse(rawUrl, configuredBases) != null;
   }
 
-  private static Uri parse(String rawUrl) {
+  private static Uri parse(String rawUrl, Map<String, String> configuredBases) {
     try {
       Uri uri = Uri.parse(rawUrl == null ? "" : rawUrl.trim());
       String host = uri.getHost();
@@ -38,9 +40,10 @@ final class TrustedRecoveryUrls {
           || host.isEmpty()
           || uri.getUserInfo() != null
           || uri.getFragment() != null
-          || (!matchesConfiguredBase(uri, BuildConfig.QWQ_RECOVERY_BASE_URL)
-              && !matchesConfiguredBase(uri, BuildConfig.QWQ_PUBLIC_WEB_URL)
-              && !matchesConfiguredBase(uri, BuildConfig.QWQ_APP_DOWNLOAD_BASE_URL))) {
+          || configuredBases == null
+          || (!matchesConfiguredBase(uri, configuredBases.get("gatewayBaseUrl"))
+              && !matchesConfiguredBase(uri, configuredBases.get("publicWebBaseUrl"))
+              && !matchesConfiguredBase(uri, configuredBases.get("appDownloadBaseUrl")))) {
         return null;
       }
       return uri;

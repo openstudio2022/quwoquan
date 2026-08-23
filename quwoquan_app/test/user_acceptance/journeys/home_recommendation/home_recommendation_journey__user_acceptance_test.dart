@@ -39,7 +39,7 @@ const _apiContractEnv = String.fromEnvironment(
 
 // 首页推荐 feed 卡片容器 key（home_multi_form_feed.dart 真相源）。
 const _kFeedCard0 = ValueKey<String>('home-feed-card-0');
-const _kHomeSearchChrome = ValueKey<String>('home-search-chrome');
+const _kHomeSearchChrome = ValueKey<String>('home-primary-tab-chrome');
 const _kRelationHeader = ValueKey<String>('home-relation-card-header');
 const _kRelationActions = ValueKey<String>('home-relation-card-actions');
 

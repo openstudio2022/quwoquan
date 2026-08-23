@@ -23,7 +23,7 @@ func TestAppReleaseHTTPUsesOneValidatedReleaseCatalog(t *testing.T) {
 			RecoveryURL:                 "https://download.quwoquan.example/download",
 			APKURL:                      "https://cdn.quwoquan.example/releases/quwoquan-18201.apk",
 			APKHostAllowlist:            []string{"cdn.quwoquan.example"},
-			APKPackageName:              "com.quwoquan.quwoquan_app",
+			APKPackageName:              "com.leadwise.quwoquan",
 			APKSHA256:                   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 			APKSizeBytes:                42,
 			APKSigningCertificateSHA256: "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",

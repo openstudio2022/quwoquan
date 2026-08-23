@@ -1,18 +1,15 @@
-"""stackctl package --kind app-artifact 的 local_contract 测试。
-
-绑定 deliver-deploy-prod-pipeline DEC-004：canonical App 制品入口显式接收
-env/platform/build-mode/distribution-class/device，真 Debug 不进入市场/官网，
-store 渠道要求已登记的 Prod 正式 ID，身份推导与 metadata 单轨。
-"""
+"""stackctl package --kind app-artifact 的 build-product local contract。"""
 
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
+import os
 import sys
 import tempfile
 import unittest
+import uuid
 from pathlib import Path
 from unittest import mock
 
@@ -21,9 +18,14 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.commands.package_app_artifact import (
+    _BASELINE_BUILD_PRODUCT_IDS,
     _CAPSULE_ROOTS,
     _artifact_digest,
+    _build_from_capsule,
     _ios_unsigned_release_command,
+    _materialize_protected_inputs,
+    _materialize_runtime_config_inputs,
+    build_product_artifact_segment,
     command_package_app_artifact,
 )
 from quwoquan_ops.cli.commands.package_app_artifact_identity import (
@@ -34,12 +36,7 @@ from quwoquan_ops.cli.commands.package_app_artifact_identity import (
 
 def _args(**overrides: object) -> argparse.Namespace:
     values: dict[str, object] = {
-        "env": "alpha",
-        "target": "",
-        "app_platform": "android",
-        "app_build_mode": "debug",
-        "distribution_class": "dev_direct",
-        "device": "",
+        "build_product_id": "android-nonprod-apk",
         "artifact_path": "",
     }
     values.update(overrides)
@@ -50,17 +47,16 @@ def _fake_build(**values: object) -> dict[str, str]:
     attempt_dir = Path(str(values["attempt_dir"]))
     artifact = attempt_dir / "app.apk"
     artifact.write_bytes(b"artifact-bytes")
-    digest = "sha256:" + hashlib.sha256(b"artifact-bytes").hexdigest()
     return {
         "artifactPath": str(artifact),
-        "artifactDigest": digest,
-        "launchManifestDigest": "sha256:" + "1" * 64,
+        "artifactDigest": _artifact_digest(artifact),
         "signingIdentityDigest": "sha256:" + "2" * 64,
         "sourceCapsuleDigest": "sha256:" + "3" * 64,
         "sourceStatusDigest": (
             "sha256:e3b0c44298fc1c149afbf4c8996fb924"
             "27ae41e4649b934ca495991b7852b855"
         ),
+        "runtimeConfigTrustEnvelopeDigest": "sha256:" + "4" * 64,
     }
 
 
@@ -85,10 +81,8 @@ class StackctlAppArtifactIdentityTest(unittest.TestCase):
             artifact.write_bytes(b"signed-bundle")
             identity_result = mock.Mock(
                 returncode=0,
-                stdout="com.quwoquan.quwoquan_app\n",
+                stdout="com.leadwise.quwoquan\n",
             )
-            # keytool 打印的是 32 个冒号分隔的十六进制字节对，fixture 用满长
-            # 指纹，避免断言一个长度不合法的摘要。
             signature_result = mock.Mock(
                 returncode=0,
                 stdout="SHA256: " + ":".join(["AB"] * 32) + "\n",
@@ -108,13 +102,39 @@ class StackctlAppArtifactIdentityTest(unittest.TestCase):
             ):
                 identity = read_android_identity(
                     artifact,
-                    "com.quwoquan.quwoquan_app",
+                    "com.leadwise.quwoquan",
                 )
                 signature = signing_digest("android", artifact)
-            self.assertEqual(identity, "com.quwoquan.quwoquan_app")
+            self.assertEqual(identity, "com.leadwise.quwoquan")
             self.assertEqual(signature, "sha256:" + "ab" * 32)
             self.assertIn("dump", run.call_args_list[0].args[0])
             self.assertIn("-jarfile", run.call_args_list[1].args[0])
+
+    def test_canonical_baseline_is_exactly_five_build_products(self) -> None:
+        self.assertEqual(
+            _BASELINE_BUILD_PRODUCT_IDS,
+            (
+                "android-nonprod-apk",
+                "android-prod-apk",
+                "ios-nonprod-app",
+                "ios-prod-app",
+                "web-shared",
+            ),
+        )
+        for build_product_id in _BASELINE_BUILD_PRODUCT_IDS:
+            with self.subTest(build_product_id=build_product_id), mock.patch(
+                "quwoquan_ops.cli.commands.package_app_artifact.workspace_snapshot",
+                side_effect=OSError("producer imported and invoked"),
+            ):
+                result = command_package_app_artifact(
+                    _args(build_product_id=build_product_id)
+                )
+                self.assertEqual(result["exitCode"], 2)
+                details = "\n".join(result["details"])
+                if build_product_id == "ios-prod-app":
+                    self.assertIn("prod_ios_identity_unregistered", details)
+                else:
+                    self.assertIn("producer imported and invoked", details)
 
     def test_source_capsule_includes_every_production_local_path_dependency(self) -> None:
         self.assertIn("quwoquan_app", _CAPSULE_ROOTS)
@@ -122,139 +142,100 @@ class StackctlAppArtifactIdentityTest(unittest.TestCase):
             "quwoquan_service/contracts/runtime_errors/packages/dart/quwoquan_runtime_errors",
             _CAPSULE_ROOTS,
         )
-        expected_environment_roots = {
-            path.relative_to(ROOT).as_posix()
-            for path in (ROOT / "quwoquan_service/services").glob("*/environments")
-            if path.is_dir()
+
+    def test_ios_release_command_uses_profile_and_zero_runtime_defines(self) -> None:
+        command = _ios_unsigned_release_command(build_profile="nonprod")
+        self.assertIn("--release", command)
+        self.assertIn("--no-codesign", command)
+        self.assertEqual(command[command.index("--flavor") + 1], "nonprod")
+        self.assertFalse(any("dart-define" in token for token in command))
+        for forbidden in (
+            "APP_RUNTIME_ENV",
+            "CLOUD_GATEWAY_BASE_URL",
+            "APP_LAUNCH_POLICY",
+            "QWQ_LAUNCH_TARGET",
+        ):
+            self.assertNotIn(forbidden, " ".join(command))
+
+    def test_old_environment_interface_is_rejected_without_fallback(self) -> None:
+        for legacy in (
+            {"env": "alpha"},
+            {"target": "alpha-local"},
+            {"app_platform": "android"},
+            {"app_build_mode": "release"},
+            {"distribution_class": "dev_direct"},
+            {"artifact_format": "apk"},
+        ):
+            with self.subTest(legacy=legacy):
+                result = command_package_app_artifact(_args(**legacy))
+                self.assertEqual(result["exitCode"], 2)
+                self.assertIn("use --build-product-id only", "\n".join(result["details"]))
+
+    def test_build_product_path_has_no_environment_segment(self) -> None:
+        attempt_id = str(uuid.uuid4())
+        segment = build_product_artifact_segment(
+            build_product_id="android-nonprod-apk",
+            attempt_id=attempt_id,
+        )
+        self.assertEqual(segment, f"android-nonprod-apk/{attempt_id}")
+        for environment in ("alpha", "beta", "gamma", "prod"):
+            self.assertNotIn(f"/{environment}/", f"/{segment}/")
+
+    def test_nonprod_build_is_environment_channel_and_stage_invariant(self) -> None:
+        manifests: list[dict[str, object]] = []
+        build_arguments: list[dict[str, object]] = []
+        for environment, channel, stage in (
+            ("alpha", "official_web", "canary"),
+            ("beta", "internal", "full"),
+            ("gamma", "store", "pilot"),
+        ):
+            with tempfile.TemporaryDirectory() as directory, mock.patch.dict(
+                os.environ,
+                {
+                    "QWQ_APP_RUNTIME_ENV": environment,
+                    "QWQ_APP_CHANNEL": channel,
+                    "QWQ_APP_ROLLOUT_STAGE": stage,
+                },
+                clear=False,
+            ), mock.patch(
+                "quwoquan_ops.cli.stackctl.deployment_target_path",
+                return_value=Path(directory),
+            ), mock.patch(
+                "quwoquan_ops.cli.commands.package_app_artifact._build_from_capsule",
+                side_effect=_fake_build,
+            ) as build, mock.patch(
+                "quwoquan_ops.cli.commands.package_app_artifact.workspace_snapshot",
+                side_effect=[_snapshot(), _snapshot()],
+            ), mock.patch(
+                "quwoquan_ops.cli.commands.package_app_artifact._git_identity",
+                return_value=("a" * 40, "sha1:" + "b" * 40),
+            ):
+                result = command_package_app_artifact(_args())
+                self.assertEqual(result["exitCode"], 0, result)
+                manifests.append(result["manifest"])
+                build_arguments.append(build.call_args.kwargs)
+        invariant_manifest_fields = {
+            key: value
+            for key, value in manifests[0].items()
+            if key not in {"artifactDigest", "buildProvenanceDigest"}
         }
-        self.assertTrue(expected_environment_roots)
-        self.assertTrue(expected_environment_roots.issubset(set(_CAPSULE_ROOTS)))
+        for manifest in manifests[1:]:
+            self.assertEqual(
+                {
+                    key: value
+                    for key, value in manifest.items()
+                    if key not in {"artifactDigest", "buildProvenanceDigest"}
+                },
+                invariant_manifest_fields,
+            )
+        for arguments in build_arguments:
+            self.assertEqual(arguments["build_product_id"], "android-nonprod-apk")
+            self.assertEqual(arguments["build_profile"], "nonprod")
+            self.assertNotIn("environment", arguments)
+            self.assertNotIn("channel", arguments)
+            self.assertNotIn("stage", arguments)
 
-    def test_ios_release_uses_unsigned_device_aot_and_simulator_release_is_blocked(self) -> None:
-        flutter_command = _ios_unsigned_release_command(
-            environment="beta",
-            entrypoint="lib/main_prod.dart",
-            defines=["--dart-define=APP_RUNTIME_ENV=beta"],
-        )
-        self.assertIn("--release", flutter_command)
-        self.assertIn("--no-codesign", flutter_command)
-        self.assertIn("--flavor", flutter_command)
-        self.assertIn("beta", flutter_command)
-        self.assertNotIn("--simulator", flutter_command)
-        self.assertNotIn("--debug", flutter_command)
-        blocked = command_package_app_artifact(
-            _args(
-                app_platform="ios",
-                app_build_mode="release",
-                distribution_class="simulator",
-            )
-        )
-        self.assertEqual(blocked["exitCode"], 2)
-        self.assertTrue(
-            any(
-                "APP.PACKAGE.ios_simulator_debug_only" in item
-                for item in blocked["details"]
-            )
-        )
-
-    def test_prod_ios_release_requires_registered_identity_for_every_distribution(self) -> None:
-        result = command_package_app_artifact(
-            _args(
-                env="prod",
-                target="prod-hosted",
-                app_platform="ios",
-                app_build_mode="release",
-                distribution_class="dev_direct",
-            )
-        )
-        self.assertEqual(result["exitCode"], 2)
-        self.assertTrue(
-            any(
-                "APP.PACKAGE.prod_ios_identity_unregistered" in item
-                for item in result["details"]
-            )
-        )
-
-    def test_debug_artifact_is_blocked_from_store_and_official_web(self) -> None:
-        for distribution_class in ("store", "official_web", "hosted_web"):
-            result = command_package_app_artifact(
-                _args(distribution_class=distribution_class)
-            )
-            self.assertEqual(result["exitCode"], 2, distribution_class)
-            self.assertTrue(
-                any("buildMode=debug" in item for item in result["details"]),
-                result["details"],
-            )
-
-    def test_ios_store_requires_registered_production_id(self) -> None:
-        result = command_package_app_artifact(
-            _args(
-                env="prod",
-                app_platform="ios",
-                app_build_mode="release",
-                distribution_class="store",
-            )
-        )
-        self.assertEqual(result["exitCode"], 2)
-        self.assertTrue(
-            any("registered" in item for item in result["details"]),
-            result["details"],
-        )
-        self.assertFalse(result["decision"]["promotable"])
-
-    def test_android_prod_release_store_is_promotable(self) -> None:
-        with tempfile.TemporaryDirectory() as directory, mock.patch(
-            "quwoquan_ops.cli.stackctl.deployment_target_path",
-            return_value=Path(directory),
-        ) as deployment_path, mock.patch(
-            "quwoquan_ops.cli.commands.package_app_artifact._build_from_capsule",
-            side_effect=_fake_build,
-        ), mock.patch(
-            "quwoquan_ops.cli.commands.package_app_artifact.workspace_snapshot",
-            side_effect=[_snapshot(), _snapshot()],
-        ):
-            result = command_package_app_artifact(
-                _args(
-                    env="prod",
-                    target="prod-hosted",
-                    app_platform="android",
-                    app_build_mode="release",
-                    distribution_class="store",
-                )
-            )
-            deployment_path.assert_called_once_with(
-                "prod-hosted", "packages", "app"
-            )
-        self.assertEqual(result["exitCode"], 0, result)
-        decision = result["decision"]
-        self.assertEqual(decision["applicationId"], "com.quwoquan.quwoquan_app")
-        self.assertTrue(decision["promotable"])
-
-    def test_registered_device_distribution_requires_device(self) -> None:
-        result = command_package_app_artifact(
-            _args(distribution_class="registered_device")
-        )
-        self.assertEqual(result["exitCode"], 2)
-        self.assertTrue(
-            any("--device" in item for item in result["details"]),
-            result["details"],
-        )
-        with tempfile.TemporaryDirectory() as directory, mock.patch(
-            "quwoquan_ops.cli.stackctl.deployment_target_path",
-            return_value=Path(directory),
-        ), mock.patch(
-            "quwoquan_ops.cli.commands.package_app_artifact._build_from_capsule",
-            side_effect=_fake_build,
-        ), mock.patch(
-            "quwoquan_ops.cli.commands.package_app_artifact.workspace_snapshot",
-            side_effect=[_snapshot(), _snapshot()],
-        ):
-            allowed = command_package_app_artifact(
-                _args(distribution_class="registered_device", device="udid-1")
-            )
-        self.assertEqual(allowed["exitCode"], 0, allowed)
-
-    def test_non_prod_debug_identity_is_isolated_and_not_promotable(self) -> None:
+    def test_manifest_has_new_fields_and_no_retired_fields(self) -> None:
         with tempfile.TemporaryDirectory() as directory, mock.patch(
             "quwoquan_ops.cli.stackctl.deployment_target_path",
             return_value=Path(directory),
@@ -267,73 +248,151 @@ class StackctlAppArtifactIdentityTest(unittest.TestCase):
         ):
             result = command_package_app_artifact(_args())
         self.assertEqual(result["exitCode"], 0, result)
-        decision = result["decision"]
-        self.assertEqual(
-            decision["applicationId"], "com.quwoquan.quwoquan_app.alpha.debug"
-        )
-        self.assertFalse(decision["promotable"])
-
-    def test_build_decision_carries_schema_digest_and_resolved_identity(self) -> None:
-        blocked = command_package_app_artifact(_args(distribution_class="store"))
-        self.assertEqual(blocked["exitCode"], 2, blocked)
-        # 编译成功后 decision 会被 AppArtifactManifest 覆写同一个 schema 键，
-        # 因此裁决态是唯一能证明 canonical 裁决 schema 名的观察点。
-        self.assertEqual(
-            blocked["decision"]["schema"],
-            "app-artifact-build-decision",
-        )
-        self.assertEqual(
-            blocked["decision"]["applicationId"],
-            "com.quwoquan.quwoquan_app.alpha.debug",
-        )
-        with tempfile.TemporaryDirectory() as directory, mock.patch(
-            "quwoquan_ops.cli.stackctl.deployment_target_path",
-            return_value=Path(directory),
-        ), mock.patch(
-            "quwoquan_ops.cli.commands.package_app_artifact._build_from_capsule",
-            side_effect=_fake_build,
-        ), mock.patch(
-            "quwoquan_ops.cli.commands.package_app_artifact.workspace_snapshot",
-            side_effect=[_snapshot(), _snapshot()],
+        manifest = result["manifest"]
+        for required in (
+            "buildProductId",
+            "buildProfile",
+            "platform",
+            "buildMode",
+            "artifactFormat",
+            "distributionClass",
+            "sourceTreeDigest",
+            "buildProvenanceDigest",
+            "runtimeConfigTrustEnvelopeDigest",
         ):
-            result = command_package_app_artifact(_args())
-            self.assertEqual(result["exitCode"], 0, result)
-            attempt_dir = Path(str(result["attemptDir"]))
-            decision = result["decision"]
-            self.assertRegex(
-                str(decision["artifactDigest"]),
-                r"^sha256:[0-9a-f]{64}$",
-            )
-            # 摘要必须是制品字节的内容寻址结果，而不是另一处推导出的第二真相源。
-            self.assertEqual(
-                decision["artifactDigest"],
-                _artifact_digest(attempt_dir / "app.apk"),
-            )
-            self.assertEqual(
-                decision["applicationId"],
-                "com.quwoquan.quwoquan_app.alpha.debug",
-            )
-            manifest = json.loads(
-                (attempt_dir / "manifest.json").read_text(encoding="utf-8")
-            )
-        self.assertEqual(manifest["schema"], "app-artifact-manifest")
-        self.assertEqual(manifest["artifactDigest"], decision["artifactDigest"])
-        self.assertEqual(manifest["applicationId"], decision["applicationId"])
+            self.assertIn(required, manifest)
+        for retired in ("environment", "target", "launchManifestDigest"):
+            self.assertNotIn(retired, manifest)
 
-    def test_artifact_path_bypass_is_rejected(self) -> None:
+    def test_mobile_build_embeds_only_profile_trust_envelope(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            artifact = root / "app-debug.apk"
-            artifact.write_bytes(b"artifact-bytes")
-            result = command_package_app_artifact(
-                _args(artifact_path=str(artifact))
+            trust_path = root / "runtime-config-trust.json"
+            trust_path.write_text(
+                json.dumps(
+                    {
+                        "schema": "app-runtime-config-trust",
+                        "schemaVersion": "1",
+                        "buildProfile": "nonprod",
+                        "signatureAlgorithm": "ed25519",
+                        "trustedPublicKeys": {
+                            "nonprod-key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+                        },
+                    }
+                ),
+                encoding="utf-8",
             )
-        self.assertEqual(result["exitCode"], 2)
-        self.assertTrue(
-            any("--artifact-path bypass is forbidden" in item for item in result["details"])
-        )
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "QWQ_APP_RUNTIME_CONFIG_PACKAGE_PATH": "",
+                    "QWQ_APP_RUNTIME_CONFIG_TRUST_PATH": str(trust_path),
+                },
+                clear=False,
+            ):
+                digest = _materialize_runtime_config_inputs(
+                    app_dir=root,
+                    build_profile="nonprod",
+                    platform="android",
+                    command_env={},
+                )
 
-    def test_source_drift_during_compile_is_a_typed_concurrent_writer_block(self) -> None:
+            runtime_root = root / "android/app/src/main/assets/qwq_runtime"
+            self.assertTrue((runtime_root / "runtime-config-trust.json").is_file())
+            self.assertFalse((runtime_root / "runtime-config-package.json").exists())
+            self.assertRegex(digest, r"^sha256:[0-9a-f]{64}$")
+
+    def test_mobile_build_rejects_target_runtime_package_input(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            package_path = root / "runtime-config-package.json"
+            trust_path = root / "runtime-config-trust.json"
+            package_path.write_text("{}", encoding="utf-8")
+            trust_path.write_text(
+                json.dumps(
+                    {
+                        "schema": "app-runtime-config-trust",
+                        "schemaVersion": "1",
+                        "buildProfile": "nonprod",
+                        "signatureAlgorithm": "ed25519",
+                        "trustedPublicKeys": {
+                            "nonprod-key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "QWQ_APP_RUNTIME_CONFIG_PACKAGE_PATH": str(package_path),
+                    "QWQ_APP_RUNTIME_CONFIG_TRUST_PATH": str(trust_path),
+                },
+                clear=False,
+            ):
+                with self.assertRaisesRegex(Exception, "runtime_config_package_forbidden"):
+                    _materialize_runtime_config_inputs(
+                        app_dir=root,
+                        build_profile="nonprod",
+                        platform="android",
+                        command_env={},
+                    )
+
+    def test_protected_firebase_key_is_selected_only_by_build_profile(self) -> None:
+        payload = json.dumps(
+            {
+                "client": [
+                    {
+                        "client_info": {
+                            "android_client_info": {
+                                "package_name": "com.leadwise.quwoquan.nonprod"
+                            }
+                        }
+                    }
+                ]
+            }
+        )
+        module = "quwoquan_ops.cli.commands.package_app_artifact"
+        for environment in ("alpha", "beta", "gamma"):
+            with tempfile.TemporaryDirectory() as directory, mock.patch.dict(
+                os.environ,
+                {"QWQ_ANDROID_NONPROD_GOOGLE_SERVICES_JSON": payload},
+                clear=False,
+            ), mock.patch(f"{module}._write_private"), mock.patch(
+                f"{module}._decode_secret",
+                return_value=b"keystore",
+            ):
+                os.environ["QWQ_ANDROID_RELEASE_KEYSTORE_B64"] = "a2V5c3RvcmU="
+                os.environ["QWQ_ANDROID_RELEASE_STORE_PASSWORD"] = "store"
+                os.environ["QWQ_ANDROID_RELEASE_KEY_ALIAS"] = "alias"
+                os.environ["QWQ_ANDROID_RELEASE_KEY_PASSWORD"] = "key"
+                _materialize_protected_inputs(
+                    app_dir=Path(directory),
+                    build_profile="nonprod",
+                    platform="android",
+                    build_mode="release",
+                    artifact_format="apk",
+                    application_id="com.leadwise.quwoquan.nonprod",
+                    command_env={},
+                    private_dir=Path(directory) / "private",
+                )
+            self.assertEqual(environment in {"alpha", "beta", "gamma"}, True)
+        source = Path(
+            sys.modules[_build_from_capsule.__module__].__file__ or ""
+        ).read_text(encoding="utf-8")
+        for retired in (
+            "QWQ_ANDROID_ALPHA_GOOGLE_SERVICES_JSON",
+            "QWQ_ANDROID_BETA_GOOGLE_SERVICES_JSON",
+            "QWQ_ANDROID_GAMMA_GOOGLE_SERVICES_JSON",
+        ):
+            self.assertNotIn(retired, source)
+
+    def test_artifact_path_bypass_is_rejected(self) -> None:
+        result = command_package_app_artifact(_args(artifact_path="/tmp/app.apk"))
+        self.assertEqual(result["exitCode"], 2)
+        self.assertIn("--artifact-path bypass is forbidden", "\n".join(result["details"]))
+
+    def test_source_drift_is_typed_concurrent_writer_block(self) -> None:
         changed = _snapshot()
         changed["deploymentInputDigest"] = "sha256:" + "9" * 64
         with tempfile.TemporaryDirectory() as directory, mock.patch(

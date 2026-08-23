@@ -379,7 +379,6 @@ def test_campaign_request_envelope_freeze__contract__local_contract_test(
 
     first = envelopes.write_scale_envelopes(
         "M100",
-        region_ref="china",
         repo_root=repo,
         output_root=tmp_path,
         day="20260731",
@@ -400,7 +399,6 @@ def test_campaign_request_envelope_freeze__contract__local_contract_test(
 
     second = envelopes.write_scale_envelopes(
         "M100",
-        region_ref="china",
         repo_root=repo,
         output_root=tmp_path,
         day="20260731",
@@ -411,7 +409,6 @@ def test_campaign_request_envelope_freeze__contract__local_contract_test(
     named = {
         scale: envelopes.write_scale_envelopes(
             scale,
-            region_ref="china",
             repo_root=repo,
             output_root=tmp_path,
             day="20260731",
@@ -422,7 +419,6 @@ def test_campaign_request_envelope_freeze__contract__local_contract_test(
     m1 = envelopes.build_envelope(
         scale="M1",
         carrier="homepage",
-        region_ref="china",
         repo_root=repo,
         day="20260731",
     )
@@ -435,37 +431,59 @@ def test_campaign_request_envelope_freeze__contract__local_contract_test(
     m100000 = envelopes.build_envelope(
         scale="M100000",
         carrier="video",
-        region_ref="china",
         repo_root=repo,
         day="20260731",
     )
     assert m100000["quota"] == 100000
     assert m100000["count"] == _expected_count(100000)
 
-    arbitrary = envelopes.build_envelope(
-        scale="M37",
-        carrier="article",
-        region_ref="china",
-        topic="zhejiang",
-        repo_root=repo,
-        day="20260731",
-    )
-    assert arbitrary["quota"] == 37
-    assert arbitrary["count"] == _expected_count(37)
-    assert arbitrary["topic"] == "zhejiang"
-    assert arbitrary["regionRef"] == "china"
-    assert "--china-zhejiang--" in arbitrary["executionId"]
-    assert arbitrary["familyRef"] == "content/travel/article/article"
+    # topic 化 demand 只能来自 confirmed handoff 的 region_topic 投影，
+    # 不再接受调用方独立 topic 输入。
+    topic_handoff = {
+        "vertical": "travel",
+        "regionRef": "china",
+        "lifecycle": "research",
+        "scopeType": "region_topic",
+        "scope": "china-zhejiang",
+        "primaryTopicRef": "Topic/travel/zhejiang",
+        "relatedTopicRefs": [],
+        "handoffId": "local-contract",
+        "handoffRevision": 1,
+        "handoffDigest": "sha256:" + "9" * 64,
+    }
+    with pytest.MonkeyPatch.context() as topic_patch:
+        topic_patch.setattr(
+            request_envelope_build,
+            "load_pre_acquisition_handoff",
+            lambda _path: dict(topic_handoff),
+        )
+        from content.execution.campaign import request_envelope_writer
 
-    by_quota = envelopes.write_scale_envelopes(
-        quota=37,
-        region_ref="china",
-        topic="zhejiang",
-        repo_root=repo,
-        output_root=tmp_path / "by-quota",
-        day="20260731",
-    )
-    assert set(by_quota) == {"homepage", "article", "image", "video"}
+        topic_patch.setattr(
+            request_envelope_writer,
+            "load_pre_acquisition_handoff",
+            lambda _path: dict(topic_handoff),
+        )
+        arbitrary = envelopes.build_envelope(
+            scale="M37",
+            carrier="article",
+            repo_root=repo,
+            day="20260731",
+        )
+        assert arbitrary["quota"] == 37
+        assert arbitrary["count"] == _expected_count(37)
+        assert arbitrary["topic"] == "Topic/travel/zhejiang"
+        assert arbitrary["regionRef"] == "china"
+        assert "--china-zhejiang--" in arbitrary["executionId"]
+        assert arbitrary["familyRef"] == "content/travel/article/article"
+
+        by_quota = envelopes.write_scale_envelopes(
+            quota=37,
+            repo_root=repo,
+            output_root=tmp_path / "by-quota",
+            day="20260731",
+        )
+        assert set(by_quota) == {"homepage", "article", "image", "video"}
 
     with pytest.raises(CampaignScaleError, match="GATE_BLOCK"):
         resolve_campaign_scale(quota=0)
@@ -477,7 +495,6 @@ def test_campaign_request_envelope_freeze__contract__local_contract_test(
         envelopes.build_envelope(
             scale="M100001",
             carrier="homepage",
-            region_ref="china",
             repo_root=repo,
             day="20260731",
         )
@@ -492,7 +509,6 @@ def test_campaign_envelope_keeps_object_quota_above_unique_entity_scope(
     envelope = envelopes.build_envelope(
         scale="M15",
         carrier="video",
-        region_ref="china",
         target_names=(
             "杭州西湖", "都江堰", "成都大熊猫繁育研究基地", "乌镇",
             "成昆铁路", "都江堰熊猫谷", "北京故宫", "黄山风景区",
@@ -505,9 +521,10 @@ def test_campaign_envelope_keeps_object_quota_above_unique_entity_scope(
     assert len(envelope["targetNames"]) == 8
     assert envelope["count"] == _expected_count(15)
     # DEC-002 起对象配额不再被复制成 worker 数：信封只携带工作单元口径
-    # （quota/count）与选中的 calibration 来源绑定。
+    # （quota/count）与互斥 executionAuthority；M15 超出 bounded 上限走 governed。
     assert "requiredWorkers" not in envelope
-    assert envelope["capacityCalibration"]["frozenCapacity"][
+    assert envelope["executionAuthority"]["mode"] == "governed_calibration"
+    assert envelope["executionAuthority"]["calibration"]["frozenCapacity"][
         "fleetMaxConcurrentWorkers"
     ] == 2
 
@@ -520,8 +537,21 @@ def test_campaign_envelope_freeze_rejects_cross_lane_handoff_drift(
     _patch_envelope_deps(monkeypatch)
 
     def bind(carrier: str, *_args, **_kwargs):
+        document = {
+            "vertical": "travel",
+            "regionRef": "china",
+            "lifecycle": "research",
+            "scopeType": "region",
+            "scope": "china",
+            "primaryTopicRef": None,
+            "relatedTopicRefs": [],
+            "handoffId": "local-contract",
+            "handoffRevision": 1 if carrier == "homepage" else 2,
+            "handoffDigest": "sha256:" + "9" * 64,
+        }
         return (
             [],
+            document,
             {
                 "handoffId": "local-contract",
                 "handoffRevision": 1 if carrier == "homepage" else 2,
@@ -543,7 +573,6 @@ def test_campaign_envelope_freeze_rejects_cross_lane_handoff_drift(
     with pytest.raises(ValueError, match="handoff identity changed"):
         envelopes.write_scale_envelopes(
             "M100",
-            region_ref="china",
             repo_root=repo,
             output_root=tmp_path,
             day="20260731",
@@ -564,7 +593,6 @@ def test_campaign_envelope_freeze_records_expired_probe_as_nonblocking_observati
         envelopes.build_envelope(
             scale="M3",
             carrier="image",
-            region_ref="china",
             repo_root=repo,
             day="20260805",
             predecessor_execution_id=predecessor,
@@ -572,7 +600,6 @@ def test_campaign_envelope_freeze_records_expired_probe_as_nonblocking_observati
     retry = envelopes.build_envelope(
         scale="M3",
         carrier="image",
-        region_ref="china",
         repo_root=repo,
         day="20260805",
         sequence=2,
@@ -601,7 +628,6 @@ def test_campaign_envelope_freeze_records_expired_probe_as_nonblocking_observati
     envelope = envelopes.build_envelope(
         scale="M3",
         carrier="image",
-        region_ref="china",
         repo_root=repo,
         day="20260805",
         semantic_selection_id="cursor_grok",

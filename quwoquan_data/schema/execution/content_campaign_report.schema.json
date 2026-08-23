@@ -85,7 +85,7 @@
     },
     "lanes": {
       "type": "object",
-      "required": ["homepage", "article", "image", "video"],
+      "minProperties": 1,
       "additionalProperties": false,
       "properties": {
         "homepage": { "$ref": "#/$defs/lane" },

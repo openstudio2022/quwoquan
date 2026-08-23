@@ -7,6 +7,7 @@ import CryptoKit
 import EventKit
 import Foundation
 import Flutter
+import Darwin
 import MetricKit
 import PushKit
 import Security
@@ -22,6 +23,15 @@ private let startupHealthFatalAtKey = "qwq.runtime.startup_health_fatal_at"
 private let startupHealthFatalQueuedIdentityKey =
   "qwq.runtime.startup_health_fatal_queued_identity"
 private var previousNativeCrashHandler: (@convention(c) (NSException) -> Void)?
+private let nativeRuntimePackageFileName = "runtime-config-package.json"
+private let nativeRuntimeTrustFileName = "runtime-config-trust.json"
+private let nativeRuntimeActivationRequestFileName = "runtime-config-activation-request.json"
+private let nativeRuntimeActivationReceiptFileName = "runtime-config-activation-receipt.json"
+private let nativeRuntimeActiveReceiptFileName = "runtime-config-active-receipt.json"
+private let nativeRuntimeActivationRequestDigestArgument =
+  "--qwq-runtime-config-activation-request-digest"
+private let nativeRuntimeConfigDirectory = "qwq_runtime"
+private let nativeRuntimeConfigMaximumBytes = 1024 * 1024
 
 private func persistNativeCrashMarker(_ exception: NSException) {
   let rawKind = exception.name.rawValue
@@ -42,6 +52,10 @@ private func persistNativeCrashMarker(_ exception: NSException) {
   // 仅尽力持久化，平台仍必须完全掌控终止流程。
   CFPreferencesAppSynchronize(kCFPreferencesCurrentApplication)
   previousNativeCrashHandler?(exception)
+}
+
+private func nativeSHA256Identity(_ data: Data) -> String {
+  "sha256:" + SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
 }
 
 private enum NativeCrashMarkerStore {
@@ -93,15 +107,19 @@ private enum NativeCrashMarkerStore {
   }
 
   static var currentArtifactIdentity: String {
-    let manifest = nativeRuntimeIdentityManifest
-    let environment = manifest["runtimeEnvironment"] as? String ?? "unknown"
-    let configDigest = manifest["runtimeConfigDigest"] as? String ?? "missing"
-    let definesDigest = manifest["dartDefinesDigest"] as? String ?? "missing"
-    let target = manifest["launchTarget"] as? String ?? "missing"
-    let effectiveDigest =
-      manifest["effectiveLaunchManifestDigest"] as? String ?? "missing"
-    return
-      "\(currentBuild)|\(environment)|\(configDigest)|\(definesDigest)|\(target)|\(effectiveDigest)"
+    switch NativeRuntimeConfigStore.readActivePackage() {
+    case .present(let active):
+      let package = active.package
+      let environment = package["environment"] as? String ?? "unknown"
+      let target = package["target"] as? String ?? "missing"
+      let buildProfile = active.artifactTrustEnvelope["buildProfile"] as? String ?? "missing"
+      return "\(currentBuild)|\(buildProfile)|\(environment)|\(target)|\(active.packageDigest)"
+    case .absent(let trust):
+      let buildProfile = trust.artifactTrustEnvelope["buildProfile"] as? String ?? "missing"
+      return "\(currentBuild)|\(buildProfile)|runtime-config-absent|\(trust.trustEnvelopeDigest)"
+    case .failure(let error):
+      return "\(currentBuild)|runtime-config-failure|\(error.flutterCode)"
+    }
   }
 
   static func shouldRecoverCurrentBuild() -> Bool {
@@ -182,7 +200,8 @@ private enum NativeCrashMarkerStore {
   }
 
   static var effectiveLaunchManifestDigest: String {
-    nativeRuntimeIdentityManifest["effectiveLaunchManifestDigest"] as? String ?? ""
+    (try? NativeRuntimeConfigActivationCoordinator.readVerifiedIdentity()
+      .effectiveLaunchManifestDigest) ?? ""
   }
 
   private static func clearFatalMarker(reason: String) {
@@ -193,24 +212,1310 @@ private enum NativeCrashMarkerStore {
     NSLog("QWQStartup startup_fatal_marker_stale_cleared reason=%@", reason)
   }
 
-  private static var nativeRuntimeIdentityManifest: [String: Any] {
-    guard
-      let url = Bundle.main.url(
-        forResource: "QWQNativeRuntime",
-        withExtension: "plist"
-      ),
-      let data = try? Data(contentsOf: url),
-      let raw = try? PropertyListSerialization.propertyList(
-        from: data,
-        options: [],
-        format: nil
-      ),
-      let manifest = raw as? [String: Any]
-    else {
-      return [:]
+}
+
+enum NativeRuntimeConfigReadError: Error {
+  case trustMissing
+  case trustPathInvalid
+  case trustTooLarge
+  case trustMalformed
+  case packageMissing
+  case packagePathInvalid
+  case packageTooLarge
+  case packageMalformed
+  case schemaMismatch
+  case profileMismatch
+  case targetMismatch
+  case policyMismatch
+  case algorithmMismatch
+  case keyringMismatch
+  case signatureKeyUntrusted
+  case payloadDigestMismatch
+  case packageDigestMismatch
+  case trustDigestMismatch
+  case signatureInvalid
+  case freshnessInvalid
+  case activeDigestConflict
+  case activationWriteFailed
+  case activationReadbackFailed
+  case activationRollbackFailed
+  case activationRequiresColdStart
+  case activationRequestMissing
+  case activationRequestMalformed
+  case activationRequestDigestInvalid
+  case activationRequestDigestMismatch
+  case effectiveManifestMalformed
+  case effectiveManifestDigestMismatch
+  case activationIdentityMismatch
+  case activationReceiptMissing
+  case activationReceiptReadFailed
+  case activationReceiptMalformed
+  case activationReceiptMismatch
+  case activationReceiptWriteFailed
+  case internalFailure
+
+  var flutterCode: String {
+    switch self {
+    case .trustMissing: return "runtime_config_trust_missing"
+    case .trustPathInvalid: return "runtime_config_trust_path_invalid"
+    case .trustTooLarge: return "runtime_config_trust_too_large"
+    case .trustMalformed: return "runtime_config_trust_malformed"
+    case .packageMissing: return "runtime_config_package_missing"
+    case .packagePathInvalid: return "runtime_config_package_path_invalid"
+    case .packageTooLarge: return "runtime_config_package_too_large"
+    case .packageMalformed: return "runtime_config_package_malformed"
+    case .schemaMismatch: return "runtime_config_schema_mismatch"
+    case .profileMismatch: return "runtime_config_profile_mismatch"
+    case .targetMismatch: return "runtime_config_target_mismatch"
+    case .policyMismatch: return "runtime_config_launch_policy_mismatch"
+    case .algorithmMismatch: return "runtime_config_signature_algorithm_mismatch"
+    case .keyringMismatch: return "runtime_config_keyring_mismatch"
+    case .signatureKeyUntrusted: return "runtime_config_signature_key_untrusted"
+    case .payloadDigestMismatch: return "runtime_config_payload_digest_mismatch"
+    case .packageDigestMismatch: return "runtime_config_package_digest_mismatch"
+    case .trustDigestMismatch: return "runtime_config_trust_digest_mismatch"
+    case .signatureInvalid: return "runtime_config_signature_invalid"
+    case .freshnessInvalid: return "runtime_config_freshness_invalid"
+    case .activeDigestConflict: return "runtime_config_active_digest_conflict"
+    case .activationWriteFailed: return "runtime_config_activation_write_failed"
+    case .activationReadbackFailed: return "runtime_config_activation_readback_failed"
+    case .activationRollbackFailed: return "runtime_config_activation_rollback_failed"
+    case .activationRequiresColdStart: return "runtime_config_activation_requires_cold_start"
+    case .activationRequestMissing: return "runtime_config_activation_request_missing"
+    case .activationRequestMalformed: return "runtime_config_activation_request_malformed"
+    case .activationRequestDigestInvalid:
+      return "runtime_config_activation_request_digest_invalid"
+    case .activationRequestDigestMismatch:
+      return "runtime_config_activation_request_digest_mismatch"
+    case .effectiveManifestMalformed: return "runtime_config_effective_manifest_malformed"
+    case .effectiveManifestDigestMismatch:
+      return "runtime_config_effective_manifest_digest_mismatch"
+    case .activationIdentityMismatch: return "runtime_config_activation_identity_mismatch"
+    case .activationReceiptMissing: return "runtime_config_activation_receipt_missing"
+    case .activationReceiptReadFailed:
+      return "runtime_config_activation_receipt_read_failed"
+    case .activationReceiptMalformed:
+      return "runtime_config_activation_receipt_malformed"
+    case .activationReceiptMismatch: return "runtime_config_activation_receipt_mismatch"
+    case .activationReceiptWriteFailed:
+      return "runtime_config_activation_receipt_write_failed"
+    case .internalFailure: return "runtime_config_internal_failure"
     }
-    return manifest
   }
+}
+
+private struct NativeRuntimeConfigTrustProjection {
+  let artifactTrustEnvelope: [String: Any]
+  let trustEnvelopeDigest: String
+  let trustedPublicKeys: [String: String]
+}
+
+private struct NativeRuntimeConfigActiveProjection {
+  let package: [String: Any]
+  let artifactTrustEnvelope: [String: Any]
+  let packageDigest: String
+  let trustEnvelopeDigest: String
+
+  var flutterEnvelope: [String: Any] {
+    [
+      "package": package,
+      "trustedBuildProfile": artifactTrustEnvelope["buildProfile"] as? String ?? "",
+      "trustedTarget": package["target"] as? String ?? "",
+      "trustedPublicKeys": artifactTrustEnvelope["trustedPublicKeys"] as? [String: Any] ?? [:],
+    ]
+  }
+
+  var readerEnvelope: [String: Any] {
+    [
+      "state": "present",
+      "package": package,
+      "artifactTrustEnvelope": artifactTrustEnvelope,
+      "packageDigest": packageDigest,
+      "trustEnvelopeDigest": trustEnvelopeDigest,
+    ]
+  }
+}
+
+private enum NativeRuntimeConfigReadState {
+  case present(NativeRuntimeConfigActiveProjection)
+  case absent(NativeRuntimeConfigTrustProjection)
+  case failure(NativeRuntimeConfigReadError)
+}
+
+private struct NativeRuntimeConfigActivationResult {
+  let packageDigest: String
+  let trustEnvelopeDigest: String
+  let previousActiveDigest: String
+}
+
+private enum NativeRuntimeConfigStore {
+  private static let packageFields: Set<String> = [
+    "schema", "schemaVersion", "environment", "buildProfile", "target",
+    "launchPolicy", "issuedAt", "expiresAt", "sourceGitSha", "sourceTreeDigest",
+    "runtime", "payloadDigest", "signatureAlgorithm", "signatureKeyId",
+    "trustedPublicKeys", "signature",
+  ]
+  private static let runtimeFields: Set<String> = [
+    "appRuntimeEnv", "gatewayBaseUrl", "legalBaseUrl", "publicWebBaseUrl",
+    "appDownloadBaseUrl", "realtimeBaseUrl", "mediaAvatarCdnBaseUrl",
+    "mediaImageCdnBaseUrl", "mediaVideoCdnBaseUrl", "mediaUploadBaseUrl",
+    "rtcMediaConnectionUrl",
+  ]
+  private static let targetEnvironments = [
+    "alpha-local": "alpha",
+    "beta-local": "beta",
+    "gamma-local": "gamma",
+    "prod-sim": "prod",
+    "prod-hosted": "prod",
+  ]
+  private static let maximumLifetime: TimeInterval = 86_400
+  private static let maximumFutureSkew: TimeInterval = 300
+  private static let writeQueue = DispatchQueue(label: "quwoquan.runtime.config.activation")
+
+  static func readActivePackage() -> NativeRuntimeConfigReadState {
+    loadActivePackage()
+  }
+
+  private static func loadActivePackage() -> NativeRuntimeConfigReadState {
+    do {
+      let trust = try loadTrustEnvelope()
+      guard let packageURL = try runtimePackageURL(createDirectory: false) else {
+        return .absent(trust)
+      }
+      let storedPackageData = try readData(
+        url: packageURL,
+        pathError: .packagePathInvalid,
+        sizeError: .packageTooLarge,
+        malformedError: .packageMalformed
+      )
+      let package = try decodeDocument(storedPackageData, malformedError: .packageMalformed)
+      let canonicalPackageData = try canonicalJSONData(package)
+      let active = try validatePackage(
+        package,
+        packageData: canonicalPackageData,
+        trust: trust,
+        expectedPackageDigest: nil
+      )
+      return .present(active)
+    } catch let error as NativeRuntimeConfigReadError {
+      return .failure(error)
+    } catch {
+      return .failure(.packageMalformed)
+    }
+  }
+
+  static func readRuntimeConfig() throws -> [String: Any] {
+    let identity = try NativeRuntimeConfigActivationCoordinator.readVerifiedIdentity()
+    switch readActivePackage() {
+    case .present(let active):
+      var envelope = active.flutterEnvelope
+      envelope["runtimeConfigPackageDigest"] = active.packageDigest
+      envelope["runtimeConfigTrustEnvelopeDigest"] = active.trustEnvelopeDigest
+      envelope["effectiveLaunchManifestDigest"] = identity.effectiveLaunchManifestDigest
+      return envelope
+    case .absent:
+      throw NativeRuntimeConfigReadError.packageMissing
+    case .failure(let error):
+      throw error
+    }
+  }
+
+  static func readRuntimeConfigState() -> [String: Any] {
+    switch readActivePackage() {
+    case .present(let active):
+      return active.readerEnvelope
+    case .absent(let trust):
+      return [
+        "state": "absent",
+        "artifactTrustEnvelope": trust.artifactTrustEnvelope,
+        "trustEnvelopeDigest": trust.trustEnvelopeDigest,
+      ]
+    case .failure(let error):
+      return [
+        "state": "failure",
+        "errorCode": error.flutterCode,
+      ]
+    }
+  }
+
+  static func activate(
+    package rawPackage: [String: Any],
+    expectedPackageDigest: String,
+    expectedTrustEnvelopeDigest: String,
+    expectedActiveDigest: String,
+    commit: ((NativeRuntimeConfigActivationResult) throws -> Void)? = nil
+  ) throws -> NativeRuntimeConfigActivationResult {
+    guard digestIdentity(expectedPackageDigest) != nil else {
+      throw NativeRuntimeConfigReadError.packageDigestMismatch
+    }
+    guard digestIdentity(expectedTrustEnvelopeDigest) != nil else {
+      throw NativeRuntimeConfigReadError.trustDigestMismatch
+    }
+    guard expectedActiveDigest.isEmpty || digestIdentity(expectedActiveDigest) != nil else {
+      throw NativeRuntimeConfigReadError.activeDigestConflict
+    }
+    return try writeQueue.sync {
+      let trust = try loadTrustEnvelope()
+      guard trust.trustEnvelopeDigest == expectedTrustEnvelopeDigest else {
+        throw NativeRuntimeConfigReadError.trustDigestMismatch
+      }
+      let currentState = loadActivePackage()
+      let currentDigest: String
+      switch currentState {
+      case .present(let active):
+        currentDigest = active.packageDigest
+      case .absent:
+        currentDigest = ""
+      case .failure(let error):
+        throw error
+      }
+      guard currentDigest == expectedActiveDigest else {
+        throw NativeRuntimeConfigReadError.activeDigestConflict
+      }
+      let packageData = try canonicalJSONData(rawPackage)
+      let validated = try validatePackage(
+        rawPackage,
+        packageData: packageData,
+        trust: trust,
+        expectedPackageDigest: expectedPackageDigest
+      )
+      let previousActivePackage = try readCurrentActivePackageData()
+      do {
+        try atomicallyActivate(packageData)
+        let activatedState = loadActivePackage()
+        guard case .present(let activated) = activatedState,
+              activated.packageDigest == validated.packageDigest,
+              activated.trustEnvelopeDigest == validated.trustEnvelopeDigest
+        else {
+          throw NativeRuntimeConfigReadError.activationReadbackFailed
+        }
+        let result = NativeRuntimeConfigActivationResult(
+          packageDigest: validated.packageDigest,
+          trustEnvelopeDigest: validated.trustEnvelopeDigest,
+          previousActiveDigest: currentDigest
+        )
+        try commit?(result)
+        return result
+      } catch {
+        try restorePreviousActivePackage(previousActivePackage, originalError: error)
+        if let typed = error as? NativeRuntimeConfigReadError {
+          throw typed
+        }
+        throw NativeRuntimeConfigReadError.activationReadbackFailed
+      }
+    }
+  }
+
+  private static func loadTrustEnvelope() throws -> NativeRuntimeConfigTrustProjection {
+    guard let trustURL = bundledTrustURL() else {
+      throw NativeRuntimeConfigReadError.trustMissing
+    }
+    let trustData = try readData(
+      url: trustURL,
+      pathError: .trustPathInvalid,
+      sizeError: .trustTooLarge,
+      malformedError: .trustMalformed
+    )
+    let trust = try decodeDocument(trustData, malformedError: .trustMalformed)
+    guard Set(trust.keys) == [
+      "schema", "schemaVersion", "buildProfile", "signatureAlgorithm", "trustedPublicKeys",
+    ],
+      trust["schema"] as? String == "app-runtime-config-trust",
+      trust["schemaVersion"] as? String == "1",
+      trust["signatureAlgorithm"] as? String == "ed25519",
+      let buildProfile = nonEmptyString(trust["buildProfile"]),
+      ["nonprod", "prod"].contains(buildProfile)
+    else {
+      throw NativeRuntimeConfigReadError.trustMalformed
+    }
+    let trustedPublicKeys = try normalizedKeyring(trust["trustedPublicKeys"])
+    return NativeRuntimeConfigTrustProjection(
+      artifactTrustEnvelope: trust,
+      trustEnvelopeDigest: nativeSHA256Identity(try canonicalJSONData(trust)),
+      trustedPublicKeys: trustedPublicKeys
+    )
+  }
+
+  private static func validatePackage(
+    _ package: [String: Any],
+    packageData: Data,
+    trust: NativeRuntimeConfigTrustProjection,
+    expectedPackageDigest: String?
+  ) throws -> NativeRuntimeConfigActiveProjection {
+    guard Set(package.keys) == packageFields,
+          package["schema"] as? String == "app-runtime-config-package",
+          package["schemaVersion"] as? String == "1"
+    else {
+      throw NativeRuntimeConfigReadError.schemaMismatch
+    }
+    guard package["signatureAlgorithm"] as? String == "ed25519",
+          trust.artifactTrustEnvelope["signatureAlgorithm"] as? String == "ed25519"
+    else {
+      throw NativeRuntimeConfigReadError.algorithmMismatch
+    }
+    guard let profile = nonEmptyString(package["buildProfile"]),
+          profile == trust.artifactTrustEnvelope["buildProfile"] as? String
+    else {
+      throw NativeRuntimeConfigReadError.profileMismatch
+    }
+    guard let environment = nonEmptyString(package["environment"]),
+          let target = nonEmptyString(package["target"]),
+          targetEnvironments[target] == environment
+    else {
+      throw NativeRuntimeConfigReadError.targetMismatch
+    }
+    let expectedPolicy = profile == "prod" ? "prod_release" : "test_live"
+    let allowedEnvironments = profile == "prod"
+      ? Set(["prod"])
+      : Set(["alpha", "beta", "gamma"])
+    guard allowedEnvironments.contains(environment),
+          package["launchPolicy"] as? String == expectedPolicy
+    else {
+      throw NativeRuntimeConfigReadError.policyMismatch
+    }
+    guard let runtime = package["runtime"] as? [String: Any],
+          Set(runtime.keys) == runtimeFields,
+          runtime["appRuntimeEnv"] as? String == environment,
+          runtime.values.allSatisfy({ nonEmptyString($0) != nil })
+    else {
+      throw NativeRuntimeConfigReadError.schemaMismatch
+    }
+    let packageKeyring = try normalizedKeyring(package["trustedPublicKeys"])
+    guard packageKeyring == trust.trustedPublicKeys else {
+      throw NativeRuntimeConfigReadError.keyringMismatch
+    }
+    guard let keyID = nonEmptyString(package["signatureKeyId"]),
+          let encodedPublicKey = trust.trustedPublicKeys[keyID],
+          let publicKeyData = Data(base64Encoded: encodedPublicKey),
+          publicKeyData.count == 32
+    else {
+      throw NativeRuntimeConfigReadError.signatureKeyUntrusted
+    }
+    guard let encodedSignature = nonEmptyString(package["signature"]),
+          let signature = Data(base64Encoded: encodedSignature),
+          signature.count == 64,
+          signature.base64EncodedString() == encodedSignature
+    else {
+      throw NativeRuntimeConfigReadError.signatureInvalid
+    }
+    guard let sourceGitSHA = nonEmptyString(package["sourceGitSha"]),
+          sourceGitSHA.range(of: "^[0-9a-f]{40}$", options: .regularExpression) != nil,
+          let sourceTreeDigest = nonEmptyString(package["sourceTreeDigest"]),
+          sourceTreeDigest.range(
+            of: "^sha(?:1|256):[0-9a-f]+$",
+            options: .regularExpression
+          ) != nil
+    else {
+      throw NativeRuntimeConfigReadError.schemaMismatch
+    }
+    var payloadDigestDocument = package
+    payloadDigestDocument.removeValue(forKey: "signature")
+    payloadDigestDocument["payloadDigest"] = ""
+    let computedPayloadDigest = nativeSHA256Identity(
+      try canonicalJSONData(payloadDigestDocument)
+    )
+    guard package["payloadDigest"] as? String == computedPayloadDigest else {
+      throw NativeRuntimeConfigReadError.payloadDigestMismatch
+    }
+    var signedPayload = package
+    signedPayload.removeValue(forKey: "signature")
+    let signedPayloadData = try canonicalJSONData(signedPayload)
+    do {
+      let publicKey = try Curve25519.Signing.PublicKey(rawRepresentation: publicKeyData)
+      guard publicKey.isValidSignature(signature, for: signedPayloadData) else {
+        throw NativeRuntimeConfigReadError.signatureInvalid
+      }
+    } catch let error as NativeRuntimeConfigReadError {
+      throw error
+    } catch {
+      throw NativeRuntimeConfigReadError.signatureInvalid
+    }
+    try validateFreshness(package)
+    let packageDigest = nativeSHA256Identity(try canonicalJSONData(package))
+    if let expectedPackageDigest, packageDigest != expectedPackageDigest {
+      throw NativeRuntimeConfigReadError.packageDigestMismatch
+    }
+    let canonicalPackageData = try canonicalJSONData(package)
+    if packageData != canonicalPackageData {
+      throw NativeRuntimeConfigReadError.packageMalformed
+    }
+    return NativeRuntimeConfigActiveProjection(
+      package: package,
+      artifactTrustEnvelope: trust.artifactTrustEnvelope,
+      packageDigest: packageDigest,
+      trustEnvelopeDigest: trust.trustEnvelopeDigest
+    )
+  }
+
+  private static func validateFreshness(_ package: [String: Any]) throws {
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    let fallback = ISO8601DateFormatter()
+    guard let issuedRaw = nonEmptyString(package["issuedAt"]),
+          let expiresRaw = nonEmptyString(package["expiresAt"]),
+          let issuedAt = formatter.date(from: issuedRaw) ?? fallback.date(from: issuedRaw),
+          let expiresAt = formatter.date(from: expiresRaw) ?? fallback.date(from: expiresRaw),
+          expiresAt > issuedAt,
+          expiresAt.timeIntervalSince(issuedAt) <= maximumLifetime,
+          issuedAt.timeIntervalSinceNow <= maximumFutureSkew,
+          expiresAt > Date()
+    else {
+      throw NativeRuntimeConfigReadError.freshnessInvalid
+    }
+  }
+
+  private static func normalizedKeyring(_ value: Any?) throws -> [String: String] {
+    guard let rawKeyring = value as? [String: Any], !rawKeyring.isEmpty else {
+      throw NativeRuntimeConfigReadError.keyringMismatch
+    }
+    var keyring: [String: String] = [:]
+    let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-")
+    for (keyID, rawValue) in rawKeyring {
+      guard !keyID.isEmpty,
+            keyID.count <= 128,
+            keyID.unicodeScalars.allSatisfy({ allowed.contains($0) }),
+            let encoded = nonEmptyString(rawValue),
+            let decoded = Data(base64Encoded: encoded),
+            decoded.count == 32,
+            decoded.base64EncodedString() == encoded
+      else {
+        throw NativeRuntimeConfigReadError.keyringMismatch
+      }
+      keyring[keyID] = encoded
+    }
+    return keyring
+  }
+
+  private static func canonicalJSONData(_ document: [String: Any]) throws -> Data {
+    guard JSONSerialization.isValidJSONObject(document) else {
+      throw NativeRuntimeConfigReadError.packageMalformed
+    }
+    do {
+      return try JSONSerialization.data(
+        withJSONObject: document,
+        options: [.sortedKeys, .withoutEscapingSlashes]
+      )
+    } catch {
+      throw NativeRuntimeConfigReadError.packageMalformed
+    }
+  }
+
+  private static func decodeDocument(
+    _ data: Data,
+    malformedError: NativeRuntimeConfigReadError
+  ) throws -> [String: Any] {
+    do {
+      guard let document = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+            !document.isEmpty
+      else {
+        throw malformedError
+      }
+      return document
+    } catch let error as NativeRuntimeConfigReadError {
+      throw error
+    } catch {
+      throw malformedError
+    }
+  }
+
+  private static func readData(
+    url: URL,
+    pathError: NativeRuntimeConfigReadError,
+    sizeError: NativeRuntimeConfigReadError,
+    malformedError: NativeRuntimeConfigReadError
+  ) throws -> Data {
+    guard let values = try? url.resourceValues(forKeys: [
+      .isRegularFileKey,
+      .isSymbolicLinkKey,
+      .fileSizeKey,
+    ]),
+      values.isRegularFile == true,
+      values.isSymbolicLink != true
+    else {
+      throw pathError
+    }
+    guard let size = values.fileSize, size > 0, size <= nativeRuntimeConfigMaximumBytes else {
+      throw sizeError
+    }
+    do {
+      return try Data(contentsOf: url, options: [.mappedIfSafe])
+    } catch {
+      throw malformedError
+    }
+  }
+
+  private static func readCurrentActivePackageData() throws -> Data? {
+    guard let packageURL = try runtimePackageURL(createDirectory: false) else {
+      return nil
+    }
+    return try readData(
+      url: packageURL,
+      pathError: .packagePathInvalid,
+      sizeError: .packageTooLarge,
+      malformedError: .packageMalformed
+    )
+  }
+
+  private static func restorePreviousActivePackage(
+    _ previousActivePackage: Data?,
+    originalError: Error
+  ) throws {
+    do {
+      let destination = try runtimePackageDestinationURL(createDirectory: true)
+      if let previousActivePackage {
+        try writeAndReplace(previousActivePackage, destination: destination)
+      } else if FileManager.default.fileExists(atPath: destination.path) {
+        try FileManager.default.removeItem(at: destination)
+        try synchronizeDirectory(destination.deletingLastPathComponent())
+      }
+    } catch {
+      let originalCode = (originalError as? NativeRuntimeConfigReadError)?.flutterCode
+        ?? NativeRuntimeConfigReadError.internalFailure.flutterCode
+      NSLog(
+        "QWQStartup ios_runtime_config_activation_rollback_failed originalCode=%@",
+        originalCode
+      )
+      throw NativeRuntimeConfigReadError.activationRollbackFailed
+    }
+  }
+
+  private static func runtimePackageURL(createDirectory: Bool) throws -> URL? {
+    let packageURL = try runtimePackageDestinationURL(createDirectory: createDirectory)
+    return FileManager.default.fileExists(atPath: packageURL.path) ? packageURL : nil
+  }
+
+  private static func runtimePackageDestinationURL(createDirectory: Bool) throws -> URL {
+    let fileManager = FileManager.default
+    let supportRoot: URL
+    do {
+      supportRoot = try fileManager.url(
+        for: .applicationSupportDirectory,
+        in: .userDomainMask,
+        appropriateFor: nil,
+        create: createDirectory
+      ).standardizedFileURL
+    } catch {
+      throw NativeRuntimeConfigReadError.packagePathInvalid
+    }
+    let directory = supportRoot
+      .appendingPathComponent(nativeRuntimeConfigDirectory, isDirectory: true)
+      .standardizedFileURL
+    guard directory.path.hasPrefix(supportRoot.path + "/") else {
+      throw NativeRuntimeConfigReadError.packagePathInvalid
+    }
+    if createDirectory {
+      do {
+        try fileManager.createDirectory(
+          at: directory,
+          withIntermediateDirectories: true,
+          attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication]
+        )
+      } catch {
+        throw NativeRuntimeConfigReadError.activationWriteFailed
+      }
+    }
+    let packageURL = directory
+      .appendingPathComponent(nativeRuntimePackageFileName, isDirectory: false)
+      .standardizedFileURL
+    guard packageURL.path.hasPrefix(directory.path + "/") else {
+      throw NativeRuntimeConfigReadError.packagePathInvalid
+    }
+    return packageURL
+  }
+
+  private static func atomicallyActivate(_ packageData: Data) throws {
+    let destination = try runtimePackageDestinationURL(createDirectory: true)
+    try writeAndReplace(packageData, destination: destination)
+  }
+
+  private static func writeAndReplace(_ data: Data, destination: URL) throws {
+    let fileManager = FileManager.default
+    let temporary = destination.deletingLastPathComponent().appendingPathComponent(
+      ".runtime-config-package.\(UUID().uuidString).tmp",
+      isDirectory: false
+    )
+    do {
+      guard fileManager.createFile(
+        atPath: temporary.path,
+        contents: nil,
+        attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication]
+      ) else {
+        throw NativeRuntimeConfigReadError.activationWriteFailed
+      }
+      let handle = try FileHandle(forWritingTo: temporary)
+      do {
+        try handle.write(contentsOf: data)
+        try handle.synchronize()
+        try handle.close()
+      } catch {
+        try? handle.close()
+        throw error
+      }
+      if fileManager.fileExists(atPath: destination.path) {
+        _ = try fileManager.replaceItemAt(
+          destination,
+          withItemAt: temporary,
+          backupItemName: nil,
+          options: []
+        )
+      } else {
+        try fileManager.moveItem(at: temporary, to: destination)
+      }
+      try synchronizeDirectory(destination.deletingLastPathComponent())
+    } catch {
+      try? fileManager.removeItem(at: temporary)
+      if let typed = error as? NativeRuntimeConfigReadError {
+        throw typed
+      }
+      throw NativeRuntimeConfigReadError.activationWriteFailed
+    }
+  }
+
+  private static func synchronizeDirectory(_ directory: URL) throws {
+    let directoryHandle = open(directory.path, O_RDONLY)
+    guard directoryHandle >= 0 else {
+      throw NativeRuntimeConfigReadError.activationWriteFailed
+    }
+    defer { _ = close(directoryHandle) }
+    guard fsync(directoryHandle) == 0 else {
+      throw NativeRuntimeConfigReadError.activationWriteFailed
+    }
+  }
+
+  private static func bundledTrustURL() -> URL? {
+    Bundle.main.url(
+      forResource: nativeRuntimeTrustFileName,
+      withExtension: nil,
+      subdirectory: nativeRuntimeConfigDirectory
+    )
+  }
+
+  private static func digestIdentity(_ value: Any?) -> String? {
+    guard let digest = nonEmptyString(value),
+          digest.range(
+            of: "^sha256:[0-9a-f]{64}$",
+            options: .regularExpression
+          ) != nil
+    else {
+      return nil
+    }
+    return digest
+  }
+
+  private static func nonEmptyString(_ value: Any?) -> String? {
+    guard let string = value as? String else { return nil }
+    let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.isEmpty ? nil : trimmed
+  }
+}
+
+struct NativeRuntimeConfigActivationIdentity {
+  let packageDigest: String
+  let trustEnvelopeDigest: String
+  let effectiveLaunchManifestDigest: String
+}
+
+// Recovery 面消费的 runtime context 三态投影：缺席（首装）与读取失败必须分流，
+// 失败携带登记错误码，不得吞错折叠为空上下文。
+enum NativeRuntimeRecoveryContext {
+  case present([String: Any])
+  case absent
+  case failure(String)
+}
+
+struct NativeRuntimeConfigActivationConsumeResult {
+  let requested: Bool
+  let activated: Bool
+  let errorCode: String
+  let validationIssues: [String]
+}
+
+enum NativeRuntimeConfigActivationCoordinator {
+  private static let requestFields: Set<String> = [
+    "schema", "schemaVersion", "environment", "buildProfile", "target", "package",
+    "packageDigest", "trustEnvelopeDigest", "effectiveLaunchManifest",
+    "effectiveLaunchManifestDigest", "expectedActiveDigest",
+  ]
+  private static let effectiveManifestFields: Set<String> = [
+    "schema", "environment", "buildProfile", "target", "entrypoint", "launchMode",
+    "launchPolicy", "runtimeConfigPackageDigest", "runtimeConfigTrustEnvelopeDigest",
+    "requiresLocalTransport", "transport",
+  ]
+  private static let transportFields: Set<String> = [
+    "required", "reverseExpectedPorts", "reverseActualPorts", "reverseReceiptDigest",
+    "consumerLeaseId",
+  ]
+  private static let receiptFields: Set<String> = [
+    "schema", "schemaVersion", "status", "requestDigest", "environment", "buildProfile",
+    "target", "packageDigest", "trustEnvelopeDigest", "effectiveLaunchManifestDigest",
+    "previousActiveDigest", "activePackageDigest", "errorCode", "validationIssues",
+  ]
+
+  static func consumePendingActivationRequest(
+    arguments: [String],
+    coldStartAllowed: Bool
+  ) -> NativeRuntimeConfigActivationConsumeResult {
+    guard let markerIndex = arguments.firstIndex(
+      of: nativeRuntimeActivationRequestDigestArgument
+    ) else {
+      return NativeRuntimeConfigActivationConsumeResult(
+        requested: false,
+        activated: false,
+        errorCode: "",
+        validationIssues: []
+      )
+    }
+    let expectedRequestDigest = arguments.indices.contains(markerIndex + 1)
+      ? arguments[markerIndex + 1]
+      : ""
+    var request: [String: Any]?
+    var requestDigest = canonicalDigest(expectedRequestDigest) ?? String(
+      repeating: "0",
+      count: 64
+    ).withSHA256Prefix
+    var previousActiveDigest = ""
+    do {
+      guard coldStartAllowed else {
+        throw NativeRuntimeConfigReadError.activationRequiresColdStart
+      }
+      guard let normalizedRequestDigest = canonicalDigest(expectedRequestDigest) else {
+        throw NativeRuntimeConfigReadError.activationRequestDigestInvalid
+      }
+      previousActiveDigest = try currentActiveDigest()
+      let requestURL = try runtimeConfigFileURL(
+        name: nativeRuntimeActivationRequestFileName,
+        createDirectory: false,
+        requireExisting: true
+      )
+      let requestData = try readActivationData(requestURL)
+      requestDigest = nativeSHA256Identity(try requestData.canonicalJSONObjectData())
+      guard requestDigest == normalizedRequestDigest else {
+        throw NativeRuntimeConfigReadError.activationRequestDigestMismatch
+      }
+      let decoded = try requestData.activationJSONObject()
+      request = decoded
+      try validateRequest(decoded)
+      if try isAlreadyActivated(request: decoded, requestDigest: requestDigest) {
+        try? FileManager.default.removeItem(at: requestURL)
+        return NativeRuntimeConfigActivationConsumeResult(
+          requested: true,
+          activated: true,
+          errorCode: "",
+          validationIssues: []
+        )
+      }
+      guard let package = decoded["package"] as? [String: Any],
+            let packageDigest = decoded["packageDigest"] as? String,
+            let trustDigest = decoded["trustEnvelopeDigest"] as? String,
+            let expectedActiveDigest = decoded["expectedActiveDigest"] as? String
+      else {
+        throw NativeRuntimeConfigReadError.activationRequestMalformed
+      }
+      _ = try NativeRuntimeConfigStore.activate(
+        package: package,
+        expectedPackageDigest: packageDigest,
+        expectedTrustEnvelopeDigest: trustDigest,
+        expectedActiveDigest: expectedActiveDigest
+      ) { result in
+        let receipt = buildReceipt(
+          request: decoded,
+          requestDigest: requestDigest,
+          status: "activated",
+          previousActiveDigest: result.previousActiveDigest,
+          activePackageDigest: result.packageDigest,
+          errorCode: "",
+          validationIssues: []
+        )
+        try commitActivationReceipts(receipt)
+      }
+      try? FileManager.default.removeItem(at: requestURL)
+      return NativeRuntimeConfigActivationConsumeResult(
+        requested: true,
+        activated: true,
+        errorCode: "",
+        validationIssues: []
+      )
+    } catch {
+      var errorCode = (error as? NativeRuntimeConfigReadError)?.flutterCode
+        ?? NativeRuntimeConfigReadError.internalFailure.flutterCode
+      var issues = [errorCode]
+      // 读取失败时状态未知：保持最后已知 CAS 值并追加 rollback_failed，不得宣称空 active，
+      // 也不得覆盖原始失败码；只有确认读取成功且与 CAS 前不一致才升级为 rollback_failed。
+      var activeDigest = previousActiveDigest
+      var activeDigestUnknown = false
+      do {
+        activeDigest = try currentActiveDigest()
+      } catch {
+        activeDigestUnknown = true
+      }
+      let rollbackCode = NativeRuntimeConfigReadError.activationRollbackFailed.flutterCode
+      if activeDigestUnknown {
+        if !issues.contains(rollbackCode) {
+          issues.append(rollbackCode)
+        }
+      } else if activeDigest != previousActiveDigest {
+        errorCode = rollbackCode
+        issues.insert(errorCode, at: 0)
+      }
+      if let request {
+        do {
+          let receipt = buildReceipt(
+            request: request,
+            requestDigest: requestDigest,
+            status: "failed",
+            previousActiveDigest: previousActiveDigest,
+            activePackageDigest: activeDigest,
+            errorCode: errorCode,
+            validationIssues: issues
+          )
+          try writeReceipt(receipt, name: nativeRuntimeActivationReceiptFileName)
+          let requestURL = try runtimeConfigFileURL(
+            name: nativeRuntimeActivationRequestFileName,
+            createDirectory: false,
+            requireExisting: false
+          )
+          try? FileManager.default.removeItem(at: requestURL)
+        } catch {
+          if !issues.contains(NativeRuntimeConfigReadError.activationReceiptWriteFailed.flutterCode) {
+            issues.append(NativeRuntimeConfigReadError.activationReceiptWriteFailed.flutterCode)
+          }
+        }
+      }
+      return NativeRuntimeConfigActivationConsumeResult(
+        requested: true,
+        activated: false,
+        errorCode: errorCode,
+        validationIssues: issues
+      )
+    }
+  }
+
+  // Active receipt 的缺席、读取失败与解码失败必须使用 receipt 语义错误码，
+  // 不得复用 activation request 错误语义（metadata receipt 契约约束）。
+  static func readActiveReceiptDocument() throws -> [String: Any] {
+    let receiptURL = try runtimeConfigFileURL(
+      name: nativeRuntimeActiveReceiptFileName,
+      createDirectory: false,
+      requireExisting: true,
+      missingError: .activationReceiptMissing
+    )
+    let data = try readActivationData(
+      receiptURL,
+      malformedError: .activationReceiptMalformed,
+      readFailedError: .activationReceiptReadFailed
+    )
+    return try data.activationJSONObject(malformedError: .activationReceiptMalformed)
+  }
+
+  static func readRecoveryRuntimeContext() -> NativeRuntimeRecoveryContext {
+    let active: NativeRuntimeConfigActiveProjection
+    switch NativeRuntimeConfigStore.readActivePackage() {
+    case .absent:
+      return .absent
+    case .failure(let error):
+      return .failure(error.flutterCode)
+    case .present(let projection):
+      active = projection
+    }
+    do {
+      let identity = try readVerifiedIdentity()
+      let runtime = active.package["runtime"] as? [String: Any] ?? [:]
+      return .present([
+        "runtimeEnvironment": active.package["environment"] as? String ?? "",
+        "runtimeConfigDigest": identity.packageDigest,
+        "effectiveLaunchManifestDigest": identity.effectiveLaunchManifestDigest,
+        "recoveryBaseURL": runtime["gatewayBaseUrl"] as? String ?? "",
+        "publicWebURL": runtime["publicWebBaseUrl"] as? String ?? "",
+        "appDownloadBaseURL": runtime["appDownloadBaseUrl"] as? String ?? "",
+      ])
+    } catch {
+      let code = (error as? NativeRuntimeConfigReadError)?.flutterCode
+        ?? NativeRuntimeConfigReadError.internalFailure.flutterCode
+      return .failure(code)
+    }
+  }
+
+  static func readVerifiedIdentity() throws -> NativeRuntimeConfigActivationIdentity {
+    let active: NativeRuntimeConfigActiveProjection
+    switch NativeRuntimeConfigStore.readActivePackage() {
+    case .present(let projection):
+      active = projection
+    case .absent:
+      throw NativeRuntimeConfigReadError.packageMissing
+    case .failure(let error):
+      throw error
+    }
+    let receipt = try readActiveReceiptDocument()
+    guard Set(receipt.keys) == receiptFields,
+          receipt["schema"] as? String == "app-runtime-config-activation-receipt",
+          receipt["schemaVersion"] as? String == "1",
+          receipt["status"] as? String == "activated",
+          receipt["errorCode"] as? String == "",
+          let issues = receipt["validationIssues"] as? [Any],
+          issues.isEmpty,
+          receipt["environment"] as? String == active.package["environment"] as? String,
+          receipt["buildProfile"] as? String == active.package["buildProfile"] as? String,
+          receipt["target"] as? String == active.package["target"] as? String,
+          receipt["packageDigest"] as? String == active.packageDigest,
+          receipt["activePackageDigest"] as? String == active.packageDigest,
+          receipt["trustEnvelopeDigest"] as? String == active.trustEnvelopeDigest,
+          canonicalDigest(receipt["requestDigest"] as? String) != nil,
+          let manifestDigest = canonicalDigest(
+            receipt["effectiveLaunchManifestDigest"] as? String
+          )
+    else {
+      throw NativeRuntimeConfigReadError.activationReceiptMismatch
+    }
+    return NativeRuntimeConfigActivationIdentity(
+      packageDigest: active.packageDigest,
+      trustEnvelopeDigest: active.trustEnvelopeDigest,
+      effectiveLaunchManifestDigest: manifestDigest
+    )
+  }
+
+  private static func validateRequest(_ request: [String: Any]) throws {
+    guard Set(request.keys) == requestFields,
+          request["schema"] as? String == "app-runtime-config-activation-request",
+          request["schemaVersion"] as? String == "1",
+          let environment = nonEmptyString(request["environment"]),
+          let buildProfile = nonEmptyString(request["buildProfile"]),
+          let target = nonEmptyString(request["target"]),
+          let packageDigest = canonicalDigest(request["packageDigest"] as? String),
+          let trustDigest = canonicalDigest(request["trustEnvelopeDigest"] as? String),
+          let manifestDigest = canonicalDigest(
+            request["effectiveLaunchManifestDigest"] as? String
+          ),
+          let expectedActiveDigest = request["expectedActiveDigest"] as? String,
+          expectedActiveDigest.isEmpty || canonicalDigest(expectedActiveDigest) != nil,
+          let package = request["package"] as? [String: Any],
+          let manifest = request["effectiveLaunchManifest"] as? [String: Any]
+    else {
+      throw NativeRuntimeConfigReadError.activationRequestMalformed
+    }
+    guard Set(manifest.keys) == effectiveManifestFields,
+          manifest["schema"] as? String == "app-effective-launch-manifest",
+          manifest["entrypoint"] as? String == "lib/main_prod.dart",
+          let transport = manifest["transport"] as? [String: Any],
+          Set(transport.keys) == transportFields
+    else {
+      throw NativeRuntimeConfigReadError.effectiveManifestMalformed
+    }
+    guard nativeSHA256Identity(try canonicalJSONData(manifest)) == manifestDigest else {
+      throw NativeRuntimeConfigReadError.effectiveManifestDigestMismatch
+    }
+    guard package["environment"] as? String == environment,
+          package["buildProfile"] as? String == buildProfile,
+          package["target"] as? String == target,
+          package["launchPolicy"] as? String == manifest["launchPolicy"] as? String,
+          manifest["environment"] as? String == environment,
+          manifest["buildProfile"] as? String == buildProfile,
+          manifest["target"] as? String == target,
+          manifest["runtimeConfigPackageDigest"] as? String == packageDigest,
+          manifest["runtimeConfigTrustEnvelopeDigest"] as? String == trustDigest
+    else {
+      throw NativeRuntimeConfigReadError.activationIdentityMismatch
+    }
+  }
+
+  private static func buildReceipt(
+    request: [String: Any],
+    requestDigest: String,
+    status: String,
+    previousActiveDigest: String,
+    activePackageDigest: String,
+    errorCode: String,
+    validationIssues: [String]
+  ) -> [String: Any] {
+    [
+      "schema": "app-runtime-config-activation-receipt",
+      "schemaVersion": "1",
+      "status": status,
+      "requestDigest": requestDigest,
+      "environment": request["environment"] as? String ?? "",
+      "buildProfile": request["buildProfile"] as? String ?? "",
+      "target": request["target"] as? String ?? "",
+      "packageDigest": request["packageDigest"] as? String ?? "",
+      "trustEnvelopeDigest": request["trustEnvelopeDigest"] as? String ?? "",
+      "effectiveLaunchManifestDigest": request["effectiveLaunchManifestDigest"] as? String ?? "",
+      "previousActiveDigest": previousActiveDigest,
+      "activePackageDigest": activePackageDigest,
+      "errorCode": errorCode,
+      "validationIssues": validationIssues,
+    ]
+  }
+
+  private static func commitActivationReceipts(_ receipt: [String: Any]) throws {
+    try commitActivationReceipts(
+      receipt,
+      readExisting: { name in
+        try readExistingActivationData(name: name)
+      },
+      write: { receipt, name in
+        try writeReceipt(receipt, name: name)
+      },
+      restore: { data, name in
+        try restoreExistingActivationData(data, name: name)
+      }
+    )
+  }
+
+  static func commitActivationReceipts(
+    _ receipt: [String: Any],
+    readExisting: (String) throws -> Data?,
+    write: ([String: Any], String) throws -> Void,
+    restore: (Data?, String) throws -> Void
+  ) throws {
+    let previousActiveReceipt = try readExisting(nativeRuntimeActiveReceiptFileName)
+    let previousLaunchReceipt = try readExisting(nativeRuntimeActivationReceiptFileName)
+    do {
+      try write(receipt, nativeRuntimeActiveReceiptFileName)
+      try write(receipt, nativeRuntimeActivationReceiptFileName)
+    } catch {
+      do {
+        try restore(previousActiveReceipt, nativeRuntimeActiveReceiptFileName)
+        try restore(previousLaunchReceipt, nativeRuntimeActivationReceiptFileName)
+      } catch {
+        throw NativeRuntimeConfigReadError.activationRollbackFailed
+      }
+      throw error
+    }
+  }
+
+  private static func readExistingActivationData(name: String) throws -> Data? {
+    let url = try runtimeConfigFileURL(
+      name: name,
+      createDirectory: true,
+      requireExisting: false
+    )
+    guard FileManager.default.fileExists(atPath: url.path) else {
+      return nil
+    }
+    do {
+      return try Data(contentsOf: url, options: [.mappedIfSafe])
+    } catch {
+      throw NativeRuntimeConfigReadError.activationReceiptWriteFailed
+    }
+  }
+
+  private static func restoreExistingActivationData(_ data: Data?, name: String) throws {
+    let url = try runtimeConfigFileURL(
+      name: name,
+      createDirectory: true,
+      requireExisting: false
+    )
+    if let data {
+      try writeActivationData(data, destination: url)
+    } else if FileManager.default.fileExists(atPath: url.path) {
+      do {
+        try FileManager.default.removeItem(at: url)
+      } catch {
+        throw NativeRuntimeConfigReadError.activationRollbackFailed
+      }
+    }
+  }
+
+  private static func writeReceipt(_ receipt: [String: Any], name: String) throws {
+    let destination = try runtimeConfigFileURL(
+      name: name,
+      createDirectory: true,
+      requireExisting: false
+    )
+    do {
+      try writeActivationData(try canonicalJSONData(receipt), destination: destination)
+    } catch {
+      throw NativeRuntimeConfigReadError.activationReceiptWriteFailed
+    }
+  }
+
+  private static func runtimeConfigFileURL(
+    name: String,
+    createDirectory: Bool,
+    requireExisting: Bool,
+    missingError: NativeRuntimeConfigReadError = .activationRequestMissing
+  ) throws -> URL {
+    let fileManager = FileManager.default
+    let supportRoot: URL
+    do {
+      supportRoot = try fileManager.url(
+        for: .applicationSupportDirectory,
+        in: .userDomainMask,
+        appropriateFor: nil,
+        create: createDirectory
+      ).standardizedFileURL
+    } catch {
+      throw NativeRuntimeConfigReadError.packagePathInvalid
+    }
+    let directory = supportRoot
+      .appendingPathComponent(nativeRuntimeConfigDirectory, isDirectory: true)
+      .standardizedFileURL
+    guard directory.path.hasPrefix(supportRoot.path + "/") else {
+      throw NativeRuntimeConfigReadError.packagePathInvalid
+    }
+    if createDirectory {
+      do {
+        try fileManager.createDirectory(
+          at: directory,
+          withIntermediateDirectories: true,
+          attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication]
+        )
+      } catch {
+        throw NativeRuntimeConfigReadError.activationWriteFailed
+      }
+    }
+    let candidate = directory.appendingPathComponent(name, isDirectory: false)
+      .standardizedFileURL
+    guard candidate.path.hasPrefix(directory.path + "/") else {
+      throw NativeRuntimeConfigReadError.packagePathInvalid
+    }
+    if requireExisting && !fileManager.fileExists(atPath: candidate.path) {
+      throw missingError
+    }
+    return candidate
+  }
+
+  private static func readActivationData(
+    _ url: URL,
+    malformedError: NativeRuntimeConfigReadError = .activationRequestMalformed,
+    readFailedError: NativeRuntimeConfigReadError = .activationRequestMalformed
+  ) throws -> Data {
+    guard let values = try? url.resourceValues(forKeys: [
+      .isRegularFileKey,
+      .isSymbolicLinkKey,
+      .fileSizeKey,
+    ]),
+      values.isRegularFile == true,
+      values.isSymbolicLink != true,
+      let size = values.fileSize,
+      size > 0,
+      size <= nativeRuntimeConfigMaximumBytes
+    else {
+      throw malformedError
+    }
+    do {
+      return try Data(contentsOf: url, options: [.mappedIfSafe])
+    } catch {
+      throw readFailedError
+    }
+  }
+
+  private static func writeActivationData(_ data: Data, destination: URL) throws {
+    let temporary = destination.deletingLastPathComponent().appendingPathComponent(
+      ".runtime-config-activation.\(UUID().uuidString).tmp",
+      isDirectory: false
+    )
+    do {
+      try data.write(
+        to: temporary,
+        options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication]
+      )
+      if FileManager.default.fileExists(atPath: destination.path) {
+        _ = try FileManager.default.replaceItemAt(destination, withItemAt: temporary)
+      } else {
+        try FileManager.default.moveItem(at: temporary, to: destination)
+      }
+    } catch {
+      try? FileManager.default.removeItem(at: temporary)
+      throw NativeRuntimeConfigReadError.activationReceiptWriteFailed
+    }
+  }
+
+  private static func currentActiveDigest() throws -> String {
+    switch NativeRuntimeConfigStore.readActivePackage() {
+    case .present(let active):
+      return active.packageDigest
+    case .absent:
+      return ""
+    case .failure(let error):
+      throw error
+    }
+  }
+
+  private static func isAlreadyActivated(
+    request: [String: Any],
+    requestDigest: String
+  ) throws -> Bool {
+    guard let expectedPackageDigest = request["packageDigest"] as? String,
+          let expectedTrustDigest = request["trustEnvelopeDigest"] as? String,
+          let expectedManifestDigest = request["effectiveLaunchManifestDigest"] as? String
+    else {
+      return false
+    }
+    let identity: NativeRuntimeConfigActivationIdentity
+    do {
+      identity = try readVerifiedIdentity()
+    } catch NativeRuntimeConfigReadError.packageMissing,
+            NativeRuntimeConfigReadError.activationReceiptMissing {
+      return false
+    }
+    let receipt = try readActiveReceiptDocument()
+    return receipt["requestDigest"] as? String == requestDigest
+      && identity.packageDigest == expectedPackageDigest
+      && identity.trustEnvelopeDigest == expectedTrustDigest
+      && identity.effectiveLaunchManifestDigest == expectedManifestDigest
+  }
+
+  private static func canonicalJSONData(_ document: [String: Any]) throws -> Data {
+    guard JSONSerialization.isValidJSONObject(document) else {
+      throw NativeRuntimeConfigReadError.activationRequestMalformed
+    }
+    do {
+      return try JSONSerialization.data(
+        withJSONObject: document,
+        options: [.sortedKeys, .withoutEscapingSlashes]
+      )
+    } catch {
+      throw NativeRuntimeConfigReadError.activationRequestMalformed
+    }
+  }
+
+  private static func canonicalDigest(_ value: String?) -> String? {
+    guard let value,
+          value.range(of: "^sha256:[0-9a-f]{64}$", options: .regularExpression) != nil
+    else {
+      return nil
+    }
+    return value
+  }
+
+  private static func nonEmptyString(_ value: Any?) -> String? {
+    guard let value = value as? String else { return nil }
+    let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    return normalized.isEmpty ? nil : normalized
+  }
+}
+
+private extension Data {
+  func activationJSONObject(
+    malformedError: NativeRuntimeConfigReadError = .activationRequestMalformed
+  ) throws -> [String: Any] {
+    do {
+      guard let document = try JSONSerialization.jsonObject(with: self) as? [String: Any],
+            !document.isEmpty
+      else {
+        throw malformedError
+      }
+      return document
+    } catch let error as NativeRuntimeConfigReadError {
+      throw error
+    } catch {
+      throw malformedError
+    }
+  }
+
+  func canonicalJSONObjectData() throws -> Data {
+    let document = try activationJSONObject()
+    guard JSONSerialization.isValidJSONObject(document) else {
+      throw NativeRuntimeConfigReadError.activationRequestMalformed
+    }
+    return try JSONSerialization.data(
+      withJSONObject: document,
+      options: [.sortedKeys, .withoutEscapingSlashes]
+    )
+  }
+}
+
+private extension String {
+  var withSHA256Prefix: String { "sha256:" + self }
 }
 
 private final class RecoveryActionButton: UIButton {
@@ -474,6 +1779,9 @@ private final class RecoveryFailureEncryptedStore {
   private var nativeRecoveryShown = false
   private var nativeRecoveryDeadlineReached = false
   private var confirmedPreviousBuildFatal = false
+  private var nativeActivationOnly = false
+  private var nativeActivationFailureCode = ""
+  private var nativeActivationValidationIssues: [String] = []
   private var recoveryExternalOpenInFlight = false
   private var recoveryExternalReturnPending = false
   private var recoveryVersionCheckInFlight = false
@@ -506,6 +1814,24 @@ private final class RecoveryFailureEncryptedStore {
         NSLog("QWQStartup ios_debug_confirmed_startup_fatal_cleared")
       }
     #endif
+    let activation = consumePendingActivationRequest()
+    if activation.requested && !activation.activated {
+      nativeActivationFailureCode = activation.errorCode
+      nativeActivationValidationIssues = activation.validationIssues
+      NSLog(
+        "QWQStartup ios_runtime_config_activation_failed code=%@ issues=%@",
+        nativeActivationFailureCode,
+        nativeActivationValidationIssues.joined(separator: ",")
+      )
+      return true
+    }
+    if activation.activated {
+      nativeActivationOnly = true
+      NSLog("QWQStartup ios_runtime_config_activation_complete")
+      // Canonical executor 验证回执后会用无 activation argument 的第二次冷启动
+      // 进入 Flutter；当前进程只提交原生 CAS，绝不能创建 implicit engine。
+      return true
+    }
     confirmedPreviousBuildFatal = NativeCrashMarkerStore.shouldRecoverCurrentBuild()
     if confirmedPreviousBuildFatal {
       // FlutterAppDelegate 的 will/didFinish 都不得进入；恢复 gate 必须先于
@@ -522,6 +1848,20 @@ private final class RecoveryFailureEncryptedStore {
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    if nativeActivationOnly {
+      startupSafeTerminalConfirmed = true
+      NSLog("QWQStartup ios_native_activation_only_complete")
+      return true
+    }
+    if !nativeActivationFailureCode.isEmpty {
+      startupSafeTerminalConfirmed = true
+      appInForeground = true
+      NSLog(
+        "QWQStartup ios_native_activation_gate_recovery code=%@",
+        nativeActivationFailureCode
+      )
+      return true
+    }
     if confirmedPreviousBuildFatal {
       startupSafeTerminalConfirmed = true
       appInForeground = true
@@ -556,7 +1896,10 @@ private final class RecoveryFailureEncryptedStore {
     configurationForConnecting connectingSceneSession: UISceneSession,
     options: UIScene.ConnectionOptions
   ) -> UISceneConfiguration {
-    guard confirmedPreviousBuildFatal else {
+    guard confirmedPreviousBuildFatal
+            || nativeActivationOnly
+            || !nativeActivationFailureCode.isEmpty
+    else {
       // FlutterAppDelegate adopts UIApplicationDelegate but does not implement
       // this optional selector on every engine version. Calling super here
       // therefore crashes normal launch with an unrecognized selector.
@@ -583,7 +1926,10 @@ private final class RecoveryFailureEncryptedStore {
   }
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
-    guard !confirmedPreviousBuildFatal else {
+    guard !confirmedPreviousBuildFatal,
+          !nativeActivationOnly,
+          nativeActivationFailureCode.isEmpty
+    else {
       assertionFailure("Flutter engine initialized behind native startup recovery gate")
       return
     }
@@ -608,6 +1954,15 @@ private final class RecoveryFailureEncryptedStore {
     )
   }
 
+  private func consumePendingActivationRequest()
+    -> NativeRuntimeConfigActivationConsumeResult
+  {
+    NativeRuntimeConfigActivationCoordinator.consumePendingActivationRequest(
+      arguments: ProcessInfo.processInfo.arguments,
+      coldStartAllowed: true
+    )
+  }
+
   private func registerMethodChannels(
     binaryMessenger: FlutterBinaryMessenger,
     includeStartupTimings: Bool = true
@@ -620,32 +1975,39 @@ private final class RecoveryFailureEncryptedStore {
       name: "quwoquan/runtime/config",
       binaryMessenger: binaryMessenger
     )
-    runtimeConfigChannel.setMethodCallHandler { [weak self] call, result in
-      guard call.method == "readRuntimeConfig" else {
-        result(FlutterMethodNotImplemented)
-        return
-      }
-      guard let rawValues = self?.nativeRuntimeManifest["runtimeDefines"]
-              as? [String: Any]
-      else {
-        result([String: String]())
-        return
-      }
-      let values = rawValues.reduce(into: [String: String]()) { output, entry in
-        if let value = entry.value as? String, !value.isEmpty {
-          output[entry.key] = value
+    runtimeConfigChannel.setMethodCallHandler { call, result in
+      DispatchQueue.global(qos: .userInitiated).async {
+        do {
+          let response: Any
+          switch call.method {
+          case "readRuntimeConfig":
+            response = try NativeRuntimeConfigStore.readRuntimeConfig()
+          case "readRuntimeConfigState":
+            response = NativeRuntimeConfigStore.readRuntimeConfigState()
+          default:
+            DispatchQueue.main.async { result(FlutterMethodNotImplemented) }
+            return
+          }
+          DispatchQueue.main.async { result(response) }
+        } catch let error as NativeRuntimeConfigReadError {
+          DispatchQueue.main.async {
+            result(FlutterError(
+              code: error.flutterCode,
+              message: "Native runtime configuration operation failed.",
+              details: nil
+            ))
+          }
+        } catch {
+          NSLog("QWQStartup ios_runtime_config_internal_failure error=%@", "\(error)")
+          DispatchQueue.main.async {
+            result(FlutterError(
+              code: NativeRuntimeConfigReadError.internalFailure.flutterCode,
+              message: "Native runtime configuration operation failed.",
+              details: nil
+            ))
+          }
         }
       }
-      var packageValues = values
-      for key in [
-        "launchTarget",
-        "effectiveLaunchManifestDigest",
-      ] {
-        if let value = self?.nativeRuntimeManifest[key] as? String, !value.isEmpty {
-          packageValues[key] = value
-        }
-      }
-      result(packageValues)
     }
 
     let videoEditingChannel = FlutterMethodChannel(
@@ -760,7 +2122,7 @@ private final class RecoveryFailureEncryptedStore {
           "deviceModel": UIDevice.current.model,
           "environment": self.nativeRuntimeEnvironment,
           "recoveryBaseUrl": self.recoveryBaseURLString,
-          "runtimeConfigDigest": self.nativeRuntimeConfigDigest,
+          "runtimeConfigDigest": self.nativeActiveRuntimePackageDigest,
           "effectiveLaunchManifestDigest": self.nativeEffectiveLaunchManifestDigest,
           "publicWebUrl": self.publicWebURLString,
           "appDownloadBaseUrl": self.appDownloadBaseURLString,
@@ -881,12 +2243,7 @@ private final class RecoveryFailureEncryptedStore {
       nativeRuntimeManifest["publicWebURL"] as? String,
       nativeRuntimeManifest["appDownloadBaseURL"] as? String,
     ]
-    let bundleValues = [
-      Bundle.main.object(forInfoDictionaryKey: "QWQRecoveryBaseURL") as? String,
-      Bundle.main.object(forInfoDictionaryKey: "QWQPublicWebURL") as? String,
-      Bundle.main.object(forInfoDictionaryKey: "QWQAppDownloadBaseURL") as? String,
-    ]
-    return (manifestValues + bundleValues).compactMap { rawValue in
+    return manifestValues.compactMap { rawValue in
       guard let value = rawValue?.trimmingCharacters(in: .whitespacesAndNewlines),
             !value.isEmpty
       else {
@@ -895,7 +2252,6 @@ private final class RecoveryFailureEncryptedStore {
       return URL(string: value)
     }
   }
-
   private func registerStartupTimingsChannel(
     binaryMessenger: FlutterBinaryMessenger
   ) {
@@ -1167,7 +2523,10 @@ private final class RecoveryFailureEncryptedStore {
   }
 
   override func applicationDidBecomeActive(_ application: UIApplication) {
-    if !confirmedPreviousBuildFatal {
+    if nativeActivationOnly {
+      return
+    }
+    if !confirmedPreviousBuildFatal && nativeActivationFailureCode.isEmpty {
       super.applicationDidBecomeActive(application)
     }
     if !appInForeground {
@@ -1196,7 +2555,7 @@ private final class RecoveryFailureEncryptedStore {
         webButton: web
       )
     }
-    if !confirmedPreviousBuildFatal {
+    if !confirmedPreviousBuildFatal && nativeActivationFailureCode.isEmpty {
       armFlutterFirstFrameWatchdog()
     }
   }
@@ -1210,7 +2569,10 @@ private final class RecoveryFailureEncryptedStore {
     appInForeground = false
     foregroundStartedUptime = 0
     cancelFlutterFirstFrameWatchdog()
-    if !confirmedPreviousBuildFatal {
+    if !confirmedPreviousBuildFatal,
+       !nativeActivationOnly,
+       nativeActivationFailureCode.isEmpty
+    {
       super.applicationWillResignActive(application)
     }
   }
@@ -1218,7 +2580,10 @@ private final class RecoveryFailureEncryptedStore {
   override func applicationWillTerminate(_ application: UIApplication) {
     cancelFlutterFirstFrameWatchdog()
     cancelNativeRecoveryTerminalReconciliation()
-    if !confirmedPreviousBuildFatal {
+    if !confirmedPreviousBuildFatal,
+       !nativeActivationOnly,
+       nativeActivationFailureCode.isEmpty
+    {
       super.applicationWillTerminate(application)
     }
   }
@@ -1524,7 +2889,9 @@ private final class RecoveryFailureEncryptedStore {
   }
 
   func showNativeStartupRecovery() {
-    guard (!startupSafeTerminalConfirmed || confirmedPreviousBuildFatal),
+    guard (!startupSafeTerminalConfirmed
+             || confirmedPreviousBuildFatal
+             || !nativeActivationFailureCode.isEmpty),
           !nativeRecoveryShown,
           let window
     else { return }
@@ -1656,57 +3023,42 @@ private final class RecoveryFailureEncryptedStore {
   }
 
   private var recoveryBaseURLString: String {
-    if let value = nativeRuntimeManifest["recoveryBaseURL"] as? String,
-       isTrustedRecoveryURL(URL(string: value)) {
-      return value
+    guard let value = nativeRuntimeManifest["recoveryBaseURL"] as? String,
+          isTrustedRecoveryURL(URL(string: value))
+    else {
+      return ""
     }
-    let configured = Bundle.main.object(forInfoDictionaryKey: "QWQRecoveryBaseURL") as? String
-    let value = configured?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    if isTrustedRecoveryURL(URL(string: value)) {
-      return value
-    }
-    return ""
+    return value
   }
 
   private var publicWebURLString: String {
-    if let value = nativeRuntimeManifest["publicWebURL"] as? String,
-       isTrustedRecoveryURL(URL(string: value)) {
-      return value
+    guard let value = nativeRuntimeManifest["publicWebURL"] as? String,
+          isTrustedRecoveryURL(URL(string: value))
+    else {
+      return ""
     }
-    let configured = Bundle.main.object(forInfoDictionaryKey: "QWQPublicWebURL") as? String
-    let value = configured?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    if isTrustedRecoveryURL(URL(string: value)) {
-      return value
-    }
-    return ""
+    return value
   }
 
   private var appDownloadBaseURLString: String {
-    if let value = nativeRuntimeManifest["appDownloadBaseURL"] as? String,
-       isTrustedRecoveryURL(URL(string: value)) {
-      return value
+    guard let value = nativeRuntimeManifest["appDownloadBaseURL"] as? String,
+          isTrustedRecoveryURL(URL(string: value))
+    else {
+      return ""
     }
-    let configured = Bundle.main.object(
-      forInfoDictionaryKey: "QWQAppDownloadBaseURL"
-    ) as? String
-    let value = configured?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    if isTrustedRecoveryURL(URL(string: value)) {
-      return value
-    }
-    return ""
+    return value
   }
 
   private var nativeRuntimeEnvironment: String {
-    if let value = nativeRuntimeManifest["runtimeEnvironment"] as? String,
-       ["alpha", "beta", "gamma", "prod"].contains(value) {
-      return value
+    guard let value = nativeRuntimeManifest["runtimeEnvironment"] as? String,
+          ["alpha", "beta", "gamma", "prod"].contains(value)
+    else {
+      return ""
     }
-    let configured = Bundle.main.object(forInfoDictionaryKey: "QWQRuntimeEnvironment") as? String
-    let value = configured?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    return ["alpha", "beta", "gamma", "prod"].contains(value) ? value : ""
+    return value
   }
 
-  private var nativeRuntimeConfigDigest: String {
+  private var nativeActiveRuntimePackageDigest: String {
     (nativeRuntimeManifest["runtimeConfigDigest"] as? String)?
       .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
   }
@@ -1717,21 +3069,15 @@ private final class RecoveryFailureEncryptedStore {
   }
 
   private var nativeRuntimeManifest: [String: Any] {
-    guard
-      let url = Bundle.main.url(
-        forResource: "QWQNativeRuntime",
-        withExtension: "plist"
-      ),
-      let data = try? Data(contentsOf: url),
-      let value = try? PropertyListSerialization.propertyList(
-        from: data,
-        options: [],
-        format: nil
-      ) as? [String: Any]
-    else {
+    switch NativeRuntimeConfigActivationCoordinator.readRecoveryRuntimeContext() {
+    case .present(let manifest):
+      return manifest
+    case .absent:
       return [:]
+    case .failure(let code):
+      NSLog("QWQStartup ios_runtime_config_recovery_context_failed code=%@", code)
+      return ["runtimeConfigErrorCode": code]
     }
-    return value
   }
 
   private func checkNativeRecoveryVersion(

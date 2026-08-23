@@ -12,12 +12,84 @@ appear and no quota may be defaulted in from a sibling field (`GWT-009`).
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from content.execution.campaign.lane import (
     CAMPAIGN_CARRIERS,
     normalize_active_carriers,
     normalize_workloads,
 )
+from content.execution.campaign.plan import write_report
+from content.execution.campaign.plan_lane_state import empty_lane
+from content.execution.campaign.workspace import CampaignRuntimePaths
+from core.io import read_json
+
+
+def _runtime(tmp_path: Path) -> CampaignRuntimePaths:
+    return CampaignRuntimePaths(
+        repo_root=tmp_path / "repo",
+        output_root=tmp_path / "output",
+        publish_root=tmp_path / "publish",
+        campaigns_root=tmp_path / "campaigns",
+        workspaces_root=tmp_path / "workspaces",
+    )
+
+
+def _write_article_report(
+    tmp_path: Path,
+    *,
+    lanes: dict[str, dict[str, object]],
+) -> Path:
+    return write_report(
+        _runtime(tmp_path),
+        "20260822--travel-article-workload--china--scale-001",
+        status="awaiting_submissions",
+        phase="submission",
+        plan_digest=None,
+        git_branch=None,
+        git_commit_sha=None,
+        source_digest=None,
+        entity_catalog_digest=None,
+        lanes=lanes,
+        started_at="2026-08-22T00:00:00+00:00",
+        failure=None,
+        active_carriers=("article",),
+        workloads={"article": 1},
+    )
+
+
+def test_campaign_report_accepts_exact_single_article_lane(tmp_path: Path) -> None:
+    path = _write_article_report(
+        tmp_path,
+        lanes={"article": empty_lane("article-execution")},
+    )
+
+    report = read_json(path)
+    assert report["activeCarriers"] == ["article"]
+    assert report["workloads"] == {"article": 1}
+    assert set(report["lanes"]) == {"article"}
+
+
+@pytest.mark.parametrize(
+    "lanes",
+    [
+        {},
+        {
+            "article": empty_lane("article-execution"),
+            "video": empty_lane("hidden-video-execution"),
+        },
+    ],
+)
+def test_campaign_report_rejects_lane_set_different_from_active_workload(
+    tmp_path: Path,
+    lanes: dict[str, dict[str, object]],
+) -> None:
+    with pytest.raises(
+        ValueError,
+        match="campaign report lanes must exactly match active carriers",
+    ):
+        _write_article_report(tmp_path, lanes=lanes)
 
 
 def test_the_four_carriers_are_the_closed_canonical_order() -> None:

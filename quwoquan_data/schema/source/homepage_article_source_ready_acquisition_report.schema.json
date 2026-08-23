@@ -14,7 +14,7 @@
   "properties": {
     "schema": {"const": "quwoquan_data.homepage_article_source_ready_acquisition_report"},
     "sourceSetId": {"type": "string", "minLength": 1},
-    "targetScale": {"enum": ["M100", "M1000", "M10000"]},
+    "targetScale": {"enum": ["WORKLOAD", "M100", "M1000", "M10000"]},
     "sourceRevision": {"$ref": "#/$defs/sha256"},
     "sourceDigest": {"$ref": "#/$defs/sha256"},
     "entityCatalogDigest": {"$ref": "#/$defs/sha256"},

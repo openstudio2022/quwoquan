@@ -35,15 +35,13 @@ from governance.coverage.distribution import (
 
 _RESULT_SCHEMA = "quwoquan_data.work_request_compile_result"
 _MAX_DOCUMENT_BYTES = 256 * 1024
+# Demand facts (vertical, scope, topic refs, lifecycle, workloads) are owned by
+# the confirmed pre-acquisition handoff; independent caller inputs for them are
+# rejected as unknown keys instead of silently merged.
 _ALLOWED_INPUTS = frozenset(
     {
         "intentText",
-        "vertical",
-        "regionRef",
-        "topic",
-        "lifecycle",
         "mode",
-        "workloads",
         "targetNames",
         "sourceProviders",
         "semanticSelectionId",
@@ -60,11 +58,7 @@ _ALLOWED_INPUTS = frozenset(
     }
 )
 _REQUIRED_INPUTS = (
-    "regionRef",
-    "lifecycle",
     "mode",
-    "workloads",
-    "capacityCalibrationReceiptRef",
     "preAcquisitionHandoffRef",
     "scaleSourcePoolPlanRef",
     "sourcePoolEvidenceRootRef",
@@ -195,11 +189,12 @@ def _canonical_ref(path: Path) -> str:
     raise ValueError(f"dependency is outside governed roots: {resolved}")
 
 
-def _normalized_workload(intent: Mapping[str, Any]) -> tuple[str, str, dict[str, int]]:
-    raw = intent.get("workloads")
-    if not isinstance(raw, Mapping) or not raw:
-        raise ValueError("workloads must be a non-empty carrier mapping")
-    workloads = normalize_workloads(raw)
+def _normalized_workload(
+    raw_workloads: Mapping[str, int],
+) -> tuple[str, str, dict[str, int]]:
+    if not isinstance(raw_workloads, Mapping) or not raw_workloads:
+        raise ValueError("handoff workloadTargets must be a non-empty carrier mapping")
+    workloads = normalize_workloads(raw_workloads)
     policy = load_content_distribution_policy()
     for milestone in policy.governed_scales():
         if tuple(workloads) == CAMPAIGN_CARRIERS and workloads == campaign_workload_targets(
@@ -260,10 +255,14 @@ def _dependency_bindings(
     ):
         raise ValueError("SourcePool identity or workload binding drift")
     file_refs = {
-        "capacityCalibrationReceiptRef": _path(intent["capacityCalibrationReceiptRef"]),
         "preAcquisitionHandoffRef": _path(intent["preAcquisitionHandoffRef"]),
         "scaleSourcePoolPlanRef": plan_path,
     }
+    # bounded M1–M10 请求不携带 calibration receipt，授权由 envelope builder
+    # 的互斥 executionAuthority 判定；governed 请求仍逐字节绑定 receipt。
+    calibration_ref = str(intent.get("capacityCalibrationReceiptRef") or "").strip()
+    if calibration_ref:
+        file_refs["capacityCalibrationReceiptRef"] = _path(calibration_ref)
     semantic_ref = str(intent.get("semanticPreflightReceiptRef") or "").strip()
     if semantic_ref:
         file_refs["semanticPreflightReceiptRef"] = _path(semantic_ref)
@@ -343,11 +342,31 @@ def _dependency_bindings(
 
 
 def _normalize(intent: Mapping[str, Any]) -> dict[str, Any]:
-    scale, workload_mode, workloads = _normalized_workload(intent)
-    vertical = str(intent.get("vertical") or "travel").strip().lower()
-    region_ref = str(intent["regionRef"]).strip()
-    lifecycle = str(intent["lifecycle"]).strip()
+    from content.execution.controller.execute.pre_acquisition_handoff import (
+        PreAcquisitionHandoffError,
+        load_pre_acquisition_handoff,
+    )
+    from governance.provider_policy import load_provider_policy
+
+    handoff_path = _path(intent["preAcquisitionHandoffRef"])
+    try:
+        handoff = load_pre_acquisition_handoff(handoff_path)
+    except PreAcquisitionHandoffError as exc:
+        raise ValueError(str(exc)) from exc
+    vertical = str(handoff["vertical"])
+    region_ref = str(handoff.get("regionRef") or "").strip()
+    lifecycle = str(handoff["lifecycle"])
     execution_mode = str(intent["mode"]).strip()
+    scale, workload_mode, workloads = _normalized_workload(handoff["workloadTargets"])
+    if scale != str(handoff["scale"]):
+        raise ValueError(
+            "handoff scale conflicts with its own workloadTargets: "
+            f"{handoff['scale']} vs {scale}"
+        )
+    if not region_ref:
+        # Envelope execution is region-addressed today; region-less scopes stay
+        # typed at the input boundary instead of collapsing to a default region.
+        raise LookupError(f"regionScopedExecutionRequired:{handoff['scopeType']}")
     entity_root = (
         paths.REPO_ROOT
         / "quwoquan_data"
@@ -363,6 +382,27 @@ def _normalize(intent: Mapping[str, Any]) -> dict[str, Any]:
         raise LookupError(
             "lifecycle conflicts with current content distribution policy"
         )
+    providers = sorted(
+        {
+            str(item).strip()
+            for item in intent.get("sourceProviders") or []
+            if str(item).strip()
+        }
+    )
+    try:
+        load_provider_policy(vertical).require_declared(tuple(providers))
+    except ValueError as exc:
+        raise LookupError(f"undeclaredSourceProvider:{exc}") from exc
+    predecessors = dict(intent.get("predecessorExecutionIdsByCarrier") or {})
+    if execution_mode == "retry" and set(predecessors) != set(workloads):
+        raise LookupError("predecessorExecutionIdsByCarrier")
+    external_inputs = intent.get("externalInputRefsByCarrier") or {}
+    if isinstance(external_inputs, Mapping):
+        inactive = sorted(set(external_inputs) - set(workloads))
+        if inactive:
+            raise LookupError(
+                "externalInputInactiveCarrier:" + ",".join(inactive)
+            )
     dependencies = _dependency_bindings(
         intent,
         scale=scale,
@@ -371,11 +411,13 @@ def _normalize(intent: Mapping[str, Any]) -> dict[str, Any]:
         vertical=vertical,
         region_ref=region_ref,
     )
-    topic = str(intent.get("topic") or "").strip() or None
     normalized = {
         "vertical": vertical,
         "regionRef": region_ref,
-        "topic": topic,
+        "scopeType": str(handoff["scopeType"]),
+        "scope": str(handoff["scope"]),
+        "primaryTopicRef": handoff.get("primaryTopicRef"),
+        "relatedTopicRefs": list(handoff.get("relatedTopicRefs") or []),
         "lifecycle": lifecycle,
         "executionMode": execution_mode,
         "scale": scale,
@@ -396,8 +438,10 @@ def _normalize(intent: Mapping[str, Any]) -> dict[str, Any]:
             if str(intent.get("semanticPreflightReceiptRef") or "").strip()
             else ""
         ),
-        "capacityCalibrationReceiptRef": _canonical_ref(
-            _path(intent["capacityCalibrationReceiptRef"])
+        "capacityCalibrationReceiptRef": (
+            _canonical_ref(_path(intent["capacityCalibrationReceiptRef"]))
+            if str(intent.get("capacityCalibrationReceiptRef") or "").strip()
+            else ""
         ),
         "preAcquisitionHandoffRef": _canonical_ref(
             _path(intent["preAcquisitionHandoffRef"])
@@ -459,33 +503,6 @@ def _normalize(intent: Mapping[str, Any]) -> dict[str, Any]:
 def _input_issues(intent: Mapping[str, Any]) -> list[str]:
     issues = [key for key in _REQUIRED_INPUTS if intent.get(key) in (None, "", {})]
     issues.extend(f"unknown:{key}" for key in intent if key not in _ALLOWED_INPUTS)
-    raw_workloads = intent.get("workloads")
-    if isinstance(raw_workloads, Mapping):
-        issues.extend(
-            f"unknownCarrier:{carrier}"
-            for carrier in raw_workloads
-            if carrier not in CAMPAIGN_CARRIERS
-        )
-        if any(
-            isinstance(value, bool) or not isinstance(value, int) or value < 1
-            for value in raw_workloads.values()
-        ):
-            issues.append("workloads")
-    vertical = intent.get("vertical", "travel")
-    if not isinstance(vertical, str) or re.fullmatch(
-        r"[a-z][a-z0-9-]*", vertical.strip().lower()
-    ) is None:
-        issues.append("vertical")
-    region_ref = intent.get("regionRef")
-    region_path = Path(str(region_ref or ""))
-    if (
-        not isinstance(region_ref, str)
-        or region_path.is_absolute()
-        or ".." in region_path.parts
-    ):
-        issues.append("regionRef")
-    if intent.get("topic") is not None and not isinstance(intent.get("topic"), str):
-        issues.append("topic")
     for field in ("targetNames", "sourceProviders"):
         value = intent.get(field, [])
         if not isinstance(value, list) or any(
@@ -496,20 +513,16 @@ def _input_issues(intent: Mapping[str, Any]) -> list[str]:
     if not isinstance(external_inputs, Mapping):
         issues.append("externalInputRefsByCarrier")
     else:
-        active = set(raw_workloads) if isinstance(raw_workloads, Mapping) else set()
         issues.extend(
-            f"externalInputInactiveCarrier:{carrier}"
+            f"unknownCarrier:{carrier}"
             for carrier in external_inputs
-            if carrier not in active
+            if carrier not in CAMPAIGN_CARRIERS
         )
         issues.extend(
             f"externalInputRefsByCarrier:{carrier}"
             for carrier, declarations in external_inputs.items()
             if not isinstance(declarations, list)
         )
-    lifecycle = str(intent.get("lifecycle") or "")
-    if lifecycle and lifecycle not in {"research", "commercial"}:
-        issues.append("lifecycle")
     mode = str(intent.get("mode") or "")
     if mode and mode not in {"fresh", "retry"}:
         issues.append("mode")
@@ -527,14 +540,9 @@ def _input_issues(intent: Mapping[str, Any]) -> list[str]:
     if mode == "fresh" and (predecessors or reconciliation):
         issues.append("freshRetryConflict")
     if mode == "retry":
-        raw_workloads = intent.get("workloads") or {}
-        if (
-            not isinstance(predecessors, Mapping)
-            or set(predecessors) != set(raw_workloads)
-            or any(
-                not isinstance(value, str) or not value.strip()
-                for value in predecessors.values()
-            )
+        if not isinstance(predecessors, Mapping) or not predecessors or any(
+            not isinstance(value, str) or not value.strip()
+            for value in predecessors.values()
         ):
             issues.append("predecessorExecutionIdsByCarrier")
         if not reconciliation:

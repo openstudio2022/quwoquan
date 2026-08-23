@@ -14,6 +14,7 @@ services:
       SERVICE_NAME: tag-service
       APP_ENV: "${QWQ_COMPOSE_ENV:-gamma}"
       CONFIG_ROOT: /etc/qwq-config
+      QWQ_ARTIFACT_IDENTITY_FILE: /etc/quwoquan/artifact-identity.json
       CONFIG_VERSION: "${QWQ_COMPOSE_TAG_SERVICE_CONFIG_VERSION:?QWQ_COMPOSE_TAG_SERVICE_CONFIG_VERSION is required}"
       IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:?immutable image version is required}"
       TAG_MONGO_URI: mongodb://mongodb:27017
@@ -25,6 +26,7 @@ services:
         condition: service_completed_successfully
     volumes:
       - ${QWQ_COMPOSE_CONFIG_ROOT:?QWQ_COMPOSE_CONFIG_ROOT is required}:/etc/qwq-config:ro
+      - ${QWQ_COMPOSE_ARTIFACT_IDENTITY_FILE:?artifact identity mount is required}:/etc/quwoquan/artifact-identity.json:ro
 
   tag-service:
     image: "${QWQ_COMPOSE_TAG_SERVICE_IMAGE:?fixed tag-service source image reference is required}"
@@ -39,6 +41,7 @@ services:
       SERVICE_NAME: tag-service
       APP_ENV: "${QWQ_COMPOSE_ENV:-gamma}"
       CONFIG_ROOT: /etc/qwq-config
+      QWQ_ARTIFACT_IDENTITY_FILE: /etc/quwoquan/artifact-identity.json
       CONFIG_VERSION: "${QWQ_COMPOSE_TAG_SERVICE_CONFIG_VERSION:?QWQ_COMPOSE_TAG_SERVICE_CONFIG_VERSION is required}"
       IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:?immutable image version is required}"
       TAG_SERVICE_ADDR: ":18092"
@@ -62,6 +65,7 @@ services:
         condition: service_completed_successfully
     volumes:
       - ${QWQ_COMPOSE_CONFIG_ROOT:?QWQ_COMPOSE_CONFIG_ROOT is required}:/etc/qwq-config:ro
+      - ${QWQ_COMPOSE_ARTIFACT_IDENTITY_FILE:?artifact identity mount is required}:/etc/quwoquan/artifact-identity.json:ro
     ports:
       - "${QWQ_COMPOSE_TAG_PORT:-19270}:18092"
     healthcheck:

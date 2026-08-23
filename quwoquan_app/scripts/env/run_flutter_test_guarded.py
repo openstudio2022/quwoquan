@@ -28,6 +28,13 @@ if str(REPOSITORY_ROOT) not in sys.path:
 from quwoquan_app.scripts._common.flutter_test_selection import (  # noqa: E402
   declares_serial_tests,
 )
+from quwoquan_app.scripts.device.verify_flutter_run_defines import (  # noqa: E402
+  RUNTIME_VALUE_DEFINE_KEYS,
+)
+from quwoquan_app.scripts.env.print_app_env_dart_defines import (  # noqa: E402
+  deployment_target_for_env,
+  test_live_runtime_values,
+)
 
 
 APP_ROOT = Path(__file__).resolve().parents[2]
@@ -52,7 +59,6 @@ DEFAULT_TEST_TIMEOUT_SECONDS = int(
   os.environ.get("FLUTTER_TEST_GUARD_TIMEOUT_SECONDS", "1200")
 )
 DEFAULT_MAX_ATTEMPTS = int(os.environ.get("FLUTTER_TEST_GUARD_MAX_ATTEMPTS", "3"))
-RUNTIME_DEFINE_SCRIPT = APP_ROOT / "scripts" / "env" / "print_app_env_dart_defines.py"
 
 
 def _cpu_default_concurrency(*, full_local_contract: bool) -> int:
@@ -282,41 +288,39 @@ def _dart_define_values(args: list[str]) -> dict[str, str]:
 
 
 def _with_runtime_environment_defines(args: list[str]) -> list[str]:
+  """给测试宿主注入 endpoint define。
+
+  App 运行时本身不读编译期 define——runtime config 走签名 package 的安装后
+  激活——但 ``String.fromEnvironment`` 会冻进测试 kernel，所以 user_acceptance
+  测试宿主必须在 ``flutter test`` 前拿到该打哪个 endpoint。取值与 App 同源，
+  键映射由 ``verify_flutter_run_defines`` 独占。
+  """
   defined = _dart_define_values(args)
   runtime_env = (
     defined.get("APP_RUNTIME_ENV")
     or os.environ.get("QWQ_APP_RUNTIME_ENV")
     or "alpha"
   ).strip()
-  result = subprocess.run(
-    [
-      sys.executable,
-      str(RUNTIME_DEFINE_SCRIPT),
-      "--env",
-      runtime_env,
-      "--launch-policy",
-      "test_live",
-      "--format",
-      "args",
-    ],
-    cwd=str(APP_ROOT),
-    text=True,
-    capture_output=True,
-    check=False,
-  )
-  if result.returncode != 0:
+  try:
+    values = test_live_runtime_values(
+      runtime_env, deployment_target_for_env(runtime_env)
+    )
+  except (OSError, SystemExit, ValueError) as error:
     raise RuntimeError(
       "cannot resolve explicit runtime Dart defines for Flutter tests: "
-      + (result.stderr or result.stdout).strip()
-    )
+      f"{error}"
+    ) from error
   injected: list[str] = []
-  for line in result.stdout.splitlines():
-    value = line.strip()
-    if not value.startswith("--dart-define="):
+  for value_key, define_key in sorted(RUNTIME_VALUE_DEFINE_KEYS.items()):
+    if define_key in defined:
       continue
-    key = value.removeprefix("--dart-define=").partition("=")[0]
-    if key and key not in defined:
-      injected.append(value)
+    value = str(values.get(value_key, "")).strip()
+    if not value:
+      raise RuntimeError(
+        "cannot resolve explicit runtime Dart defines for Flutter tests: "
+        f"{runtime_env} runtime config has no {value_key}"
+      )
+    injected.append(f"--dart-define={define_key}={value}")
   return [*injected, *args]
 
 

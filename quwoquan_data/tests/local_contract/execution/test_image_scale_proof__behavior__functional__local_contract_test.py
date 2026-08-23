@@ -32,6 +32,7 @@ from content.execution import store  # noqa: E402
 from content.execution.planning.selection import build_execution_spec  # noqa: E402
 from support.capacity_calibration_fixture import (  # noqa: E402
     synthetic_capacity_source_binding,
+    synthetic_governed_execution_authority,
 )
 from content.source.image_scale_proof import (  # noqa: E402
     build_open_license_scale_proof,

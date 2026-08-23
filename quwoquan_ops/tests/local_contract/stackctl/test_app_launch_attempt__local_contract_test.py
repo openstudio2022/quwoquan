@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-002
+
 import json
 import signal
 import subprocess
@@ -19,7 +21,10 @@ from quwoquan_ops.cli.lib.app_debug_preflight_handoff import (
     write_app_debug_preflight_receipt,
 )
 from quwoquan_ops.cli.lib.app_launch_attempt import (
+    CONFIGURATION_STATES,
     LAUNCH_BLOCKERS,
+    RECOVERY_WEB_STATUSES,
+    RUNTIME_HEALTH_STATUSES,
     create_app_launch_attempt,
     read_app_launch_attempt,
     record_app_launch_attempt_observation,
@@ -132,6 +137,29 @@ def test_receipt_rejects_skipped_forward_state() -> None:
             transition_app_launch_attempt(receipt, "launched")
 
 
+def test_receipt_requires_activation_between_install_and_launch() -> None:
+    with tempfile.TemporaryDirectory() as temporary:
+        receipt = Path(temporary) / "attempt.json"
+        _new_receipt(receipt)
+        for status in ("compiling", "compiled", "installing", "installed"):
+            transition_app_launch_attempt(receipt, status)
+        with pytest.raises(ValueError, match="installed -> launching"):
+            transition_app_launch_attempt(receipt, "launching")
+        for status in ("configuring", "configured", "launching", "launched"):
+            transition_app_launch_attempt(receipt, status)
+        assert [item["status"] for item in read_app_launch_attempt(receipt)["transitions"]] == [
+            "prepared",
+            "compiling",
+            "compiled",
+            "installing",
+            "installed",
+            "configuring",
+            "configured",
+            "launching",
+            "launched",
+        ]
+
+
 def test_compile_failure_after_old_pid_window_never_becomes_launched() -> None:
     with tempfile.TemporaryDirectory() as temporary:
         receipt = Path(temporary) / "attempt.json"
@@ -165,7 +193,7 @@ def test_launch_error_does_not_invent_install_or_launched_transitions() -> None:
         receipt = Path(temporary) / "attempt.json"
         result = _run_supervisor(
             receipt,
-            "print('Xcode build done.', flush=True); "
+            "print('QWQ_APP_LAUNCH_PHASE status=compiled', flush=True); "
             "print('Error launching application on iPhone.', flush=True); "
             "raise SystemExit(1)",
         )
@@ -188,9 +216,13 @@ def test_bootstrap_failure_is_logged_as_runtime_degraded_warning() -> None:
         result = subprocess.run(
             _supervisor_argv(
                 receipt,
-                "print('Xcode build done.', flush=True); "
-                "print('Syncing files to device iPhone...', flush=True); "
-                "print('A Dart VM Service is available', flush=True); "
+                "print('QWQ_APP_LAUNCH_PHASE status=compiled', flush=True); "
+                "print('QWQ_APP_LAUNCH_PHASE status=installing', flush=True); "
+                "print('QWQ_APP_LAUNCH_PHASE status=installed', flush=True); "
+                "print('QWQ_APP_LAUNCH_PHASE status=configuring', flush=True); "
+                "print('QWQ_APP_LAUNCH_PHASE status=configured', flush=True); "
+                "print('QWQ_APP_LAUNCH_PHASE status=launching', flush=True); "
+                "print('QWQ_APP_LAUNCH_PHASE status=launched', flush=True); "
                 "print('[bootstrap] source=bootstrap_failure exception=typed', flush=True)",
                 log_ref=log_ref,
             ),
@@ -205,37 +237,24 @@ def test_bootstrap_failure_is_logged_as_runtime_degraded_warning() -> None:
         assert "source=bootstrap_failure" in log_ref.read_text(encoding="utf-8")
 
 
-def test_fresh_install_probe_advances_to_launching_without_claiming_launched() -> None:
-    supervisor = _load_supervisor_module()
+def test_install_state_requires_executor_phase_marker() -> None:
     with tempfile.TemporaryDirectory() as temporary:
         receipt = Path(temporary) / "attempt.json"
-        create_app_launch_attempt(
+        result = _run_supervisor(
             receipt,
-            environment="alpha",
-            target="alpha-local",
-            platform="ios",
-            build_mode="debug",
-            run_mode="ui-only",
-            device_id="ios-1",
+            "print('QWQ_APP_LAUNCH_PHASE status=compiled', flush=True)",
         )
-        transition_app_launch_attempt(receipt, "compiling")
-        transition_app_launch_attempt(receipt, "compiled")
-        with mock.patch.object(
-            supervisor,
-            "_installation_snapshot",
-            return_value="new-container\0new-mtime",
-        ):
-            observed = supervisor._advance_fresh_install(
-                receipt,
-                before="old-container\0old-mtime",
-                platform="ios",
-                device="ios-1",
-                application_id="com.example.app",
-            )
-        assert observed is True
         payload = read_app_launch_attempt(receipt)
-        assert payload["status"] == "launching"
-        assert "launched" not in [item["status"] for item in payload["transitions"]]
+
+    assert result.returncode != 0
+    assert payload["status"] == "failed"
+    assert payload["firstBlocker"] == "APP.LAUNCH.install_failed"
+    assert [item["status"] for item in payload["transitions"]] == [
+        "prepared",
+        "compiling",
+        "compiled",
+        "failed",
+    ]
 
 
 def test_timeout_is_typed_and_ctrl_c_is_stopped_without_compile_failure() -> None:
@@ -354,6 +373,81 @@ def test_launch_blockers_are_enumerated_by_metadata_not_by_free_text() -> None:
             )
 
 
+def test_install_failure_is_typed_from_the_phase_it_died_in() -> None:
+    """compiled/installing 阶段的死亡是安装失败，不得复用编译或启动的码。"""
+
+    module = _load_supervisor_module()
+    assert module._failure_for("compiled") == "APP.LAUNCH.install_failed"
+    assert module._failure_for("installing") == "APP.LAUNCH.install_failed"
+    with tempfile.TemporaryDirectory() as temporary:
+        receipt = Path(temporary) / "attempt.json"
+        result = _run_supervisor(
+            receipt,
+            "import sys; print('QWQ_APP_LAUNCH_PHASE status=compiled', flush=True); sys.exit(1)",
+        )
+        payload = read_app_launch_attempt(receipt)
+        assert result.returncode != 0
+        assert payload["status"] == "failed"
+        assert payload["firstBlocker"] == "APP.LAUNCH.install_failed"
+
+
+def test_waiting_past_the_deadline_is_a_typed_receipt_timeout() -> None:
+    with tempfile.TemporaryDirectory() as temporary:
+        receipt = Path(temporary) / "attempt.json"
+        _new_receipt(receipt)
+        transition_app_launch_attempt(receipt, "compiling")
+        with pytest.raises(TimeoutError, match="APP.LAUNCH.receipt_timeout"):
+            wait_for_app_launch_attempt(
+                receipt, timeout_seconds=0.05, poll_seconds=0.01
+            )
+
+
+def test_prod_sim_rejects_an_artifact_that_is_not_the_exact_release() -> None:
+    """prod-sim 只接受 exact non-promotable simulator Release manifest。"""
+
+    import importlib.util
+
+    launcher_path = (
+        ROOT / "quwoquan_app/scripts/device/launch_release_artifact.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "launch_release_artifact", launcher_path
+    )
+    assert spec is not None and spec.loader is not None
+    launcher = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = launcher
+    spec.loader.exec_module(launcher)
+
+    with tempfile.TemporaryDirectory() as temporary:
+        manifest_path = Path(temporary) / "app-artifact-manifest.json"
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "schema": "app-artifact-manifest",
+                    "environment": "prod",
+                    "platform": "android",
+                    "buildMode": "release",
+                    "distributionClass": "simulator",
+                    # promotable 制品不是 prod-sim 的可运行对象。
+                    "promotable": True,
+                }
+            ),
+            encoding="utf-8",
+        )
+        with pytest.raises(ValueError, match="APP.LAUNCH.prod_artifact_invalid"):
+            launcher._load_inputs(manifest_path, "android")
+
+
+def test_observation_states_are_enumerated_by_metadata_not_by_free_text() -> None:
+    fields = _launch_manifest()["schemas"]["app_launch_attempt"]["fields"]
+    for field, constant in (
+        ("configurationState", CONFIGURATION_STATES),
+        ("runtimeHealthStatus", RUNTIME_HEALTH_STATUSES),
+        ("recoveryWebStatus", RECOVERY_WEB_STATUSES),
+    ):
+        assert set(fields[field]["allowed_values"]) == set(constant)
+
+
 def test_new_receipt_starts_unobserved_for_configuration_and_runtime() -> None:
     manifest_fields = _launch_manifest()["schemas"]["app_launch_attempt"]
     with tempfile.TemporaryDirectory() as temporary:
@@ -401,19 +495,27 @@ def test_recovery_web_status_requires_readable_evidence_reference() -> None:
             )
 
 
-def test_configuration_state_is_read_from_the_app_console_evidence() -> None:
+def test_configuration_state_is_read_from_the_canonical_startup_attempt_line() -> None:
+    """一个事实只有一条文法：supervisor 只认 (android|ios)_dart_startup_attempt。"""
+
     module = _load_supervisor_module()
     assert module._configuration_state_from(
-        "[log] startup_configuration_state state=complete"
+        "I/QWQStartup: android_dart_startup_attempt attemptId=a1 "
+        "launchMode=stackctl_alpha hotRestart=false configurationState=complete"
     ) == "complete"
     assert module._configuration_state_from(
-        "[log] startup_configuration_state state=pending_native"
+        "QWQStartup ios_dart_startup_attempt attemptId=b2 "
+        "configurationState=pending_native"
     ) == "pending_native"
     # 未登记的取值不得写进 receipt，宁可保持 unobserved。
     assert module._configuration_state_from(
-        "[log] startup_configuration_state state=content_missing"
+        "android_dart_startup_attempt attemptId=a1 configurationState=content_missing"
     ) == ""
     assert module._configuration_state_from("unrelated output") == ""
+    # 第二条文法一旦复活即为双真相源，这里显式钉死它不被接受。
+    assert module._configuration_state_from(
+        "[log] startup_configuration_state state=complete"
+    ) == ""
 
 
 def test_launched_attempt_settles_runtime_health_from_observed_warnings() -> None:
@@ -422,10 +524,14 @@ def test_launched_attempt_settles_runtime_health_from_observed_warnings() -> Non
         healthy_receipt = root / "healthy.json"
         result = _run_supervisor(
             healthy_receipt,
-            "print('Xcode build done.', flush=True); "
-            "print('Syncing files to device iPhone...', flush=True); "
-            "print('startup_configuration_state state=complete', flush=True); "
-            "print('A Dart VM Service is available', flush=True)",
+            "print('QWQ_APP_LAUNCH_PHASE status=compiled', flush=True); "
+            "print('QWQ_APP_LAUNCH_PHASE status=installing', flush=True); "
+            "print('QWQ_APP_LAUNCH_PHASE status=installed', flush=True); "
+            "print('QWQ_APP_LAUNCH_PHASE status=configuring', flush=True); "
+            "print('QWQ_APP_LAUNCH_PHASE status=configured', flush=True); "
+            "print('QWQ_APP_LAUNCH_PHASE status=launching', flush=True); "
+            "print('android_dart_startup_attempt attemptId=a1 ""configurationState=complete', flush=True); "
+            "print('QWQ_APP_LAUNCH_PHASE status=launched', flush=True)",
         )
         healthy = read_app_launch_attempt(healthy_receipt)
         assert result.returncode == 0
@@ -436,9 +542,13 @@ def test_launched_attempt_settles_runtime_health_from_observed_warnings() -> Non
         degraded_receipt = root / "degraded.json"
         _run_supervisor(
             degraded_receipt,
-            "print('Xcode build done.', flush=True); "
-            "print('Syncing files to device iPhone...', flush=True); "
-            "print('A Dart VM Service is available', flush=True); "
+            "print('QWQ_APP_LAUNCH_PHASE status=compiled', flush=True); "
+            "print('QWQ_APP_LAUNCH_PHASE status=installing', flush=True); "
+            "print('QWQ_APP_LAUNCH_PHASE status=installed', flush=True); "
+            "print('QWQ_APP_LAUNCH_PHASE status=configuring', flush=True); "
+            "print('QWQ_APP_LAUNCH_PHASE status=configured', flush=True); "
+            "print('QWQ_APP_LAUNCH_PHASE status=launching', flush=True); "
+            "print('QWQ_APP_LAUNCH_PHASE status=launched', flush=True); "
             "print('[bootstrap] source=bootstrap_failure exception=typed', flush=True)",
         )
         degraded = read_app_launch_attempt(degraded_receipt)

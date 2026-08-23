@@ -13,6 +13,7 @@ from core.content_library import (
     link_from_library,
 )
 
+from content.source.media_source_admission import MediaSourceAdmissionQuery
 from content.source.research.scale_source_pool import SOURCE_POOL_SHORTFALL
 
 
@@ -83,6 +84,39 @@ def safe_evidence_directory(root: Path, ref: str) -> Path:
     return current
 
 
+def media_source_admission_refs(
+    candidate: Mapping[str, Any], *, evidence_root: Path
+) -> dict[str, str]:
+    result = MediaSourceAdmissionQuery(evidence_root).require_accepted(
+        str(candidate.get("sourceAdmissionRef") or "")
+    )
+    receipt = result["receipt"]
+    if (
+        result["receiptDigest"] != candidate.get("sourceAdmissionDigest")
+        or receipt.get("assetKind") != candidate.get("carrier")
+        or (
+            candidate.get("objectRef") is not None
+            and receipt.get("objectRef") != candidate.get("objectRef")
+        )
+    ):
+        raise ValueError("selected media source admission projection drift")
+    refs = {
+        result["receiptRef"]: file_sha256(
+            safe_evidence_file(evidence_root, result["receiptRef"])
+        )
+    }
+    for binding in receipt["evidenceBindings"]:
+        previous = refs.setdefault(binding["ref"], binding["fileSha256"])
+        if previous != binding["fileSha256"]:
+            raise ValueError(f"source-pool evidence digest collision: {binding['ref']}")
+    asset_ref = str(receipt["assetSnapshot"]["assetRef"])
+    asset_sha = file_sha256(safe_evidence_file(evidence_root, asset_ref))
+    previous = refs.setdefault(asset_ref, asset_sha)
+    if previous != asset_sha:
+        raise ValueError(f"source-pool evidence digest collision: {asset_ref}")
+    return refs
+
+
 def link_evidence_surface_from_library(
     refs: Mapping[str, str],
     *,
@@ -114,6 +148,7 @@ __all__ = [
     "digest",
     "file_sha256",
     "link_evidence_surface_from_library",
+    "media_source_admission_refs",
     "relative_to_output",
     "safe_evidence_directory",
     "safe_evidence_file",

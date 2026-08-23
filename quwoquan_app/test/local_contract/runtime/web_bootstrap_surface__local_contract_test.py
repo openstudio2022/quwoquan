@@ -35,7 +35,7 @@ class WebBootstrapSurfaceContractTest(unittest.TestCase):
         cls.js = JS_ASSET.read_text(encoding="utf-8")
 
     def test_generated_assets_are_in_sync_with_sources(self) -> None:
-        # generator 是唯一实现：产物必须与设计系统/ARB 真相源逐字节同步。
+        # generator 是唯一实现：安全逻辑与设计系统/ARB 产物必须逐字节同步。
         bootstrap_assets.check()
 
     def test_index_html_mounts_single_bootstrap_surface(self) -> None:
@@ -92,6 +92,83 @@ class WebBootstrapSurfaceContractTest(unittest.TestCase):
         )[0]
         self.assertNotIn("<button", loading)
         self.assertNotIn("<a ", loading)
+
+    def test_runtime_config_is_verified_before_flutter_engine_load(self) -> None:
+        bootstrap = (APP_ROOT / "web/flutter_bootstrap.js").read_text(encoding="utf-8")
+        self.assertIn('RUNTIME_CONFIG_TRUST_PATH = "/runtime-config-trust.json"', self.js)
+        self.assertIn('RUNTIME_CONFIG_PACKAGE_PATH = "/runtime-config-package.json"', self.js)
+        self.assertIn('cache: "no-store"', self.js)
+        self.assertIn('credentials: "same-origin"', self.js)
+        self.assertIn("fetchJson(RUNTIME_CONFIG_TRUST_PATH", self.js)
+        self.assertIn("RUNTIME_CONFIG_PACKAGE_PATH,\n      \"package\"", self.js)
+        self.assertIn('TRUST_SCHEMA = "app-runtime-config-trust"', self.js)
+        self.assertIn('PACKAGE_SCHEMA = "app-runtime-config-package"', self.js)
+        self.assertIn('EXPECTED_SCHEMA_VERSION = "1"', self.js)
+        self.assertIn('signatureAlgorithm !== "ed25519"', self.js)
+        self.assertIn('new URL(path, window.location.href)', self.js)
+        self.assertIn('url.origin !== window.location.origin', self.js)
+        self.assertNotIn('RUNTIME_CONFIG_TRUST_PATH = "runtime-config-trust.json"', self.js)
+        self.assertNotIn('RUNTIME_CONFIG_PACKAGE_PATH = "runtime-config-package.json"', self.js)
+        self.assertIn('crypto.subtle.verify(', self.js)
+        self.assertIn('{ name: "Ed25519" }', self.js)
+        self.assertIn("runtime-payload-digest-invalid", self.js)
+        self.assertIn("runtime-freshness-invalid", self.js)
+        self.assertIn("runtime-signature-key-untrusted", self.js)
+        self.assertIn("runtime-trust-profile-mismatch", self.js)
+        self.assertIn("window.__qwqRuntimeConfigReady.then(startFlutter)", bootstrap)
+        self.assertIn("payload.payloadDigest = \"\"", self.js)
+        self.assertIn("trustEnvelope.trustedPublicKeys", self.js)
+        self.assertIn("packageValue.trustedPublicKeys", self.js)
+        self.assertIn("runtime-trust-keyring-invalid", self.js)
+        for rejected_url_component in (
+            "url.username",
+            "url.password",
+            "url.search",
+            "url.hash",
+        ):
+            self.assertIn(rejected_url_component, self.js)
+        self.assertIn("canonicalTimestamp.test(packageValue.issuedAt)", self.js)
+        self.assertIn("canonicalTimestamp.test(packageValue.expiresAt)", self.js)
+        self.assertIn("packageValue.buildProfile !== trustEnvelope.buildProfile", self.js)
+        self.assertIn("window.__qwqReadRuntimeConfigPackage", self.js)
+        self.assertIn("JSON.stringify(packageValue)", self.js)
+        self.assertNotIn("JSON.stringify(envelope)", self.js)
+        for retired in (
+            '"package",\n    "trustedBuildProfile"',
+            '"trustedTarget"',
+            "trustEnvelope.package",
+            "trustEnvelope.trustedBuildProfile",
+            "trustEnvelope.trustedTarget",
+        ):
+            self.assertNotIn(retired, self.js)
+        self.assertLess(
+            bootstrap.index("window.__qwqRuntimeConfigReady.then(startFlutter)"),
+            bootstrap.index(".catch(function (error)"),
+        )
+        self.assertNotIn("String.fromEnvironment", bootstrap)
+        self.assertNotIn("APP_RUNTIME_ENV", bootstrap)
+
+    def test_config_failure_has_distinct_surface_and_copy(self) -> None:
+        self.assertIn('id="qwq-bootstrap-config-error"', self.index)
+        self.assertIn('id="qwq-bootstrap-config-code"', self.index)
+        self.assertIn("应用配置不可用", self.js)
+        self.assertIn("当前站点的启动配置缺失、已过期或未通过安全校验", self.js)
+        self.assertIn("window.__qwqShowRuntimeConfigError", self.js)
+        self.assertNotIn(
+            'window.__qwqShowRuntimeConfigError = showRecovery',
+            self.js,
+        )
+
+    def test_web_bundle_has_no_environment_or_endpoint_defaults(self) -> None:
+        joined = self.index + self.js + (APP_ROOT / "web/flutter_bootstrap.js").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotRegex(joined, re.compile(r"https://(?:api|cdn|rtc)\\."))
+        self.assertNotIn("APP_RUNTIME_ENV", joined)
+        self.assertNotIn('environment = "alpha"', joined)
+        self.assertNotIn('environment = "prod"', joined)
+        self.assertNotIn("localStorage", self.js)
+        self.assertNotIn("sessionStorage.setItem(\"qwq-runtime", self.js)
 
 
 if __name__ == "__main__":

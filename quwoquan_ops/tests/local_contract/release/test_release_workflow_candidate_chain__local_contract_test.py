@@ -12,6 +12,7 @@ from quwoquan_ops.ci.plan_service_release_images import (
     ALL_SERVICES,
     ENVIRONMENTS,
     RUNTIME_IMAGE_OWNERS,
+    TRUST_DOMAINS,
     affected_services,
     build_plan,
 )
@@ -42,13 +43,14 @@ class ServiceReleaseImagePlanTest(unittest.TestCase):
 
     def _previous_manifest(self, root: Path) -> Path:
         environment_artifacts: dict[str, dict[str, object]] = {}
-        for environment_index, environment in enumerate(ENVIRONMENTS, start=1):
+        for environment in ENVIRONMENTS:
+            trust_domain = "prod" if environment == "prod" else "nonprod"
             images = {}
             for owner_index, owner in enumerate(RUNTIME_IMAGE_OWNERS, start=1):
-                digest = f"sha256:{environment_index * 100 + owner_index:064x}"
+                digest = f"sha256:{(200 if trust_domain == 'prod' else 100) + owner_index:064x}"
                 images[owner] = {
                     "digest": digest,
-                    "ref": f"ghcr.io/owner/repo/{owner}-{environment}@{digest}",
+                    "ref": f"ghcr.io/owner/repo/{owner}-{trust_domain}@{digest}",
                 }
             environment_artifacts[environment] = {"images": images}
         path = root / "manifest.json"
@@ -74,22 +76,57 @@ class ServiceReleaseImagePlanTest(unittest.TestCase):
                 self._previous_manifest(Path(directory)),
             )
         actions = {
-            (item["environment"], item["runtime_image_owner"]): item["action"]
+            (item["trust_domain"], item["runtime_image_owner"]): item["action"]
             for item in plan
         }
-        self.assertEqual(len(plan), len(ENVIRONMENTS) * len(RUNTIME_IMAGE_OWNERS))
-        for environment in ENVIRONMENTS:
-            self.assertEqual(actions[(environment, "service-core")], "build")
+        self.assertEqual(len(plan), len(TRUST_DOMAINS) * len(RUNTIME_IMAGE_OWNERS))
+        for trust_domain in TRUST_DOMAINS:
+            self.assertEqual(actions[(trust_domain, "service-core")], "build")
             self.assertEqual(
-                actions[(environment, "recommendation-service")], "reuse"
+                actions[(trust_domain, "recommendation-service")], "reuse"
             )
         self.assertTrue(
             all(
                 item["image_name"]
-                == f"{item['runtime_image_owner']}-{item['environment']}"
+                == f"{item['runtime_image_owner']}-{item['trust_domain']}"
                 for item in plan
             )
         )
+
+    def test_app_only_change_reuses_every_cloud_image_without_builds(self) -> None:
+        # DEC-005/DEC-006：App-only change 复用原 Cloud 摘要，Cloud builder
+        # invocation 必须为 0；复用仍逐格绑定上一 immutable candidate 的 exact ref。
+        with tempfile.TemporaryDirectory() as directory:
+            previous = self._previous_manifest(Path(directory))
+            plan, reasons = build_plan(
+                [
+                    "quwoquan_app/lib/service/content_service/content/post/presentation/home_page.dart",
+                    "quwoquan_app/test/local_contract/runtime/bootstrap_recovery__local_contract_test.dart",
+                ],
+                previous,
+            )
+            artifacts = json.loads(previous.read_text(encoding="utf-8"))[
+                "environmentArtifacts"
+            ]
+            expected_refs = {
+                ("nonprod", owner): descriptor["ref"]
+                for owner, descriptor in artifacts["alpha"]["images"].items()
+            }
+            expected_refs.update(
+                {
+                    ("prod", owner): descriptor["ref"]
+                    for owner, descriptor in artifacts["prod"]["images"].items()
+                }
+            )
+        self.assertEqual(sum(item["action"] == "build" for item in plan), 0)
+        self.assertEqual(len(plan), len(TRUST_DOMAINS) * len(RUNTIME_IMAGE_OWNERS))
+        for item in plan:
+            self.assertEqual(item["action"], "reuse")
+            self.assertEqual(
+                item["source_ref"],
+                expected_refs[(item["trust_domain"], item["runtime_image_owner"])],
+            )
+        self.assertNotIn("previous-canonical-evidence-unavailable", reasons)
 
     def test_shared_contract_change_expands_to_every_service(self) -> None:
         affected, reasons = affected_services(
@@ -170,16 +207,33 @@ class ServiceReleaseImagePlanTest(unittest.TestCase):
                     path,
                 )
 
-    def test_previous_cross_environment_digest_reuse_is_rejected(self) -> None:
+    def test_previous_nonprod_digest_divergence_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = self._previous_manifest(Path(directory))
             payload = json.loads(path.read_text(encoding="utf-8"))
             owner = RUNTIME_IMAGE_OWNERS[0]
-            payload["environmentArtifacts"]["beta"]["images"][owner] = payload[
+            divergent_digest = "sha256:" + "f" * 64
+            payload["environmentArtifacts"]["beta"]["images"][owner] = {
+                "digest": divergent_digest,
+                "ref": f"ghcr.io/owner/repo/{owner}-nonprod@{divergent_digest}",
+            }
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "nonprod environments"):
+                build_plan(
+                    ["quwoquan_service/services/chat-service/internal/chat.go"],
+                    path,
+                )
+
+    def test_previous_prod_digest_must_fork_from_nonprod(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = self._previous_manifest(Path(directory))
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            owner = RUNTIME_IMAGE_OWNERS[0]
+            payload["environmentArtifacts"]["prod"]["images"][owner] = payload[
                 "environmentArtifacts"
             ]["alpha"]["images"][owner]
             path.write_text(json.dumps(payload), encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "across environments"):
+            with self.assertRaisesRegex(ValueError, "prod image reuses the nonprod"):
                 build_plan(
                     ["quwoquan_service/services/chat-service/internal/chat.go"],
                     path,

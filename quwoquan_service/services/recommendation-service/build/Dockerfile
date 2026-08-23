@@ -3,26 +3,14 @@ ARG PYTHON_BASE_IMAGE=python:3.11
 ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
 ARG PIP_TRUSTED_HOST=pypi.tuna.tsinghua.edu.cn
 ARG PIP_FALLBACK_INDEX_URL=https://pypi.org/simple
-ARG QWQ_ARTIFACT_ENVIRONMENT
-ARG QWQ_ARTIFACT_CONFIG_DIGEST
 FROM ${PYTHON_BASE_IMAGE}
 ARG PIP_INDEX_URL
 ARG PIP_TRUSTED_HOST
 ARG PIP_FALLBACK_INDEX_URL
-ARG QWQ_ARTIFACT_ENVIRONMENT
-ARG QWQ_ARTIFACT_CONFIG_DIGEST
 
+# 环境身份不烤入镜像：artifact-identity.json 由部署面挂载（DEC-005 信任域裁决），
+# 启动时经 QWQ_ARTIFACT_IDENTITY_FILE 读取并用 APP_ENV 断言校验。
 WORKDIR /app
-RUN set -eu; \
-    case "${QWQ_ARTIFACT_ENVIRONMENT}" in alpha|beta|gamma|prod) ;; *) exit 2 ;; esac; \
-    digest_hex="${QWQ_ARTIFACT_CONFIG_DIGEST#sha256:}"; \
-    test "${#digest_hex}" -eq 64; \
-    test -z "$(printf '%s' "${digest_hex}" | tr -d '0-9a-f')"; \
-    install -d /etc/quwoquan; \
-    printf '{"schema":"qwq.environment-artifact-identity","environment":"%s","configDigest":"%s"}\n' \
-      "${QWQ_ARTIFACT_ENVIRONMENT}" "${QWQ_ARTIFACT_CONFIG_DIGEST}" \
-      > /etc/quwoquan/artifact-identity.json; \
-    chmod 0444 /etc/quwoquan/artifact-identity.json
 
 # lightgbm loads libgomp at runtime; python slim images do not ship it by default.
 RUN if [ -f /etc/apt/sources.list.d/debian.sources ]; then \

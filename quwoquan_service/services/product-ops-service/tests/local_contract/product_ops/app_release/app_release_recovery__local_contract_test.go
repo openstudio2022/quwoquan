@@ -426,7 +426,7 @@ func appReleaseCatalog() apprelease.Catalog {
 			RecoveryURL:                 "https://download.quwoquan.example/download",
 			APKURL:                      "https://cdn.quwoquan.example/releases/quwoquan-18201.apk",
 			APKHostAllowlist:            []string{"cdn.quwoquan.example"},
-			APKPackageName:              "com.quwoquan.quwoquan_app",
+			APKPackageName:              "com.leadwise.quwoquan",
 			APKSHA256:                   testSHA256,
 			APKSizeBytes:                42,
 			APKSigningCertificateSHA256: testCertificate,

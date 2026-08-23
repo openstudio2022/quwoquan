@@ -37,7 +37,7 @@ class MinimumSupportedBuildIncreaseTest(unittest.TestCase):
                 root / "apkanalyzer",
                 """#!/bin/sh
 case "$2" in
-  application-id) echo com.quwoquan.quwoquan_app ;;
+  application-id) echo com.leadwise.quwoquan ;;
   version-name) echo 1.8.2 ;;
   version-code) echo 18201 ;;
   min-sdk) echo 26 ;;
@@ -58,7 +58,7 @@ echo 'Signer #1 certificate SHA-256 digest: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
                 package_root=root / "package",
                 public_origin="https://quwoquan.com",
                 download_origin="https://cdn.quwoquan.com",
-                expected_package="com.quwoquan.quwoquan_app",
+                expected_package="com.leadwise.quwoquan",
                 expected_signing_certificate_sha256="a" * 64,
                 minimum_supported_version="1.8.0",
                 minimum_supported_build="18000",

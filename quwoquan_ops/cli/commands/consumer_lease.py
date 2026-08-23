@@ -35,7 +35,7 @@ def register_parser(
     consumer_lease_parser.add_argument("--consumer", default="flutter-run")
     consumer_lease_parser.add_argument(
         "--platform",
-        choices=("android", "ios-simulator"),
+        choices=("android", "ios-simulator", "ios-physical"),
         default="android",
     )
     # 缺省时按 target 环境 × Debug 由 canonical application_identity 派生。
@@ -72,7 +72,10 @@ def command_consumer_lease(args: argparse.Namespace) -> dict[str, Any]:
         return {
             "exitCode": 2,
             "summary": f"consumer-lease {action} requires --device",
-            "details": ["select one connected Android device or booted iOS Simulator"],
+            "details": [
+                "select one connected Android device, booted iOS Simulator, "
+                "or registered iPhone"
+            ],
         }
     try:
         if action == "acquire":
@@ -88,7 +91,7 @@ def command_consumer_lease(args: argparse.Namespace) -> dict[str, Any]:
             )
             with _stackctl._local_stack_operation_lock(target):
                 application_id = str(args.package_name).strip()
-                if platform == "ios-simulator":
+                if platform in {"ios-simulator", "ios-physical"}:
                     application_id = str(getattr(args, "bundle_id", "") or "").strip()
                     if not application_id:
                         application_id = _stackctl.application_id_for(

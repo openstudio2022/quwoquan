@@ -39,6 +39,18 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
             encoding="utf-8",
         )
         (app / "run.sh").chmod(0o755)
+        # launcher 首个工具调用前的参数预检复用 executor 的唯一 sanitizer 叶子模块，
+        # stub 树直接复用生产文件，避免第二真相源。
+        executor_dir = app / "scripts/device"
+        (executor_dir / "canonical_app_instance").mkdir(parents=True)
+        for relative in (
+            "canonical_app_instance/__init__.py",
+            "canonical_app_instance/arguments.py",
+        ):
+            (executor_dir / relative).write_text(
+                (APP_DIR / "scripts/device" / relative).read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
         (app / "ios/Pods").mkdir(parents=True)
         (app / "ios/Podfile.lock").write_text("locked\n", encoding="utf-8")
         (app / "ios/Pods/Manifest.lock").write_text(
@@ -99,6 +111,9 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
         environment = dict(os.environ)
         environment["PATH"] = f"{bin_dir}{os.pathsep}{environment['PATH']}"
         environment.pop("QWQ_ENVIRONMENT", None)
+        # launcher 以包路径导入 `quwoquan_ops.cli.lib.dev_up`。宿主 PYTHONPATH 若指向
+        # 真实仓库根，沙箱会命中生产模块而不是这里的替身，测试就不再观察 launcher 行为。
+        environment.pop("PYTHONPATH", None)
         return temporary, app, environment
 
     def test_launcher_has_explicit_content_live_default_and_ui_only_mode(self) -> None:
@@ -115,9 +130,9 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
 
         app_preflight = source.index("app-debug-preflight")
         delivery = source.index('verify --env "$QWQ_APP_RUNTIME_ENV"')
-        flutter_run = source.index("flutter run \\")
+        canonical_executor = source.index('scripts/device/run_app_instance.py"')
         self.assertLess(app_preflight, delivery)
-        self.assertLess(delivery, flutter_run)
+        self.assertLess(delivery, canonical_executor)
         self.assertIn('--kind content-delivery --profile integration', source)
         self.assertIn('payload.get("contentLive") != "passed"', source)
         self.assertIn('"reason": first_blocker', source)

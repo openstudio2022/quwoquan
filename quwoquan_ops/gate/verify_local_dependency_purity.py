@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import shutil
 import sys
 from pathlib import Path
@@ -512,6 +513,15 @@ def _verify_uat_static_analysis_coverage(
                 production_options,
                 f"must exclude {required_exclude} from the main-App analysis",
             )
+    excluded_test_prefixes = tuple(
+        sorted(
+            {
+                _excluded_test_prefix(str(pattern))
+                for pattern in production_excludes
+                if str(pattern).startswith("test/")
+            }
+        )
+    )
 
     # canonical UAT 只允许被 symlink 引用；复制会立刻产生第二个真相源。
     if not canonical_link.is_symlink():
@@ -533,17 +543,30 @@ def _verify_uat_static_analysis_coverage(
             if str(host_exclude).startswith("test/canonical"):
                 uncovered(host_options, f"must not exclude {host_exclude}")
 
-    analysis_roots = ("user_acceptance", "support/runtime/patrol")
     if not gate_script.is_file():
         uncovered(gate_script, "is missing")
-    else:
-        gate_text = gate_script.read_text(encoding="utf-8")
-        for analysis_root in analysis_roots:
-            if f"test/canonical/{analysis_root}" not in gate_text:
-                uncovered(
-                    gate_script,
-                    f"must analyze test/canonical/{analysis_root} in the test host",
-                )
+        return
+    # 覆盖面只能从 test host 真实的 analyze 参数表派生：全文 substring 匹配会让
+    # 一行注释就满足判据。
+    analyzed_prefixes = _test_host_analysis_prefixes(
+        gate_script.read_text(encoding="utf-8")
+    )
+    for analysis_root in ("user_acceptance", "support/runtime/patrol"):
+        if not _prefix_is_analyzed(analysis_root, analyzed_prefixes):
+            uncovered(
+                gate_script,
+                f"must analyze test/canonical/{analysis_root} in the test host",
+            )
+
+    # 主 App 每一条 test/** 排除都必须有等价证人。硬编码白名单挡不住第三条新增
+    # 排除，集合互补才挡得住。
+    for prefix in excluded_test_prefixes:
+        if not _prefix_is_analyzed(prefix, analyzed_prefixes):
+            uncovered(
+                production_options,
+                f"excludes test/{prefix}/** from the main-App analysis with no "
+                "matching test host analysis root",
+            )
 
     covered_sources = tuple(
         sorted(canonical_uat_root.rglob("*_test.dart"))
@@ -552,9 +575,49 @@ def _verify_uat_static_analysis_coverage(
         uncovered(canonical_uat_root, "exposes no canonical UAT to analyze")
     for source in covered_sources:
         relative = source.relative_to(app_dir / "test").as_posix()
-        analyzed = canonical_link / relative
-        if not analyzed.is_file():
+        if not _prefix_is_analyzed(relative, analyzed_prefixes):
             uncovered(source, "is not reachable from the test host analysis root")
+
+
+def _excluded_test_prefix(pattern: str) -> str:
+    """Return the ``test/``-relative directory an analyzer exclude covers."""
+
+    prefix = pattern[len("test/") :]
+    for suffix in ("/**", "/*", "/**/*"):
+        if prefix.endswith(suffix):
+            prefix = prefix[: -len(suffix)]
+            break
+    return prefix.rstrip("/")
+
+
+def _test_host_analysis_prefixes(gate_text: str) -> tuple[str, ...]:
+    """Return the ``test/``-relative roots the test host actually analyzes."""
+
+    match = re.search(
+        r"test_host/patrol\s+&&\s+flutter\s+analyze\s+"
+        r"((?:[^\n\\]*\\\n)*[^\n)]*)",
+        gate_text,
+    )
+    if match is None:
+        return ()
+    try:
+        arguments = shlex.split(match.group(1).replace("\\\n", " "))
+    except ValueError:
+        return ()
+    prefixes: list[str] = []
+    for argument in arguments:
+        if argument == "test/canonical":
+            prefixes.append("")
+        elif argument.startswith("test/canonical/"):
+            prefixes.append(argument[len("test/canonical/") :].rstrip("/"))
+    return tuple(prefixes)
+
+
+def _prefix_is_analyzed(relative: str, analyzed_prefixes: tuple[str, ...]) -> bool:
+    return any(
+        prefix == "" or relative == prefix or relative.startswith(f"{prefix}/")
+        for prefix in analyzed_prefixes
+    )
 
 
 def _verify_android_vendoring(failures: list[str]) -> None:

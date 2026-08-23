@@ -23,17 +23,19 @@
 
 ## 3. Journey / Scenario 贡献
 
-- [`JNY-008 / SCN-014`](../../spec.md#scn-014)
-  - 本能力接收：该 Scenario 进入本能力边界的已授权主体与 canonical 输入。
+- [`JNY-014 / SCN-035`](../../spec.md#scn-035)
+  - 本能力接收：内容运营者 confirmed 按需请求（范围、载体组合、逐载体数量、来源策略）与 canonical 输入。
   - 本能力处理：可复用实体主页与多载体内容供给、发布和环境消费闭环。
   - 本能力输出：直属 Story 组合产生的可观察结果与明确失败终态。
   - 失败时终态：保留已确认事实，并返回可恢复的 canonical failure。
 
 ## 4. Story
 
-
-
-- [`multi-carrier-release`](./multi-carrier-release/spec.md)：每个发布对象必须闭合 creator、tag、entity、media 与 source 引用；运行 receipt 只能写入输出目录，不得回写静态真相源。
+- [`work-request-compilation`](./work-request-compilation/spec.md)：confirmed 按需 handoff 与派生 WorkRequest 的意图编译单轨，终点为 confirmed WorkRequest 与逐载体 request envelope。
+- [`on-demand-content-pool-admission`](./on-demand-content-pool-admission/spec.md)：所选载体生产、来源/媒体准入、article 来源预筛与唯一 reviewed delivery 入池路径，终点为 canonical pool record 与可恢复 typed 终态。
+- [`source-discovery-scale-reliability`](./source-discovery-scale-reliability/spec.md)：来源发现阶段的有界并发、slot 接管与运行中存活/进度可判定。
+- [`canonical-content-identity-recovery`](./canonical-content-identity-recovery/spec.md)：invalid canonical identity 的互斥状态、受治理修复与 source-ready 调度不再永久饥饿。
+- [`multi-carrier-release`](./multi-carrier-release/spec.md)：每个发布对象必须闭合 creator、tag、entity、media 与 source 引用，运行 receipt 只能写入输出目录、不得回写静态真相源；immutable release、环境导入与 App 消费是本 Story 的唯一下游终点。
 
 ## 5. 能力要求
 

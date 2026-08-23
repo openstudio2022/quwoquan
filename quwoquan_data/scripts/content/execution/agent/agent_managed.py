@@ -170,6 +170,40 @@ def run_managed_controller(ctx: ExecutionContext) -> int:
                     if dispatch.status is ReliableTaskDispatchStatus.BLOCKED
                     else 10
                 )
+            from content.execution.controller.dag import DAG
+
+            is_managed_checkpoint = any(
+                candidate is typed_stage and kind.value == "checkpoint"
+                for candidate, kind, _runner in DAG
+            )
+            if not is_managed_checkpoint:
+                from core.data_issue import (
+                    DataIssueCode,
+                    DataIssueStage,
+                    DataRecoveryAction,
+                    data_issue,
+                )
+
+                issue = data_issue(
+                    DataIssueCode.CONTRACT_INVALID,
+                    stage=DataIssueStage(typed_stage.value),
+                    message=(
+                        f"non-checkpoint stage {stage} yielded without a "
+                        "ReliableTask dispatch result"
+                    ),
+                    recovery=DataRecoveryAction.STOP,
+                )
+                state = load_execution_state(ctx.execution_id)
+                state.status = ExecutionStateStatus.MANUAL_REQUIRED
+                state.waiting_checkpoint = None
+                state.failed_issue_records = [issue.as_dict()]
+                state.failed_objects = [str(issue)]
+                state.next_action = (
+                    f"repair {stage} queue declaration or backend binding before resume"
+                )
+                state.heartbeat_at = store.now_iso()
+                save_execution_state(state)
+                return 1
         if isinstance(state.controller_yield, Mapping):
             if _recover_stale_controller_yield(ctx, state):
                 continue

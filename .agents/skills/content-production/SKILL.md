@@ -7,108 +7,71 @@ metadata:
 
 # content-production
 
-从可复用输入到 execution 工作包、immutable release、环境导入与 App UAT 的内容生产主线。
-五段执行契约见根 `AGENTS.md`。唯一编排入口：
+从可复用输入到 execution 工作包、immutable release、环境导入与 App UAT 的
+内容生产主线。五段执行契约见根 `AGENTS.md`。
 
-```bash
-python3 quwoquan_data/scripts/cli.py <command> ...
-```
+## 边界宣言（详见 [references/boundary.md](references/boundary.md)）
 
-脚本负责 IO、契约、下载、校验、发布与证据；**正文语义创作只由 Agent 完成**。
-禁止新增直跑业务脚本、静态任务实例、分片运行根或第二套发布流程。
+- **宿主 agent 是唯一执行主体**：调研、创作、评审、推进决策、读校验报错自修产物。
+- **skill 只写契约**：阶段序、产物位置/结构、完成判据绑定、恢复语义；零代码。
+- **脚本只做检查与确定性 IO**：verify 门禁、下载/CAS、publish/release/ship
+  原子操作、receipt 记录；永不驱动或等待 agent。
 
-## 触发
+## 主线阶段
 
-无斜杠命令，自然语言自动触发：内容生产、区域主页、execution 恢复/重试、
-immutable release、环境导入、App UAT。
+每阶段按四段生命周期执行（[references/handoff-protocol.md](references/handoff-protocol.md)），
+收尾以 `task stage-record` 落 receipt。验收命令简写 `verify … ` =
+`python3 quwoquan_data/scripts/cli.py verify …`，退出码 0 为过。
 
-## 输入
+| 阶段 | 产物根 | 契约 | 完成判据 |
+| --- | --- | --- | --- |
+| `0.plan` | `0.plan/` + manifest | [0.plan.md](references/stage-contracts/0.plan.md) | `verify runtime-input-ownership` + `verify content-execution-layout` |
+| `sources` | `sources/` | [sources.md](references/stage-contracts/sources.md) | `verify source-digest --execution-id` |
+| `1.download` | 对象 `1.download/` + CAS | [1.download.md](references/stage-contracts/1.download.md) | 按 lane 绑定（见契约 POST 栏） |
+| `2.quality` | 对象 `2.quality/` | [2.quality.md](references/stage-contracts/2.quality.md) | `verify stage-artifacts --execution-id` |
+| `3.compose` | 对象 `3.compose/` | [3.compose.md](references/stage-contracts/3.compose.md) | `verify stage-artifacts --execution-id` |
+| `4.draft` | 对象 `4.draft/` | [4.draft.md](references/stage-contracts/4.draft.md) | 按 lane 绑定（见契约 POST 栏） |
+| `5.review` | 对象 `5.review/` | [5.review.md](references/stage-contracts/5.review.md) | `verify rubric --file --generation-family` |
+| `publish` | `quwoquan_data/publish/` | [publish.md](references/stage-contracts/publish.md) | `verify publish-purity` + `verify publish-closure` |
+| `release` | `.qwq_output/data/releases/<rid>/` | [release.md](references/stage-contracts/release.md) | `verify release-integrity --release` + `verify media-release-contract` |
+| `ship` | 环境 run + UAT 证据 | [ship.md](references/stage-contracts/ship.md) | `verify release-lifecycle` + `stackctl verify --env gamma` |
 
-- family / vertical / contentType 与 `--family` recipe 路径。
-- 区域范围（`--region-ref`）、selector、count、stage。
-- `executionId`（格式 `YYYYMMDD--<vertical>-<contentType>-<intent>--<scope>--<pilot|scale|full>-<sequence>`）；
-  诊断/恢复时为已存在的工作包 ID。
-- 目标环境与 canonical source；凭证：仓外 `0600` 的 `~/.config/quwoquan/cursor_api_key`。
+角色人设（独立会话派发）见 [references/roles/](references/roles/)。
 
-## 角色
+## 入口三分支
 
-见 [references/roles/](references/roles/)，六个执行角色按主线顺序接力：
+1. **新任务**：`python3 quwoquan_data/scripts/cli.py task preflight --json` →
+   读 [0.plan.md](references/stage-contracts/0.plan.md) 开始。
+2. **续跑 / 跨宿主接手**：读 [references/recovery.md](references/recovery.md)
+   判定表，从 receipt 链定位断点。
+3. **loop / 并发 / fleet 运行**：读 [references/orchestration.md](references/orchestration.md)
+   （运行档位 A/B/D、single-writer claim、模型策略；正式并发唯一实现是
+   fleet_dispatcher + loop_driver，宿主命令经 `HOST_CMD` 参数注入，零宿主分叉）。
 
-- [planner](references/roles/planner.md)：冻结 scope 与 execution。
-- [source-researcher](references/roles/source-researcher.md)：收集可追溯来源。
-- [content-author](references/roles/content-author.md)：只基于 source 与 prompt 创作正文。
-- [quality-reviewer](references/roles/quality-reviewer.md)：校验 schema/事实/媒体/标签。
-- [rights-reviewer](references/roles/rights-reviewer.md)：校验授权与商用范围。
-- [release-operator](references/roles/release-operator.md)：publish / ship / 环境导入 / UAT。
+工作包布局与命名约束见 [references/execution-layout.md](references/execution-layout.md)；
+验收失败的自修循环见 [references/self-repair.md](references/self-repair.md)。
 
-## 执行
+## 凭证与安全
 
-自由度：低（CLI 门面与阶段顺序固定）。
-
-单一 execution work package 主线：
-
-```text
-0.plan -> sources -> 1.download -> 2.quality -> 3.compose -> 4.draft -> 5.review
--> publish -> release -> ship -> 环境导入 -> App UAT
-```
-
-开始前 preflight，再用唯一任务门面执行：
-
-```bash
-python3 quwoquan_data/scripts/cli.py task preflight --json
-python3 quwoquan_data/scripts/cli.py task execute \
-  --execution-id YYYYMMDD--travel-homepage-coverage--cn-region-a--pilot-001 \
-  --family content/travel/homepage/homepage \
-  --region-ref china/test-region-a \
-  --selector priority \
-  --count 1 \
-  --stage run
-```
-
-- 仓库输入、工作包布局、canonical/publish 路径与命名约束见
-  [references/execution-layout.md](references/execution-layout.md)。
-- 诊断与恢复（同 ID resume、递增 sequence + `retryOf`）见
-  [references/diagnose-and-resume.md](references/diagnose-and-resume.md)。
-- 每次运行由 `0.plan/request.json` 冻结目标、数量和阶段；任一运行先完成真实来源、
-  逐图权利、Agent 创作、独立 review、canonical 原子发布、目标环境幂等导入、
-  服务 API 核验、消费者 UAT、回滚与重放，才能创建下一次运行。
-
-## 交付件
-
-**immutable release + 环境导入证据**：execution work package、canonical 对象、
-release id、环境导入回执与 App UAT 结果。
-
-送审前自检（publish 前逐项）：
-
-```bash
-python3 quwoquan_data/scripts/cli.py task preflight --json
-python3 quwoquan_data/scripts/cli.py verify content-execution-layout
-python3 quwoquan_data/scripts/cli.py verify publish-purity
-python3 quwoquan_data/scripts/cli.py verify release-lifecycle --release <releaseId>
-python3 quwoquan_data/scripts/cli.py verify all
-python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --profile integration
-```
+- 凭证只来自仓外 `0600` 的 `~/.config/quwoquan/cursor_api_key`；
+  任何输出不得包含 key、片段或指纹。
+- [MUST NOT] 手改 verify/schema/门禁参数；[MUST NOT] 手写 receipt 或
+  `execution_state.json`；[MUST NOT] 补写缺失的 source、rights、review 或
+  release 证据。
+- 失败必须保留明确的阶段与原因；证据缺失一律带 `executionId` 返回 `GATE_BLOCK`。
 
 ## 内置评审
 
 - publish 前 POST 调 `review`（workflow=`content-production`，segment=POST，
   deliverable=`content-release`），角色 data-quality + data-legal——板外复核，
-  独立于本 Skill 内 quality-reviewer / rights-reviewer 执行角色的自查。
-
-## 失败与停止
-
-- 脚本不生成、拼接或填充正文；不新增第二任务身份、运行根、发布流或环境 seed。
-- [MUST NOT] 补写缺失的 source、rights、review 或 release 证据。
-- 失败必须保留明确的阶段与原因，不得迁移、兼容或伪造通过。
-- 凭证、来源、权利、Gamma、API 或 App 任一真实证据缺失：返回带 executionId 的
-  `GATE_BLOCK`，不得用 fixture、skip、历史数据或估算报告替代。
-- 任何输出不得包含 key、片段或指纹。
+  独立于 `5.review` 执行角色的自查。
 
 ## HANDOFF
 
-- **产出物**：release 与 UAT 证据，报告给用户。
-- **未决项去向**：失败 execution 保留阶段与原因，恢复入口见 diagnose-and-resume。
+- **产出物**：release 与 UAT 证据（receipt 链 + 环境 run 路径），报告给用户。
+- **未决项去向**：blocked receipt 的 `openItems` 已落 `return_to_stage` /
+  `gate_block` / `out_of_scope` 三者之一；恢复入口 [recovery.md](references/recovery.md)。
 - **唯一合法下游**：App 侧问题交接 `dev`；其余报告给用户结束。
-- **证据链**：`.qwq_output/data/tasks/<executionId>/evidence/`、
+- **证据链**：`.qwq_output/data/tasks/<executionId>/_shared/receipts/`、
   `.qwq_output/data/releases/<releaseId>/`、
   `.qwq_output/env/<env>/runs/data-release/<releaseId>/<runId>/`。

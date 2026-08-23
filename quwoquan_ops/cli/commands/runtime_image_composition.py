@@ -174,21 +174,6 @@ def _bind_gamma_build_service_image_refs(
     return composition
 
 
-def _artifact_identity_build_args(
-    environment: Mapping[str, str],
-) -> dict[str, str]:
-    artifact_environment = str(environment.get("QWQ_COMPOSE_ENV") or "").strip()
-    config_digest = str(environment.get("LOCAL_GAMMA_CONFIG_VERSION") or "").strip()
-    if artifact_environment not in {"alpha", "beta", "gamma", "prod"}:
-        raise ValueError("runtime image artifact environment is unresolved")
-    if re.fullmatch(r"sha256:[0-9a-f]{64}", config_digest) is None:
-        raise ValueError("runtime image artifact configuration digest is unresolved")
-    return {
-        "QWQ_ARTIFACT_ENVIRONMENT": artifact_environment,
-        "QWQ_ARTIFACT_CONFIG_DIGEST": config_digest,
-    }
-
-
 def _runtime_image_build_spec(
     service: str,
     *,
@@ -197,7 +182,9 @@ def _runtime_image_build_spec(
 ) -> tuple[Path, Path, dict[str, str]]:
     import quwoquan_ops.cli.stackctl as _stackctl
 
-    artifact_args = _artifact_identity_build_args(environment)
+    # 环境身份不进 build args：镜像字节环境无关（DEC-005 信任域裁决），
+    # artifact-identity.json 由部署面在 up/package 时生成并挂载。
+    artifact_args: dict[str, str] = {}
     overlay_context = str(
         environment.get("QWQ_PROVIDER_BINDING_OVERLAY_CONTEXT") or ""
     ).strip()
@@ -689,6 +676,7 @@ def _bind_gamma_packaged_service_image_refs(
         raise ValueError("package OCI startup identity is incomplete")
     environment["QWQ_STARTUP_IMAGE_COMPOSITION_FILE"] = startup_manifest
     environment["QWQ_STARTUP_IMAGE_TRANSPORT_TAG"] = startup_transport_tag
+    _stackctl._bind_artifact_identity_mount_material(environment)
     return composition
 
 
@@ -864,6 +852,7 @@ def _bind_gamma_release_image_refs(
         composition,
     )
     _stackctl._apply_gamma_image_composition(composition, environment)
+    _stackctl._bind_artifact_identity_mount_material(environment)
     return composition
 
 

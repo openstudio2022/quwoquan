@@ -1,49 +1,155 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/platform/native_runtime_config_bridge.dart';
 
+final class _FakeClient implements RuntimeConfigChannelClient {
+  _FakeClient(this.responses);
+
+  final List<Object?> responses;
+  var attempts = 0;
+
+  @override
+  Future<Object?> invokeMethod(String method) async {
+    expect(method, 'readRuntimeConfig');
+    final response = responses[attempts.clamp(0, responses.length - 1)];
+    attempts += 1;
+    if (response is Exception) {
+      throw response;
+    }
+    if (response is Future<Object?>) {
+      return response;
+    }
+    return response;
+  }
+}
+
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
+  test('Hot Restart 通道短暂空包时有界重试同一 package', () async {
+    final client = _FakeClient(<Object?>[
+      const <String, Object?>{},
+      const <String, Object?>{
+        'schema': 'app-runtime-config-package',
+        'buildProfile': 'nonprod',
+      },
+    ]);
+    final bridge = NativeRuntimeConfigBridge(
+      client: client,
+      retryDelay: Duration.zero,
+    );
 
-  const channel = MethodChannel('quwoquan/runtime/config');
-  final messenger =
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    final package = await bridge.readRuntimePackage();
 
-  tearDown(() {
-    messenger.setMockMethodCallHandler(channel, null);
+    expect(client.attempts, 2);
+    expect(package['buildProfile'], 'nonprod');
+    expect(package, isNot(contains('package')));
+    expect(package, isNot(contains('trustedBuildProfile')));
+    expect(package, isNot(contains('trustedTarget')));
   });
 
-  test('Hot Restart 通道短暂未就绪时有界重试同一 native package', () async {
-    var attempts = 0;
-    messenger.setMockMethodCallHandler(channel, (call) async {
-      expect(call.method, 'readRuntimeConfig');
-      attempts += 1;
-      if (attempts == 1) {
-        return const <String, String>{};
+  test('持续空包抛 typed emptyPackage，绝不返回空 map', () async {
+    final client = _FakeClient(<Object?>[const <String, Object?>{}]);
+    final bridge = NativeRuntimeConfigBridge(
+      client: client,
+      retryDelay: Duration.zero,
+    );
+
+    await expectLater(
+      bridge.readRuntimePackage(),
+      throwsA(
+        isA<NativeRuntimeConfigReadException>()
+            .having(
+              (error) => error.reason,
+              'reason',
+              NativeRuntimeConfigReadFailureReason.emptyPackage,
+            )
+            .having((error) => error.attempts, 'attempts', 3),
+      ),
+    );
+    expect(client.attempts, 3);
+  });
+
+  test(
+    'MissingPlugin 与 PlatformException 转为 typed config read failure',
+    () async {
+      for (final testCase
+          in <(Exception, NativeRuntimeConfigReadFailureReason)>[
+            (
+              MissingPluginException('missing'),
+              NativeRuntimeConfigReadFailureReason.missingPlugin,
+            ),
+            (
+              PlatformException(code: 'read_failed'),
+              NativeRuntimeConfigReadFailureReason.platform,
+            ),
+          ]) {
+        final bridge = NativeRuntimeConfigBridge(
+          client: _FakeClient(<Object?>[testCase.$1]),
+          maxAttempts: 1,
+          retryDelay: Duration.zero,
+        );
+        await expectLater(
+          bridge.readRuntimePackage(),
+          throwsA(
+            isA<NativeRuntimeConfigReadException>()
+                .having((error) => error.reason, 'reason', testCase.$2)
+                .having(
+                  (error) => error.platformCode,
+                  'platformCode',
+                  testCase.$2 == NativeRuntimeConfigReadFailureReason.platform
+                      ? 'read_failed'
+                      : null,
+                ),
+          ),
+        );
       }
-      return const <String, String>{
-        'APP_RUNTIME_ENV': 'gamma',
-        'APP_LAUNCH_POLICY': 'test_live',
-      };
-    });
+    },
+  );
 
-    final package = await NativeRuntimeConfigBridge.readRuntimePackage();
+  test('非 Map 与非字符串键 Map 转为 typed malformedPackage', () async {
+    for (final response in <Object?>[
+      'not-a-map',
+      <Object?, Object?>{1: 'invalid-key'},
+    ]) {
+      final bridge = NativeRuntimeConfigBridge(
+        client: _FakeClient(<Object?>[response]),
+        maxAttempts: 1,
+        retryDelay: Duration.zero,
+      );
 
-    expect(attempts, 2);
-    expect(package['APP_RUNTIME_ENV'], 'gamma');
-    expect(package['APP_LAUNCH_POLICY'], 'test_live');
+      await expectLater(
+        bridge.readRuntimePackage(),
+        throwsA(
+          isA<NativeRuntimeConfigReadException>()
+              .having(
+                (error) => error.reason,
+                'reason',
+                NativeRuntimeConfigReadFailureReason.malformedPackage,
+              )
+              .having((error) => error.attempts, 'attempts', 1),
+        ),
+      );
+    }
   });
 
-  test('native package 持续不可用时仍返回空包供严格配置校验阻断', () async {
-    var attempts = 0;
-    messenger.setMockMethodCallHandler(channel, (call) async {
-      attempts += 1;
-      return const <String, String>{};
-    });
+  test('读取超时转为 typed timeout failure', () async {
+    final bridge = NativeRuntimeConfigBridge(
+      client: _FakeClient(<Object?>[Completer<Object?>().future]),
+      maxAttempts: 1,
+      retryDelay: Duration.zero,
+      attemptTimeout: const Duration(milliseconds: 1),
+    );
 
-    final package = await NativeRuntimeConfigBridge.readRuntimePackage();
-
-    expect(attempts, 3);
-    expect(package, isEmpty);
+    await expectLater(
+      bridge.readRuntimePackage(),
+      throwsA(
+        isA<NativeRuntimeConfigReadException>().having(
+          (error) => error.reason,
+          'reason',
+          NativeRuntimeConfigReadFailureReason.timeout,
+        ),
+      ),
+    );
   });
 }

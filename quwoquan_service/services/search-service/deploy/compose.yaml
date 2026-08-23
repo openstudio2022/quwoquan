@@ -13,6 +13,7 @@ services:
       SERVICE_NAME: search-service
       APP_ENV: "${QWQ_COMPOSE_ENV:-gamma}"
       CONFIG_ROOT: /etc/qwq-config
+      QWQ_ARTIFACT_IDENTITY_FILE: /etc/quwoquan/artifact-identity.json
       CONFIG_VERSION: "${QWQ_COMPOSE_SEARCH_SERVICE_CONFIG_VERSION:?QWQ_COMPOSE_SEARCH_SERVICE_CONFIG_VERSION is required}"
       IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:?immutable image version is required}"
       QWQ_RELEASE_CANDIDATE_DIGEST: "${QWQ_RELEASE_CANDIDATE_DIGEST:?release candidate digest is required}"
@@ -49,6 +50,7 @@ services:
       - "${QWQ_COMPOSE_SEARCH_PORT:-19280}:18095"
     volumes:
       - ${QWQ_COMPOSE_CONFIG_ROOT:?QWQ_COMPOSE_CONFIG_ROOT is required}:/etc/qwq-config:ro
+      - ${QWQ_COMPOSE_ARTIFACT_IDENTITY_FILE:?artifact identity mount is required}:/etc/quwoquan/artifact-identity.json:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18095/healthz >/dev/null 2>&1"]
       interval: 10s

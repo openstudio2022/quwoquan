@@ -43,8 +43,8 @@ from content.execution.closure.adoption_campaign_contract import (
     validate_adoption_target_identity,
     validate_campaign_adoption_binding,
 )
-from content.execution.planning.capacity_calibration import (
-    assert_capacity_source_binding,
+from content.execution.planning.execution_authority import (
+    assert_execution_authority,
 )
 from content.execution.planning.semantic_preflight_admission import (
     bind_semantic_preflight_receipt,
@@ -142,12 +142,15 @@ def write_report(
     from content.execution.campaign.runtime import read_runtime_snapshot
 
     runtime_snapshot = read_runtime_snapshot(runtime, root_execution_id) or {}
+    active = normalize_active_carriers(active_carriers)
+    if set(lanes) != set(active):
+        raise ValueError("campaign report lanes must exactly match active carriers")
     payload = {
         "schema": "quwoquan_data.content_campaign_report",
         "rootExecutionId": root_execution_id,
-        "activeCarriers": list(normalize_active_carriers(active_carriers)),
+        "activeCarriers": list(active),
         "workloads": normalize_workloads(
-            workloads, active_carriers=active_carriers
+            workloads, active_carriers=active
         ),
         "campaignRunId": runtime_snapshot.get("runId"),
         "campaignGeneration": runtime_snapshot.get("generation"),
@@ -333,25 +336,25 @@ def freeze_plan(
         )
         for row in submissions.values()
     }
-    capacity_calibrations = {
+    execution_authorities = {
         json.dumps(
-            row.get("capacityCalibration"),
+            row.get("executionAuthority"),
             ensure_ascii=False,
             sort_keys=True,
             separators=(",", ":"),
         )
         for row in submissions.values()
     }
-    if len(capacity_calibrations) != 1:
-        raise ValueError("campaign lanes disagree on the capacity calibration")
-    # 只有真正要跑受治理工作的 campaign 才有容量事实：reviewed-closure adoption 不
-    # 作者、不派发 fleet，只重发已审对象，绑一份 calibration 会让它声称一个从未
-    # 发生过的并发与批次预算。
-    raw_capacity_calibration = first_submission.get("capacityCalibration")
-    capacity_calibration: dict[str, Any] | None = None
-    if raw_capacity_calibration is not None:
-        capacity_calibration = dict(raw_capacity_calibration)
-        assert_capacity_source_binding(capacity_calibration)
+    if len(execution_authorities) != 1:
+        raise ValueError("campaign lanes disagree on the execution authority")
+    # 只有真正要跑受治理工作的 campaign 才有执行授权事实：reviewed-closure
+    # adoption 不作者、不派发 fleet，只重发已审对象，绑一份授权会让它声称一个
+    # 从未发生过的并发与批次预算。
+    raw_execution_authority = first_submission.get("executionAuthority")
+    execution_authority: dict[str, Any] | None = None
+    if raw_execution_authority is not None:
+        execution_authority = dict(raw_execution_authority)
+        assert_execution_authority(execution_authority)
     elif first_submission.get(CAMPAIGN_ADOPTION_FIELD) is None:
         raise ValueError(
             "GATE_BLOCK DATA.CAPACITY.CALIBRATION_REQUIRED: campaign plan "
@@ -504,8 +507,8 @@ def freeze_plan(
             "campaignGeneration": int(distributed_run["campaignGeneration"]),
             "campaignFencingToken": str(distributed_run["campaignFencingToken"]),
         }
-    if capacity_calibration is not None:
-        stable["capacityCalibration"] = capacity_calibration
+    if execution_authority is not None:
+        stable["executionAuthority"] = execution_authority
     semantic_preflight = submissions[active[0]].get("semanticPreflightReceipt")
     if semantic_preflight is not None:
         stable["semanticPreflightReceipt"] = dict(semantic_preflight)

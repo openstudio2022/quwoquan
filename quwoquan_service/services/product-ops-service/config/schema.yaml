@@ -111,7 +111,7 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-  default: com.quwoquan.quwoquan_app
+  default: com.leadwise.quwoquan
 - key: sys.product-ops-service.app_release.android.apk_sha256
   type: string
   scope: workload

@@ -11,8 +11,8 @@
 - 设计目标：article lane 在冻结 target set 之前就把实体级来源可得性判成互不塌陷的四态，运营者只读终态即可决定续跑、修来源闭集还是换实体。
 - 设计目标：内容运营者的 typed intent 在写入 execution 事实前经过 preview 与显式确认，并只编译到现有 carrier request envelope。
 - 非目标：复制字段 schema、实现任务、测试排列组合或执行历史。
-- 容量数值由 Story 的受治理 calibration 决定：`local-apple-silicon + cursor_grok` 绑定 `m100-wave-soak-20260818-v4` receipt，取值为来源发现并发 8、fleet 并发 3、单对象 wall-clock 660 秒、完成宽限 60 秒；设计不复制这些数值的 schema。
-- 非目标：冻结实体锚定匹配置信度、最小正文字数与单实体探测预算的具体取值，这些数由 Story `OPEN-004` 的受治理 calibration 承接。
+- 容量数值由 Story 的受治理 calibration 决定：`local-apple-silicon + cursor_grok` 当前没有受版本控制的有效 calibration receipt（旧 receipt 字节不在真相源中，不可复核），M100+ 容量授权由 [`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `OPEN-006` 承接；M1–M10 explicit 请求走 `DEC-025` 的 bounded authority，不产生容量结论。设计不复制容量数值的 schema。
+- 非目标：冻结实体锚定匹配置信度、最小正文字数与单实体探测预算的具体取值，这些数由 [`on-demand-content-pool-admission`](./on-demand-content-pool-admission/spec.md) 的 `OPEN-001` 受治理 calibration 承接。
 - 非目标：为 managed checkpoint 的 prompt 扇出建立第三个受治理容量上限。
 - 非目标：定义候选级与页面级拒绝原因的闭集，或改变 homepage/image/video 既有的供给与来源判定机制。
 - 非目标：收敛 download、content_plan 与 recovery 阶段既有的载体分支；本层只约束目标选择到 target set 冻结这一段。
@@ -21,7 +21,11 @@
 
 ## 2. Story 协作与状态流
 
-- [`multi-carrier-release`](./multi-carrier-release/spec.md)：每个发布对象必须闭合 creator、tag、entity、media 与 source 引用；运行 receipt 只能写入输出目录，不得回写静态真相源。
+- [`work-request-compilation`](./work-request-compilation/spec.md)：confirmed handoff 与 derived WorkRequest 编译为逐载体 envelope，确认前零 execution 事实。
+- [`on-demand-content-pool-admission`](./on-demand-content-pool-admission/spec.md)：消费 confirmed WorkRequest 与 envelope，经来源预筛/媒体准入、生产与独立审核后沿唯一 reviewed delivery 路径入 canonical 池。
+- [`source-discovery-scale-reliability`](./source-discovery-scale-reliability/spec.md)：来源发现阶段的有界并发、slot 接管与运行中存活心跳。
+- [`canonical-content-identity-recovery`](./canonical-content-identity-recovery/spec.md)：invalid canonical identity 的互斥状态与唯一恢复 command，供池调度与 release 选择消费。
+- [`multi-carrier-release`](./multi-carrier-release/spec.md)：每个发布对象必须闭合 creator、tag、entity、media 与 source 引用，运行 receipt 只能写入输出目录、不得回写静态真相源；canonical 池之后的 immutable release、环境与 App 消费闭环由它拥有。
 
 ## 3. 端云与数据流
 
@@ -62,7 +66,7 @@
 - 可观察面：local_contract 用同一请求冻结三值并单独提高 `approvedQuota`，断言派生 job 数只随工作单元数变化、并行上限不变、wave 数随 job 数变化，并断言缺任一值即 fail closed。
 - 关联要求：`REQ-001`
 - 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的执行策略容量冻结面
-- 关联验收：`GWT-009.t1`、`GWT-009.t2`、`GWT-009.t3`、`GWT-009.t4`、`GWT-008.t1`、`GWT-011.t1` 与 `SIT-001.t11`
+- 关联验收：`GWT-009.t1`、`GWT-009.t2`、`GWT-009.t3`、`GWT-009.t4`、[`source-discovery-scale-reliability`](./source-discovery-scale-reliability/spec.md) 的 `GWT-001.t1`、`GWT-011.t1` 与 `SIT-001.t11`
 
 <a id="dec-003"></a>
 ### DEC-003 批次绝对截止在 execution 冻结时定值，lease 截止降为派生量
@@ -95,7 +99,7 @@
 - 可观察面：local_contract 断言 fleet 回执实测峰值不超过冻结上限、执行策略在回执写入后字节不变，并断言 execution state 契约中不存在 worker 命名字段。
 - 关联要求：`REQ-001`
 - 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的运行观测面
-- 关联验收：`GWT-011.t2`、`GWT-011.t5`、`GWT-008.t4`、`GWT-008.t5` 与 `SIT-001.t8`
+- 关联验收：`GWT-011.t2`、`GWT-011.t5`、[`source-discovery-scale-reliability`](./source-discovery-scale-reliability/spec.md) 的 `GWT-001.t4`、`GWT-001.t5` 与 `SIT-001.t8`
 
 <a id="dec-005"></a>
 ### DEC-005 零合格原因是一个共享值对象，由观测者写一次再向上引用
@@ -140,14 +144,14 @@
 - 约束与影响：四态、子原因与计量都不得以缺席、空数组或零计数表达；`探测失败` 单独计量，不并入其余三类的分子分母。
 - 可观察面：local_contract 对六类实体逐个构造终态，断言四态与子原因逐一成立且任一态都不是空值、空集合或零计数，并断言 `探测失败` 必带非空可续跑 refs、`在场不足` 与 `缺席` 必带不可续跑依据；`缺席` 与 `探测失败` 在真实探测下的区分由 api_integration 以受治理 provider-state 注入取得拒绝、超时与预算耗尽证明。
 - 关联要求：`REQ-001`
-- 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 article 来源预筛终态面
-- 关联验收：`GWT-012.t1`、`GWT-012.t2`、`GWT-012.t6` 与 `GWT-012.t7`
+- 影响 Story：[`on-demand-content-pool-admission`](./on-demand-content-pool-admission/spec.md) 的 article 来源预筛终态面
+- 关联验收：`GWT-001.t1`、`GWT-001.t2`、`GWT-001.t6` 与 `GWT-001.t7`
 
 <a id="dec-008"></a>
 ### DEC-008 预筛终态是先于 spec 的 create-once receipt，退出码不再承载原因
 - 决策：预筛聚合以 create-once receipt 写入该 execution 的工作包，写入时点严格早于 execution spec；进程只允许在 receipt 落盘之后退出，退出码与异常字符串不再是 article 预筛失败的呈现面。
 - 决策：该 receipt 是运营者的唯一呈现面。lane 回执与 campaign report 只以 `ref + digest` 指向它并投影四类计数，不复制 verdict 行，也不新建第二个查询入口。
-- 理由：预筛失败的定义就是 spec 不会被冻结，所以任何「冻结之后再补写」的落点在需要它的时候都不存在；只有把受体放在 spec 之前，`GWT-012.t9` 才有东西可读。
+- 理由：预筛失败的定义就是 spec 不会被冻结，所以任何「冻结之后再补写」的落点在需要它的时候都不存在；只有把受体放在 spec 之前，`GWT-001.t9` 才有东西可读。
 - 理由：receipt 与 spec 绑定同一个 execution 身份，lane 终态为 `published` 或 `partial` 时它仍在原路径可读，`探测失败` 实体的可续跑 refs 不因该 lane 已发布而被丢弃。
 - 被否决方案：把 campaign report 的自由文本 `error` 升级成 typed 对象——report 是运行回执而不是新的真相源，且 campaign 层只投影 lane 事实；把唯一权威面放进去会让复制会话的 finalize 聚合写者与预筛写者争抢同一字段。
 - 被否决方案：复用 lane 回执——它的 phase 闭集是 `review` 与 `publish`，最早也要到 review 才成立；预筛终止时 review 从未发生，为它加第三个 phase 等于把「从未进入生产」伪装成一次 review 结果。
@@ -155,15 +159,15 @@
 - 约束与影响：该 receipt 是 execution 证据，因此止于预筛的 attempt 不再是「无 plan/report/runtime/execution 证据」的 submission-only attempt，其收口走既有 terminal execution 证据路径；receipt 受 GC protection，不得被清理或改写。
 - 可观察面：local_contract 让预筛在 spec 冻结之前终止，断言 receipt 已存在且四态可读、执行 spec 不存在、进程退出码不携带任何原因；并断言 lane 终态为 `published` 或 `partial` 时同一 receipt 仍可读、可续跑 refs 未被删除。
 - 关联要求：`REQ-001`
-- 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的预筛呈现面
-- 关联验收：`GWT-012.t8`、`GWT-012.t9` 与 `GWT-013.t7`
+- 影响 Story：[`on-demand-content-pool-admission`](./on-demand-content-pool-admission/spec.md) 的预筛呈现面
+- 关联验收：`GWT-001.t8`、`GWT-001.t9` 与 `GWT-002.t7`
 
 <a id="dec-009"></a>
 ### DEC-009 article 预筛是独立对象，选择器只消费它的单向投影
 - 决策：article 预筛是自己的对象，既不做 `TargetSourceQualification` 的第三个实现，也不把 homepage/video/article 三个 qualifier 收敛成按载体分派的统一抽象。
 - 决策：`source-ready-priority` 对 qualifier 非空的硬性要求由一个 adapter 满足，它从已完成的四态 verdict 单向投影：`在场可用` 投影为接受，其余三态投影为不接受。投影有损且只喂选择器，任何消费者都不得从选择器的拒绝码反推四态。
 - 决策：article lane 与 homepage 同样强制 `source-ready-priority`，预筛不是调用方可选项。
-- 理由：`TargetSourceQualification` 是二值接受加单个拒绝码，且以不变量绑定「接受当且仅当有合格来源」；三个非成功态只能压进同一个不接受再靠拒绝码反推，正是 REQ-007 禁止的塌陷。拒绝码闭集的 owner 也不是本节点，借它当四态载体意味着别处新增一个码就改变本节点的态。
+- 理由：`TargetSourceQualification` 是二值接受加单个拒绝码，且以不变量绑定「接受当且仅当有合格来源」；三个非成功态只能压进同一个不接受再靠拒绝码反推，正是 REQ-001 禁止的塌陷。拒绝码闭集的 owner 也不是本节点，借它当四态载体意味着别处新增一个码就改变本节点的态。
 - 理由：homepage 判的是百科三闭集加字数门，video 判的是冻结 acquisition receipt 的 exact pair 查表且完全不探测网络，article 判的是站点 frontier 探测加实体锚定；输入、失败模式、探测预算与判定时点都不同，统一抽象只会退化成一个按载体分支的 dispatcher，把三份互不相关的判定绑到一个 owner，还会迫使 homepage 与 video 承担它们规格已判为 Out of Scope 的四态。
 - 理由：不强制选择器时，「必须在冻结之前完成判定」会退化成调用方选项，等于给整条准入留一个 warn-only 逃逸。
 - 被否决方案：让 article 沿用 homepage qualifier 的形状新增一个同构实现——形状同构掩盖的是值域不同，四态一进去就塌成两态。
@@ -171,8 +175,8 @@
 - 约束与影响：materialization 中「其余载体一律 fail closed」的分支收敛为「article 走预筛、其余仍 fail closed」，homepage 与 video 两个 qualifier 的形状和语义不变。
 - 可观察面：local_contract 断言只有 `在场可用` 实体进入冻结工作单元、其余三态实体不出现在 auto_research/download/content_plan 的输入里，并断言 article 在非 `source-ready-priority` 选择器下 fail closed。
 - 关联要求：`REQ-001`
-- 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 article 目标冻结面
-- 关联验收：`GWT-012.t5` 与 `GWT-012.t1`
+- 影响 Story：[`on-demand-content-pool-admission`](./on-demand-content-pool-admission/spec.md) 的 article 目标冻结面
+- 关联验收：`GWT-001.t5` 与 `GWT-001.t1`
 
 <a id="dec-010"></a>
 ### DEC-010 补采资格与不足处置各自显式声明，不再由来源证据是否持久化派生
@@ -186,8 +190,8 @@
 - 约束与影响：quota 不得因预筛结果被静默下调，未通过预筛的实体不得 padding 进工作单元；预筛只改变进入冻结的候选集合，不改变 `DEC-002` 的三值分离。
 - 可观察面：local_contract 用对象级 typed double 让首轮 `在场可用` 少于 quota，断言补采被触发且新候选重新预筛、quota 值不变、工作单元不含未通过预筛的实体；再让补采预算耗尽，断言 lane 为 `partial` 而不是 `blocked`，并单独断言零 `在场可用` 时 `blocked` 携带实体级首要原因。
 - 关联要求：`REQ-001`
-- 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 article 补采与不足处置面
-- 关联验收：`GWT-013.t1`、`GWT-013.t2`、`GWT-013.t3`、`GWT-013.t4` 与 `GWT-013.t5`
+- 影响 Story：[`on-demand-content-pool-admission`](./on-demand-content-pool-admission/spec.md) 的 article 补采与不足处置面
+- 关联验收：`GWT-002.t1`、`GWT-002.t2`、`GWT-002.t3`、`GWT-002.t4` 与 `GWT-002.t5`
 
 <a id="dec-011"></a>
 ### DEC-011 实体级与 fleet 级各自单写者，衔接只有 refs 一个方向
@@ -196,13 +200,13 @@
 - 决策：零 `在场可用` 的 article lane 在其零合格原因旁引用本 receipt 的实体级首要原因聚合，引用而不复制，不为这一种零另立 fleet 级原因值。
 - 理由：同一次网络不可达在两层得出不同结论不是矛盾，而是两层在回答不同问题：fleet 级说「本批次到此为止，需要新的 `retryOf`」，实体级说「这些实体的判定未完成，下一次仍应探测」。把两者强行对齐会逼出一个既不能回答续跑、也不能回答重探的折中值。
 - 理由：观测口径因此按分母固定——fleet 级原因的分母是批次，实体级四类的分母是候选实体数；两者不做加总，也不互相校验相等。
-- 被否决方案：由 fleet 级原因派生实体级终态——批次级原因没有实体维度，派生只能给全部实体盖同一个章，`GWT-013.t6` 的四类构成随之失真。
+- 被否决方案：由 fleet 级原因派生实体级终态——批次级原因没有实体维度，派生只能给全部实体盖同一个章，`GWT-002.t6` 的四类构成随之失真。
 - 被否决方案：由实体级聚合反推 fleet 级原因——`REQ-006` 闭集中除来源为空之外的原因都在预筛得出结论之后才被观测到，预筛看不到它们。
 - 约束与影响：article lane 引用实体级聚合的前提是 `DEC-005` 的共享值对象已落地；在它落地之前不得在 article 侧先自建一份原因枚举。
 - 可观察面：local_contract 构造一次网络不可达，断言 fleet 级判本批次不可续跑的同时实体级仍为 `探测失败` 且保留可续跑 refs，两个结论并存且互不覆盖；并断言零 `在场可用` 的 `blocked` 通过引用而不是复制携带实体级首要原因。
 - 关联要求：`REQ-001`
-- 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的续跑判定面
-- 关联验收：`GWT-013.t8`、`GWT-013.t4`、`GWT-013.t5` 与 `GWT-012.t6`
+- 影响 Story：[`on-demand-content-pool-admission`](./on-demand-content-pool-admission/spec.md) 的续跑判定面
+- 关联验收：`GWT-002.t8`、`GWT-002.t4`、`GWT-002.t5` 与 `GWT-001.t6`
 
 <a id="dec-012"></a>
 ### DEC-012 归并在实体边界执行一次，跨阶段对账靠同一实体键做差集
@@ -217,8 +221,8 @@
 - 约束与影响：本节点只消费候选级判定结果做实体级聚合与准入，不复制候选级闭集，站点与 provider 级抓取准入及其审计证据仍归 owner 节点。
 - 可观察面：local_contract 构造同时含未达门槛候选与判定未完成候选的实体，断言归并得到 `探测失败`。构造携带未归类原因的实体，断言以 `探测失败` fail closed 并点名该原因。四类的分子、分母与占比可直接由实体级聚合算出且第四类单独计量。三阶段逐实体对账由 api_integration 经一次真实 execution 的 selection、auto_research 与 content_plan receipt 完成，断言 ready 数下降时能精确列出出局实体及其首要原因。
 - 关联要求：`REQ-001`
-- 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的实体级原因聚合与跨阶段对账面
-- 关联验收：`GWT-012.t3`、`GWT-012.t4`、`GWT-013.t6`、`GWT-013.t9` 与 `GWT-013.t10`
+- 影响 Story：[`on-demand-content-pool-admission`](./on-demand-content-pool-admission/spec.md) 的实体级原因聚合与跨阶段对账面
+- 关联验收：`GWT-001.t3`、`GWT-001.t4`、`GWT-002.t6`、`GWT-002.t9` 与 `GWT-002.t10`
 
 <a id="dec-013"></a>
 ### DEC-013 零合格原因按观测阶段分家，publish 阶段的体量准入不并入 review 阶段的质量被拒
@@ -252,15 +256,15 @@
 - 约束与影响：`retryOf` 继承在请求名单为空时同样不可补采，前驱候选池在任何 retry 形态下都不被重新抽取改写。
 - 可观察面：local_contract 对四种候选池 provenance 逐一断言补采资格取值，并在每种 provenance 下翻转持久化标志断言资格不变；单独构造请求名单为空的 `retryOf` 继承，断言它仍不可补采且选中集合与前驱逐行相同。
 - 关联要求：`REQ-001`
-- 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 article 补采资格面
-- 关联验收：`GWT-013.t1` 与 `GWT-012.t5`
+- 影响 Story：[`on-demand-content-pool-admission`](./on-demand-content-pool-admission/spec.md) 的 article 补采资格面
+- 关联验收：`GWT-002.t1` 与 `GWT-001.t5`
 
 <a id="dec-015"></a>
 ### DEC-015 不足处置收敛为一处显式裁决，两条抽取路径只返回 typed 终态
 - 决策：「候选不足是 fail closed 还是以实际合格集合继续」是 lane 交付契约事实，作为 selection 请求的显式二值入参在 execution 冻结时声明。闭集为「不足即阻断」与「不足即部分准入、零合格仍阻断」，无默认值，缺失即 fail closed。homepage 取前者，article 与 video 取后者。
 - 决策：单轮分级与补采循环都不再自行把未达 quota 抛成失败，两者各自返回带 typed stop reason 的完整终态；是否阻断由目标选择的单一收口按上述入参裁决一次。今天分散在单轮分级的供给不足判据、选择器出口的候选池耗尽判据与补采循环终态这三处的 fail-closed 合并到这一处。
 - 决策：抽取循环的 stop reason 是过程事实，只作为处置裁决的输入与 lane 回执的诊断，不得被投影成运营者可读的原因枚举。实体级终态权威面仍只有 `DEC-008` 的 verdict receipt，lane 级仍只有 `DEC-005` 的零合格原因值对象。
-- 理由：补采循环今天把「循环已跑完、停止原因已证明、产出低于 quota」抛成异常。那是一个判定已完成、结论确定的事实，抛异常把它编码成「没做成」，正是结果状态单义禁止的跨态代偿；`REQ-007` 要求 article 的「在场不足」与「探测失败」分属判定已完成与判定未完成，沿用异常编码会让前者在这一层就塌进后者。
+- 理由：补采循环今天把「循环已跑完、停止原因已证明、产出低于 quota」抛成异常。那是一个判定已完成、结论确定的事实，抛异常把它编码成「没做成」，正是结果状态单义禁止的跨态代偿；`REQ-001` 要求 article 的「在场不足」与「探测失败」分属判定已完成与判定未完成，沿用异常编码会让前者在这一层就塌进后者。
 - 理由：选择抽取路径与选择不足处置本是两次独立决定，今天却由同一次二选一同时做出——走补采路径等于选了无条件阻断，走单轮路径等于选了按持久化标志分叉的阻断。只要处置还留在路径内部，任何只解开补采资格的做法都是把同一个阻断换个位置保留下来，article 仍拿不到 partial。
 - 理由：处置只在一处执行时，「不足」与「零合格」的分界只需要写一次。分散在三处时每处都要重新判定一次零合格例外，而「持久化或零合格」与「非持久化且有选中」已经是同一条规则的两份互为镜像的记录。
 - 被否决方案：保留补采循环抛错、由 article 侧捕获后继续——`DEC-010` 已否决，把失败态转写成成功态属于禁止的 fallback，并会丢掉循环给出的 typed stop reason。
@@ -271,8 +275,8 @@
 - 约束与影响：两条抽取路径的公开返回形状统一为「选中集合 + 分级报告 + typed stop reason」；调用方不得从是否抛出异常推断供给结论。
 - 可观察面：local_contract 让两条抽取路径分别停在未达 quota 的终态，断言各自返回 typed stop reason 而不抛错。对同一终态分别注入两种处置取值，断言前者阻断、后者以实际合格集合继续，并断言合格数为零时两种取值都阻断。处置入参缺失即 fail closed。stop reason 不出现在 verdict receipt 与零合格原因值对象中。
 - 关联要求：`REQ-001`
-- 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 article 不足处置面
-- 关联验收：`GWT-013.t3`、`GWT-013.t4`、`GWT-013.t1`、`GWT-013.t2` 与 `GWT-001.t6`
+- 影响 Story：[`on-demand-content-pool-admission`](./on-demand-content-pool-admission/spec.md) 的 article 不足处置面
+- 关联验收：`GWT-002.t3`、`GWT-002.t4`、`GWT-002.t1`、`GWT-002.t2` 与 [`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `GWT-001.t6`
 
 <a id="dec-016"></a>
 ### DEC-016 共享选择路径不读载体身份，载体差异只在装配点冻结为取值
@@ -287,28 +291,28 @@
 - 约束与影响：本禁令只覆盖目标选择到 target set 冻结这一段；download、content_plan 与 recovery 阶段既有的载体分支不在范围内。
 - 可观察面：local_contract 用同一组候选行、同一 qualifier 行为与同一组策略取值，分别以两个载体身份运行选择路径，断言选中集合与分级报告逐行相同；再单独改变其中一个取值，断言全部差异都能由该取值解释。
 - 关联要求：`REQ-001`
-- 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 article 共享选择装配面
-- 关联验收：`GWT-012.t5`、`GWT-013.t3` 与 `GWT-013.t4`
+- 影响 Story：[`on-demand-content-pool-admission`](./on-demand-content-pool-admission/spec.md) 的 article 共享选择装配面
+- 关联验收：`GWT-001.t5`、`GWT-002.t3` 与 `GWT-002.t4`
 
 <a id="dec-017"></a>
 ### DEC-017 冻结期准入是选择器的决定，不进预筛四态，且严格后置于判定
-- 决策：一个 `在场可用` 实体因跨 execution 累计分布约束而未被选入本批工作单元，是**选择器在冻结工作单元时的准入决定**，不是来源预筛的结论。`REQ-007` 的四态保持四个值，不新增第五态，也不在四态旁挂一个表达是否被选中的状态位。
+- 决策：一个 `在场可用` 实体因跨 execution 累计分布约束而未被选入本批工作单元，是**选择器在冻结工作单元时的准入决定**，不是来源预筛的结论。`REQ-001` 的四态保持四个值，不新增第五态，也不在四态旁挂一个表达是否被选中的状态位。
 - 决策：冻结期准入严格在实体级预筛判定完成之后执行，只作用于已判为 `在场可用` 的行；判定与准入的先后不可对调。多样性是这类准入今天的唯一成员，本决策约束的是这一类而不是这一个实现。
-- 决策：冻结期准入的出局不得计入预筛的候选级或实体级拒绝计量。`GWT-013.t6` 四类的分子与分母只由 verdict receipt 的实体终态算出，被准入挡下的实体在这四类里始终计为 `在场可用` 之外的零。
+- 决策：冻结期准入的出局不得计入预筛的候选级或实体级拒绝计量。`GWT-002.t6` 四类的分子与分母只由 verdict receipt 的实体终态算出，被准入挡下的实体在这四类里始终计为 `在场可用` 之外的零。
 - 理由：四态的分界是「该实体的来源判定是否完成、结论是什么」，输入是实体、允许来源闭集与 calibration 阈值。准入的输入是 canonical publish 树的跨 execution 累计分布、本批已准入投影与治理策略，与该实体的来源可得性无关。同一实体、同一探测证据换一个批次就换结论，这样的取值不能充当 `DEC-011` 所说「该实体是否还能被重新探测」的权威。
 - 理由：第五态会让一个来源完全可用的实体被记成来源预筛的一种态。四态的每个子原因都绑定一个运营动作——修来源闭集、扩来源闭集、调篇幅门槛、换实体、续跑——而被准入挡下的实体的正确动作是扩大候选范围或等累计分布变化，它绑不到其中任何一个；运营者按四态提示去改来源，改的是一个没有问题的来源。
 - 理由：结果状态单义要求「来源可用但未被选中」与「来源不可用」保持两种状态。第五态把两个不同问题的答案挤进同一个枚举，读到该值的消费者无法判断它在回答哪一个问题，正是禁止的跨态代偿。
-- 理由：顺序不可对调。先准入后判定会让被挡下的实体根本不产生 verdict 行，它既不在候选全集里、也没有出局原因，`DEC-012` 的逐实体差集会少掉一整块被减数，`GWT-013.t6` 的四类分母随之失真——省下的探测预算是用对账证据换来的。
+- 理由：顺序不可对调。先准入后判定会让被挡下的实体根本不产生 verdict 行，它既不在候选全集里、也没有出局原因，`DEC-012` 的逐实体差集会少掉一整块被减数，`GWT-002.t6` 的四类分母随之失真——省下的探测预算是用对账证据换来的。
 - 被否决方案：在四态上加第五个值「可用但未选中」——这让预筛成为一个它没有做出、也无法复现的决定的写者（准入读 publish 树累计计数，预筛不读也不该读），直接违反 `DEC-011` 的单写者边界。
 - 被否决方案：保留四态但给 `在场可用` 旁挂一个是否入选的布尔——同一实体的终态从此要两个字段合读才有意义，`DEC-007` 的「四态是一个字段的四个值」被拆成两个可分别漂移的位，而该布尔的写者仍然只能是选择器，写者问题原样保留。
 - 被否决方案：把准入提前到预筛之前以省下探测预算——被挡下的实体不再产生 verdict 行，候选全集缩小到与 `在场可用` 集同形，跨阶段差集形式上恒为空，看似闭合实则把出局证据整体删除。
-- 约束与影响：`GWT-012.t5` 的「只有 `在场可用` 的实体进入冻结的工作单元」是必要条件而不是充分条件，本决策与该结果子句不冲突，不需要改写它。
+- 约束与影响：`GWT-001.t5` 的「只有 `在场可用` 的实体进入冻结的工作单元」是必要条件而不是充分条件，本决策与该结果子句不冲突，不需要改写它。
 - 约束与影响：准入出局不是失败。补采循环把它计为当前抽取轮次未产出并在后续补采轮次补齐，因此它改变的是补采轮次数，不改变 quota，也不改变 `DEC-002` 的三值分离与 `DEC-010` 的补采轮次机制。
 - 约束与影响：`在场可用` 非空但准入后为零时 lane 仍然阻断。该阻断的批次级归因不在四态内，而是 `DEC-005` 共享值对象中「全部候选实体被选择器准入排除」这一原因值，由 lane 回执按 `DEC-005` 的单写者规则写入。批次级原因与实体级证据是引用关系而不是二选一：该原因在不可续跑依据之外必须携带逐实体准入排除 refs，指向 [`DEC-018`](#dec-018) 排除面上已声明的条目，缺该 refs 时原因不成立；只留逐实体证据而不写批次级原因同样不成立。
 - 可观察面：local_contract 构造两个来源证据逐字段相同的 `在场可用` 实体，只改变累计分布使其一被挡下，断言两者的 verdict 终态与子原因逐字段相同且都是 `在场可用`。verdict 契约中不存在任何多样性或入选字段。实体级四类的分子、分母与占比在该实体被挡下前后不变。准入只接收已判 `在场可用` 的行，未判定的行不进入准入。
 - 关联要求：`REQ-001`
-- 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 article 冻结期准入归属面
-- 关联验收：`GWT-012.t1`、`GWT-012.t5` 与 `GWT-013.t6`
+- 影响 Story：[`on-demand-content-pool-admission`](./on-demand-content-pool-admission/spec.md) 的 article 冻结期准入归属面
+- 关联验收：`GWT-001.t1`、`GWT-001.t5` 与 `GWT-002.t6`
 
 <a id="dec-018"></a>
 ### DEC-018 准入结论落在既有冻结选择证据上，写者是选择器，与 verdict 只有 refs 一个方向
@@ -329,8 +333,8 @@
 - 约束与影响：该证据与 `DEC-008` 的 verdict receipt 同级受 GC protection，不得被清理或改写。
 - 可观察面：local_contract 让准入挡下若干 `在场可用` 实体，断言选择证据可逐实体列举出局实体、约束与原因，实体键与 verdict receipt 逐字相同，且 verdict receipt 无任何准入字段。构造零准入使 spec 不被冻结，断言选择证据仍存在且出局集合可读。分别构造闸门未运行与闸门零出局，断言前者省略该键、后者该键在场且集合为空，两者不被读成同一结果。
 - 关联要求：`REQ-001`
-- 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 article 冻结期准入呈现面
-- 关联验收：`GWT-013.t9`、`GWT-013.t10` 与 `GWT-012.t5`
+- 影响 Story：[`on-demand-content-pool-admission`](./on-demand-content-pool-admission/spec.md) 的 article 冻结期准入呈现面
+- 关联验收：`GWT-002.t9`、`GWT-002.t10` 与 `GWT-001.t5`
 
 <a id="dec-019"></a>
 ### DEC-019 冻结边界进入逐实体差集，未归属的出局残差 fail closed
@@ -340,17 +344,17 @@
 - 决策：每条边界的出局原因只从拥有该边界的那个面读——`C \ V` 读 verdict receipt 的四态与子原因，`V \ F` 读选择证据的准入排除面，`F \ R_auto` 与 `R_auto \ R_plan` 读各自阶段的 receipt。四态不被要求解释它不拥有的边界。
 - 理由：只有把 `V` 与 `F` 分成两个集合，被准入挡下的实体才有一条属于自己的边界可落；把预筛阶段的 ready 集直接定义为 `F` 会让 `V \ F` 恒为空，对账形式上闭合而出局实体从对账中整体消失。
 - 理由：闭合必须是充要而不是单向包含。只断言 `X ⊆ V \ F` 时，任何新的、未声明的选择器侧丢弃都会静默通过；把残差判定写成 fail closed，才让「差额必有出处」由结构保证，而不是靠今天恰好只有一个排除来源。
-- 理由：原因按边界归属而不是按枚举归属，是这条闭合式能与 `REQ-007` 并存的前提。auto_research 与 content_plan 的出局原因本来就不在四态内，跨阶段子句要求的一直是「该实体在该阶段出局的首要原因」，准入排除只是又一条同形的边界。
+- 理由：原因按边界归属而不是按枚举归属，是这条闭合式能与 `REQ-001` 并存的前提。auto_research 与 content_plan 的出局原因本来就不在四态内，跨阶段子句要求的一直是「该实体在该阶段出局的首要原因」，准入排除只是又一条同形的边界。
 - 被否决方案：为准入出局建一个独立对账台账——`DEC-012` 已就同形方案否决：三阶段各自的 ready 集已经是既有产物，第三份记录只会成为可漂移的第二真相源。
 - 被否决方案：以计数相减判定闭合（`|V| - |F|` 等于出局计数）——计数相等不证明是同一批实体，两个方向的错配可以互相抵消；`DEC-012` 已判定对账是差集而不是比较计数。
-- 被否决方案：把残差降级为诊断统计并继续执行——残差的含义正是「有实体在无人认领的地方出局」，容忍它等于让 `GWT-013.t10` 的「精确列出出局实体」退化为 warn-only。
+- 被否决方案：把残差降级为诊断统计并继续执行——残差的含义正是「有实体在无人认领的地方出局」，容忍它等于让 `GWT-002.t10` 的「精确列出出局实体」退化为 warn-only。
 - 约束与影响：本闭合式只覆盖 article lane 的预筛对账，homepage 与 video 既有路径不变。
 - 约束与影响：`X` 的载体键缺席时（准入闸门未运行）`V \ F` 必须为空集，否则 fail closed；这条依赖 [`DEC-018`](#dec-018) 的缺席与在场为空可分。
 - 约束与影响：一次性抽取路径按候选池容量截断已合格集合时，被截断实体落在 `V \ F` 且今天没有声明面，按本条 fail closed。补法是在 `DEC-018` 的同一排除面上声明该约束取值，而不是放宽本闭合式。
 - 可观察面：local_contract 构造一批实体使 `在场可用` 集大于冻结集，断言 `V \ F` 与准入排除集逐实体相等、`F ⊆ V` 成立，并单独注入一个既不在冻结集也不在排除集中的 `在场可用` 实体，断言残差判定 fail closed 而不是记为统计项；再断言仅计数相等而实体不同时同样 fail closed。三阶段逐实体对账仍由 `OPEN-004` 已分派的 api_integration 经一次真实 execution 的 selection、auto_research 与 content_plan receipt 完成，本次在其上追加 `V \ F` 这条边界的断言。
 - 关联要求：`REQ-001`
-- 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 article 跨阶段对账闭合面
-- 关联验收：`GWT-013.t9`、`GWT-013.t10` 与 `GWT-013.t6`
+- 影响 Story：[`on-demand-content-pool-admission`](./on-demand-content-pool-admission/spec.md) 的 article 跨阶段对账闭合面
+- 关联验收：`GWT-002.t9`、`GWT-002.t10` 与 `GWT-002.t6`
 
 <a id="dec-020"></a>
 ### DEC-020 WorkRequest 是确认后才存在的独立聚合，编译只进入现有 envelope 单轨
@@ -367,12 +371,12 @@
 - 可测试观察面：local_contract 经三个 typed port 观察修改、取消、确认、四态结果、同 digest replay、collision、全有或全无和 owner 禁写边界。api_integration 经真实 CLI 观察 confirm 后现有 submit/freeze、provider/source/rights failure 与新 `retryOf` 恢复。user_acceptance 只消费 immutable release，在 entity homepage、article、image、video 四个 surface 分别绑定同一 release digest 的 CaseResult。
 - 失败恢复：confirm 前失败回到 preview，不留下 WorkRequest、execution identity 或 envelope。confirm 后而 submit 前失败重放同一 WorkRequest 与 compile receipt。submit 后失败只能创建新 retry WorkRequest 并精确消费旧 terminal/reconciliation receipt。App UAT 失败沿已有 release rollback receipt 恢复 previous active，不重建 release。
 - 质量、容量与成本：preview 与 confirm 不调用 semantic Provider 或环境服务，单请求最多四个 carrier，CPU、内存与持久化成本相对 envelope 大小线性。成本方向为增加但有界：startup 基线按每日最多 1,000 次 confirmed request、每份 WorkRequest 与 compile receipt 平均各 16 KiB 估算，日增约 31.25 MiB、30 天约 0.92 GiB、180 天热保留约 5.49 GiB；schema 分别以 256 KiB 为硬上限，因此 180 天未压缩最坏上界约 87.9 GiB。既有最多四份 envelope 不计作 WorkRequest 新增成本，实测超过任一基线必须先更新容量设计而不是静默放宽上限。
-- 性能与观测：preview/confirm 本地 p95 SLO 分别不超过 2,000/5,000 ms。在 1-carrier 与 4-carrier 的 success、blocked、collision 场景各形成专项 benchmark，缺样本或未达标保持 `OPEN-010`。WorkRequest 与 compile receipt 必须记录同一 `correlationId/workRequestDigest`、typed outcome、`durationMs`、active carrier 数、发布 artifact 数与总字节数。preview 全量记录不含用户原文的结果与时延，confirm/compile receipt 全量保留 180 天并按前述引用保护归档。按 outcome 分组计算 5 分钟窗口计数和 30 天 p95：任一 all-or-nothing violation 或 identity collision 立即 `GATE_BLOCK` 并产生高优先级告警。至少 20 个成功样本后 p95 连续两个窗口超 SLO 产生告警，少于 20 个样本只报 `insufficient_samples`、不得冒充达标。观测由 receipt 与结构化结果派生，不新增可写运行台账。
+- 性能与观测：preview/confirm 本地 p95 SLO 分别不超过 2,000/5,000 ms。在 1-carrier 与 4-carrier 的 success、blocked、collision 场景各形成专项 benchmark，缺样本或未达标保持 [`work-request-compilation`](./work-request-compilation/spec.md) 的 `OPEN-002`。WorkRequest 与 compile receipt 必须记录同一 `correlationId/workRequestDigest`、typed outcome、`durationMs`、active carrier 数、发布 artifact 数与总字节数。preview 全量记录不含用户原文的结果与时延，confirm/compile receipt 全量保留 180 天并按前述引用保护归档。按 outcome 分组计算 5 分钟窗口计数和 30 天 p95：任一 all-or-nothing violation 或 identity collision 立即 `GATE_BLOCK` 并产生高优先级告警。至少 20 个成功样本后 p95 连续两个窗口超 SLO 产生告警，少于 20 个样本只报 `insufficient_samples`、不得冒充达标。观测由 receipt 与结构化结果派生，不新增可写运行台账。
 - rollout 与 rollback：先以 `scale=M1`、`workloadMode=explicit`、`targetScale=WORKLOAD` 的 homepage=1 非环境 source-ready 输入验证 preview/confirm 与 batch 原子性，再扩到四 carrier，随后只以 milestone preset 进入 M100/M1000/M10000。未形成 immutable release 前不触达环境。回滚只停止消费未提交的 WorkRequest 并保留现有手工 `prepare-campaign -> task execute` 单轨；已激活 release 使用原 immutable release 与 rollback receipt 在 5 分钟目标内恢复，不重新构建。
 - 受影响契约：新增 WorkRequest、compile result 与 carrier execution policy 三个 Data execution schema，并新增一份受治理 carrier execution policy 实例。现有 request envelope 只扩展条件约束，使 `workloadMode=explicit` 的任意 M1 及以上请求可携带既有 `targetScale=WORKLOAD` SourcePool binding；不增加字段、版本信封或双读。execution spec、reconciliation receipt、SourcePool 与 release schema 不复制字段。
-- 关联要求：`REQ-009`
-- 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的意图 preview、确认编译与四载体数量闭环
-- 关联验收：`GWT-015`、`GWT-016`
+- 关联要求：[`work-request-compilation`](./work-request-compilation/spec.md) 的 `REQ-001`
+- 影响 Story：[`work-request-compilation`](./work-request-compilation/spec.md) 的意图 preview、确认编译，与 [`multi-carrier-release`](./multi-carrier-release/spec.md) 的四载体数量闭环
+- 关联验收：[`work-request-compilation`](./work-request-compilation/spec.md) 的 `GWT-001` 与 [`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `GWT-016`
 
 <a id="dec-021"></a>
 ### DEC-021 容量自举是 measurement-only process manager，日常 execution 仍只认受治理 receipt
@@ -400,9 +404,9 @@
 - 可观察面与 SLO：accepted independent receipt 前 canonical 可见数恒为 0，receipt 后同 stable identity canonical append 恰为 1。Image/Video 分开计量。Video `entityMatch=mismatch` 的 source admission 恒为 blocked，playable、4K 或 premium eligible 均不能覆盖该结论。
 - 可测试面：local_contract 证明 SourcePool 只绑定 source admission、publish 只绑定 independent receipt且二者不可互换。api_integration 从干净 root 对 Image/Video 各跑一条完整链，断言三个 runId 互异、publish 前零可见、receipt 后精确一和 replay 同摘要。negative integration 覆盖 root drift、reviewer local-root drift、execution identity 缺失及 Video mismatch。
 - 被否决方案：SourcePool 强制 pre-execution independent review。把 source-scoped review 冒充内容 independent review。publish 仅凭 SourcePool 放行。跨 root 相对路径或绝对路径。旧 independent receipt 与新 source admission 双读 fallback。
-- 关联要求：`REQ-001`、`REQ-002` 与 `REQ-009`
-- 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的首波 media SourcePool 与发布准入
-- 关联验收：`GWT-017`
+- 关联要求：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `REQ-001`、`REQ-002` 与 [`work-request-compilation`](./work-request-compilation/spec.md) 的 `REQ-001`
+- 影响 Story：[`on-demand-content-pool-admission`](./on-demand-content-pool-admission/spec.md) 的首波 media SourcePool 与发布准入
+- 关联验收：[`on-demand-content-pool-admission`](./on-demand-content-pool-admission/spec.md) 的 `GWT-004`
 
 <a id="dec-023"></a>
 ### DEC-023 invalid canonical 由唯一 repair process manager 按三个证据谓词收敛
@@ -416,9 +420,54 @@
 - 可观察面与 SLO：`actionless_invalid_identity_total` 与 `invalid_identity_semantic_dispatch_total` 必须恒为 0，同 identity effective-current 数只能是 0 或 1，三个读取面的 state/error/action 逐项相等。每个 repair case 全量记录 resolution、duration、evidence digest 与 terminal reason，保留期跟随 canonical 引用保护。
 - 可测试面：local_contract 覆盖完整状态转移、三谓词互斥、optimistic conflict、两个版本号规则、terminal 零新版本与三 reader 同源。api_integration 必须先通过真实 canonical application command 创建有效状态，再经 canonical storage adapter 暴露的 test-only fault-injection port 在存储边界制造 payload digest drift；禁止直接写 manifest、ledger 或 fixture seed。随后注入三种互斥 evidence，断言首轮保留原 error 与唯一 command，repair/rebuild 后只有一个 current，terminal 分支零新内容版本且退出 backlog。reliability 在 staging、ledger append、current switch 三个故障点注入失败并断言旧状态不变。
 - 被否决方案：manifest-only 判已消费。折叠深层错误。放宽 payload digest。原地覆盖 payload/record。让 backfill 同时承担 inspection 与 repair。repair/terminate 两套 CLI。用空 backlog或删除文件表达 termination。
-- 关联要求：`REQ-001` 与 `REQ-009`
-- 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 canonical 修复与 source-ready 调度
-- 关联验收：`GWT-018`
+- 关联要求：[`canonical-content-identity-recovery`](./canonical-content-identity-recovery/spec.md) 的 `REQ-001` 与 [`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `REQ-001`
+- 影响 Story：[`canonical-content-identity-recovery`](./canonical-content-identity-recovery/spec.md) 的 canonical 修复与 source-ready 调度
+- 关联验收：[`canonical-content-identity-recovery`](./canonical-content-identity-recovery/spec.md) 的 `GWT-001`
+
+<a id="dec-024"></a>
+### DEC-024 confirmed handoff 是来源发现前按需 demand 的唯一 owner，WorkRequest 只持直接父引用
+
+- 对象边界：`content_pre_acquisition_handoff` 扩展为来源发现之前 confirmed demand 事实的唯一 owner——lifecycle、严格 discriminated scope（`vertical|region|topic|region_topic` 四类条件必填）、canonical `primaryTopicRef` 与 `relatedTopicRefs`、按载体 `sourceSelection`、逐载体数量意图。复用既有 revision/supersedes/create-once 语义，不新建 `ContentDemandRequest` 或第二套 demand 台账。
+- 派生单轨：WorkRequest 只从 `handoff ref+digest + SourcePool ref+digest` 派生，这些字段的独立调用方输入路径全部删除；WorkRequest 保留的任何 intent/workload 字段都只能是不可独立写入的确定性投影，投影漂移在编译前 fail closed。
+- 输入不静默默认：vertical 是显式输入，缺失只允许 preview 显式建议并要求确认，编译器的静默垂类 fallback 删除。`topic` 原子收紧为 canonical taxonomy 引用，不留自由文本双轨。`sourceProviders` 在 preview/confirm 按垂类 provider 闭集 fail closed，不推迟到执行阶段。
+- 理由：demand 事实一旦有两个 owner（调用方直填 WorkRequest 与 handoff 各留一份），每次新场景都要改编译器读哪一份——这正是"每次生产都改引擎"的输入侧根因。唯一 owner 加确定性派生让新场景只改 handoff 数据，不改引擎。
+- 被否决方案：新建独立 `ContentDemandRequest` 聚合——与既有 handoff 表达同一事实，构成第二真相源。保留 topic 自由文本兼容双轨——未知主题会静默合成伪 identity。保留 vertical 默认值——静默默认使同一请求在不同默认下产出不同内容且不可复核。
+- 约束与影响：scope 四类条件必填互斥，`relatedTopicRefs` 为 uniqueItems、不含 primary、不由 `sameAsRefs` 自动展开；未知或歧义映射返回 `needs_input`。
+- 可测试面：local_contract 覆盖四类 scope 条件校验、缺 vertical 的显式建议路径、taxonomy 映射失败 `needs_input`、provider 闭集 fail closed 与派生投影漂移写前失败。
+- 关联要求：[`work-request-compilation`](./work-request-compilation/spec.md) 的 `REQ-002`
+- 影响 Story：[`work-request-compilation`](./work-request-compilation/spec.md) 的 demand 输入面
+- 关联验收：[`work-request-compilation`](./work-request-compilation/spec.md) 的 `GWT-002`
+
+<a id="dec-025"></a>
+### DEC-025 executionAuthority 是互斥 oneOf，bounded explicit 永不产生容量资格
+
+- 对象边界：campaign envelope 的必填 `capacityCalibration` 原子替换为 `executionAuthority` 互斥 `oneOf`；旧字段与旧读取路径同批删除，不做双字段、fallback 或 shim。
+- `bounded_explicit`：仅允许 M1–M10 explicit 请求、单 worker、不可续期绝对 deadline，且必须精确绑定当前 handoff/SourcePool/workload digest；它永不产生 capacity qualification，限制取值只来自受版本控制 policy，不来自调用方覆写、默认常量或探针观测。
+- `governed_calibration`：保留给 M100 及以上，仍要求受治理 create-once calibration receipt（由 [`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `OPEN-006` 与 `DEC-021` 承接）。
+- 数量三轴单义：用户 `workload/quota` 是不可下调下限，SourcePool `candidateCount` 由 oversampling policy 派生，execution `workUnitCount` 只由实际 accepted candidates 派生。三者不得互相反推，SourcePool selection 误传 `quota_value` 的错配修正为传解析出的 oversampled `count`。
+- 理由：必填 capacity calibration 使 M1 无 receipt 即无法启动，形成"要跑内容先跑 M100 soak"的启动环；bounded authority 给小规模显式请求一条不冒充容量结论的合法通路，恢复后的空工作区也能立即开始 M1。
+- 被否决方案：给 M1 伪造或手写 calibration receipt——伪造 receipt 不可能命中冻结摘要且污染容量真相源。放宽 capacityCalibration 为可选——缺席会静默塌陷为无限授权。双字段过渡——契约单轨禁止双读。
+- 约束与影响：无效或越界 authority（超出 M10、多 worker、deadline 续期、绑定漂移）一律 typed blocked；bounded 运行的 timing 样本只是运行事实，不得投影为容量结论或 receipt。
+- 可测试面：local_contract 覆盖 oneOf 互斥、越界 typed blocked、三轴各自可断言与 quota 错配修复；旧字段 reader 数为 0 由静态断言锁定。
+- 关联要求：[`work-request-compilation`](./work-request-compilation/spec.md) 的 `REQ-003`
+- 影响 Story：[`work-request-compilation`](./work-request-compilation/spec.md) 的 execution authority 面
+- 关联验收：[`work-request-compilation`](./work-request-compilation/spec.md) 的 `GWT-002`
+
+<a id="dec-026"></a>
+### DEC-026 canonical admission 以单对象事务为原子与幂等单位，唯一写路径经 reviewed delivery
+
+- 对象边界：canonical admission 的原子与幂等单位是单对象 transaction；drain 只是可 partial 的 process manager，消费 reviewed delivery intent 并逐对象提交，不拥有批次级成功语义。历史 raw backfill/pool-append 直写只保留迁移能力，current WorkRequest execution 不得经它入池。
+- 结果单义：单对象结果互斥为 `appended|replayed|pending|excluded|blocked`，满足 `total = appended + replayed + pending + excluded + blocked`、`poolDelta = appended`；用户汇总只从既有 handoff、SourcePool、review 与 drain facts 的只读投影派生，不新增可写台账。
+- 恢复面：compile 与 drain 的所有非成功终态提供结构化 `nextAction + reentryRef`，action 取自最小闭集，`reentryRef` 绑定原 handoff/request/intent 摘要；追加过程中断（含尾部 tag snapshot refresh 失败窗口）必须可重入且零半可见对象。
+- exact replay：同一冻结请求重放时全部已入池对象 `poolDelta=0`、record-set digest 与既有 record 字节不变，漂移返回 typed conflict 且零写入——这是引擎复用资格的机械判据。
+- lineage 单轨：submission/envelope 不新增 `workRequestDigest` 冗余字段，回溯沿既有 `executionId` join（compile receipt ↔ envelope ↔ delivery intent ↔ pool record），以断言测试锁定该链。
+- 理由：批次为原子单位时任一对象失败会拖垮或回滚整批，运营者只能重跑并再次全量生产；对象为原子单位加显式重入引用，失败只留下该对象的 typed 终态，已合格对象不重复生产——增量入池由此成立。
+- 被否决方案：批次级事务——放大失败半径。为 backfill 保留生产入口——形成绕过 review 的第二写路径。在 envelope 冗余请求摘要——同一事实两份记录，必然漂移。
+- 约束与影响：入池冻结证据必须绑定 batch 输入摘要、逐对象 record（`contentVersion/recordSequence/结果态`）与 post-apply pool readback，不得只引用一次终端输出。
+- 可测试面：local_contract 覆盖五态守恒、nextAction/reentry 闭集、重入窗口、backfill 拒绝与 replay 单义；api_integration 以真实 typed 请求覆盖首次入池与 exact replay 零增量。
+- 关联要求：[`on-demand-content-pool-admission`](./on-demand-content-pool-admission/spec.md) 的 `REQ-002`
+- 影响 Story：[`on-demand-content-pool-admission`](./on-demand-content-pool-admission/spec.md) 的唯一入池路径与恢复面
+- 关联验收：[`on-demand-content-pool-admission`](./on-demand-content-pool-admission/spec.md) 的 `GWT-005`
 
 ## 5. 失败与恢复
 

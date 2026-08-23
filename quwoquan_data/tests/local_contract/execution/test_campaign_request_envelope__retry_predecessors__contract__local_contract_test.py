@@ -35,7 +35,6 @@ def test_campaign_retry_envelope_requires_one_matching_predecessor(
         envelopes.build_envelope(
             scale="M3",
             carrier="image",
-            region_ref="china",
             repo_root=repo,
             day="20260805",
             predecessor_execution_id=predecessor,
@@ -43,7 +42,6 @@ def test_campaign_retry_envelope_requires_one_matching_predecessor(
     rolling = envelopes.build_envelope(
         scale="M3",
         carrier="image",
-        region_ref="china",
         repo_root=repo,
         day="20260805",
         sequence=2,
@@ -53,7 +51,6 @@ def test_campaign_retry_envelope_requires_one_matching_predecessor(
     retry = envelopes.build_envelope(
         scale="M3",
         carrier="image",
-        region_ref="china",
         repo_root=repo,
         day="20260805",
         sequence=2,
@@ -79,7 +76,6 @@ def test_campaign_retry_envelope_requires_one_matching_predecessor(
     cursor_retry = envelopes.build_envelope(
         scale="M3",
         carrier="image",
-        region_ref="china",
         repo_root=repo,
         day="20260805",
         sequence=2,
@@ -94,7 +90,6 @@ def test_campaign_retry_envelope_requires_one_matching_predecessor(
         envelopes.build_envelope(
             scale="M3",
             carrier="image",
-            region_ref="china",
             repo_root=repo,
             day="20260805",
             semantic_selection_id="cursor_auto",
@@ -105,7 +100,6 @@ def test_campaign_retry_envelope_requires_one_matching_predecessor(
         envelopes.build_envelope(
             scale="M3",
             carrier="image",
-            region_ref="china",
             repo_root=repo,
             day="20260805",
             sequence=2,
@@ -121,7 +115,6 @@ def test_campaign_retry_envelope_requires_one_matching_predecessor(
         envelopes.build_envelope(
             scale="M1",
             carrier="image",
-            region_ref="china",
             repo_root=repo,
             day="20260805",
             sequence=2,
@@ -130,7 +123,6 @@ def test_campaign_retry_envelope_requires_one_matching_predecessor(
     subset_retry = envelopes.build_envelope(
         scale="M1",
         carrier="image",
-        region_ref="china",
         repo_root=repo,
         day="20260805",
         sequence=2,
@@ -158,7 +150,6 @@ def test_campaign_retry_write_requires_all_active_predecessors_and_separate_path
     with pytest.raises(ValueError, match="exactly match active carriers"):
         envelopes.write_scale_envelopes(
             "M3",
-            region_ref="china",
             repo_root=repo,
             output_root=tmp_path,
             day="20260805",
@@ -170,7 +161,6 @@ def test_campaign_retry_write_requires_all_active_predecessors_and_separate_path
     with pytest.raises(ValueError, match="sequence=1 forbids"):
         envelopes.write_scale_envelopes(
             "M3",
-            region_ref="china",
             repo_root=repo,
             output_root=tmp_path,
             day="20260805",
@@ -179,7 +169,6 @@ def test_campaign_retry_write_requires_all_active_predecessors_and_separate_path
 
     first = envelopes.write_scale_envelopes(
         "M3",
-        region_ref="china",
         repo_root=repo,
         output_root=tmp_path,
         day="20260805",
@@ -188,7 +177,6 @@ def test_campaign_retry_write_requires_all_active_predecessors_and_separate_path
     )
     second = envelopes.write_scale_envelopes(
         "M3",
-        region_ref="china",
         repo_root=repo,
         output_root=tmp_path,
         day="20260805",
@@ -270,7 +258,6 @@ def test_campaign_retry_envelopes_bind_submission_reconciliation_targets(
 
     paths = envelopes.write_scale_envelopes(
         "M3",
-        region_ref="china",
         repo_root=repo,
         output_root=tmp_path / "envelopes",
         day="20260805",
@@ -293,7 +280,6 @@ def test_campaign_retry_envelopes_bind_submission_reconciliation_targets(
     with pytest.raises(ValueError, match="targetNames differ"):
         envelopes.write_scale_envelopes(
             "M3",
-            region_ref="china",
             target_names=["另一个目标"],
             repo_root=repo,
             output_root=tmp_path / "drifted-envelopes",
@@ -316,7 +302,6 @@ def test_campaign_retry_envelopes_bind_submission_reconciliation_targets(
     with pytest.raises(ValueError, match="did not leave the reconciled source"):
         envelopes.write_scale_envelopes(
             "M3",
-            region_ref="china",
             repo_root=repo,
             output_root=tmp_path / "original-source-envelopes",
             day="20260805",

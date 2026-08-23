@@ -59,3 +59,4 @@ constraints:
   - configuration 同时绑定 service configuration、App runtime config 与 packaged environment runtime；Provider 同时绑定 canonical binding 与 runtime composition。
   - endpointAuthorityDigest 绑定 environment、target 与 packaged publicBases 的 canonical 投影；runtimeTopologyDigest 绑定 package-owned runtime topology manifest 的精确字节。
   - 任一字段缺失、多余、target/environment 错配、摘要不可复算、跨环境复用或 package-owned 字节漂移均 fail-closed。
+  - 镜像字节按 nonprod/prod 两个信任域分叉（DEC-005）：alpha/beta/gamma 的同 owner 镜像必须共享同一 digest，prod 镜像 digest 必须与 nonprod 分叉；环境身份由部署面挂载的 artifact-identity.json 承载，不烤入镜像字节。environment artifact 的不可交换性由 configuration/endpoint/topology 投影差异保证，与镜像 digest 复用无冲突。

@@ -46,6 +46,7 @@ from support.campaign_scale_evidence_fixture import (
 )
 from support.capacity_calibration_fixture import (
     synthetic_capacity_source_binding,
+    synthetic_governed_execution_authority,
 )
 from support.semantic_preflight_fixture import ready_semantic_preflight
 
@@ -407,7 +408,7 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
         "entityCatalogDigest": CATALOG_DIGEST,
         "semanticSelectionId": "default",
         "semanticPreflightReceipt": terra_preflight_binding,
-        "capacityCalibration": synthetic_capacity_source_binding(),
+        "executionAuthority": synthetic_governed_execution_authority(),
         "scaleSourcePool": pool_binding,
         "sourcePoolEvidenceRootRef": pool_evidence_ref,
         "laneSourcePoolSelections": pool_selections,

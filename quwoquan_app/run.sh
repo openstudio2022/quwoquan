@@ -2,6 +2,15 @@
 # 使用 env-package-backed Remote 启动入口，避免裸跑漏掉 runtime/release 合同。
 set -euo pipefail
 
+# 本 recovery 工作树已废弃：其构建派生物（native runtime package/handoff）随主仓
+# 契约演进立即过期，曾直接导致启动配置静默失效被误判为云侧故障。
+# 开发启动统一从主工作树经 canonical handoff 执行。
+if [[ "$(cd "$(dirname "$0")/.." && pwd)" == *"quwoquan-recovery-"* ]]; then
+  echo "GATE_BLOCK: 此工作树 (quwoquan-recovery-*) 已废弃，禁止从这里启动 App。" >&2
+  echo "请用 git worktree list 定位 canonical 主工作树，再从其仓库根目录执行 ./quwoquan_app/run.sh。" >&2
+  exit 1
+fi
+
 APP_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$APP_DIR/.." && pwd)"
 # bytecode 缓存统一落 local/cache/**：local/<target>/ 只允许 process/ 与 cache/，
@@ -9,10 +18,13 @@ ROOT_DIR="$(cd "$APP_DIR/.." && pwd)"
 export PYTHONPYCACHEPREFIX="${PYTHONPYCACHEPREFIX:-$ROOT_DIR/.qwq_output/env/repo/local/cache/python/app-launch}"
 REQUESTED_ENVIRONMENT="${QWQ_ENVIRONMENT:-}"
 REQUESTED_TARGET=""
+REQUESTED_DEVICE_ID=""
 RUN_MODE="content-live"
 ENSURE_RUNTIME=0
 LAUNCH_RECEIPT="${QWQ_APP_LAUNCH_RECEIPT:-}"
 LAUNCH_LOG_REF="${QWQ_APP_LAUNCH_LOG_REF:-}"
+RUNTIME_CONFIG_MATERIAL_ROOT=""
+RUNTIME_CONFIG_TRUST_PATH=""
 FLUTTER_ARGUMENTS=()
 
 print_usage() {
@@ -78,6 +90,32 @@ while [[ $# -gt 0 ]]; do
       ENSURE_RUNTIME=1
       shift
       ;;
+    -d|--device-id)
+      value="${2:-}"
+      if [[ -z "$value" ]]; then
+        echo "[run] GATE_BLOCK: $1 requires a device id." >&2
+        exit 2
+      fi
+      if [[ -n "$REQUESTED_DEVICE_ID" && "$REQUESTED_DEVICE_ID" != "$value" ]]; then
+        echo "[run] GATE_BLOCK: conflicting device selectors are forbidden." >&2
+        exit 2
+      fi
+      REQUESTED_DEVICE_ID="$value"
+      shift 2
+      ;;
+    --device-id=*)
+      value="${1#*=}"
+      if [[ -z "$value" ]]; then
+        echo "[run] GATE_BLOCK: --device-id requires a device id." >&2
+        exit 2
+      fi
+      if [[ -n "$REQUESTED_DEVICE_ID" && "$REQUESTED_DEVICE_ID" != "$value" ]]; then
+        echo "[run] GATE_BLOCK: conflicting device selectors are forbidden." >&2
+        exit 2
+      fi
+      REQUESTED_DEVICE_ID="$value"
+      shift
+      ;;
     --launch-receipt)
       LAUNCH_RECEIPT="${2:-}"
       [[ -n "$LAUNCH_RECEIPT" ]] || {
@@ -112,7 +150,29 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
-set -- "${FLUTTER_ARGUMENTS[@]}"
+if (( ${#FLUTTER_ARGUMENTS[@]} == 0 )); then
+  set --
+else
+  set -- "${FLUTTER_ARGUMENTS[@]}"
+fi
+if ! python3 - "$APP_DIR/scripts/device" "$@" <<'PY'
+import sys
+
+sys.path.insert(0, sys.argv[1])
+from canonical_app_instance.arguments import (
+    CanonicalExecutorError,
+    sanitize_attach_arguments,
+)
+
+try:
+    sanitize_attach_arguments(tuple(sys.argv[2:]))
+except CanonicalExecutorError as error:
+    print(f"[run] GATE_BLOCK: {error}", file=sys.stderr)
+    raise SystemExit(2) from None
+PY
+then
+  exit 2
+fi
 
 case "$RUN_MODE" in
   content-live|ui-only) ;;
@@ -149,29 +209,32 @@ case "$QWQ_APP_RUNTIME_ENV" in
     exit 2
     ;;
 esac
+export QWQ_APP_BUILD_PROFILE=nonprod
 export QWQ_LAUNCH_TARGET="${REQUESTED_TARGET:-${QWQ_APP_RUNTIME_ENV}-local}"
 export QWQ_APP_RUN_MODE="$RUN_MODE"
 export QWQ_APP_BUILD_CONTEXT=runtime
 export QWQ_APP_LAUNCH_POLICY=test_live
 
-cd "$APP_DIR"
+ACTIVATION_TIMEOUT_SECONDS="${QWQ_APP_ACTIVATION_TIMEOUT_SECONDS:-30}"
+LAUNCH_TIMEOUT_SECONDS="${QWQ_APP_LAUNCH_TIMEOUT_SECONDS:-900}"
+if ! python3 - "$ACTIVATION_TIMEOUT_SECONDS" "$LAUNCH_TIMEOUT_SECONDS" <<'PY'
+import math
+import sys
 
-parse_flutter_device_id() {
-  while [[ $# -gt 0 ]]; do
-    case "$1" in
-      -d|--device-id)
-        echo "${2:-}"
-        return 0
-        ;;
-      --device-id=*)
-        echo "${1#*=}"
-        return 0
-        ;;
-    esac
-    shift
-  done
-  return 0
-}
+for value in sys.argv[1:]:
+    try:
+        seconds = float(value)
+    except ValueError:
+        raise SystemExit(2) from None
+    if not math.isfinite(seconds) or seconds <= 0:
+        raise SystemExit(2)
+PY
+then
+  echo "[run] GATE_BLOCK: activation and launch timeouts must be positive finite numbers." >&2
+  exit 2
+fi
+
+cd "$APP_DIR"
 
 for argument in "$@"; do
   case "$argument" in
@@ -182,7 +245,7 @@ for argument in "$@"; do
   esac
 done
 
-export QWQ_RUN_DEVICE_ID="$(parse_flutter_device_id "$@")"
+export QWQ_RUN_DEVICE_ID="$REQUESTED_DEVICE_ID"
 DEVICE_ID="$QWQ_RUN_DEVICE_ID"
 
 if [[ "$ENSURE_RUNTIME" == "1" ]]; then
@@ -418,19 +481,8 @@ export QWQ_RUN_CONSUMER_ID="flutter-run-$$"
 export QWQ_CONSUMER_LEASE_ACQUIRED=0
 export QWQ_CONSUMER_LEASE_ID=""
 export QWQ_ANDROID_REVERSE_OWNED_PORTS=""
-export QWQ_ANDROID_VM_FORWARD_PREEXISTING=0
 
 release_consumer_lease() {
-  if command -v adb >/dev/null 2>&1 \
-    && [[ "${QWQ_RUN_DEVICE_KIND:-}" == android* ]] \
-    && [[ "$QWQ_ANDROID_VM_FORWARD_PREEXISTING" != "1" ]]; then
-    current_vm_forward="$({ adb forward --list 2>/dev/null || true; } \
-      | awk -v device="$DEVICE_ID" '$1 == device && $2 == "tcp:8888" { print $2; exit }')"
-    if [[ "$current_vm_forward" == "tcp:8888" ]] \
-      && ! adb -s "$DEVICE_ID" forward --remove tcp:8888 >/dev/null 2>&1; then
-      echo "[run] WARN: failed to remove owned Flutter VM adb forward tcp:8888."
-    fi
-  fi
   if command -v adb >/dev/null 2>&1 \
     && [[ -n "$QWQ_ANDROID_REVERSE_OWNED_PORTS" ]]; then
     IFS=',' read -r -a reverse_ports <<< "$QWQ_ANDROID_REVERSE_OWNED_PORTS"
@@ -456,6 +508,9 @@ cleanup_run() {
   release_consumer_lease
   if [[ -n "${QWQ_APP_INSTANCE_STATE_FILE:-}" ]]; then
     rm -f -- "$QWQ_APP_INSTANCE_STATE_FILE"
+  fi
+  if [[ -n "$RUNTIME_CONFIG_MATERIAL_ROOT" ]]; then
+    rm -rf -- "$RUNTIME_CONFIG_MATERIAL_ROOT"
   fi
 }
 
@@ -510,19 +565,6 @@ if device_kind.startswith("android"):
             int(match.group(1))
             for match in re.finditer(r"tcp:(\d+)\s+tcp:\d+", before.stdout)
         }
-        forwards = subprocess.run(
-            ["adb", "forward", "--list"],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        if forwards.returncode != 0:
-            raise RuntimeError("unable to read existing adb forward mappings")
-        vm_forward_preexisting = any(
-            fields[:2] == [device_id, "tcp:8888"]
-            for fields in (line.split() for line in forwards.stdout.splitlines())
-            if len(fields) >= 2
-        )
         ports = enable_android_adb_reverse(device_id, target, topology=topology)
     except (OSError, RuntimeError, TypeError, ValueError) as exc:
         if os.environ.get("QWQ_APP_RUN_MODE") == "content-live":
@@ -544,10 +586,6 @@ if device_kind.startswith("android"):
     print("export QWQ_ANDROID_REVERSE_EXPECTED_PORTS=" + shlex.quote(port_list))
     print("export QWQ_ANDROID_REVERSE_ACTUAL_PORTS=" + shlex.quote(port_list))
     print("export QWQ_ANDROID_REVERSE_OWNED_PORTS=" + shlex.quote(owned_port_list))
-    print(
-        "export QWQ_ANDROID_VM_FORWARD_PREEXISTING="
-        + ("1" if vm_forward_preexisting else "0")
-    )
     print("export QWQ_ANDROID_REVERSE_RECEIPT_DIGEST=" + shlex.quote(
         "sha256:" + hashlib.sha256(
             f"{target}\0{device_id}\0{port_list}".encode("utf-8")
@@ -622,14 +660,15 @@ PY
   fi
 fi
 
+RUNTIME_STACKCTL_PYTHON="$(
+  bash "$APP_DIR/scripts/ios/build_resolve_stackctl_python.sh"
+)" || {
+  echo "[run] GATE_BLOCK: a compatible Python is required for native activation." >&2
+  exit 2
+}
+
 if [[ "${QWQ_RUN_DEVICE_KIND:-}" == "ios-simulator" \
    || "${QWQ_RUN_DEVICE_KIND:-}" == android* ]]; then
-  RUNTIME_STACKCTL_PYTHON="$(
-    bash "$APP_DIR/scripts/ios/build_resolve_stackctl_python.sh"
-  )" || {
-    echo "[run] GATE_BLOCK: a compatible Python is required for device system trust." >&2
-    exit 2
-  }
   DEVICE_TRUST_PLATFORM="$QWQ_RUN_DEVICE_KIND"
   if [[ "$DEVICE_TRUST_PLATFORM" == "android_emulator" ]]; then
     DEVICE_TRUST_PLATFORM="android-emulator"
@@ -665,23 +704,22 @@ if [[ "${QWQ_RUN_DEVICE_KIND:-}" == android* ]]; then
   fi
 fi
 
-if [[ "${QWQ_RUN_DEVICE_KIND:-}" == "ios-simulator" \
+QWQ_DEBUG_APP_ID_PLATFORM="android"
+if [[ "${QWQ_RUN_DEVICE_KIND:-}" == ios-* ]]; then
+  QWQ_DEBUG_APP_ID_PLATFORM="ios"
+fi
+QWQ_DEBUG_APP_ID="$(
+  PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" PYTHONDONTWRITEBYTECODE=1 \
+    "$RUNTIME_STACKCTL_PYTHON" -c "from quwoquan_ops.cli.lib.app_identity import application_id_for; import sys; print(application_id_for(sys.argv[1], sys.argv[2], 'debug'))" \
+    "$QWQ_DEBUG_APP_ID_PLATFORM" "$QWQ_APP_RUNTIME_ENV"
+)" || {
+  echo "[run] GATE_BLOCK: failed to derive the debug application id for $QWQ_APP_RUNTIME_ENV." >&2
+  exit 2
+}
+
+if [[ "${QWQ_RUN_DEVICE_KIND:-}" == ios-* \
    || ("${QWQ_RUN_DEVICE_KIND:-}" == android* \
       && -n "$QWQ_ANDROID_LOCAL_PORTS") ]]; then
-  # run.sh 走 flutter run（Debug）；lease 身份必须与实际安装的
-  # 环境 × BuildMode applicationId/bundle id 单轨一致，禁止字面值。
-  QWQ_DEBUG_APP_ID_PLATFORM="android"
-  if [[ "${QWQ_RUN_DEVICE_KIND:-}" == "ios-simulator" ]]; then
-    QWQ_DEBUG_APP_ID_PLATFORM="ios"
-  fi
-  QWQ_DEBUG_APP_ID="$(
-    PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" PYTHONDONTWRITEBYTECODE=1 \
-      "$RUNTIME_STACKCTL_PYTHON" -c "from quwoquan_ops.cli.lib.app_identity import application_id_for; import sys; print(application_id_for(sys.argv[1], sys.argv[2], 'debug'))" \
-      "$QWQ_DEBUG_APP_ID_PLATFORM" "$QWQ_APP_RUNTIME_ENV"
-  )" || {
-    echo "[run] GATE_BLOCK: failed to derive the debug application id for $QWQ_APP_RUNTIME_ENV." >&2
-    exit 2
-  }
   LEASE_COMMAND=(
     "$RUNTIME_STACKCTL_PYTHON" "$ROOT_DIR/quwoquan_ops/cli/stackctl.py"
     --output-format json consumer-lease acquire
@@ -689,19 +727,29 @@ if [[ "${QWQ_RUN_DEVICE_KIND:-}" == "ios-simulator" \
     --device "$DEVICE_ID"
     --consumer "$QWQ_RUN_CONSUMER_ID"
   )
-  if [[ "${QWQ_RUN_DEVICE_KIND:-}" == "ios-simulator" ]]; then
-    LEASE_COMMAND+=(
-      --platform ios-simulator
-      --bundle-id "$QWQ_DEBUG_APP_ID"
-      --ports ""
-    )
-  else
-    LEASE_COMMAND+=(
-      --platform android
-      --package-name "$QWQ_DEBUG_APP_ID"
-      --ports "$QWQ_ANDROID_LOCAL_PORTS"
-    )
-  fi
+  case "${QWQ_RUN_DEVICE_KIND:-}" in
+    ios-simulator)
+      LEASE_COMMAND+=(
+        --platform ios-simulator
+        --bundle-id "$QWQ_DEBUG_APP_ID"
+        --ports ""
+      )
+      ;;
+    ios-physical)
+      LEASE_COMMAND+=(
+        --platform ios-physical
+        --bundle-id "$QWQ_DEBUG_APP_ID"
+        --ports ""
+      )
+      ;;
+    android*)
+      LEASE_COMMAND+=(
+        --platform android
+        --package-name "$QWQ_DEBUG_APP_ID"
+        --ports "$QWQ_ANDROID_LOCAL_PORTS"
+      )
+      ;;
+  esac
   if LEASE_JSON="$(PYTHONDONTWRITEBYTECODE=1 "${LEASE_COMMAND[@]}")"; then
     QWQ_CONSUMER_LEASE_ID="$(
     python3 - "$LEASE_JSON" <<'PY'
@@ -725,14 +773,27 @@ PY
   fi
 fi
 
+RUNTIME_CONFIG_MATERIAL_ROOT="$(
+  mktemp -d "${TMPDIR:-/tmp}/qwq-app-runtime-config.XXXXXX"
+)" || {
+  echo "[run] GATE_BLOCK: failed to create private runtime configuration material directory." >&2
+  exit 2
+}
+chmod 0700 "$RUNTIME_CONFIG_MATERIAL_ROOT"
+mkdir "$RUNTIME_CONFIG_MATERIAL_ROOT/qwq_runtime"
+chmod 0700 "$RUNTIME_CONFIG_MATERIAL_ROOT/qwq_runtime"
+RUNTIME_CONFIG_TRUST_PATH="$RUNTIME_CONFIG_MATERIAL_ROOT/qwq_runtime/runtime-config-trust.json"
+export QWQ_APP_RUNTIME_CONFIG_TRUST_PATH="$RUNTIME_CONFIG_TRUST_PATH"
+export QWQ_ANDROID_RUNTIME_CONFIG_ASSET_ROOT="$RUNTIME_CONFIG_MATERIAL_ROOT"
+export QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH="$RUNTIME_CONFIG_TRUST_PATH"
+
 HANDOFF_CMD=(
   python3 "$APP_DIR/scripts/device/build_launcher_handoff.py"
   --env "$QWQ_APP_RUNTIME_ENV"
   --target "$QWQ_LAUNCH_TARGET"
   --launch-mode canonical_launcher
   --launch-policy test_live
-  --app-instance-id "$QWQ_APP_RUNTIME_ENV-run"
-  --app-instance-namespace "$QWQ_APP_RUNTIME_ENV-run"
+  --runtime-config-trust-output "$RUNTIME_CONFIG_TRUST_PATH"
 )
 if [[ -n "$ANDROID_LOCAL_GATEWAY_BASE_URL" ]]; then
   HANDOFF_CMD+=(--gateway-base-url "$ANDROID_LOCAL_GATEWAY_BASE_URL")
@@ -773,24 +834,15 @@ import sys
 handoff = json.loads(sys.argv[1])
 print("ENTRYPOINT=" + shlex.quote(handoff["entrypoint"]))
 print("LAUNCH_MODE=" + shlex.quote(handoff["launchMode"]))
-print("DART_DEFINES_DIGEST=" + shlex.quote(handoff["dartDefinesDigest"]))
-print("RUNTIME_CONFIG_DIGEST=" + shlex.quote(handoff["runtimeConfigDigest"]))
+print("RUNTIME_CONFIG_PACKAGE_DIGEST=" + shlex.quote(
+    handoff["runtimeConfigPackageDigest"]
+))
+print("RUNTIME_CONFIG_TRUST_ENVELOPE_DIGEST=" + shlex.quote(
+    handoff["runtimeConfigTrustEnvelopeDigest"]
+))
 print("EFFECTIVE_LAUNCH_MANIFEST_DIGEST=" + shlex.quote(
     handoff["effectiveLaunchManifestDigest"]
 ))
-print("EFFECTIVE_LAUNCH_MANIFEST_JSON=" + shlex.quote(json.dumps(
-    handoff["effectiveLaunchManifest"],
-    ensure_ascii=False,
-    separators=(",", ":"),
-)))
-print("RECOVERY_BASE_URL=" + shlex.quote(handoff["recoveryBaseUrl"]))
-print("PUBLIC_WEB_BASE_URL=" + shlex.quote(handoff["publicWebBaseUrl"]))
-print("APP_DOWNLOAD_BASE_URL=" + shlex.quote(handoff["appDownloadBaseUrl"]))
-print("DEFINES_JSON=" + shlex.quote(json.dumps(
-    handoff["dartDefines"],
-    ensure_ascii=False,
-    separators=(",", ":"),
-)))
 PY
 )" || {
   echo "[run] GATE_BLOCK: failed to parse launcher handoff." >&2
@@ -799,12 +851,9 @@ PY
 eval "$HANDOFF_EXPORTS"
 export QWQ_APP_LAUNCH_MODE="$LAUNCH_MODE"
 export QWQ_LAUNCH_HANDOFF_JSON="$HANDOFF_JSON"
-export QWQ_DART_DEFINES_DIGEST="$DART_DEFINES_DIGEST"
-export QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST="$RUNTIME_CONFIG_DIGEST"
+export QWQ_RUNTIME_CONFIG_PACKAGE_DIGEST="$RUNTIME_CONFIG_PACKAGE_DIGEST"
+export QWQ_RUNTIME_CONFIG_TRUST_ENVELOPE_DIGEST="$RUNTIME_CONFIG_TRUST_ENVELOPE_DIGEST"
 export QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST="$EFFECTIVE_LAUNCH_MANIFEST_DIGEST"
-export QWQ_APP_RECOVERY_BASE_URL="$RECOVERY_BASE_URL"
-export QWQ_APP_PUBLIC_WEB_URL="$PUBLIC_WEB_BASE_URL"
-export QWQ_APP_DOWNLOAD_BASE_URL="$APP_DOWNLOAD_BASE_URL"
 if [[ "$QWQ_CONSUMER_LEASE_ACQUIRED" == "1" ]]; then
   LEASE_BIND_COMMAND=(
     "${LEASE_COMMAND[@]}"
@@ -829,40 +878,6 @@ if [[ "$QWQ_CONSUMER_LEASE_ACQUIRED" == "1" ]]; then
     echo "[run] WARN: failed to bind the runtime consumer lease to the final handoff digest." >&2
   fi
 fi
-VERIFY_HANDOFF_CMD=(
-  python3 "$APP_DIR/scripts/device/verify_flutter_run_defines.py"
-  --env "$QWQ_APP_RUNTIME_ENV"
-  --target "$QWQ_LAUNCH_TARGET"
-  --entrypoint "$ENTRYPOINT"
-  --defines-digest "$DART_DEFINES_DIGEST"
-  --runtime-config-digest "$RUNTIME_CONFIG_DIGEST"
-  --effective-launch-manifest-json "$EFFECTIVE_LAUNCH_MANIFEST_JSON"
-  --effective-launch-manifest-digest "$EFFECTIVE_LAUNCH_MANIFEST_DIGEST"
-  --defines-json "$DEFINES_JSON"
-)
-if [[ "${QWQ_RUN_DEVICE_KIND:-}" == android* \
-   && "$QWQ_CONSUMER_LEASE_ACQUIRED" == "1" ]]; then
-  VERIFY_HANDOFF_CMD+=(
-    --transport-required
-    --reverse-expected-ports "$QWQ_ANDROID_REVERSE_EXPECTED_PORTS"
-    --reverse-actual-ports "$QWQ_ANDROID_REVERSE_ACTUAL_PORTS"
-    --reverse-receipt-digest "$QWQ_ANDROID_REVERSE_RECEIPT_DIGEST"
-    --consumer-lease-id "$QWQ_CONSUMER_LEASE_ID"
-  )
-fi
-"${VERIFY_HANDOFF_CMD[@]}"
-
-DART_DEFINES=()
-while IFS= read -r line; do
-  [[ -n "$line" ]] && DART_DEFINES+=("$line")
-done < <(
-  python3 - "$DEFINES_JSON" <<'PY'
-import json
-import sys
-for key, value in json.loads(sys.argv[1]).items():
-    print(f"--dart-define={key}={value}")
-PY
-)
 
 set +e
 if [[ -z "$LAUNCH_RECEIPT" ]]; then
@@ -887,7 +902,7 @@ SUPERVISOR_CMD=(
   --device "$DEVICE_ID"
   --application-id "${QWQ_DEBUG_APP_ID:-}"
   --launch-digest "$EFFECTIVE_LAUNCH_MANIFEST_DIGEST"
-  --timeout-seconds "${QWQ_APP_LAUNCH_TIMEOUT_SECONDS:-900}"
+  --timeout-seconds "$LAUNCH_TIMEOUT_SECONDS"
 )
 if [[ -n "$LAUNCH_LOG_REF" ]]; then
   SUPERVISOR_CMD+=(--log-ref "$LAUNCH_LOG_REF")
@@ -904,14 +919,14 @@ for item in json.loads(sys.argv[1]).get("warnings") or []:
 PY
 )
 "${SUPERVISOR_CMD[@]}" -- \
-  flutter run \
-    --no-pub \
-    --flavor "$QWQ_APP_RUNTIME_ENV" \
-    --target "$ENTRYPOINT" \
-    --host-vmservice-port=8888 \
-    --dds-port=8889 \
-    "${DART_DEFINES[@]}" \
-    "$@"
+  python3 "$APP_DIR/scripts/device/run_app_instance.py" \
+    --device-kind "$QWQ_RUN_DEVICE_KIND" \
+    --device "$DEVICE_ID" \
+    --application-id "$QWQ_DEBUG_APP_ID" \
+    --entrypoint "$ENTRYPOINT" \
+    --activation-timeout-seconds "$ACTIVATION_TIMEOUT_SECONDS" \
+    --attach-timeout-seconds "$LAUNCH_TIMEOUT_SECONDS" \
+    -- "$@"
 FLUTTER_RUN_EXIT_CODE=$?
 set -e
 

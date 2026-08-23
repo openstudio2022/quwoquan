@@ -90,6 +90,9 @@ quwoquan_service/services/*/state/
 # Git worktrees
 .worktrees/
 
+# 本地 Cursor 客户端类型工具（含 exe / 密钥 / 运行时票据，不入产品仓）
+cursor（重置额度）/
+
 # 阿里云号码认证客户端 SDK 由受控构建缓存注入，禁止提交授权二进制。
 quwoquan_app/vendor/commercial_auth/aliyun/android/*.aar
 quwoquan_app/vendor/commercial_auth/aliyun/android/*.jar

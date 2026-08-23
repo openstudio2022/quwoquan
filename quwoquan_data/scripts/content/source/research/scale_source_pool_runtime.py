@@ -229,7 +229,11 @@ def write_frozen_scale_source_pool_plans(
         if name in by_name:
             raise _fail(f"selected source-ready entity is duplicated: {name}")
         by_name[name] = row
-    if set(by_name) != set(entity_ids):
+    requested_names = tuple(entity_ids)
+    if (
+        len(set(requested_names)) != len(requested_names)
+        or any(name not in by_name for name in requested_names)
+    ):
         raise _fail("execution entity ids drift from frozen source-pool selection")
     plan_file = research_plan_files()[carrier]
     updated: list[dict[str, Any]] = []
@@ -353,6 +357,11 @@ def materialize_frozen_scale_source_pool_entity(
     )
     source_unit = candidate["primarySource"] if carrier == "homepage" else candidate
     assert isinstance(source_unit, Mapping)
+    publish_media_mode = (
+        "illustrated"
+        if carrier == "homepage"
+        else str(candidate["publishMediaMode"])
+    )
     existing = _existing_source_unit(
         execution_id,
         str(source_unit["sourceUnitId"]),
@@ -361,7 +370,7 @@ def materialize_frozen_scale_source_pool_entity(
         carrier=carrier,
         source_url=str(source_unit["sourceUrl"]),
         source_attribution=candidate["sourceAttribution"],
-        publish_media_mode=str(candidate.get("publishMediaMode") or "illustrated"),
+        publish_media_mode=publish_media_mode,
         image_placements=image_placements,
         asset_funnel=asset_funnel,
     )
@@ -390,7 +399,7 @@ def materialize_frozen_scale_source_pool_entity(
         extractor=str(source_unit["extractor"]),
         policy_revision=str(source_unit["policyRevision"]),
         source_use_mode="factual_reference_only",
-        publish_media_mode=str(candidate.get("publishMediaMode") or "illustrated"),
+        publish_media_mode=publish_media_mode,
         source_role="base",
         image_evidence_mode=(
             "" if candidate.get("publishMediaMode") == "text_only" else "same_source"

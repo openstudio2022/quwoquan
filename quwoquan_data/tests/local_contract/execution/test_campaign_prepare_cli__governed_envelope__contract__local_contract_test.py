@@ -9,7 +9,10 @@ import pytest
 from content.execution.campaign import prepare as prepare_campaign
 from content.execution.campaign.lane import CAMPAIGN_CARRIERS
 from core.io import write_json
-from support.capacity_calibration_fixture import synthetic_capacity_source_binding
+from support.capacity_calibration_fixture import (
+    synthetic_capacity_source_binding,
+    synthetic_governed_execution_authority,
+)
 
 
 def test_prepare_campaign_defaults_new_campaigns_to_cursor_grok() -> None:
@@ -88,10 +91,8 @@ def _args(tmp_path: Path) -> Namespace:
     return Namespace(
         phase="envelopes",
         scale="M3",
-        region_ref="china",
         run_date="20260806",
         sequence=2,
-        topic="川西",
         target_names=["四姑娘山", "九寨沟"],
         source_providers=["pinterest", "manual_file"],
         semantic_selection_id="default",
@@ -135,7 +136,7 @@ def _fake_envelopes(tmp_path: Path) -> dict[str, Path]:
                 "selector": "all",
                 "quota": 3,
                 "count": 6,
-                "capacityCalibration": synthetic_capacity_source_binding(),
+                "executionAuthority": synthetic_governed_execution_authority(),
                 "topic": "川西",
                 "targetNames": ["九寨沟", "四姑娘山"],
                 "sourceProviders": ["manual_file", "pinterest"],
@@ -250,6 +251,13 @@ def test_prepare_campaign_handoff_revision_never_writes_envelopes(
     args.supersedes_handoff_ref = str(tmp_path / "manual-revision-1.json")
     args.campaign_retry_of = None
     args.handoff_ref = None
+    args.vertical = "travel"
+    args.lifecycle = "research"
+    args.scope_type = "region"
+    args.region_ref = "china"
+    args.primary_topic_ref = None
+    args.related_topic_refs = []
+    args.source_selection_rows = ["homepage=site_primary:wikipedia"]
     args.semantic_preflight_receipt = None
     args.capacity_calibration_receipt = None
     args.homepage_image_input = None

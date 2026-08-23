@@ -458,6 +458,10 @@ def _bind_gamma_down_parse_environment(environment: dict[str, str]) -> None:
             "QWQ_COMPOSE_PROVIDER_SUBSTITUTE_CA_FILE": "/tmp/down-not-used",
             "QWQ_COMPOSE_PROVIDER_SUBSTITUTE_TLS_CERT_FILE": "/tmp/down-not-used",
             "QWQ_COMPOSE_PROVIDER_SUBSTITUTE_TLS_KEY_FILE": "/tmp/down-not-used",
+            # DEC-005：环境身份与 platform-ops facts 是部署面挂载材料；down 只需
+            # 确定性插值，不生成材料。
+            "QWQ_COMPOSE_ARTIFACT_IDENTITY_FILE": "/tmp/down-not-used",
+            "QWQ_COMPOSE_PLATFORM_OPS_FACTS_ROOT": "/tmp",
         }
     )
     # compose 模板对每个服务强制声明 CONFIG_VERSION；down 只需确定性插值，

@@ -17849,6 +17849,11 @@
       "slo": {
         "latencyP95Milliseconds": 1500,
         "availabilityPercent": 99.9
+      },
+      "clientContract": {
+        "dartImport": "../circle/circle_operation_contracts.g.dart",
+        "responseType": "GatheringPlanCommandResult",
+        "responseDecoder": "decodeGatheringPlanCommandResult"
       }
     },
     {
@@ -17929,6 +17934,11 @@
       "slo": {
         "latencyP95Milliseconds": 1500,
         "availabilityPercent": 99.9
+      },
+      "clientContract": {
+        "dartImport": "../circle/circle_operation_contracts.g.dart",
+        "responseType": "GatheringPlanCommandResult",
+        "responseDecoder": "decodeGatheringPlanCommandResult"
       }
     },
     {
@@ -18005,6 +18015,11 @@
       "slo": {
         "latencyP95Milliseconds": 400,
         "availabilityPercent": 99.9
+      },
+      "clientContract": {
+        "dartImport": "../circle/circle_operation_contracts.g.dart",
+        "responseType": "GatheringPlan",
+        "responseDecoder": "decodeGatheringPlan"
       }
     },
     {
@@ -18094,6 +18109,11 @@
       "slo": {
         "latencyP95Milliseconds": 400,
         "availabilityPercent": 99.9
+      },
+      "clientContract": {
+        "dartImport": "../circle/circle_operation_contracts.g.dart",
+        "responseType": "GatheringPlanRevisionPageSlice",
+        "responseDecoder": "decodeGatheringPlanRevisionPageSlice"
       }
     },
     {
@@ -18175,6 +18195,11 @@
       "slo": {
         "latencyP95Milliseconds": 1500,
         "availabilityPercent": 99.9
+      },
+      "clientContract": {
+        "dartImport": "../circle/circle_operation_contracts.g.dart",
+        "responseType": "GatheringPlanCommandResult",
+        "responseDecoder": "decodeGatheringPlanCommandResult"
       }
     },
     {
@@ -74306,6 +74331,28 @@
     {
       "objectId": "circle.gathering_plan",
       "specRef": "specs/feature-tree/circle-community/gathering-coordination/gathering-plan-collaboration/spec.md#gwt-001",
+      "caseId": "gathering_plan_get_gathering_plan_app_local",
+      "producer": "app",
+      "layer": "local_contract",
+      "target": {
+        "kind": "operation",
+        "id": "circle.gathering_plan.GetGatheringPlan"
+      },
+      "runnerSourcePath": "quwoquan_app/test/local_contract/service/circle_service/circle_management/gathering_plan/gathering_plan_remote__local_contract_test.dart",
+      "executions": [
+        {
+          "environment": "alpha",
+          "platform": "app",
+          "deviceClass": "runner",
+          "provider": "none",
+          "digestBinding": "candidate"
+        }
+      ],
+      "sourcePath": "circle/circle_management/gathering_plan/operations.yaml"
+    },
+    {
+      "objectId": "circle.gathering_plan",
+      "specRef": "specs/feature-tree/circle-community/gathering-coordination/gathering-plan-collaboration/spec.md#gwt-001",
       "caseId": "get-gathering-plan-api",
       "producer": "service",
       "layer": "api_integration",
@@ -106978,7 +107025,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/circle/circle_shell_widget__local_contract_test.dart",
-            "sha256": "43b9348b0dda95bc3e5886017904bf366c023f4e84fb2eef8f002b92222099df"
+            "sha256": "3c8ac7d1762efcf7da1d954118c36ee05ad2f07107e3984ca9c90ef44c8c3339"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/circle/circle_stats_page_widget__local_contract_test.dart",
@@ -108526,11 +108573,11 @@
         "adapters": [
           {
             "path": "quwoquan_app/lib/service/circle_service/circle_management/gathering/adapters/gathering_remote.dart",
-            "sha256": "178c96a3687b918390649d5f91b975d1d0a278eb5ddd5d7081e7f214bbddcf57"
+            "sha256": "78a838dbe6cc92501acc556eb7b71f08e475c03f41c054fdfac5f0dc9dbd5794"
           },
           {
             "path": "quwoquan_app/lib/service/circle_service/circle_management/gathering/adapters/gathering_wire_codec.dart",
-            "sha256": "86d5af669f1edb24e7940c3a7d2e14d8f6d271910a8febd52f778c10f0d1a6de"
+            "sha256": "368a5e33ca866d078d2b451fbdd63e2adab42b455583f3cddffdf77bc370cfb1"
           }
         ],
         "presentation": [
@@ -108586,7 +108633,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/gathering/gathering_remote__local_contract_test.dart",
-            "sha256": "fc5800a5a151270dfaf5f71906648ef83cb858c0d4504c67e3be7e6b51358fb0"
+            "sha256": "3fe84457c2acbb0864510cbf5f60c8a7199966bcbb7884c877f3bb80acfc9fd5"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/gathering/gathering_shared_experience__local_contract_test.dart",
@@ -108762,9 +108809,23 @@
       "app": {
         "domain": [],
         "application": [],
-        "adapters": [],
+        "adapters": [
+          {
+            "path": "quwoquan_app/lib/service/circle_service/circle_management/gathering_plan/adapters/gathering_plan_wire_codec.dart",
+            "sha256": "f234febcda2bbae78a57df8ed17a11dc05ffb030be402f3c643e29190fb399d4"
+          }
+        ],
         "presentation": [],
-        "localContract": [],
+        "localContract": [
+          {
+            "path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/gathering_plan/gathering_plan_board_projection__local_contract_test.dart",
+            "sha256": "50c7bf5cfdbc54f84d5e5e0a8bc97b00dea0d604e1e6a541cf885714a61df88a"
+          },
+          {
+            "path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/gathering_plan/gathering_plan_remote__local_contract_test.dart",
+            "sha256": "ce66a9f7fac8c5377f31ed907f4b360b7e8954641e38328cca8b57b78b117c34"
+          }
+        ],
         "apiIntegration": [],
         "userAcceptance": [],
         "pageParticipant": false,
@@ -109912,11 +109973,11 @@
         "userAcceptance": [
           {
             "path": "quwoquan_app/test/user_acceptance/service/content_service/content/feed_delivery_page/feed_controlled_edge_recovery__user_acceptance_test.dart",
-            "sha256": "7c20060787b2e2266829beb01446cbd31c5884d6e71ed30c6ea5052df1f515ab"
+            "sha256": "fe27b3b8bb562a3e1c0514afd65b46ee731386b4ea9fad9f668e84834a32a1e1"
           },
           {
             "path": "quwoquan_app/test/user_acceptance/service/content_service/content/feed_delivery_page/feed_load__user_acceptance_test.dart",
-            "sha256": "f496de9be3c096cad17624acac1152d411ad4ba4af52ced775ce0bc6c0c5e272"
+            "sha256": "f5b46d2e17f86b008cb68902ea68fccf0c8a9b57c4b7cbe342a52a989b47b29d"
           }
         ],
         "pageParticipant": false,
@@ -113434,7 +113495,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/presentation/home_page.dart",
-            "sha256": "a243f0a86b1e9fb1b230af8d155d0df496aa6f617354a395f29374c5c256b253"
+            "sha256": "4e82c69484d17c8ca0a177b8aa1b20d107e9f0dc38a398b82c9cfcdf6b07aba0"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/presentation/interest_onboarding_page.dart",
@@ -113462,7 +113523,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/presentation/work_browser_entry_page.dart",
-            "sha256": "b01802ab3a4cff75c39644f089d47d566c6645c1055ed3b346c865a2c33d51d0"
+            "sha256": "35a75384a1e922d054a28b3a72c16854d0cdb718418bf7c00e6caf185aff5f09"
           }
         ],
         "localContract": [
@@ -113708,7 +113769,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/discovery_share_template__typed_wire_context__functional__local_contract_test.dart",
-            "sha256": "c93a2229261237eebc718320b4bf66b0134e85f2ba13f1325be82db968942d15"
+            "sha256": "a7bc40184ac931a1a906b37f7bb0b8c11f1b93ad53544794482f53be97e3265d"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/discovery_wire_lookup__local_contract_test.dart",
@@ -113788,7 +113849,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/home_page_widget__local_contract_test.dart",
-            "sha256": "14dec246664ee42f504729e4cc8198f12db20183414fd3817f2d7b7121d96251"
+            "sha256": "0c0ac84f2f3386c883c380e85cb6b7167bd1c5115bef049db09d7a91a7c41bc7"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/homepage_reference_draft_codec__local_contract_test.dart",
@@ -113804,7 +113865,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/markdown_seo_html_renderer__local_contract_test.dart",
-            "sha256": "6ac90b5b94ea75944f70450cc3f6e79d466ae76c767832c867e67e05647cdeab"
+            "sha256": "354604446451c7a782154bac8434d2c64f339d78f27e98c6353de5bd8072c3f0"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/more_action_popup__functional__local_contract_test.dart",
@@ -113948,11 +114009,11 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/share_template_by_identity_widget__local_contract_test.dart",
-            "sha256": "10e9031697e6bfe04085d56cc553e7c3fd602978652252f2b0f3595b3dd87dc9"
+            "sha256": "426b254d4422098384bee5475e82bc6f8433d6076d522bbe46dd50c6c077f232"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/share_unified_surface_parity__local_contract_test.dart",
-            "sha256": "dcc52039229fedbb9946dcc4c4c9933a7fe104706249f66585314a2e84e8bfd6"
+            "sha256": "f7de269e578a271c7eada0845cb99deb0333a738040cd3abdbd9b6a64f99ff8d"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/text_publish_payload_media_refs__local_contract_test.dart",
@@ -114048,7 +114109,7 @@
           },
           {
             "path": "quwoquan_app/test/user_acceptance/service/content_service/content/post/interest_onboarding__user_acceptance_test.dart",
-            "sha256": "8548360a38c57cddef85dee5d360d203c864b89d96147c6df4fbcbc9aaccc56c"
+            "sha256": "573457878c0221bda91f356449e9c89d319c090a8ce4607d7542720ae1a0bdc8"
           },
           {
             "path": "quwoquan_app/test/user_acceptance/service/content_service/content/post/location_lookup_provider__user_acceptance_test.dart",
@@ -115082,7 +115143,7 @@
         "presentation": [
           {
             "path": "quwoquan_app/lib/service/entity_service/entity_homepage/homepage/presentation/homepage_detail_page.dart",
-            "sha256": "926a5ef154115e300edb8a4ed36054af20955f5f3a26c22fa35747aae58afe7c"
+            "sha256": "73ee68e9cc2208809c8b36285afc0ce412788299faefb5e121d766a7c05b23ae"
           },
           {
             "path": "quwoquan_app/lib/service/entity_service/entity_homepage/homepage/presentation/homepage_introduction_page.dart",
@@ -115124,7 +115185,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage/homepage_detail_share__functional__local_contract_test.dart",
-            "sha256": "aa2780247fe518330812b921396a7531b919ef3044ada321d7ef418275285ebc"
+            "sha256": "1c14a11024715b4818de3dce276fccebf1651fbe637d00e824288c601c38e019"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage/homepage_detail_wishlist__functional__local_contract_test.dart",
@@ -118018,7 +118079,7 @@
         "localContract": [
           {
             "path": "quwoquan_service/services/product-ops-service/tests/local_contract/product_ops/app_release/app_release_recovery__local_contract_test.go",
-            "sha256": "bea04d094a092eaef5fd897bc5cc8d79c30af261dc02d6ef8ceb1882ed1060f0"
+            "sha256": "64de43d987566fd8e97ead89c2d2cca6d53a1c7533f2f342a8eab21c6e61028b"
           },
           {
             "path": "quwoquan_service/services/product-ops-service/tests/local_contract/product_ops/app_release/recovery_operation_actor__contract__local_contract_test.go",
@@ -118028,7 +118089,7 @@
         "apiIntegration": [
           {
             "path": "quwoquan_service/services/product-ops-service/tests/api_integration/product_ops/app_release/version_and_download_http__api_integration_test.go",
-            "sha256": "4aa3cdb96a1311990836a6793e042af9686929dc5e7c47a5ce799032447e6952"
+            "sha256": "4564aece759c57c98bb307648fe1a7b59430c5160c6d56aff4bb3faa13c91642"
           }
         ]
       },
@@ -119156,7 +119217,7 @@
           },
           {
             "path": "quwoquan_service/services/realtime-gateway/tests/local_contract/realtime/connection/connection_error_semantics__local_contract_test.go",
-            "sha256": "4f3252443623dc1a0c3474cec02abe20e642be52fcec21bc0d1cd865da03e163"
+            "sha256": "99568bc04209652fffc63b3e81d95526061bc860deb5dfda213c661c7442a182"
           },
           {
             "path": "quwoquan_service/services/realtime-gateway/tests/local_contract/realtime/connection/connection_policy__contract__local_contract_test.go",
@@ -124745,7 +124806,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/persona_management/persona/other_profile_journey__local_contract_test.dart",
-            "sha256": "e6a5928dff6b507e4343608e92f2ff7090b7fc80ae71ad2815ff4cdd5fb5a34e"
+            "sha256": "6c61697da0d185c263d99016aa2a4f0972a81f405e0147ffa75291d9bf9ed43c"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/persona_management/persona/other_profile_page__local_contract_test.dart",
@@ -124809,7 +124870,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/persona_management/persona/profile_shell_widget__local_contract_test.dart",
-            "sha256": "33761002601c1041c730a51cc853c43929aa901e1aa9e6b3b8b76b913017ee26"
+            "sha256": "ea40b1624922716334f3949541bfce42db5178893c59ea85b3efc019a789cdc0"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/persona_management/persona/profile_slogan_card__local_contract_test.dart",
@@ -126435,7 +126496,7 @@
         "userAcceptance": [
           {
             "path": "quwoquan_app/test/user_acceptance/service/user_service/account/user_account/account_closure_remote__user_acceptance_test.dart",
-            "sha256": "33766e77300153e58e3b1ca5c99b404ee3b10159b694610c19184a656173cf41"
+            "sha256": "3fdb59ccdf95cee99f6fb08549bfb8d64541ace20a89b5bf842b32d7bd3d0ccb"
           }
         ],
         "pageParticipant": true,
@@ -127105,10 +127166,10 @@
     },
     {
       "objectId": "circle.gathering_plan",
-      "stage": "implemented",
+      "stage": "contract-ready",
       "modeled": true,
       "contractReady": true,
-      "implemented": true,
+      "implemented": false,
       "commercialReady": false,
       "missing": [
         "commercial.operation.CommitGatheringPlanProposal",
@@ -127116,7 +127177,8 @@
         "commercial.operation.GetGatheringPlan",
         "commercial.operation.ListGatheringPlanRevisions",
         "commercial.operation.ProposeGatheringPlan",
-        "commercial.result_bundle"
+        "implementation.app.api_integration",
+        "implementation.app.application"
       ]
     },
     {
@@ -128216,11 +128278,11 @@
     },
     {
       "path": "_shared/app_artifact_manifest.yaml",
-      "sha256": "07f69f7ef47901af09f948433a7c3cfe6e2a9f5f3bb36242f884fdbca424f3a3"
+      "sha256": "eb8b29d35accc04f3187aab41c609bb189a5c7da8c4056d1b153feda0b6c863d"
     },
     {
       "path": "_shared/app_launch_manifest.yaml",
-      "sha256": "0fc548b38c93662b7e6369df9cd289311fd07ec85b4a1593e038966806f3750d"
+      "sha256": "e82fe431f942c18a3a602b67a14f2c388b209de575d7b1a226d93e310a9140b8"
     },
     {
       "path": "_shared/app_pages.yaml",
@@ -128256,7 +128318,7 @@
     },
     {
       "path": "_shared/environment_artifact_identity.yaml",
-      "sha256": "57cf7efa52736f2b8376941bd99dad8a572319101ad9cf8b42eff82a5ed280eb"
+      "sha256": "43cdcb113aa4f223b44b403b77729ce0efbb41d7df1b1f5129998792764daec4"
     },
     {
       "path": "_shared/link_templates.yaml",
@@ -128268,7 +128330,7 @@
     },
     {
       "path": "_shared/page_object_contract.yaml",
-      "sha256": "3da1639642279e42e565898d1a08c348a2b84f905bc34ea615c764ad51eece90"
+      "sha256": "65dc7c5ee2e9297a33100ff8563c1d225cf1d78474029ba20be1e08f0572f195"
     },
     {
       "path": "_shared/realtime_event_catalog.yaml",
@@ -128328,7 +128390,7 @@
     },
     {
       "path": "_shared/ui_surfaces.yaml",
-      "sha256": "a195bbe064527b6aa5a608279593c55175e055bef3db54ea4a5ed80d92411726"
+      "sha256": "690db05e234b58dae60b292d837ab6546177474f9961b87d90734cb20f90aab6"
     },
     {
       "path": "_shared/workflow.yaml",
@@ -129428,7 +129490,7 @@
     },
     {
       "path": "circle/circle_management/gathering_plan/operations.yaml",
-      "sha256": "196f8a0b76aaa268ed8681d6292e90709f78c695f1275f641f8bded7b5d77014"
+      "sha256": "a5db51b4eb4c50135296221db7a0cc4aba6577553eeb4c8a4ecbae7664e8c3d0"
     },
     {
       "path": "circle/circle_management/gathering_plan/storage.yaml",
@@ -131012,7 +131074,7 @@
     },
     {
       "path": "platform/config.yaml",
-      "sha256": "68ced5a97f2ee26e25db0193cc8887ec9d08d5083f2ac32331903b6ecca68d36"
+      "sha256": "b2b0ac6548ad7e39776f43e0e82183aefeb128106408dfa7230a81899ba15e2f"
     },
     {
       "path": "realtime/openapi.yaml",
@@ -133415,14 +133477,14 @@
     },
     {
       "path": "_shared/app_artifact_manifest.yaml",
-      "sha256": "07f69f7ef47901af09f948433a7c3cfe6e2a9f5f3bb36242f884fdbca424f3a3",
+      "sha256": "eb8b29d35accc04f3187aab41c609bb189a5c7da8c4056d1b153feda0b6c863d",
       "mediaType": "application/yaml",
       "content": {
         "application_identity": {
           "base_application_ids": {
             "android": {
               "registered": true,
-              "value": "com.quwoquan.quwoquan_app"
+              "value": "com.leadwise.quwoquan"
             },
             "ios": {
               "registered": false,
@@ -133439,25 +133501,81 @@
             "profile": ".profile",
             "release": ""
           },
-          "display_name_base": "趣我圈",
-          "environment_display_marks": {
-            "alpha": "α",
-            "beta": "β",
-            "gamma": "γ",
+          "build_profile_display_marks": {
+            "nonprod": "·N",
             "prod": ""
           },
-          "environment_suffixes": {
-            "alpha": ".alpha",
-            "beta": ".beta",
-            "gamma": ".gamma",
+          "build_profile_suffixes": {
+            "nonprod": ".nonprod",
             "prod": ""
-          }
+          },
+          "display_name_base": "趣我圈"
         },
+        "artifact_formats": [
+          "apk",
+          "aab",
+          "ipa",
+          "app",
+          "web"
+        ],
         "build_modes": [
           "debug",
           "profile",
           "release"
         ],
+        "build_products": {
+          "android-nonprod-apk": {
+            "artifact_format": "apk",
+            "build_mode": "release",
+            "build_profile": "nonprod",
+            "distribution_class": "dev_direct",
+            "platform": "android"
+          },
+          "android-prod-apk": {
+            "artifact_format": "apk",
+            "build_mode": "release",
+            "build_profile": "prod",
+            "distribution_class": "store",
+            "platform": "android"
+          },
+          "ios-nonprod-app": {
+            "artifact_format": "app",
+            "build_mode": "release",
+            "build_profile": "nonprod",
+            "distribution_class": "dev_direct",
+            "platform": "ios"
+          },
+          "ios-prod-app": {
+            "artifact_format": "app",
+            "build_mode": "release",
+            "build_profile": "prod",
+            "distribution_class": "store",
+            "platform": "ios"
+          },
+          "web-shared": {
+            "artifact_format": "web",
+            "build_mode": "release",
+            "build_profile": "shared",
+            "distribution_class": "hosted_web",
+            "platform": "web"
+          }
+        },
+        "build_profiles": {
+          "nonprod": {
+            "environments": [
+              "alpha",
+              "beta",
+              "gamma"
+            ],
+            "launch_policy": "test_live"
+          },
+          "prod": {
+            "environments": [
+              "prod"
+            ],
+            "launch_policy": "prod_release"
+          }
+        },
         "description": "App 制品身份、安装回执与分发渠道矩阵的唯一真相源（deliver-deploy-prod-pipeline DEC-004）；打包、签名校验、渠道登记与准出工具全部消费本文件，不得自持字段集合。",
         "digest_contract": {
           "algorithm": "sha256",
@@ -133687,11 +133805,16 @@
           "app_artifact_manifest": {
             "additional_fields": false,
             "constraints": [
+              "buildProductId 必须引用 build_products；buildProfile/platform/buildMode/artifactFormat 必须逐字段等于该产品声明。",
               "distributionClass 与 buildMode 的组合必须满足 distribution_classes 声明；store/official_web/hosted_web 只接受 release。",
+              "artifactFormat 由打包请求显式声明或按平台默认（android→apk、ios→设备类 ipa/其余 app、web→web）；不得由 distributionClass 推导，官网与全部 APK 市场引用同一 release APK source digest。",
+              "aab 仅允许 android × release，且仅当已启用渠道 capability 硬性要求 AAB 时构建一次；渠道 upload_format 只声明渠道接受能力，不驱动构建。",
               "simulator 的 platform_build_modes 是平台特有硬边界；iOS 仅允许 Debug，iOS Release 必须生成 iphoneos AOT 制品且不得以 Debug simulator 冒充。",
               "promotable 必须等于 distribution_classes 中该 class 的 promotability 且 buildMode 为 release。",
-              "本清单不携带内容 release 身份；内容激活身份只由 Content API 响应在运行时下发。",
-              "alpha/beta/gamma/prod 与 Debug/Release 的 applicationId 必须互不覆盖；Prod 正式 ID 只取已登记外部事实。"
+              "本清单不携带 environment、target、endpoint、runtimeConfigDigest、launchManifestDigest 或内容 release 身份；这些事实只属于签名 runtime config package、launch handoff 或服务端运行时响应。",
+              "Android/iOS AppArtifact 必须携带 runtimeConfigTrustEnvelopeDigest，且等于制品内 build-profile trust envelope 的 canonical 摘要；Web AppArtifact 禁止携带该字段，Web trust envelope 只由各环境 hosting composition 同源提供。",
+              "本清单不携带 channelId、灰度阶段或分发回执字段；渠道与灰度只出现在部署/分发与激活期对象（DEC-006/DEC-007）。",
+              "buildProfile × BuildMode 的 applicationId 必须互不覆盖；Alpha/Beta/Gamma 必须解析为同一 nonprod identity，Prod 正式 ID 只取已登记外部事实。"
             ],
             "fields": {
               "applicationId": {
@@ -133700,6 +133823,16 @@
               },
               "artifactDigest": {
                 "format": "sha256_identity",
+                "type": "string"
+              },
+              "artifactFormat": {
+                "allowed_values": [
+                  "apk",
+                  "aab",
+                  "ipa",
+                  "app",
+                  "web"
+                ],
                 "type": "string"
               },
               "buildMode": {
@@ -133712,6 +133845,22 @@
               },
               "buildNumber": {
                 "min_length": 1,
+                "type": "string"
+              },
+              "buildProductId": {
+                "allowed_values_ref": "build_products",
+                "type": "string"
+              },
+              "buildProfile": {
+                "allowed_values": [
+                  "nonprod",
+                  "prod",
+                  "shared"
+                ],
+                "type": "string"
+              },
+              "buildProvenanceDigest": {
+                "format": "sha256_identity",
                 "type": "string"
               },
               "displayVersion": {
@@ -133729,19 +133878,6 @@
                 ],
                 "type": "string"
               },
-              "environment": {
-                "allowed_values": [
-                  "alpha",
-                  "beta",
-                  "gamma",
-                  "prod"
-                ],
-                "type": "string"
-              },
-              "launchManifestDigest": {
-                "format": "sha256_identity",
-                "type": "string"
-              },
               "platform": {
                 "allowed_values": [
                   "android",
@@ -133752,6 +133888,10 @@
               },
               "promotable": {
                 "type": "boolean"
+              },
+              "runtimeConfigTrustEnvelopeDigest": {
+                "format": "sha256_identity",
+                "type": "string"
               },
               "schema": {
                 "const": "app-artifact-manifest",
@@ -133772,21 +133912,119 @@
             },
             "required_fields": [
               "schema",
-              "environment",
+              "buildProductId",
+              "buildProfile",
               "platform",
               "buildMode",
               "distributionClass",
+              "artifactFormat",
               "applicationId",
               "displayVersion",
               "buildNumber",
               "signingIdentityDigest",
               "sourceGitSha",
               "sourceTreeDigest",
+              "buildProvenanceDigest",
               "artifactDigest",
-              "launchManifestDigest",
               "promotable"
             ],
             "schema_value": "app-artifact-manifest"
+          },
+          "app_distribution_receipt": {
+            "additional_fields": false,
+            "append_only": true,
+            "constraints": [
+              "回执 append-only 且逐渠道独立；一个渠道的回执不得替代另一渠道，失败/驳回回执不得被后续成功覆盖。",
+              "同一 candidateId 下所有 android 渠道回执必须引用同一 release APK artifactDigest；fan-out 只复用 reviewed 制品，不复制、不重签、不重编。",
+              "channelId、phase 与 readback 均为部署/分发期事实，不进入 AppArtifactManifest 或候选身份（DEC-005/DEC-006）。",
+              "readbackMethod 必须与 distribution_channels 中该渠道声明的 readback 一致；platformRecordId 只保留平台侧脱敏 ID，凭据与平台原始响应不入回执。",
+              "非 uploaded 的 phase 回执要求同渠道同 candidateId 已存在 uploaded 回执；分发状态链必须可追溯到一次真实上传。"
+            ],
+            "fields": {
+              "applicationId": {
+                "min_length": 1,
+                "type": "string"
+              },
+              "artifactDigest": {
+                "format": "sha256_identity",
+                "type": "string"
+              },
+              "buildNumber": {
+                "min_length": 1,
+                "type": "string"
+              },
+              "candidateId": {
+                "format": "sha256_identity",
+                "type": "string"
+              },
+              "channelId": {
+                "allowed_values": [
+                  "apple_app_store",
+                  "apple_testflight",
+                  "huawei_appgallery",
+                  "xiaomi_getapps",
+                  "oppo_market",
+                  "vivo_market",
+                  "tencent_myapp",
+                  "official_web"
+                ],
+                "type": "string"
+              },
+              "displayVersion": {
+                "min_length": 1,
+                "type": "string"
+              },
+              "phase": {
+                "allowed_values": [
+                  "uploaded",
+                  "review_submitted",
+                  "approved",
+                  "published",
+                  "rejected"
+                ],
+                "type": "string"
+              },
+              "platformRecordId": {
+                "min_length": 1,
+                "type": "string"
+              },
+              "readbackDigest": {
+                "format": "sha256_identity",
+                "type": "string"
+              },
+              "readbackMethod": {
+                "allowed_values": [
+                  "app_store_connect_api",
+                  "agc_api",
+                  "manual_with_machine_receipt",
+                  "cdn_receipt"
+                ],
+                "type": "string"
+              },
+              "recordedAt": {
+                "format": "rfc3339_utc",
+                "type": "string"
+              },
+              "schema": {
+                "const": "app-distribution-receipt",
+                "type": "string"
+              }
+            },
+            "required_fields": [
+              "schema",
+              "channelId",
+              "candidateId",
+              "artifactDigest",
+              "applicationId",
+              "displayVersion",
+              "buildNumber",
+              "phase",
+              "platformRecordId",
+              "readbackMethod",
+              "readbackDigest",
+              "recordedAt"
+            ],
+            "schema_value": "app-distribution-receipt"
           },
           "app_install_receipt": {
             "additional_fields": false,
@@ -133909,24 +134147,36 @@
             "constraints": [
               "packageDigest 必须是对 canonical payload 目录的不可变 sha256 树摘要。",
               "sourceGitSha/sourceTreeDigest 必须与检出的 reviewed candidate 完全一致。",
-              "artifactManifest 必须逐字段保留 canonical AppArtifactManifest；environment/platform/source 必须与外层一致，artifactDigest 必须与真实 payload 制品一致，distributionClass/promotable 不得降维或改写。"
+              "artifactManifest 必须逐字段保留 canonical AppArtifactManifest；buildProductId/buildProfile/platform/source 必须与外层一致，artifactDigest 必须与真实 payload 制品一致，distributionClass/promotable 不得降维或改写。",
+              "baseline 集合必须恰好等于 build_products 五项；同一 product 不得按 environment 复制，AAB 只作为 capability 驱动的可选第六项。"
             ],
             "fields": {
               "artifactManifest": {
                 "schema_ref": "app_artifact_manifest",
                 "type": "object"
               },
-              "environment": {
+              "buildProductId": {
+                "allowed_values_ref": "build_products",
+                "type": "string"
+              },
+              "buildProfile": {
                 "allowed_values": [
-                  "alpha",
-                  "beta",
-                  "gamma",
-                  "prod"
+                  "nonprod",
+                  "prod",
+                  "shared"
                 ],
                 "type": "string"
               },
               "packageDigest": {
                 "format": "sha256_identity",
+                "type": "string"
+              },
+              "platform": {
+                "allowed_values": [
+                  "android",
+                  "ios",
+                  "web"
+                ],
                 "type": "string"
               },
               "schema": {
@@ -133940,20 +134190,13 @@
               "sourceTreeDigest": {
                 "format": "git_tree_digest",
                 "type": "string"
-              },
-              "surface": {
-                "allowed_values": [
-                  "android",
-                  "ios",
-                  "web"
-                ],
-                "type": "string"
               }
             },
             "required_fields": [
               "schema",
-              "environment",
-              "surface",
+              "buildProductId",
+              "buildProfile",
+              "platform",
               "sourceGitSha",
               "sourceTreeDigest",
               "packageDigest",
@@ -133961,12 +134204,13 @@
             ],
             "schema_value": "release-application-package"
           }
-        }
+        },
+        "web_application_id": "com.leadwise.quwoquan.web"
       }
     },
     {
       "path": "_shared/app_launch_manifest.yaml",
-      "sha256": "0fc548b38c93662b7e6369df9cd289311fd07ec85b4a1593e038966806f3750d",
+      "sha256": "e82fe431f942c18a3a602b67a14f2c388b209de575d7b1a226d93e310a9140b8",
       "mediaType": "application/yaml",
       "content": {
         "description": "Android、iOS、App 与 Ops 共同消费的启动清单、launcher handoff 和摘要协议；runtime 拥有组合语义，各平台不得复制字段或摘要规则。",
@@ -133996,15 +134240,24 @@
           "APP.LAUNCH.prod_hosted_flutter_forbidden": "prod-hosted 只消费已签名制品、安装回执与显式 rollout 授权。",
           "APP.LAUNCH.receipt_invalid": "attempt receipt 不满足本 schema。",
           "APP.LAUNCH.receipt_timeout": "等待终态超时且未观测到 typed failure。",
+          "APP.LAUNCH.runtime_config_activation_failed": "runtime package 验证、原子写入或 active readback 未完成。",
+          "APP.LAUNCH.runtime_config_missing": "安装后平台私有容器没有可激活或可读取的 runtime package。",
+          "APP.LAUNCH.runtime_dependency_unavailable": "目标 runtime 的必需容器已退出或 unhealthy，编译安装前即阻断。",
           "APP.WEB.recovery_unavailable": "恢复 Web 静态面不可达，不得据此生成 launched 或 ready 假证据。"
         },
         "launch_policies": {
           "prod_release": {
+            "build_profiles": [
+              "prod"
+            ],
             "environments": [
               "prod"
             ]
           },
           "test_live": {
+            "build_profiles": [
+              "nonprod"
+            ],
             "environments": [
               "alpha",
               "beta",
@@ -134019,6 +134272,147 @@
           "prod-sim"
         ],
         "owner": "runtime",
+        "runtime_config_error_codes": {
+          "runtime_config_activation_identity_mismatch": "request/package/manifest 三方身份不一致。",
+          "runtime_config_activation_readback_failed": "写入后 active readback 校验失败。",
+          "runtime_config_activation_receipt_malformed": "active receipt 解码或结构非法。",
+          "runtime_config_activation_receipt_mismatch": "active receipt 与 active package 身份不一致。",
+          "runtime_config_activation_receipt_missing": "active receipt 文件缺失。",
+          "runtime_config_activation_receipt_read_failed": "active receipt 读取 IO 失败。",
+          "runtime_config_activation_receipt_write_failed": "receipt 原子写入失败。",
+          "runtime_config_activation_request_digest_invalid": "host 传入的 request digest 格式非法。",
+          "runtime_config_activation_request_digest_mismatch": "request canonical 摘要与 host 声明不一致。",
+          "runtime_config_activation_request_malformed": "activation request 解码或字段集非法。",
+          "runtime_config_activation_request_missing": "activation request 文件缺失。",
+          "runtime_config_activation_request_read_failed": "activation request 读取 IO 失败。",
+          "runtime_config_activation_requires_cold_start": "activation 只允许冷启动原生 gate 消费。",
+          "runtime_config_activation_rollback_failed": "失败回滚未完成或 CAS 后状态未知。",
+          "runtime_config_activation_write_failed": "active package 原子写入失败。",
+          "runtime_config_active_digest_conflict": "expectedActiveDigest 与当前 active digest CAS 冲突。",
+          "runtime_config_digest_unavailable": "平台摘要原语不可用。",
+          "runtime_config_effective_manifest_digest_mismatch": "effectiveLaunchManifest 摘要不一致。",
+          "runtime_config_effective_manifest_malformed": "effectiveLaunchManifest 结构非法。",
+          "runtime_config_endpoint_invalid": "runtime endpoint 值非法。",
+          "runtime_config_freshness_invalid": "issuedAt/expiresAt 生命周期校验失败。",
+          "runtime_config_internal_failure": "原生实现未预期异常的 fail-closed 包装码。",
+          "runtime_config_keyring_mismatch": "package 自带公钥与 trust envelope 不一致。",
+          "runtime_config_launch_policy_mismatch": "package launchPolicy 与 manifest 不符。",
+          "runtime_config_package_digest_mismatch": "packageDigest 与 canonical JSON 摘要不符。",
+          "runtime_config_package_empty": "runtime package 内容为空。",
+          "runtime_config_package_malformed": "runtime package 解码或结构非法。",
+          "runtime_config_package_missing": "私有容器没有 active runtime package。",
+          "runtime_config_package_path_invalid": "runtime package 路径非法。",
+          "runtime_config_package_read_failed": "runtime package 读取 IO 失败。",
+          "runtime_config_package_too_large": "runtime package 超出尺寸上限。",
+          "runtime_config_payload_digest_mismatch": "payloadDigest 与签名载荷不符。",
+          "runtime_config_profile_mismatch": "package buildProfile 与消费方 profile 不符。",
+          "runtime_config_runtime_values_invalid": "runtime 字段集合或值类型违反 runtime_value_keys。",
+          "runtime_config_schema_mismatch": "package schema/schemaVersion 与契约不符。",
+          "runtime_config_signature_algorithm_mismatch": "签名算法不是 ed25519。",
+          "runtime_config_signature_invalid": "Ed25519 验签失败。",
+          "runtime_config_signature_key_untrusted": "签名 key 不在 trust keyring 内。",
+          "runtime_config_source_identity_invalid": "sourceGitSha/sourceTreeDigest 身份非法。",
+          "runtime_config_target_mismatch": "package target 与请求 target 不符。",
+          "runtime_config_trust_digest_mismatch": "trust envelope 摘要与请求声明不一致。",
+          "runtime_config_trust_empty": "trust envelope 内容为空。",
+          "runtime_config_trust_keyring_invalid": "trust keyring 不是非空 canonical Ed25519 集合。",
+          "runtime_config_trust_malformed": "trust envelope 解码或结构非法。",
+          "runtime_config_trust_missing": "制品内 build-profile trust envelope 缺失。",
+          "runtime_config_trust_path_invalid": "trust envelope 路径非法。",
+          "runtime_config_trust_read_failed": "trust envelope 读取 IO 失败。",
+          "runtime_config_trust_too_large": "trust envelope 超出尺寸上限。"
+        },
+        "runtime_config_package": {
+          "forbidden_runtime_categories": [
+            "content_release",
+            "rollout_stage",
+            "channel",
+            "secret"
+          ],
+          "max_future_skew_seconds": 300,
+          "max_lifetime_seconds": 86400,
+          "schema_version": "1",
+          "signature_algorithm": "ed25519",
+          "signed_payload_excludes": [
+            "signature"
+          ],
+          "source_identity": {
+            "accepted_authorities": [
+              "package_input_capsule",
+              "audited_git_identity"
+            ],
+            "git_sha_format": "lowercase_40_hex",
+            "tree_digest_formats": [
+              "sha1",
+              "sha256"
+            ]
+          }
+        },
+        "runtime_config_trust": {
+          "build_profiles": [
+            "nonprod",
+            "prod"
+          ],
+          "schema_version": "1",
+          "signature_algorithm": "ed25519"
+        },
+        "runtime_value_keys": {
+          "appDownloadBaseUrl": {
+            "category": "endpoint",
+            "required": true,
+            "type": "string"
+          },
+          "appRuntimeEnv": {
+            "category": "launch",
+            "required": true,
+            "type": "string"
+          },
+          "gatewayBaseUrl": {
+            "category": "endpoint",
+            "required": true,
+            "type": "string"
+          },
+          "legalBaseUrl": {
+            "category": "endpoint",
+            "required": true,
+            "type": "string"
+          },
+          "mediaAvatarCdnBaseUrl": {
+            "category": "endpoint",
+            "required": true,
+            "type": "string"
+          },
+          "mediaImageCdnBaseUrl": {
+            "category": "endpoint",
+            "required": true,
+            "type": "string"
+          },
+          "mediaUploadBaseUrl": {
+            "category": "endpoint",
+            "required": true,
+            "type": "string"
+          },
+          "mediaVideoCdnBaseUrl": {
+            "category": "endpoint",
+            "required": true,
+            "type": "string"
+          },
+          "publicWebBaseUrl": {
+            "category": "endpoint",
+            "required": true,
+            "type": "string"
+          },
+          "realtimeBaseUrl": {
+            "category": "endpoint",
+            "required": true,
+            "type": "string"
+          },
+          "rtcMediaConnectionUrl": {
+            "category": "endpoint",
+            "required": true,
+            "type": "string"
+          }
+        },
         "schema_id": "app_launch_manifest",
         "schemas": {
           "app_effective_launch_manifest": {
@@ -134029,17 +134423,17 @@
               "transport.required=true 只允许 local_transport_targets，且端口集合必须相等，receipt digest 与 consumer lease ID 必须是 sha256 identity。",
               "transport.required=false 时端口和本地 transport identity 必须为空；这种 package-only 或未附带设备 transport 的 handoff 不得成为 runtime UAT 证据。",
               "prod-hosted 必须令 local transport 为 false，且全部端口与本地 transport identity 为空。",
-              "recoveryBaseUrl 与 publicWebBaseUrl 必须是 HTTPS origin；appDownloadBaseUrl 允许 path，但三个 URL 都不得包含 query、fragment 或凭据。",
-              "launchPolicy 必须与 environment 满足 launch_policies 声明的映射；launchMode 只记录启动来源（launch provenance），任何消费方不得据此改变业务行为。",
+              "buildProfile、launchPolicy 必须与 environment 满足 launch_policies 和 app_artifact_manifest.build_profiles 的映射；launchMode 只记录启动来源（launch provenance），任何消费方不得据此改变业务行为。",
+              "runtimeConfigPackageDigest 必须等于 handoff 所携带 runtimeConfigPackage 的 digest_contract canonical JSON 摘要。",
+              "runtimeConfigTrustEnvelopeDigest 必须等于已安装 AppArtifact/Web bootstrap 内匹配 buildProfile 的 runtime_config_trust_envelope 摘要；handoff 只携带摘要，不复制 keyring。",
               "本清单不携带内容 release 身份；内容激活身份只由 Content API 响应在运行时下发。"
             ],
             "fields": {
-              "appDownloadBaseUrl": {
-                "format": "https_url_no_query_fragment_credentials",
-                "type": "string"
-              },
-              "dartDefinesDigest": {
-                "format": "sha256_identity",
+              "buildProfile": {
+                "allowed_values": [
+                  "nonprod",
+                  "prod"
+                ],
                 "type": "string"
               },
               "entrypoint": {
@@ -134066,18 +134460,14 @@
                 ],
                 "type": "string"
               },
-              "publicWebBaseUrl": {
-                "format": "https_origin",
-                "type": "string"
-              },
-              "recoveryBaseUrl": {
-                "format": "https_origin",
-                "type": "string"
-              },
               "requiresLocalTransport": {
                 "type": "boolean"
               },
-              "runtimeConfigDigest": {
+              "runtimeConfigPackageDigest": {
+                "format": "sha256_identity",
+                "type": "string"
+              },
+              "runtimeConfigTrustEnvelopeDigest": {
                 "format": "sha256_identity",
                 "type": "string"
               },
@@ -134127,15 +134517,13 @@
             "required_fields": [
               "schema",
               "environment",
+              "buildProfile",
               "target",
               "entrypoint",
               "launchMode",
               "launchPolicy",
-              "dartDefinesDigest",
-              "runtimeConfigDigest",
-              "recoveryBaseUrl",
-              "publicWebBaseUrl",
-              "appDownloadBaseUrl",
+              "runtimeConfigPackageDigest",
+              "runtimeConfigTrustEnvelopeDigest",
               "requiresLocalTransport",
               "transport"
             ],
@@ -134145,9 +134533,9 @@
             "additional_fields": false,
             "append_only_transitions": true,
             "constraints": [
-              "transitions 只能按 prepared → compiling → compiled → installing → installed → launching → launched 前进；failed、runtime_degraded 与 stopped 是显式终态，不得倒推或补写 launched。",
-              "编译、安装和启动失败的 firstBlocker 分别为 APP.LAUNCH.compile_failed、APP.LAUNCH.install_failed 与 APP.LAUNCH.launch_failed；Prod Debug 必须在 prepared 后以 APP.LAUNCH.prod_debug_forbidden 失败。",
-              "ui-only 允许把 runtime、Provider、TLS、transport 与 content readiness 记入 warnings 后继续；content-live 与 release-artifact 不得把同一问题降级为 warning。",
+              "transitions 只能按 prepared → compiling → compiled → installing → installed → configuring → configured → launching → launched 前进；failed、runtime_degraded 与 stopped 是显式终态，不得倒推或补写 launched。",
+              "编译、安装和启动失败的 firstBlocker 分别为 APP.LAUNCH.compile_failed、APP.LAUNCH.install_failed 与 APP.LAUNCH.launch_failed；无 active package 使用 APP.LAUNCH.runtime_config_missing，runtime package 验证、原子写入或 readback 失败使用 APP.LAUNCH.runtime_config_activation_failed；Prod Debug 必须在 prepared 后以 APP.LAUNCH.prod_debug_forbidden 失败。",
+              "ui-only 允许把 runtime、Provider、TLS、transport 与 content readiness 记入 warnings 后继续，但 runtime package/trust 缺失或 activation 失败仍须阻断；content-live 与 release-artifact 不得把同一问题降级为 warning。",
               "stopped 只表示用户或父进程正常停止已启动会话，不得解释为编译失败，也不得清理 App 或环境数据。",
               "prod-sim 的 release-artifact 只允许 Android exact Release emulator artifact；Flutter iOS Simulator 只支持 Debug，iOS Release/Profile 必须以 APP.LAUNCH.ios_release_simulator_unsupported 阻断，不能生成或消费伪 Release 启动回执。",
               "firstBlocker 非空时只允许取 launch_blockers 声明的码；不得写入自由文本或服务端错误码。",
@@ -134258,6 +134646,8 @@
                   "compiled",
                   "installing",
                   "installed",
+                  "configuring",
+                  "configured",
                   "launching",
                   "launched",
                   "runtime_degraded",
@@ -134323,20 +134713,18 @@
             "constraints": [
               "顶层 launch identity 字段必须与 effectiveLaunchManifest 完全一致。",
               "effectiveLaunchManifestDigest 必须是 digest_contract 对 effectiveLaunchManifest canonical JSON 的摘要。",
-              "dartDefinesDigest 必须是 digest_contract 对规范化 string-only dartDefines 的摘要。"
+              "runtimeConfigPackageDigest 必须是 digest_contract 对完整 runtimeConfigPackage canonical JSON 的摘要，并与 effectiveLaunchManifest 完全一致。",
+              "runtimeConfigTrustEnvelopeDigest 必须与 effectiveLaunchManifest 完全一致，并在安装后 activation 前与 AppArtifact/Web bootstrap 回读的实际 envelope digest 相等；handoff 不携带 trust envelope 或 keyring 原文。",
+              "compileDiagnostics 只允许非环境、非 endpoint、非 secret 的 string-only 编译诊断；不得携带 APP_RUNTIME_ENV、CLOUD_GATEWAY、RTC、CDN 或其等价环境配置。"
             ],
             "fields": {
-              "appDownloadBaseUrl": {
-                "source": "app_effective_launch_manifest.appDownloadBaseUrl",
+              "buildProfile": {
+                "source": "app_effective_launch_manifest.buildProfile",
                 "type": "string"
               },
-              "dartDefines": {
+              "compileDiagnostics": {
                 "type": "object",
                 "value_type": "string"
-              },
-              "dartDefinesDigest": {
-                "source": "app_effective_launch_manifest.dartDefinesDigest",
-                "type": "string"
               },
               "effectiveLaunchManifest": {
                 "schema_ref": "app_effective_launch_manifest",
@@ -134362,20 +134750,20 @@
                 "source": "app_effective_launch_manifest.launchPolicy",
                 "type": "string"
               },
-              "publicWebBaseUrl": {
-                "source": "app_effective_launch_manifest.publicWebBaseUrl",
-                "type": "string"
-              },
-              "recoveryBaseUrl": {
-                "source": "app_effective_launch_manifest.recoveryBaseUrl",
-                "type": "string"
-              },
               "requiresLocalTransport": {
                 "source": "app_effective_launch_manifest.requiresLocalTransport",
                 "type": "boolean"
               },
-              "runtimeConfigDigest": {
-                "source": "app_effective_launch_manifest.runtimeConfigDigest",
+              "runtimeConfigPackage": {
+                "schema_ref": "runtime_config_package",
+                "type": "object"
+              },
+              "runtimeConfigPackageDigest": {
+                "source": "app_effective_launch_manifest.runtimeConfigPackageDigest",
+                "type": "string"
+              },
+              "runtimeConfigTrustEnvelopeDigest": {
+                "source": "app_effective_launch_manifest.runtimeConfigTrustEnvelopeDigest",
                 "type": "string"
               },
               "schema": {
@@ -134394,22 +134782,423 @@
             "required_fields": [
               "schema",
               "environment",
+              "buildProfile",
               "target",
               "entrypoint",
               "launchMode",
               "launchPolicy",
-              "dartDefinesDigest",
-              "runtimeConfigDigest",
-              "recoveryBaseUrl",
-              "publicWebBaseUrl",
-              "appDownloadBaseUrl",
+              "runtimeConfigPackageDigest",
+              "runtimeConfigTrustEnvelopeDigest",
               "requiresLocalTransport",
               "transport",
-              "dartDefines",
+              "compileDiagnostics",
+              "runtimeConfigPackage",
               "effectiveLaunchManifest",
               "effectiveLaunchManifestDigest"
             ],
             "schema_value": "app-launcher-handoff"
+          },
+          "runtime_config_activation_receipt": {
+            "additional_fields": false,
+            "constraints": [
+              "receipt 只能由原生 gate 在读取制品内 trust、验证 request/package/manifest/profile/target、完成 CAS 原子写入并回读 active package 后生成；host 回显不构成证据。",
+              "status=activated 时 errorCode 与 validationIssues 必须为空、previousActiveDigest 必须等于 request.expectedActiveDigest、activePackageDigest 必须等于 packageDigest，且 environment/buildProfile/target/packageDigest/trustEnvelopeDigest/effectiveLaunchManifestDigest 必须全部非空并与 request 逐字段一致。",
+              "status=failed 时 errorCode 必须非空且 validationIssues 必须至少包含该稳定错误码；request 尚可安全解码时身份字段必须与 request 一致，request 缺失或无法解码时身份字段为空，不得伪造；失败不得覆盖上一份成功 active receipt，私有 active package必须保持 CAS 前状态或由 installer 原子回滚。",
+              "errorCode 与 validationIssues 的每个成员必须来自 runtime_config_error_codes 闭集。active receipt 自身的缺失、读取 IO 失败与解码失败分别使用 runtime_config_activation_receipt_missing、runtime_config_activation_receipt_read_failed 与 runtime_config_activation_receipt_malformed，不得归入 activation request 错误语义。",
+              "记录 failed receipt 时若当前 active digest 读取失败，activePackageDigest 必须保持最后已知 CAS 值（previousActiveDigest），且 validationIssues 必须追加 runtime_config_activation_rollback_failed 表示 CAS 后状态未知；读取失败不得折叠为空 digest 或宣称 active 缺席。"
+            ],
+            "fields": {
+              "activePackageDigest": {
+                "format": "optional_sha256_identity",
+                "type": "string"
+              },
+              "buildProfile": {
+                "allowed_values": [
+                  "",
+                  "nonprod",
+                  "prod"
+                ],
+                "type": "string"
+              },
+              "effectiveLaunchManifestDigest": {
+                "format": "optional_sha256_identity",
+                "type": "string"
+              },
+              "environment": {
+                "allowed_values": [
+                  "",
+                  "alpha",
+                  "beta",
+                  "gamma",
+                  "prod"
+                ],
+                "type": "string"
+              },
+              "errorCode": {
+                "type": "string"
+              },
+              "packageDigest": {
+                "format": "optional_sha256_identity",
+                "type": "string"
+              },
+              "previousActiveDigest": {
+                "format": "optional_sha256_identity",
+                "type": "string"
+              },
+              "requestDigest": {
+                "format": "sha256_identity",
+                "type": "string"
+              },
+              "schema": {
+                "const": "app-runtime-config-activation-receipt",
+                "type": "string"
+              },
+              "schemaVersion": {
+                "const": "1",
+                "type": "string"
+              },
+              "status": {
+                "allowed_values": [
+                  "activated",
+                  "failed"
+                ],
+                "type": "string"
+              },
+              "target": {
+                "allowed_values": [
+                  "",
+                  "alpha-local",
+                  "beta-local",
+                  "gamma-local",
+                  "prod-sim",
+                  "prod-hosted"
+                ],
+                "type": "string"
+              },
+              "trustEnvelopeDigest": {
+                "format": "optional_sha256_identity",
+                "type": "string"
+              },
+              "validationIssues": {
+                "items": {
+                  "min_length": 1,
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required_fields": [
+              "schema",
+              "schemaVersion",
+              "status",
+              "requestDigest",
+              "environment",
+              "buildProfile",
+              "target",
+              "packageDigest",
+              "trustEnvelopeDigest",
+              "effectiveLaunchManifestDigest",
+              "previousActiveDigest",
+              "activePackageDigest",
+              "errorCode",
+              "validationIssues"
+            ],
+            "schema_value": "app-runtime-config-activation-receipt"
+          },
+          "runtime_config_activation_request": {
+            "additional_fields": false,
+            "constraints": [
+              "request digest 使用 digest_contract 对完整 request canonical JSON 求摘要，并由 host 通过平台启动参数独立传给原生 gate；原生必须重算并一致后才可处理。",
+              "packageDigest、trustEnvelopeDigest 与 effectiveLaunchManifestDigest 必须分别匹配 package、AppArtifact 内 profile trust envelope 与 effectiveLaunchManifest；environment/buildProfile/target/launchPolicy 必须在三者之间完全一致。",
+              "expectedActiveDigest 为空只表示私有容器当前没有 active package；非空时必须是当前 active package digest。原生 activation 仅允许 CAS 条件更新，不得猜测或覆盖冲突值。"
+            ],
+            "fields": {
+              "buildProfile": {
+                "allowed_values": [
+                  "nonprod",
+                  "prod"
+                ],
+                "type": "string"
+              },
+              "effectiveLaunchManifest": {
+                "schema_ref": "app_effective_launch_manifest",
+                "type": "object"
+              },
+              "effectiveLaunchManifestDigest": {
+                "format": "sha256_identity",
+                "type": "string"
+              },
+              "environment": {
+                "allowed_values": [
+                  "alpha",
+                  "beta",
+                  "gamma",
+                  "prod"
+                ],
+                "type": "string"
+              },
+              "expectedActiveDigest": {
+                "format": "optional_sha256_identity",
+                "type": "string"
+              },
+              "package": {
+                "schema_ref": "runtime_config_package",
+                "type": "object"
+              },
+              "packageDigest": {
+                "format": "sha256_identity",
+                "type": "string"
+              },
+              "schema": {
+                "const": "app-runtime-config-activation-request",
+                "type": "string"
+              },
+              "schemaVersion": {
+                "const": "1",
+                "type": "string"
+              },
+              "target": {
+                "allowed_values": [
+                  "alpha-local",
+                  "beta-local",
+                  "gamma-local",
+                  "prod-sim",
+                  "prod-hosted"
+                ],
+                "type": "string"
+              },
+              "trustEnvelopeDigest": {
+                "format": "sha256_identity",
+                "type": "string"
+              }
+            },
+            "required_fields": [
+              "schema",
+              "schemaVersion",
+              "environment",
+              "buildProfile",
+              "target",
+              "package",
+              "packageDigest",
+              "trustEnvelopeDigest",
+              "effectiveLaunchManifest",
+              "effectiveLaunchManifestDigest",
+              "expectedActiveDigest"
+            ],
+            "schema_value": "app-runtime-config-activation-request"
+          },
+          "runtime_config_package": {
+            "additional_fields": false,
+            "constraints": [
+              "canonical signed payload 是排除 signature 后按 digest_contract canonical JSON 编码的完整 package；payloadDigest 必须等于将 payloadDigest 置为空字符串后的同一 canonical payload 摘要，signature 对最终 payload（包含 payloadDigest）签名。",
+              "sourceGitSha/sourceTreeDigest 必须来自 package input capsule 或受审 Git identity；当前时间与路径不得充当 source identity。",
+              "environment/target 必须满足 target_environment；environment/buildProfile/launchPolicy 必须满足 launch_policies 与 app_artifact_manifest.build_profiles 的单轨映射。",
+              "expiresAt 必须晚于 issuedAt，生命周期不得超过 max_lifetime_seconds；验证时 issuedAt 不得超过 max_future_skew_seconds，expiresAt 已过期必须拒绝。",
+              "runtime 字段集合必须恰好来自 runtime_value_keys，值全部为非空 string；内容 release、灰度 stage、channel 与 secret 字段一律拒绝。",
+              "trustedPublicKeys 是签名覆盖的 canonical Ed25519 公钥投影且必须包含 signatureKeyId；验签时还必须与消费方独立配置的 trusted keyring 完全一致，package 自带公钥不得独立成为信任根。私钥引用、私钥字节与 secret 不得进入 package。"
+            ],
+            "fields": {
+              "buildProfile": {
+                "allowed_values": [
+                  "nonprod",
+                  "prod"
+                ],
+                "type": "string"
+              },
+              "environment": {
+                "allowed_values": [
+                  "alpha",
+                  "beta",
+                  "gamma",
+                  "prod"
+                ],
+                "type": "string"
+              },
+              "expiresAt": {
+                "format": "rfc3339_utc",
+                "type": "string"
+              },
+              "issuedAt": {
+                "format": "rfc3339_utc",
+                "type": "string"
+              },
+              "launchPolicy": {
+                "allowed_values": [
+                  "test_live",
+                  "prod_release"
+                ],
+                "type": "string"
+              },
+              "payloadDigest": {
+                "format": "sha256_identity",
+                "type": "string"
+              },
+              "runtime": {
+                "additional_fields": false,
+                "fields": {
+                  "appDownloadBaseUrl": {
+                    "min_length": 1,
+                    "type": "string"
+                  },
+                  "appRuntimeEnv": {
+                    "min_length": 1,
+                    "type": "string"
+                  },
+                  "gatewayBaseUrl": {
+                    "min_length": 1,
+                    "type": "string"
+                  },
+                  "legalBaseUrl": {
+                    "min_length": 1,
+                    "type": "string"
+                  },
+                  "mediaAvatarCdnBaseUrl": {
+                    "min_length": 1,
+                    "type": "string"
+                  },
+                  "mediaImageCdnBaseUrl": {
+                    "min_length": 1,
+                    "type": "string"
+                  },
+                  "mediaUploadBaseUrl": {
+                    "min_length": 1,
+                    "type": "string"
+                  },
+                  "mediaVideoCdnBaseUrl": {
+                    "min_length": 1,
+                    "type": "string"
+                  },
+                  "publicWebBaseUrl": {
+                    "min_length": 1,
+                    "type": "string"
+                  },
+                  "realtimeBaseUrl": {
+                    "min_length": 1,
+                    "type": "string"
+                  },
+                  "rtcMediaConnectionUrl": {
+                    "min_length": 1,
+                    "type": "string"
+                  }
+                },
+                "required_fields": [
+                  "appRuntimeEnv",
+                  "gatewayBaseUrl",
+                  "legalBaseUrl",
+                  "publicWebBaseUrl",
+                  "appDownloadBaseUrl",
+                  "realtimeBaseUrl",
+                  "mediaAvatarCdnBaseUrl",
+                  "mediaImageCdnBaseUrl",
+                  "mediaVideoCdnBaseUrl",
+                  "mediaUploadBaseUrl",
+                  "rtcMediaConnectionUrl"
+                ],
+                "type": "object"
+              },
+              "schema": {
+                "const": "app-runtime-config-package",
+                "type": "string"
+              },
+              "schemaVersion": {
+                "const": "1",
+                "type": "string"
+              },
+              "signature": {
+                "format": "strict_base64_ed25519_signature",
+                "type": "string"
+              },
+              "signatureAlgorithm": {
+                "const": "ed25519",
+                "type": "string"
+              },
+              "signatureKeyId": {
+                "min_length": 1,
+                "type": "string"
+              },
+              "sourceGitSha": {
+                "format": "git_object_sha",
+                "type": "string"
+              },
+              "sourceTreeDigest": {
+                "format": "git_tree_digest",
+                "type": "string"
+              },
+              "target": {
+                "allowed_values": [
+                  "alpha-local",
+                  "beta-local",
+                  "gamma-local",
+                  "prod-sim",
+                  "prod-hosted"
+                ],
+                "type": "string"
+              },
+              "trustedPublicKeys": {
+                "type": "object",
+                "value_type": "string"
+              }
+            },
+            "required_fields": [
+              "schema",
+              "schemaVersion",
+              "environment",
+              "buildProfile",
+              "target",
+              "launchPolicy",
+              "issuedAt",
+              "expiresAt",
+              "sourceGitSha",
+              "sourceTreeDigest",
+              "runtime",
+              "payloadDigest",
+              "signatureAlgorithm",
+              "signatureKeyId",
+              "trustedPublicKeys",
+              "signature"
+            ],
+            "schema_value": "app-runtime-config-package"
+          },
+          "runtime_config_trust_envelope": {
+            "additional_fields": false,
+            "constraints": [
+              "envelope 是 AppArtifact/Web bootstrap 的 build-profile 级只读输入，由 App/Web artifact 完整性保护；不得携带 environment、target、endpoint、runtime package、private key、secret 或 rollout/channel/content 字段。",
+              "trustedPublicKeys 必须是非空 canonical Ed25519 keyring；nonprod envelope 只信任 Alpha/Beta/Gamma 共用签发域，prod envelope 只信任 Prod 签发域。",
+              "envelope digest 使用 digest_contract 对完整 canonical JSON 求摘要；runtime package 的 trustedPublicKeys 必须与本 envelope 完全一致，package 自带公钥不得独立成为信任根。"
+            ],
+            "fields": {
+              "buildProfile": {
+                "allowed_values": [
+                  "nonprod",
+                  "prod"
+                ],
+                "type": "string"
+              },
+              "schema": {
+                "const": "app-runtime-config-trust",
+                "type": "string"
+              },
+              "schemaVersion": {
+                "const": "1",
+                "type": "string"
+              },
+              "signatureAlgorithm": {
+                "const": "ed25519",
+                "type": "string"
+              },
+              "trustedPublicKeys": {
+                "type": "object",
+                "value_type": "string"
+              }
+            },
+            "required_fields": [
+              "schema",
+              "schemaVersion",
+              "buildProfile",
+              "signatureAlgorithm",
+              "trustedPublicKeys"
+            ],
+            "schema_value": "app-runtime-config-trust"
           }
         },
         "target_environment": {
@@ -136441,7 +137230,7 @@
     },
     {
       "path": "_shared/environment_artifact_identity.yaml",
-      "sha256": "57cf7efa52736f2b8376941bd99dad8a572319101ad9cf8b42eff82a5ed280eb",
+      "sha256": "43cdcb113aa4f223b44b403b77729ce0efbb41d7df1b1f5129998792764daec4",
       "mediaType": "application/yaml",
       "content": {
         "constraints": [
@@ -136451,7 +137240,8 @@
           "environmentArtifactDigest 是 digest_contract 对 activation_seal_fields 投影的摘要；外部 activation seal 以 identityCoreDigest 绑定最终 imageSetDigest。",
           "configuration 同时绑定 service configuration、App runtime config 与 packaged environment runtime；Provider 同时绑定 canonical binding 与 runtime composition。",
           "endpointAuthorityDigest 绑定 environment、target 与 packaged publicBases 的 canonical 投影；runtimeTopologyDigest 绑定 package-owned runtime topology manifest 的精确字节。",
-          "任一字段缺失、多余、target/environment 错配、摘要不可复算、跨环境复用或 package-owned 字节漂移均 fail-closed。"
+          "任一字段缺失、多余、target/environment 错配、摘要不可复算、跨环境复用或 package-owned 字节漂移均 fail-closed。",
+          "镜像字节按 nonprod/prod 两个信任域分叉（DEC-005）：alpha/beta/gamma 的同 owner 镜像必须共享同一 digest，prod 镜像 digest 必须与 nonprod 分叉；环境身份由部署面挂载的 artifact-identity.json 承载，不烤入镜像字节。environment artifact 的不可交换性由 configuration/endpoint/topology 投影差异保证，与镜像 digest 复用无冲突。"
         ],
         "description": "四环境部署候选统一制品身份协议；environment artifact 将共同 release train/source capsule 与环境专属 image、config、Provider binding、endpoint authority、runtime topology、ContractGraph 绑定为可复算且不可跨环境交换的摘要。",
         "digest_contract": {
@@ -137203,7 +137993,7 @@
     },
     {
       "path": "_shared/page_object_contract.yaml",
-      "sha256": "3da1639642279e42e565898d1a08c348a2b84f905bc34ea615c764ad51eece90",
+      "sha256": "65dc7c5ee2e9297a33100ff8563c1d225cf1d78474029ba20be1e08f0572f195",
       "mediaType": "application/yaml",
       "content": {
         "contract_id": "app_page_object_contract",
@@ -142211,6 +143001,38 @@
               "all_of": [],
               "any_of": []
             },
+            "data_contract_reason": "runtime package 缺失或失效时的阻断页，只呈现本地失败码与本地诊断复制；配置不可信时不得发起任何业务查询或依赖 runtime 配置的外部跳转。",
+            "data_owners": [
+              "app"
+            ],
+            "entry_widget": "StartupConfigurationErrorPage",
+            "experience_owner": "app",
+            "mount_evidence": [
+              "lib/runtime/shell/recovery/bootstrap_recovery.dart"
+            ],
+            "object_ids": [],
+            "page_id": "app.startup_configuration_error",
+            "page_kind": "shell",
+            "query_slices": "none",
+            "source_path": "lib/runtime/shell/recovery/startup_configuration_error_page.dart",
+            "surface_ids": [
+              "welcome"
+            ],
+            "telemetry_descriptor": {
+              "event_namespace": "page.app.startup_configuration_error",
+              "lifecycle": [
+                "enter",
+                "failure"
+              ]
+            },
+            "typed_presentation": "none"
+          },
+          {
+            "auth_requirement": "public",
+            "capability_requirements": {
+              "all_of": [],
+              "any_of": []
+            },
             "data_contract_reason": "启动品牌动效与本地 ready 状态，无业务对象查询。",
             "data_owners": [
               "app"
@@ -146373,7 +147195,7 @@
     },
     {
       "path": "_shared/ui_surfaces.yaml",
-      "sha256": "a195bbe064527b6aa5a608279593c55175e055bef3db54ea4a5ed80d92411726",
+      "sha256": "690db05e234b58dae60b292d837ab6546177474f9961b87d90734cb20f90aab6",
       "mediaType": "application/yaml",
       "content": {
         "surfaces": [
@@ -147280,11 +148102,16 @@
             "route_id": "gatheringCreate"
           },
           {
-            "description": "Gathering 公开详情、动态主动作与 Host 管理入口",
+            "description": "Gathering 公开详情、动态主动作、Host 管理入口与可选 Plan 协作",
             "id": "gatheringDetail",
             "operation_ids": [
               "GetPublicGathering",
               "GetGathering",
+              "GetGatheringPlan",
+              "CreateGatheringPlan",
+              "ProposeGatheringPlan",
+              "CommitGatheringPlanProposal",
+              "ListGatheringPlanRevisions",
               "UpdateGathering",
               "JoinOpenGathering",
               "ApplyToGathering",
@@ -147314,7 +148141,8 @@
             "id": "gatheringBoard",
             "operation_ids": [
               "GetGatheringChatBoard",
-              "GetGathering"
+              "GetGathering",
+              "GetGatheringPlan"
             ],
             "owner": "chat",
             "path_template": "/chat/{id}/board",
@@ -236426,7 +237254,7 @@
     },
     {
       "path": "circle/circle_management/gathering_plan/operations.yaml",
-      "sha256": "196f8a0b76aaa268ed8681d6292e90709f78c695f1275f641f8bded7b5d77014",
+      "sha256": "a5db51b4eb4c50135296221db7a0cc4aba6577553eeb4c8a4ecbae7664e8c3d0",
       "mediaType": "application/yaml",
       "content": {
         "api_routes": [
@@ -237055,6 +237883,26 @@
             "spec_ref": "specs/feature-tree/circle-community/gathering-coordination/gathering-plan-collaboration/spec.md#gwt-001",
             "target": {
               "id": "ListGatheringPlanRevisions",
+              "kind": "operation"
+            }
+          },
+          {
+            "case_id": "gathering_plan_get_gathering_plan_app_local",
+            "executions": [
+              {
+                "device": "runner",
+                "digest_binding": "candidate",
+                "env": "alpha",
+                "platform": "app",
+                "provider": "none"
+              }
+            ],
+            "layer": "local_contract",
+            "producer": "app",
+            "runner_source_path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/gathering_plan/gathering_plan_remote__local_contract_test.dart",
+            "spec_ref": "specs/feature-tree/circle-community/gathering-coordination/gathering-plan-collaboration/spec.md#gwt-001",
+            "target": {
+              "id": "GetGatheringPlan",
               "kind": "operation"
             }
           }
@@ -349650,7 +350498,7 @@
     },
     {
       "path": "platform/config.yaml",
-      "sha256": "68ced5a97f2ee26e25db0193cc8887ec9d08d5083f2ac32331903b6ecca68d36",
+      "sha256": "b2b0ac6548ad7e39776f43e0e82183aefeb128106408dfa7230a81899ba15e2f",
       "mediaType": "application/yaml",
       "content": {
         "configs": [
@@ -353172,7 +354020,7 @@
             "type": "list"
           },
           {
-            "default": "com.quwoquan.quwoquan_app",
+            "default": "com.leadwise.quwoquan",
             "key": "sys.product-ops-service.app_release.android.apk_package_name",
             "reload": "restart",
             "rollout": "progressive",

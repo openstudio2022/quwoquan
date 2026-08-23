@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import re
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -10,8 +10,9 @@ import yaml
 
 from quwoquan_ops.ci import collect_stackctl_app_shard as shard_collector
 from quwoquan_ops.ci import render_release_application_package as package_renderer
-from quwoquan_ops.tests.support.app_artifact_manifest_test_support import (
-    app_artifact_manifest,
+from quwoquan_ops.cli.lib.app_identity import (
+    application_id_for_build_product,
+    resolve_build_product,
 )
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -24,6 +25,13 @@ PLATFORM_RUNNER = ROOT / "quwoquan_ops/ci/run_mobile_platform_matrix.sh"
 TIMING_BUDGETS = ROOT / "quwoquan_ops/environments/pr_gate_timing_budgets.json"
 EVIDENCE_DOCKERFILE = ROOT / "quwoquan_ops/ci/app_candidate_evidence.Dockerfile"
 SPEC_REF = "specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-001"
+BUILD_PRODUCTS = (
+    "android-nonprod-apk",
+    "android-prod-apk",
+    "ios-nonprod-app",
+    "ios-prod-app",
+    "web-shared",
+)
 
 
 def _source() -> tuple[str, str]:
@@ -39,23 +47,33 @@ def _source() -> tuple[str, str]:
 def _stackctl_result(
     root: Path,
     *,
-    environment: str,
-    surface: str,
+    build_product_id: str,
     artifact: Path,
 ) -> Path:
     revision, tree = _source()
-    attempt = root / f"attempt-{environment}-{surface}"
+    product = resolve_build_product(build_product_id)
+    attempt = root / f"attempt-{build_product_id}"
     attempt.mkdir(parents=True)
-    manifest = app_artifact_manifest(
-        environment=environment,
-        surface=surface,
-        source_git_sha=revision,
-        source_tree_digest=tree,
-        artifact_digest=package_renderer._package_digest(artifact),
-    )
-    if environment != "prod" and surface == "android":
-        manifest["distributionClass"] = "simulator"
-        manifest["promotable"] = False
+    manifest = {
+        "schema": "app-artifact-manifest",
+        "buildProductId": product.build_product_id,
+        "buildProfile": product.build_profile,
+        "platform": product.platform,
+        "buildMode": product.build_mode,
+        "distributionClass": product.distribution_class,
+        "artifactFormat": product.artifact_format,
+        "applicationId": application_id_for_build_product(product.build_product_id),
+        "displayVersion": "1.0.0",
+        "buildNumber": "1",
+        "signingIdentityDigest": "sha256:" + "1" * 64,
+        "sourceGitSha": revision,
+        "sourceTreeDigest": tree,
+        "buildProvenanceDigest": "sha256:" + "2" * 64,
+        "artifactDigest": package_renderer._package_digest(artifact),
+        "promotable": product.distribution_class in {"store", "hosted_web"},
+    }
+    if product.platform in {"android", "ios"}:
+        manifest["runtimeConfigTrustEnvelopeDigest"] = "sha256:" + "4" * 64
     for name, payload in (
         ("manifest.json", manifest),
         (
@@ -73,7 +91,7 @@ def _stackctl_result(
     ):
         (attempt / name).write_text(json.dumps(payload) + "\n", encoding="utf-8")
     (attempt / "compile.log").write_text("compiled\n", encoding="utf-8")
-    result = root / f"result-{environment}-{surface}.json"
+    result = root / f"result-{build_product_id}.json"
     result.write_text(
         json.dumps(
             {"exitCode": 0, "manifest": manifest, "attemptDir": str(attempt)}
@@ -109,34 +127,94 @@ def test_app_pipeline_is_reusable_only_and_publishes_immutable_oci() -> None:
     assert "oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d" in text
     assert "app_candidate_oci_transport.py materialize-shards" in text
     assert 'CMD ["/evidence"]' in EVIDENCE_DOCKERFILE.read_text(encoding="utf-8")
-    assert text.count("environment: [alpha, beta, gamma, prod]") == 3
-    assert text.count("--kind app-artifact") == 3
+    jobs = payload["jobs"]
+    product_job = jobs["product"]
+    assert product_job["name"] == "App package product / ${{ matrix.buildProductId }}"
+    assert product_job["strategy"]["matrix"]["include"] == [
+        {
+            "buildProductId": "android-nonprod-apk",
+            "profile": "nonprod",
+            "format": "apk",
+        },
+        {
+            "buildProductId": "android-prod-apk",
+            "profile": "prod",
+            "format": "apk",
+        },
+        {
+            "buildProductId": "ios-nonprod-app",
+            "profile": "nonprod",
+            "format": "app",
+        },
+        {
+            "buildProductId": "ios-prod-app",
+            "profile": "prod",
+            "format": "app",
+        },
+        {
+            "buildProductId": "web-shared",
+            "profile": "shared",
+            "format": "web",
+        },
+    ]
+    assert "environment" not in product_job["strategy"]["matrix"]
+    assert product_job["runs-on"] == (
+        "${{ matrix.format == 'app' && 'macos-latest' || 'ubuntu-latest' }}"
+    )
+    assert jobs["aggregate"]["needs"] == ["product"]
+    assert text.count("--kind app-artifact") == 1
+    assert text.count("--build-product-id") == 1
     assert "--kind app-release" in text
     assert "--kind ops-portal" in text
+    assert "payloads/opsPortal" in text
+    assert "payloads/prod/opsPortal" not in text
+    assert "render_release_application_package.py bind-special" not in text
     assert "flutter build" not in text
     assert "working-directory: quwoquan_app" not in text
 
 
-def test_app_pipeline_requires_four_environment_three_platform_package_set() -> None:
+def test_app_pipeline_requires_exactly_five_build_products_without_environment_compilation() -> None:
     assert SPEC_REF
     text = WORKFLOW.read_text(encoding="utf-8")
-    for environment in ("alpha", "beta", "gamma", "prod"):
-        assert environment in text
-    for surface in ("android", "ios", "web"):
-        assert f"--app-platform {surface}" in text
+    payload = yaml.load(text, Loader=yaml.BaseLoader)
+    matrix = payload["jobs"]["product"]["strategy"]["matrix"]["include"]
+
+    assert tuple(item["buildProductId"] for item in matrix) == BUILD_PRODUCTS
+    assert tuple((item["profile"], item["format"]) for item in matrix) == (
+        ("nonprod", "apk"),
+        ("prod", "apk"),
+        ("nonprod", "app"),
+        ("prod", "app"),
+        ("shared", "web"),
+    )
+    assert "matrix.environment" not in text
+    assert "environment: [alpha, beta, gamma, prod]" not in text
+    assert "app-candidate-shard-android-" not in text
+    assert "app-candidate-shard-ios-" not in text
+    assert "app-candidate-shard-web-" not in text
+    assert (
+        "app-candidate-shard-${{ matrix.buildProductId }}" in text
+    )
     assert "--app-platform macos" not in text
+    assert "App package shard / macOS" not in text
+    assert "--app-platform" not in text
+    assert "--app-build-mode" not in text
+    assert "--distribution-class" not in text
+    assert "--artifact-format" not in text
+    product_command = re.search(
+        r"--kind app-artifact \\\n(?P<arguments>.*?)> \"\$RESULT\"",
+        text,
+        flags=re.DOTALL,
+    )
+    assert product_command is not None
+    assert "--env" not in product_command.group("arguments")
     collector = (
         ROOT / "quwoquan_ops/ci/collect_stackctl_app_shard.py"
     ).read_text(encoding="utf-8")
-    for evidence in ("application-packages", "payloads", "evidence"):
-        assert evidence in collector
-    assert "QWQ_ANDROID_ALPHA_GOOGLE_SERVICES_JSON" in text
-    assert "QWQ_ANDROID_BETA_GOOGLE_SERVICES_JSON" in text
-    assert "QWQ_ANDROID_GAMMA_GOOGLE_SERVICES_JSON" in text
-    assert "QWQ_ANDROID_PROD_GOOGLE_SERVICES_JSON" in text
-    assert "--app-platform ios --app-build-mode release" in text
-    assert "--distribution-class dev_direct" in text
-    assert "iOS Release simulator" not in text
+    assert '"application-packages" / f"{build_product_id}.json"' in collector
+    assert '"payloads" / build_product_id' in collector
+    assert '"evidence" / build_product_id' in collector
+    assert "build_product_id=build_product_id" in collector
 
 
 def test_app_pipeline_missing_signing_inputs_are_typed_gate_blocks() -> None:
@@ -147,46 +225,54 @@ def test_app_pipeline_missing_signing_inputs_are_typed_gate_blocks() -> None:
     for required in (
         "QWQ_ANDROID_RELEASE_KEYSTORE_B64",
         "QWQ_ANDROID_RELEASE_KEY_ALIAS",
-        "QWQ_ANDROID_ALPHA_GOOGLE_SERVICES_JSON",
+        "QWQ_ANDROID_NONPROD_GOOGLE_SERVICES_JSON",
+        "QWQ_ANDROID_PROD_GOOGLE_SERVICES_JSON",
     ):
         assert required in text
+    for retired in (
+        "QWQ_ANDROID_ALPHA_GOOGLE_SERVICES_JSON",
+        "QWQ_ANDROID_BETA_GOOGLE_SERVICES_JSON",
+        "QWQ_ANDROID_GAMMA_GOOGLE_SERVICES_JSON",
+    ):
+        assert retired not in text
+    assert "FIREBASE_INPUT=QWQ_ANDROID_NONPROD_GOOGLE_SERVICES_JSON" in text
 
 
-def test_collector_preserves_nonpromotable_app_artifact_manifest(
+def test_collector_preserves_nonpromotable_baseline_product_manifest(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.chdir(ROOT)
-    artifact = tmp_path / "alpha.apk"
-    artifact.write_bytes(b"alpha apk")
+    artifact = tmp_path / "nonprod.apk"
+    artifact.write_bytes(b"nonprod apk")
     result = _stackctl_result(
         tmp_path,
-        environment="alpha",
-        surface="android",
+        build_product_id="android-nonprod-apk",
         artifact=artifact,
     )
     bundle = tmp_path / "bundle"
 
-    shard_collector.collect(result, bundle)
+    collected = shard_collector.collect(result, bundle)
 
-    package = json.loads(
-        (bundle / "application-packages/alpha--android.json").read_text()
-    )
-    assert package["artifactManifest"]["distributionClass"] == "simulator"
+    package_path = bundle / "application-packages/android-nonprod-apk.json"
+    package = json.loads(package_path.read_text())
+    assert collected["buildProductId"] == "android-nonprod-apk"
+    assert package["artifactManifest"]["distributionClass"] == "dev_direct"
     assert package["artifactManifest"]["promotable"] is False
+    assert (bundle / "payloads/android-nonprod-apk/app-release.apk").is_file()
+    assert (bundle / "evidence/android-nonprod-apk/manifest.json").is_file()
 
 
-def test_collector_projects_prod_web_special_from_canonical_artifact(
+def test_collector_retains_web_special_without_replacing_baseline_product(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.chdir(ROOT)
-    artifact = tmp_path / "prod-web"
+    artifact = tmp_path / "shared-web"
     artifact.mkdir()
     for name in ("index.html", "main.dart.js", "manifest.json", "flutter_service_worker.js"):
         (artifact / name).write_text(name, encoding="utf-8")
     result = _stackctl_result(
         tmp_path,
-        environment="prod",
-        surface="web",
+        build_product_id="web-shared",
         artifact=artifact,
     )
     bundle = tmp_path / "bundle"
@@ -194,9 +280,55 @@ def test_collector_projects_prod_web_special_from_canonical_artifact(
     shard_collector.collect(result, bundle)
 
     special = json.loads((bundle / "public-web-manifest.json").read_text())
+    baseline = json.loads(
+        (bundle / "application-packages/web-shared.json").read_text()
+    )
     assert special["schema"] == "client-app.web.official-release"
     assert special["artifactManifest"]["promotable"] is True
-    assert not (bundle / "application-packages/prod--web.json").exists()
+    assert baseline["buildProductId"] == "web-shared"
+    assert (bundle / "payloads/web-shared/public-web/index.html").is_file()
+
+
+def test_collector_retains_android_special_without_replacing_baseline_product(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(ROOT)
+    artifact = tmp_path / "prod.apk"
+    artifact.write_bytes(b"prod apk")
+    result = _stackctl_result(
+        tmp_path,
+        build_product_id="android-prod-apk",
+        artifact=artifact,
+    )
+    manifest = json.loads(result.read_text())["manifest"]
+    official = tmp_path / "official.json"
+    official.write_text(
+        json.dumps(
+            {
+                "schema": "client-app.android.official-release",
+                "apkSHA256": manifest["artifactDigest"].removeprefix("sha256:"),
+                "apkSigningCertificateSHA256": manifest[
+                    "signingIdentityDigest"
+                ].removeprefix("sha256:"),
+                "packagedAPK": "quwoquan.apk",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    bundle = tmp_path / "bundle"
+
+    shard_collector.collect(
+        result, bundle, android_release_manifest=official
+    )
+
+    special = json.loads((bundle / "android-release-manifest.json").read_text())
+    baseline = json.loads(
+        (bundle / "application-packages/android-prod-apk.json").read_text()
+    )
+    assert special["artifactManifest"]["buildProductId"] == "android-prod-apk"
+    assert baseline["buildProductId"] == "android-prod-apk"
+    assert (bundle / "payloads/android-prod-apk/app-release.apk").is_file()
 
 
 def test_collector_rejects_prod_android_without_canonical_official_manifest(
@@ -207,8 +339,7 @@ def test_collector_rejects_prod_android_without_canonical_official_manifest(
     artifact.write_bytes(b"prod apk")
     result = _stackctl_result(
         tmp_path,
-        environment="prod",
-        surface="android",
+        build_product_id="android-prod-apk",
         artifact=artifact,
     )
 

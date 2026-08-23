@@ -19,6 +19,10 @@ from quwoquan_ops.cli.lib.output_paths import portal_deployment_package_dir
 from quwoquan_ops.cli.lib.output_paths import remove_deployment_tree
 from quwoquan_ops.cli.lib.output_paths import target_local_dir as resolve_target_local_dir
 from quwoquan_ops.cli.lib.output_paths import web_deployment_package_dir
+from quwoquan_ops.cli.lib.web_official_release import (
+    WebOfficialReleaseError,
+    materialize_web_runtime_config,
+)
 
 from .constants import ROOT, RUNTIME_LOG_EXPORT_SERVICES
 from .package_inputs import (
@@ -207,6 +211,47 @@ def main() -> int:
         shutil.copytree(web_release_public, web_output_root)
     else:
         web_output_root.mkdir(parents=True, exist_ok=True)
+    web_runtime_config_digests: dict[str, str] = {}
+    trust_path = Path(str(args.web_runtime_config_trust or "")).expanduser()
+    package_path = Path(str(args.web_runtime_config_package or "")).expanduser()
+    if "gamma-proxy" in support and args.instance != "prevalidate":
+        missing_runtime_inputs = [
+            label
+            for label, path in (
+                ("trust", trust_path),
+                ("package", package_path),
+            )
+            if not path.is_absolute() or not path.is_file() or path.is_symlink()
+        ]
+        if missing_runtime_inputs:
+            raise SystemExit(
+                "FAIL: prod Web hosting runtime configuration is required: "
+                + ", ".join(missing_runtime_inputs)
+            )
+        try:
+            trust_envelope = json.loads(trust_path.read_text(encoding="utf-8"))
+            runtime_package = json.loads(package_path.read_text(encoding="utf-8"))
+            if not isinstance(trust_envelope, dict) or not isinstance(
+                runtime_package, dict
+            ):
+                raise ValueError("runtime configuration inputs must be JSON objects")
+            web_runtime_config_digests = materialize_web_runtime_config(
+                hosting_root=web_output_root,
+                trust_envelope=trust_envelope,
+                runtime_package=runtime_package,
+                expected_environment="prod",
+                expected_target="prod-hosted",
+            )
+        except (
+            OSError,
+            UnicodeError,
+            json.JSONDecodeError,
+            ValueError,
+            WebOfficialReleaseError,
+        ) as exc:
+            raise SystemExit(
+                f"FAIL: prod Web hosting runtime configuration is invalid: {exc}"
+            ) from exc
     deployment_target_path(
         "prod-hosted",
         "rendered",
@@ -377,6 +422,7 @@ def main() -> int:
         "legalStaticSource": str(legal_package_public),
         "portalStaticRoot": portal_root,
         "portalStaticSource": str(portal_release_dist),
+        "publicWebRuntimeConfig": web_runtime_config_digests,
         "observabilityRuntime": observability_runtime,
         "systemdUnitFile": systemd_unit_file,
     }

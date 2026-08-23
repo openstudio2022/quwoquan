@@ -346,7 +346,7 @@ def acquire_homepage_article_source_ready_batch(
         raise HomepageArticleSourceReadyAcquisitionError(
             SOURCE_INVALID_EVIDENCE, ["sourceSetId is invalid"]
         )
-    if target_scale not in {"M100", "M1000", "M10000"}:
+    if target_scale not in {"WORKLOAD", "M100", "M1000", "M10000"}:
         raise HomepageArticleSourceReadyAcquisitionError(
             SOURCE_INVALID_EVIDENCE, ["targetScale is invalid"]
         )

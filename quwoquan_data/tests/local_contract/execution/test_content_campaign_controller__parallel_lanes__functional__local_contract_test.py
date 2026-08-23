@@ -19,6 +19,9 @@ from content.execution.campaign.runtime import (
     runtime_events_path,
 )
 from content.execution.campaign.workspace import CampaignRuntimePaths
+from content.execution.planning.execution_authority import (
+    build_bounded_execution_authority,
+)
 from core.execution_branch import (
     current_git_branch,
     execution_branch_issues,
@@ -78,6 +81,156 @@ def test_run_phase_propagates_no_implicit_lane_timeout(monkeypatch) -> None:
 
     assert observed == [None] * len(CARRIERS)
     assert set(result) == set(CARRIERS)
+
+
+def test_distributed_lane_command_preserves_frozen_source_pool_selection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_revision = "sha256:" + "a" * 64
+    source_digest = "sha256:" + "b" * 64
+    entity_catalog_digest = "sha256:" + "c" * 64
+    plan_digest = "sha256:" + "d" * 64
+    plan_file_sha256 = "sha256:" + "e" * 64
+    selection_digest = "sha256:" + "f" * 64
+    fence_digest = "sha256:" + "9" * 64
+    candidate_ids = ["candidate-qingchengshan", "candidate-dujiangyan"]
+    submission = {
+        "executionId": (
+            "20260822--travel-article-workload-article-1--china-cultural-deep-tour"
+            "--scale-003"
+        ),
+        "rootExecutionId": (
+            "20260822--travel-article-workload-article-1--china-cultural-deep-tour"
+            "--scale-003"
+        ),
+        "familyRef": "content/travel/article/base",
+        "regionRef": "china/四川省",
+        "selector": "source-ready-priority",
+        "quota": 1,
+        "count": 2,
+        "executionAuthority": build_bounded_execution_authority(
+            total_objects=1
+        ),
+        "semanticSelectionId": "cursor_auto",
+        "targetNames": [],
+        "gitBranch": "dev1.0",
+        "gitCommitSha": "a" * 40,
+        "sourceRevision": source_revision,
+        "sourceDigest": {"digest": source_digest},
+        "entityCatalogDigest": entity_catalog_digest,
+        "scaleSourcePool": {
+            "poolId": "m1-article-culture-china",
+            "targetScale": "WORKLOAD",
+            "planRef": "data/local/workspace/source-pool/plan.json",
+            "planDigest": plan_digest,
+            "planFileSha256": plan_file_sha256,
+            "sourceRevision": source_revision,
+            "sourceDigest": source_digest,
+            "entityCatalogDigest": entity_catalog_digest,
+        },
+        "sourcePoolEvidenceRootRef": "data/local/workspace/source-pool/evidence",
+        "sourcePoolSelection": {
+            "carrier": "article",
+            "candidateIds": candidate_ids,
+            "candidateCount": 2,
+            "selectionDigest": selection_digest,
+        },
+    }
+    execution_root = tmp_path / "output/data/tasks/article"
+    execution_root.mkdir(parents=True)
+    capsule_path = tmp_path / "capsule"
+    capsule = SimpleNamespace(
+        path=capsule_path,
+        lane_external_inputs={"article": {"externalInputRefs": []}},
+        source_revision=source_revision,
+        source_digest=source_digest,
+        entity_catalog_digest=entity_catalog_digest,
+        external_input_root=lambda _carrier: capsule_path / "external-inputs/article",
+    )
+    workspace = SimpleNamespace(
+        carrier="article",
+        path=capsule_path,
+        capsule=capsule,
+        execution_root=execution_root,
+        ref="data/local/cache/content-campaign-workspaces/article",
+    )
+    runtime = SimpleNamespace(
+        campaigns_root=tmp_path / "output/data/local/workspace/campaigns",
+        output_root=tmp_path / "output",
+        publish_root=tmp_path / "publish",
+    )
+    checkpoints: list[dict[str, object]] = []
+    run_session = SimpleNamespace(
+        run_id="campaign-run-source-pool",
+        generation=1,
+        fencing_token=fence_digest,
+        plan_digest=fence_digest,
+        lane_checkpoint=lambda **kwargs: checkpoints.append(kwargs),
+    )
+    commands: list[list[str]] = []
+
+    def capture_command(
+        command: list[str],
+        _cwd: Path,
+        _env: dict[str, str],
+        _log_path: Path,
+        _timeout_seconds: float | None,
+    ) -> int:
+        commands.append(command)
+        return 0
+
+    result = campaign_process.run_lane(
+        workspace,
+        submission,
+        stage="run",
+        runtime=runtime,
+        root_execution_id=submission["rootExecutionId"],
+        timeout_seconds=None,
+        lane_runner=capture_command,
+        run_session=run_session,
+        observer_binary_binding=None,
+        fleet_transport_binding=None,
+    )
+
+    assert result == (0, None)
+    assert len(commands) == 1
+    command = commands[0]
+
+    def argument_values(flag: str) -> list[str]:
+        return [
+            command[index + 1]
+            for index, value in enumerate(command[:-1])
+            if value == flag
+        ]
+
+    assert argument_values("--quota") == ["1"]
+    assert argument_values("--count") == ["2"]
+    assert argument_values("--capacity-calibration-receipt") == []
+    assert argument_values("--scale-source-pool-id") == [
+        "m1-article-culture-china"
+    ]
+    assert argument_values("--scale-source-pool-target-scale") == ["WORKLOAD"]
+    assert argument_values("--scale-source-pool-plan-ref") == [
+        "data/local/workspace/source-pool/plan.json"
+    ]
+    assert argument_values("--scale-source-pool-plan-digest") == [plan_digest]
+    assert argument_values("--scale-source-pool-plan-file-sha256") == [
+        plan_file_sha256
+    ]
+    assert argument_values("--source-pool-source-revision") == [source_revision]
+    assert argument_values("--source-pool-source-digest") == [source_digest]
+    assert argument_values("--source-pool-entity-catalog-digest") == [
+        entity_catalog_digest
+    ]
+    assert argument_values("--source-pool-evidence-root-ref") == [
+        "data/local/workspace/source-pool/evidence"
+    ]
+    assert argument_values("--source-pool-carrier") == ["article"]
+    assert argument_values("--source-pool-selection-digest") == [selection_digest]
+    assert argument_values("--source-pool-candidate-id") == candidate_ids
+    assert "--target" not in command
+    assert checkpoints[-1]["status"] == "succeeded"
 
 
 def test_detached_branch_fallback_requires_campaign_context(

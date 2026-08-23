@@ -234,3 +234,12 @@
 - 准出影响：`block`
 - 影响或价值：尚缺 `GWT-004` 在真实运营商、短信与联合登录 Provider 下的一键、OTP、手机号绑定及失败恢复闭环；现有本地状态与截图证据不能证明 production Remote 登录或 continuation 单次消费。
 - 完成判定：`GWT-004` 与 `GWT-011` 由同一 commit、ContractGraph、candidate、环境和真实 Provider 的 production journey 覆盖，且 Android 物理设备与 iPhone 物理设备 `ReadinessResultBundle` 均为 passed；failed、blocked、skipped、模拟器、动态 skip 或测试 double 均不计通过。
+
+<a id="open-002"></a>
+### OPEN-002 登录不可用文案分轨与归因维度
+
+- 类型：`capability_gap`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：当前登录页把「服务自述不可用」（readiness 返回 `temporarily_unavailable`）、「网络请求失败」与「探针超时」收敛为同一句用户文案，用户看到的都是「登录服务暂时不可用」；同时登录 readiness 观测缺 endpoint 与 environment 维度，事后无法按环境或被探端点归因，只能人工翻服务端日志。这不改变任何登录成功或失败判定，但会显著拖长一次真实故障的定位时间——环境依赖断裂时它是唯一的用户可见入口。
+- 完成判定：`GWT-004` 的失败恢复子句在三类原因下分别断言可区分的用户可见状态与恢复动作，且登录 readiness 观测事件携带 endpoint 与 environment 维度并可按维度回读；`REQ-004` 的「不得暴露技术原因」仍然成立，分轨只体现为动作与文案差异，不引入错误码或诊断编号。

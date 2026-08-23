@@ -61,7 +61,7 @@
 .PHONY: verify-local-port-manifest
 .PHONY: verify-public-vs-upstream-url-contract
 .PHONY: verify-domain-governance
-.PHONY: verify-python-script-governance
+.PHONY: verify-python-script-governance verify-service-probe-homology
 .PHONY: verify-vertical-architecture-ratchet
 .PHONY: test-vertical-architecture-ratchet-local-contract
 .PHONY: sync-page-object-source-paths verify-page-object-source-paths
@@ -465,6 +465,10 @@ verify-domain-governance:
 verify-python-script-governance:
 	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_python_script_governance.py --scope all --mode check
 
+# 服务端就绪路由与 deploy readinessProbe 同源：探针错配会让依赖断裂报绿。
+verify-service-probe-homology:
+	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_service_probe_homology.py
+
 # 垂类架构静态防回退：存量债务只减不增，已退役 travel-service 永久零缺口。
 verify-vertical-architecture-ratchet:
 	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_vertical_architecture_ratchet.py
@@ -774,6 +778,11 @@ verify-app-page-object-contract:
 	@python3 quwoquan_service/scripts/contracts/sync_page_object_source_paths.py --check --fail-on-review
 	@python3 quwoquan_app/scripts/runtime/page/verify_page_object_contract.py
 
+# UAT 断言的 Widget key 必须能在 lib 找到产出方：实现侧删掉 key 而 UAT 仍引用
+# 旧字面量时，find.byKey 只会永远 findsNothing，把删除锁成「正确行为」。
+verify-app-uat-widget-key-references:
+	@python3 quwoquan_ops/gate/verify_app_uat_widget_key_references.py
+
 verify-app-native-edge-navigation:
 	@python3 quwoquan_app/scripts/runtime/page/verify_native_edge_navigation.py
 
@@ -974,10 +983,12 @@ verify-assistant-agent-replay-evaluation:
 
 gate:
 	@$(MAKE) verify-global-increment-constraints
+	@$(MAKE) verify-local-worktree-lifecycle
 	@$(MAKE) verify-agent-context-budget
 	@$(MAKE) verify-retired-runtime-architecture
 	@$(MAKE) verify-service-ddd-cqrs-baseline
 	@$(MAKE) verify-service-architecture
+	@$(MAKE) verify-service-probe-homology
 	@$(MAKE) verify-commercial-contract-generation
 	@$(MAKE) verify-behavior-event-type-contract
 	@$(MAKE) verify-object-relation-edge-type-contract
@@ -1164,10 +1175,20 @@ config-slo-gate:
 	@python3 quwoquan_ops/cli/stackctl.py verify --kind config-slo --profile baseline --prometheus-url "$(PROMETHEUS_URL)"
 
 .PHONY: commit-gate gate-smoke gate-integration gate-release test-api-contract test-api-contract-chat
+.PHONY: install-hooks verify-local-worktree-lifecycle
 
 # L0 本地入库门禁（pre-commit 同源）：并行静态 + 影响面测试，目标 ≤10m / 硬顶 15m。
 commit-gate:
 	@bash quwoquan_ops/gate/commit_gate.sh
+
+# 安装仓内 git hooks（core.hooksPath）。幂等，回读校验通过才算成功。
+install-hooks:
+	@bash quwoquan_ops/hooks/run_install_hooks.sh
+
+# 本地工作副本生命周期：hooks 安装自检 + 未合入滞留识别。
+# 必须留在 gate 链上：hooks 失效时 pre-commit 恰好不会运行，自检不能只挂在 pre-commit。
+verify-local-worktree-lifecycle:
+	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_local_worktree_lifecycle.py
 .PHONY: prepare-test-python verify-test-no-fake verify-test-nonfunctional-coverage verify-test-directory-layout verify-test-coverage-map
 .PHONY: verify-execution-profiles
 .PHONY: test-local-contract test-app-python-local-contract test-runtime-local-contract test-api-integration test-runtime-api-integration test-runtime-api-integration-gamma test-user-acceptance verify-homepage-performance-evidence

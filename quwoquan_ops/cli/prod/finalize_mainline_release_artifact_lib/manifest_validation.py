@@ -68,6 +68,7 @@ def _validate_required_evidence(value: Any) -> dict[str, Any]:
         "environmentArtifacts",
         "configurationPackages",
         "applicationPackages",
+        "opsPortal",
         "contractGraphDigest",
         "providerEvidence",
         "testEvidence",
@@ -102,18 +103,13 @@ def _validate_required_evidence(value: Any) -> dict[str, Any]:
             configuration_packages[environment],
             f"requiredEvidence.configurationPackages.{environment}",
         )
-    applications = value["applicationPackages"]
-    if not isinstance(applications, dict) or set(applications) != set(ENVIRONMENTS):
-        raise ValueError("requiredEvidence.applicationPackages is not four-environment")
-    for environment in ENVIRONMENTS:
-        surfaces = _require_string_list(
-            applications[environment],
-            f"requiredEvidence.applicationPackages.{environment}",
-        )
-        if tuple(surfaces) != APPLICATION_PACKAGES[environment]:
-            raise ValueError(
-                f"requiredEvidence.applicationPackages.{environment} is not canonical"
-            )
+    applications = _require_string_list(
+        value["applicationPackages"], "requiredEvidence.applicationPackages"
+    )
+    if tuple(applications) != APPLICATION_PACKAGES:
+        raise ValueError("requiredEvidence.applicationPackages is not canonical")
+    if value["opsPortal"] is not True:
+        raise ValueError("requiredEvidence.opsPortal must be independently required")
     layers = _require_string_list(value["testEvidence"], "requiredEvidence.testEvidence")
     if tuple(layers) != TEST_LAYERS:
         raise ValueError("requiredEvidence.testEvidence is not canonical")
@@ -152,30 +148,26 @@ def _validate_packages(
     return value
 
 
-def _validate_application_packages(
-    value: Any,
-    *,
-    environment: str,
-) -> dict[str, dict[str, Any]]:
-    expected = set(APPLICATION_PACKAGES[environment])
-    if not isinstance(value, dict) or set(value) != expected:
-        raise ValueError(f"applicationPackages.{environment} set is not canonical")
-    source_refs: set[str] = set()
-    for surface, descriptor in value.items():
-        label = f"applicationPackages.{environment}.{surface}"
-        if not isinstance(descriptor, dict) or set(descriptor) != APPLICATION_DESCRIPTOR_FIELDS:
-            raise ValueError(f"{label} descriptor is not canonical")
-        _validate_relative_path(descriptor.get("path"), label)
-        for digest_key in ("digest", "packageDigest"):
-            if DIGEST_PATTERN.fullmatch(str(descriptor.get(digest_key) or "")) is None:
-                raise ValueError(f"{label}.{digest_key} is not immutable")
-        source_ref = str(descriptor.get("sourceRef") or "")
-        if OCI_DIGEST_REF_PATTERN.fullmatch(source_ref) is None:
-            raise ValueError(f"{label}.sourceRef is not an immutable OCI reference")
-        source_refs.add(source_ref)
-    if len(source_refs) != 1:
-        raise ValueError(
-            f"applicationPackages.{environment} must use one application evidence OCI"
+def _validate_content_descriptor(value: Any, *, label: str) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != APPLICATION_DESCRIPTOR_FIELDS:
+        raise ValueError(f"{label} descriptor is not canonical")
+    _validate_relative_path(value.get("path"), label)
+    for digest_key in ("digest", "packageDigest"):
+        if DIGEST_PATTERN.fullmatch(str(value.get(digest_key) or "")) is None:
+            raise ValueError(f"{label}.{digest_key} is not immutable")
+    source_ref = str(value.get("sourceRef") or "")
+    if OCI_DIGEST_REF_PATTERN.fullmatch(source_ref) is None:
+        raise ValueError(f"{label}.sourceRef is not an immutable OCI reference")
+    return value
+
+
+def _validate_application_packages(value: Any) -> dict[str, dict[str, Any]]:
+    if not isinstance(value, dict) or set(value) != set(APPLICATION_PACKAGES):
+        raise ValueError("applicationPackages must contain exactly five build products")
+    for build_product_id, descriptor in value.items():
+        _validate_content_descriptor(
+            descriptor,
+            label=f"applicationPackages.{build_product_id}",
         )
     return value
 
@@ -196,8 +188,9 @@ def _validate_images(
             raise ValueError(f"{label} must be an object")
         repository = str(image.get("repository") or "").strip()
         transport_ref = str(image.get("transportRef") or "").strip()
-        if not repository.endswith(f"/{owner}-{environment}"):
-            raise ValueError(f"{label} repository is not environment-bound")
+        trust_domain = "prod" if environment == "prod" else "nonprod"
+        if not repository.endswith(f"/{owner}-{trust_domain}"):
+            raise ValueError(f"{label} repository is not trust-domain-bound")
         if not repository.startswith("ghcr.io/") or not transport_ref.startswith(
             repository + ":"
         ):
@@ -248,7 +241,10 @@ def _validate_environment_artifacts(
 
     if not isinstance(value, dict) or set(value) != set(ENVIRONMENTS):
         raise ValueError("environmentArtifacts must contain alpha/beta/gamma/prod")
-    seen_digests: dict[str, str] = {}
+    # DEC-005 信任域裁决：alpha/beta/gamma 同 owner 必须共享同一 nonprod digest，
+    # prod 属于独立信任域（编译期 Provider binding 不同），digest 必须分叉。
+    nonprod_digests: dict[str, str] = {}
+    prod_digests: dict[str, str] = {}
     for environment in ENVIRONMENTS:
         artifact = value[environment]
         if not isinstance(artifact, dict) or set(artifact) != {
@@ -272,24 +268,43 @@ def _validate_environment_artifacts(
             label=f"environmentArtifacts.{environment}.configurationPackages",
         )
         declared = artifact.get("environmentArtifactDigest")
-        projection_artifact = dict(artifact)
-        projection_artifact["environmentArtifactDigest"] = None
-        expected_digest = canonical_environment_artifact_digest(
-            {"environmentArtifacts": {environment: projection_artifact}}, environment
-        )
-        if declared != expected_digest:
-            raise ValueError(
-                f"environmentArtifacts.{environment} digest mismatch"
+        if status == "build-input":
+            # build-input 阶段镜像尚未 immutable，组合身份只由内容摘要构成
+            # （DEC-006），因此环境摘要必须缺席，不得由 transport locator 预先合成。
+            if declared is not None:
+                raise ValueError(
+                    f"environmentArtifacts.{environment} digest must be absent "
+                    "before images are immutable"
+                )
+        else:
+            projection_artifact = dict(artifact)
+            projection_artifact["environmentArtifactDigest"] = None
+            expected_digest = canonical_environment_artifact_digest(
+                {"environmentArtifacts": {environment: projection_artifact}},
+                environment,
             )
+            if declared != expected_digest:
+                raise ValueError(
+                    f"environmentArtifacts.{environment} digest mismatch"
+                )
         if status != "build-input":
-            for image in images.values():
+            for owner, image in images.items():
                 digest = str(image["digest"])
-                previous_environment = seen_digests.setdefault(digest, environment)
-                if previous_environment != environment:
-                    raise ValueError(
-                        "environmentArtifacts reuse an image digest across environments: "
-                        f"{previous_environment}/{environment}"
-                    )
+                if environment == "prod":
+                    prod_digests[str(owner)] = digest
+                else:
+                    previous = nonprod_digests.setdefault(str(owner), digest)
+                    if previous != digest:
+                        raise ValueError(
+                            "nonprod environmentArtifacts must share one image "
+                            f"digest per owner: {owner} diverges at {environment}"
+                        )
+    for owner, digest in prod_digests.items():
+        if nonprod_digests.get(owner) == digest:
+            raise ValueError(
+                "prod environmentArtifacts must not reuse the nonprod "
+                f"trust-domain image digest: {owner}"
+            )
     return value
 
 
@@ -308,17 +323,10 @@ def _forbidden_field_paths(value: Any, prefix: str = "") -> list[str]:
 
 
 def _validate_candidate_evidence(manifest: dict[str, Any]) -> None:
-    applications = manifest.get("applicationPackages")
-    if not isinstance(applications, dict) or set(applications) != set(ENVIRONMENTS):
-        raise ValueError("applicationPackages must contain four environments")
-    for environment in ENVIRONMENTS:
-        _validate_application_packages(
-            applications[environment], environment=environment
-        )
+    applications = _validate_application_packages(manifest.get("applicationPackages"))
+    _validate_content_descriptor(manifest.get("opsPortal"), label="opsPortal")
     application_evidence_refs = {
-        descriptor["sourceRef"]
-        for packages in applications.values()
-        for descriptor in packages.values()
+        descriptor["sourceRef"] for descriptor in applications.values()
     }
     if len(application_evidence_refs) != 1:
         raise ValueError("applicationPackages must use one application evidence OCI")
@@ -515,11 +523,12 @@ def _expected_gaps(manifest: dict[str, Any], status: str) -> tuple[list[str], li
         )
     if status in {"build-input", "component-ready"}:
         missing.extend(
-            f"applicationPackages.{environment}.{surface}"
-            for environment in ENVIRONMENTS
-            for surface in APPLICATION_PACKAGES[environment]
+            f"applicationPackages.{build_product_id}"
+            for build_product_id in APPLICATION_PACKAGES
         )
-        missing.extend(("contractGraphDigest", "providerEvidence", "testEvidence"))
+        missing.extend(
+            ("opsPortal", "contractGraphDigest", "providerEvidence", "testEvidence")
+        )
     present_environments = set(manifest.get("environmentReceipts") or {})
     missing.extend(
         f"environmentReceipts.{environment}"
@@ -636,10 +645,10 @@ def validate_manifest(
     )
 
     if status in {"build-input", "component-ready"}:
-        if manifest.get("applicationPackages") != {
-            environment: {} for environment in ENVIRONMENTS
-        }:
+        if manifest.get("applicationPackages") != {}:
             raise ValueError("applicationPackages must remain empty before candidate-ready")
+        if manifest.get("opsPortal") is not None:
+            raise ValueError("opsPortal must remain absent before candidate-ready")
         if manifest.get("contractGraphDigest") is not None:
             raise ValueError("contractGraphDigest must remain empty before candidate-ready")
         if manifest.get("providerEvidence") != {} or manifest.get("testEvidence") != {}:

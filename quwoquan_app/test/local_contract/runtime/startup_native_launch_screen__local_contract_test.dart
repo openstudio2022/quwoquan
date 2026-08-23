@@ -264,9 +264,13 @@ void main() {
         gate,
         contains('StartupHealthStore.enqueueConfirmedStartupFatal(this)'),
       );
+      // 恢复页有多个进入分支（runtime config activation 失败、confirmed fatal），
+      // 因此顺序只能在 fatal 分支内部锚定，不能用全文首次出现位置。
+      final fatalEnqueueIndex = gate.indexOf('enqueueConfirmedStartupFatal(this)');
+      expect(fatalEnqueueIndex, greaterThanOrEqualTo(0));
       expect(
-        gate.indexOf('enqueueConfirmedStartupFatal(this)'),
-        lessThan(gate.indexOf('showNativeStartupRecovery();')),
+        gate.indexOf('showNativeStartupRecovery();', fatalEnqueueIndex),
+        greaterThan(fatalEnqueueIndex),
       );
       expect(gate, contains('STATE_MAIN_HANDOFF_STARTED'));
       expect(gate, contains('mainHandoffStarted = true;'));
@@ -332,12 +336,17 @@ void main() {
       );
       expect(gate, isNot(contains('FlutterEngine')));
       expect(gate, isNot(contains('StartupEagerPluginRegistry')));
-      expect(health, contains('BuildConfig.QWQ_RUNTIME_CONFIG_DIGEST'));
+      expect(health, contains('AndroidRuntimeConfig.createStore(context)'));
+      expect(health, contains('.currentIdentity()'));
       expect(
         health,
-        contains('BuildConfig.QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST'),
+        isNot(contains('BuildConfig.QWQ_RUNTIME_CONFIG_DIGEST')),
       );
-      expect(health, contains('BuildConfig.QWQ_RUNTIME_ENVIRONMENT'));
+      expect(
+        health,
+        isNot(contains('BuildConfig.QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST')),
+      );
+      expect(health, isNot(contains('BuildConfig.QWQ_RUNTIME_ENVIRONMENT')));
       expect(health, contains('STARTED_AT_KEY'));
       expect(
         health.indexOf('latestExit.getTimestamp() < previousStartedAt'),
@@ -445,8 +454,8 @@ void main() {
         patrolHostGradle,
         contains('pl.leancode.patrol.PatrolJUnitRunner'),
       );
-      expect(gradle, contains('"QWQ_RUNTIME_CONFIG_DIGEST"'));
-      expect(gradle, contains('expectedRuntimeConfigDigest'));
+      expect(gradle, isNot(contains('"QWQ_RUNTIME_CONFIG_DIGEST"')));
+      expect(gradle, isNot(contains('expectedRuntimeConfigDigest')));
       expect(gradle, isNot(contains('nativeRuntimeConfigDigest')));
     });
 
@@ -1137,17 +1146,17 @@ void main() {
       final bootstrap = _readAppFile(
         'lib/runtime/shell/startup/app_bootstrap.dart',
       );
-      expect(script, contains('print_app_env_dart_defines.py'));
-      expect(script, contains('use ./run.sh -d <device>'));
-      expect(script, contains('build_launcher_handoff.py'));
-      expect(script, contains('direct_flutter_run'));
-      expect(script, contains('DIRECT_RUNTIME_DEFINES_JSON'));
-      expect(script, contains('runtimeDefines'));
+      expect(script, contains(r'ios-${BUILD_PROFILE}-app'));
+      expect(script, contains('runtime-config-package.json'));
+      expect(script, contains('runtime-config-trust.json'));
+      expect(script, contains('QWQ_IOS_RUNTIME_CONFIG_PACKAGE_PATH'));
+      expect(script, contains('QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH'));
+      expect(script, contains('runtime configuration is forbidden in DART_DEFINES'));
+      expect(script, isNot(contains('runtimeDefines')));
+      expect(script, isNot(contains('QWQNativeRuntime.plist')));
       expect(script, contains('print("export FLUTTER_TARGET="'));
-      expect(script, contains('consumer-lease acquire'));
-      expect(script, contains('--platform ios-simulator'));
       expect(script, contains('QWQ_IOS_DART_DEFINES_READY'));
-      expect(wrapper, contains('runtime package preparation failed'));
+      expect(wrapper, contains('trust envelope preparation failed'));
       expect(wrapper, contains('first typed blocker'));
       expect(wrapper, isNot(contains('use quwoquan_app/run.sh')));
       expect(wrapper, contains('QWQ_IOS_DART_DEFINES_READY'));
@@ -1155,25 +1164,66 @@ void main() {
       expect(project, isNot(contains('eval \\"')));
       expect(appDelegate, contains('quwoquan/runtime/config'));
       expect(appDelegate, contains('readRuntimeConfig'));
+      expect(appDelegate, contains('readRuntimeConfigState'));
+      expect(appDelegate, isNot(contains('installRuntimeConfigPackage')));
+      expect(appDelegate, contains('bundledTrustURL()'));
+      expect(appDelegate, contains('runtimePackageURL(createDirectory: false)'));
+      expect(appDelegate, contains('let trust = try loadTrustEnvelope()'));
+      expect(appDelegate, contains('guard let trustURL = bundledTrustURL()'));
+      expect(appDelegate, isNot(contains('nativeRuntimeIdentityManifest')));
+      expect(
+        appDelegate,
+        isNot(contains('runtimeConfigURL(fileName: nativeRuntimeTrustFileName)')),
+      );
+      expect(appDelegate, isNot(contains('bundleIdentifier.hasSuffix')));
+      expect(
+        appDelegate,
+        isNot(contains('object(forInfoDictionaryKey: "QWQRecoveryBaseURL")')),
+      );
       expect(nativeBridge, contains('quwoquan/runtime/config'));
       expect(nativeBridge, contains('readRuntimePackage'));
       expect(runtimeConfig, contains('hydrateFromNativeRuntimePackage'));
-      expect(runtimeConfig, contains('shouldLoadNativeRuntimePackage'));
       expect(
         bootstrap,
-        contains('NativeRuntimeConfigBridge.readRuntimePackage'),
+        contains('CloudRuntimeConfig.hydrateFromNativeRuntimePackage()'),
       );
       // configurationState 由唯一生产解析器产出，facade 只做投影。
       final runtimePackageResolver = _readAppFile(
         'lib/runtime/config/runtime_package_resolver.dart',
       );
       expect(
-        runtimePackageResolver,
-        contains("'configurationState': 'pending_native'"),
+        runtimeConfig,
+        contains("'configurationState': 'missing'"),
       );
       expect(startupRuntime, contains('startup_runtime_configured'));
       expect(logHygiene, contains('APP_ROOT / "run.sh"'));
       expect(logHygiene, isNot(contains('cmd = ["flutter", "run"')));
+    });
+
+    test('Android runtime config channel 只读且 activation 仅由 canonical coordinator 写入', () {
+      final activity = _readAppFile(
+        'android/app/src/main/java/com/quwoquan/quwoquan_app/MainActivity.java',
+      );
+      final store = _readAppFile(
+        'android/app/src/main/java/com/quwoquan/quwoquan_app/RuntimeConfigPackageStore.java',
+      );
+      final coordinator = _readAppFile(
+        'android/app/src/main/java/com/quwoquan/quwoquan_app/RuntimeConfigActivationCoordinator.java',
+      );
+      final retiredInstaller = _appFile(
+        'android/app/src/main/java/com/quwoquan/quwoquan_app/RuntimeConfigPackageInstaller.java',
+      );
+
+      expect(activity, contains('case "readRuntimeConfig":'));
+      expect(activity, contains('case "readRuntimeConfigState":'));
+      expect(activity, isNot(contains('installRuntimeConfigPackage')));
+      expect(activity, isNot(contains('RuntimeConfigPackageInstaller')));
+      expect(retiredInstaller.existsSync(), isFalse);
+      expect(store, contains('synchronized ActivationResult activate('));
+      expect(store, isNot(contains('runtime_config_install_arguments_invalid')));
+      expect(coordinator, contains('validateRequest(requestDocument)'));
+      expect(coordinator, contains('store.activate('));
+      expect(coordinator, contains('commitActivationReceipts('));
     });
 
     test('Android 插件由稳定应用注册器分层装配，生成注册器不在构建期修改', () {
@@ -1196,6 +1246,15 @@ void main() {
       final activity = _readAppFile(
         'android/app/src/main/java/com/quwoquan/quwoquan_app/MainActivity.java',
       );
+      final runtimeConfigStore = _readAppFile(
+        'android/app/src/main/java/com/quwoquan/quwoquan_app/RuntimeConfigPackageStore.java',
+      );
+      final runtimeConfigCoordinator = _readAppFile(
+        'android/app/src/main/java/com/quwoquan/quwoquan_app/RuntimeConfigActivationCoordinator.java',
+      );
+      final retiredRuntimeConfigInstaller = _appFile(
+        'android/app/src/main/java/com/quwoquan/quwoquan_app/RuntimeConfigPackageInstaller.java',
+      );
       expect(pluginPolicy, contains('startupPostFirstFrame'));
       expect(pluginPolicy, contains('eagerRuntime'));
       expect(pluginPolicy, contains('contentEntry'));
@@ -1217,11 +1276,28 @@ void main() {
         lessThan(activity.indexOf('super.onCreate(savedInstanceState);')),
       );
       expect(activity, contains('android_dart_jni_class_loader_initialized'));
-      expect(
-        activity,
-        contains('Iterator<String> names = runtimeDefines.keys()'),
-      );
-      expect(activity, contains('android_runtime_configured'));
+      expect(activity, isNot(contains('installRuntimeConfigPackage')));
+      expect(activity, isNot(contains('RuntimeConfigPackageInstaller')));
+      expect(activity, contains('readRuntimeConfigState'));
+      expect(retiredRuntimeConfigInstaller.existsSync(), isFalse);
+      expect(runtimeConfigStore, contains('runtime-config-package.json'));
+      expect(runtimeConfigStore, contains('runtime-config-trust.json'));
+      expect(runtimeConfigStore, contains('noBackupRoot'));
+      expect(runtimeConfigStore, contains('ReadKind'));
+      expect(runtimeConfigStore, isNot(contains('BuildConfig')));
+      expect(runtimeConfigStore, contains('expectedActiveDigest'));
+      expect(runtimeConfigStore, contains('Ed25519Verify'));
+      expect(runtimeConfigStore, isNot(contains('getAssets().open(PACKAGE_FILE_NAME')));
+      expect(runtimeConfigCoordinator, contains('REQUEST_FIELDS'));
+      expect(runtimeConfigCoordinator, contains('validateRequest(requestDocument)'));
+      expect(runtimeConfigStore, isNot(contains('runtime_config_install_arguments_invalid')));
+      expect(runtimeConfigCoordinator, contains('store.activate('));
+      expect(runtimeConfigCoordinator, contains('commitActivationReceipts('));
+      expect(activity, isNot(contains('cachedNativeRuntimeConfigEnvelope')));
+      expect(activity, contains('result.error('));
+      expect(activity, contains('result.error('));
+      expect(activity, contains('error.code,'));
+      expect(activity, isNot(contains('QWQ_RUNTIME_DART_DEFINES_JSON')));
       expect(eagerRegistry, isNot(contains('FlutterWebRTCPlugin')));
       expect(eagerRegistry, isNot(contains('CameraAndroidCameraxPlugin')));
       expect(deferredRegistry, contains('FlutterWebRTCPlugin'));
@@ -1235,11 +1311,11 @@ void main() {
         isNot(contains('super.configureFlutterEngine(flutterEngine);')),
       );
       expect(gradle, contains('afterEvaluate {'));
-      expect(gradle, contains('buildCanonicalDirectDebugHandoff'));
-      expect(gradle, contains('direct_flutter_run'));
-      expect(gradle, contains('direct-debug'));
-      expect(gradle, contains('QWQ_RUNTIME_DART_DEFINES_JSON'));
-      expect(gradle, contains('app-debug-preflight'));
+      expect(gradle, contains('forbiddenRuntimeDartDefineKeys'));
+      expect(gradle, isNot(contains('buildCanonicalDirectDebugHandoff')));
+      expect(gradle, isNot(contains('build_launcher_handoff.py')));
+      expect(gradle, isNot(contains('app-debug-preflight')));
+      expect(gradle, isNot(contains('QWQ_RUNTIME_DART_DEFINES_JSON')));
       // 内容激活是服务端运行时事实：Android 构建期与原生 handoff 都不得携带
       // 内容 release 身份，否则一次内容不可用会被误判成配置非法而阻断启动。
       for (final contentIdentityKey in const <String>[
@@ -1259,9 +1335,15 @@ void main() {
       final runtimePackageResolver = _readAppFile(
         'lib/runtime/config/runtime_package_resolver.dart',
       );
-      expect(runtimeConfig, contains('RuntimePackageResolver.resolve'));
-      expect(runtimePackageResolver, contains('nativeDriftKeys'));
-      expect(runtimePackageResolver, contains(r'NATIVE_RUNTIME_PACKAGE.$key'));
+      // 注入点语义是「默认走生产 resolver」，与 dart format 的换行位置无关。
+      expect(
+        runtimeConfig,
+        matches(
+          RegExp(r'\(resolver \?\? RuntimePackageResolver\(\)\)\s*\.resolve\('),
+        ),
+      );
+      expect(runtimePackageResolver, contains('trustedBuildProfile'));
+      expect(runtimePackageResolver, contains('trusted-public-keys-mismatch'));
       expect(runtimeConfig, contains('hydrateFromNativeRuntimePackage('));
       expect(
         runtimeConfig,
@@ -1275,39 +1357,33 @@ void main() {
         runtimeConfig,
         isNot(contains('clearNativeRuntimePackageForTest')),
       );
-      expect(gradle, contains('requireCompleteRuntimeDartDefines'));
-      expect(gradle, contains('verifyAndroidLocalLauncherContract'));
-      expect(gradle, contains('QWQ_CONSUMER_LEASE_ACQUIRED'));
-      expect(gradle, contains('QWQ_RUN_DEVICE_ID'));
-      expect(gradle, contains('QWQ_RUN_CONSUMER_ID'));
-      expect(gradle, contains('QWQ_ANDROID_LOCAL_PORTS'));
-      expect(gradle, contains('QWQ_ANDROID_REVERSE_EXPECTED_PORTS'));
-      expect(gradle, contains('QWQ_ANDROID_REVERSE_ACTUAL_PORTS'));
-      expect(gradle, contains('QWQ_ANDROID_REVERSE_RECEIPT_DIGEST'));
-      expect(gradle, isNot(contains('QWQ_LOCAL_TLS_BUNDLE_DIGEST')));
-      expect(gradle, contains('QWQ_CONSUMER_LEASE_ID'));
-      expect(gradle, contains('QWQ_RUNTIME_CONFIG_DIGEST'));
+      expect(gradle, isNot(contains('requireCompleteRuntimeDartDefines')));
+      expect(gradle, isNot(contains('verifyAndroidLocalLauncherContract')));
+      expect(gradle, isNot(contains('System.getenv("QWQ_APP_RUNTIME_ENV")')));
+      expect(gradle, isNot(contains('System.getenv("QWQ_LAUNCH_TARGET")')));
       expect(
         gradle,
-        contains(
-          'runtimeEnvironment in setOf("alpha", "beta", "gamma", "prod")',
-        ),
+        isNot(contains('System.getenv("QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST")')),
       );
       expect(
         gradle,
-        contains('expectedEnvironment = effectiveAppRuntimeEnvironment'),
+        isNot(contains('System.getenv("QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST")')),
       );
-      expect(gradle, isNot(contains('expectedEnvironment = "alpha"')));
+      for (final retiredField in const <String>[
+        'QWQ_RUNTIME_ENVIRONMENT',
+        'QWQ_RUNTIME_CONFIG_DIGEST',
+        'QWQ_DART_DEFINES_DIGEST',
+      ]) {
+        expect(gradle, isNot(contains(retiredField)));
+      }
       expect(gradle, isNot(contains('mergeAlphaLocalDartDefines')));
       expect(gradle, isNot(contains('prepareAndroidLocalAlphaStack')));
       expect(gradle, isNot(contains('prepareAndroidLocalAdbReverse')));
-      expect(gradle, contains('"consumer-lease",'));
-      expect(gradle, contains('handoffLocalPorts(directDebugHandoff)'));
       expect(gradle, contains('providers.gradleProperty("target-platform")'));
       expect(gradle, contains('abiFilters.addAll(flutterTargetAndroidAbis)'));
       expect(
         gradle,
-        contains('Flutter build requires complete runtime dart-defines'),
+        contains('Android compilation must not consume runtime environment'),
       );
       expect(
         activity,
@@ -1353,7 +1429,8 @@ void main() {
         'build_launcher_handoff.py',
         'QWQ_ANDROID_LOCAL_TARGET',
         'consumer-lease acquire',
-        'runtimeConfigDigest',
+        'runtimeConfigPackageDigest',
+        'runtimeConfigTrustEnvelopeDigest',
         'QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST',
         '--transport-required',
         'QWQ_CONSUMER_LEASE_ID',

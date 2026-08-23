@@ -18,12 +18,23 @@
     "status": {"const": "compiled"},
     "intent": {
       "type": "object",
-      "required": ["vertical", "regionRef", "topic"],
+      "required": ["vertical", "regionRef", "scopeType", "primaryTopicRef", "relatedTopicRefs"],
       "additionalProperties": false,
       "properties": {
         "vertical": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"},
         "regionRef": {"type": "string", "minLength": 1},
-        "topic": {"type": ["string", "null"]}
+        "scopeType": {"enum": ["vertical", "region", "topic", "region_topic"]},
+        "primaryTopicRef": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "pattern": "^Topic/.+$"}
+          ]
+        },
+        "relatedTopicRefs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^Topic/.+$"}
+        }
       }
     },
     "lifecycle": {"enum": ["research", "commercial"]},

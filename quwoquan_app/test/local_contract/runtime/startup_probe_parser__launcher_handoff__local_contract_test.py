@@ -18,11 +18,9 @@ sys.path.insert(0, str(APP_DIR / "scripts/device"))
 sys.path.insert(0, str(APP_DIR / "scripts/runtime/platform"))
 sys.path.insert(0, str(APP_DIR / "test/support/runtime/launcher"))
 
-from build_launcher_handoff import (
-    dart_defines_digest,
-    effective_launch_manifest_digest,
-)
-from launcher_package_fixture import fixture_runtime_config_digest
+from build_launcher_handoff import effective_launch_manifest_digest
+from launcher_package_fixture import build_test_handoff
+import build_launcher_handoff as launcher
 from verify_flutter_run_defines import validate_flutter_run_defines
 from verify_startup_ttid_baseline import main as verify_startup_ttid_main
 from verify_startup_ttid_baseline import validate_commercial_uat
@@ -37,51 +35,28 @@ class StartupProbeParserContractTest(unittest.TestCase):
             effective_launch_manifest_digest(right),
         )
 
-    def test_launcher_handoff_validates_target_runner_and_digests(self) -> None:
-        defines = {
-            "APP_RUNTIME_ENV": "prod",
-            "CLOUD_GATEWAY_BASE_URL": "https://api.quwoquan.com",
-            "APP_LEGAL_BASE_URL": "https://quwoquan.com/legal",
-            "PUBLIC_WEB_BASE_URL": "https://quwoquan.com",
-            "MEDIA_AVATAR_CDN_BASE_URL": "https://cdn.quwoquan.com",
-            "MEDIA_IMAGE_CDN_BASE_URL": "https://cdn.quwoquan.com",
-            "MEDIA_VIDEO_CDN_BASE_URL": "https://cdn.quwoquan.com",
-            "MEDIA_UPLOAD_BASE_URL": "https://upload.quwoquan.com",
-            "RTC_MEDIA_CONNECTION_URL": "wss://rtc.quwoquan.com",
-        }
-        self.assertEqual(
-            validate_flutter_run_defines(
-                defines,
-                expected_env="prod",
-                target="prod-sim",
-                entrypoint="lib/main_prod.dart",
-                defines_digest=dart_defines_digest(defines),
-                runtime_config_digest=fixture_runtime_config_digest(
-                    "prod",
-                    "prod-sim",
-                ),
-            ),
-            [],
-        )
-        self.assertIn(
-            "target alpha-local requires APP_RUNTIME_ENV=alpha",
-            validate_flutter_run_defines(defines, target="alpha-local"),
-        )
-        alpha_defines = {**defines, "APP_RUNTIME_ENV": "alpha"}
-        self.assertEqual(
-            validate_flutter_run_defines(
-                alpha_defines,
-                expected_env="alpha",
-                target="alpha-local",
-                entrypoint="lib/main_prod.dart",
-                defines_digest=dart_defines_digest(alpha_defines),
-                runtime_config_digest=fixture_runtime_config_digest(
-                    "alpha",
-                    "alpha-local",
-                ),
-            ),
-            [],
-        )
+    def test_launcher_handoff_validates_target_profile_and_package_digest(self) -> None:
+        for environment, target, profile in (
+            ("alpha", "alpha-local", "nonprod"),
+            ("prod", "prod-sim", "prod"),
+        ):
+            with self.subTest(environment=environment, target=target):
+                handoff = build_test_handoff(
+                    launcher,
+                    environment,
+                    target,
+                    launch_mode="startup-probe-test",
+                )
+                self.assertEqual(handoff["buildProfile"], profile)
+                self.assertRegex(
+                    handoff["runtimeConfigPackageDigest"],
+                    r"^sha256:[0-9a-f]{64}$",
+                )
+                self.assertNotIn("dartDefines", handoff)
+                self.assertEqual(
+                    handoff["runtimeConfigPackage"]["environment"],
+                    environment,
+                )
 
     def test_launcher_handoff_validates_local_transport_receipts(self) -> None:
         defines = {

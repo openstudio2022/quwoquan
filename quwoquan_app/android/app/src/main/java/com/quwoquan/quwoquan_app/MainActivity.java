@@ -18,7 +18,7 @@ import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
@@ -81,6 +81,8 @@ public class MainActivity extends FlutterFragmentActivity {
   private volatile String currentDartAttemptId = "";
   private volatile String currentLaunchMode = "unknown";
   private volatile long currentDartAttemptStartedElapsedMs;
+  private RuntimeConfigPackageStore runtimeConfigPackageStore;
+  private RuntimeConfigActivationCoordinator runtimeConfigActivationCoordinator;
   private long firstFrameForegroundRemainingMs = FLUTTER_FIRST_FRAME_DEADLINE_MS;
   private long foregroundStartedElapsedMs;
 
@@ -213,23 +215,55 @@ public class MainActivity extends FlutterFragmentActivity {
             (MethodCall call, MethodChannel.Result result) -> {
               switch (call.method) {
                 case "getRecoveryContext":
-                  Map<String, Object> context = new HashMap<>();
-                  context.put("platform", "android");
-                  context.put("appVersion", BuildConfig.VERSION_NAME);
-                  context.put("buildNumber", BuildConfig.VERSION_CODE);
-                  context.put("osVersion", Build.VERSION.RELEASE);
-                  context.put("deviceModel", Build.MANUFACTURER + " " + Build.MODEL);
-                  context.put("environment", BuildConfig.QWQ_RUNTIME_ENVIRONMENT);
-                  context.put("recoveryBaseUrl", BuildConfig.QWQ_RECOVERY_BASE_URL);
-                  context.put("runtimeConfigDigest", BuildConfig.QWQ_RUNTIME_CONFIG_DIGEST);
-                  context.put(
-                      "effectiveLaunchManifestDigest",
-                      BuildConfig.QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST);
-                  context.put("publicWebUrl", BuildConfig.QWQ_PUBLIC_WEB_URL);
-                  context.put(
-                      "appDownloadBaseUrl",
-                      BuildConfig.QWQ_APP_DOWNLOAD_BASE_URL);
-                  result.success(context);
+                  startupWatchdogExecutor.execute(
+                      () -> {
+                        try {
+                          Map<String, Object> runtimeConfigEnvelope =
+                              readNativeRuntimeConfigPackage();
+                          Map<String, Object> packageDocument =
+                              runtimeConfigPackageFromEnvelope(runtimeConfigEnvelope);
+                          Map<String, Object> runtimeValues =
+                              runtimeValuesFromPackage(packageDocument);
+                          Map<String, Object> context = new HashMap<>();
+                          context.put("platform", "android");
+                          context.put("appVersion", BuildConfig.VERSION_NAME);
+                          context.put("buildNumber", BuildConfig.VERSION_CODE);
+                          context.put("osVersion", Build.VERSION.RELEASE);
+                          context.put(
+                              "deviceModel", Build.MANUFACTURER + " " + Build.MODEL);
+                          context.put(
+                              "environment",
+                              requireRuntimeConfigString(packageDocument, "environment"));
+                          context.put(
+                              "recoveryBaseUrl",
+                              requireRuntimeConfigString(runtimeValues, "gatewayBaseUrl"));
+                          context.put(
+                              "runtimeConfigDigest",
+                              requireRuntimeConfigString(
+                                  runtimeConfigEnvelope, "runtimeConfigPackageDigest"));
+                          context.put(
+                              "effectiveLaunchManifestDigest",
+                              requireRuntimeConfigString(
+                                  runtimeConfigEnvelope,
+                                  "effectiveLaunchManifestDigest"));
+                          context.put(
+                              "publicWebUrl",
+                              requireRuntimeConfigString(
+                                  runtimeValues, "publicWebBaseUrl"));
+                          context.put(
+                              "appDownloadBaseUrl",
+                              requireRuntimeConfigString(
+                                  runtimeValues, "appDownloadBaseUrl"));
+                          startupHandler.post(() -> result.success(context));
+                        } catch (RuntimeConfigPackageStore.RuntimeConfigException error) {
+                          startupHandler.post(
+                              () ->
+                                  result.error(
+                                      error.code,
+                                      "Native runtime recovery context is unavailable.",
+                                      null));
+                        }
+                      });
                   break;
                 case "openTrustedExternalUrl":
                   result.success(openTrustedRecoveryUrl(stringArgument(call, "url")));
@@ -312,40 +346,109 @@ public class MainActivity extends FlutterFragmentActivity {
   }
 
   private void registerNativeRuntimeConfigChannel(@NonNull FlutterEngine flutterEngine) {
+    if (runtimeConfigPackageStore == null) {
+      runtimeConfigPackageStore = AndroidRuntimeConfig.createStore(this);
+      runtimeConfigActivationCoordinator =
+          new RuntimeConfigActivationCoordinator(
+              getApplicationContext().getNoBackupFilesDir(), runtimeConfigPackageStore);
+    }
     new MethodChannel(
             flutterEngine.getDartExecutor().getBinaryMessenger(),
             "quwoquan/runtime/config")
         .setMethodCallHandler(
-            (MethodCall call, MethodChannel.Result result) -> {
-              if (!"readRuntimeConfig".equals(call.method)) {
-                result.notImplemented();
-                return;
-              }
-              Map<String, Object> values = new HashMap<>();
-              try {
-                JSONObject runtimeDefines =
-                    new JSONObject(BuildConfig.QWQ_RUNTIME_DART_DEFINES_JSON);
-                Iterator<String> names = runtimeDefines.keys();
-                while (names.hasNext()) {
-                  String name = names.next();
-                  String value = runtimeDefines.optString(name, "");
-                  if (!value.isEmpty()) {
-                    values.put(name, value);
-                  }
-                }
-              } catch (Exception ignored) {
-                // Dart 侧会把空配置收敛为既有 runtime configuration failure。
-              }
-              if (!BuildConfig.QWQ_LAUNCH_TARGET.isEmpty()) {
-                values.put("launchTarget", BuildConfig.QWQ_LAUNCH_TARGET);
-              }
-              if (!BuildConfig.QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST.isEmpty()) {
-                values.put(
-                    "effectiveLaunchManifestDigest",
-                    BuildConfig.QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST);
-              }
-              result.success(values);
-            });
+            (MethodCall call, MethodChannel.Result result) ->
+                startupWatchdogExecutor.execute(
+                    () -> handleNativeRuntimeConfigCall(call, result)));
+  }
+
+  private void handleNativeRuntimeConfigCall(MethodCall call, MethodChannel.Result result) {
+    try {
+      Object response;
+      switch (call.method) {
+        case "readRuntimeConfig":
+          response = readNativeRuntimeConfigPackage();
+          break;
+        case "readRuntimeConfigState":
+          response = runtimeConfigPackageStore.readStateEnvelope();
+          break;
+        default:
+          startupHandler.post(result::notImplemented);
+          return;
+      }
+      startupHandler.post(() -> result.success(response));
+    } catch (RuntimeConfigPackageStore.RuntimeConfigException error) {
+      Log.e(
+          STARTUP_TAG,
+          "android_runtime_config_operation_failed code=" + error.code,
+          error);
+      startupHandler.post(
+          () ->
+              result.error(
+                  error.code,
+                  "Native runtime configuration operation failed.",
+                  null));
+    } catch (RuntimeException error) {
+      Log.e(STARTUP_TAG, "android_runtime_config_internal_failure", error);
+      startupHandler.post(
+          () ->
+              result.error(
+                  "runtime_config_internal_failure",
+                  "Native runtime configuration operation failed.",
+                  null));
+    }
+  }
+
+  private Map<String, Object> readNativeRuntimeConfigPackage()
+      throws RuntimeConfigPackageStore.RuntimeConfigException {
+    return runtimeConfigActivationCoordinator.readVerifiedFlutterEnvelope();
+  }
+
+  private Map<String, Object> runtimeConfigPackageFromEnvelope(
+      Map<String, Object> envelope)
+      throws RuntimeConfigPackageStore.RuntimeConfigException {
+    Object rawPackage = envelope.get("package");
+    if (!(rawPackage instanceof Map)) {
+      throw new RuntimeConfigPackageStore.RuntimeConfigException(
+          "runtime_config_package_malformed");
+    }
+    Map<String, Object> packageDocument = new LinkedHashMap<>();
+    for (Map.Entry<?, ?> entry : ((Map<?, ?>) rawPackage).entrySet()) {
+      if (!(entry.getKey() instanceof String)) {
+        throw new RuntimeConfigPackageStore.RuntimeConfigException(
+            "runtime_config_package_malformed");
+      }
+      packageDocument.put((String) entry.getKey(), entry.getValue());
+    }
+    return packageDocument;
+  }
+
+  private Map<String, Object> runtimeValuesFromPackage(
+      Map<String, Object> packageDocument)
+      throws RuntimeConfigPackageStore.RuntimeConfigException {
+    Object rawRuntime = packageDocument.get("runtime");
+    if (!(rawRuntime instanceof Map)) {
+      throw new RuntimeConfigPackageStore.RuntimeConfigException(
+          "runtime_config_package_malformed");
+    }
+    Map<String, Object> runtimeValues = new LinkedHashMap<>();
+    for (Map.Entry<?, ?> entry : ((Map<?, ?>) rawRuntime).entrySet()) {
+      if (!(entry.getKey() instanceof String)) {
+        throw new RuntimeConfigPackageStore.RuntimeConfigException(
+            "runtime_config_package_malformed");
+      }
+      runtimeValues.put((String) entry.getKey(), entry.getValue());
+    }
+    return runtimeValues;
+  }
+
+  private String requireRuntimeConfigString(Map<String, Object> values, String key)
+      throws RuntimeConfigPackageStore.RuntimeConfigException {
+    Object rawValue = values.get(key);
+    if (!(rawValue instanceof String) || ((String) rawValue).trim().isEmpty()) {
+      throw new RuntimeConfigPackageStore.RuntimeConfigException(
+          "runtime_config_package_malformed");
+    }
+    return ((String) rawValue).trim();
   }
 
   private void completeDeferredPluginRegistration(
@@ -361,7 +464,19 @@ public class MainActivity extends FlutterFragmentActivity {
   }
 
   private boolean openTrustedRecoveryUrl(String rawUrl) {
-    return TrustedRecoveryUrls.open(this, rawUrl, STARTUP_TAG);
+    try {
+      return TrustedRecoveryUrls.open(
+          this,
+          rawUrl,
+          runtimeConfigPackageStore.readRecoveryRuntimeValues(),
+          STARTUP_TAG);
+    } catch (RuntimeConfigPackageStore.RuntimeConfigException error) {
+      Log.w(
+          STARTUP_TAG,
+          "android_recovery_runtime_config_unavailable code=" + error.code,
+          error);
+      return false;
+    }
   }
 
   private WechatSdkCoordinator wechatSdkCoordinator() {
@@ -693,8 +808,6 @@ public class MainActivity extends FlutterFragmentActivity {
                 + currentDartAttemptIsHotRestart
                 + " configurationState="
                 + configurationState
-                + " effectiveLaunchManifestDigest="
-                + BuildConfig.QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST
                 + (missingDefineKeys.isEmpty() ? "" : " missingDefineKeys=" + missingDefineKeys));
       } catch (Exception ignored) {
         Log.i(STARTUP_TAG, "android_dart_startup_attempt_invalid");
@@ -712,9 +825,7 @@ public class MainActivity extends FlutterFragmentActivity {
             "android_runtime_configured launchMode="
                 + currentLaunchMode
                 + " configurationState="
-                + configurationState
-                + " effectiveLaunchManifestDigest="
-                + BuildConfig.QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST);
+                + configurationState);
       } catch (Exception ignored) {
         Log.i(STARTUP_TAG, "android_runtime_configured_invalid");
       }

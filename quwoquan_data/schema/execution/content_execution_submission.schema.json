@@ -79,8 +79,8 @@
     "selector": { "type": "string", "minLength": 1 },
     "quota": { "type": "integer", "minimum": 1 },
     "count": { "type": "integer", "minimum": 1 },
-    "capacityCalibration": {
-      "$ref": "governed_capacity_calibration_receipt.schema.json#/$defs/sourceBinding"
+    "executionAuthority": {
+      "$ref": "execution_authority.schema.json"
     },
     "workerHostSetBinding": {
       "oneOf": [
@@ -179,7 +179,7 @@
       },
       "then": {
         "required": [
-          "capacityCalibration"
+          "executionAuthority"
         ],
         "properties": {
           "semanticSelectionId": { "enum": ["default", "cursor_grok", "cursor_auto"] }

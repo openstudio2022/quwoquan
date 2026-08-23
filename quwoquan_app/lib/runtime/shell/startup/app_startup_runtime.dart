@@ -2,8 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
 
-import 'package:flutter/foundation.dart'
-    show kProfileMode, kReleaseMode;
+import 'package:flutter/foundation.dart' show kProfileMode, kReleaseMode;
 import 'package:flutter/widgets.dart';
 import 'package:quwoquan_app/runtime/observability/analytics.dart';
 import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
@@ -232,17 +231,9 @@ final class AppStartupRuntime {
       StartupTelemetryPhase.configurationValidation,
       outcome: 'validated',
     );
-    final configured = _snapshot(phase: 'configuration_validation');
     _recordPlatformStartupEvent(
       eventName: 'startup_runtime_configured',
-      properties: configured.toJson(),
-    );
-    // launch attempt receipt 的 configurationState 只能从控制台回读，
-    // 这条证据与 runtime summary 同源，不另立判定。
-    developer.log(
-      'startup_configuration_state '
-      'state=${configured.configurationState ?? 'unobserved'}',
-      name: 'QWQStartup',
+      properties: _snapshot(phase: 'configuration_validation').toJson(),
     );
   }
 
@@ -713,7 +704,9 @@ final class AppStartupRuntime {
           buildMode: buildMode,
           launchProvenance: launchProvenance,
           launchManifestDigest:
-              launchManifestDigest.isEmpty ? null : launchManifestDigest,
+              launchManifestDigest == null || launchManifestDigest.isEmpty
+              ? null
+              : launchManifestDigest,
         ),
       ),
     );

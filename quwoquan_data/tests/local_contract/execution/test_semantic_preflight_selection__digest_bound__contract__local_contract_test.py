@@ -28,7 +28,9 @@ from core.control_types import AgentProvider
 from core.cursor_credentials import CURSOR_SENSITIVE_PROCESS_ENV_KEYS
 from core.io import read_json, write_json
 from core.runtime_policy import active_runtime_policy
-from support.capacity_calibration_fixture import synthetic_capacity_source_binding
+from support.capacity_calibration_fixture import (
+    synthetic_governed_execution_authority,
+)
 from support.semantic_preflight_fixture import ready_semantic_preflight
 
 
@@ -441,9 +443,9 @@ def test_frozen_and_direct_admission_reuse_expired_receipt_identity(
         "entityCatalogDigest": "sha256:" + "d" * 64,
         "semanticSelectionId": "cursor_auto",
         "semanticPreflightReceipt": binding,
-        # A frozen plan carries its governed capacity source; this test is about
-        # preflight receipt identity, so the synthetic binding stands in for it.
-        "capacityCalibration": synthetic_capacity_source_binding(
+        # A frozen plan carries its governed execution authority; this test is
+        # about preflight receipt identity, so the synthetic one stands in.
+        "executionAuthority": synthetic_governed_execution_authority(
             provider_tier="cursor_auto"
         ),
         "laneExternalInputs": {

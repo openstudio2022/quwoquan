@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-001
+
 import tempfile
 from pathlib import Path
 
@@ -497,8 +499,9 @@ def _write_uat_analysis_coverage_fixture(root: Path) -> tuple[Path, Path]:
     )
     gate = root / "gate_repo.sh"
     gate.write_text(
-        "flutter analyze test/canonical/user_acceptance "
-        "test/canonical/support/runtime/patrol\n",
+        "(cd quwoquan_app/test_host/patrol && flutter analyze \\\n"
+        "  lib test/patrol test/canonical/user_acceptance "
+        "test/canonical/support/runtime/patrol)\n",
         encoding="utf-8",
     )
     return app, gate
@@ -566,6 +569,49 @@ def test_uat_analysis_coverage_rejects_unexcluded_main_app_analysis() -> None:
             for failure in failures
             if failure.startswith("APP.PACKAGE.uat_static_analysis_uncovered:")
             and "test/user_acceptance/**" in failure
+        ]
+
+
+def test_uat_analysis_coverage_rejects_a_new_exclude_without_a_witness() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        app, gate = _write_uat_analysis_coverage_fixture(Path(tmp))
+        (app / "analysis_options.yaml").write_text(
+            "analyzer:\n"
+            "  exclude:\n"
+            "    - test/user_acceptance/**\n"
+            "    - test/support/runtime/patrol/**\n"
+            "    - test/support/runtime/device/**\n",
+            encoding="utf-8",
+        )
+        failures: list[str] = []
+        _verify_uat_static_analysis_coverage(
+            failures, app_dir=app, gate_script=gate
+        )
+        assert [
+            failure
+            for failure in failures
+            if failure.startswith("APP.PACKAGE.uat_static_analysis_uncovered:")
+            and "test/support/runtime/device/**" in failure
+        ]
+
+
+def test_uat_analysis_coverage_rejects_a_commented_out_analysis_root() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        app, gate = _write_uat_analysis_coverage_fixture(Path(tmp))
+        gate.write_text(
+            "# test/canonical/user_acceptance test/canonical/support/runtime/patrol\n"
+            "(cd quwoquan_app/test_host/patrol && flutter analyze lib test/patrol)\n",
+            encoding="utf-8",
+        )
+        failures: list[str] = []
+        _verify_uat_static_analysis_coverage(
+            failures, app_dir=app, gate_script=gate
+        )
+        assert [
+            failure
+            for failure in failures
+            if failure.startswith("APP.PACKAGE.uat_static_analysis_uncovered:")
+            and "test/canonical/user_acceptance" in failure
         ]
 
 

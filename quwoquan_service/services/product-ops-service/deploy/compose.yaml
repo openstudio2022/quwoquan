@@ -14,6 +14,7 @@ services:
       SERVICE_NAME: product-ops-service
       APP_ENV: "${QWQ_COMPOSE_ENV:-gamma}"
       CONFIG_ROOT: /etc/qwq-config
+      QWQ_ARTIFACT_IDENTITY_FILE: /etc/quwoquan/artifact-identity.json
       CONFIG_VERSION: "${QWQ_COMPOSE_PRODUCT_OPS_SERVICE_CONFIG_VERSION:?QWQ_COMPOSE_PRODUCT_OPS_SERVICE_CONFIG_VERSION is required}"
       IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:?immutable image version is required}"
       PRODUCT_OPS_SERVICE_ADDR: ":18086"
@@ -66,6 +67,7 @@ services:
       - "${QWQ_COMPOSE_PRODUCT_OPS_SERVICE_PORT:-19250}:18086"
     volumes:
       - ${QWQ_COMPOSE_CONFIG_ROOT:?QWQ_COMPOSE_CONFIG_ROOT is required}:/etc/qwq-config:ro
+      - ${QWQ_COMPOSE_ARTIFACT_IDENTITY_FILE:?artifact identity mount is required}:/etc/quwoquan/artifact-identity.json:ro
       # ES 告警评估循环的执行策略（真相源在 quwoquan_ops）；是否启用由
       # telemetry_alerts.policy_path / alertmanager_url 配置决定。
       - ../../../../quwoquan_ops/observability/elasticsearch/product_telemetry_alerts.yaml:/etc/qwq/observability/product_telemetry_alerts.yaml:ro

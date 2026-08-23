@@ -149,7 +149,10 @@ def collect(
 
     output_dir.mkdir(parents=True, exist_ok=True)
     ordered: dict[str, dict[str, dict[str, Any]]] = {}
-    seen_digests: dict[str, str] = {}
+    # DEC-005 信任域裁决：alpha/beta/gamma 必须复用同一 nonprod digest，
+    # prod 属于独立信任域（编译期 Provider binding 不同），digest 必须分叉。
+    nonprod_digests: dict[str, str] = {}
+    prod_digests: dict[str, str] = {}
     for environment in ENVIRONMENTS:
         ordered[environment] = {}
         environment_dir = output_dir / environment
@@ -157,18 +160,27 @@ def collect(
         for owner in required[environment]:
             descriptor = descriptors[(environment, owner)]
             digest = str(descriptor["digest"])
-            previous_environment = seen_digests.setdefault(digest, environment)
-            if previous_environment != environment:
-                raise ValueError(
-                    "release images must not reuse a final digest across environments: "
-                    f"{previous_environment}/{environment}"
-                )
+            if environment == "prod":
+                prod_digests[str(owner)] = digest
+            else:
+                previous = nonprod_digests.setdefault(str(owner), digest)
+                if previous != digest:
+                    raise ValueError(
+                        "nonprod release images must share one digest per owner: "
+                        f"{owner} diverges at {environment}"
+                    )
             environment_dir.joinpath(f"{owner}.json").write_text(
                 json.dumps(descriptor, ensure_ascii=False, indent=2, sort_keys=True)
                 + "\n",
                 encoding="utf-8",
             )
             ordered[environment][owner] = descriptor
+    for owner, digest in prod_digests.items():
+        if nonprod_digests.get(owner) == digest:
+            raise ValueError(
+                "prod release images must not reuse the nonprod trust-domain "
+                f"digest: {owner}"
+            )
     return ordered
 
 

@@ -995,10 +995,15 @@ class AppUiSurfaces {
     owner: 'circle',
     routeId: 'gatheringDetail',
     pathTemplate: '/gatherings/{id}',
-    description: 'Gathering 公开详情、动态主动作与 Host 管理入口',
+    description: 'Gathering 公开详情、动态主动作、Host 管理入口与可选 Plan 协作',
     operationIds: <String>[
       'GetPublicGathering',
       'GetGathering',
+      'GetGatheringPlan',
+      'CreateGatheringPlan',
+      'ProposeGatheringPlan',
+      'CommitGatheringPlanProposal',
+      'ListGatheringPlanRevisions',
       'UpdateGathering',
       'JoinOpenGathering',
       'ApplyToGathering',
@@ -1030,6 +1035,7 @@ class AppUiSurfaces {
     operationIds: <String>[
       'GetGatheringChatBoard',
       'GetGathering',
+      'GetGatheringPlan',
     ],
   );
 

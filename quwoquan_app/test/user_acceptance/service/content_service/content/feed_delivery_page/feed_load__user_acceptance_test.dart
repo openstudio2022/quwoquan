@@ -27,7 +27,6 @@ import '../../../../../support/runtime/patrol/patrol_test_support.dart';
 
 const _feedCardProbeKeys = <ValueKey<String>>[
   ValueKey<String>('home-feed-card-0'),
-  ValueKey<String>('dual-discovery-card-0'),
 ];
 
 // dart-define 注入
@@ -84,10 +83,7 @@ void main() {
 List<String> _visibleFeedCardKeys() {
   final visible = <String>[];
   for (var index = 0; index < 20; index += 1) {
-    for (final prefix in const <String>[
-      'home-feed-card-',
-      'dual-discovery-card-',
-    ]) {
+    for (final prefix in const <String>['home-feed-card-']) {
       final key = '$prefix$index';
       if (find.byKey(ValueKey<String>(key)).evaluate().isNotEmpty) {
         visible.add(key);

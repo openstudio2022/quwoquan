@@ -59,7 +59,7 @@ const _gatewayBaseUrl = String.fromEnvironment('CLOUD_GATEWAY_BASE_URL');
 const _prodDisposableAccountConfirmed = bool.fromEnvironment(
   'QWQ_ACCOUNT_CLOSURE_DISPOSABLE_ACK',
 );
-const _homeSearchChrome = ValueKey<String>('home-search-chrome');
+const _homeSearchChrome = ValueKey<String>('home-primary-tab-chrome');
 
 final class _FixedAccessTokenProvider implements CloudAuthTokenProvider {
   const _FixedAccessTokenProvider(this.accessToken);

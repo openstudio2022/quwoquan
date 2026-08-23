@@ -405,10 +405,8 @@ def dispatch_reliabletask_checkpoint(
     stage: ExecutionStage,
 ) -> ReliableTaskDispatchResult | None:
     """Run the current checkpoint through the sole service-owned executor."""
-    if not uses_reliabletask(ctx):
-        return None
     queue_stage = _queue_stage_for(stage)
-    if queue_stage is None:
+    if queue_stage is None or not uses_reliabletask(ctx, stage=queue_stage):
         return None
     declared = _declared_jobs(ctx.execution_id, queue_stage)
     if not declared:
@@ -420,7 +418,15 @@ def dispatch_reliabletask_checkpoint(
         stage,
         queue_stage,
     ):
-        return None
+        if stage is not ExecutionStage.PUBLISH:
+            return None
+        return ReliableTaskDispatchResult(
+            stage=stage,
+            queue_stage=queue_stage,
+            status=ReliableTaskDispatchStatus.COMPLETED,
+            attempted_count=0,
+            completed_count=_delivered_count(ctx, stage, queue_stage),
+        )
     return _dispatch_fleet(ctx, stage, queue_stage)
 
 

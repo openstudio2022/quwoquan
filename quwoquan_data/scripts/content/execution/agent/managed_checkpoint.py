@@ -12,8 +12,8 @@ def _run_managed_checkpoint(ctx: ExecutionContext, stage: str) -> bool:
     from content.execution.agent.agent_runner import _terminate_workspace_cursor_bridges
     from content.execution.agent.agent_worker import _default_managed_agent_runner_isolated, _terminate_managed_agent_subprocesses
     from content.execution.agent.history import (
-        ManagedAgentRunRecord,
         ManagedAgentScheduler,
+        build_managed_agent_run_record,
         save_managed_agent_run,
     )
     from content.execution.agent.outcome import (
@@ -229,9 +229,8 @@ def _run_managed_checkpoint(ctx: ExecutionContext, stage: str) -> bool:
         yield_reason = "managed checkpoint interrupted"
         if finished_count > 0:
             yield_reason = "managed checkpoint interrupted after partial author progress"
-        partial_record = ManagedAgentRunRecord(
+        partial_record = build_managed_agent_run_record(
             stage=ExecutionStage(stage),
-            job_count=len(outcomes),
             planned_job_count=len(prompts),
             scheduler=ManagedAgentScheduler(
                 requested_max_workers=int(ctx.max_workers or 1),
@@ -246,10 +245,6 @@ def _run_managed_checkpoint(ctx: ExecutionContext, stage: str) -> bool:
                 finished_at=interrupted_at,
                 elapsed_seconds=round(max(0.0, time.monotonic() - checkpoint_started_mono), 3),
             ),
-            refs=tuple(out.ref for out in outcomes if out.ref),
-            started_count=started_count,
-            finished_count=finished_count,
-            infrastructure_failures=infrastructure_failures,
             outcomes=tuple(outcomes),
             finished_at=interrupted_at,
             status=ManagedAgentCheckpointStatus.INTERRUPTED,
@@ -293,9 +288,22 @@ def _run_managed_checkpoint(ctx: ExecutionContext, stage: str) -> bool:
     finished_at = store.now_iso()
     state = load_execution_state(ctx.execution_id)
     state.active_agent_scheduler = None
-    agent_run_record = ManagedAgentRunRecord(
-        stage=ExecutionStage(stage),
-        job_count=len(outcomes),
+    typed_stage = ExecutionStage(stage)
+    if typed_stage in {ExecutionStage.BUILD_HOMEPAGE, ExecutionStage.POST_AUTHOR}:
+        from content.execution.agent.checkpoint_exclusion import (
+            write_semantic_checkpoint_exclusion,
+        )
+
+        for outcome in outcomes:
+            if not outcome.succeeded and outcome.ref:
+                write_semantic_checkpoint_exclusion(
+                    ctx.execution_id,
+                    stage=typed_stage,
+                    job_outcome=outcome,
+                    recorded_at=finished_at,
+                )
+    agent_run_record = build_managed_agent_run_record(
+        stage=typed_stage,
         planned_job_count=len(prompts),
         scheduler=ManagedAgentScheduler(
             requested_max_workers=int(ctx.max_workers or 1),
@@ -310,10 +318,6 @@ def _run_managed_checkpoint(ctx: ExecutionContext, stage: str) -> bool:
             finished_at=finished_at,
             elapsed_seconds=round(max(0.0, time.monotonic() - checkpoint_started_mono), 3),
         ),
-        refs=tuple(out.ref for out in outcomes if out.ref),
-        started_count=started_count,
-        finished_count=finished_count,
-        infrastructure_failures=infrastructure_failures,
         outcomes=tuple(outcomes),
         finished_at=finished_at,
     )

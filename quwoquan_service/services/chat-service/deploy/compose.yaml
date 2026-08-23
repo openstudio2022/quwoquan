@@ -14,6 +14,7 @@ services:
       MODULE_PACKAGE: chat-service
       APP_ENV: "${QWQ_COMPOSE_ENV:-gamma}"
       CONFIG_ROOT: /etc/qwq-config
+      QWQ_ARTIFACT_IDENTITY_FILE: /etc/quwoquan/artifact-identity.json
       CONFIG_VERSION: "${QWQ_COMPOSE_CHAT_SERVICE_CONFIG_VERSION:?QWQ_COMPOSE_CHAT_SERVICE_CONFIG_VERSION is required}"
       IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:?immutable image version is required}"
       CHAT_SERVICE_ADDR: ":18081"
@@ -51,6 +52,7 @@ services:
       - "${QWQ_COMPOSE_CHAT_PORT:-19200}:18081"
     volumes:
       - ${QWQ_COMPOSE_CONFIG_ROOT:?QWQ_COMPOSE_CONFIG_ROOT is required}:/etc/qwq-config:ro
+      - ${QWQ_COMPOSE_ARTIFACT_IDENTITY_FILE:?artifact identity mount is required}:/etc/quwoquan/artifact-identity.json:ro
       - ${QWQ_COMPOSE_MEDIA_ROOT:-../../../.qwq_output/env/gamma/local/gamma-local/cache/media}:/var/lib/quwoquan/chat-media
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18081/healthz >/dev/null 2>&1"]

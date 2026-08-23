@@ -20,7 +20,10 @@ from content.execution.campaign.submission_reconciliation_contract import (
 from content.execution.identity import build_execution_id
 from core.io import read_json, write_json
 from core.source_digest import content_source_revision
-from support.capacity_calibration_fixture import synthetic_capacity_source_binding
+from support.capacity_calibration_fixture import (
+    synthetic_capacity_source_binding,
+    synthetic_governed_execution_authority,
+)
 from support.semantic_preflight_fixture import ready_semantic_preflight
 
 ROOT_ID = "20260808--travel-homepage-m1--china-beta-bootstrap-not-m100--scale-021"
@@ -97,7 +100,7 @@ def _write_boundary(
             "targetNames": list(target_names),
             "sourceProviders": [],
             "semanticSelectionId": "default",
-            "capacityCalibration": synthetic_capacity_source_binding(),
+            "executionAuthority": synthetic_governed_execution_authority(),
             "retryOf": execution_ids[carrier].replace("scale-021", "scale-020"),
             "gitBranch": "dev1.0",
             "gitCommitSha": "d" * 40,
@@ -150,7 +153,7 @@ def _write_boundary(
         "entityCatalogDigest": CATALOG_DIGEST,
         "semanticSelectionId": "default",
         "semanticPreflightReceipt": preflight,
-        "capacityCalibration": synthetic_capacity_source_binding(),
+        "executionAuthority": synthetic_governed_execution_authority(),
         "laneExternalInputs": lane_external_inputs,
         "externalInputsDigest": payload_digest(
             {

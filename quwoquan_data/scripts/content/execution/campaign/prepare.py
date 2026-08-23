@@ -15,10 +15,12 @@ from core.source_digest import current_source_digest
 from content.execution.campaign.lane import (
     CAMPAIGN_CARRIERS,
     normalize_active_carriers,
-    normalize_workloads,
+)
+from content.execution.campaign.prepare_input import (
+    parse_requested_workloads as _requested_workloads,
+    parse_source_selection as _parsed_source_selection,
 )
 from content.execution.campaign.request_envelope import (
-    normalize_execution_scope,
     write_scale_envelopes,
 )
 from content.execution.campaign.scale import (
@@ -67,26 +69,6 @@ def _retry_predecessors(args: argparse.Namespace) -> dict[str, str]:
     return {carrier: value for carrier, value in rows.items() if value}
 
 
-def _requested_workloads(args: argparse.Namespace) -> dict[str, int] | None:
-    rows = tuple(getattr(args, "workload_rows", ()) or ())
-    if not rows:
-        return None
-    parsed: dict[str, int] = {}
-    for raw in rows:
-        carrier, separator, quota_text = str(raw).partition("=")
-        carrier = carrier.strip()
-        if not separator or not quota_text.strip():
-            raise ValueError("--workload must use CARRIER=QUOTA")
-        if carrier in parsed:
-            raise ValueError(f"duplicate --workload carrier: {carrier}")
-        try:
-            quota = int(quota_text)
-        except ValueError as exc:
-            raise ValueError(f"invalid --workload quota: {raw}") from exc
-        parsed[carrier] = quota
-    return normalize_workloads(parsed)
-
-
 def _resolved_scale(args: argparse.Namespace, workloads: dict[str, int] | None) -> str:
     return resolve_campaign_scale(
         scale=(str(args.scale).strip() if str(args.scale or "").strip() else None),
@@ -121,8 +103,19 @@ def _summary(paths: dict[str, Path]) -> dict[str, Any]:
             str(envelope["quota"]),
             "--count",
             str(envelope["count"]),
-            "--capacity-calibration-receipt",
-            str(envelope["capacityCalibration"]["calibrationReceiptRef"]),
+            *(
+                [
+                    "--capacity-calibration-receipt",
+                    str(
+                        envelope["executionAuthority"]["calibration"][
+                            "calibrationReceiptRef"
+                        ]
+                    ),
+                ]
+                if envelope["executionAuthority"]["mode"]
+                == "governed_calibration"
+                else []
+            ),
             "--semantic-selection-id",
             str(envelope["semanticSelectionId"]),
             "--semantic-preflight-receipt",
@@ -245,7 +238,15 @@ def _require_phase_args(args: argparse.Namespace) -> None:
         workloads.keys() if workloads is not None else CAMPAIGN_CARRIERS
     )
     if phase == "handoff":
-        missing = _missing(args, "handoff_id", "handoff_revision")
+        missing = _missing(
+            args,
+            "handoff_id",
+            "handoff_revision",
+            "vertical",
+            "lifecycle",
+            "scope_type",
+            "source_selection_rows",
+        )
         envelope_only = [
             name
             for name in (
@@ -267,9 +268,14 @@ def _require_phase_args(args: argparse.Namespace) -> None:
             for carrier in CAMPAIGN_CARRIERS
             if getattr(args, f"{carrier}_retry_of", None)
         ]
+        flag_names = {"source_selection_rows": "source-selection"}
         if missing:
             raise ValueError(
-                "handoff phase requires: " + ", ".join(f"--{name.replace('_', '-')}" for name in missing)
+                "handoff phase requires: "
+                + ", ".join(
+                    "--" + flag_names.get(name, name.replace("_", "-"))
+                    for name in missing
+                )
             )
         if envelope_only or retry_fields:
             raise ValueError(
@@ -280,10 +286,12 @@ def _require_phase_args(args: argparse.Namespace) -> None:
                 )
             )
         return
+    # capacity_calibration_receipt 是否必需由 envelope builder 的互斥
+    # executionAuthority 判定裁决：bounded 小批禁止携带，governed 缺失即
+    # CALIBRATION_REQUIRED。CLI 只透传，不复制判定。
     required_inputs = [
         "handoff_ref",
         "semantic_preflight_receipt",
-        "capacity_calibration_receipt",
     ]
     if "homepage" in active:
         required_inputs.append("homepage_image_input")
@@ -299,6 +307,13 @@ def _require_phase_args(args: argparse.Namespace) -> None:
             "handoff_revision",
             "supersedes_handoff_ref",
             "campaign_retry_of",
+            "vertical",
+            "lifecycle",
+            "scope_type",
+            "region_ref",
+            "primary_topic_ref",
+            "related_topic_refs",
+            "source_selection_rows",
         )
         if getattr(args, name, None)
     ]
@@ -326,17 +341,16 @@ def _workload_targets(scale: str) -> dict[str, int]:
 
 def _handle_handoff(args: argparse.Namespace) -> None:
     repo_root = paths.REPO_ROOT.resolve()
-    region_ref = str(args.region_ref)
-    discovery = (
-        repo_root
-        / "quwoquan_data"
-        / "reference"
-        / "travel"
-        / "entities"
-        / region_ref
-    )
+    vertical = str(args.vertical or "").strip().lower()
+    if not vertical:
+        raise ValueError(
+            "handoff phase requires an explicit --vertical; silent defaults are forbidden"
+        )
+    region_ref = str(args.region_ref or "").strip() or None
+    entity_root = repo_root / "quwoquan_data" / "reference" / vertical / "entities"
+    discovery = entity_root / region_ref if region_ref else entity_root
     if not discovery.is_dir():
-        raise ValueError(f"region reference does not exist: {region_ref}")
+        raise ValueError(f"entity reference does not exist: {discovery}")
     from core.source_digest import (
         current_execution_bundle_identity,
         current_source_definition_snapshot,
@@ -357,10 +371,17 @@ def _handle_handoff(args: argparse.Namespace) -> None:
             else None
         ),
         scale=scale,
-        vertical="travel",
-        scope=normalize_execution_scope(region_ref, args.topic),
+        vertical=vertical,
+        lifecycle=str(args.lifecycle),
+        scope_type=str(args.scope_type),
         region_ref=region_ref,
-        topic=str(args.topic).strip() if str(args.topic or "").strip() else None,
+        primary_topic_ref=(
+            str(args.primary_topic_ref).strip()
+            if str(args.primary_topic_ref or "").strip()
+            else None
+        ),
+        related_topic_refs=tuple(args.related_topic_refs or ()),
+        source_selection=_parsed_source_selection(args),
         run_date=str(args.run_date),
         campaign_sequence=int(args.sequence),
         campaign_retry_of=(
@@ -412,17 +433,17 @@ def _handle_envelopes(args: argparse.Namespace) -> None:
     paths = write_scale_envelopes(
         _resolved_scale(args, requested_workloads),
         workloads=requested_workloads,
-        region_ref=str(args.region_ref),
-        topic=str(args.topic).strip() if str(args.topic or "").strip() else None,
         target_names=tuple(args.target_names or ()),
         source_providers=tuple(args.source_providers or ()),
         day=str(args.run_date),
         sequence=int(args.sequence),
         semantic_selection_id=str(args.semantic_selection_id),
         semantic_preflight_receipt=preflight,
-        capacity_calibration_receipt=Path(
-            str(args.capacity_calibration_receipt)
-        ).expanduser(),
+        capacity_calibration_receipt=(
+            Path(str(args.capacity_calibration_receipt)).expanduser()
+            if str(getattr(args, "capacity_calibration_receipt", "") or "").strip()
+            else None
+        ),
         predecessor_execution_ids_by_carrier=_retry_predecessors(args),
         predecessor_reconciliation_receipt=(
             Path(str(args.predecessor_reconciliation_receipt))
@@ -483,10 +504,34 @@ def register_prepare_campaign_parser(sub: argparse._SubParsersAction) -> None:
         metavar="CARRIER=QUOTA",
         help="显式 active workload；可重复，未提供时 --scale 作为四载体 preset",
     )
-    parser.add_argument("--region-ref", required=True)
+    parser.add_argument(
+        "--vertical",
+        help="handoff 阶段必填的显式垂类；禁止任何静默默认",
+    )
+    parser.add_argument("--lifecycle", choices=("research", "commercial"))
+    parser.add_argument(
+        "--scope-type",
+        choices=("vertical", "region", "topic", "region_topic"),
+    )
+    parser.add_argument("--region-ref")
     parser.add_argument("--run-date", required=True, help="YYYYMMDD；retry 保持前序日期")
     parser.add_argument("--sequence", required=True, type=int)
-    parser.add_argument("--topic")
+    parser.add_argument("--primary-topic-ref", help="canonical Topic/** 引用")
+    parser.add_argument(
+        "--related-topic-ref",
+        dest="related_topic_refs",
+        action="append",
+        default=[],
+        help="canonical Topic/** 引用；可重复，不含 primary",
+    )
+    parser.add_argument(
+        "--source-selection",
+        dest="source_selection_rows",
+        action="append",
+        default=[],
+        metavar="CARRIER=MODE:PROVIDER[,PROVIDER...]",
+        help="按载体来源策略；MODE 为 site_primary 或 search_supplement",
+    )
     parser.add_argument(
         "--target", dest="target_names", action="append", default=[]
     )

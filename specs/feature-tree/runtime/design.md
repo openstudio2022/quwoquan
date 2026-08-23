@@ -71,17 +71,18 @@
 - 关联能力：[`deliver-deploy-prod-pipeline`](./deliver-deploy-prod-pipeline/spec.md)、[`development-workflow-governance`](./development-workflow-governance/spec.md)、[`native-edge-gesture-navigation`](./native-edge-gesture-navigation/spec.md)、[`runtime-agentpack`](./runtime-agentpack/spec.md)、[`runtime-assistant`](./runtime-assistant/spec.md)、[`runtime-client-foundation`](./runtime-client-foundation/spec.md)、[`runtime-codegen`](./runtime-codegen/spec.md)、[`runtime-config`](./runtime-config/spec.md)、[`runtime-context`](./runtime-context/spec.md)、[`runtime-control-plane-foundation`](./runtime-control-plane-foundation/spec.md)、[`runtime-data-engineering`](./runtime-data-engineering/spec.md)、[`runtime-errors`](./runtime-errors/spec.md)、[`runtime-eventstore`](./runtime-eventstore/spec.md)、[`runtime-experiments`](./runtime-experiments/spec.md)、[`runtime-external-integration`](./runtime-external-integration/spec.md)、[`runtime-governance`](./runtime-governance/spec.md)、[`runtime-http`](./runtime-http/spec.md)、[`runtime-interceptor`](./runtime-interceptor/spec.md)、[`runtime-learning`](./runtime-learning/spec.md)、[`runtime-media`](./runtime-media/spec.md)、[`runtime-messaging`](./runtime-messaging/spec.md)、[`runtime-observability`](./runtime-observability/spec.md)、[`runtime-projector`](./runtime-projector/spec.md)、[`runtime-recommendation`](./runtime-recommendation/spec.md)、[`runtime-redis`](./runtime-redis/spec.md)、[`runtime-rpc`](./runtime-rpc/spec.md)、[`runtime-skill`](./runtime-skill/spec.md)、[`runtime-streaming`](./runtime-streaming/spec.md)、[`runtime-test-pyramid`](./runtime-test-pyramid/spec.md)、[`runtime-testinfra`](./runtime-testinfra/spec.md)、[`system-architecture-and-engineering-guide`](./system-architecture-and-engineering-guide/spec.md)
 
 <a id="dec-002"></a>
-### DEC-002 端云制品在构建期绑定环境且运行时只验证身份
+### DEC-002 可执行字节按信任域构建且环境配置在装配期绑定
 
-- 决策：同一受控 source capsule 先生成一个 `releaseTrainId`，再为 `alpha / beta / gamma / prod` 分别构建不可交换的环境制品。端侧由 flavor/scheme 在原生构建图解析前绑定环境；云侧由单环境 codegen、rendered config、Provider binding、endpoint authority、模块拓扑与六类镜像共同生成 `environmentArtifactDigest`。
-- 决策：业务进程只读取制品内嵌 identity core 与只读 activation manifest。`APP_ENV` 在迁移期只允许与内嵌环境做相等断言，不得选择配置、Adapter、endpoint、数据源或策略；迁移完成后从业务进程移除。
-- 决策：`prod-sim` 与 `prod-hosted` 同属 Prod 环境但拥有不同 target activation seal；prevalidate 与 rollout 只改变 authority receipt，不重构同一 `prod-hosted` payload。
-- 理由：运行时环境选择会让同一二进制被环境变量重新解释，也让配置、Provider 与候选身份分裂。构建期单环境闭包使跨环境镜像复用、替身注入和历史回执冒充当前事实都能在 listener 前被判定。
-- 被否决方案：四环境 Binding 表进入同一生产二进制、`APP_ENV` 运行时选表、同一最终镜像跨环境复用、共享 current-environment 生成文件、启动时重新 codegen，以及以字符串扫描代替最终 AOT/Go/OCI 可达性证明。
-- 失败恢复：启动 identity 任一字段不一致时 fail-closed；回滚只启动上一份同环境 artifact 的精确 image/config/binding/topology bytes，不允许只改环境变量或混搭候选。
-- 可测试观察面：local_contract 证明四环境 artifact digest 相互隔离，且单环境生成物不含其他环境。
-- 可测试观察面：api_integration 交换 image/config/binding 或篡改环境变量时，在 listener 前失败。
-- 可测试观察面：user_acceptance 回读 App 与服务同一 activation identity。
+- 决策：同一受控 source capsule 先生成一个 `releaseTrainId`，再按 `nonprod/prod` 信任域构建不可变组件。Alpha、Beta、Gamma 引用同一 nonprod App 与同一 owner 的 nonprod Cloud digest，Prod 引用独立 prod digest。四环境继续各自生成配置、SecretRef、endpoint、拓扑和 activation receipt，并在 release composition 中与兼容的组件摘要组合。
+- 决策：端侧由 `buildProfile` flavor/scheme 在原生构建图解析前绑定 application/bundle ID、签名、entitlements 与第三方 SDK 注册身份。环境名和 endpoint 只来自带 schema、签名、签发时间与 source digest 的 runtime config package。nonprod package 只允许 Alpha、Beta、Gamma，prod package 只允许 Prod，启动握手必须在进入业务 Shell 前验证 profile、environment、target、摘要和 staleness。
+- 决策：云侧每个服务仍以四环境目录独立 author 配置，但配置与 artifact identity 由部署面挂载。external Provider binding 保留编译期防污染边界并按信任域固化，前提是 Alpha、Beta、Gamma 的 binding 声明先收敛为同一 nonprod 视图。`APP_ENV` 只校验已装配配置的环境身份，不选择 Adapter、数据源或策略。
+- 决策：`prod-sim` 与 `prod-hosted` 同属 Prod 环境但拥有不同 target activation seal。prevalidate 与 rollout 只改变配置、authority receipt 或流量 activation，不重构同一组件字节。
+- 理由：环境差异属于配置与运行事实，不属于 compiler identity。按环境重复编译会扩大过期组合并让每次验证绑定不同字节。信任域构建与环境装配分离既阻断非生产 Provider 或身份进入 Prod，又允许未变组件按真实 digest 复用。
+- 被否决方案：按四环境重复编译、按渠道构建 APK、把 endpoint 或 rollout stage 写入字节、让 prod binary 读取 nonprod 配置、保留环境 flavor 与 profile flavor 双轨，以及以 cache/tag 冒充经过签名和 provenance 验证的组件。
+- 失败恢复：profile、runtime config、签名、摘要、target、environment 或 staleness 任一不一致时 fail-closed。回滚只重新组合上一份已验证组件摘要与对应环境配置，不允许混搭信任域或把失败降级为空配置继续运行。
+- 可测试观察面：local_contract 证明 Android/iOS 只有 nonprod/prod identity，Web 只有一个 build shard，Alpha/Beta/Gamma 引用相同 nonprod bytes digest。
+- 可测试观察面：api_integration 证明同一 nonprod bytes 分别装配 Alpha 与 Gamma 配置后 endpoint 和数据隔离正确，错配或过期配置在业务 listener 前失败。
+- 可测试观察面：user_acceptance 仍按 Alpha、Beta、Gamma、Prod 顺序回读 App、服务、配置和 activation identity，且 stage 或渠道变化不产生新组件。
 - 影响能力：[`runtime-config`](./runtime-config/spec.md)、[`deliver-deploy-prod-pipeline`](./deliver-deploy-prod-pipeline/spec.md)、[`runtime-external-integration`](./runtime-external-integration/spec.md)
 
 ## 6. 质量与运行约束

@@ -114,6 +114,7 @@ def _apply_candidate_evidence(
     evidence: dict[str, dict[str, Any]],
 ) -> None:
     manifest["applicationPackages"] = evidence["applicationPackages"]
+    manifest["opsPortal"] = evidence["opsPortal"]
     manifest["contractGraphDigest"] = evidence["contractGraph"]["digest"]
     provider = evidence["providerEvidence"]
     provider_payload = provider["payload"]
@@ -175,7 +176,7 @@ def finalize(
             raise ValueError("image evidence is only accepted from build-input")
         descriptors = load_image_descriptors(descriptors_dir)
         required = manifest["requiredEvidence"]["environmentArtifacts"]
-        seen_digests: dict[str, str] = {}
+        trust_domain_digests: dict[tuple[str, str], str] = {}
         for environment in ENVIRONMENTS:
             if set(descriptors[environment]) != set(required[environment]):
                 missing = sorted(
@@ -199,14 +200,25 @@ def finalize(
                     expected_transport_ref=str(current["transportRef"]),
                 )
                 digest = str(descriptor["digest"])
-                previous_environment = seen_digests.setdefault(digest, environment)
-                if previous_environment != environment:
+                trust_domain = "prod" if environment == "prod" else "nonprod"
+                previous = trust_domain_digests.setdefault(
+                    (trust_domain, str(owner)), digest
+                )
+                if previous != digest:
                     raise ValueError(
-                        "image descriptor reuses a digest across environments: "
-                        f"{previous_environment}/{environment}"
+                        "nonprod image descriptors must share one digest per owner: "
+                        f"{owner} diverges at {environment}"
                     )
                 images[owner] = descriptor
             manifest["environmentArtifacts"][environment]["images"] = images
+        for owner in required["prod"]:
+            if trust_domain_digests[("prod", owner)] == trust_domain_digests.get(
+                ("nonprod", owner)
+            ):
+                raise ValueError(
+                    "prod image descriptor must fork from the nonprod trust domain: "
+                    f"{owner}"
+                )
     elif artifact_descriptors_dir is not None:
         if original_status != "component-ready" or operations != 1:
             raise ValueError("candidate material is only accepted from component-ready")

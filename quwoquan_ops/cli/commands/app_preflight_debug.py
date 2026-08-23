@@ -184,6 +184,61 @@ def _execute_otp_login_journey(
     }
 
 
+def _runtime_container_liveness_evidence(
+    startup: Mapping[str, Any],
+) -> dict[str, Any]:
+    """复验 running receipt 声明的容器现况，供编译安装前阻断使用。"""
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    from quwoquan_ops.cli.lib.runtime_container_liveness import (
+        RUNTIME_DEPENDENCY_BLOCKER,
+        ComposeProjectAbsent,
+        verify_running_receipt_liveness,
+    )
+
+    empty = {
+        "status": "not_applicable",
+        "composeProject": str(startup.get("composeProject") or ""),
+        "blocker": "",
+        "containers": [],
+        "issues": [],
+        "warnings": [],
+    }
+    try:
+        report = verify_running_receipt_liveness(startup, runner=_stackctl.run)
+    except ComposeProjectAbsent:
+        # receipt 合法性归 startup receipt 契约（composeProject 是必填非空），
+        # 这里不重复判定，只如实记为未命中，避免建立第二真相源。
+        return empty
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        return {
+            **empty,
+            "status": "unavailable",
+            "blocker": RUNTIME_DEPENDENCY_BLOCKER,
+            "issues": [f"runtime container liveness is unverifiable: {exc}"],
+        }
+    if report is None:
+        return empty
+    return {
+        "status": report.status,
+        "composeProject": report.compose_project,
+        "blocker": report.blocker,
+        "containers": [
+            {
+                "service": item.service or item.name,
+                "state": item.state,
+                "health": item.health,
+                "exitCode": item.exit_code,
+                "live": item.is_live,
+                "completedTask": item.is_completed_task,
+            }
+            for item in report.containers
+        ],
+        "issues": report.issues(),
+        "warnings": [],
+    }
+
+
 def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
     """Validate runtime health plus a real SendOtp/Login/session journey."""
     import quwoquan_ops.cli.stackctl as _stackctl
@@ -207,6 +262,16 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
     content_preflight: dict[str, Any] = {}
     provider_runtime_binding: dict[str, Any] | None = None
     login_journey: dict[str, Any] = {}
+    container_liveness: dict[str, Any] = {
+        "status": "not_applicable",
+        "composeProject": "",
+        "blocker": "",
+        "containers": [],
+        "issues": [],
+        "warnings": [],
+    }
+    runtime_dependency_blocker = ""
+    capacity_blocker = ""
 
     def record_readiness_finding(message: str) -> None:
         if runtime_mode == "test_live" and purpose == "runtime":
@@ -297,6 +362,21 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
             != (provider_runtime_binding or {}).get("baselineId")
         ):
             details.append("startup receipt does not bind the active candidate")
+        # 以上都是 receipt 身份检查，只证明「启动过」。必需容器事后退出不会
+        # 回写 receipt，而依赖断裂时把 App 编译安装出来也没有可用的服务面，
+        # 因此现况复验对 test-live 与 ui-only 同样硬阻断，不降级为 warning。
+        container_liveness = _runtime_container_liveness_evidence(startup)
+        details.extend(container_liveness["issues"])
+        warnings.extend(container_liveness["warnings"])
+        if container_liveness["issues"]:
+            runtime_dependency_blocker = str(container_liveness["blocker"])
+    # 容量不足时编译产物与容器层都写不进去，安装出来的 App 也无服务面可用；
+    # 这条判定不依赖 startup receipt 是否存在，因此放在 receipt 分支之外。
+    capacity = _stackctl.local_runtime_capacity_evidence(target)
+    details.extend(capacity["issues"])
+    warnings.extend(capacity["warnings"])
+    if capacity["issues"] and not capacity_blocker:
+        capacity_blocker = str(capacity["blocker"])
 
     try:
         tls_evidence = _stackctl.verify_certificate(target_name)
@@ -612,12 +692,18 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
         if purpose == "content_live"
         else "not_requested"
     )
+    # 容量与依赖不可用先于其他准备度问题：内容与登录旅程都建立在服务面之上，
+    # 底座断裂时它们的失败只是级联，不是首因。
     first_blocker = (
-        "APP.CONTENT_LIVE."
-        + blocked_content_components[0].upper()
-        + "_BLOCKED"
-        if blocked_content_components
-        else ("APP.RUNTIME.PREFLIGHT_BLOCKED" if details else "")
+        capacity_blocker
+        or runtime_dependency_blocker
+        or (
+            "APP.CONTENT_LIVE."
+            + blocked_content_components[0].upper()
+            + "_BLOCKED"
+            if blocked_content_components
+            else ("APP.RUNTIME.PREFLIGHT_BLOCKED" if details else "")
+        )
     )
     recovery_command = (
         "python3 quwoquan_ops/cli/stackctl.py --output-format json "
@@ -647,6 +733,8 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
             startup.get("providerRuntimeDigest") or ""
         ),
         "runtimeChecks": check_receipts,
+        "runtimeContainerLiveness": container_liveness,
+        "capacity": capacity["evidence"],
         "tls": {
             "profile": str(tls_evidence.get("profile") or ""),
             "status": str(tls_evidence.get("status") or ""),

@@ -69,6 +69,14 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--host", default="")
     parser.add_argument(
+        "--web-runtime-config-trust",
+        default=os.environ.get("QWQ_WEB_RUNTIME_CONFIG_TRUST_PATH", ""),
+    )
+    parser.add_argument(
+        "--web-runtime-config-package",
+        default=os.environ.get("QWQ_WEB_RUNTIME_CONFIG_PACKAGE_PATH", ""),
+    )
+    parser.add_argument(
         "--data-mode",
         default="external",
         choices=["isolated", "external"],

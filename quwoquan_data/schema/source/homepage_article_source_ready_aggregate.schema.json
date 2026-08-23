@@ -16,7 +16,7 @@
       "minLength": 1,
       "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$"
     },
-    "targetScale": {"enum": ["M100", "M1000", "M10000"]},
+    "targetScale": {"enum": ["WORKLOAD", "M100", "M1000", "M10000"]},
     "sourceRevision": {"$ref": "#/$defs/sha256"},
     "sourceDigest": {"$ref": "#/$defs/sha256"},
     "entityCatalogDigest": {"$ref": "#/$defs/sha256"},

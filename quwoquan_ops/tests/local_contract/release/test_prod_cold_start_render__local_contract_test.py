@@ -50,6 +50,16 @@ class ProdColdStartRenderContractTest(unittest.TestCase):
             caddy,
         )
         self.assertNotIn("@immutable path /assets/*", caddy)
+        self.assertIn(
+            "@runtime_config path /runtime-config-trust.json /runtime-config-package.json",
+            caddy,
+        )
+        runtime_config = caddy.index("@runtime_config path")
+        runtime_config_header = caddy.index(
+            'Cache-Control "no-store"', runtime_config
+        )
+        web_handle = caddy.index("\thandle {", runtime_config_header)
+        self.assertLess(runtime_config_header, web_handle)
         web_start = caddy.index("\nquwoquan.com {")
         web_site = caddy[web_start:]
         rewrite = web_site.index("try_files {path} /index.html")

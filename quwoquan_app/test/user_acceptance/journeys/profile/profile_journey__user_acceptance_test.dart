@@ -49,7 +49,7 @@ const _appContentProfileP0Only = bool.fromEnvironment(
   'APP_CONTENT_PROFILE_P0_ONLY',
 );
 
-const _kHomeSearchChrome = ValueKey<String>('home-search-chrome');
+const _kHomeSearchChrome = ValueKey<String>('home-primary-tab-chrome');
 const _kFeedCard0 = ValueKey<String>('home-feed-card-0');
 const _kRelationHeader = ValueKey<String>('home-relation-card-header');
 const _kEditProfileNicknameRow = ValueKey<String>('edit-profile-nickname-row');

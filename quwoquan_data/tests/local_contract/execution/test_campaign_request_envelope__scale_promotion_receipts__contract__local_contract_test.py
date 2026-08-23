@@ -16,7 +16,10 @@ from support.campaign_request_envelope_fixture import (
     _expected_count,
     _wave_targets,
 )
-from support.capacity_calibration_fixture import synthetic_capacity_source_binding
+from support.capacity_calibration_fixture import (
+    synthetic_capacity_source_binding,
+    synthetic_governed_execution_authority,
+)
 
 
 _M100_WORKLOADS = {
@@ -258,7 +261,7 @@ def test_video_scale_promotion_writes_immutable_m100_receipt(
             "selector": "priority",
             "quota": 10,
             "count": _expected_count(10),
-            "capacityCalibration": synthetic_capacity_source_binding(),
+            "executionAuthority": synthetic_governed_execution_authority(),
             "workerHostSetBinding": None,
             "scaleSourcePool": {
                 "poolId": "pool-local-contract",
@@ -347,7 +350,7 @@ def test_video_scale_promotion_writes_immutable_m100_receipt(
                 "selector": "priority",
                 "quota": 10,
                 "count": _expected_count(10),
-                "capacityCalibration": synthetic_capacity_source_binding(),
+                "executionAuthority": synthetic_governed_execution_authority(),
                 "workerHostSetBinding": None,
                 "scaleSourcePool": {
                     "poolId": "pool-local-contract",

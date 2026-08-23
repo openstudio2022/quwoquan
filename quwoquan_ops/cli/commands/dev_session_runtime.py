@@ -384,69 +384,6 @@ def _dev_session_source_compose_files(
     return canonical_files, sorted(profiles)
 
 
-def _materialize_local_portal_root(
-    topology: dict[str, Any],
-    target_name: str,
-    portal_root: Path,
-) -> str:
-    """物化本地 Portal 静态站点到 Caddy /srv/portal 挂载根。
-
-    具备仓内 node 工具链（portal/node_modules/.bin）与 QWQ_DEPLOY_WORK_ROOT
-    时现场 vite build（base URL 从目标 publicBases 派生，不手写域名）；
-    工具链缺失时写显式「未构建」提示页——本地开发环境不因前端缺构建阻塞
-    服务栈启动，但绝不留下静默空 404 根目录。
-    """
-    import quwoquan_ops.cli.stackctl as _stackctl
-
-    portal_dir = _stackctl.ROOT / "quwoquan_ops/portal"
-    vite_binary = portal_dir / "node_modules/.bin/vite"
-    deploy_work_root = os.environ.get("QWQ_DEPLOY_WORK_ROOT", "").strip()
-    bases = _stackctl.get_target(topology, target_name).get("publicBases") or {}
-
-    def _base(role: str) -> str:
-        # 本地 target 的 publicBases 是渲染后的 URL 字符串（含端口）。
-        return str(bases.get(role) or "")
-
-    if vite_binary.is_file() and deploy_work_root:
-        build_env = {
-            **os.environ,
-            "QWQ_DEPLOY_TARGET": target_name,
-            "VITE_PRODUCT_OPS_BASE_URL": _base("productOps"),
-            "VITE_PLATFORM_OPS_BASE_URL": _base("productOps"),
-            "VITE_CONTENT_SERVICE_BASE_URL": _base("api"),
-            "VITE_ENTITY_SERVICE_BASE_URL": _base("api"),
-        }
-        try:
-            result = subprocess.run(
-                [str(vite_binary), "build"],
-                cwd=portal_dir,
-                env=build_env,
-                capture_output=True,
-                text=True,
-                timeout=600,
-                check=False,
-            )
-            build_output = (
-                Path(deploy_work_root) / target_name / "build" / "ops-portal"
-            )
-            if result.returncode == 0 and (build_output / "index.html").is_file():
-                shutil.copytree(build_output, portal_root, dirs_exist_ok=True)
-                return "built"
-        except (OSError, subprocess.TimeoutExpired):
-            pass
-    (portal_root / "index.html").write_text(
-        "<!doctype html><html lang=\"zh\"><meta charset=\"utf-8\">"
-        "<title>ops-portal 未构建</title><body>"
-        "<h1>ops-portal 尚未构建</h1>"
-        "<p>本地 Portal 静态产物缺失：请在 quwoquan_ops/portal 安装 node "
-        "依赖后重新执行 stackctl dev-session / up，或运行 "
-        "stackctl package --kind ops-portal。本页面是显式占位，"
-        "不承载任何业务数据。</p></body></html>\n",
-        encoding="utf-8",
-    )
-    return "placeholder"
-
-
 def _dev_session_materialize_compose_files(
     source_files: Sequence[Path],
     *,
@@ -690,7 +627,7 @@ def _dev_session_render_runtime_inputs(
     profile_name = str(target_contract.get("portProfile") or "")
     if profile_name != target:
         raise ValueError("mutable test_live target must own its canonical port profile")
-    public_web_package, public_web_root = (
+    public_web_package, public_web_artifact_root = (
         _stackctl._resolve_dev_session_public_web_package(
             environment=environment,
             target=target,
@@ -749,6 +686,21 @@ def _dev_session_render_runtime_inputs(
         portal_root,
     ):
         directory.mkdir(parents=True, exist_ok=True)
+
+    from quwoquan_ops.cli.lib.dev_session_web_runtime_config import (
+        materialize_dev_session_web_runtime_config,
+    )
+
+    public_web_root = render_root / "public-web-hosting"
+    runtime_config_digests = materialize_dev_session_web_runtime_config(
+        repo_root=_stackctl.ROOT,
+        environment=environment,
+        target=target,
+        artifact_root=public_web_artifact_root,
+        hosting_root=public_web_root,
+        source_revision=str(workspace_snapshot.get("sourceRevision") or ""),
+        run_command=_stackctl.run,
+    )
 
     execution_compose_files = _stackctl._dev_session_materialize_compose_files(
         compose_files,
@@ -994,4 +946,5 @@ def _dev_session_render_runtime_inputs(
         "composeFiles": execution_compose_files,
         "composeProfiles": compose_profiles,
         "portalMaterialization": portal_materialization,
+        "publicWebRuntimeConfig": dict(runtime_config_digests),
     }

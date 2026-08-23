@@ -82,34 +82,49 @@ def _candidate(carrier: str, index: int) -> dict[str, object]:
         "entityRef": f"/entity/地点/景区/{name}",
         "observedEntityRef": f"/entity/地点/景区/{name}",
         **IDENTITY,
-        "sourceUnitRef": EVIDENCE["sourceUnit"][0],
-        "sourceUnitDigest": _sha_text(f"source:{name}"),
-        "sourceUnitFileSha256": _sha_bytes(EVIDENCE["sourceUnit"][1]),
         "provider": f"{carrier}-source",
         "contentSha256": _sha_text(f"content:{name}"),
         "acquisitionStatus": "acquired",
-        "acquisitionRef": EVIDENCE["acquisition"][0],
-        "acquisitionDigest": _sha_text(f"acquisition:{name}"),
-        "acquisitionFileSha256": _sha_bytes(EVIDENCE["acquisition"][1]),
         "rightsStatus": "unverified",
         "distributionDecision": "research_allowed",
-        "rightsRef": EVIDENCE["rights"][0],
-        "rightsDigest": _sha_text(f"rights:{name}"),
-        "rightsFileSha256": _sha_bytes(EVIDENCE["rights"][1]),
         "qualityStatus": "passed",
-        "qualityRef": EVIDENCE["quality"][0],
-        "qualityDigest": _sha_text(f"quality:{name}"),
-        "qualityFileSha256": _sha_bytes(EVIDENCE["quality"][1]),
         "generated": False,
         "publishMediaMode": "illustrated",
-        "playabilityRef": None,
-        "playabilityDigest": None,
-        "playabilityFileSha256": None,
         "videoReadiness": None,
     }
     if carrier in {"homepage", "article"}:
-        row["sourceReadyEvidenceRootRef"] = "."
-        row["sourceAttribution"] = _attribution(carrier, index)
+        # homepage/article 走 source-ready evidence 全套件。
+        row.update(
+            {
+                "sourceUnitRef": EVIDENCE["sourceUnit"][0],
+                "sourceUnitDigest": _sha_text(f"source:{name}"),
+                "sourceUnitFileSha256": _sha_bytes(EVIDENCE["sourceUnit"][1]),
+                "acquisitionRef": EVIDENCE["acquisition"][0],
+                "acquisitionDigest": _sha_text(f"acquisition:{name}"),
+                "acquisitionFileSha256": _sha_bytes(EVIDENCE["acquisition"][1]),
+                "rightsRef": EVIDENCE["rights"][0],
+                "rightsDigest": _sha_text(f"rights:{name}"),
+                "rightsFileSha256": _sha_bytes(EVIDENCE["rights"][1]),
+                "qualityRef": EVIDENCE["quality"][0],
+                "qualityDigest": _sha_text(f"quality:{name}"),
+                "qualityFileSha256": _sha_bytes(EVIDENCE["quality"][1]),
+                "playabilityRef": None,
+                "playabilityDigest": None,
+                "playabilityFileSha256": None,
+                "sourceReadyEvidenceRootRef": ".",
+                "sourceAttribution": _attribution(carrier, index),
+            }
+        )
+    else:
+        # image/video 只声明 source admission 指针，evidence 套件字段禁止出现。
+        row.update(
+            {
+                "sourceAdmissionRef": (
+                    f"data/source-admissions/{name}/admission.json"
+                ),
+                "sourceAdmissionDigest": _sha_text(f"admission:{name}"),
+            }
+        )
     return row
 
 
@@ -232,7 +247,7 @@ def test_three_active_carriers_dispatch_without_video_or_campaign(
     )
     assert all(
         "requiredWorkers" not in slot["taskRequest"]
-        and slot["taskRequest"]["capacityCalibration"]
+        and slot["taskRequest"]["executionAuthority"]["calibration"]
         == manifest["capacityCalibration"]
         for slot in manifest["slots"]
     )

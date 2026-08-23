@@ -85,10 +85,11 @@ class ImmutableImageCompositionContractTest(unittest.TestCase):
         )
         self.assertEqual(build_args["GO_BASE_IMAGE"], "golang:test")
         self.assertEqual(build_args["ALPINE_BASE_IMAGE"], "alpine:test")
-        self.assertEqual(build_args["QWQ_ARTIFACT_ENVIRONMENT"], "gamma")
+        self.assertNotIn("QWQ_ARTIFACT_ENVIRONMENT", build_args)
+        self.assertNotIn("QWQ_ARTIFACT_CONFIG_DIGEST", build_args)
         self.assertEqual(
-            build_args["QWQ_ARTIFACT_CONFIG_DIGEST"],
-            "sha256:" + "c" * 64,
+            build_args["QWQ_PROVIDER_BINDING_MANIFEST_DIGEST"],
+            "sha256:" + "d" * 64,
         )
 
         context, dockerfile, _ = stackctl._runtime_image_build_spec(
@@ -103,11 +104,25 @@ class ImmutableImageCompositionContractTest(unittest.TestCase):
             / "quwoquan_service/services/recommendation-service/build/Dockerfile",
         )
 
-        for missing in ("QWQ_COMPOSE_ENV", "LOCAL_GAMMA_CONFIG_VERSION"):
+        # 环境名与配置摘要属于部署挂载材料，不是镜像 build input。
+        for absent in ("QWQ_COMPOSE_ENV", "LOCAL_GAMMA_CONFIG_VERSION"):
+            with self.subTest(absent=absent):
+                valid = dict(environment)
+                valid.pop(absent)
+                stackctl._runtime_image_build_spec(
+                    "rtc-service",
+                    source_root=ROOT,
+                    environment=valid,
+                )
+        for missing in (
+            "QWQ_PROVIDER_BINDING_OVERLAY_CONTEXT",
+            "QWQ_PROVIDER_BINDING_MANIFEST_DIGEST",
+            "QWQ_COMPOSE_GO_BASE_IMAGE",
+        ):
             with self.subTest(missing=missing):
                 invalid = dict(environment)
                 invalid.pop(missing)
-                with self.assertRaisesRegex(ValueError, "artifact"):
+                with self.assertRaisesRegex(ValueError, "Provider binding|build arg"):
                     stackctl._runtime_image_build_spec(
                         "rtc-service",
                         source_root=ROOT,

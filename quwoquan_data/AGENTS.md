@@ -7,15 +7,16 @@
 ## 数据工程硬约束
 
 - 一律遵守 `CLI prepare -> Agent semantic -> CLI validate + gate` 三段式。
+- **执行推进主体是宿主 agent 会话**（[`DEC-005`](../specs/feature-tree/runtime/runtime-data-engineering/design.md#dec-005)）：阶段序、产物契约与交接协议由 `.agents/skills/content-production/` 拥有；每阶段收尾用 `task stage-record` 落 create-once stage receipt，receipt 链 + 磁盘产物是跨会话交接与恢复的唯一状态源。仓库执行代码只允许两类——确定性 IO（下载、CAS、publish/release/ship 原子命令）与检查器（verify + schema）；禁止新增驱动/等待 agent、自动推进状态机或内置业务重试的编排代码，唯一豁免是 `quwoquan_data/scripts/content/execution/runner/loop_driver.sh`（≤50 行）与 `quwoquan_data/scripts/content/execution/runner/fleet_dispatcher.sh`（≤100 行，均无业务判断）。
 - 新能力优先进入 `python3 quwoquan_data/scripts/cli.py <command>`，不要新增可直接运行的业务入口脚本。
 - schema、blueprint、metadata、tag taxonomy、内容契约先行，再写下载/生产/发布逻辑。
 - 内容生成以真实性、可追溯性和阶段结果为核心；不要用拍脑袋补全替代证据链。
 - 新脚本归位到现有领域目录，禁止在仓库根创建平铺 `scripts/`。
-- `content/execution/` 根只保留稳定工作包内核、CLI 薄绑定与 `handler.py`；四 lane
-  campaign、runtime evidence、reviewed closure、scale promotion 分别落
-  `campaign/`、`runtime_evidence/`、`closure/`、`scale/`，选择与准入扩展
-  `planning/`，ReliableTask 扩展 `queue/agent`，单 execution execute 编排扩展
-  `controller/execute/`。搬迁必须原子更新 import 与测试，禁止旧路径 shim。
+- `content/execution/` 根只保留稳定工作包内核、CLI 薄绑定与 `handler.py`。其中
+  `agent/`、`queue/`、`controller` 自动推进与 checkpoint 循环、`recovery/` rewind、
+  campaign fleet 调度为**退役中存量**（[`OPEN-006`](../specs/feature-tree/runtime/runtime-data-engineering/spec.md#open-006)）：
+  不得作为新内容任务的执行入口，也不得再扩展；删除以 skill 驱动稳产证据为准入。
+  搬迁必须原子更新 import 与测试，禁止旧路径 shim。
 - 当前阶段未上线：旧模板拼文、区域硬编码、版本化 publish 路径、孤立脚本、不可追溯素材、弱事实证据一律直接清理，不做兼容。
 - `.qwq_output/` 只允许可删除重建的运行产物、部署快照、证据与缓存；禁止把 `control_plane/prompts/templates/schema/specs/policies/reference` 等可复用真相源放入 output。Python venv 只是由仓内 `requirements.txt` 临时重建的 disposable cache，不是可复用测试环境、工程配置或发布资产；任何任务都不得要求该缓存预先存在。
 - Python bytecode、pytest cache 只能写入 `.qwq_output/env/repo/local/**` 或测试隔离临时根；解释器工具缓存只能写入仓外的用户缓存目录（默认 `~/.cache/quwoquan/python-envs`），两者都不得进入 `quwoquan_data/**`。所有 Make/gate/pytest 入口必须以解释器 `-B` 启动、显式重定向 pytest cache，并在执行后运行 Data layout gate。

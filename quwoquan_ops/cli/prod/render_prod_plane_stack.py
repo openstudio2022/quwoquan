@@ -885,6 +885,11 @@ www.quwoquan.com {{
 \t\troot * /srv/legal
 \t\tfile_server
 \t}}
+\t@runtime_config path /runtime-config-trust.json /runtime-config-package.json
+\theader @runtime_config {{
+\t\tCache-Control "no-store"
+\t\tContent-Type "application/json; charset=utf-8"
+\t}}
 \t@service_worker path /flutter_service_worker.js
 \theader @service_worker Cache-Control "no-cache, no-store, must-revalidate"
 \t@revalidated_web_asset path /assets/* /canvaskit/* /icons/* /fonts/* /main.dart.js /flutter.js /flutter_bootstrap.js *.ttf *.woff2

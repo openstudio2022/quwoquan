@@ -53,6 +53,8 @@ public final class StartupGateActivity extends Activity {
   private volatile boolean recoveryVersionCheckInFlight;
   private boolean recoveryVersionRefreshPending;
   private boolean recoveryExternalOpenInFlight;
+  private RuntimeConfigPackageStore runtimeConfigPackageStore;
+  private RuntimeConfigActivationCoordinator runtimeConfigActivationCoordinator;
   private TextView recoveryTitle;
   private TextView recoveryMessage;
   private Button recoveryPrimary;
@@ -70,6 +72,10 @@ public final class StartupGateActivity extends Activity {
   protected void onCreate(Bundle savedInstanceState) {
     StartupProcessClock.initialize();
     super.onCreate(savedInstanceState);
+    runtimeConfigPackageStore = AndroidRuntimeConfig.createStore(this);
+    runtimeConfigActivationCoordinator =
+        new RuntimeConfigActivationCoordinator(
+            getApplicationContext().getNoBackupFilesDir(), runtimeConfigPackageStore);
     mainHandoffStarted =
         savedInstanceState != null
             && savedInstanceState.getBoolean(STATE_MAIN_HANDOFF_STARTED, false);
@@ -77,6 +83,25 @@ public final class StartupGateActivity extends Activity {
       // The Main handoff was already committed before a configuration/process
       // recreation. Finishing this transient gate prevents a second handoff.
       finish();
+      return;
+    }
+    RuntimeConfigActivationCoordinator.ConsumeResult activation =
+        runtimeConfigActivationCoordinator.consumePendingRequest(getIntent(), isTaskRoot());
+    if (activation.kind == RuntimeConfigActivationCoordinator.ConsumeKind.FAILED) {
+      Log.e(
+          STARTUP_TAG,
+          "android_runtime_config_activation_failed code="
+              + activation.errorCode
+              + " issues="
+              + String.join(",", activation.validationIssues));
+      showNativeStartupRecovery();
+      return;
+    }
+    if (activation.kind == RuntimeConfigActivationCoordinator.ConsumeKind.ACTIVATED) {
+      Log.i(STARTUP_TAG, "android_runtime_config_activation_complete");
+      // Canonical executor 用第二次无 activation extra 的冷启动进入 Flutter。
+      // 此进程只负责原生 CAS 与回执，成功后不得继续创建 Flutter engine。
+      finishAndRemoveTask();
       return;
     }
     StartupHealthStore.promoteConfirmedPlatformStartupCrash(this);
@@ -324,7 +349,9 @@ public final class StartupGateActivity extends Activity {
     web.setOnClickListener(
         ignored ->
             openRecoveryTarget(
-                BuildConfig.QWQ_PUBLIC_WEB_URL, "", "网页暂时无法打开，请稍后再试"));
+                recoveryRuntimeValue("publicWebBaseUrl"),
+                "",
+                "网页暂时无法打开，请稍后再试"));
     LinearLayout.LayoutParams webLayout =
         new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48));
     webLayout.topMargin = dp(12);
@@ -382,8 +409,10 @@ public final class StartupGateActivity extends Activity {
         () -> {
           HttpURLConnection connection = null;
           try {
-            String base = BuildConfig.QWQ_RECOVERY_BASE_URL.replaceAll("/+$", "");
-            if (!TrustedRecoveryUrls.isTrusted(base)) {
+            java.util.Map<String, String> recoveryRuntime =
+                runtimeConfigPackageStore.readRecoveryRuntimeValues();
+            String base = recoveryRuntime.get("gatewayBaseUrl").replaceAll("/+$", "");
+            if (!TrustedRecoveryUrls.isTrusted(base, recoveryRuntime)) {
               throw new IllegalStateException("recovery base URL rejected");
             }
             URL endpoint =
@@ -411,9 +440,9 @@ public final class StartupGateActivity extends Activity {
             int latestBuild = Integer.parseInt(payload.getString("latestBuild"));
             String updateUrl = payload.getString("updateUrl");
             String recoveryUrl = payload.getString("recoveryUrl");
-            if (!TrustedRecoveryUrls.isTrusted(recoveryUrl)
+            if (!TrustedRecoveryUrls.isTrusted(recoveryUrl, recoveryRuntime)
                 || (latestBuild > BuildConfig.VERSION_CODE
-                    && !TrustedRecoveryUrls.isTrusted(updateUrl))) {
+                    && !TrustedRecoveryUrls.isTrusted(updateUrl, recoveryRuntime))) {
               throw new IllegalStateException("version response url rejected");
             }
             mainHandler.post(
@@ -441,7 +470,7 @@ public final class StartupGateActivity extends Activity {
                   primary.setOnClickListener(
                       ignored ->
                           openRecoveryTarget(
-                              BuildConfig.QWQ_PUBLIC_WEB_URL,
+                              recoveryRuntime.get("publicWebBaseUrl"),
                               recoveryUrl,
                               "网页暂时无法打开，请稍后再试"));
                   web.setVisibility(View.GONE);
@@ -458,7 +487,7 @@ public final class StartupGateActivity extends Activity {
                   primary.setOnClickListener(
                       view ->
                           openRecoveryTarget(
-                              BuildConfig.QWQ_PUBLIC_WEB_URL,
+                              recoveryRuntimeValue("publicWebBaseUrl"),
                               "",
                               "网页暂时无法打开，请稍后再试"));
                   web.setVisibility(View.GONE);
@@ -528,9 +557,11 @@ public final class StartupGateActivity extends Activity {
       return;
     }
     recoveryExternalOpenInFlight = true;
-    boolean opened = TrustedRecoveryUrls.open(this, target, STARTUP_TAG);
+    java.util.Map<String, String> recoveryRuntime = recoveryRuntimeValues();
+    boolean opened =
+        TrustedRecoveryUrls.open(this, target, recoveryRuntime, STARTUP_TAG);
     if (!opened && fallback != null && !fallback.isEmpty()) {
-      opened = TrustedRecoveryUrls.open(this, fallback, STARTUP_TAG);
+      opened = TrustedRecoveryUrls.open(this, fallback, recoveryRuntime, STARTUP_TAG);
     }
     if (!opened) {
       Toast.makeText(this, failureMessage, Toast.LENGTH_SHORT).show();
@@ -538,6 +569,23 @@ public final class StartupGateActivity extends Activity {
       recoveryVersionRefreshPending = true;
     }
     recoveryExternalOpenInFlight = false;
+  }
+
+  private java.util.Map<String, String> recoveryRuntimeValues() {
+    try {
+      return runtimeConfigPackageStore.readRecoveryRuntimeValues();
+    } catch (RuntimeConfigPackageStore.RuntimeConfigException error) {
+      Log.w(
+          STARTUP_TAG,
+          "android_recovery_runtime_config_unavailable code=" + error.code,
+          error);
+      return java.util.Collections.emptyMap();
+    }
+  }
+
+  private String recoveryRuntimeValue(String key) {
+    String value = recoveryRuntimeValues().get(key);
+    return value == null ? "" : value;
   }
 
   private int dp(int value) {

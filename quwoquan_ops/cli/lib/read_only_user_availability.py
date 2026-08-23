@@ -84,6 +84,12 @@ def read_only_user_availability_report(target_name: str) -> dict[str, Any]:
         issues["runtime_full_ready"].append(
             "selected startup identity is absent, mismatched, stopped, or not full"
         )
+    # receipt 身份对得上，只说明启动过；必需容器事后退出不会回写任何 receipt，
+    # 因此必须复验现况，否则「可用」这个结论会在无人察觉下保持数小时。
+    liveness = _runtime_liveness_report(startup)
+    if runtime_ready and liveness["status"] not in {"healthy", "not_applicable"}:
+        runtime_ready = False
+        issues["runtime_full_ready"].extend(liveness["issues"])
 
     provider = _provider_report(
         target_name=target_name,
@@ -179,6 +185,7 @@ def read_only_user_availability_report(target_name: str) -> dict[str, Any]:
                     "test_live": mutable_startup,
                 },
                 "startupReceipt": startup,
+                "containerLiveness": liveness,
             },
             "providerComposition": provider,
             "content": content,
@@ -303,6 +310,63 @@ def _select_runtime(
     if candidate.get("status") == "validated":
         return "immutable_candidate", dict(immutable_startup)
     return "test_live", dict(mutable_startup)
+
+
+def _runtime_liveness_report(startup: Mapping[str, Any]) -> dict[str, Any]:
+    """复验 running receipt 所声明 runtime 的容器现况（只读）。"""
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    from quwoquan_ops.cli.lib.runtime_container_liveness import (
+        ComposeProjectAbsent,
+        verify_running_receipt_liveness,
+    )
+
+    try:
+        report = verify_running_receipt_liveness(startup, runner=_stackctl.run)
+    except ComposeProjectAbsent:
+        # receipt 合法性归 startup receipt 契约（composeProject 是必填非空），
+        # 这里不重复判定，只如实记为未命中，避免建立第二真相源。
+        return {
+            "status": "not_applicable",
+            "composeProject": "",
+            "blocker": "",
+            "containers": [],
+            "issues": [],
+        }
+    except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        return {
+            "status": "unavailable",
+            "composeProject": str(startup.get("composeProject") or ""),
+            "blocker": "",
+            "containers": [],
+            "issues": [f"runtime container liveness is unverifiable: {exc}"],
+        }
+    if report is None:
+        # receipt 不是 running：没有「启动过」这个前提，现况复验不适用。
+        return {
+            "status": "not_applicable",
+            "composeProject": str(startup.get("composeProject") or ""),
+            "blocker": "",
+            "containers": [],
+            "issues": [],
+        }
+    return {
+        "status": report.status,
+        "composeProject": report.compose_project,
+        "blocker": report.blocker,
+        "containers": [
+            {
+                "service": item.service or item.name,
+                "state": item.state,
+                "health": item.health,
+                "exitCode": item.exit_code,
+                "live": item.is_live,
+                "completedTask": item.is_completed_task,
+            }
+            for item in report.containers
+        ],
+        "issues": report.issues(),
+    }
 
 
 def _startup_identity_ready(

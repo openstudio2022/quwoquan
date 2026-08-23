@@ -24,11 +24,10 @@ import sys
 
 ROOT = REPO_ROOT
 APP = ROOT / "quwoquan_app"
-DEVICE_SCRIPTS = APP / "scripts" / "device"
-if str(DEVICE_SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(DEVICE_SCRIPTS))
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-from launch_manifest_metadata import (  # noqa: E402
+from quwoquan_ops.cli.lib.app_launch_manifest_contract import (  # noqa: E402
     LaunchManifestContractError,
     load_launch_manifest_contract,
 )

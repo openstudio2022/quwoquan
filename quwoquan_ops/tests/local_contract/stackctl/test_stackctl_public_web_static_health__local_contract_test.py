@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-# spec_ref: specs/feature-tree/runtime/runtime-client-foundation/public-content-web-entry/spec.md#gwt-005
+# spec_ref: specs/feature-tree/runtime/runtime-client-foundation/public-content-web-entry/spec.md#gwt-006
 
 import argparse
 import json
@@ -27,6 +27,24 @@ def _api_check() -> dict[str, object]:
 
 
 class PublicWebStaticHealthLocalContractTest(unittest.TestCase):
+    def test_runtime_config_is_served_no_store_before_spa_fallback(self) -> None:
+        caddy = (
+            Path(__file__).resolve().parents[4]
+            / "quwoquan_ops/environments/gamma/local/Caddyfile"
+        ).read_text(encoding="utf-8")
+        runtime_handler = caddy.index("handle @public_web_runtime_config")
+        runtime_handler_end = caddy.index("\n\t@public_web_service_worker", runtime_handler)
+        app_handler = caddy.index("handle @public_web_app")
+        self.assertLess(runtime_handler, app_handler)
+        runtime_block = caddy[runtime_handler:runtime_handler_end]
+        self.assertIn(
+            "path /runtime-config-trust.json /runtime-config-package.json",
+            caddy,
+        )
+        self.assertIn('Cache-Control "no-store"', runtime_block)
+        self.assertIn('Content-Type "application/json; charset=utf-8"', runtime_block)
+        self.assertNotIn("X-QWQ-Web-Content-Digest", runtime_block)
+
     def test_static_probes_cover_shell_script_worker_and_chinese_font(self) -> None:
         checks = _public_web_static_health_checks({"publicWeb": _ORIGIN + "/"})
 
@@ -36,6 +54,8 @@ class PublicWebStaticHealthLocalContractTest(unittest.TestCase):
                 _ORIGIN + "/index.html",
                 _ORIGIN + "/main.dart.js",
                 _ORIGIN + "/flutter_service_worker.js",
+                _ORIGIN + "/runtime-config-trust.json",
+                _ORIGIN + "/runtime-config-package.json",
                 _ORIGIN
                 + "/assets/assets/fonts/noto_sans_sc/NotoSansSC%5Bwght%5D.ttf",
             ],
@@ -49,6 +69,18 @@ class PublicWebStaticHealthLocalContractTest(unittest.TestCase):
         self.assertEqual(
             by_name["public-web-shell"]["expectedContentTypePrefix"],
             "text/html",
+        )
+        self.assertEqual(
+            by_name["public-web-runtime-config-trust"][
+                "expectedContentTypePrefix"
+            ],
+            "application/json",
+        )
+        self.assertEqual(
+            by_name["public-web-runtime-config-package"][
+                "expectedContentTypePrefix"
+            ],
+            "application/json",
         )
         self.assertEqual(
             by_name["public-web-font"]["expectedContentTypePrefix"],
@@ -73,6 +105,8 @@ class PublicWebStaticHealthLocalContractTest(unittest.TestCase):
                 "public-web-shell",
                 "public-web-main",
                 "public-web-service-worker",
+                "public-web-runtime-config-trust",
+                "public-web-runtime-config-package",
                 "public-web-font",
             ],
         )
@@ -121,6 +155,8 @@ class PublicWebStaticHealthLocalContractTest(unittest.TestCase):
                     return True, 200, "font-bytes", "font/ttf"
                 if url.endswith(".html"):
                     return True, 200, "<html lang=\"zh-CN\">", "text/html; charset=utf-8"
+                if url.endswith(".json"):
+                    return True, 200, "{}", "application/json"
                 return True, 200, "ok", "application/javascript"
 
             with (

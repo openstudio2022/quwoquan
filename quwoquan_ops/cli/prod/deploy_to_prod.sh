@@ -45,6 +45,8 @@ ROLLOUT_TIMEOUT_SECONDS="${ROLLOUT_TIMEOUT_SECONDS:-300}"
 PROD_SSH_KEY_DIR="${PROD_SSH_KEY_DIR:-$HOME/.ssh/quwoquan-prod}"
 SERVICE_FILTER="${SERVICE:-}"
 PROD_IMAGE_DELIVERY_MODE="${PROD_IMAGE_DELIVERY_MODE:-prebuilt}"
+QWQ_WEB_RUNTIME_CONFIG_TRUST_PATH="${QWQ_WEB_RUNTIME_CONFIG_TRUST_PATH:-}"
+QWQ_WEB_RUNTIME_CONFIG_PACKAGE_PATH="${QWQ_WEB_RUNTIME_CONFIG_PACKAGE_PATH:-}"
 
 case "$ROLLOUT_STAGE" in
   canary|5|20|50|100) ;;
@@ -73,6 +75,16 @@ fi
 if [[ "$DRY_RUN" != "true" && "$PROD_IMAGE_DELIVERY_MODE" != "skip" && ! -s "$RELEASE_MANIFEST" ]]; then
   echo "::error::真实发布必须提供可部署的 RELEASE_MANIFEST，禁止按 tag 或本地 latest 发布" >&2
   exit 2
+fi
+if [[ "$DRY_RUN" != "true" ]]; then
+  if [[ "$QWQ_WEB_RUNTIME_CONFIG_TRUST_PATH" != /* || ! -f "$QWQ_WEB_RUNTIME_CONFIG_TRUST_PATH" || -L "$QWQ_WEB_RUNTIME_CONFIG_TRUST_PATH" ]]; then
+    echo "::error::真实发布必须提供绝对路径 QWQ_WEB_RUNTIME_CONFIG_TRUST_PATH" >&2
+    exit 2
+  fi
+  if [[ "$QWQ_WEB_RUNTIME_CONFIG_PACKAGE_PATH" != /* || ! -f "$QWQ_WEB_RUNTIME_CONFIG_PACKAGE_PATH" || -L "$QWQ_WEB_RUNTIME_CONFIG_PACKAGE_PATH" ]]; then
+    echo "::error::真实发布必须提供绝对路径 QWQ_WEB_RUNTIME_CONFIG_PACKAGE_PATH" >&2
+    exit 2
+  fi
 fi
 
 # SSH 属于受限管理面，不得从面向 App 的 publicBases 推导。单主机
@@ -248,6 +260,8 @@ PY
         --candidate-digest "$CANDIDATE_DIGEST" \
         --image-transport-tag "$IMAGE_TRANSPORT_TAG" \
         --release-evidence-digest "$RELEASE_EVIDENCE_DIGEST" \
+        --web-runtime-config-trust "$QWQ_WEB_RUNTIME_CONFIG_TRUST_PATH" \
+        --web-runtime-config-package "$QWQ_WEB_RUNTIME_CONFIG_PACKAGE_PATH" \
         --output-dir "$render_dir" \
         --host "$ssh_host" >/dev/null
       if [[ "$PROD_IMAGE_DELIVERY_MODE" == "skip" ]]; then

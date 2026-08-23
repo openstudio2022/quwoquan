@@ -12,6 +12,7 @@ import hashlib
 import json
 from pathlib import Path
 
+from content.source.media_source_admission import MediaSourceAdmissionCommandWriter
 from content.source.research.scale_source_pool_homepage_article import (
     project_scale_source_pool_homepage_article,
 )
@@ -23,6 +24,7 @@ from support.scale_source_pool_catalog_fixture import (
     _document_digest,
     _file_digest,
     _image_bytes,
+    _source_attribution,
     _write_evidence_bytes,
     _write_evidence_file,
     _write_json,
@@ -185,6 +187,11 @@ def _source_ready_batch(
                         candidate_root / ref, media_bytes
                     ),
                 })
+            raw_evidence_ref = f"raw/{carrier}/{candidate_id}.json"
+            raw_evidence_sha = _write_evidence_file(
+                candidate_root / raw_evidence_ref,
+                json.dumps({"candidateId": candidate_id}, ensure_ascii=False),
+            )
             evidence_bindings: list[dict[str, str]] = []
             for name in ("discovery", "acquisition", "rights", "quality"):
                 ref = (
@@ -192,10 +199,22 @@ def _source_ready_batch(
                     if per_member_roots
                     else f"provenance/{candidate_id}-{name}.json"
                 )
-                _write_json(
-                    candidate_root / ref,
-                    {"schema": f"test.{name}", "id": candidate_id},
+                evidence = (
+                    {
+                        "schema": (
+                            "quwoquan_data."
+                            "homepage_article_source_ready_acquisition_evidence"
+                        ),
+                        "id": candidate_id,
+                        "sourceUnit": {
+                            "rawEvidenceRef": raw_evidence_ref,
+                            "rawEvidenceFileSha256": raw_evidence_sha,
+                        },
+                    }
+                    if name == "discovery"
+                    else {"schema": f"test.{name}", "id": candidate_id}
                 )
+                _write_json(candidate_root / ref, evidence)
                 evidence_bindings.append({
                     "ref": ref,
                     "fileSha256": _file_digest(candidate_root / ref),
@@ -303,13 +322,212 @@ def _project(
     )
 
 
+def _media_probe() -> dict[str, object]:
+    return {
+        "width": 1920,
+        "height": 1080,
+        "frameCount": 240,
+        "framesPerSecond": 30.0,
+        "durationMs": 8000,
+        "codec": "h264",
+        "hasAudio": False,
+        "sampleCount": 12,
+        "distinctFrameCount": 12,
+        "movingTransitionCount": 11,
+        "meanTransitionDelta": 0.4,
+        "playable": True,
+        "motionVideo": True,
+        "staticImageSequence": False,
+        "premiumPlayableEligible": True,
+    }
+
+
+def _media_popularity(provider: str, index: int) -> dict[str, object]:
+    return {
+        "playCount": 10000 + index,
+        "likeCount": 500 + index,
+        "commentCount": 40 + index,
+        "shareCount": 30 + index,
+        "favoriteCount": 200 + index,
+        "observedAt": "2026-08-08T00:00:00Z",
+        "provider": provider,
+        "topic": "旅行",
+        "timeBucket": "2026-W32",
+        "popularityScore": 10000 + index,
+        "popularityPercentile": round(index / 18, 6),
+        "rankingEligible": True,
+        "ineligibleReason": "",
+        "comparisonCandidateCount": 18,
+    }
+
+
+def _media_admission_row(
+    *, evidence_root: Path, carrier: str, index: int, provider: str
+) -> dict[str, object]:
+    candidate_id = f"{carrier}-{index:05d}"
+    asset_id = f"{carrier}-asset-{index:05d}"
+    object_ref = f"posts/{carrier}/{candidate_id}"
+    entity_id = candidate_id
+    entity_ref = f"/entity/地点/景区/{entity_id}"
+    source_url = f"https://source.example/{carrier}/{index}"
+    asset_ref = f"media/{carrier}/{asset_id}.{'jpg' if carrier == 'image' else 'mp4'}"
+    content_sha256 = _write_evidence_bytes(
+        evidence_root / asset_ref,
+        (f"real-{carrier}-asset-{index}" * 300).encode("utf-8"),
+    )
+    attribution = _source_attribution(
+        platform=provider,
+        source_url=source_url,
+        asset_url=f"https://source.example/{carrier}/{index}/asset",
+    )
+    common = {
+        "assetId": asset_id,
+        "entityId": entity_id,
+        "observedEntityId": entity_id,
+        "contentSha256": content_sha256,
+    }
+    probe = _media_probe() if carrier == "video" else None
+    popularity = _media_popularity(provider, index) if carrier == "video" else None
+    acquisition_asset = {
+        **common,
+        "provider": provider,
+        "platform": provider,
+        "sourceUrl": source_url,
+        "creator": f"creator-{carrier}-{index}",
+        "capturedAt": "2026-08-08T00:00:00Z",
+        "assetRef": asset_ref,
+        "acquisitionStatus": "acquired",
+        "rightsStatus": "unverified",
+        "authorizationRequired": True,
+        "distributionDecision": "research_allowed",
+        "sourceAttribution": attribution,
+        **(
+            {"width": 1600, "height": 1200}
+            if carrier == "image"
+            else {
+                "sourceKind": "tourism_video_site",
+                "mediaProbe": probe,
+                "popularitySignals": popularity,
+            }
+        ),
+    }
+    evidence_dir = Path("media-admission") / carrier / f"{index:05d}"
+    evidence_documents = {
+        "catalog": {
+            "schema": "quwoquan_data.fixture_media_catalog",
+            **IDENTITY,
+            "candidates": [{**common, "provider": provider}],
+        },
+        "acquisition": {
+            "schema": "quwoquan_data.fixture_media_acquisition",
+            **IDENTITY,
+            "assets": [acquisition_asset],
+        },
+        "media_probe": {
+            "schema": "quwoquan_data.fixture_media_probe",
+            **common,
+            **(
+                {"width": 1600, "height": 1200}
+                if carrier == "image"
+                else {"mediaProbe": probe, "popularitySignals": popularity}
+            ),
+        },
+        "rights_attribution": {
+            "schema": "quwoquan_data.fixture_media_rights_attribution",
+            **common,
+            "rightsStatus": "unverified",
+            "authorizationRequired": True,
+            "distributionDecision": "research_allowed",
+            "sourceAttribution": attribution,
+        },
+        "source_semantic_review": {
+            "schema": "quwoquan_data.fixture_media_source_semantic_review",
+            **common,
+            "status": "passed",
+            "entityMatch": "matched",
+            "qualityStatus": "passed",
+            "privacyRisk": "none",
+            "minorRisk": "none",
+            "maliciousMediaRisk": "none",
+            "watermarkStatus": "absent",
+            "findings": [],
+        },
+    }
+    evidence_refs: dict[str, str] = {}
+    for role, document in evidence_documents.items():
+        ref = (evidence_dir / f"{role}.json").as_posix()
+        _write_json(evidence_root / ref, document)
+        evidence_refs[role] = ref
+    receipt, receipt_ref = MediaSourceAdmissionCommandWriter(evidence_root).write(
+        asset_kind=carrier,
+        asset_id=asset_id,
+        object_ref=object_ref,
+        source_revision=IDENTITY["sourceRevision"],
+        source_digest=IDENTITY["sourceDigest"],
+        entity_catalog_digest=IDENTITY["entityCatalogDigest"],
+        evidence_refs=evidence_refs,
+        recorded_at="2026-08-08T00:00:00Z",
+    )
+    snapshot = receipt["assetSnapshot"]
+    return {
+        "candidateId": candidate_id,
+        "carrier": carrier,
+        "objectRef": object_ref,
+        "entityRef": entity_ref,
+        "observedEntityRef": entity_ref,
+        **IDENTITY,
+        "sourceAdmissionRef": receipt_ref,
+        "sourceAdmissionDigest": receipt["receiptDigest"],
+        "sourceAttribution": snapshot["sourceAttribution"],
+        "provider": provider,
+        "contentSha256": snapshot["contentSha256"],
+        "acquisitionStatus": "acquired",
+        "rightsStatus": snapshot["rightsStatus"],
+        "distributionDecision": snapshot["distributionDecision"],
+        "qualityStatus": "passed",
+        "generated": False,
+        "videoReadiness": (
+            {
+                "playable": True,
+                "motion": True,
+                "premiumEligible": True,
+                **{
+                    field: popularity[field]
+                    for field in (
+                        "playCount", "likeCount", "commentCount", "shareCount",
+                        "favoriteCount", "observedAt", "popularityPercentile",
+                    )
+                },
+                "comparisonBucket": {
+                    "provider": provider,
+                    "topic": "旅行",
+                    "timeBucket": "2026-W32",
+                    "candidateCount": 18,
+                },
+            }
+            if carrier == "video"
+            else None
+        ),
+    }
+
+
 def _clone_row(
     template: dict[str, object],
     *,
     carrier: str,
     index: int,
     provider: str,
+    evidence_root: Path | None = None,
 ) -> dict[str, object]:
+    if carrier in {"image", "video"}:
+        if evidence_root is None:
+            raise ValueError("media clone requires evidence_root")
+        return _media_admission_row(
+            evidence_root=evidence_root,
+            carrier=carrier,
+            index=index,
+            provider=provider,
+        )
     row = copy.deepcopy(template)
     entity_ref = f"/entity/地点/景区/{carrier}-{index:05d}"
     row.update(
@@ -321,41 +539,10 @@ def _clone_row(
             "observedEntityRef": entity_ref,
             "provider": provider,
             "contentSha256": _digest(f"projected:{carrier}:{index}"),
+            "playabilityRef": None,
+            "playabilityDigest": None,
+            "playabilityFileSha256": None,
+            "videoReadiness": None,
         }
     )
-    if carrier == "video":
-        row.update(
-            {
-                "playabilityRef": row["sourceUnitRef"],
-                "playabilityDigest": _digest(f"playability:{index}"),
-                "playabilityFileSha256": row["sourceUnitFileSha256"],
-                "videoReadiness": {
-                    "playable": True,
-                    "motion": True,
-                    "premiumEligible": True,
-                    "playCount": 10000 + index,
-                    "likeCount": 500 + index,
-                    "commentCount": 40 + index,
-                    "shareCount": 30 + index,
-                    "favoriteCount": 200 + index,
-                    "observedAt": "2026-08-08T00:00:00Z",
-                    "popularityPercentile": round(index / 18, 6),
-                    "comparisonBucket": {
-                        "provider": provider,
-                        "topic": "旅行",
-                        "timeBucket": "2026-W32",
-                        "candidateCount": 18,
-                    },
-                },
-            }
-        )
-    else:
-        row.update(
-            {
-                "playabilityRef": None,
-                "playabilityDigest": None,
-                "playabilityFileSha256": None,
-                "videoReadiness": None,
-            }
-        )
     return row
