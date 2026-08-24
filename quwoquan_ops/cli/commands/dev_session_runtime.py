@@ -916,6 +916,13 @@ def _dev_session_render_runtime_inputs(
         if key.startswith("LOCAL_GAMMA_"):
             environment_values[f"QWQ_COMPOSE_{key.removeprefix('LOCAL_GAMMA_')}"] = value
 
+    # 服务 Compose 片段由 immutable 候选与 mutable test_live 共用，且把部署期
+    # 环境身份与 platform-ops facts 声明为必需挂载。两条装配必须绑定同一份材料，
+    # 否则本路径的 Compose render 会在缺少插值变量时直接失败。
+    environment_values["QWQ_LOCAL_RELEASE_ENV"] = environment
+    environment_values["QWQ_RUN_ROOT"] = str(report_dir)
+    _stackctl._bind_artifact_identity_mount_material(environment_values)
+
     plan = {
         "schema": "stackctl.mutable_test_live_runtime",
         "environment": environment,
