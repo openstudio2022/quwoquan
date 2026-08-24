@@ -287,14 +287,63 @@ package；Prod 只执行 fail-closed contract、artifact isolation、OCI evidenc
 
 | Secret | 用途 |
 |--------|------|
-| `QWQ_DNS_PROVISIONING_API_TOKEN` | Cloudflare DNS provisioning token，仅供 canonical A/AAAA/CAA/MX/TXT/CNAME apply |
-| `QWQ_ACME_DNS_API_TOKEN` | Cloudflare DNS-01 challenge-only token，仅授权非生产 `_acme-challenge` authority，禁止生产区变更 |
-| `QWQ_DNS_ZONE_ID` | `quwoquan.com` zone id |
-| `QWQ_ACME_ACCOUNT_EMAIL` | Let's Encrypt ACME account |
+| `QWQ_DNS_PROVISIONING_API_TOKEN` | 权威 DNS 记录写入凭据，仅供 canonical A/AAAA/CAA/MX/TXT apply |
+| `QWQ_ACME_DNS_API_TOKEN` | DNS-01 challenge 专用凭据，与 provisioning 凭据独立轮换 |
+| `QWQ_PROD_EDGE_IPV4` | 生产 edge 的公网 IPv4；只在 apply 时注入，不入仓库 |
 | `QWQ_TLS_AGE_RECIPIENT` | 证书部署方持有私钥的 age 公钥；CI 只上传加密后的证书包 |
 
+变量名与 workflow 接线是供应商中立的；具体厂商只由
+`quwoquan_ops/environments/domain_governance.yaml` 的 `dnsProvider.kind` 与
+`acme.dnsProvider` 决定，当前现役实现是阿里云云解析（`aliyun-dns` / lego `alidns`）。
+在该实现下两个 DNS 凭据的值形状为 `<accessKeyId>:<accessKeySecret>`，分别对应两个
+独立 RAM 用户。凭据形状由 provider 实现解释，策略只声明「环境变量名 -> 凭据部件名」，
+因此换服务商只需新增 provider 实现，secret 名、策略键与 workflow 都不变。
+
+zone 标识不是 secret：它就是策略已声明的 `registrableDomain`，再要一份部署时输入
+只会形成第二真相源。ACME 注册邮箱同理不是签发前提——Let's Encrypt 已不要求联系
+邮箱，签发命令不传 `--email`，因此这里不需要任何邮箱。
+
+两个 RAM 用户在授权面上的实际差异只有「是否独立轮换与吊销」：云解析的授权粒度到
+域名为止，无法把 challenge 用户限定在 `_acme-challenge` 前缀，详见下文与 `OPEN-008`。
+
+公网核对使用的两个 DoH 解析器都不属于权威服务商——用服务商自家解析器核对自家写入
+等于自证，门禁会拦。这两个解析器只做只读取证，不构成任何服务商依赖。
+
+现役实现下两个 RAM 用户各自的最小权限如下。两者都只勾选「编程访问」，不加控制台
+登录，也不加入任何带 `AliyunDNSFullAccess` 的用户组。
+
+provisioning 用户（`QWQ_DNS_PROVISIONING_API_TOKEN`）需要 canonical 记录集的读写
+与对账能力：`alidns:DescribeDomainRecords`、`alidns:DescribeDomainRecordInfo`、
+`alidns:AddDomainRecord`、`alidns:UpdateDomainRecord`、`alidns:DeleteDomainRecord`、
+`alidns:SetDomainRecordStatus`，资源限定到 `quwoquan.com` 这一个域名。不要授予
+域名转移、NS 变更、DNS 安全加速或账单相关动作。
+
+challenge 用户（`QWQ_ACME_DNS_API_TOKEN`）只需要 lego 完成 DNS-01 所需的四个动作：
+`alidns:DescribeDomainRecords`、`alidns:AddDomainRecord`、`alidns:UpdateDomainRecord`、
+`alidns:DeleteDomainRecord`，同样限定到 `quwoquan.com`。云解析的 RAM 授权粒度到
+域名为止，无法在授权层把它限定在 `_acme-challenge` 前缀，因此该范围由凭据隔离与
+工具链行为保证，策略侧已如实标注为 `credential-isolation-only`，风险与三条候选收紧
+路径登记在环境拓扑节点的 `OPEN-008`。
+
+`QWQ_PROD_EDGE_IPV4` 填生产 edge 的公网 IPv4；换机时同时改这个 secret 与
+`quwoquan_ops/environments/prod/access-isolation.yaml` 的 `sshHost`，前者是数据面、
+后者是管理面，两者不共享同一份取值。这个地址不是机密（公网 DNS 本就可查），放
+secret 的理由是换机只改注入值、不产生仓库改动。
+
+写入生产 DNS 记录属于破坏性动作：定时触发只跑 plan 与漂移核对，覆盖或删除现存
+生产记录必须手动 dispatch 并勾选 `applyProductionRecords`，否则 CLI 先行
+`GATE_BLOCK` 且不产生任何 provider 写入。首次下发生产记录不需要该确认。
+
+收敛的所有权按记录类型划定：地址（`A`/`AAAA`/`CNAME`）与 zone 级授权（`CAA`/`MX`）
+由计划完全拥有，同名同类型的多余值会被清除；`TXT` 是共享类型，收敛只认自己声明的
+`v=spf1` 与 `v=DMARC1`，备案与第三方站点校验令牌不会被占用或删除，只在 receipt 的
+`observedUnmanaged` 里列出。因此在控制台加备案 TXT 是安全的，加第二条 apex A 记录
+不是。
+
 Workflow 不上传明文私钥；证书包以 age 加密、保留 7 天。DNS apply 与 live DNS
-证据不含 token，保留 30 天。生产证书仍由 `public-ca-prod` 外部发布面管理。
+证据不含 token，保留 30 天。生产证书由 `public-ca-prod` profile 经同一 DNS-01
+自动化签发，不再依赖仓外人工发布面。未注入 `QWQ_PROD_EDGE_IPV4` 时生产地址记录
+保持缺席并在 receipt 的 `pending` 中如实报告，既不写占位值，也不删除现存记录。
 
 ---
 

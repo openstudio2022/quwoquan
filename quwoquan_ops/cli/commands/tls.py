@@ -76,10 +76,7 @@ def command_tls(args: argparse.Namespace) -> dict[str, Any]:
             else:
                 acme = policy.get("acme") or {}
                 authority = policy.get("acmeChallengeAuthority") or {}
-                required_envs = (
-                    str(acme.get("accountEmailEnv") or ""),
-                    str(authority.get("apiTokenEnv") or ""),
-                )
+                required_envs = (str(authority.get("apiTokenEnv") or ""),)
                 missing_envs = [
                     name for name in required_envs if not name or not os.environ.get(name, "").strip()
                 ]

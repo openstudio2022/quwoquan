@@ -62,10 +62,11 @@ def test_domain_governance_wires_dns_acme_and_age_inputs_to_typed_gate() -> None
     assert workflow.count("--scope domain-governance") == 2
     for required in (
         "QWQ_DNS_PROVISIONING_API_TOKEN",
-        "QWQ_DNS_ZONE_ID",
         "QWQ_ACME_DNS_API_TOKEN",
-        "QWQ_ACME_ACCOUNT_EMAIL",
         "QWQ_TLS_AGE_RECIPIENT",
     ):
         assert required in workflow
     assert 'test -n "$QWQ_TLS_AGE_RECIPIENT"' not in workflow
+    # zone 标识由 registrableDomain 派生，注册邮箱不是签发前提：两者都不是可配置输入。
+    for retired in ("QWQ_DNS_ZONE_ID", "QWQ_ACME_ACCOUNT_EMAIL"):
+        assert retired not in workflow

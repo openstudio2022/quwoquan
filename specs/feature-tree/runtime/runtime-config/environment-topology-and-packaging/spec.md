@@ -54,7 +54,7 @@
 - provisioning 与 ACME challenge 使用两个独立凭据。`acmeChallengeAuthority.providerEnforcement` 必须如实声明 challenge 凭据的可写范围由服务商 IAM 强制还是仅由凭据隔离加工具链行为保证，禁止把无法强制的范围描述成已强制；把「只变更 `_acme-challenge`」当作已成立的事实断言也属于此列。
 - 生产 edge 地址是部署时事实，只能经受保护变量注入，禁止入库。它不是机密——公网 DNS 本就可查——用变量的理由是换机只改注入值、不产生仓库改动，因此它与受版本控制的 SSH 管理端点是两个互不替代的投影，同值也不得合并。未注入时生产地址记录保持缺席并在 plan/apply/verify 的 `pending` 中显式报告；缺席不得降级为占位值、不得被解释为要求删除现存记录，非全球可路由或格式非法的地址必须 fail closed。
 - 覆盖或删除现存生产 DNS 记录是破坏性动作：收敛必须先整体算出将发生的动作，未取得显式确认时先行 fail closed 且不做部分收敛，定时触发只做 plan 与漂移核对。首次下发生产记录不属于破坏性动作，不需要该确认。
-- canonical publicWeb 始终是 apex，`www` 只能作为 `apexFollowers` 与 apex 共享同一份地址记录，不得用 CNAME 表达。同一条 edge 地址事实只有一种表达，apex 地址缺席时 follower 一同缺席，计划面不得让 CNAME 与地址记录落在同一个受管名字上。非生产四个 zone 的公网记录统一解析到 loopback 并发布 null MX 与 SPF deny；生产 apex 不发布 null MX，以便将来接入收件而无需先撤销一条显式拒收声明。当前生产 apex 同样没有真实 MX，因此 CAA `iodef` 通知实际不可投递，该缺口登记为 `OPEN-010`，不得表述为已具备邮件可达性。
+- canonical publicWeb 始终是 apex，`www` 只能作为 `apexFollowers` 与 apex 共享同一份地址记录，不得用 CNAME 表达。同一条 edge 地址事实只有一种表达，apex 地址缺席时 follower 一同缺席，计划面不得让 CNAME 与地址记录落在同一个受管名字上。非生产四个 zone 的公网记录统一解析到 loopback 并发布 null MX 与 SPF deny；生产 apex 不发布 null MX，以便将来接入收件而无需先撤销一条显式拒收声明。本域名不收件，因此 CAA 与 DMARC 都不得声明回报邮箱——声明一个投递不到的地址等于制造一条不成立的安全通道。
 - 每个 zone 必须显式选一个 `caaProfiles` 条目：签发公共证书的 zone 用允许清单，不签发的用 `deny-all`。省略 CAA 从而继承 apex 允许清单必须 `GATE_BLOCK`，`caaProfiles` 的选择必须与该 target 的 TLS profile 归属一致。
 - 每个 zone 的 apex 必须同时发布 SPF deny 与 `_dmarc` 的 `p=reject` 策略，覆盖 envelope 与 header From 两条伪造路径。任何 mail guard 缺少 `dmarc` 或 DMARC 策略非 reject 必须 fail closed。
 - derived link 的 origin 只来自 `publicWeb` role，path 只来自 `quwoquan_service/contracts/metadata/_shared/link_templates.yaml`；user-service 使用生成的 `linktemplates.UserWebPath`，App/Data/Service 禁止再拼接 `/u/`、`/post/` 等第二份公开业务路径。
@@ -200,6 +200,7 @@
 - AND 环境无激活内容 release 时 App 只接受 canonical `outcome=empty + emptyReason=no_active_release` 或 typed unavailable，不以普通空列表冒充成功；环境已激活 release 时 App 从 Content API 响应解析 `releaseId + manifestDigest`，UAT 以环境侧期望 release 比对读回身份，App 制品不内嵌内容身份。Prod 发布准出仍绑定 active candidate、commercial readiness 与 rollback/replay 的环境侧证据，任一缺失均阻断准出，但不改变 App 运行时行为。
 - AND `stackctl app-content-uat` 只有在 Alpha/Beta/Gamma 同 baseline、releaseId、manifest digest 与 `appUatEnvelope` 的预检、字面 `flutter run`、首页 Feed、核心 readback、视频播放，以及受控 API Edge 故障下的错误文案与同安装恢复均通过时生成 passed receipt；故障控制只作用于 runtime receipt 绑定的精确容器且始终恢复，任何 target 失败时保留已有证据并停止后续 App 执行。
 - AND 显式但不完整的 handoff、Profile/Release 与非 Alpha direct build 在安装前失败，用户不得看到由开发配置缺失制造的启动恢复页。
+- AND 端到端验收 runner 入口唯一归属主测试树，只承载会话级前置与收尾，不聚合用例也不预启动 App；每个验收场景各自完成一次启动，不存在第二份 runner 入口。
 
 <a id="gwt-003"></a>
 ### GWT-003 全渠道安装启动行为等价
@@ -246,8 +247,8 @@
 - 类型：`external_blocker`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：`quwoquan.com` 注册与 NS 委派已生效，仓内已具备供应商中立的 DNS plan/apply/verify、五个 zone 的完整记录集（含生产 apex 与全部业务子域）、CAA、邮件防护，以及 `prod-sim` 与 `prod-hosted` 两条 DNS-01 证书签发链路，并隔离 provisioning 与 challenge-only 两个凭据。剩余阻断有两类，不得只报其中之一。第一类是运行凭据：未提供两个 DNS 凭据、ACME account email 与生产 edge 地址，因此不能伪造 Prod 接入的 live DNS/TLS 成功证据。第二类是边缘可达性：生产 apex 当前虽已解析到 edge 地址，但该地址的 80/443 从公网不可达，因此即使凭据到位，公开角色 HTTP/WSS 探针仍不可能通过。该阻断不得反向阻塞 Alpha/Beta/Gamma 的 local-managed 本地闭环，也不得反向阻塞非生产 zone 的公网记录下发。
-- 目标：通过受保护变量提供 `QWQ_DNS_PROVISIONING_API_TOKEN`、`QWQ_ACME_DNS_API_TOKEN`、`QWQ_DNS_ZONE_ID`、`QWQ_ACME_ACCOUNT_EMAIL` 与 `QWQ_PROD_EDGE_IPV4`，执行五个 zone 的 apply、`prod-sim`/`prod-hosted` 证书签发与公共 CA 验证并保存 receipt。
+- 影响或价值：`quwoquan.com` 注册与 NS 委派已生效，仓内已具备供应商中立的 DNS plan/apply/verify、五个 zone 的完整记录集（含生产 apex 与全部业务子域）、CAA、邮件防护，以及 `prod-sim` 与 `prod-hosted` 两条 DNS-01 证书签发链路，并隔离 provisioning 与 challenge-only 两个凭据。剩余阻断有两类，不得只报其中之一。第一类是运行凭据：未提供两个 DNS 凭据与生产 edge 地址，因此不能伪造 Prod 接入的 live DNS/TLS 成功证据。第二类是边缘可达性：生产 apex 当前虽已解析到 edge 地址，但该地址的 80/443 从公网不可达，因此即使凭据到位，公开角色 HTTP/WSS 探针仍不可能通过。该阻断不得反向阻塞 Alpha/Beta/Gamma 的 local-managed 本地闭环，也不得反向阻塞非生产 zone 的公网记录下发。
+- 目标：通过受保护变量提供 `QWQ_DNS_PROVISIONING_API_TOKEN`、`QWQ_ACME_DNS_API_TOKEN` 与 `QWQ_PROD_EDGE_IPV4`，执行五个 zone 的 apply、`prod-sim`/`prod-hosted` 证书签发与公共 CA 验证并保存 receipt。
 - 现网前置：服务商控制台当前已存在人工维护的生产 apex 与 `www` 地址记录，第一次 apply 必须把它们收敛进 `dnsZones` 派生的记录集，收敛后控制台不再持有第二份人工记录。生产 edge 主机还需先让 80/443 从公网可达，再谈公开角色探针。
 - 完成判定：`GWT-001` 的 Prod `stackctl package / up / health / verify` 子句在真实公网接入下成立——Prod 接入要求的 DNS A/AAAA/CAA/MX/SPF/DMARC、反向解析、证书 SAN/有效期及公开角色 HTTP/WSS 探针全部通过，且证据报告可回读。
 
@@ -293,27 +294,6 @@
 - 完成判定：codegen 按各 buildProfile 的 `distribution_class.build_modes` 求交后产出 xcconfig，`GWT-002` 绑定的 iOS 身份矩阵契约同时断言 project/Podfile/scheme 三处无引用且这两份 xcconfig 不再生成；生成清单随之收敛。
 - 依赖：Go codegen 与其 local_contract，属 iOS 构建身份矩阵面。
 
-<a id="open-007"></a>
-### OPEN-007 Patrol runner 入口的归属在门禁与实现之间对立
-
-- 类型：`risk`
-- 优先级：`P2`
-- 准出影响：`track`
-- 影响或价值：同一份 Patrol runner 入口被一条断言要求不存在、被一次显式恢复提交
-  要求存在，两个判据同时是「当前真相」，读者无法确定哪一侧该改。
-- 对立事实一：`quwoquan_ops/tests/local_contract/environment/test_environment_patrol_smoke__local_contract_test.py`
-  的 `test_remote_patrol_keeps_125s_video_contract_without_app_bundle` 断言
-  `quwoquan_app/test/user_acceptance/patrol/patrol_test_main.dart` 不存在。
-- 对立事实二：该文件受版本控制且是主测试树的 Patrol runner 入口，物理存在。
-- 同域失锚项：同目录 `test_core_readback_requires_and_forwards_one_release_envelope`
-  的观察点同样与当前 release envelope 转发实现对立，需与本项一并裁决。
-- 尚缺实现：裁定 Patrol runner 入口的唯一归属——留在主测试树，或只存在于
-  `test_host/patrol`。裁定后另一侧随之删除，不保留兼容壳。
-- 尚缺验收证据：`patrol_test_main.dart` 的存在与否只有一处判据，且上列两个观察点
-  与该判据一致。
-- 完成判定：`GWT-002` 绑定的 patrol smoke 契约成立。
-- 依赖：无外部阻断。
-
 <a id="open-008"></a>
 ### OPEN-008 ACME challenge 凭据的记录前缀范围无法由服务商强制
 
@@ -338,14 +318,15 @@
 - 完成判定：`GWT-001` 的 DNS 治理子句扩展为「zone 内不存在未登记记录」，且该断言由 zone 级列举证据支撑。
 - 依赖：无外部阻断。
 
-<a id="open-010"></a>
-### OPEN-010 生产 apex 无 MX，CAA iodef 通知实际不可投递
+<a id="open-011"></a>
+### OPEN-011 精选池首次填充在新环境上自我阻断
 
-- 类型：`risk`
-- 优先级：`P2`
+- 类型：`capability_gap`
+- 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：`caaProfiles` 的两个档位都发布 `iodef mailto:security@quwoquan.com`，让 CA 在遇到越权签发请求时可以通知我们，但生产 apex 既无 null MX 也无真实 MX，收件会隐式回落到 apex 地址记录所指的 edge 主机，而该主机不跑 SMTP。结果是这条安全通道在声明上存在、在投递上不成立。同理，非生产 zone 的 `_dmarc` 记录声明了 `rua`，而跨域报告需要 `_report._dmarc.<子域>` 授权记录，当前未发布，聚合报告同样收不到。
-- 尚缺实现：为 apex 接入可收件的 MX（或把 `iodef` 与 `rua` 指向已有可达域名），并为非生产各 zone 发布跨域报告授权记录。
-- 尚缺验收证据：一次真实投递验证——向 `iodef` 地址发信可达，且至少收到一份 DMARC 聚合报告。
-- 完成判定：`GWT-001` 的邮件防护子句从「发布 SPF 与 DMARC 记录」扩展为「安全通知与聚合报告实际可达」。
-- 依赖：邮件收件方案选定（自建 MX 或复用既有可达域名）。
+- 影响或价值：当前 `premium_stream` 的池条目只能由 `stackctl premium-pool` 写入，而它的两条绑定路径都反向依赖一次已通过的 consumer 档校验：`immutable-candidate` 要求 `readinessPhase in {consumer, commercial}` 的 receipt，`test-live` 要求携带 `verifyRunId` 的运行期 content binding。consumer 档校验本身又把「`premium_stream` 暴露至少一个 release 绑定的 `postId`」作为通过条件，因此没有精选池条目的环境无法完成首次激活，停在 `DATA.DELIVERY_RESTORE_UNAVAILABLE`，App 侧 `test_live` 预检随之无法取得内容绑定。
+- 尚缺实现：为「环境尚无精选池条目」这一初始状态提供一条不依赖 consumer 收据的绑定路径，其输入是 `apply` 已产出的导入证据，并保持条目在后续 consumer 校验中仍可被撤销。
+- 尚缺验收证据：一个契约测试从空池环境出发，仅凭 `apply` 证据完成一次 upsert 并使随后的 consumer 档校验通过，证明首次激活不再自我阻断。
+- 完成判定：`GWT-004` 的 GIVEN「Alpha 已激活一份可形成完整 `appUatEnvelope` 的 immutable release」可在一个尚无池条目的环境上从 `ship apply` 连续达成，中途不需要人工写库或跨环境搬运收据。
+- 依赖：无外部阻断；改动面与环境编排重构同属 `quwoquan_ops/cli/lib/premium_pool_release.py`，需与该重构的收敛结果对齐。
+

@@ -21,11 +21,15 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.lib.common import load_json_yaml
+from quwoquan_ops.cli.lib.dns_provider import DnsProviderError, provider_for_kind
 from quwoquan_ops.cli.lib.environment_topology import (
     get_target,
     load_environment_topology,
 )
-from quwoquan_ops.cli.lib.output_paths import certificate_export_dir
+from quwoquan_ops.cli.lib.output_paths import (
+    certificate_export_dir,
+    deployment_target_path,
+)
 
 
 POLICY_PATH = ROOT / "quwoquan_ops" / "environments" / "domain_governance.yaml"
@@ -100,6 +104,15 @@ def _required_names(target: str, profile: dict[str, Any]) -> list[str]:
 
 def certificate_dir(target: str) -> Path:
     return certificate_export_dir(target)
+
+
+def certificate_bundle_dir(target: str) -> Path:
+    """加密证书包的落盘目录。
+
+    证书包是待交付的 deployment payload，只能落在仓外受限的部署工作区，不得写回
+    `.qwq_output`。调用方一律从这里取路径，不自己拼。
+    """
+    return deployment_target_path(target, "packages", "tls")
 
 
 def certificate_paths(target: str, *, require_ready: bool = True) -> tuple[Path, Path]:
@@ -313,6 +326,63 @@ def _issue_local_managed_certificate(
     return verify_certificate(target)
 
 
+def _challenge_credential_environment(
+    policy: dict[str, Any],
+    acme: dict[str, Any],
+    challenge_credential: str,
+) -> dict[str, str]:
+    """把中立的 challenge 凭据投影为 ACME 客户端所需的 provider 变量。
+
+    「变量名 -> 部件名」由 policy 的 `acme.credentialEnvironment` 声明，凭据本身
+    的形状由 provider 解释，所以换服务商只加 provider 实现，本模块不动。
+    """
+    mapping = acme.get("credentialEnvironment") or {}
+    if not isinstance(mapping, dict) or not mapping:
+        raise PublicDomainTlsError(
+            "GATE_BLOCK: acme.credentialEnvironment must declare the DNS-01 "
+            "credential projection"
+        )
+    kind = str((policy.get("dnsProvider") or {}).get("kind") or "")
+    try:
+        provider_class = provider_for_kind(kind)
+        return provider_class.challenge_environment(
+            challenge_credential, {str(k): str(v) for k, v in mapping.items()}
+        )
+    except DnsProviderError as exc:
+        raise PublicDomainTlsError(str(exc)) from exc
+
+
+def _lego_command(
+    lego: str,
+    *,
+    acme: dict[str, Any],
+    profile: dict[str, Any],
+    lego_root: Path,
+) -> list[str]:
+    """构造 ACME 客户端调用。
+
+    `run` 同时承担首签与续期：是否真正续期由 `--renew-days` 与 CA 的 ARI 判定，
+    因此调用面不按证书是否已存在分叉。注册邮箱不是签发前提，不予传递。
+    """
+    return [
+        lego,
+        "run",
+        "--accept-tos",
+        "--dns",
+        str(acme.get("dnsProvider") or ""),
+        "--server",
+        str(acme.get("directory") or ""),
+        "--path",
+        str(lego_root),
+        "--domains",
+        str(profile["apex"]),
+        "--domains",
+        str(profile["wildcard"]),
+        "--renew-days",
+        str(int(acme.get("renewBeforeDays", 30))),
+    ]
+
+
 def issue_certificate(target: str) -> dict[str, Any]:
     policy = load_policy()
     profile_name, profile = _profile_for_target(target)
@@ -323,15 +393,12 @@ def issue_certificate(target: str) -> dict[str, Any]:
             f"GATE_BLOCK: {target} certificate issuance is externally managed"
         )
     acme = policy.get("acme") or {}
-    provider = str(acme.get("dnsProvider") or "")
-    email_env = str(acme.get("accountEmailEnv") or "")
-    email = os.environ.get(email_env, "").strip()
     challenge_authority = policy.get("acmeChallengeAuthority") or {}
     token_env = str(challenge_authority.get("apiTokenEnv") or "")
     token = os.environ.get(token_env, "").strip()
-    if not email or not token:
+    if not token:
         raise PublicDomainTlsError(
-            f"GATE_BLOCK: {email_env} and {token_env} are required for DNS-01 issuance"
+            f"GATE_BLOCK: {token_env} is required for DNS-01 issuance"
         )
     lego = shutil.which(str(acme.get("client") or "lego"))
     if lego is None:
@@ -341,28 +408,9 @@ def issue_certificate(target: str) -> dict[str, Any]:
     lego_root = output_root / "lego"
     output_root.mkdir(parents=True, exist_ok=True)
     env = dict(os.environ)
-    env["CLOUDFLARE_DNS_API_TOKEN"] = token
+    env.update(_challenge_credential_environment(policy, acme, token))
     source_cert = lego_root / "certificates" / f"{profile['apex']}.crt"
-    action = "renew" if source_cert.is_file() else "run"
-    command = [
-        lego,
-        "--accept-tos",
-        "--email",
-        email,
-        "--dns",
-        provider,
-        "--server",
-        str(acme.get("directory") or ""),
-        "--path",
-        str(lego_root),
-        "--domains",
-        str(profile["apex"]),
-        "--domains",
-        str(profile["wildcard"]),
-        action,
-    ]
-    if action == "renew":
-        command.extend(["--days", str(int(acme.get("renewBeforeDays", 30)))])
+    command = _lego_command(lego, acme=acme, profile=profile, lego_root=lego_root)
     result = subprocess.run(command, env=env, text=True, capture_output=True, check=False)
     if result.returncode != 0:
         detail = (result.stderr or result.stdout).strip()
@@ -419,6 +467,8 @@ def main(argv: list[str] | None = None) -> int:
             except PublicDomainTlsError:
                 if not args.allow_missing:
                     raise
+            bundle_dir = certificate_bundle_dir(args.target)
+            payload["bundleDirectory"] = str(bundle_dir)
             if args.format == "shell":
                 print(
                     "export QWQ_PUBLIC_TLS_CERT_FILE="
@@ -427,6 +477,10 @@ def main(argv: list[str] | None = None) -> int:
                 print(
                     "export QWQ_PUBLIC_TLS_KEY_FILE="
                     + shlex.quote(str(key))
+                )
+                print(
+                    "export QWQ_PUBLIC_TLS_BUNDLE_DIR="
+                    + shlex.quote(str(bundle_dir))
                 )
                 if "rootCertificate" in payload:
                     print(

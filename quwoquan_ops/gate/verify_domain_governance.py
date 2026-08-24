@@ -15,11 +15,21 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.domain_governance import (
-    LOCAL_TARGETS,
-    PUBLIC_DNS_TARGETS,
+    EDGE_ADDRESS_ABSENT,
+    DomainGovernanceError,
     desired_dns_records,
+    dns_zones,
+    loopback_dns_targets,
+    pending_dns_scopes,
+    prod_edge_dns_targets,
+    zone_record_names,
 )
 from quwoquan_ops.cli.lib.common import load_json_yaml
+from quwoquan_ops.cli.lib.dns_provider import (
+    DnsProviderError,
+    provider_for_kind,
+    registered_kinds,
+)
 from quwoquan_ops.cli.lib.environment_topology import (
     ENVIRONMENTS,
     ENVIRONMENT_CANONICAL_TARGET,
@@ -43,6 +53,9 @@ RETIRED_AUTHORITY_TOKENS = (
     "app.quwoquan.com",
     "realtime.quwoquan.com",
 )
+# 门禁探针必须过 `is_global` 校验，所以不能用 RFC 5737 文档地址；这里取 RFC 7526
+# 已废弃的 6to4 中继 anycast 地址——它可路由但不会是任何人的生产 edge。
+GATE_PROBE_EDGE_ADDRESS = "192.88.99.1"
 PRIVATE_TRUST_TOKENS = (
     "QWQ_ANDROID_LOCAL_ENV_CA",
     "local_env_debug_root",
@@ -147,6 +160,71 @@ def main() -> int:
     challenge_authority = policy.get("acmeChallengeAuthority") or {}
     provisioning_token_env = str(dns_provider.get("apiTokenEnv") or "")
     challenge_token_env = str(challenge_authority.get("apiTokenEnv") or "")
+    provider_kind = str(dns_provider.get("kind") or "")
+    if provider_kind not in registered_kinds():
+        issues.append(
+            "dnsProvider.kind must name a registered neutral provider "
+            f"implementation; registered: {registered_kinds()}"
+        )
+    if int(dns_provider.get("minimumTtlSeconds") or 0) <= 0:
+        issues.append("dnsProvider.minimumTtlSeconds must be positive")
+    if str(policy.get("prodEdgeAddressEnv") or "") != "QWQ_PROD_EDGE_IPV4":
+        issues.append(
+            "production edge address must come from the protected "
+            "QWQ_PROD_EDGE_IPV4 input"
+        )
+    resolvers = policy.get("publicResolvers")
+    if not isinstance(resolvers, list) or len(resolvers) < 2:
+        issues.append(
+            "publicResolvers must list at least two independent DoH resolvers"
+        )
+    else:
+        # 只数个数不够：用权威服务商自家的解析器去核对自家的写入，等于自证。
+        try:
+            vendor_tokens = provider_for_kind(provider_kind).vendor_hostname_tokens
+        except Exception:  # noqa: BLE001 - kind 非法已在上面报过
+            vendor_tokens = ()
+        for resolver in resolvers:
+            hostname = (urlsplit(str(resolver)).hostname or "").lower()
+            if any(token in hostname for token in vendor_tokens):
+                issues.append(
+                    f"publicResolvers must stay independent of {provider_kind}; "
+                    f"{hostname} belongs to the authoritative provider"
+                )
+        if len({urlsplit(str(r)).hostname for r in resolvers}) < 2:
+            issues.append("publicResolvers must not repeat the same resolver host")
+    mail_guards = policy.get("mailGuards")
+    if not isinstance(mail_guards, dict) or not mail_guards:
+        issues.append("mailGuards must declare the canonical mail-guard modes")
+        mail_guards = {}
+    for guard_name, guard in mail_guards.items():
+        if not isinstance(guard, dict) or not str(guard.get("spf") or "").strip():
+            issues.append(f"mailGuards[{guard_name}].spf is required")
+        if not isinstance(guard, dict) or not str(guard.get("dmarc") or "").strip():
+            issues.append(f"mailGuards[{guard_name}].dmarc is required")
+        elif "p=reject" not in str(guard["dmarc"]):
+            issues.append(
+                f"mailGuards[{guard_name}].dmarc must reject header-From spoofing"
+            )
+    caa_profiles = policy.get("caaProfiles")
+    if not isinstance(caa_profiles, dict) or not caa_profiles:
+        issues.append("caaProfiles must declare the canonical CAA record sets")
+        caa_profiles = {}
+    deny_all = caa_profiles.get("deny-all")
+    if not isinstance(deny_all, list) or not any(
+        isinstance(entry, dict)
+        and str(entry.get("tag") or "") == "issue"
+        and str(entry.get("value") or "") == ";"
+        for entry in deny_all or []
+    ):
+        issues.append(
+            "caaProfiles must offer a deny-all profile so zones without public "
+            "certificates block every CA"
+        )
+    if "caa" in policy:
+        issues.append(
+            "the legacy flat caa list is retired; zones must name a caaProfile"
+        )
     if provisioning_token_env != "QWQ_DNS_PROVISIONING_API_TOKEN":
         issues.append("DNS record provisioning must use its dedicated protected token")
     if challenge_token_env != "QWQ_ACME_DNS_API_TOKEN":
@@ -157,8 +235,19 @@ def main() -> int:
         issues.append("ACME challenge authority must use a scoped DNS API token")
     if challenge_authority.get("requiredNamePrefix") != "_acme-challenge":
         issues.append("ACME token scope must be limited to _acme-challenge")
-    if challenge_authority.get("forbidProductionZoneMutation") is not True:
-        issues.append("ACME challenge authority must forbid production zone mutation")
+    if challenge_authority.get("forbidNonChallengeMutation") is not True:
+        issues.append(
+            "ACME challenge authority must forbid mutating anything other than "
+            "_acme-challenge records"
+        )
+    if str(challenge_authority.get("providerEnforcement") or "") not in {
+        "credential-isolation-only",
+        "provider-enforced-prefix",
+    }:
+        issues.append(
+            "ACME challenge authority must state how far the DNS provider can "
+            "actually enforce the challenge scope"
+        )
     endpoint_registry = policy.get("endpointRegistry")
     if not isinstance(endpoint_registry, list):
         issues.append("domain governance endpointRegistry must be a list")
@@ -293,12 +382,10 @@ def main() -> int:
             issues.append(
                 f"{target_name}: attachment delivery must use the canonical CDN origin"
             )
-    dns_records = desired_dns_records()
-    dns_names = {
-        str(record["name"])
-        for record in dns_records
-        if record["type"] == "A"
-    }
+    # 门禁只判仓库事实，因此两种寻址场景都显式传参，绝不读 QWQ_PROD_EDGE_IPV4：
+    # 让结果依赖运行环境会在生产接线完成的那一刻把这个门禁变成永久红灯。
+    absent_edge_records = desired_dns_records(EDGE_ADDRESS_ABSENT)
+    dns_records = desired_dns_records(GATE_PROBE_EDGE_ADDRESS)
     record_identities = [
         (
             str(record["type"]),
@@ -309,19 +396,110 @@ def main() -> int:
     ]
     if len(record_identities) != len(set(record_identities)):
         issues.append("DNS plan contains duplicate record identities")
-    topology_local_hosts: set[str] = set()
-    for target_name in PUBLIC_DNS_TARGETS:
-        for value in (get_target(topology, target_name).get("publicBases") or {}).values():
-            host = urlsplit(str(value)).hostname
-            if host:
-                topology_local_hosts.add(host)
-    for host in topology_local_hosts:
-        covered = host in dns_names or any(
-            name.startswith("*.") and host.endswith(name[1:])
-            for name in dns_names
+    # 白名单而非黑名单：逐个列举厂商字段永远滞后于新增字段。
+    neutral_record_fields = {"type", "name", "content", "data", "ttl", "priority"}
+    for record in dns_records:
+        extra = sorted(set(record) - neutral_record_fields)
+        if extra:
+            issues.append(
+                "DNS plan records must stay provider-neutral; "
+                f"{record['type']} {record['name']} carries {extra}"
+            )
+
+    zones = dns_zones()
+    zone_by_target = {str(zone["target"]): zone for zone in zones}
+    expected_zone_targets = {
+        *(ENVIRONMENT_CANONICAL_TARGET[environment] for environment in ENVIRONMENTS),
+        "prod-sim",
+    }
+    if set(zone_by_target) != expected_zone_targets:
+        issues.append(
+            "dnsZones must cover every canonical environment target exactly once; "
+            f"expected {sorted(expected_zone_targets)}, got {sorted(zone_by_target)}"
         )
-        if not covered:
-            issues.append(f"DNS plan does not cover topology host {host}")
+    if set(loopback_dns_targets()) & set(prod_edge_dns_targets()):
+        issues.append("a DNS zone must not be both loopback and prod-edge addressed")
+    if set(prod_edge_dns_targets()) != {"prod-hosted"}:
+        issues.append("only prod-hosted may resolve to the production edge address")
+    absent_pending = {item["scope"] for item in pending_dns_scopes(EDGE_ADDRESS_ABSENT)}
+    if "prod" not in absent_pending:
+        issues.append(
+            "without an injected edge address the production zone must report "
+            "pending instead of silently planning nothing"
+        )
+    if pending_dns_scopes(GATE_PROBE_EDGE_ADDRESS):
+        issues.append(
+            "an injected edge address must clear every pending scope; "
+            f"still pending: {sorted(pending_dns_scopes(GATE_PROBE_EDGE_ADDRESS))}"
+        )
+    prod_zone = zone_by_target.get("prod-hosted") or {}
+    if prod_zone:
+        absent_prod_addresses = [
+            record
+            for record in absent_edge_records
+            if str(record["type"]) in {"A", "AAAA"}
+            and str(record["name"]) in set(zone_record_names(prod_zone))
+        ]
+        if absent_prod_addresses:
+            issues.append(
+                "without an injected edge address the production zone must plan "
+                "no address record at all; got "
+                f"{[record['name'] for record in absent_prod_addresses]}"
+            )
+    for target_name, zone in sorted(zone_by_target.items()):
+        declared_names = set(zone_record_names(zone))
+        if str(zone.get("apex") or "") not in declared_names:
+            issues.append(f"dnsZones[{zone.get('scope')}] must cover its own apex")
+        topology_hosts = {
+            urlsplit(str(value)).hostname
+            for value in (
+                get_target(topology, target_name).get("publicBases") or {}
+            ).values()
+        }
+        for host in sorted(item for item in topology_hosts if item):
+            covered = host in declared_names or any(
+                name.startswith("*.") and host.endswith(name[1:])
+                for name in declared_names
+            )
+            if not covered:
+                issues.append(
+                    f"dnsZones[{zone.get('scope')}] does not cover topology host {host}"
+                )
+        public_web_host = urlsplit(
+            str(
+                (get_target(topology, target_name).get("publicBases") or {}).get(
+                    "publicWeb"
+                )
+                or ""
+            )
+        ).hostname
+        if public_web_host and str(zone.get("apex") or "") != public_web_host:
+            issues.append(
+                f"dnsZones[{zone.get('scope')}].apex must equal the canonical "
+                f"publicWeb host {public_web_host}"
+            )
+        apex = str(zone.get("apex") or "")
+        for follower in zone.get("apexFollowers") or []:
+            name = str(follower)
+            if not name.endswith(f".{apex}"):
+                issues.append(
+                    f"dnsZones[{zone.get('scope')}] apexFollowers must live under "
+                    f"{apex}; got {name}"
+                )
+            if name not in declared_names:
+                issues.append(
+                    f"dnsZones[{zone.get('scope')}] apexFollowers must receive the "
+                    f"same address records as the apex; {name} is uncovered"
+                )
+    if any("aliases" in zone for zone in zones):
+        issues.append(
+            "CNAME aliases are retired; apex followers must share the apex "
+            "address records so one edge address has exactly one expression"
+        )
+    if any(str(record["type"]).upper() == "CNAME" for record in dns_records):
+        issues.append(
+            "the DNS plan must not mix CNAME with address records on managed names"
+        )
 
     for path in tracked_files:
         if (
@@ -462,27 +640,41 @@ def main() -> int:
         if isinstance(profile, dict)
         and profile.get("kind") == "dns-01-public-ca"
     }
-    if public_profile_targets != set(PUBLIC_DNS_TARGETS):
-        issues.append("DNS-01 TLS profiles must cover prod-sim exactly once")
+    if public_profile_targets != {"prod-sim", "prod-hosted"}:
+        issues.append(
+            "DNS-01 public-CA profiles must cover prod-sim and prod-hosted "
+            "exactly once each"
+        )
+    for profile_name, profile in tls_profiles.items():
+        if not isinstance(profile, dict):
+            continue
+        if profile.get("certificateAutomation") == "external":
+            issues.append(
+                f"tlsProfiles[{profile_name}] must not defer certificate "
+                "automation to an unowned external surface"
+            )
     for profile_name, profile in tls_profiles.items():
         if (
             not isinstance(profile, dict)
             or profile.get("kind") != "dns-01-public-ca"
         ):
             continue
+        # apex/wildcard 的唯一声明面是对应 zone；TLS profile 只能与它一致，门禁不再
+        # 维护第三份 target -> apex 的硬编码映射。
         target_name = str(profile.get("target") or "")
-        env_label = {
-            "alpha-local": "alpha",
-            "beta-local": "beta",
-            "gamma-local": "gamma",
-            "prod-sim": "sim",
-            "prod-hosted": "",
-        }.get(target_name)
-        expected_apex = (
-            f"{env_label}.quwoquan.com" if env_label else "quwoquan.com"
-        )
+        zone = zone_by_target.get(target_name)
+        if zone is None:
+            issues.append(
+                f"tlsProfiles[{profile_name}] targets {target_name!r} which has no "
+                "dnsZones entry to derive apex/wildcard from"
+            )
+            continue
+        expected_apex = str(zone.get("apex") or "")
         if profile.get("apex") != expected_apex:
-            issues.append(f"{profile_name}.apex must be {expected_apex}")
+            issues.append(
+                f"{profile_name}.apex must match dnsZones[{zone.get('scope')}].apex "
+                f"({expected_apex})"
+            )
         if profile.get("wildcard") != f"*.{expected_apex}":
             issues.append(f"{profile_name}.wildcard must be *.{expected_apex}")
     prod_roles = get_target(topology, "prod-hosted").get("resolvedUrlRoles") or {}
@@ -491,7 +683,26 @@ def main() -> int:
         for role in prod_roles.values()
         if isinstance(role, dict)
     ):
-        issues.append("prod-hosted roles must use externally managed public-ca-prod")
+        issues.append("prod-hosted roles must all bind the public-ca-prod TLS profile")
+    prod_tls_profile = tls_profiles.get("public-ca-prod")
+    if not isinstance(prod_tls_profile, dict):
+        issues.append("public-ca-prod TLS profile is required for prod-hosted")
+    elif prod_tls_profile.get("kind") != "dns-01-public-ca":
+        issues.append("public-ca-prod must be issued through owned DNS-01 automation")
+
+    for target_name, zone in sorted(zone_by_target.items()):
+        expects_public_certificate = target_name in public_profile_targets
+        selected = str(zone.get("caa") or "")
+        if expects_public_certificate and selected == "deny-all":
+            issues.append(
+                f"dnsZones[{zone.get('scope')}] issues public certificates and "
+                "must not deny every CA"
+            )
+        if not expects_public_certificate and selected != "deny-all":
+            issues.append(
+                f"dnsZones[{zone.get('scope')}] has no public certificate and "
+                "must deny every CA instead of inheriting the apex allowlist"
+            )
 
     for path in tracked_files:
         if (
@@ -527,7 +738,9 @@ def main() -> int:
             {
                 "environments": list(ENVIRONMENTS),
                 "roles": list(URL_FIELDS),
-                "dnsNames": len(dns_names),
+                "dnsZones": [str(zone.get("scope") or "") for zone in zones],
+                "dnsRecords": len(dns_records),
+                "providerKind": str(dns_provider.get("kind") or ""),
             },
             ensure_ascii=False,
         )
@@ -535,5 +748,16 @@ def main() -> int:
     return 0
 
 
+def _cli() -> int:
+    # 策略/注入值非法时也要走同一套输出契约，而不是抛栈——消费方按
+    # `[verify-domain-governance] FAIL` 解析结果。
+    try:
+        return main()
+    except (DomainGovernanceError, DnsProviderError) as exc:
+        print("[verify-domain-governance] FAIL")
+        print(f"  - {exc}")
+        return 1
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(_cli())

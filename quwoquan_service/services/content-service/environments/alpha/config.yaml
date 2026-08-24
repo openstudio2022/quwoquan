@@ -1,6 +1,7 @@
 overrides:
   sys.content-service.accountSecurityAuthority.baseUrl: http://user-service:18081
   sys.content-service.accountSecurityAuthority.timeoutMs: 300
+  sys.content-service.embedding.enabled: true
   sys.content-service.es.enabled: true
   sys.content-service.ip_location.provider: deterministic
   sys.content-service.oss.use_ssl: true

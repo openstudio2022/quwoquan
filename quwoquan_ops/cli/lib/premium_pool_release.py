@@ -72,7 +72,31 @@ class PremiumPoolTestLiveBinding:
     runtime_identity: Mapping[str, str]
 
 
-PremiumPoolBinding = PremiumPoolCandidateBinding | PremiumPoolTestLiveBinding
+@dataclass(frozen=True)
+class PremiumPoolBootstrapBinding:
+    """首次激活绑定：只以 `apply` 的导入证据为输入。
+
+    与 candidate 绑定的本质区别是没有 `verify_run_id`——这条路径存在的前提正是
+    consumer 档校验尚未、也无法通过。
+    """
+
+    environment: str
+    target: str
+    baseline_id: str
+    package_digest: str
+    source_revision: str
+    release_id: str
+    manifest_digest: str
+    import_run_id: str
+    content_id: str
+    import_report_ref: str
+
+
+PremiumPoolBinding = (
+    PremiumPoolCandidateBinding
+    | PremiumPoolTestLiveBinding
+    | PremiumPoolBootstrapBinding
+)
 
 
 def load_premium_pool_candidate_binding(
@@ -165,6 +189,125 @@ def load_premium_pool_candidate_binding(
         content_id=canonical_content_id,
         readiness_receipt_ref=receipt_ref,
     )
+
+
+def load_premium_pool_bootstrap_binding(
+    *,
+    environment: str,
+    target: str,
+    import_report: str | Path,
+    content_id: str,
+    pool_is_empty: bool,
+) -> PremiumPoolBootstrapBinding:
+    """Bind the first PremiumPoolEntry of an environment to its import evidence.
+
+    `immutable-candidate` 要求一份已通过的 consumer 档收据，而该档校验把
+    「`premium_stream` 非空」当作通过条件，因此空池环境无法自举。这条路径只在
+    池确实为空时开放，且不放宽 release 绑定：内容必须是本次导入落库的视频。
+    """
+
+    if not pool_is_empty:
+        raise PremiumPoolReleaseError(
+            "environment already has premium pool entries; "
+            "use the consumer readiness receipt instead"
+        )
+    active = active_deployment_candidate(target)
+    if not isinstance(active, dict):
+        raise PremiumPoolReleaseError(
+            "GATE_BLOCK: active immutable candidate is required"
+        )
+    baseline_id = str(active.get("baselineId") or "").strip()
+    manifest = load_candidate_manifest(
+        environment,
+        target,
+        baseline_id,
+        require_full=True,
+    )
+    report_path = Path(import_report).expanduser().resolve()
+    report_root = env_runs_root(environment).resolve()
+    try:
+        report_ref = str(report_path.relative_to(report_root))
+    except ValueError as exc:
+        raise PremiumPoolReleaseError(
+            "import report must belong to the selected environment"
+        ) from exc
+    try:
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise PremiumPoolReleaseError("import report is unreadable") from exc
+    if (
+        not isinstance(report, dict)
+        or report.get("schema") != "quwoquan.content_import_report"
+        or report.get("environment") != environment
+        or report.get("status") != "imported"
+    ):
+        raise PremiumPoolReleaseError(
+            "import report is not a passed canonical content import report"
+        )
+    release_binding = manifest.get("release")
+    candidate_release = (
+        release_binding.get("candidate") if isinstance(release_binding, dict) else None
+    )
+    if not isinstance(candidate_release, dict):
+        raise PremiumPoolReleaseError("active candidate has no release binding")
+    release_id = str(report.get("releaseId") or "").strip()
+    manifest_digest = str(report.get("manifestDigest") or "").strip()
+    if (
+        release_id != candidate_release.get("releaseId")
+        or manifest_digest != candidate_release.get("releaseDigest")
+    ):
+        raise PremiumPoolReleaseError(
+            "import report does not match the active candidate release"
+        )
+    canonical_content_id = str(content_id or "").strip()
+    if not canonical_content_id:
+        raise PremiumPoolReleaseError("contentId is required")
+    video_ids = {
+        str(row.get("postId") or "").strip()
+        for row in report.get("postBindings") or []
+        if isinstance(row, dict)
+        and row.get("contentType") == "video"
+        and str(row.get("postId") or "").strip()
+    }
+    if canonical_content_id not in video_ids:
+        raise PremiumPoolReleaseError(
+            "contentId is not a release-bound video in the import report"
+        )
+    return PremiumPoolBootstrapBinding(
+        environment=environment,
+        target=target,
+        baseline_id=baseline_id,
+        package_digest=str(manifest.get("packageDigest") or "").strip(),
+        source_revision=str(manifest.get("sourceRevision") or "").strip(),
+        release_id=release_id,
+        manifest_digest=manifest_digest,
+        import_run_id=report_path.parent.name,
+        content_id=canonical_content_id,
+        import_report_ref=report_ref,
+    )
+
+
+def premium_pool_is_empty(*, api_base_url: str, ssl_cafile: str) -> bool:
+    """Read the premium projection to decide whether a first activation is due.
+
+    判定只读内容面，因此不需要运维凭据——这与 readback 的取证口径一致。
+    """
+
+    payload = _request_json(
+        api_base_url.rstrip("/") + PREMIUM_FEED_PATH,
+        method="GET",
+        token="",
+        body=None,
+        headers={"X-Client-Session-Id": "premium-bootstrap-probe"},
+        ssl_cafile=ssl_cafile,
+        timeout_seconds=5.0,
+    )
+    return not [
+        item
+        for item in payload.get("items") or []
+        if isinstance(item, dict)
+        and str(item.get("id") or item.get("postId") or "").strip()
+    ]
 
 
 def load_premium_pool_test_live_binding(
@@ -364,7 +507,7 @@ def execute_premium_pool_upsert(
         raise PremiumPoolReleaseError("qualityScore must be between 0.75 and 1.0")
     canonical_expiry = _future_rfc3339(expires_at)
     supply_source = "canonical_data_release:" + binding.release_id
-    audit_id = "content-commercial:" + binding.verify_run_id
+    audit_id = _premium_audit_id(binding)
     rollback_token = _premium_rollback_token(binding)
     body = {
         "contentId": binding.content_id,
@@ -540,6 +683,18 @@ def _wait_for_premium_projection(
         time.sleep(0.5)
 
 
+def _premium_audit_id(binding: PremiumPoolBinding) -> str:
+    """审计标识必须指向真正支撑这次写入的证据。
+
+    首次激活尚无 verify 运行，其唯一凭据是导入报告；把它记成 commercial 审核会让
+    收据谎称经过了并不存在的校验。
+    """
+
+    if isinstance(binding, PremiumPoolBootstrapBinding):
+        return "content-release-import:" + binding.import_run_id
+    return "content-commercial:" + binding.verify_run_id
+
+
 def _premium_readback_session_id(binding: PremiumPoolBinding) -> str:
     if isinstance(binding, PremiumPoolTestLiveBinding):
         identity = (
@@ -555,7 +710,9 @@ def _premium_readback_session_id(binding: PremiumPoolBinding) -> str:
 
 
 def _premium_idempotency_identity(binding: PremiumPoolBinding) -> bytes:
-    if isinstance(binding, PremiumPoolCandidateBinding):
+    if isinstance(
+        binding, (PremiumPoolCandidateBinding, PremiumPoolBootstrapBinding)
+    ):
         return binding.package_digest.encode("utf-8")
     return json.dumps(
         {
@@ -587,6 +744,20 @@ def _premium_rollback_token(binding: PremiumPoolBinding) -> str:
 
 
 def _premium_receipt_binding(binding: PremiumPoolBinding) -> dict[str, Any]:
+    if isinstance(binding, PremiumPoolBootstrapBinding):
+        return {
+            "releaseImportBinding": {
+                "launchPolicy": "release_import",
+                "baselineId": binding.baseline_id,
+                "packageDigest": binding.package_digest,
+                "sourceRevision": binding.source_revision,
+                "releaseId": binding.release_id,
+                "manifestDigest": binding.manifest_digest,
+                "importRunId": binding.import_run_id,
+                "importReportRef": binding.import_report_ref,
+                "videoWorkId": binding.content_id,
+            }
+        }
     if isinstance(binding, PremiumPoolCandidateBinding):
         return {
             "candidate": {

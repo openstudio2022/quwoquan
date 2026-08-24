@@ -197,6 +197,47 @@ class ExternalProviderGovernanceContractTest(unittest.TestCase):
                         (environment, service_id, capability_id, binding["adapter"]),
                     )
 
+    def test_enabled_binding_is_matched_by_an_enabled_capability_switch(self) -> None:
+        """绑定为 enabled 却不打开能力开关，会让该能力在该环境静默缺席。
+
+        这不是「环境按容量裁剪」——绑定已经声明这个环境要用该能力，开关关着
+        只会让依赖它的读取面返回空结果，且没有任何失败信号。
+
+        spec_ref: environment-topology-and-packaging GWT-001（四环境同一 composition）
+        """
+        # 能力标识 -> 决定它是否真正生效的服务配置开关。
+        capability_switches = {
+            "content.embedding.generation": (
+                "content-service",
+                "sys.content-service.embedding.enabled",
+            ),
+        }
+        bindings = governance.load_bindings()
+        missing: list[tuple[str, str, str]] = []
+        for environment, service_map in bindings["environments"].items():
+            for service_id, service_bindings in service_map.items():
+                for capability_id, binding in service_bindings.items():
+                    switch = capability_switches.get(capability_id)
+                    if switch is None or switch[0] != service_id:
+                        continue
+                    if binding.get("state") != "enabled":
+                        continue
+                    config_path = (
+                        ROOT
+                        / "quwoquan_service"
+                        / "services"
+                        / service_id
+                        / "environments"
+                        / environment
+                        / "config.yaml"
+                    )
+                    overrides = (
+                        yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+                    ).get("overrides") or {}
+                    if overrides.get(switch[1]) is not True:
+                        missing.append((environment, service_id, switch[1]))
+        self.assertEqual(missing, [])
+
     def test_adapter_paths_are_scanned_from_real_sources(self) -> None:
         for adapter in governance.load_registry()["adapters"]:
             self.assertTrue(adapter["implementation_path"], adapter["adapter_id"])

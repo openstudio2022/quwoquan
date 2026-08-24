@@ -100,8 +100,9 @@ from quwoquan_ops.cli.lib.local_environment_auth import (
 )
 from quwoquan_ops.cli.lib.premium_pool_release import (
     PremiumPoolReleaseError, execute_premium_pool_readback, execute_premium_pool_upsert,
-    load_premium_pool_candidate_binding, load_premium_pool_test_live_binding,
-    open_premium_pool_operator_session,
+    load_premium_pool_bootstrap_binding, load_premium_pool_candidate_binding,
+    load_premium_pool_test_live_binding, open_premium_pool_operator_session,
+    premium_pool_is_empty,
 )
 from quwoquan_ops.cli.lib.local_gamma_object_storage import prepare_local_gamma_object_storage
 from quwoquan_ops.cli.lib.local_environment_object_storage import (
