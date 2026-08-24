@@ -84,22 +84,15 @@ func TestResolveLocationLookupFailsClosedWithoutCompiledEnvironmentBinding(t *te
 	}
 }
 
-// 公共 Provider 的环境准入完全由声明层拥有：只有 alpha 声明启用 POI 协议替身，
-// route.read 在四环境保持 not_required（App 无路线消费页面，UAT journey 无法闭环），
-// beta/gamma/prod 的两项公共能力都不得被声明为启用。
+// 公共 Provider 的环境准入完全由声明层拥有：poi.search 与 route.read 在四环境
+// 一致保持 not_required——nonprod 三环境必须共享同一 binding 档（DEC-005 信任域
+// 裁决），启用任一项都要求四环境同步声明，不允许单环境先行。
 func TestPublicLocationBindingsAlphaSubstituteAndOtherEnvironmentsBlocked(
 	t *testing.T,
 ) {
 	alphaPOI := declaredLocationBinding(t, "alpha", LocationPOISearchCapabilityID)
-	if alphaPOI.State != "enabled" ||
-		alphaPOI.AdapterID != "ext.map.nominatim.protocol_substitute" {
-		t.Fatalf("alpha POI 声明必须是协议替身: %+v", alphaPOI)
-	}
-	if len(alphaPOI.SecretEnvironmentKeys) != 0 ||
-		alphaPOI.EndpointEnvironmentKeys["base"] !=
-			"INTEGRATION_LOCATION_NOMINATIM_BASE_URL" ||
-		alphaPOI.TimeoutMilliseconds <= 0 {
-		t.Fatalf("alpha POI 声明漂移: %+v", alphaPOI)
+	if alphaPOI.State != "not_required" || alphaPOI.AdapterID != "" {
+		t.Fatalf("alpha POI 必须与其余环境同档保持未启用: %+v", alphaPOI)
 	}
 
 	alphaRoute := declaredLocationBinding(t, "alpha", LocationRouteReadCapabilityID)

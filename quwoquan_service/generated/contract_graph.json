@@ -21705,11 +21705,8 @@
       "principal": "persona",
       "ownershipPolicy": "original_access_audit_owner",
       "commercial": {
-        "status": "blocked",
-        "explicit": true,
-        "blockReason": "canonical operation awaits object-centered commercial migration",
-        "gapId": "CONTENT_ORIGINAL_ACCESS_QUOTA_COMMERCIAL_EVIDENCE",
-        "targetStory": "app-cloud-business-object-commercial-closure"
+        "status": "ready",
+        "explicit": true
       },
       "reliability": {
         "timeoutMilliseconds": 1500,
@@ -108633,7 +108630,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/gathering/gathering_remote__local_contract_test.dart",
-            "sha256": "2edaec0b068f37ca58b62b3729970b05e8f586863d49b53d0b6f2727d96babcd"
+            "sha256": "ef53baeed6f171eacab8013f8ff8fe199719c99ea092e05996a33bb4ea13b0c5"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/gathering/gathering_shared_experience__local_contract_test.dart",
@@ -108659,15 +108656,15 @@
         "apiIntegration": [
           {
             "path": "quwoquan_app/test/api_integration/service/circle_service/circle_management/gathering/gathering_availability_watch_remote__api_integration_test.dart",
-            "sha256": "06ddee7d945690fef8f8eae7af70787a15d9eb35dcde000970992228778098ff"
+            "sha256": "c4ca05ecf27f9ea8417cffbd916df4e4610377e10c2061cf2c1d727196885419"
           },
           {
             "path": "quwoquan_app/test/api_integration/service/circle_service/circle_management/gathering/gathering_list_by_host_remote__api_integration_test.dart",
-            "sha256": "c7c7d78f009b277244f1cfc3f5930228ee04021a40b468741c35f0c57aec8b60"
+            "sha256": "1d41fe50c1ceffdf34880f092964f082e6b64d3b60abfffbd1e5bbe309a9f70c"
           },
           {
             "path": "quwoquan_app/test/api_integration/service/circle_service/circle_management/gathering/gathering_list_by_source_remote__api_integration_test.dart",
-            "sha256": "67a4bca6d469149ca883feabbc54018fc825b6a10eb6dfa1a01285927f013a20"
+            "sha256": "e0cb42252bf1da046930b8820acf4b0d87a92fc753fef71468c10fe1efd7f80d"
           }
         ],
         "userAcceptance": [
@@ -108810,29 +108807,33 @@
         "domain": [],
         "application": [
           {
+            "path": "quwoquan_app/lib/service/circle_service/circle_management/gathering_plan/application/public/gathering_board_plan_reader.dart",
+            "sha256": "6255517324e4dcafd36cbcd8649b532490a4d44073f3b48558d31d1f9d5f642a"
+          },
+          {
             "path": "quwoquan_app/lib/service/circle_service/circle_management/gathering_plan/application/public/gathering_plan_ports.dart",
-            "sha256": "f6e224fb7a6933402b92a6a14e286178de63d035f78073d3d33cc27787d67d42"
+            "sha256": "c62bfc514bb1edb58dc97453b33d8a0c685cd8fc638d83fabecab5d35216b213"
           }
         ],
         "adapters": [
           {
             "path": "quwoquan_app/lib/service/circle_service/circle_management/gathering_plan/adapters/gathering_plan_remote.dart",
-            "sha256": "8ebf4ac0abc1a14db954897bee5d6a1086828e0448227313d9d481c90403b129"
+            "sha256": "065eed54bde29d7add7fbaab2e3da0784fd75fd4a766d298a9e0ebb3be7b6874"
           },
           {
             "path": "quwoquan_app/lib/service/circle_service/circle_management/gathering_plan/adapters/gathering_plan_wire_codec.dart",
-            "sha256": "f234febcda2bbae78a57df8ed17a11dc05ffb030be402f3c643e29190fb399d4"
+            "sha256": "0773e94998cc3b65153e007ff96af0ea08630595418694713a49123bed5df397"
           }
         ],
         "presentation": [],
         "localContract": [
           {
             "path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/gathering_plan/gathering_plan_board_projection__local_contract_test.dart",
-            "sha256": "50c7bf5cfdbc54f84d5e5e0a8bc97b00dea0d604e1e6a541cf885714a61df88a"
+            "sha256": "42d1f442c9b9857c76436a107a156b31b99982c34b3b05e74039fec26cf7eac8"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/gathering_plan/gathering_plan_remote__local_contract_test.dart",
-            "sha256": "de659b94d525b2defc2cd4835a376396839e1bd05260c6551d506bff945e603f"
+            "sha256": "089e2206f2d7d5e1c148d732ef5d2e2eec210d5102f860761a92df07c9a99f2b"
           }
         ],
         "apiIntegration": [],
@@ -116287,7 +116288,7 @@
           },
           {
             "path": "quwoquan_service/services/integration-service/tests/local_contract/external_integration/capability_grant/public_provider_config__local_contract_test.go",
-            "sha256": "5c6575c7e85677adbe10b3d9fb82db58f7700e822ce7f69bd05558af7c56e60a"
+            "sha256": "0f806914ab6bd55c6a15d464d39a1ea8b9f158da42bed35c0f80aa1b75e7da0b"
           }
         ],
         "apiIntegration": [
@@ -117196,7 +117197,7 @@
           },
           {
             "path": "quwoquan_service/services/integration-service/tests/local_contract/external_integration/location/location_binding__local_contract_test.go",
-            "sha256": "b3892b340a127db029cb8b7f90309a94d8632fa82c6932fb0a229b960af0a2a4"
+            "sha256": "d390715f6be8899a75eb07efb708cd4b30d15a45f613ab0286174cc2b234d56c"
           },
           {
             "path": "quwoquan_service/services/integration-service/tests/local_contract/external_integration/location/location_fixture_contract__local_contract_test.go",
@@ -127334,7 +127335,6 @@
       "implemented": true,
       "commercialReady": false,
       "missing": [
-        "commercial.operation.GetOriginalImageAccessAudit",
         "commercial.result_bundle"
       ]
     },
@@ -130110,7 +130110,7 @@
     },
     {
       "path": "content/media/original_access_quota/operations.yaml",
-      "sha256": "7bd6b77d025687039bd953e989a4d1bcfbd7f1a4e54979726e3e460e50ba51d6"
+      "sha256": "9ab81fa62031f594a237389ad20f5d8293e21c2388a461332f75c6baee71413a"
     },
     {
       "path": "content/media/original_access_quota/original_access_policy.yaml",
@@ -281414,7 +281414,7 @@
     },
     {
       "path": "content/media/original_access_quota/operations.yaml",
-      "sha256": "7bd6b77d025687039bd953e989a4d1bcfbd7f1a4e54979726e3e460e50ba51d6",
+      "sha256": "9ab81fa62031f594a237389ad20f5d8293e21c2388a461332f75c6baee71413a",
       "mediaType": "application/yaml",
       "content": {
         "api_routes": [
@@ -281515,6 +281515,9 @@
             "authorization": {
               "ownership_policy": "original_access_audit_owner",
               "principal": "persona"
+            },
+            "commercial": {
+              "status": "ready"
             },
             "description": "grant 所属 persona（含研究态受管身份）回读自身原图访问 audit 事实；audit 缺失或非本人一律按拒绝 fail closed，不暴露存在性。",
             "error_codes": [

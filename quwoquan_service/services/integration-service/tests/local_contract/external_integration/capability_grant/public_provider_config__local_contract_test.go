@@ -87,20 +87,9 @@ func TestPublicProviderEnvironmentConfigsOnlyOverrideRealDifferences(t *testing.
 					)
 				}
 			}
+			// nonprod 三环境共享同一 binding 档（DEC-005），alpha 不再单独启用。
 			poiBinding := config.ExternalBindings["location.poi.search"]
-			if environment == "alpha" {
-				expected := map[string]any{
-					"state":       "enabled",
-					"adapter":     "ext.map.nominatim.protocol_substitute",
-					"endpointRef": "local_topology:provider-protocol-substitute",
-				}
-				if !reflect.DeepEqual(poiBinding, expected) {
-					t.Fatalf(
-						"alpha location.poi.search must use the managed protocol substitute: %#v",
-						poiBinding,
-					)
-				}
-			} else if len(poiBinding) != 1 || poiBinding["state"] != "not_required" {
+			if len(poiBinding) != 1 || poiBinding["state"] != "not_required" {
 				t.Fatalf(
 					"%s location.poi.search binding must remain exactly not_required: %#v",
 					environment,

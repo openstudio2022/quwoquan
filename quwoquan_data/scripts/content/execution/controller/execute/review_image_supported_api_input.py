@@ -4,7 +4,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import re
 from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
@@ -39,6 +38,7 @@ from content.execution.controller.execute.image_supported_api_review_storage imp
     write_review_json_once as _write_create_once,
 )
 from content.execution.controller.execute.image_supported_api_review_result import (
+    image_review_judgment,
     image_review_passed as _review_passed,
     image_review_summary,
 )
@@ -202,7 +202,7 @@ def _source_review_one(
         raise ProfessionalImageSupportedApiReviewError(
             "DATA.AGENT.REVIEW_INVALID: provider runId is empty"
         )
-    judgment = _judgment(outcome.result_text)
+    judgment = image_review_judgment(outcome.result_text)
     if judgment is None:
         raise ProfessionalImageSupportedApiReviewError(
             "DATA.AGENT.REVIEW_INVALID: reviewer did not return the exact judgment object"
@@ -318,28 +318,6 @@ def review_supported_api_inputs_from_source(
     return batch
 
 
-def _judgment(text: str) -> dict[str, Any] | None:
-    candidates = [text.strip()]
-    fenced = re.search(r"```(?:json)?\s*(\{.*\})\s*```", text, re.DOTALL)
-    if fenced:
-        candidates.insert(0, fenced.group(1))
-    first, last = text.find("{"), text.rfind("}")
-    if first >= 0 and last > first:
-        candidates.append(text[first : last + 1])
-    expected = {
-        "status", "entityMatch", "privacyRisk", "minorRisk",
-        "maliciousMediaRisk", "watermarkStatus", "qualityStatus", "findings",
-    }
-    for candidate in candidates:
-        try:
-            parsed = json.loads(candidate)
-        except (TypeError, ValueError):
-            continue
-        if isinstance(parsed, dict) and set(parsed) == expected:
-            return parsed
-    return None
-
-
 def _journal_pair(root: Path, *, prompt_sha256: str) -> tuple[Path, Path, dict[str, Any]]:
     matches: list[tuple[Path, Path, dict[str, Any]]] = []
     journal_root = root / "_shared/semantic_tasks"
@@ -398,7 +376,7 @@ def _execution_review_one(
         raise ProfessionalImageSupportedApiReviewError(
             "DATA.AGENT.REVIEW_INVALID: provider runId is empty"
         )
-    judgment = _judgment(outcome.result_text)
+    judgment = image_review_judgment(outcome.result_text)
     if judgment is None:
         raise ProfessionalImageSupportedApiReviewError(
             "DATA.AGENT.REVIEW_INVALID: reviewer did not return the exact judgment object"

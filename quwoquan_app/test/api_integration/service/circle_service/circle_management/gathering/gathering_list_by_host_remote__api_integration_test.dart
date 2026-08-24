@@ -25,6 +25,8 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
 import '../../../../../support/runtime/api_contract/production_cloud_operation_telemetry_evidence.dart';
 import '../../../../../support/runtime/api_contract/user_api_contract_harness.dart';
 
+import 'package:quwoquan_app/service/circle_service/circle_management/gathering_plan/adapters/gathering_board_plan_reader.dart';
+
 const _apiContractEnv = String.fromEnvironment(
   'API_CONTRACT_ENV',
   defaultValue: 'gamma',
@@ -205,9 +207,11 @@ final class _ByHostHarness {
         remote: RemoteGatheringFacet(
           client: client,
           invocationContext: invocationContext,
-          planReader: RemoteGatheringPlanFacet(
-            client: client,
-            invocationContext: invocationContext,
+          planReader: GatheringBoardPlanReaderFacade(
+            RemoteGatheringPlanFacet(
+              client: client,
+              invocationContext: invocationContext,
+            ),
           ),
         ),
         telemetry: telemetry,

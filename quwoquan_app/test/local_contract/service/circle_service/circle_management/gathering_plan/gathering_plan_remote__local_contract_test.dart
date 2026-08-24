@@ -17,6 +17,7 @@ import 'package:quwoquan_app/service/circle_service/circle_management/gathering/
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering_plan/adapters/gathering_plan_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     as cloud;
+import 'package:quwoquan_app/service/circle_service/circle_management/gathering_plan/adapters/gathering_board_plan_reader.dart';
 
 void main() {
   group('GetGatheringPlan App 读取契约', () {
@@ -154,9 +155,8 @@ RemoteGatheringFacet _remote(
   return RemoteGatheringFacet(
     client: client,
     invocationContext: context,
-    planReader: RemoteGatheringPlanFacet(
-      client: client,
-      invocationContext: context,
+    planReader: GatheringBoardPlanReaderFacade(
+      RemoteGatheringPlanFacet(client: client, invocationContext: context),
     ),
   );
 }

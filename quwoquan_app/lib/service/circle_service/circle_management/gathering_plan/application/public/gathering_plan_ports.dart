@@ -8,3 +8,11 @@ import 'package:quwoquan_app/service/chat_service/chat/conversation/application/
 abstract interface class GatheringBoardPlanReader {
   Future<GatheringBoardPlanSlice> loadPlan(String gatheringId);
 }
+
+/// 远端读取面：只做调用与 wire 解码，传输失败如实抛出。
+///
+/// 与 [GatheringBoardPlanReader] 的区别是它**会**抛异常；把失败翻译成
+/// capability reason 是 `GatheringBoardPlanReaderFacade` 的职责。
+abstract interface class GatheringPlanBoardSliceSource {
+  Future<GatheringBoardPlanSlice> readPlan(String gatheringId);
+}

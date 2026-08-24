@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import re
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -41,4 +43,31 @@ def image_review_summary(
     }
 
 
-__all__ = ["image_review_passed", "image_review_summary"]
+def image_review_judgment(text: str) -> dict[str, Any] | None:
+    """从 agent 回复中取出恰好含全部判定字段的 JSON；取不到即缺席。"""
+    candidates = [text.strip()]
+    fenced = re.search(r"```(?:json)?\s*(\{.*\})\s*```", text, re.DOTALL)
+    if fenced:
+        candidates.insert(0, fenced.group(1))
+    first, last = text.find("{"), text.rfind("}")
+    if first >= 0 and last > first:
+        candidates.append(text[first : last + 1])
+    expected = {
+        "status", "entityMatch", "privacyRisk", "minorRisk",
+        "maliciousMediaRisk", "watermarkStatus", "qualityStatus", "findings",
+    }
+    for candidate in candidates:
+        try:
+            parsed = json.loads(candidate)
+        except (TypeError, ValueError):
+            continue
+        if isinstance(parsed, dict) and set(parsed) == expected:
+            return parsed
+    return None
+
+
+__all__ = [
+    "image_review_judgment",
+    "image_review_passed",
+    "image_review_summary",
+]

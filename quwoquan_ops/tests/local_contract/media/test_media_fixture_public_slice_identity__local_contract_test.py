@@ -160,14 +160,18 @@ class PublicFixtureSliceIdentityTest(unittest.TestCase):
                 "test_live",
             )
             public_bases = topology["environments"][env_name]["publicBases"]
-            defines = {
-                define_key: public_bases[topology_field]
-                for topology_field, define_key in gate.APP_RUNTIME_CONFIG_MEDIA_FIELDS.values()
+            # 解析器交出的是完整 signed runtime package，媒体 endpoint 在 runtime 段。
+            runtime = {
+                runtime_field: public_bases[topology_field]
+                for runtime_field, (
+                    topology_field,
+                    _,
+                ) in gate.APP_RUNTIME_CONFIG_MEDIA_FIELDS.items()
             }
             return subprocess.CompletedProcess(
                 command,
                 0,
-                stdout=json.dumps(defines),
+                stdout=json.dumps({"runtime": runtime}),
                 stderr="",
             )
 
@@ -199,8 +203,13 @@ class PublicFixtureSliceIdentityTest(unittest.TestCase):
                 0,
                 stdout=json.dumps(
                     {
-                        define_key: public_bases[topology_field]
-                        for topology_field, define_key in gate.APP_RUNTIME_CONFIG_MEDIA_FIELDS.values()
+                        "runtime": {
+                            runtime_field: public_bases[topology_field]
+                            for runtime_field, (
+                                topology_field,
+                                _,
+                            ) in gate.APP_RUNTIME_CONFIG_MEDIA_FIELDS.items()
+                        }
                     }
                 ),
                 stderr="",

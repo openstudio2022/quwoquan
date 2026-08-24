@@ -668,31 +668,41 @@ def _validate_runtime_config_authority_parity(
             )
             continue
         try:
-            defines = json.loads(result.stdout)
+            package = json.loads(result.stdout)
         except json.JSONDecodeError as exc:
-            issues.append(f"{env_name}: App Dart define 输出不是 JSON: {exc}")
+            issues.append(f"{env_name}: App runtime package 输出不是 JSON: {exc}")
             continue
-        for runtime_field, (topology_field, define_key) in APP_RUNTIME_CONFIG_MEDIA_FIELDS.items():
+        # 解析器交出的是完整 signed runtime package，媒体 endpoint 落在它的
+        # runtime 段；这里比对该段而不是已退役的扁平 define map。
+        resolved_runtime = package.get("runtime")
+        if not isinstance(resolved_runtime, dict):
+            issues.append(f"{env_name}: App runtime package 缺少 runtime 段")
+            continue
+        for runtime_field, (topology_field, _) in APP_RUNTIME_CONFIG_MEDIA_FIELDS.items():
             expected = str(expected_bases.get(topology_field) or "").rstrip("/")
-            if str(defines.get(define_key) or "").rstrip("/") != expected:
+            if str(resolved_runtime.get(runtime_field) or "").rstrip("/") != expected:
                 issues.append(
-                    f"{env_name}: Dart define {define_key} 未与 topology "
+                    f"{env_name}: runtime package {runtime_field} 未与 topology "
                     f"{topology_field} 保持一致"
                 )
 
+    # endpoint 不得有编译期兜底这一意图，在 runtime package 切换后由「只从
+    # package 读」直接满足：源码里根本不存在 endpoint 的 String.fromEnvironment。
+    # 因此判据从「define 必须留空默认值」改为「不得存在 endpoint define 读取」。
     runtime_config_source = APP_RUNTIME_CONFIG_SOURCE.read_text(encoding="utf-8")
-    for define_key in (
-        "CLOUD_GATEWAY_BASE_URL",
-        *(define_key for _, define_key in APP_RUNTIME_CONFIG_MEDIA_FIELDS.values()),
-    ):
-        default_pattern = re.compile(
-            rf"'{re.escape(define_key)}'\s*,\s*defaultValue:\s*''",
-            re.DOTALL,
-        )
-        if not default_pattern.search(runtime_config_source):
+    for runtime_field, (_, define_key) in (
+        {"gatewayBaseUrl": ("gateway", "CLOUD_GATEWAY_BASE_URL")}
+        | APP_RUNTIME_CONFIG_MEDIA_FIELDS
+    ).items():
+        if re.search(rf"fromEnvironment\(\s*'{re.escape(define_key)}'", runtime_config_source):
             issues.append(
-                f"cloud_runtime_config.dart: {define_key} 必须无 endpoint 默认值，"
-                "由环境 launcher 显式注入"
+                f"cloud_runtime_config.dart: {define_key} 不得再从编译期 define 读取，"
+                "endpoint 只能来自已激活的 signed runtime package"
+            )
+        if not re.search(rf"_runtimeValue\('{re.escape(runtime_field)}'\)", runtime_config_source):
+            issues.append(
+                f"cloud_runtime_config.dart: {runtime_field} 必须经 _runtimeValue "
+                "从 signed runtime package 读取"
             )
 
     patrol_source = (
@@ -728,13 +738,33 @@ def _validate_runtime_config_authority_parity(
             issues.append(
                 f"{source_path}: 正式 launcher/Patrol 禁止单一 media base fallback"
             )
-    for source_path, source in (
-        ("run_environment_patrol_smoke.py", patrol_source),
-        ("print_app_env_dart_defines.py", dart_defines_source),
+    # Patrol 的媒体 authority 由 session 装配模块拥有，入口脚本只做转发。
+    patrol_session_source = (
+        ROOT
+        / "quwoquan_ops"
+        / "cli"
+        / "smoke"
+        / "environment_patrol_smoke"
+        / "session.py"
+    ).read_text(encoding="utf-8")
+    # runtime package 切换后两侧都不再出现 dart-define 键：解析器按 runtime 字段
+    # 名装配，Patrol 按 CLI 选项装配。四类各自显式这条意图不变，判据锚到各自的
+    # 真实标识符，而不是已退役的 define 键。
+    for runtime_field in APP_RUNTIME_CONFIG_MEDIA_FIELDS:
+        if runtime_field not in dart_defines_source:
+            issues.append(
+                f"print_app_env_dart_defines.py: 缺少显式装配 {runtime_field} 的路径"
+            )
+    for option_name in (
+        "media_avatar_base_url",
+        "media_image_base_url",
+        "media_video_base_url",
+        "media_upload_base_url",
     ):
-        for _, define_key in APP_RUNTIME_CONFIG_MEDIA_FIELDS.values():
-            if define_key not in source:
-                issues.append(f"{source_path}: 缺少显式注入 {define_key} 的路径")
+        if option_name not in patrol_session_source:
+            issues.append(
+                f"environment_patrol_smoke/session.py: 缺少显式注入 {option_name} 的路径"
+            )
 
 
 def _validate_video_playback_patrol_contract(issues: list[str]) -> None:

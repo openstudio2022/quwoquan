@@ -20,6 +20,25 @@ if str(_SCRIPTS_ROOT) not in sys.path:
 
 from _common.paths import REPO_ROOT
 
+# 同目录实现单元：owner 发现与归属分析。
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from cloud_runtime_owner_analysis import (  # noqa: E402
+    GENERATED_CLIENT_BINDING_RE,
+    GENERATED_UPGRADE_ID_RE,
+    WEBSOCKET_UPGRADE_EXECUTOR_RE,
+    OwnerReport,
+    UpgradeOwnerReport,
+    _analyze_method_owners,
+    _analyze_upgrade_owners,
+    _canonical_adapter_paths,
+    _collect_method_references,
+    _commercially_blocked_methods,
+    _legacy_cloud_paths,
+    _without_dart_non_code,
+)
+
 ROOT = REPO_ROOT
 APP = ROOT / "quwoquan_app"
 RUNTIME_ROOT = APP / "lib/runtime"
@@ -62,6 +81,7 @@ EXECUTION_RUNTIME_FILES = (
 
 IMPORT_RE = re.compile(r"^\s*import\s+['\"]([^'\"]+)['\"]", re.MULTILINE)
 EMPTY_CATCH_RE = re.compile(r"catch\s*\([^)]*\)\s*\{\s*\}", re.MULTILINE)
+REMOTE_CONSTRUCTION_RE = re.compile(r"\b(Remote[A-Za-z0-9_]*)\s*\(")
 DART_NON_CODE_RE = re.compile(
     r"//[^\n]*"
     r"|/\*.*?\*/"
@@ -71,46 +91,6 @@ DART_NON_CODE_RE = re.compile(
     r'|r?"(?:\\.|[^"\\])*"',
     re.DOTALL,
 )
-GENERATED_CLIENT_BINDING_RE = re.compile(
-    r"\b(?:[A-Za-z_][A-Za-z0-9_]*\s*\.\s*)?"
-    r"GeneratedCloudOperationClient\s+([A-Za-z_][A-Za-z0-9_]*)\b"
-)
-GENERATED_UPGRADE_ID_RE = re.compile(
-    r"\b(?:AppCloudOperationIds|AppCloudOperationUpgradeDescriptors)"
-    r"\s*\.\s*([A-Za-z][A-Za-z0-9_]*)\b"
-)
-WEBSOCKET_UPGRADE_EXECUTOR_RE = re.compile(
-    r"\bWebSocketChannel\s*\.\s*connect\s*\("
-)
-REMOTE_CONSTRUCTION_RE = re.compile(
-    r"\b(Remote[A-Za-z0-9_]*)\s*\("
-)
-
-
-class OwnerReport(NamedTuple):
-    canonical_paths: tuple[Path, ...]
-    legacy_paths: tuple[Path, ...]
-    canonical_owners: dict[str, tuple[Path, ...]]
-    legacy_references: dict[str, tuple[Path, ...]]
-    missing: frozenset[str]
-    duplicates: dict[str, tuple[Path, ...]]
-    legacy_only: frozenset[str]
-    legacy_overlap: frozenset[str]
-    non_ready: frozenset[str]
-    legacy_non_ready: frozenset[str]
-
-
-class UpgradeOwnerReport(NamedTuple):
-    canonical_paths: tuple[Path, ...]
-    legacy_paths: tuple[Path, ...]
-    canonical_owners: dict[str, tuple[Path, ...]]
-    legacy_references: dict[str, tuple[Path, ...]]
-    executors: dict[str, tuple[Path, ...]]
-    missing: frozenset[str]
-    duplicates: dict[str, tuple[Path, ...]]
-    legacy_only: frozenset[str]
-    legacy_overlap: frozenset[str]
-    missing_executors: frozenset[str]
 
 
 class GeneratedMethodMetadata(NamedTuple):
@@ -362,182 +342,6 @@ def _check_generated_purity(failures: list[str]) -> None:
                 f"{retired_raw_argument}"
             )
 
-
-def _without_dart_non_code(source: str) -> str:
-    """Remove comments and strings while preserving source line numbers."""
-
-    def replace(match: re.Match[str]) -> str:
-        newline_count = match.group(0).count("\n")
-        return "\n" * newline_count if newline_count else " "
-
-    return DART_NON_CODE_RE.sub(replace, source)
-
-
-def _display_path(path: Path, repo_root: Path = ROOT) -> str:
-    try:
-        return path.relative_to(repo_root).as_posix()
-    except ValueError:
-        return path.as_posix()
-
-
-def _canonical_adapter_paths(app_root: Path) -> tuple[Path, ...]:
-    """Discover only exact service/<domain>/<context>/<object>/adapters files."""
-
-    lib_root = app_root / "lib"
-    paths: set[Path] = set()
-    for adapter_root in lib_root.glob("service/*/*/*/adapters"):
-        if adapter_root.is_dir():
-            paths.update(adapter_root.rglob("*.dart"))
-    return tuple(sorted(paths))
-
-
-def _legacy_cloud_paths(app_root: Path) -> tuple[Path, ...]:
-    paths: set[Path] = set()
-    for legacy_root in (
-        app_root / "lib/cloud/remote",
-        app_root / "lib/cloud/services",
-    ):
-        if legacy_root.is_dir():
-            paths.update(legacy_root.rglob("*.dart"))
-    return tuple(sorted(paths))
-
-
-def _typed_generated_method_references(source: str) -> frozenset[str]:
-    code = _without_dart_non_code(source)
-    bindings = set(GENERATED_CLIENT_BINDING_RE.findall(code))
-    methods: set[str] = set()
-    for binding in bindings:
-        method_re = re.compile(
-            rf"(?<![A-Za-z0-9_])(?:this\s*\.\s*)?{re.escape(binding)}"
-            r"\s*\.\s*([A-Za-z][A-Za-z0-9_]*)\s*\("
-        )
-        methods.update(method_re.findall(code))
-    return frozenset(methods)
-
-
-def _collect_method_references(
-    paths: Iterable[Path],
-) -> dict[str, tuple[Path, ...]]:
-    references: defaultdict[str, set[Path]] = defaultdict(set)
-    for source_path in paths:
-        source = source_path.read_text(encoding="utf-8")
-        for method in _typed_generated_method_references(source):
-            references[method].add(source_path)
-    return {
-        method: tuple(sorted(owner_paths))
-        for method, owner_paths in sorted(references.items())
-    }
-
-
-def _collect_upgrade_references(
-    paths: Iterable[Path],
-    generated_upgrades: Iterable[str],
-) -> dict[str, tuple[Path, ...]]:
-    ready_upgrades = frozenset(generated_upgrades)
-    references: defaultdict[str, set[Path]] = defaultdict(set)
-    for source_path in paths:
-        code = _without_dart_non_code(source_path.read_text(encoding="utf-8"))
-        for identifier in GENERATED_UPGRADE_ID_RE.findall(code):
-            if identifier in ready_upgrades:
-                references[identifier].add(source_path)
-    return {
-        identifier: tuple(sorted(owner_paths))
-        for identifier, owner_paths in sorted(references.items())
-    }
-
-
-def _collect_upgrade_executors(
-    canonical_paths: Iterable[Path],
-    owners: dict[str, tuple[Path, ...]],
-) -> dict[str, tuple[Path, ...]]:
-    paths = tuple(canonical_paths)
-    result: dict[str, tuple[Path, ...]] = {}
-    for identifier, owner_paths in owners.items():
-        owner_directories = {path.parent for path in owner_paths}
-        executors = tuple(
-            sorted(
-                path
-                for path in paths
-                if path.parent in owner_directories
-                and WEBSOCKET_UPGRADE_EXECUTOR_RE.search(
-                    _without_dart_non_code(path.read_text(encoding="utf-8"))
-                )
-            )
-        )
-        if executors:
-            result[identifier] = executors
-    return result
-
-
-def _analyze_method_owners(
-    app_root: Path,
-    generated_methods: Iterable[str],
-) -> OwnerReport:
-    ready_methods = frozenset(generated_methods)
-    canonical_paths = _canonical_adapter_paths(app_root)
-    legacy_paths = _legacy_cloud_paths(app_root)
-    canonical_owners = _collect_method_references(canonical_paths)
-    legacy_references = _collect_method_references(legacy_paths)
-    canonical_methods = frozenset(canonical_owners)
-    legacy_methods = frozenset(legacy_references)
-    without_canonical = ready_methods - canonical_methods
-    return OwnerReport(
-        canonical_paths=canonical_paths,
-        legacy_paths=legacy_paths,
-        canonical_owners=canonical_owners,
-        legacy_references=legacy_references,
-        missing=frozenset(without_canonical - legacy_methods),
-        duplicates={
-            method: paths
-            for method, paths in canonical_owners.items()
-            if len(paths) > 1
-        },
-        legacy_only=frozenset(without_canonical & legacy_methods),
-        legacy_overlap=frozenset(
-            ready_methods & canonical_methods & legacy_methods
-        ),
-        non_ready=frozenset(canonical_methods - ready_methods),
-        legacy_non_ready=frozenset(legacy_methods - ready_methods),
-    )
-
-
-def _analyze_upgrade_owners(
-    app_root: Path,
-    generated_upgrades: Iterable[str],
-) -> UpgradeOwnerReport:
-    ready_upgrades = frozenset(generated_upgrades)
-    canonical_paths = _canonical_adapter_paths(app_root)
-    legacy_paths = _legacy_cloud_paths(app_root)
-    canonical_owners = _collect_upgrade_references(
-        canonical_paths,
-        ready_upgrades,
-    )
-    legacy_references = _collect_upgrade_references(
-        legacy_paths,
-        ready_upgrades,
-    )
-    canonical_ids = frozenset(canonical_owners)
-    legacy_ids = frozenset(legacy_references)
-    without_canonical = ready_upgrades - canonical_ids
-    executors = _collect_upgrade_executors(canonical_paths, canonical_owners)
-    return UpgradeOwnerReport(
-        canonical_paths=canonical_paths,
-        legacy_paths=legacy_paths,
-        canonical_owners=canonical_owners,
-        legacy_references=legacy_references,
-        executors=executors,
-        missing=frozenset(without_canonical - legacy_ids),
-        duplicates={
-            identifier: paths
-            for identifier, paths in canonical_owners.items()
-            if len(paths) > 1
-        },
-        legacy_only=frozenset(without_canonical & legacy_ids),
-        legacy_overlap=frozenset(
-            ready_upgrades & canonical_ids & legacy_ids
-        ),
-        missing_executors=frozenset(canonical_ids - frozenset(executors)),
-    )
 
 
 def _parse_generated_surface(
@@ -929,7 +733,11 @@ def main() -> int:
         key for key, value in generated_method_metadata.items() if value.transport == "graphql"
     )
     json_methods = generated_methods - graphql_methods
-    owner_report = _analyze_method_owners(APP, json_methods)
+    owner_report = _analyze_method_owners(
+        APP,
+        json_methods,
+        _commercially_blocked_methods(generated_source),
+    )
     _check_adapter_owners(owner_report, failures)
     graphql_owned_methods = _check_graphql_method_owners(APP, generated_method_metadata, failures)
     upgrade_report = _analyze_upgrade_owners(APP, generated_upgrades)

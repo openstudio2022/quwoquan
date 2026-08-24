@@ -7,12 +7,19 @@ import argparse
 import json
 import os
 import subprocess
+import sys
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from quwoquan_ops.cli.lib.app_identity import (
+# launcher 从 run.sh 直接执行，进程不带仓库根；identity 与 manifest 契约的
+# 唯一 owner 在 ops 树，按仓内绝对包名导入前先把根接上。
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from quwoquan_ops.cli.lib.app_identity import (  # noqa: E402
     build_profile_for_environment,
     launch_policy_for_build_profile,
 )
