@@ -13,6 +13,10 @@ from unittest import mock
 
 from quwoquan_ops.cli import stackctl
 from quwoquan_ops.cli.lib import startup_attempt_receipt
+from quwoquan_ops.tests.support.provider_binding_overlay_fixture import (
+    packaged_service_build_ref,
+    write_provider_binding_overlay_fixture,
+)
 from quwoquan_app.scripts.gamma import verify_local_gamma_mirror
 
 
@@ -157,52 +161,65 @@ class StackctlRuntimeReceiptSingleTrackContractTest(unittest.TestCase):
         configuration_digest = "sha256:" + "1" * 64
         build_input_digest = "sha256:" + "2" * 64
         baseline_id = "sha256:" + "3" * 64
-        build_refs = {
+        source_refs = {
             service: f"localhost/quwoquan_service_{service.replace('-', '_')}:build"
             for service, _ in stackctl.GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS
         }
-        build_refs["service-core"] = (
+        source_refs["service-core"] = (
             "localhost/quwoquan_service_core:"
             + baseline_id.removeprefix("sha256:")
         )
-        images: dict[str, dict[str, str]] = {}
-        for index, (service, _) in enumerate(
-            stackctl.GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS,
-            start=1,
-        ):
-            image_digest = "sha256:" + f"{index:064x}"
-            images[service] = {
-                "ref": build_refs[service],
-                "imageDigest": image_digest,
-            }
         provider_role = "provider-protocol-substitute"
         provider_descriptor = {
             "buildInputDigest": "sha256:" + "8" * 64,
             "ref": "quwoquan/provider-protocol-substitute:build",
             "imageDigest": "sha256:" + "9" * 64,
         }
-        images[provider_role] = provider_descriptor
-        image_set_digest = "sha256:" + hashlib.sha256(
-            json.dumps(
-                images,
-                ensure_ascii=True,
-                separators=(",", ":"),
-                sort_keys=True,
-            ).encode("utf-8")
-        ).hexdigest()
-        manifest = {
-            "schema": stackctl.PACKAGE_OCI_IMAGES_SCHEMA,
-            "environment": "alpha",
-            "target": "alpha-local",
-            "configurationDigest": configuration_digest,
-            "buildInputDigest": build_input_digest,
-            "imageDigest": image_set_digest,
-            "images": images,
-        }
         with tempfile.TemporaryDirectory() as temporary_dir:
-            candidate_root = Path(temporary_dir) / "candidate"
+            candidate_root = Path(temporary_dir).resolve() / "candidate"
             package_root = candidate_root / "packages/runtime-shared"
             package_root.mkdir(parents=True)
+            binding_manifest_digest = write_provider_binding_overlay_fixture(
+                candidate_root,
+                environment="alpha",
+                target="alpha-local",
+            )
+            build_refs = {
+                service: packaged_service_build_ref(
+                    service,
+                    source_ref,
+                    binding_manifest_digest,
+                )
+                for service, source_ref in source_refs.items()
+            }
+            images: dict[str, dict[str, str]] = {}
+            for index, (service, _) in enumerate(
+                stackctl.GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS,
+                start=1,
+            ):
+                image_digest = "sha256:" + f"{index:064x}"
+                images[service] = {
+                    "ref": build_refs[service],
+                    "imageDigest": image_digest,
+                }
+            images[provider_role] = provider_descriptor
+            image_set_digest = "sha256:" + hashlib.sha256(
+                json.dumps(
+                    images,
+                    ensure_ascii=True,
+                    separators=(",", ":"),
+                    sort_keys=True,
+                ).encode("utf-8")
+            ).hexdigest()
+            manifest = {
+                "schema": stackctl.PACKAGE_OCI_IMAGES_SCHEMA,
+                "environment": "alpha",
+                "target": "alpha-local",
+                "configurationDigest": configuration_digest,
+                "buildInputDigest": build_input_digest,
+                "imageDigest": image_set_digest,
+                "images": images,
+            }
             manifest_path = package_root / "oci-images.json"
             manifest_path.write_text(
                 json.dumps(manifest),
@@ -217,7 +234,7 @@ class StackctlRuntimeReceiptSingleTrackContractTest(unittest.TestCase):
                 mock.patch.object(
                     stackctl,
                     "_packaged_service_source_image_ref",
-                    side_effect=lambda _environment, service: build_refs[service],
+                    side_effect=lambda _environment, service: source_refs[service],
                 ),
                 mock.patch.object(
                     stackctl,

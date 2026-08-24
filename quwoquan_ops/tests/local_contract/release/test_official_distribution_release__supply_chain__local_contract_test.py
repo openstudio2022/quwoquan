@@ -13,6 +13,7 @@ from quwoquan_ops.cli.lib.official_distribution_release import (
     inspect_official_distribution,
     prevalidate_android_distribution_candidate,
 )
+from quwoquan_ops.cli.lib.app_identity import resolve_build_product
 from quwoquan_ops.cli.prod import finalize_mainline_release_artifact as finalizer
 from quwoquan_ops.tests.support.app_artifact_manifest_test_support import (
     app_artifact_manifest,
@@ -163,7 +164,7 @@ class OfficialDistributionReleaseTest(unittest.TestCase):
                 android_manifest=android_manifest,
             )
             package = json.loads(android_manifest.read_text(encoding="utf-8"))
-            package["apkUrl"] = "https://cdn.quwoquan.com/tampered.apk"
+            package["apkSHA256"] = "e" * 64
             android_manifest.write_text(json.dumps(package), encoding="utf-8")
             with self.assertRaisesRegex(
                 OfficialDistributionReleaseError,
@@ -201,8 +202,7 @@ def _web_package(root: Path) -> Path:
         "contentSHA256": content_digest,
         "noindex": False,
         "artifactManifest": app_artifact_manifest(
-            environment="prod",
-            surface="web",
+            build_product_id="web-shared",
             source_git_sha="b" * 40,
             source_tree_digest="sha1:" + ("c" * 40),
             artifact_digest="sha256:" + content_digest,
@@ -244,8 +244,7 @@ def _android_package(root: Path, *, build: str) -> Path:
         "minimumSupportedBuild": "17000",
         "packagedAPK": apk.name,
         "artifactManifest": app_artifact_manifest(
-            environment="prod",
-            surface="android",
+            build_product_id="android-prod-apk",
             source_git_sha="b" * 40,
             source_tree_digest="sha1:" + ("c" * 40),
             artifact_digest="sha256:" + hashlib.sha256(apk.read_bytes()).hexdigest(),
@@ -263,73 +262,71 @@ def _release_manifest(
     android_manifest: Path,
 ) -> Path:
     root.mkdir(parents=True)
-    application_packages: dict[str, dict[str, dict[str, str]]] = {
-        environment: {} for environment in finalizer.ENVIRONMENTS
+    # ReleaseEvidence 只登记通用包；对外分发的 web/android 描述文件是另一份
+    # 产物，两者通过产品的内容摘要绑定，而不是同一个文件。
+    distribution_content_digests = {
+        "web-shared": "sha256:"
+        + str(json.loads(web_manifest.read_text())["contentSHA256"]),
+        "android-prod-apk": "sha256:"
+        + str(json.loads(android_manifest.read_text())["apkSHA256"]),
     }
-    package_sources = {
-        ("prod", "web"): web_manifest,
-        ("prod", "android"): android_manifest,
-    }
-    for environment in finalizer.ENVIRONMENTS:
-        for surface in finalizer.APPLICATION_PACKAGES[environment]:
-            destination = (
-                root
-                / "packages/applications"
-                / environment
-                / surface
-                / "manifest.json"
-            )
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            source = package_sources.get((environment, surface))
-            if source is not None:
-                destination.write_bytes(source.read_bytes())
-            elif environment == "prod" and surface == "opsPortal":
-                destination.write_text(
-                    json.dumps(
-                        {
-                            "schema": "qwq.ops_portal_package",
-                            "sourceGitSha": "b" * 40,
-                            "sourceTreeDigest": "sha1:" + ("c" * 40),
-                            "packageDigest": "sha256:" + ("d" * 64),
-                        }
+    application_packages: dict[str, dict[str, str]] = {}
+    for build_product_id in finalizer.APPLICATION_PACKAGES:
+        destination = (
+            root / "packages/applications" / build_product_id / "manifest.json"
+        )
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        product = resolve_build_product(build_product_id)
+        package_digest = distribution_content_digests.get(
+            build_product_id, "sha256:" + ("d" * 64)
+        )
+        destination.write_text(
+            json.dumps(
+                {
+                    "schema": finalizer.APPLICATION_PACKAGE_SCHEMA,
+                    "buildProductId": product.build_product_id,
+                    "buildProfile": product.build_profile,
+                    "platform": product.platform,
+                    "sourceGitSha": "b" * 40,
+                    "sourceTreeDigest": "sha1:" + ("c" * 40),
+                    "packageDigest": package_digest,
+                    "artifactManifest": app_artifact_manifest(
+                        build_product_id=build_product_id,
+                        source_git_sha="b" * 40,
+                        source_tree_digest="sha1:" + ("c" * 40),
+                        artifact_digest=package_digest,
                     ),
-                    encoding="utf-8",
-                )
-            else:
-                destination.write_text(
-                    json.dumps(
-                        {
-                            "schema": finalizer.APPLICATION_PACKAGE_SCHEMA,
-                            "environment": environment,
-                            "surface": surface,
-                            "sourceGitSha": "b" * 40,
-                            "sourceTreeDigest": "sha1:" + ("c" * 40),
-                            "packageDigest": "sha256:" + ("d" * 64),
-                            "artifactManifest": app_artifact_manifest(
-                                environment=environment,
-                                surface=surface,
-                                source_git_sha="b" * 40,
-                                source_tree_digest="sha1:" + ("c" * 40),
-                                artifact_digest="sha256:" + ("d" * 64),
-                            ),
-                        }
-                    ),
-                    encoding="utf-8",
-                )
-            application_packages[environment][surface] = {
-                "path": destination.relative_to(root).as_posix(),
-                "digest": _sha256_prefixed(destination),
-                "packageDigest": (
-                    "sha256:"
-                    + str(json.loads(destination.read_text())["contentSHA256"])
-                    if environment == "prod" and surface == "web"
-                    else "sha256:"
-                    + str(json.loads(destination.read_text())["apkSHA256"])
-                    if environment == "prod" and surface == "android"
-                    else "sha256:" + ("d" * 64)
-                ),
-                "sourceRef": APP_EVIDENCE_REF,
+                }
+            ),
+            encoding="utf-8",
+        )
+        application_packages[build_product_id] = {
+            "path": destination.relative_to(root).as_posix(),
+            "digest": _sha256_prefixed(destination),
+            "packageDigest": package_digest,
+            "sourceRef": APP_EVIDENCE_REF,
+        }
+
+    # opsPortal 不是 App build product，它在 ReleaseEvidence 里是独立顶层证据。
+    ops_portal_manifest = root / "packages/opsPortal/manifest.json"
+    ops_portal_manifest.parent.mkdir(parents=True, exist_ok=True)
+    ops_portal_manifest.write_text(
+        json.dumps(
+            {
+                "schema": "qwq.ops_portal_package",
+                "sourceGitSha": "b" * 40,
+                "sourceTreeDigest": "sha1:" + ("c" * 40),
+                "packageDigest": "sha256:" + ("d" * 64),
             }
+        ),
+        encoding="utf-8",
+    )
+    ops_portal_package = {
+        "path": ops_portal_manifest.relative_to(root).as_posix(),
+        "digest": _sha256_prefixed(ops_portal_manifest),
+        "packageDigest": "sha256:" + ("d" * 64),
+        "sourceRef": APP_EVIDENCE_REF,
+    }
 
     configuration_packages: dict[str, dict[str, dict[str, str]]] = {}
     for environment in finalizer.ENVIRONMENTS:
@@ -483,6 +480,7 @@ def _release_manifest(
             for index, environment in enumerate(finalizer.ENVIRONMENTS, start=1)
         },
         "applicationPackages": application_packages,
+        "opsPortal": ops_portal_package,
         "contractGraphDigest": _sha256_prefixed(contract_graph),
         "requiredEvidence": {
             "environmentArtifacts": {
@@ -493,10 +491,8 @@ def _release_manifest(
                 environment: ["content-service"]
                 for environment in finalizer.ENVIRONMENTS
             },
-            "applicationPackages": {
-                environment: list(finalizer.APPLICATION_PACKAGES[environment])
-                for environment in finalizer.ENVIRONMENTS
-            },
+            "applicationPackages": list(finalizer.APPLICATION_PACKAGES),
+            "opsPortal": True,
             "contractGraphDigest": True,
             "providerEvidence": True,
             "testEvidence": list(finalizer.TEST_LAYERS),

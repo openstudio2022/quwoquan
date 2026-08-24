@@ -16,6 +16,9 @@ from quwoquan_ops.cli import stackctl
 from quwoquan_ops.cli.lib.provider_runtime_composition import (
     compile_provider_runtime_composition,
 )
+from quwoquan_ops.tests.support.provider_binding_overlay_fixture import (
+    packaged_service_build_ref,
+)
 
 
 class StackctlGammaOperationLockContractTestBase(unittest.TestCase):
@@ -167,6 +170,8 @@ class StackctlGammaOperationLockContractTestBase(unittest.TestCase):
             else service.replace("-", "_")
         )
         return f"localhost/quwoquan_service_{repository}:{digest}"
+
+    _packaged_service_build_ref = staticmethod(packaged_service_build_ref)
 
     def setUp(self) -> None:
         self.deploy_root = tempfile.TemporaryDirectory()

@@ -24,9 +24,20 @@ class OfficialDistributionReleaseError(RuntimeError):
 
 
 _SHA256 = re.compile(r"sha256:[0-9a-f]{64}")
+# 对外分发只走两个 store/hosted 产品，键必须与 ReleaseEvidence 的
+# applicationPackages 同源；后者已按 canonical build product ID 编址，
+# 不再按 environment × surface 分层。
 _KINDS = {
-    "web": "web",
-    "app-release": "android",
+    "web": "web-shared",
+    "app-release": "android-prod-apk",
+}
+_COMPONENT_SCHEMAS = {
+    "web-shared": "client-app.web.official-release",
+    "android-prod-apk": "client-app.android.official-release",
+}
+_COMPONENT_CONTENT_DIGEST_KEYS = {
+    "web-shared": "contentSHA256",
+    "android-prod-apk": "apkSHA256",
 }
 
 
@@ -663,28 +674,31 @@ def _verify_component_binding(
     package_manifest: dict[str, Any],
 ) -> None:
     components = release_manifest.get("applicationPackages")
-    prod_components = components.get("prod") if isinstance(components, dict) else None
-    component = (
-        prod_components.get(component_key)
-        if isinstance(prod_components, dict)
-        else None
-    )
+    component = components.get(component_key) if isinstance(components, dict) else None
     if not isinstance(component, dict):
         raise OfficialDistributionReleaseError(
             f"release manifest does not bind artifact {component_key}"
         )
-    digest = "sha256:" + hashlib.sha256(package_manifest_path.read_bytes()).hexdigest()
-    if component.get("digest") != digest:
-        raise OfficialDistributionReleaseError(
-            f"release manifest distribution digest mismatch: {component_key}"
-        )
-    expected_schema = {
-        "web": "client-app.web.official-release",
-        "android": "client-app.android.official-release",
-    }[component_key]
+    expected_schema = _COMPONENT_SCHEMAS[component_key]
     if expected_schema != str(package_manifest.get("schema") or ""):
         raise OfficialDistributionReleaseError(
             f"release manifest distribution schema mismatch: {component_key}"
+        )
+    # 产品包只证明「分发的产物就是已发布的那个」；描述文件里的下载地址、
+    # 主机白名单等字段不进产物摘要，必须另按分发证据做文件级比对。
+    content_digest = str(
+        package_manifest.get(_COMPONENT_CONTENT_DIGEST_KEYS[component_key]) or ""
+    )
+    if not content_digest.startswith("sha256:"):
+        content_digest = "sha256:" + content_digest
+    if component.get("packageDigest") != content_digest:
+        raise OfficialDistributionReleaseError(
+            f"release manifest distribution digest mismatch: {component_key}"
+        )
+    declared_product = str(package_manifest.get("buildProductId") or "")
+    if declared_product and declared_product != component_key:
+        raise OfficialDistributionReleaseError(
+            f"release manifest distribution product mismatch: {component_key}"
         )
 
 

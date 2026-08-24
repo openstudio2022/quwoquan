@@ -10,6 +10,9 @@ from pathlib import Path
 from unittest import mock
 
 from quwoquan_ops.cli import stackctl
+from quwoquan_ops.tests.support.provider_binding_overlay_fixture import (
+    write_provider_binding_overlay_fixture,
+)
 from quwoquan_ops.tests.support.stackctl_gamma_operation_lock_test_support import (
     StackctlGammaOperationLockContractTestBase,
 )
@@ -81,15 +84,28 @@ class StackctlGammaOperationLockContractTest(
 
     def test_gamma_runtime_binds_exact_package_image_ids_not_build_tags(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:
-            candidate_root = Path(temporary_dir) / "candidate"
+            candidate_root = Path(temporary_dir).resolve() / "candidate"
             shared = candidate_root / "packages/runtime-shared"
             shared.mkdir(parents=True)
-            build_refs = {
+            binding_manifest_digest = write_provider_binding_overlay_fixture(
+                candidate_root,
+                environment="gamma",
+                target="gamma-local",
+            )
+            source_refs = {
                 service: self._packaged_service_source_ref(
                     service,
                     ("f" * 64 if service == stackctl.SERVICE_CORE_WORKLOAD else "build"),
                 )
                 for service, _ in stackctl.GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS
+            }
+            build_refs = {
+                service: self._packaged_service_build_ref(
+                    service,
+                    source_ref,
+                    binding_manifest_digest,
+                )
+                for service, source_ref in source_refs.items()
             }
             images = {
                 service: {
@@ -131,7 +147,11 @@ class StackctlGammaOperationLockContractTest(
                 + "\n",
                 encoding="utf-8",
             )
-            environment = {"QWQ_LOCAL_RELEASE_TARGET": "gamma-local"}
+            environment = {
+                "QWQ_LOCAL_RELEASE_TARGET": "gamma-local",
+                "QWQ_LOCAL_RELEASE_ENV": "gamma",
+                "QWQ_RUN_ROOT": str(Path(temporary_dir) / "run"),
+            }
             candidate = {
                 "baselineId": "sha256:" + "f" * 64,
                 "imageDigest": image_set_digest,
@@ -151,7 +171,7 @@ class StackctlGammaOperationLockContractTest(
                 mock.patch.object(
                     stackctl,
                     "_packaged_service_source_image_ref",
-                    side_effect=lambda _env, service: build_refs[service],
+                    side_effect=lambda _env, service: source_refs[service],
                 ),
                 mock.patch.object(
                     stackctl,
@@ -187,7 +207,7 @@ class StackctlGammaOperationLockContractTest(
                 mock.patch.object(
                     stackctl,
                     "_packaged_service_source_image_ref",
-                    side_effect=lambda _env, service: build_refs[service],
+                    side_effect=lambda _env, service: source_refs[service],
                 ),
                 mock.patch.object(
                     stackctl,
@@ -259,15 +279,28 @@ class StackctlGammaOperationLockContractTest(
             ),
         ):
             with self.subTest(expected=expected), tempfile.TemporaryDirectory() as temporary_dir:
-                candidate_root = Path(temporary_dir) / "candidate"
+                candidate_root = Path(temporary_dir).resolve() / "candidate"
                 shared = candidate_root / "packages/runtime-shared"
                 shared.mkdir(parents=True)
-                build_refs = {
+                binding_manifest_digest = write_provider_binding_overlay_fixture(
+                    candidate_root,
+                    environment="gamma",
+                    target="gamma-local",
+                )
+                source_refs = {
                     service: self._packaged_service_source_ref(
                         service,
                         ("1" * 64 if service == stackctl.SERVICE_CORE_WORKLOAD else "build"),
                     )
                     for service, _ in stackctl.GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS
+                }
+                build_refs = {
+                    service: self._packaged_service_build_ref(
+                        service,
+                        source_ref,
+                        binding_manifest_digest,
+                    )
+                    for service, source_ref in source_refs.items()
                 }
                 images = {
                     service: {
@@ -310,7 +343,7 @@ class StackctlGammaOperationLockContractTest(
                     mock.patch.object(
                         stackctl,
                         "_packaged_service_source_image_ref",
-                        side_effect=lambda _env, service: build_refs[service],
+                        side_effect=lambda _env, service: source_refs[service],
                     ),
                     mock.patch.object(
                         stackctl,
