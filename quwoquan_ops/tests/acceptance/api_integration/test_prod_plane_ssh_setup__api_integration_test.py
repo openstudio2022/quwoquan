@@ -12,6 +12,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[4]
 
 
+def _canonical_ssh_host() -> str:
+    """SSH 管理端点的唯一真相源是 access-isolation.yaml，测试不复制其值。"""
+    from quwoquan_ops.cli.lib.common import load_json_yaml
+
+    policy = load_json_yaml(
+        ROOT / "quwoquan_ops" / "environments" / "prod" / "access-isolation.yaml"
+    )
+    return str((policy.get("management") or {})["sshHost"])
+
+
 class ProdPlaneSshSetupTest(unittest.TestCase):
     """部署模块：本地 prod 平面 SSH key 生成与映射产物输出。"""
 
@@ -41,7 +51,7 @@ class ProdPlaneSshSetupTest(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             mapping = json.loads(mapping_out.read_text(encoding="utf-8"))
-            self.assertEqual(mapping["host"], "118.31.239.122")
+            self.assertEqual(mapping["host"], _canonical_ssh_host())
             self.assertEqual(
                 [account["account"] for account in mapping["accounts"]],
                 ["prod-edge-svc", "prod-media-svc", "prod-service-svc"],
@@ -216,7 +226,7 @@ class ProdPlaneSshSetupTest(unittest.TestCase):
             manifest = json.loads(
                 (extract_dir / "prod-ssh-bundle" / "manifest.json").read_text(encoding="utf-8")
             )
-            self.assertEqual(manifest["host"], "118.31.239.122")
+            self.assertEqual(manifest["host"], _canonical_ssh_host())
             self.assertEqual(len(manifest["accounts"]), 5)
             self.assertTrue((extract_dir / "prod-ssh-bundle" / "prod-service-svc").is_file())
 

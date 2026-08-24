@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 from quwoquan_ops.cli import stackctl
+from quwoquan_ops.cli.lib.app_identity import resolve_build_product
 from quwoquan_ops.cli.prod import finalize_mainline_release_artifact as finalizer
 from quwoquan_ops.cli.prod import inspect_prod_plane_runtime as inspect_runtime
 from quwoquan_ops.cli.prod import prevalidate_prod_hosted as prevalidate
@@ -89,60 +90,59 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
                 }
                 for service in services
             }
-        application_packages: dict[str, dict[str, dict[str, str]]] = {
-            environment: {} for environment in finalizer.ENVIRONMENTS
-        }
-        for environment in finalizer.ENVIRONMENTS:
-            for surface in finalizer.APPLICATION_PACKAGES[environment]:
-                relative = (
-                    f"packages/applications/{environment}/{surface}/manifest.json"
-                )
-                package_path = root / relative
-                package_path.parent.mkdir(parents=True, exist_ok=True)
-                artifact_manifest = app_artifact_manifest(
-                    environment=environment,
-                    surface=surface,
+        # App 包按 canonical build product 编址，四环境共用同一批产品；
+        # opsPortal 不是 build product，它是 ReleaseEvidence 的独立顶层证据。
+        application_packages: dict[str, dict[str, str]] = {}
+        for build_product_id in finalizer.APPLICATION_PACKAGES:
+            relative = f"packages/applications/{build_product_id}/manifest.json"
+            package_path = root / relative
+            package_path.parent.mkdir(parents=True, exist_ok=True)
+            product = resolve_build_product(build_product_id)
+            package_payload = {
+                "schema": finalizer.APPLICATION_PACKAGE_SCHEMA,
+                "buildProductId": product.build_product_id,
+                "buildProfile": product.build_profile,
+                "platform": product.platform,
+                "sourceGitSha": "a" * 40,
+                "sourceTreeDigest": "sha1:" + ("b" * 40),
+                "packageDigest": "sha256:" + ("d" * 64),
+                "artifactManifest": app_artifact_manifest(
+                    build_product_id=build_product_id,
                     source_git_sha="a" * 40,
                     source_tree_digest="sha1:" + ("b" * 40),
                     artifact_digest="sha256:" + ("d" * 64),
-                )
-                if environment == "prod" and surface in {
-                    "web",
-                    "android",
-                    "opsPortal",
-                }:
-                    schema = finalizer.PROD_APPLICATION_SOURCE_SCHEMAS[surface]
-                    package_payload = {
-                        "schema": schema,
-                        "sourceGitSha": "a" * 40,
-                        "sourceTreeDigest": "sha1:" + ("b" * 40),
-                    }
-                    if surface == "web":
-                        package_payload["contentSHA256"] = "d" * 64
-                        package_payload["artifactManifest"] = artifact_manifest
-                    elif surface == "android":
-                        package_payload["apkSHA256"] = "d" * 64
-                        package_payload["artifactManifest"] = artifact_manifest
-                    else:
-                        package_payload["packageDigest"] = "sha256:" + ("d" * 64)
-                else:
-                    package_payload = {
-                        "schema": finalizer.APPLICATION_PACKAGE_SCHEMA,
-                        "environment": environment,
-                        "surface": surface,
-                        "sourceGitSha": "a" * 40,
-                        "sourceTreeDigest": "sha1:" + ("b" * 40),
-                        "packageDigest": "sha256:" + ("d" * 64),
-                        "artifactManifest": artifact_manifest,
-                    }
-                package_path.write_text(json.dumps(package_payload), encoding="utf-8")
-                application_packages[environment][surface] = {
-                    "path": relative,
-                    "digest": "sha256:"
-                    + hashlib.sha256(package_path.read_bytes()).hexdigest(),
+                ),
+            }
+            package_path.write_text(json.dumps(package_payload), encoding="utf-8")
+            application_packages[build_product_id] = {
+                "path": relative,
+                "digest": "sha256:"
+                + hashlib.sha256(package_path.read_bytes()).hexdigest(),
+                "packageDigest": "sha256:" + ("d" * 64),
+                "sourceRef": APP_EVIDENCE_REF,
+            }
+
+        ops_portal_relative = "packages/opsPortal/manifest.json"
+        ops_portal_path = root / ops_portal_relative
+        ops_portal_path.parent.mkdir(parents=True, exist_ok=True)
+        ops_portal_path.write_text(
+            json.dumps(
+                {
+                    "schema": finalizer.OPS_PORTAL_SCHEMA,
+                    "sourceGitSha": "a" * 40,
+                    "sourceTreeDigest": "sha1:" + ("b" * 40),
                     "packageDigest": "sha256:" + ("d" * 64),
-                    "sourceRef": APP_EVIDENCE_REF,
                 }
+            ),
+            encoding="utf-8",
+        )
+        ops_portal_package = {
+            "path": ops_portal_relative,
+            "digest": "sha256:"
+            + hashlib.sha256(ops_portal_path.read_bytes()).hexdigest(),
+            "packageDigest": "sha256:" + ("d" * 64),
+            "sourceRef": APP_EVIDENCE_REF,
+        }
         evidence_root = root / "evidence"
         evidence_root.mkdir(parents=True, exist_ok=True)
         contract_graph = evidence_root / "contractGraph.json"
@@ -239,6 +239,7 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
                 for environment in finalizer.ENVIRONMENTS
             },
             "applicationPackages": application_packages,
+            "opsPortal": ops_portal_package,
             "contractGraphDigest": "sha256:"
             + hashlib.sha256(contract_graph.read_bytes()).hexdigest(),
             "requiredEvidence": {
@@ -248,10 +249,8 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
                 "configurationPackages": {
                     environment: services for environment in finalizer.ENVIRONMENTS
                 },
-                "applicationPackages": {
-                    environment: list(finalizer.APPLICATION_PACKAGES[environment])
-                    for environment in finalizer.ENVIRONMENTS
-                },
+                "applicationPackages": list(finalizer.APPLICATION_PACKAGES),
+                "opsPortal": True,
                 "contractGraphDigest": True,
                 "providerEvidence": True,
                 "testEvidence": list(finalizer.TEST_LAYERS),
@@ -366,7 +365,7 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
                 "--mode",
                 "prevalidate",
                 "--ssh-host",
-                "118.31.239.122",
+                "192.0.2.10",
                 "--data-mode",
                 "isolated",
                 "--prevalidate-scope",
@@ -374,7 +373,7 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
             ]
         )
         self.assertEqual(args.mode, "prevalidate")
-        self.assertEqual(args.ssh_host, "118.31.239.122")
+        self.assertEqual(args.ssh_host, "192.0.2.10")
         self.assertEqual(args.data_mode, "isolated")
 
     def test_projection_is_pinned_empty_and_excludes_external_providers(self) -> None:
@@ -567,7 +566,7 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
                     "--mode",
                     "prevalidate",
                     "--ssh-host",
-                    "118.31.239.122",
+                    "192.0.2.10",
                     "--data-mode",
                     "isolated",
                     "--prevalidate-scope",
@@ -612,7 +611,7 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
                     "--stage",
                     "canary",
                     "--ssh-host",
-                    "118.31.239.122",
+                    "192.0.2.10",
                     "--data-mode",
                     "isolated",
                     "--prevalidate-scope",
@@ -644,7 +643,7 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
             mock.patch.object(
                 stackctl,
                 "get_target",
-                return_value={"publicBases": {"api": "https://118.31.239.122"}},
+                return_value={"publicBases": {"api": "https://192.0.2.10"}},
             ),
         ):
             with self.assertRaisesRegex(RuntimeError, "canonical public HTTPS DNS"):

@@ -199,8 +199,8 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                     "backend": "ssh-hosted",
                     "portProfile": None,
                     "publicBases": {
-                        "api": "https://118.31.239.122:19000",
-                        "productOps": "https://118.31.239.122:19010",
+                        "api": "https://192.0.2.10:19000",
+                        "productOps": "https://192.0.2.10:19010",
                     },
                 }
             }

@@ -57,7 +57,7 @@ class PublicWebStaticHealthLocalContractTest(unittest.TestCase):
                 _ORIGIN + "/runtime-config-trust.json",
                 _ORIGIN + "/runtime-config-package.json",
                 _ORIGIN
-                + "/assets/assets/fonts/noto_sans_sc/NotoSansSC%5Bwght%5D.ttf",
+                + "/assets/assets/fonts/noto_sans_sc/NotoSansSC-wght.ttf",
             ],
         )
         self.assertEqual(

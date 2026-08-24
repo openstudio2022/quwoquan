@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+import re
 import subprocess
 import tempfile
 import threading
@@ -175,8 +176,13 @@ class DevUpTest(unittest.TestCase):
             "https://cdn.quwoquan.com/media/image",
         )
         self.assertEqual(overrides["mediaUploadBaseUrl"], "https://upload.quwoquan.com")
-        self.assertNotIn("118.31.239.122", "\n".join(overrides.values()))
-        self.assertNotIn("10.0.2.2", "\n".join(overrides.values()))
+        joined = "\n".join(overrides.values())
+        # 守卫必须覆盖任意裸 IP authority，而不是某一台历史主机的地址。
+        self.assertIsNone(
+            re.search(r"://(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?/", joined + "/"),
+            joined,
+        )
+        self.assertNotIn("10.0.2.2", joined)
 
     def test_gamma_web_uses_local_gamma_public_bases(self) -> None:
         topology = load_environment_topology()
@@ -517,7 +523,7 @@ class DevUpTest(unittest.TestCase):
                 "--format",
                 "json",
                 "--gateway-base-url",
-                "https://118.31.239.122:19000",
+                "https://192.0.2.10:19000",
             ],
             cwd=str(ROOT),
             text=True,

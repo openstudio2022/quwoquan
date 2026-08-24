@@ -111941,7 +111941,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence/mongo_research_release_reader.go",
-            "sha256": "3f3afe9a7555a83629cf519789a107220cba7168dc71dec0475be34af81aca1a"
+            "sha256": "c7519699ef6207e37fd018d55772a502ee9d45da1cf41b28b5a7d93affbed0c5"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence/post_store.go",
