@@ -64,7 +64,7 @@ class StackctlGammaOperationLockContractTestBase(unittest.TestCase):
             "schema": "stackctl-observability-log-sink-package",
             "adapterId": "ext.obs.elasticsearch",
             "bindingDigest": digest,
-            "endpointRef": f"local_topology:{environment}.elasticsearch",
+            "endpointRef": "local_topology:elasticsearch",
             "endpointEnvironmentKey": "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT",
             "secretEnvironmentKeys": [],
             "deploymentMode": "package-bound-local",

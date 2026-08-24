@@ -2550,7 +2550,7 @@ export const platformConfig = {
       "key": "sys.content-service.ip_location.data_version",
       "type": "string",
       "owner": "",
-      "default": "2026-07-09",
+      "default": "2026-08-14",
       "scope": "workload",
       "reload": "restart",
       "rollout": "progressive",

@@ -20,6 +20,7 @@ import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.
 import 'package:quwoquan_app/runtime/transport/executor/cloud_operation_client_factory.dart';
 import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/adapters/gathering_remote.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/gathering_plan/adapters/gathering_plan_remote.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/application/public/gathering_ports.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     as cloud;
@@ -171,21 +172,28 @@ final class _BySourceHarness {
           gatewayBaseUri: gateway,
         ),
       );
+      cloud.CloudOperationInvocationContext invocationContext(
+        String clientPageId, {
+        String? idempotencyKey,
+      }) => cloud.CloudOperationInvocationContext(
+        surfaceId: AppUiSurfaces.homepageDetail.id,
+        routeId: AppUiSurfaces.homepageDetail.routeId,
+        clientPageId: clientPageId,
+        idempotencyKey: idempotencyKey,
+        actor: cloud.CloudOperationActorContext(
+          accountId: session.ownerId,
+          personaId: personaId,
+          deviceActorId: 'gathering-by-source-api-runner',
+        ),
+      );
       return _BySourceHarness(
         remote: RemoteGatheringFacet(
           client: client,
-          invocationContext: (clientPageId, {idempotencyKey}) =>
-              cloud.CloudOperationInvocationContext(
-                surfaceId: AppUiSurfaces.homepageDetail.id,
-                routeId: AppUiSurfaces.homepageDetail.routeId,
-                clientPageId: clientPageId,
-                idempotencyKey: idempotencyKey,
-                actor: cloud.CloudOperationActorContext(
-                  accountId: session.ownerId,
-                  personaId: personaId,
-                  deviceActorId: 'gathering-by-source-api-runner',
-                ),
-              ),
+          invocationContext: invocationContext,
+          planReader: RemoteGatheringPlanFacet(
+            client: client,
+            invocationContext: invocationContext,
+          ),
         ),
         telemetry: telemetry,
         httpClient: httpClient,

@@ -17,6 +17,7 @@ import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.
 import 'package:quwoquan_app/runtime/transport/executor/cloud_operation_client_factory.dart';
 import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/adapters/gathering_remote.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/gathering_plan/adapters/gathering_plan_remote.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/application/public/gathering_presentation_models.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/domain/gathering_models.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
@@ -250,21 +251,28 @@ final class _GatheringProviderHarness {
           gatewayBaseUri: gateway,
         ),
       );
+      cloud.CloudOperationInvocationContext invocationContext(
+        String clientPageId, {
+        String? idempotencyKey,
+      }) => cloud.CloudOperationInvocationContext(
+        surfaceId: AppUiSurfaces.gatheringDetail.id,
+        routeId: AppUiSurfaces.gatheringDetail.routeId,
+        clientPageId: clientPageId,
+        idempotencyKey: idempotencyKey,
+        actor: cloud.CloudOperationActorContext(
+          accountId: session.ownerId,
+          personaId: personaId,
+          deviceActorId: 'gathering-provider-api-runner',
+        ),
+      );
       return _GatheringProviderHarness(
         remote: RemoteGatheringFacet(
           client: client,
-          invocationContext: (clientPageId, {idempotencyKey}) =>
-              cloud.CloudOperationInvocationContext(
-                surfaceId: AppUiSurfaces.gatheringDetail.id,
-                routeId: AppUiSurfaces.gatheringDetail.routeId,
-                clientPageId: clientPageId,
-                idempotencyKey: idempotencyKey,
-                actor: cloud.CloudOperationActorContext(
-                  accountId: session.ownerId,
-                  personaId: personaId,
-                  deviceActorId: 'gathering-provider-api-runner',
-                ),
-              ),
+          invocationContext: invocationContext,
+          planReader: RemoteGatheringPlanFacet(
+            client: client,
+            invocationContext: invocationContext,
+          ),
         ),
         telemetry: telemetry,
         httpClient: httpClient,

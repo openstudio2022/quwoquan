@@ -163,7 +163,7 @@ func hasNonEmptyString(values []string) bool {
 	return false
 }
 
-func validateImageAssets(assets []AssetManifestItem, sourceCollectionID string, ref string) error {
+func validateImageAssets(assets []AssetManifestItem, sourceCollectionID string, ref string, releaseClass string) error {
 	if len(assets) == 0 || len(assets) > 20 {
 		return fmt.Errorf("%s: image manifest assets must contain 1..20 items", ref)
 	}
@@ -194,11 +194,24 @@ func validateImageAssets(assets []AssetManifestItem, sourceCollectionID string, 
 				return fmt.Errorf("%s: verified image asset %q has audit issues", ref, asset.AssetID)
 			}
 		case RightsAuditStatusUnverified:
-			return fmt.Errorf(
-				"%s: unverified image asset %q cannot enter an immutable release",
-				ref,
-				asset.AssetID,
-			)
+			// research release 类别接受未完成商用核验的资产（与 Data 侧
+			// research_allowed 准入同轨），但许可链字段必须完整在场；
+			// commercial 与未声明类别保持 fail closed。
+			if releaseClass != "research" {
+				return fmt.Errorf(
+					"%s: unverified image asset %q cannot enter an immutable release",
+					ref,
+					asset.AssetID,
+				)
+			}
+			if strings.TrimSpace(asset.License) == "" ||
+				(strings.TrimSpace(asset.TermsURL) == "" && strings.TrimSpace(asset.AuthorizationProof) == "") {
+				return fmt.Errorf(
+					"%s: research unverified image asset %q missing license or proof",
+					ref,
+					asset.AssetID,
+				)
+			}
 		}
 	}
 	return nil

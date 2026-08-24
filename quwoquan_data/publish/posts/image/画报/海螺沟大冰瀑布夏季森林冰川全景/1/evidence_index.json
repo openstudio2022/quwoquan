@@ -1,0 +1,24 @@
+{
+  "schema": "quwoquan_data.evidence_index",
+  "stage": "5.review",
+  "executionId": "20260824--travel-image-m-hailuogou--luding--pilot-001",
+  "executionBinding": "frozen",
+  "objectRef": "posts/image/画报/海螺沟大冰瀑布夏季森林冰川全景/1",
+  "evidence": [
+    {
+      "kind": "rubric_review",
+      "ref": "5.review/rubric_review.json",
+      "sha256": "sha256:490f131f29bcebc45a4fcba7bfaefbdddd0178d5fe0250d59f5a437465444777"
+    },
+    {
+      "kind": "quality_review",
+      "ref": "5.review/quality_review.json",
+      "sha256": "sha256:f02b15af7ddf455d80c2c62d3ec5bed350e2dc21d4855ec642d8a6bb2f8842b9"
+    },
+    {
+      "kind": "rights_review",
+      "ref": "5.review/rights_review.json",
+      "sha256": "sha256:29446ff444e0d59a428acc1e7253da4a8899b07f65df0d1b9e5d81ec1ded1c20"
+    }
+  ]
+}

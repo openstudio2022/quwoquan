@@ -470,7 +470,9 @@ def _verify_environment_bindings(issues: list[str]) -> None:
             if secret_refs != ["PRODUCT_OPS_ELASTICSEARCH_API_KEY"]:
                 issues.append("Prod runtime.log.sink must use only the managed ES API key reference")
         else:
-            expected_ref = f"local_topology:{environment}.elasticsearch"
+            # 非生产三环境共用同一个本地 ES 信任域权威，逻辑键因此不带环境名；
+            # 实际 endpoint 由各环境 runtime 的 PRODUCT_OPS_ELASTICSEARCH_ENDPOINT 解析。
+            expected_ref = "local_topology:elasticsearch"
             if endpoint_ref != expected_ref:
                 issues.append(f"{environment} runtime.log.sink must use {expected_ref}")
             if secret_refs != []:

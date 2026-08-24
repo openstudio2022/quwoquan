@@ -497,7 +497,14 @@ def review_supported_api_inputs(
         request_path = _safe_file(root, ref)
         request = _review_request_with_current_contract(request_path)
         stable = {key: value for key, value in request.items() if key != "requestDigest"}
-        if request["requestDigest"] != _digest(stable):
+        # requestDigest 由 prepare 端以无换行 canonical JSON 计算；journal/judgment
+        # 系才使用带换行的 _digest，两者不可混用。
+        request_digest = "sha256:" + hashlib.sha256(
+            json.dumps(
+                stable, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+            ).encode("utf-8")
+        ).hexdigest()
+        if request["requestDigest"] != request_digest:
             raise ProfessionalImageSupportedApiReviewError(
                 "DATA.SOURCE.REVIEW_INPUT_INVALID: request digest drift"
             )

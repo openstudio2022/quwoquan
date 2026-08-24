@@ -21,9 +21,12 @@ import 'package:quwoquan_app/runtime/platform/native_runtime_config_bridge.dart'
 /// 缺省值只在缺 define 时兜底，保证纯 `flutter test` 也能得到结构合法的
 /// package；真实取值仍由 runner 从环境拓扑注入，宿主测试因此看到与
 /// canonical launcher 相同的 endpoint 形状。
+// 兜底环境必须与受管 runner 的默认一致（`run_flutter_test_guarded.py`
+// 取 alpha）。两侧取值不同源时，裸 `flutter test` 会装配出与受管运行不同的
+// provider 图——例如 alpha 之外的环境会接上 runtime log 的云端 transport。
 const _appRuntimeEnv = String.fromEnvironment(
   'APP_RUNTIME_ENV',
-  defaultValue: 'gamma',
+  defaultValue: 'alpha',
 );
 const _gatewayBaseUrl = String.fromEnvironment(
   'CLOUD_GATEWAY_BASE_URL',

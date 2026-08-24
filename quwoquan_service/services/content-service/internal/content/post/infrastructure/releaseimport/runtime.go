@@ -132,7 +132,7 @@ func Run() {
 		}
 	}
 
-	posts, err := LoadPosts(objectRoot, postFilter)
+	posts, err := LoadPosts(objectRoot, postFilter, releaseBinding.ReleaseClass)
 	if err != nil {
 		log.Fatalf("load posts: %v", err)
 	}

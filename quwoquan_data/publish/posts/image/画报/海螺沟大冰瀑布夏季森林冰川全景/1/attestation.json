@@ -1,0 +1,29 @@
+{
+  "schema": "quwoquan_data.review_attestation",
+  "stage": "5.review",
+  "executionId": "20260824--travel-image-m-hailuogou--luding--pilot-001",
+  "executionBinding": "frozen",
+  "objectRef": "posts/image/画报/海螺沟大冰瀑布夏季森林冰川全景/1",
+  "decision": "approved",
+  "deterministicGate": {
+    "status": "passed",
+    "issues": []
+  },
+  "independentReviewer": {
+    "status": "passed",
+    "provider": "cursor_subagent",
+    "model": "gemini-3.7-flash-high",
+    "modelFamily": "gemini",
+    "runId": "gemini-review-20260824-image-r1",
+    "resultHash": "sha256:35f1c6e15be53c54089390502cf8f9fcf422d2e4fb9d7d068698abbffc45fedc"
+  },
+  "mediaRefReview": {
+    "status": "passed",
+    "issues": []
+  },
+  "repair": {
+    "status": "not_required"
+  },
+  "finalizationRef": "5.review/finalization_report.json",
+  "evidenceIndexRef": "5.review/evidence_index.json"
+}

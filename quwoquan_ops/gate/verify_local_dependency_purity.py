@@ -31,6 +31,9 @@ from quwoquan_ops.cli.lib.app_dependency_toolchain import (
 
 GATE_REPO = ROOT / "quwoquan_ops/gate/gate_repo.sh"
 RUN_SH = ROOT / "quwoquan_app/run.sh"
+# 依赖解析仍归 run.sh，但调用 Flutter 工具链的是 canonical launch executor：
+# no-pub 守卫必须查真正发出 build/attach 命令的那一侧，否则守的是空壳。
+LAUNCH_EXECUTOR = ROOT / "quwoquan_app/scripts/device/run_app_instance.py"
 FLUTTER_TEST_GUARD = ROOT / "quwoquan_app/scripts/env/run_flutter_test_guarded.py"
 PUBSPEC = ROOT / "quwoquan_app/pubspec.yaml"
 PUBSPEC_LOCK = ROOT / "quwoquan_app/pubspec.lock"
@@ -122,9 +125,9 @@ def _verify_scripts(failures: list[str]) -> None:
     )
     _check_contains(
         failures,
-        path=RUN_SH,
+        path=LAUNCH_EXECUTOR,
         needle="--no-pub",
-        description="flutter run no-pub guard",
+        description="flutter build/attach no-pub guard",
     )
     _check_contains(
         failures,

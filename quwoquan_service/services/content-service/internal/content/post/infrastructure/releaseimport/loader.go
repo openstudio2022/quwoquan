@@ -162,6 +162,7 @@ type ReleaseBinding struct {
 	ReleaseID      string
 	SourceOwner    string
 	ReleaseKind    string
+	ReleaseClass   string
 	ManifestDigest string
 }
 
@@ -170,10 +171,11 @@ func LoadReleaseBinding(releaseRoot string) (ReleaseBinding, error) {
 	headerPath := filepath.Join(releaseRoot, "payload", "release.json")
 	attestationPath := filepath.Join(releaseRoot, "attestations", "release.json")
 	var header struct {
-		Schema      string `json:"schema"`
-		ReleaseID   string `json:"releaseId"`
-		SourceOwner string `json:"sourceOwner"`
-		ReleaseKind string `json:"releaseKind"`
+		Schema       string `json:"schema"`
+		ReleaseID    string `json:"releaseId"`
+		SourceOwner  string `json:"sourceOwner"`
+		ReleaseKind  string `json:"releaseKind"`
+		ReleaseClass string `json:"releaseClass"`
 	}
 	if err := loadReleaseJSON(headerPath, &header); err != nil {
 		return empty, fmt.Errorf("load release header: %w", err)
@@ -235,6 +237,7 @@ func LoadReleaseBinding(releaseRoot string) (ReleaseBinding, error) {
 		ReleaseID:      headerReleaseID,
 		SourceOwner:    "qwq_data",
 		ReleaseKind:    headerReleaseKind,
+		ReleaseClass:   strings.TrimSpace(header.ReleaseClass),
 		ManifestDigest: manifestDigest,
 	}, nil
 }
@@ -472,7 +475,10 @@ func missingDesiredRefs(filter map[string]bool, loadedRefs []string) []string {
 }
 
 // LoadPosts 从对象闭包的 posts/ 加载内容；filter 使用相对 posts/ 的对象引用。
-func LoadPosts(publishRoot string, filter map[string]bool) ([]PostDoc, error) {
+// LoadPosts 校验并装载 release 对象闭包内的 post 文档。releaseClass 是 release
+// header 声明的发布类别（"research"/"commercial"）；空值按最严格的 commercial
+// 语义 fail closed 处理。
+func LoadPosts(publishRoot string, filter map[string]bool, releaseClass string) ([]PostDoc, error) {
 	postsRoot := filepath.Join(publishRoot, "posts")
 	var docs []PostDoc
 	var loadedObjectRefs []string
@@ -511,7 +517,7 @@ func LoadPosts(publishRoot string, filter map[string]bool) ([]PostDoc, error) {
 			return err
 		}
 		if strings.EqualFold(strings.TrimSpace(m.ContentType), "image") {
-			if err := validateImageAssets(m.Assets, m.SourceCollectionID, postRef); err != nil {
+			if err := validateImageAssets(m.Assets, m.SourceCollectionID, postRef, releaseClass); err != nil {
 				return err
 			}
 		}

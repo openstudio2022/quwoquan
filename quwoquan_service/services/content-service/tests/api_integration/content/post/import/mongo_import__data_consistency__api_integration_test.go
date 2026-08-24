@@ -1045,7 +1045,7 @@ func TestMongoLoadThenUpsertFromPublishTree(t *testing.T) {
 
 	root := publishTreeFixture(t)
 	// 只灌入 sample bundle 子集
-	posts, err := LoadPosts(root, ToSet([]string{"article/攻略/色达攻略/1"}))
+	posts, err := LoadPosts(root, ToSet([]string{"article/攻略/色达攻略/1"}), "")
 	if err != nil {
 		t.Fatal(err)
 	}

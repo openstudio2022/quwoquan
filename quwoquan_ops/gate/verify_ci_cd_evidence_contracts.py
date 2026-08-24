@@ -627,7 +627,68 @@ def _relative(path: Path, root: Path = ROOT) -> str:
     return path.relative_to(root).as_posix()
 
 
-def _constant_value(path: Path, constant_name: str) -> object:
+def _module_path(module: str, root: Path = ROOT) -> Path | None:
+    """把 `a.b.c` 解析成仓内文件；解析不到就是不可静态判定，返回缺席。"""
+    candidate = root / Path(*module.split("."))
+    if candidate.is_dir():
+        candidate = candidate / "__init__.py"
+    else:
+        candidate = candidate.with_suffix(".py")
+    return candidate if candidate.is_file() else None
+
+
+def _imported_constant_source(
+    tree: ast.Module, name: str, root: Path = ROOT
+) -> Path | None:
+    """找出 `from <module> import <name>` 中 name 的定义文件。"""
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ImportFrom) or node.module is None:
+            continue
+        if node.level:
+            # 相对导入的锚点是包路径而非仓库根，这里不猜，交由调用方按缺席处理。
+            continue
+        for alias in node.names:
+            if (alias.asname or alias.name) == name:
+                return _module_path(node.module, root)
+    return None
+
+
+def _resolve_literal(
+    tree: ast.Module, node: ast.expr, root: Path, depth: int = 0
+) -> object:
+    """按字面量求值，并额外解析对同仓常量的引用。
+
+    schema identity 的正确形态是「一处定义、别处引用」。若这里只认字面量，
+    引用共享常量反而会被判成漂移，把契约推回复制粘贴。因此遇到 Name 时溯源到
+    它的定义模块继续求值；跨模块链路有限深度，无法静态判定即返回缺席。
+    """
+    if depth > 3:
+        return None
+    if isinstance(node, ast.Name):
+        source = _imported_constant_source(tree, node.id, root)
+        if source is None:
+            return None
+        return _constant_value(source, node.id, root, depth + 1)
+    if isinstance(node, ast.Dict):
+        resolved: dict[object, object] = {}
+        for key_node, value_node in zip(node.keys, node.values):
+            if key_node is None:
+                return None
+            key = _resolve_literal(tree, key_node, root, depth)
+            value = _resolve_literal(tree, value_node, root, depth)
+            if key is None or value is None:
+                return None
+            resolved[key] = value
+        return resolved
+    try:
+        return ast.literal_eval(node)
+    except (ValueError, TypeError):
+        return None
+
+
+def _constant_value(
+    path: Path, constant_name: str, root: Path = ROOT, depth: int = 0
+) -> object:
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     for node in tree.body:
         if not isinstance(node, (ast.Assign, ast.AnnAssign)):
@@ -641,10 +702,7 @@ def _constant_value(path: Path, constant_name: str) -> object:
         value = node.value
         if value is None:
             return None
-        try:
-            return ast.literal_eval(value)
-        except (ValueError, TypeError):
-            return None
+        return _resolve_literal(tree, value, root, depth)
     return None
 
 
