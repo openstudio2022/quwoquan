@@ -380,3 +380,13 @@
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：全部触达范围门禁绿且无 warn-only/skip/allowlist 逃逸。
 - 完成判定：`SIT-007` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-022"></a>
+### OPEN-022 self-hosted 设备矩阵的物理前置长期不满足
+
+- 类型：`external_blocker`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：`App Env Device Matrix` 在可查的历史运行区间内无一成功，两条失败都不是代码问题。Android 侧报 `device_runner_lease: GATE_BLOCK: no android device is present on this runner`，即那台 self-hosted Mac 上没有连接安卓真机。iOS 侧报 `assistant-matrix-fail-fast/gateway_unreachable`，因为 `pr_light` 档声明不启动完整栈、把 beta 当常驻依赖，而该 runner 上的 beta 栈当前没在跑。于是所有 PR 都带着一个恒红的必需检查，真实的设备回归信号被噪声淹没。
+- 完成判定：`SIT-007` 的门禁零逃逸子句满足——设备矩阵在 `pr_light` 档下能稳定产出成功回执，或 profile 与工作流对齐到「无真机/无常驻 beta 时显式不作为必需检查」，两者都不得靠 warn-only 或 allowlist 绕过。
+- 依赖：self-hosted Mac 上连接安卓真机、常驻 beta 栈的运维值守。

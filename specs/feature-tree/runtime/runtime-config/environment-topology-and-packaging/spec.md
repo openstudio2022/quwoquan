@@ -47,10 +47,20 @@
 - 媒体读取按 `/media/avatar|image|video` 分段挂在媒体读取 role 下；App 安装包下载固定为 CDN role 的 `/download` 路径，上传保持独立 upload role。
 - `quwoquan_ops/environments/domain_governance.yaml` 登记 public、derived deep-link、OAuth callback、east-west、third-party 与 test-only URL 分类；运行时消费者只能读取 topology resolver 投影，不得再定义公开 authority。
 - `domain_governance.yaml` 只拥有 URL role 的身份、分类、owner、exposure 与 consumer；各环境 `runtime.yaml` 只拥有 `scheme / host / portRole / pathBase / tlsProfile`。resolver 只合并互不重叠的字段，任何重复 ownership 必须 `GATE_BLOCK`。
+- `domain_governance.yaml` 的 `dnsZones` 是公网 DNS 记录的唯一声明面，每个 canonical 环境 target 恰好一个 zone。记录名要么是 zone 自己的 apex 与 wildcard 加 `apexFollowers`，要么由该 target 的 topology host 派生；`dnsZones` 覆盖的名字集合内不得存在第二份人工维护的记录，任何未被 zone 覆盖的 topology host 必须 `GATE_BLOCK`。zone 内计划面之外的名字不在本规格的单轨范围内，其对账登记为 `OPEN-009`。
+- 收敛的所有权边界按记录类型判定：地址类型（`A`/`AAAA`/`CNAME`）与 zone 级授权类型（`CAA`/`MX`）由计划完全拥有，同组内多余值即漂移、必须清除；`TXT` 是共享类型，计划只拥有自己声明的 `v=` 方法（SPF、DMARC），备案与第三方站点校验令牌既不被占用改写也不被删除，只在 receipt 的 `observedUnmanaged` 中如实上报。
+- 记录身份必须在期望侧与现网侧归一：结构化值（`CAA` 的 `data`）与线上文本（`content`）算出同一身份，已一致的记录报 `unchanged` 且不产生任何 provider 写入。收敛对稳态必须幂等，否则 apply receipt 无法区分漂移与稳态。
+- 权威 DNS 写入只经供应商中立 provider 接口进行，服务商由 `dnsProvider.kind` 单点选择。凭据的形状是服务商知识，只能由 provider 实现解释，中立层只声明「变量名 -> 部件名」的投影；工具链、门禁、CI secret 名与 workflow 不得出现厂商专有字段、厂商 API 域名或厂商专有变量名。DoH 证据必须来自至少两个相互独立的公共解析器，且任一解析器都不得属于权威服务商——用服务商自家解析器核对自家写入等于自证。
+- provisioning 与 ACME challenge 使用两个独立凭据。`acmeChallengeAuthority.providerEnforcement` 必须如实声明 challenge 凭据的可写范围由服务商 IAM 强制还是仅由凭据隔离加工具链行为保证，禁止把无法强制的范围描述成已强制；把「只变更 `_acme-challenge`」当作已成立的事实断言也属于此列。
+- 生产 edge 地址是部署时事实，只能经受保护变量注入，禁止入库。它不是机密——公网 DNS 本就可查——用变量的理由是换机只改注入值、不产生仓库改动，因此它与受版本控制的 SSH 管理端点是两个互不替代的投影，同值也不得合并。未注入时生产地址记录保持缺席并在 plan/apply/verify 的 `pending` 中显式报告；缺席不得降级为占位值、不得被解释为要求删除现存记录，非全球可路由或格式非法的地址必须 fail closed。
+- 覆盖或删除现存生产 DNS 记录是破坏性动作：收敛必须先整体算出将发生的动作，未取得显式确认时先行 fail closed 且不做部分收敛，定时触发只做 plan 与漂移核对。首次下发生产记录不属于破坏性动作，不需要该确认。
+- canonical publicWeb 始终是 apex，`www` 只能作为 `apexFollowers` 与 apex 共享同一份地址记录，不得用 CNAME 表达。同一条 edge 地址事实只有一种表达，apex 地址缺席时 follower 一同缺席，计划面不得让 CNAME 与地址记录落在同一个受管名字上。非生产四个 zone 的公网记录统一解析到 loopback 并发布 null MX 与 SPF deny；生产 apex 不发布 null MX，以便将来接入收件而无需先撤销一条显式拒收声明。当前生产 apex 同样没有真实 MX，因此 CAA `iodef` 通知实际不可投递，该缺口登记为 `OPEN-010`，不得表述为已具备邮件可达性。
+- 每个 zone 必须显式选一个 `caaProfiles` 条目：签发公共证书的 zone 用允许清单，不签发的用 `deny-all`。省略 CAA 从而继承 apex 允许清单必须 `GATE_BLOCK`，`caaProfiles` 的选择必须与该 target 的 TLS profile 归属一致。
+- 每个 zone 的 apex 必须同时发布 SPF deny 与 `_dmarc` 的 `p=reject` 策略，覆盖 envelope 与 header From 两条伪造路径。任何 mail guard 缺少 `dmarc` 或 DMARC 策略非 reject 必须 fail closed。
 - derived link 的 origin 只来自 `publicWeb` role，path 只来自 `quwoquan_service/contracts/metadata/_shared/link_templates.yaml`；user-service 使用生成的 `linktemplates.UserWebPath`，App/Data/Service 禁止再拼接 `/u/`、`/post/` 等第二份公开业务路径。
 - Alpha/Beta/Gamma 本地 target 使用同一个 `local-managed` TLS profile；stackctl 从 topology 解析 SAN，在 target-scoped 仓外部署根生成叶证书、CA 与 resolver handoff，并负责受管 Simulator/Emulator 的信任安装与撤销。App、测试和脚本不得关闭证书校验、使用 `curl -k`、改写 canonical URL 或增加 localhost fallback。
 - local environment matrix 的 `emulator_only` 设备 profile 只要求 iOS Simulator 与 Android Emulator，并且只能签发 `ALPHA_BETA_GAMMA_EMULATOR_ONLY_FUNCTIONAL_GREEN`、`nonPromotable=true` 与 Android 真机 waiver；它不得写入正式 Green Matrix、Provider 140-cell 或 Prod artifact closure。正式 `ALPHA_BETA_GAMMA_LOCAL_GREEN` 继续要求独立 Android 真机回执。
-- `prod-sim` 仍使用 DNS-01 公共 CA，`prod-hosted` 只接受公共 CA；任何 Prod package 必须拒绝 local-managed CA、信任材料与 resolver handoff。
+- `prod-sim` 与 `prod-hosted` 都使用 DNS-01 公共 CA，且都由仓内 `tlsProfiles` 拥有签发自动化；TLS profile 不得把证书自动化推给无 owner 的外部发布面。`verify` 的证书覆盖面从 `tlsProfiles` 派生，禁止另立 target 清单——另立会让新增 profile 默默落在覆盖面外，看起来通过其实没验。任何 Prod package 必须拒绝 local-managed CA、信任材料与 resolver handoff。
 - 非生产 Web hosting 必须以响应头声明 `noindex` 且保持环境访问控制；四环境分别拥有 DNS、证书、配置与部署 composition，不从 Prod 继承，但引用同一 Web bundle 摘要。
 - `stackctl status` 是严格只读诊断：只能读取既有进程、package、receipt 与 HTTP 状态，禁止创建或刷新 secret、物化 Provider、启动服务、执行修复或改变环境事实；缺失依赖必须以失败状态返回。
 - `stackctl package` 的 immutable candidate 合同用于显式内容验收与 Prod 发布。package plan 必须先派生本次实际读取的 `deploymentInputClosure`，在短 capture 窗口把 staged、unstaged、untracked 精确字节复制到 target-scoped、只读、content-addressed package input capsule，并绑定唯一 `baselineId`；capture 期间闭包变化使该次 capture fail closed 并可重试。
@@ -155,6 +165,17 @@
 - AND Dart/Pod 跨锁与 CocoaPods executable/version 一致；任一漂移在真实编译前返回 `APP.DEPENDENCY.lock_drift`，且不执行自动 update 或 repo refresh。
 - AND bounded content workload 复用健康 full runtime 后，App preflight 仍读取原 full receipt；独立 bounded runtime 的 receipt 不冒充 full readiness。
 - AND `stackctl status` 在环境未启动、secret 缺失或 Provider 不可用时只返回诊断失败，不创建 secret、不启动或修复任何组件；consumer/commercial readiness 只有在 canonical Data receipt 与三个 release-bound exact query 均通过时才返回成功。
+- AND 公网 DNS 记录只从 `dnsZones` 派生并经供应商中立 provider 写入，每个 canonical target 的全部 topology host 都被覆盖。
+- AND 生产地址记录在缺少受保护 edge 地址时保持缺席并显式 pending，既不写占位值也不删除现存记录，非全球可路由或格式非法的注入地址 fail closed。
+- AND provisioning 与 ACME challenge 使用两个独立凭据，且 challenge 凭据的可写范围由服务商强制还是仅由凭据隔离保证被如实声明。
+- AND 每个 zone 显式选定的 `caaProfiles` 与其 TLS profile 归属一致，不签发公共证书的 zone 发布 `deny-all` 而非继承 apex 允许清单，每个 apex 同时发布 SPF deny 与 `p=reject` 的 `_dmarc` 记录。
+- AND 现网核对对 CAA 双向成立：profile 声明的每条记录都在场，且 apex 不存在 profile 之外的 CAA，`deny-all` 的 zone 因此不可能同时挂着允许型 `issue`。
+- AND `apexFollowers` 与 apex 共享同一份地址记录、随 apex 一同缺席，受管名字上不出现 CNAME。
+- AND 覆盖或删除现存生产 DNS 记录在缺少显式确认时 fail closed 且不产生任何 provider 写入，首次下发生产记录无需确认。
+- AND 收敛只拥有计划声明的记录值：地址与 zone 级授权类型由计划完全拥有，同名共享类型上计划外的值（备案、第三方站点校验）既不被占用改写也不被删除，只如实上报。
+- AND 已与计划一致的记录报 `unchanged` 且不产生 provider 写入，期望侧结构化值与现网文本值归一为同一身份。
+- AND 公网核对经至少两个与权威服务商相互独立的解析器取证，任一 scope 未被核对时返回 `incomplete` 而非 `ok`，反向解析查询失败与无 PTR 记录分别上报、不折叠为通过。
+- AND 有证书声明的每个 target 都在 `verify` 覆盖面内，覆盖面从 `tlsProfiles` 派生而非另立清单。
 - AND 失败时返回 canonical failure，且不产生伪成功事实。
 
 <a id="gwt-002"></a>
@@ -225,9 +246,10 @@
 - 类型：`external_blocker`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：仓库具备公网 DNS plan/apply/verify、CAA、邮件防护与 DNS-01 证书签发链路，并隔离 DNS provisioning token 与 challenge-only token；但当前未提供 Cloudflare token/zone id 与 ACME account email，不能伪造 Prod 接入的 live DNS/TLS 成功证据。该阻断不得反向阻塞 Alpha/Beta/Gamma 的 local-managed 本地闭环。
-- 目标：通过受保护变量提供 `QWQ_DNS_PROVISIONING_API_TOKEN`、`QWQ_ACME_DNS_API_TOKEN`、`QWQ_DNS_ZONE_ID`、`QWQ_ACME_ACCOUNT_EMAIL`，执行 Prod 接入所需的 apply、证书签发与公共 CA 验证并保存 receipt。
-- 完成判定：`GWT-001` 的 Prod `stackctl package / up / health / verify` 子句在真实公网接入下成立——Prod 接入要求的 DNS A/AAAA/CAA/MX/SPF、反向解析、证书 SAN/有效期及公开角色 HTTP/WSS 探针全部通过，且证据报告可回读。
+- 影响或价值：`quwoquan.com` 注册与 NS 委派已生效，仓内已具备供应商中立的 DNS plan/apply/verify、五个 zone 的完整记录集（含生产 apex 与全部业务子域）、CAA、邮件防护，以及 `prod-sim` 与 `prod-hosted` 两条 DNS-01 证书签发链路，并隔离 provisioning 与 challenge-only 两个凭据。剩余阻断有两类，不得只报其中之一。第一类是运行凭据：未提供两个 DNS 凭据、ACME account email 与生产 edge 地址，因此不能伪造 Prod 接入的 live DNS/TLS 成功证据。第二类是边缘可达性：生产 apex 当前虽已解析到 edge 地址，但该地址的 80/443 从公网不可达，因此即使凭据到位，公开角色 HTTP/WSS 探针仍不可能通过。该阻断不得反向阻塞 Alpha/Beta/Gamma 的 local-managed 本地闭环，也不得反向阻塞非生产 zone 的公网记录下发。
+- 目标：通过受保护变量提供 `QWQ_DNS_PROVISIONING_API_TOKEN`、`QWQ_ACME_DNS_API_TOKEN`、`QWQ_DNS_ZONE_ID`、`QWQ_ACME_ACCOUNT_EMAIL` 与 `QWQ_PROD_EDGE_IPV4`，执行五个 zone 的 apply、`prod-sim`/`prod-hosted` 证书签发与公共 CA 验证并保存 receipt。
+- 现网前置：服务商控制台当前已存在人工维护的生产 apex 与 `www` 地址记录，第一次 apply 必须把它们收敛进 `dnsZones` 派生的记录集，收敛后控制台不再持有第二份人工记录。生产 edge 主机还需先让 80/443 从公网可达，再谈公开角色探针。
+- 完成判定：`GWT-001` 的 Prod `stackctl package / up / health / verify` 子句在真实公网接入下成立——Prod 接入要求的 DNS A/AAAA/CAA/MX/SPF/DMARC、反向解析、证书 SAN/有效期及公开角色 HTTP/WSS 探针全部通过，且证据报告可回读。
 
 <a id="open-003"></a>
 ### OPEN-003 全渠道安装启动等价矩阵外部证据
@@ -291,3 +313,39 @@
   与该判据一致。
 - 完成判定：`GWT-002` 绑定的 patrol smoke 契约成立。
 - 依赖：无外部阻断。
+
+<a id="open-008"></a>
+### OPEN-008 ACME challenge 凭据的记录前缀范围无法由服务商强制
+
+- 类型：`risk`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：`acmeChallengeAuthority.requiredNamePrefix` 要求 challenge 凭据只能变更 `_acme-challenge` 记录，但现役 DNS 服务商的授权粒度只到主域名，无法在 IAM 层按记录名前缀收敛。该凭据一旦泄露，实际可写整个 zone 的任意记录，包括生产 apex 与业务子域的地址记录。当前 `providerEnforcement` 已如实标注为 `credential-isolation-only`，隔离价值仅限于两个凭据可独立轮换与吊销。
+- 尚缺实现：三条候选路径择一并落为事实——服务商提供记录级授权条件后改标 `provider-enforced-prefix`，或把 `_acme-challenge` 以 CNAME 委派到独立受限 zone 使泄露面不含主 zone，或为 challenge 凭据加短时效签发与使用后即时吊销以把暴露窗口压到单次签发。
+- 尚缺验收证据：一个契约测试证明 challenge 凭据在其被授予的范围内无法改写生产地址记录，且该证明来自授权面而非工具链自律。
+- 完成判定：`GWT-001` 的「challenge 凭据可写范围如实声明」子句可从 `credential-isolation-only` 升级为 `provider-enforced-prefix`，或委派方案使 challenge 凭据的可写 zone 不含任何生产业务记录。
+- 依赖：DNS 服务商授权粒度，或 `_acme-challenge` 委派 zone 的建立。
+
+<a id="open-009"></a>
+### OPEN-009 zone 级对账缺失，计划面之外的记录不被发现
+
+- 类型：`risk`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：收敛与核对都以「计划声明的名字」为边界，因此 zone 内任何计划外的名字既不会被 `apply` 清理，也不会被 `verify` 发现。控制台手工新增一个业务子域并指向非 canonical 地址时，全部门禁与现网核对都通过，公网却已存在一个无 owner 的入口。当前 `dnsZones` 的单轨承诺只覆盖计划面内的名字集合，`REQ-002` 已按此收窄表述。
+- 尚缺实现：`DnsProvider` 增加 zone 级列举能力，`verify` 把计划外名字报为 issue 或 pending，并区分「已知豁免」（如服务商自带的 NS/SOA）与「未登记入口」。
+- 尚缺验收证据：一个契约测试用带计划外记录的 fake zone 证明 `verify` 会报出该记录，而不是静默通过。
+- 完成判定：`GWT-001` 的 DNS 治理子句扩展为「zone 内不存在未登记记录」，且该断言由 zone 级列举证据支撑。
+- 依赖：无外部阻断。
+
+<a id="open-010"></a>
+### OPEN-010 生产 apex 无 MX，CAA iodef 通知实际不可投递
+
+- 类型：`risk`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：`caaProfiles` 的两个档位都发布 `iodef mailto:security@quwoquan.com`，让 CA 在遇到越权签发请求时可以通知我们，但生产 apex 既无 null MX 也无真实 MX，收件会隐式回落到 apex 地址记录所指的 edge 主机，而该主机不跑 SMTP。结果是这条安全通道在声明上存在、在投递上不成立。同理，非生产 zone 的 `_dmarc` 记录声明了 `rua`，而跨域报告需要 `_report._dmarc.<子域>` 授权记录，当前未发布，聚合报告同样收不到。
+- 尚缺实现：为 apex 接入可收件的 MX（或把 `iodef` 与 `rua` 指向已有可达域名），并为非生产各 zone 发布跨域报告授权记录。
+- 尚缺验收证据：一次真实投递验证——向 `iodef` 地址发信可达，且至少收到一份 DMARC 聚合报告。
+- 完成判定：`GWT-001` 的邮件防护子句从「发布 SPF 与 DMARC 记录」扩展为「安全通知与聚合报告实际可达」。
+- 依赖：邮件收件方案选定（自建 MX 或复用既有可达域名）。
