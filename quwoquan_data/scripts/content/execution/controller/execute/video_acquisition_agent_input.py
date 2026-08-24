@@ -230,6 +230,7 @@ def _author_one(
     context: ExecutionContext,
     model: Any,
     runner: Callable[[ExecutionContext, str], AgentRunOutcome],
+    object_ref: str = "",
 ) -> dict[str, Any]:
     asset_id = str(row["assetId"])
     token = hashlib.sha256(asset_id.encode()).hexdigest()[:20]
@@ -282,7 +283,7 @@ def _author_one(
         job={
             "jobId": stable_failure_fingerprint([context.execution_id, asset_id, "author"]),
             "executionId": context.execution_id,
-            "ref": f"posts/video/{asset_id}",
+            "ref": object_ref or f"posts/video/{asset_id}",
             "stage": "author",
         },
         files=[
@@ -331,6 +332,7 @@ def _review_one(
     context: ExecutionContext,
     model: Any,
     runner: Callable[[ExecutionContext, str], AgentRunOutcome],
+    object_ref: str = "",
 ) -> dict[str, Any]:
     asset_id = str(row["assetId"])
     token = hashlib.sha256(asset_id.encode()).hexdigest()[:20]
@@ -387,7 +389,7 @@ def _review_one(
         "stage": "5.review",
         "executionId": context.execution_id,
         "executionBinding": "frozen",
-        "objectRef": f"posts/video/{asset_id}",
+        "objectRef": object_ref or f"posts/video/{asset_id}",
         "provider": outcome.provider.value,
         "model": model.model_id,
         "modelFamily": model.family.value,
@@ -432,12 +434,20 @@ def _run_batch(
     acquisition_receipt_ref: str,
     asset_ids: Sequence[str],
     runner: Callable[[ExecutionContext, str], AgentRunOutcome] | None,
+    object_ref: str = "",
 ) -> dict[str, Any]:
     selected = tuple(str(value).strip() for value in asset_ids)
     if not selected or any(not value for value in selected) or len(selected) != len(set(selected)):
         _fail(
             "DATA.SOURCE.AGENT_INPUT_INVALID",
             "distinct non-empty asset ids are required",
+        )
+    # receipt 协议对象根（posts/video/<角度>/<标题>/<序号>）与 asset 一一对应，
+    # 显式 object_ref 只允许绑定恰好一个 asset。
+    if object_ref and len(selected) != 1:
+        _fail(
+            "DATA.SOURCE.AGENT_INPUT_INVALID",
+            "explicit --object-ref requires exactly one asset id",
         )
     manifest, model, context, workspace = _execution_context(execution_id, role=role)
     root = acquisition_root.expanduser().resolve()
@@ -481,6 +491,7 @@ def _run_batch(
                         context=context,
                         model=model,
                         runner=invoke,
+                        object_ref=object_ref,
                     ),
                 )
                 for asset_id in work
@@ -523,6 +534,7 @@ def _handle(args: argparse.Namespace, *, role: str) -> None:
             acquisition_receipt_ref=str(args.acquisition_receipt_ref),
             asset_ids=tuple(args.asset_id or ()),
             runner=None,
+            object_ref=str(getattr(args, "object_ref", "") or ""),
         )
     except (
         FileNotFoundError,
@@ -550,6 +562,11 @@ def register_video_acquisition_agent_input_parsers(
         parser.add_argument("--acquisition-root", required=True)
         parser.add_argument("--acquisition-receipt-ref", required=True)
         parser.add_argument("--asset-id", action="append", required=True)
+        parser.add_argument(
+            "--object-ref",
+            default="",
+            help="receipt 协议对象根（posts/video/<角度>/<标题>/<序号>）；仅允许单 asset",
+        )
         parser.set_defaults(
             handler=lambda args, selected_role=role: _handle(
                 args,

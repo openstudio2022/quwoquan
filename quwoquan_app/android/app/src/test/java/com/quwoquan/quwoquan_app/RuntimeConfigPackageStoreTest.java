@@ -623,7 +623,6 @@ public final class RuntimeConfigPackageStoreTest {
 
     JsonObject request = new JsonObject();
     request.addProperty("schema", "app-runtime-config-activation-request");
-    request.addProperty("schemaVersion", "1");
     request.addProperty("environment", "alpha");
     request.addProperty("buildProfile", "nonprod");
     request.addProperty("target", "alpha-local");
@@ -730,7 +729,6 @@ public final class RuntimeConfigPackageStoreTest {
       String publicKey = Base64.getEncoder().encodeToString(keyPair.getPublicKey());
       JsonObject trust = new JsonObject();
       trust.addProperty("schema", "app-runtime-config-trust");
-      trust.addProperty("schemaVersion", "1");
       trust.addProperty("buildProfile", trustProfile);
       trust.addProperty("signatureAlgorithm", "ed25519");
       JsonObject trustKeys = new JsonObject();
@@ -739,7 +737,6 @@ public final class RuntimeConfigPackageStoreTest {
 
       JsonObject runtimePackage = new JsonObject();
       runtimePackage.addProperty("schema", "app-runtime-config-package");
-      runtimePackage.addProperty("schemaVersion", "1");
       runtimePackage.addProperty("environment", "alpha");
       runtimePackage.addProperty("buildProfile", "nonprod");
       runtimePackage.addProperty("target", "alpha-local");

@@ -21,6 +21,9 @@ ROOT = Path(__file__).resolve().parents[4]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from quwoquan_ops.cli.lib.app_launch_manifest_contract import (
+    build_runtime_config_trust_envelope,
+)
 from quwoquan_ops.cli.smoke import run_environment_patrol_smoke as smoke
 
 from quwoquan_ops.cli import stackctl
@@ -57,7 +60,7 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
         self.assertEqual(actual["mediaVideoBaseUrl"], "https://cdn.gamma.quwoquan.com:19100/media/video")
         self.assertEqual(actual["mediaUploadBaseUrl"], "https://upload.gamma.quwoquan.com:19130")
 
-    def test_ios_build_uses_canonical_handoff_public_transport_authority(self) -> None:
+    def test_ios_build_forbids_runtime_configuration_in_dart_defines(self) -> None:
         # Isolate deploy/output roots so a host active candidate with legacy
         # legal-static/current symlink cannot pollute this contract. Safety
         # validation stays fail-closed; this test must not read that candidate.
@@ -140,13 +143,27 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
             )
             handoff = json.loads(handoff_result.stdout)
 
+            # profile trust envelope 与 Xcode 资源输出是 iOS AppArtifact 的显式
+            # 前置：signed runtime package 的信任根随制品物化，缺席即 fail-closed。
+            trust_path = work / "runtime-config-trust.json"
+            trust_path.write_text(
+                json.dumps(
+                    build_runtime_config_trust_envelope(
+                        "nonprod",
+                        {"local-nonprod-key": "0" * 43 + "="},
+                    ),
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ),
+                encoding="utf-8",
+            )
+            resources_root = work / "xcode-build"
+            (resources_root / "Runner.app").mkdir(parents=True, exist_ok=True)
+
             def prepare_defines(
-                supplied_gateway: str,
+                entries: dict[str, str],
             ) -> subprocess.CompletedProcess[str]:
-                entries = {
-                    "APP_RUNTIME_ENV": "gamma",
-                    "CLOUD_GATEWAY_BASE_URL": supplied_gateway,
-                }
                 encoded = ",".join(
                     base64.b64encode(f"{key}={value}".encode("utf-8")).decode(
                         "ascii"
@@ -164,9 +181,15 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
                     "QWQ_APP_RUNTIME_ENV": "gamma",
                     "QWQ_APP_LAUNCH_MODE": "canonical_launcher",
                     "QWQ_LAUNCH_TARGET": "gamma-local",
-                    "QWQ_DART_DEFINES_DIGEST": handoff["dartDefinesDigest"],
+                    # buildProfile 身份由 Xcode configuration 显式给出，脚本
+                    # 不从环境推断；缺席即 fail-closed。
+                    "CONFIGURATION": "Debug-nonprod",
+                    "QWQ_APP_BUILD_PROFILE": "nonprod",
+                    "QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH": str(trust_path),
+                    "TARGET_BUILD_DIR": str(resources_root),
+                    "UNLOCALIZED_RESOURCES_FOLDER_PATH": "Runner.app",
                     "QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST": handoff[
-                        "runtimeConfigDigest"
+                        "runtimeConfigPackageDigest"
                     ],
                     "QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST": handoff[
                         "effectiveLaunchManifestDigest"
@@ -191,9 +214,10 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
                 )
                 return result
 
-            canonical_result = prepare_defines(
-                handoff["dartDefines"]["CLOUD_GATEWAY_BASE_URL"]
-            )
+            # handoff 只交出签名 runtime package 与信任根摘要，编译期不再有
+            # endpoint define 可供比对，因此非 runtime 的 define 原样透传。
+            self.assertNotIn("dartDefines", handoff)
+            canonical_result = prepare_defines({"QWQ_BUILD_MARKER": "canonical"})
             self.assertEqual(canonical_result.returncode, 0, canonical_result.stderr)
             export = next(
                 line
@@ -207,19 +231,21 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
                     for item in export.split("=", 1)[1].split(",")
                 )
             }
-            self.assertEqual(
-                merged["CLOUD_GATEWAY_BASE_URL"],
-                "https://api.gamma.quwoquan.com:19000",
-            )
+            self.assertEqual(merged["QWQ_BUILD_MARKER"], "canonical")
+            self.assertNotIn("CLOUD_GATEWAY_BASE_URL", merged)
+            self.assertNotIn("APP_RUNTIME_ENV", merged)
 
-            for drifted_gateway in (
-                "https://legacy.invalid:19000",
-                "https://untrusted.localhost:19000",
+            # runtime 配置进编译期 define 一律 fail-closed，无论取值是否与
+            # 当前 target 拓扑一致——单轨的是签名 package，不是「正确的 define」。
+            for forbidden_entries in (
+                {"CLOUD_GATEWAY_BASE_URL": "https://api.gamma.quwoquan.com:19000"},
+                {"CLOUD_GATEWAY_BASE_URL": "https://legacy.invalid:19000"},
+                {"APP_RUNTIME_ENV": "gamma"},
             ):
-                result = prepare_defines(drifted_gateway)
+                result = prepare_defines(forbidden_entries)
                 self.assertEqual(result.returncode, 2, result.stderr)
                 self.assertIn(
-                    "DART_DEFINES conflict with canonical launcher handoff",
+                    "runtime configuration is forbidden in DART_DEFINES",
                     result.stderr,
                 )
 

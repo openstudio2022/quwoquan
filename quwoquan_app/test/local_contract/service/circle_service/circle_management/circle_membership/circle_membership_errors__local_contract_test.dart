@@ -16,15 +16,17 @@ void main() {
       expect(code.defaultMessage, isNotEmpty);
     });
 
-    test('membership_owner_cannot_leave → membershipOwnerCannotLeave / 409',
-        () {
-      final code = CircleMembershipErrorCode.fromCode(
-        'CIRCLE.USER.membership_owner_cannot_leave',
-      );
-      expect(code, CircleMembershipErrorCode.membershipOwnerCannotLeave);
-      expect(code.httpStatus, 409);
-      expect(code.defaultMessage, isNotEmpty);
-    });
+    test(
+      'membership_owner_cannot_leave → membershipOwnerCannotLeave / 409',
+      () {
+        final code = CircleMembershipErrorCode.fromCode(
+          'CIRCLE.USER.membership_owner_cannot_leave',
+        );
+        expect(code, CircleMembershipErrorCode.membershipOwnerCannotLeave);
+        expect(code.httpStatus, 409);
+        expect(code.defaultMessage, isNotEmpty);
+      },
+    );
 
     test('membership_role_invalid → membershipRoleInvalid / 400', () {
       final code = CircleMembershipErrorCode.fromCode(
@@ -53,15 +55,17 @@ void main() {
       expect(code.defaultMessage, isNotEmpty);
     });
 
-    test('membership_idempotency_conflict → membershipIdempotencyConflict / 409',
-        () {
-      final code = CircleMembershipErrorCode.fromCode(
-        'CIRCLE.USER.membership_idempotency_conflict',
-      );
-      expect(code, CircleMembershipErrorCode.membershipIdempotencyConflict);
-      expect(code.httpStatus, 409);
-      expect(code.defaultMessage, isNotEmpty);
-    });
+    test(
+      'membership_idempotency_conflict → membershipIdempotencyConflict / 409',
+      () {
+        final code = CircleMembershipErrorCode.fromCode(
+          'CIRCLE.USER.membership_idempotency_conflict',
+        );
+        expect(code, CircleMembershipErrorCode.membershipIdempotencyConflict);
+        expect(code.httpStatus, 409);
+        expect(code.defaultMessage, isNotEmpty);
+      },
+    );
 
     test('未知码回退 unknown 兜底', () {
       expect(

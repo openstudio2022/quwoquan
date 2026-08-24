@@ -229,7 +229,6 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
             set(envelopes[0]),
             {
                 "schema",
-                "schemaVersion",
                 "buildProfile",
                 "signatureAlgorithm",
                 "trustedPublicKeys",
@@ -260,7 +259,6 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
             set(trust_schema["fields"]),
             {
                 "schema",
-                "schemaVersion",
                 "buildProfile",
                 "signatureAlgorithm",
                 "trustedPublicKeys",
@@ -269,7 +267,8 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
         runtime_schema = contract["schemas"]["runtime_config_package"]
         self.assertEqual(runtime_schema["schema_value"], "app-runtime-config-package")
         self.assertFalse(runtime_schema["additional_fields"])
-        self.assertEqual(runtime_schema["fields"]["schemaVersion"]["const"], "1")
+        # schema 是唯一身份键；版本信封字段不得回到契约。
+        self.assertNotIn("schemaVersion", runtime_schema["fields"])
         self.assertEqual(
             runtime_schema["fields"]["signatureAlgorithm"]["const"], "ed25519"
         )
@@ -427,7 +426,6 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
 
         receipt = {
             "schema": "app-runtime-config-activation-receipt",
-            "schemaVersion": "1",
             "status": "activated",
             "requestDigest": request_digest,
             "environment": "alpha",

@@ -254,7 +254,6 @@ def build_runtime_config_package(
     private_bytes, _, keyring = validate_signing_material(ROOT, signing)
     package: dict[str, Any] = {
         "schema": contract["schemas"]["runtime_config_package"]["schema_value"],
-        "schemaVersion": contract["runtime_config_package"]["schema_version"],
         "environment": environment,
         "buildProfile": build_profile,
         "target": target,
@@ -371,14 +370,14 @@ def main() -> int:
             source_tree_digest=args.source_tree_digest,
             source_capsule_manifest=args.source_capsule_manifest,
         )
-        if args.env in {"alpha", "beta", "gamma"} and not any(
-            os.environ.get(key)
-            for key in (
-                "QWQ_APP_RUNTIME_CONFIG_SIGNING_KEY_ID",
-                "QWQ_APP_RUNTIME_CONFIG_SIGNING_PRIVATE_KEY_FILE",
-                "QWQ_APP_RUNTIME_CONFIG_TRUSTED_PUBLIC_KEYS_FILE",
-            )
-        ):
+        # 每个 selector 逐个静态读取：覆盖率门禁要按静态 key 建立配置闭包，
+        # 循环变量会让签名材料的来源在静态分析里失去 owner。
+        explicit_signing_material = (
+            os.environ.get("QWQ_APP_RUNTIME_CONFIG_SIGNING_KEY_ID")
+            or os.environ.get("QWQ_APP_RUNTIME_CONFIG_SIGNING_PRIVATE_KEY_FILE")
+            or os.environ.get("QWQ_APP_RUNTIME_CONFIG_TRUSTED_PUBLIC_KEYS_FILE")
+        )
+        if args.env in {"alpha", "beta", "gamma"} and not explicit_signing_material:
             signing = prepare_local_app_runtime_config_signing(ROOT)
         else:
             signing = resolve_signing_material(ROOT)

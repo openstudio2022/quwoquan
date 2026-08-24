@@ -48,9 +48,8 @@ def _ios_defines(environment: str) -> dict[str, str]:
     process_env["QWQ_APP_RUNTIME_ENV"] = environment
     process_env["QWQ_APP_LAUNCH_MODE"] = str(handoff["launchMode"])
     process_env["QWQ_LAUNCH_TARGET"] = str(handoff["target"])
-    process_env["QWQ_DART_DEFINES_DIGEST"] = str(handoff["dartDefinesDigest"])
     process_env["QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST"] = str(
-        handoff["runtimeConfigDigest"]
+        handoff["runtimeConfigPackageDigest"]
     )
     process_env["QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST"] = str(
         handoff["effectiveLaunchManifestDigest"]

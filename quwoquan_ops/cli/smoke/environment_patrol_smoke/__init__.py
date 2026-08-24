@@ -141,6 +141,7 @@ from .evidence import (  # noqa: E402,F401
 from .handoff import (  # noqa: E402,F401
     _apply_launcher_handoff_to_command_env,
     _canonical_handoff_projection,
+    _test_host_dart_defines,
     _canonical_test_live_launcher_handoff,
     _effective_base_urls_for_device,
     _provider_patrol_launcher_handoff,

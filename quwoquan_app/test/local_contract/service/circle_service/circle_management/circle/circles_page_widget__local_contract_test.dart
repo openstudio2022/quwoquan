@@ -110,10 +110,7 @@ void main() {
         find.text(CommunityText.circlesEntitySectionTitle),
         findsOneWidget,
       );
-      expect(
-        find.text(CommunityText.circlesRecommendedTitle),
-        findsOneWidget,
-      );
+      expect(find.text(CommunityText.circlesRecommendedTitle), findsOneWidget);
       expect(find.byIcon(CupertinoIcons.search), findsAtLeastNWidgets(1));
       expect(find.byIcon(CupertinoIcons.sparkles), findsAtLeastNWidgets(1));
       expect(

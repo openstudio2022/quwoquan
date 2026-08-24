@@ -41,7 +41,6 @@ Future<Map<String, Object?>> _signedPackage({
     'payloadDigest': '',
     'runtime': runtime ?? _runtimeValues(environment),
     'schema': runtimePackageSchema,
-    'schemaVersion': runtimePackageSchemaVersion,
     'signatureAlgorithm': 'ed25519',
     'signatureKeyId': signatureKeyId,
     'sourceGitSha': 'a' * 40,
@@ -64,7 +63,6 @@ Future<Map<String, Object?>> _signedPackage({
   final trustDocument = <String, Object?>{
     'buildProfile': buildProfile,
     'schema': 'app-runtime-config-trust',
-    'schemaVersion': runtimePackageSchemaVersion,
     'signatureAlgorithm': 'ed25519',
     'trustedPublicKeys': trustedPublicKeys,
   };
@@ -258,15 +256,16 @@ void main() {
 
   test('schema、target 与 profile trust domain 不一致时拒绝', () async {
     final schemaMismatch = await _signedPackage();
-    (schemaMismatch['package']! as Map<String, Object?>)['schemaVersion'] =
-        '99';
+    // schema 是 package 的唯一身份键，没有并行的版本信封字段可判。
+    (schemaMismatch['package']! as Map<String, Object?>)['schema'] =
+        'app-runtime-config-package-other';
     await expectLater(
       _resolve(schemaMismatch),
       throwsA(
         isA<RuntimePackageValidationException>().having(
           (error) => error.invalidKeys,
           'invalidKeys',
-          contains('schemaVersion'),
+          contains('schema'),
         ),
       ),
     );

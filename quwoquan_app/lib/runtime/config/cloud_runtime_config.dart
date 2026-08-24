@@ -318,7 +318,6 @@ abstract final class CloudRuntimeConfig {
     final trustDocument = <String, Object?>{
       'buildProfile': bridgeValue['trustedBuildProfile'],
       'schema': 'app-runtime-config-trust',
-      'schemaVersion': runtimePackageSchemaVersion,
       'signatureAlgorithm': 'ed25519',
       'trustedPublicKeys': bridgeValue['trustedPublicKeys'],
     };

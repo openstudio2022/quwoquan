@@ -97,8 +97,9 @@ Future<void> _pumpCard(
             ),
             GoRoute(
               path: '/profile/gatherings',
-              builder: (_, state) =>
-                  Text('MY_GATHERINGS:${state.uri.queryParameters['segment'] ?? ''}'),
+              builder: (_, state) => Text(
+                'MY_GATHERINGS:${state.uri.queryParameters['segment'] ?? ''}',
+              ),
             ),
             ...extraRoutes,
           ],

@@ -27,7 +27,6 @@ def _trust_envelope(root: Path, *, build_profile: str = "nonprod") -> Path:
         json.dumps(
             {
                 "schema": "app-runtime-config-trust",
-                "schemaVersion": "1",
                 "buildProfile": build_profile,
                 "signatureAlgorithm": "ed25519",
                 "trustedPublicKeys": {

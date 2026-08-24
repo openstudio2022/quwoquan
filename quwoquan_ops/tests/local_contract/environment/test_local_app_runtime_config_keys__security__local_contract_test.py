@@ -105,7 +105,6 @@ class LocalAppRuntimeConfigKeysSecurityContractTest(unittest.TestCase):
             set(envelopes[0]),
             {
                 "schema",
-                "schemaVersion",
                 "buildProfile",
                 "signatureAlgorithm",
                 "trustedPublicKeys",

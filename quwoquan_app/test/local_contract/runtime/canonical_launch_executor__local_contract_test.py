@@ -97,7 +97,6 @@ class _FakePlatformDriver:
         request = self.request
         receipt = {
             "schema": "app-runtime-config-activation-receipt",
-            "schemaVersion": "1",
             "status": "activated",
             "requestDigest": request_digest,
             "environment": request["environment"],
@@ -156,7 +155,6 @@ class CanonicalLaunchExecutorContractTest(
         return executor.canonical_json_bytes(
             {
                 "schema": "app-runtime-config-activation-receipt",
-                "schemaVersion": "1",
                 "status": "activated",
                 "requestDigest": "sha256:" + "1" * 64,
                 "environment": "alpha",
@@ -304,7 +302,6 @@ class CanonicalLaunchExecutorContractTest(
             driver.files[executor.RECEIPT_FILE_NAME] = executor.canonical_json_bytes(
                 {
                     "schema": "app-runtime-config-activation-receipt",
-                    "schemaVersion": "1",
                     "status": "failed",
                     "requestDigest": request_digest,
                     "environment": request["environment"],

@@ -64,6 +64,9 @@ Claude Code `claude -p`），换宿主 = 换 `HOST_CMD` 参数值，脚本与契
   失败原因 TopN，对所有宿主同一格式；失败形态回流 `incident-inspection` 工作流。
 - 分级晋升门：M1 → M10 → M100 → M1k → M10k → M100k，每级用真实运行数据标定
   （成功率、单内容成本、blocked 原因收敛）后才允许提并发上限，不允许跳级。
+- 容量治理（DEC-028）：并发上限只来自 dispatcher 显式 `--max-parallel` 参数，
+  标定证据只来自上一级 milestone 的 fleet 回执与 receipt 链；本轨不读取、
+  不生成旧治理轨的 calibration receipt 或 execution policy 容量字段。
 
 ## 模型策略：主控与运行时分离
 

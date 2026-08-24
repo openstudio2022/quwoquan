@@ -88,7 +88,7 @@ _PUBLIC_WEB_STATIC_PROBES = (
     ),
     (
         "public-web-font",
-        "/assets/assets/fonts/noto_sans_sc/NotoSansSC%5Bwght%5D.ttf",
+        "/assets/assets/fonts/noto_sans_sc/NotoSansSC-wght.ttf",
         200,
         "font/ttf",
     ),

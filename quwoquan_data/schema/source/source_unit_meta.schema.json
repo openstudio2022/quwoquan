@@ -69,6 +69,7 @@
         "toutiao_baike_html",
         "sourced_video_direct_download",
         "image_collection_download",
+        "frozen_professional_image_acquisition",
         "qunar_html",
         "ctrip_sight_html",
         "wikipedia_api"
@@ -119,6 +120,7 @@
         "encyclopedia-primary",
         "sourced-video-attribution",
         "image-collection-attribution",
+        "receipt-protocol-image-v1",
         "article-source-registry-v1"
       ]
     },
@@ -283,6 +285,35 @@
         },
         "researchLane": {
           "const": "video"
+        },
+        "hasVideo": {
+          "const": false
+        }
+      }
+    },
+    {
+      "required": [
+        "researchLane",
+        "hasVideo"
+      ],
+      "properties": {
+        "sourceKind": {
+          "const": "image_collection"
+        },
+        "extractor": {
+          "const": "frozen_professional_image_acquisition"
+        },
+        "policyRevision": {
+          "const": "receipt-protocol-image-v1"
+        },
+        "sourceUseMode": {
+          "enum": ["licensed_adaptation", "rights_audit_only"]
+        },
+        "rightsMode": {
+          "enum": ["licensed_adaptation", "rights_audit_only"]
+        },
+        "researchLane": {
+          "const": "image"
         },
         "hasVideo": {
           "const": false

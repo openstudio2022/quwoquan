@@ -10,6 +10,19 @@ metadata:
 从可复用输入到 execution 工作包、immutable release、环境导入与 App UAT 的
 内容生产主线。五段执行契约见根 `AGENTS.md`。
 
+## 触发
+
+- 自然语言：按区域生成主页、跑内容任务、内容生产、生产内容并导入环境、
+  复核 execution、恢复内容任务、重试实体任务、immutable release、数据发布。
+- 由模型按 `description` 自动匹配，用户是否输入斜杠命令都不改变本契约。
+
+## 输入
+
+- 可复用运行输入（区域、载体、生成家族），归属由 `verify runtime-input-ownership` 判定。
+- 来源素材及其 CAS 摘要，由 `verify source-digest --execution-id` 冻结。
+- 续跑或跨宿主接手时，既有 receipt 链与 `execution_state.json` 只读消费，
+  断点判定见 [references/recovery.md](references/recovery.md)。
+
 ## 边界宣言（详见 [references/boundary.md](references/boundary.md)）
 
 - **宿主 agent 是唯一执行主体**：调研、创作、评审、推进决策、读校验报错自修产物。
@@ -17,7 +30,17 @@ metadata:
 - **脚本只做检查与确定性 IO**：verify 门禁、下载/CAS、publish/release/ship
   原子操作、receipt 记录；永不驱动或等待 agent。
 
-## 主线阶段
+## 角色
+
+主会话扮演 **content producer**（内容生产宿主）：按阶段契约调研、创作、评审、
+推进决策，并读校验报错自修产物。阶段角色人设（独立会话派发）见
+[references/roles/](references/roles/)。
+
+## 执行
+
+自由度：低（阶段序、产物位置与完成判据固定，创作内容自由）。
+
+### 主线阶段
 
 每阶段按四段生命周期执行（[references/handoff-protocol.md](references/handoff-protocol.md)），
 收尾以 `task stage-record` 落 receipt。验收命令简写 `verify … ` =
@@ -36,9 +59,11 @@ metadata:
 | `release` | `.qwq_output/data/releases/<rid>/` | [release.md](references/stage-contracts/release.md) | `verify release-integrity --release` + `verify media-release-contract` |
 | `ship` | 环境 run + UAT 证据 | [ship.md](references/stage-contracts/ship.md) | `verify release-lifecycle` + `stackctl verify --env gamma` |
 
-角色人设（独立会话派发）见 [references/roles/](references/roles/)。
+角色人设（独立会话派发）见 [references/roles/](references/roles/)；
+载体差异判据（article/homepage/image/video）见
+[references/carriers/](references/carriers/)。
 
-## 入口三分支
+### 入口三分支
 
 1. **新任务**：`python3 quwoquan_data/scripts/cli.py task preflight --json` →
    读 [0.plan.md](references/stage-contracts/0.plan.md) 开始。
@@ -51,20 +76,35 @@ metadata:
 工作包布局与命名约束见 [references/execution-layout.md](references/execution-layout.md)；
 验收失败的自修循环见 [references/self-repair.md](references/self-repair.md)。
 
+## 交付件
+
+**immutable release 与环境导入证据**：release 目录、环境 run 与 App UAT 收据，
+经由 receipt 链绑定到 execution。
+
+送审前自检：
+
+- 每个已推进阶段都有 create-once receipt，且 `execution_state` 与 receipt 链一致；
+- release 通过 `verify release-integrity --release` 与 `verify media-release-contract`；
+- 环境侧通过 `verify release-lifecycle` 与 `stackctl verify --env gamma`。
+
 ## 凭证与安全
 
 - 凭证只来自仓外 `0600` 的 `~/.config/quwoquan/cursor_api_key`；
   任何输出不得包含 key、片段或指纹。
-- [MUST NOT] 手改 verify/schema/门禁参数；[MUST NOT] 手写 receipt 或
-  `execution_state.json`；[MUST NOT] 补写缺失的 source、rights、review 或
-  release 证据。
-- 失败必须保留明确的阶段与原因；证据缺失一律带 `executionId` 返回 `GATE_BLOCK`。
 
 ## 内置评审
 
 - publish 前 POST 调 `review`（workflow=`content-production`，segment=POST，
   deliverable=`content-release`），角色 data-quality + data-legal——板外复核，
   独立于 `5.review` 执行角色的自查。
+
+## 失败与停止
+
+- [MUST NOT] 手改 verify/schema/门禁参数；[MUST NOT] 手写 receipt 或
+  `execution_state.json`；[MUST NOT] 补写缺失的 source、rights、review 或
+  release 证据。
+- 失败必须保留明确的阶段与原因，不得把未过的门禁包装为通过。
+- 证据缺失一律带 `executionId` 返回 `GATE_BLOCK`，由 recovery 判定表决定回到哪个阶段。
 
 ## HANDOFF
 

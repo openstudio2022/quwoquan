@@ -710,9 +710,8 @@ void main() {
     _consumeImageLoadExceptions(tester);
 
     final isDark =
-        CupertinoTheme.of(
-          tester.element(find.byType(CirclesHubPage)),
-        ).brightness ==
+        CupertinoTheme.of(tester.element(find.byType(CirclesHubPage)))
+            .brightness ==
         Brightness.dark;
     final expectedPageBackground = AppColorsFunctional.getColor(
       isDark,

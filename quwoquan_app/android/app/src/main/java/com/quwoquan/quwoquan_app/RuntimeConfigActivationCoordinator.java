@@ -41,12 +41,10 @@ final class RuntimeConfigActivationCoordinator {
   private static final String REQUEST_SCHEMA = "app-runtime-config-activation-request";
   private static final String RECEIPT_SCHEMA = "app-runtime-config-activation-receipt";
   private static final String EFFECTIVE_MANIFEST_SCHEMA = "app-effective-launch-manifest";
-  private static final String SCHEMA_VERSION = "1";
   private static final Pattern DIGEST_PATTERN = Pattern.compile("^sha256:[0-9a-f]{64}$");
   private static final Set<String> REQUEST_FIELDS =
       Set.of(
           "schema",
-          "schemaVersion",
           "environment",
           "buildProfile",
           "target",
@@ -79,7 +77,6 @@ final class RuntimeConfigActivationCoordinator {
   private static final Set<String> RECEIPT_FIELDS =
       Set.of(
           "schema",
-          "schemaVersion",
           "status",
           "requestDigest",
           "environment",
@@ -344,8 +341,7 @@ final class RuntimeConfigActivationCoordinator {
   private List<String> validateRequest(JsonObject request) {
     List<String> issues = new ArrayList<>();
     if (!request.keySet().equals(REQUEST_FIELDS)
-        || !REQUEST_SCHEMA.equals(stringValue(request, "schema"))
-        || !SCHEMA_VERSION.equals(stringValue(request, "schemaVersion"))) {
+        || !REQUEST_SCHEMA.equals(stringValue(request, "schema"))) {
       issues.add("runtime_config_activation_request_malformed");
       return issues;
     }
@@ -428,7 +424,6 @@ final class RuntimeConfigActivationCoordinator {
       List<String> validationIssues) {
     Map<String, Object> receipt = new LinkedHashMap<>();
     receipt.put("schema", RECEIPT_SCHEMA);
-    receipt.put("schemaVersion", SCHEMA_VERSION);
     receipt.put("status", status);
     receipt.put("requestDigest", requestDigest);
     receipt.put("environment", stringMapValue(request, "environment"));
@@ -472,7 +467,6 @@ final class RuntimeConfigActivationCoordinator {
               "runtime_config_activation_receipt_malformed");
       if (!receipt.keySet().equals(RECEIPT_FIELDS)
           || !RECEIPT_SCHEMA.equals(stringValue(receipt, "schema"))
-          || !SCHEMA_VERSION.equals(stringValue(receipt, "schemaVersion"))
           || !"activated".equals(stringValue(receipt, "status"))
           || !"".equals(stringValue(receipt, "errorCode"))) {
         throw new RuntimeConfigPackageStore.RuntimeConfigException(

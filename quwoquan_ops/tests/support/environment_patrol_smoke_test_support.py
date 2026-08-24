@@ -106,21 +106,20 @@ class EnvironmentPatrolSmokeCaseBase(unittest.TestCase):
             smoke.load_environment_topology(),
             target,
         )["publicBases"]
-        defines = {
-            "APP_RUNTIME_ENV": environment,
-            "QWQ_APP_LAUNCH_MODE": "canonical_launcher",
-            "APP_LAUNCH_POLICY": "test_live",
-            "CLOUD_GATEWAY_BASE_URL": args.gateway_base_url,
-            "APP_LEGAL_BASE_URL": public_bases["legal"],
-            "PUBLIC_WEB_BASE_URL": public_bases["publicWeb"],
-            "APP_DOWNLOAD_BASE_URL": public_bases["appDownload"],
-            "MEDIA_AVATAR_CDN_BASE_URL": args.media_avatar_base_url,
-            "MEDIA_IMAGE_CDN_BASE_URL": args.media_image_base_url,
-            "MEDIA_VIDEO_CDN_BASE_URL": args.media_video_base_url,
-            "MEDIA_UPLOAD_BASE_URL": args.media_upload_base_url,
-            "RTC_MEDIA_CONNECTION_URL": args.rtc_media_connection_url,
-            "REALTIME_CONNECTION_URL": public_bases["realtime"],
-            "CURRENT_USER_ID": args.current_owner_id,
+        # endpoint 取值只由 handoff 携带的签名 runtime package 表达；编译期
+        # define 已随 executor cutover 退役，替身不得再自持一份 define 投影。
+        runtime_values = {
+            "appRuntimeEnv": environment,
+            "gatewayBaseUrl": args.gateway_base_url,
+            "legalBaseUrl": public_bases["legal"],
+            "publicWebBaseUrl": public_bases["publicWeb"],
+            "appDownloadBaseUrl": public_bases["appDownload"],
+            "realtimeBaseUrl": public_bases["realtime"],
+            "mediaAvatarCdnBaseUrl": args.media_avatar_base_url,
+            "mediaImageCdnBaseUrl": args.media_image_base_url,
+            "mediaVideoCdnBaseUrl": args.media_video_base_url,
+            "mediaUploadBaseUrl": args.media_upload_base_url,
+            "rtcMediaConnectionUrl": args.rtc_media_connection_url,
         }
         transport = {
             "required": android_transport,
@@ -144,18 +143,20 @@ class EnvironmentPatrolSmokeCaseBase(unittest.TestCase):
             "entrypoint": "lib/main_prod.dart",
             "launchMode": "canonical_launcher",
             "launchPolicy": "test_live",
-            "dartDefinesDigest": "sha256:" + "1" * 64,
-            "runtimeConfigDigest": "sha256:" + "1" * 64,
-            "recoveryBaseUrl": args.gateway_base_url,
-            "publicWebBaseUrl": public_bases["publicWeb"],
-            "appDownloadBaseUrl": public_bases["appDownload"],
+            "runtimeConfigPackageDigest": "sha256:" + "1" * 64,
+            "runtimeConfigTrustEnvelopeDigest": "sha256:" + "3" * 64,
             "requiresLocalTransport": True,
             "transport": transport,
         }
         return {
             **effective,
             "schema": "app-launcher-handoff",
-            "dartDefines": defines,
+            "runtimeConfigPackage": {
+                "schema": "app-runtime-config-package",
+                "environment": environment,
+                "target": target,
+                "runtime": runtime_values,
+            },
             "effectiveLaunchManifest": effective,
             "effectiveLaunchManifestDigest": "sha256:" + "2" * 64,
         }

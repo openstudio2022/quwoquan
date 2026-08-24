@@ -156,6 +156,12 @@ def _frozen_target_issues(execution_root: Path) -> list[str]:
                 f"{_display_path(execution_root)}: {spec_target.name} qualifiedHomepageSource "
                 "must exactly match the immutable execution spec"
             )
+    carriers = [carrier.value for carrier in execution_spec.content.carriers]
+    carrier = carriers[0] if len(carriers) == 1 else None
+    if carrier is None:
+        issues.append(
+            f"{_display_path(execution_root)}: execution spec must freeze exactly one content carrier"
+        )
     for target in targets:
         if not isinstance(target, dict):
             issues.append(f"{_display_path(execution_root)}: frozen target must be an object")
@@ -165,12 +171,38 @@ def _frozen_target_issues(execution_root: Path) -> list[str]:
         if len(parts) != 2 or not name:
             issues.append(f"{_display_path(execution_root)}: invalid frozen target {target}")
             continue
-        object_root = execution_root / "entities" / parts[0] / parts[1] / name
+        if carrier is None:
+            continue
+        # DEC-027：对象根按载体分根 fail closed，工作包与 canonical 坐标同构。
+        if carrier == "homepage":
+            object_root = execution_root / "entities" / parts[0] / parts[1] / name
+        else:
+            angle = str(target.get("publishAngle") or "").strip()
+            title = str(target.get("publishTitle") or "").strip()
+            seq = target.get("publishSeq") or 1
+            if not angle or not title:
+                issues.append(
+                    f"{_display_path(execution_root)}: {name} post carrier target "
+                    "requires frozen publishAngle/publishTitle"
+                )
+                continue
+            object_root = execution_root / "posts" / carrier / angle / title / str(seq)
         missing = [stage for stage in OBJECT_STAGES if not (object_root / stage).is_dir()]
         if missing:
             issues.append(
                 f"{object_root.relative_to(DATA_EXECUTIONS_ROOT)}: frozen target missing stages "
                 + ", ".join(missing)
+            )
+    if carrier is not None:
+        wrong_root = (
+            execution_root / "posts"
+            if carrier == "homepage"
+            else execution_root / "entities"
+        )
+        for stage_dir in wrong_root.rglob("1.download"):
+            issues.append(
+                f"{stage_dir.parent.relative_to(DATA_EXECUTIONS_ROOT)}: "
+                f"object is outside the {carrier} carrier root (DEC-027)"
             )
     runtime_path = execution_root / "_shared/runtime_state.json"
     if runtime_path.is_file():

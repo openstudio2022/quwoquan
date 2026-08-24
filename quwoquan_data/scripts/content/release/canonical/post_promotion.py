@@ -145,15 +145,26 @@ def promote_post_object(
     post_ref: str,
     *,
     pool_delivery_intent: Mapping[str, object],
+    qualified_refs: tuple[str, ...] | None = None,
 ) -> dict[str, str]:
-    """Atomically promote one reviewed post and return fenced result evidence."""
+    """Atomically promote one reviewed post and return fenced result evidence.
+
+    资格判定按协议分家（DEC-027）：存量 campaign 路径默认走 review closure；
+    receipt 协议调用方以 receipt 链 + attestation 判定后显式传 qualified_refs。
+    两者共用同一事务核心，核心不感知协议。
+    """
     root = execution_root(execution_id)
     normalized_ref = str(post_ref or "").strip().strip("/")
     if normalized_ref.startswith("posts/"):
         normalized_ref = normalized_ref.removeprefix("posts/")
     if len(normalized_ref.split("/")) < 4:
         raise ObjectTransactionError(f"post objectRef is invalid: {post_ref!r}")
-    if normalized_ref not in set(_qualified_post_refs(execution_id)):
+    qualified = (
+        {str(ref).strip().strip("/").removeprefix("posts/") for ref in qualified_refs}
+        if qualified_refs is not None
+        else set(_qualified_post_refs(execution_id))
+    )
+    if normalized_ref not in qualified:
         raise ObjectTransactionError(
             f"post is discarded by the post review closure: {normalized_ref}"
         )

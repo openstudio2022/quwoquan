@@ -1,0 +1,21 @@
+{
+  "schema": "quwoquan_data.review_attestation",
+  "stage": "5.review",
+  "executionId": "20260824--travel-article-m2-emeishan--leshan--pilot-002",
+  "executionBinding": "frozen",
+  "objectRef": "posts/article/攻略/峨眉山金顶攻略/1",
+  "decision": "approved",
+  "deterministicGate": {"status": "passed", "issues": []},
+  "independentReviewer": {
+    "status": "passed",
+    "provider": "codex",
+    "model": "gpt-5.6",
+    "modelFamily": "gpt",
+    "runId": "codex-root-20260824-5-review-r1",
+    "resultHash": "sha256:276a3f2da59890214d87e64bb655079fa3b19a8d6c06a3c074ce67d776138a7c"
+  },
+  "mediaRefReview": {"status": "passed", "issues": []},
+  "repair": {"status": "not_required"},
+  "finalizationRef": "5.review/finalization_report.json",
+  "evidenceIndexRef": "5.review/evidence_index.json"
+}

@@ -469,6 +469,34 @@
 - 影响 Story：[`on-demand-content-pool-admission`](./on-demand-content-pool-admission/spec.md) 的唯一入池路径与恢复面
 - 关联验收：[`on-demand-content-pool-admission`](./on-demand-content-pool-admission/spec.md) 的 `GWT-005`
 
+<a id="dec-027"></a>
+### DEC-027 receipt 协议 execution 的 publish 是一条物化加提升的原子链，坐标由 writing_pack 冻结
+
+- 决策：receipt 协议 execution（宿主会话执行、`_shared/receipts/` 为进度真相源）的 publish 阶段由单命令 `release publish-execution` 完成，命令内部为冻结序列：按 receipt 链与对象 attestation 判定资格，把 approved 对象物化为成品（`article.md` + `manifest.json`），生成 reviewed pool delivery intent，再进入既有单对象事务（audit → apply → pool record）。canonical 写入不新增第二条路径，与 `DEC-026` 同轨。
+- 决策：发布坐标 `publishAngle/publishTitle/publishSeq` 由 `0.plan` 的 target_set 逐 target 冻结——对象目录创建前坐标必须在场，工作包与 canonical 坐标同构是单对象事务的前提。creator 绑定 `creatorProfileRef` 与 `tagRefs` 由 `3.compose` 的 `writing_pack` 冻结，`entityRefs/normalizedEntityRefs` 由 target 的 `entityType/name` 机械派生。物化器只消费冻结产物，不自算任何坐标或身份。
+- 决策：对象根按载体分根 fail closed——article/image/video 落 `posts/<carrier>/<angle>/<title>/<seq>/`，homepage 落 `entities/<域>/<类型>/<名称>/`，与 canonical publish 同构；`verify content-execution-layout` 在 `0.plan`/`1.download` 截面拦截错根对象。
+- 决策：publish 契约 PRE 判据为 `5.review` receipt pass、`verify stage-artifacts --through 5.review` 与 `verify content-execution-layout`；退役编排层的 `verify execution-readiness`（要求终态、`model_readiness.json`、closure 索引）保留给存量 campaign 路径，不进入 receipt 协议。
+- 理由：`release pool-append` 只准入已在 canonical 的对象，`drain-pool-delivery` 仅限失败重放，二者都无法把 approved 对象物化并写入 canonical，receipt 协议 execution 因此停在 `5.review` 后不可达 `succeeded`；物化归 publish DURING 而非 `5.review` POST，是因为成品化属于发布操作（release-operator 职责），评审会话不得写发布面。
+- 被否决方案：让 receipt 协议绕过 delivery intent 直写 canonical——形成第二写路径，违反 `DEC-026`。给 `promote_post_object` 加协议分支参数——双轨语义进核心。物化坐标由命令参数或物化器推导——坐标脱离冻结产物，重跑漂移。
+- 约束与影响：`promote` 的资格判定按协议分家——存量 campaign 用 review closure，receipt 协议用 receipt 链加 attestation；两者共用同一事务核心，核心不感知协议。幂等语义沿用事务核心：已 promote 且 merkle 一致跳过，漂移 typed 失败。
+- 可测试面：local_contract 覆盖资格判定拒绝（无 5.review pass receipt、attestation 非 approved）、坐标缺失 fail closed、物化幂等、错根对象被 layout 门拦截；真实 execution 后缀证据由 `GWT-020.t1..t3` 承载。
+- 关联要求：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `OPEN-011`
+- 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 receipt 协议发布后缀
+- 关联验收：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `GWT-020.t1`、`GWT-020.t2`、`GWT-020.t3`
+
+<a id="dec-028"></a>
+### DEC-028 宿主会话生产轨的容量治理是分级晋升实测，不读 calibration receipt
+
+- 决策：receipt 协议下由宿主 agent 会话（`cursor-agent -p`、`codex exec` 等经 `HOST_CMD` 注入）执行的内容生产，其并发上限由 fleet dispatcher 的显式 `--max-parallel` 参数给定，合法取值只能由上一级 milestone（M1 → M10 → M100 → M1k）的真实 fleet 回执（成功率、单对象时长、blocked 原因收敛）标定，禁止跳级放量。
+- 决策：该轨不读取、不生成 `governed_capacity_calibration_receipt`，也不消费 `execution policy` 的 `fleetMaxConcurrentWorkers`；`DEC-006`、`DEC-021`、`DEC-025` 与 `OPEN-006` 的 calibration receipt 体系继续完整约束存量受治理 SDK adapter 轨（`cursor_sdk|codex_sdk` managed 生产），两轨互不读取对方的容量事实。
+- 理由：受治理轨的容量对象是数据工程自建的 SDK 调用进程，必须自测自证；宿主会话轨的执行主体是宿主 agent，容量本质是宿主账号与外部服务的配额，数据工程无法也不应自建其测量体系——晋升阶梯上每一级的真实 fleet 回执就是下一级的标定证据，语义与 `GWT-011` 的重新标定一致。
+- 被否决方案：把 calibration receipt 前置到宿主会话轨——重建「要跑内容先跑 M100 soak」的启动环，且 receipt 测量的是 SDK 进程容量，对宿主会话没有效度。两轨共用容量字段——一个字段两种测量语义，属双读。
+- 约束与影响：fleet 回执（`task fleet-status` 聚合与 dispatcher results）是宿主会话轨唯一的容量证据来源；观测值不回写为上限，提并发是人工裁决动作并在下一级 fleet 参数中显式生效。
+- 可测试面：local_contract 断言 fleet dispatcher 的并发上限只来自显式参数、无 execution policy 读取路径；晋升证据由各级 milestone 的 fleet 回执与 receipt 链承载。
+- 关联要求：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `REQ-004`
+- 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的规模晋升面
+- 关联验收：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `GWT-020.t5`
+
 ## 5. 失败与恢复
 
 - 失败类型：权限拒绝、依赖超时、版本冲突或持久化失败。

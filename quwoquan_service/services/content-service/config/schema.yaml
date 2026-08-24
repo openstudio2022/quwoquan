@@ -224,7 +224,7 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-  default: '2026-07-09'
+  default: '2026-08-14'
 - key: sys.content-service.ip_location.ipv4_database_path
   type: string
   scope: workload

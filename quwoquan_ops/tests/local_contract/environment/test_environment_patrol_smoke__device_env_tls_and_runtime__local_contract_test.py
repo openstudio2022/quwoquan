@@ -193,13 +193,15 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
                 launcher_handoff=handoff,
             )
 
-        self.assertEqual(
-            environment["QWQ_DART_DEFINES_DIGEST"],
-            handoff["dartDefinesDigest"],
-        )
+        # 编译期不再有 dart-define 摘要可比；单轨的是签名 package 与信任根摘要。
+        self.assertNotIn("QWQ_DART_DEFINES_DIGEST", environment)
         self.assertEqual(
             environment["QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST"],
-            handoff["runtimeConfigDigest"],
+            handoff["runtimeConfigPackageDigest"],
+        )
+        self.assertEqual(
+            environment["QWQ_EXPECTED_RUNTIME_CONFIG_TRUST_DIGEST"],
+            handoff["runtimeConfigTrustEnvelopeDigest"],
         )
         self.assertEqual(
             environment["QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST"],
@@ -214,20 +216,21 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
                 continue
             key, value = argument.removeprefix("--dart-define=").split("=", 1)
             command_defines.setdefault(key, []).append(value)
-        for key, value in handoff["dartDefines"].items():
+        # 测试宿主的 define 只能是签名 package runtime 值的投影。
+        for key, value in smoke._test_host_dart_defines(handoff).items():
             self.assertEqual(command_defines[key], [value])
 
     def test_canonical_handoff_rejects_missing_define_or_nested_digest_drift(
         self,
     ) -> None:
         args = self._args()
-        missing_define = self._launcher_handoff(args)
-        del missing_define["dartDefines"]["APP_LAUNCH_POLICY"]
-        with self.assertRaisesRegex(ValueError, "Dart defines are incomplete"):
-            smoke._canonical_handoff_projection(missing_define)
+        missing_value = self._launcher_handoff(args)
+        del missing_value["runtimeConfigPackage"]["runtime"]["legalBaseUrl"]
+        with self.assertRaisesRegex(ValueError, "runtime value is missing"):
+            smoke._canonical_handoff_projection(missing_value)
 
         digest_drift = self._launcher_handoff(args)
-        digest_drift["effectiveLaunchManifest"]["dartDefinesDigest"] = (
+        digest_drift["effectiveLaunchManifest"]["runtimeConfigPackageDigest"] = (
             "sha256:" + "9" * 64
         )
         with self.assertRaisesRegex(ValueError, "effective manifest mismatch"):

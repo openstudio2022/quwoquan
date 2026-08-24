@@ -1192,8 +1192,16 @@ void main() {
         'lib/runtime/config/runtime_package_resolver.dart',
       );
       expect(
+        runtimePackageResolver,
+        contains("'configurationState': 'complete'"),
+      );
+      expect(
         runtimeConfig,
         contains("'configurationState': 'missing'"),
+      );
+      expect(
+        runtimeConfig,
+        isNot(contains("'configurationState': 'complete'")),
       );
       expect(startupRuntime, contains('startup_runtime_configured'));
       expect(logHygiene, contains('APP_ROOT / "run.sh"'));

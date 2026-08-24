@@ -172,7 +172,9 @@ void main() {
     expect(started['runtimeEnv'], summary['runtimeEnv']);
     expect(started['launchMode'], summary['launchMode']);
     expect(started['configurationState'], summary['configurationState']);
-    expect(started['missingDefineKeys'] ?? '', summary['missingKeys']);
+    // 已水合的 package 没有缺失键，两侧都会缺席该字段；归一比较保证事件与
+    // summary 同源，而不是让其中一侧的缺席被当成空串差异。
+    expect(started['missingDefineKeys'] ?? '', summary['missingKeys'] ?? '');
     expect(started.containsKey('CLOUD_GATEWAY_BASE_URL'), isFalse);
   });
 

@@ -374,6 +374,17 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
         )
     )
     details = list(health.get("details", [])) if int(health["exitCode"]) != 0 else []
+    if phase is ReadinessPhase.IMPORT:
+        # import 门只消费 policy 声明能力（content_api/content_media/
+        # content_services）的探针结论。health 附带的 user availability 聚合
+        # 里 release_active 层描述的是「当前 serving release 的已验证证据」，
+        # 而首个 release 的导入正是为了创造这份证据（bootstrap），不得把
+        # 导入后才存在的 readiness receipt 倒置为导入前置。
+        details = [
+            item
+            for item in details
+            if not str(item).startswith("user availability/")
+        ]
     executed_checks = [
         item
         for item in _stackctl._read_json_object(str(report_dir / "health" / "report.json")).get("checks", [])

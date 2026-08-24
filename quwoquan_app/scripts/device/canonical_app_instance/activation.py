@@ -33,7 +33,6 @@ DIGEST_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
 RECEIPT_FIELDS = frozenset(
     {
         "schema",
-        "schemaVersion",
         "status",
         "requestDigest",
         "environment",
@@ -258,7 +257,6 @@ def decode_activation_receipt(
         raise CanonicalExecutorError(f"{label} is not canonical JSON")
     if (
         decoded.get("schema") != "app-runtime-config-activation-receipt"
-        or decoded.get("schemaVersion") != "1"
         or decoded.get("status") not in {"activated", "failed"}
     ):
         raise CanonicalExecutorError(f"{label} identity is invalid")

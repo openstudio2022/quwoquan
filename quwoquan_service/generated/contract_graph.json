@@ -108573,7 +108573,7 @@
         "adapters": [
           {
             "path": "quwoquan_app/lib/service/circle_service/circle_management/gathering/adapters/gathering_remote.dart",
-            "sha256": "78a838dbe6cc92501acc556eb7b71f08e475c03f41c054fdfac5f0dc9dbd5794"
+            "sha256": "1e002c79e559dd92b6cc872a7eda72255a44c8ba9e8af94b67206bcf47c6045f"
           },
           {
             "path": "quwoquan_app/lib/service/circle_service/circle_management/gathering/adapters/gathering_wire_codec.dart",
@@ -108808,8 +108808,17 @@
       },
       "app": {
         "domain": [],
-        "application": [],
+        "application": [
+          {
+            "path": "quwoquan_app/lib/service/circle_service/circle_management/gathering_plan/application/public/gathering_plan_ports.dart",
+            "sha256": "f6e224fb7a6933402b92a6a14e286178de63d035f78073d3d33cc27787d67d42"
+          }
+        ],
         "adapters": [
+          {
+            "path": "quwoquan_app/lib/service/circle_service/circle_management/gathering_plan/adapters/gathering_plan_remote.dart",
+            "sha256": "8ebf4ac0abc1a14db954897bee5d6a1086828e0448227313d9d481c90403b129"
+          },
           {
             "path": "quwoquan_app/lib/service/circle_service/circle_management/gathering_plan/adapters/gathering_plan_wire_codec.dart",
             "sha256": "f234febcda2bbae78a57df8ed17a11dc05ffb030be402f3c643e29190fb399d4"
@@ -127181,8 +127190,7 @@
         "commercial.operation.GetGatheringPlan",
         "commercial.operation.ListGatheringPlanRevisions",
         "commercial.operation.ProposeGatheringPlan",
-        "implementation.app.api_integration",
-        "implementation.app.application"
+        "implementation.app.api_integration"
       ]
     },
     {
@@ -128286,7 +128294,7 @@
     },
     {
       "path": "_shared/app_launch_manifest.yaml",
-      "sha256": "e82fe431f942c18a3a602b67a14f2c388b209de575d7b1a226d93e310a9140b8"
+      "sha256": "b9901e0c7091db442e49661aef314301b0d760d9f62ca65220421735480c2502"
     },
     {
       "path": "_shared/app_pages.yaml",
@@ -131078,7 +131086,7 @@
     },
     {
       "path": "platform/config.yaml",
-      "sha256": "b2b0ac6548ad7e39776f43e0e82183aefeb128106408dfa7230a81899ba15e2f"
+      "sha256": "ba45ad0dd00946ae56d90940f83f474ed21984229c88b5b774e4cda262b529f2"
     },
     {
       "path": "realtime/openapi.yaml",
@@ -134214,7 +134222,7 @@
     },
     {
       "path": "_shared/app_launch_manifest.yaml",
-      "sha256": "e82fe431f942c18a3a602b67a14f2c388b209de575d7b1a226d93e310a9140b8",
+      "sha256": "b9901e0c7091db442e49661aef314301b0d760d9f62ca65220421735480c2502",
       "mediaType": "application/yaml",
       "content": {
         "description": "Android、iOS、App 与 Ops 共同消费的启动清单、launcher handoff 和摘要协议；runtime 拥有组合语义，各平台不得复制字段或摘要规则。",
@@ -134311,7 +134319,7 @@
           "runtime_config_payload_digest_mismatch": "payloadDigest 与签名载荷不符。",
           "runtime_config_profile_mismatch": "package buildProfile 与消费方 profile 不符。",
           "runtime_config_runtime_values_invalid": "runtime 字段集合或值类型违反 runtime_value_keys。",
-          "runtime_config_schema_mismatch": "package schema/schemaVersion 与契约不符。",
+          "runtime_config_schema_mismatch": "package schema 与契约不符。",
           "runtime_config_signature_algorithm_mismatch": "签名算法不是 ed25519。",
           "runtime_config_signature_invalid": "Ed25519 验签失败。",
           "runtime_config_signature_key_untrusted": "签名 key 不在 trust keyring 内。",
@@ -134335,7 +134343,6 @@
           ],
           "max_future_skew_seconds": 300,
           "max_lifetime_seconds": 86400,
-          "schema_version": "1",
           "signature_algorithm": "ed25519",
           "signed_payload_excludes": [
             "signature"
@@ -134357,7 +134364,6 @@
             "nonprod",
             "prod"
           ],
-          "schema_version": "1",
           "signature_algorithm": "ed25519"
         },
         "runtime_value_keys": {
@@ -134857,10 +134863,6 @@
                 "const": "app-runtime-config-activation-receipt",
                 "type": "string"
               },
-              "schemaVersion": {
-                "const": "1",
-                "type": "string"
-              },
               "status": {
                 "allowed_values": [
                   "activated",
@@ -134893,7 +134895,6 @@
             },
             "required_fields": [
               "schema",
-              "schemaVersion",
               "status",
               "requestDigest",
               "environment",
@@ -134957,10 +134958,6 @@
                 "const": "app-runtime-config-activation-request",
                 "type": "string"
               },
-              "schemaVersion": {
-                "const": "1",
-                "type": "string"
-              },
               "target": {
                 "allowed_values": [
                   "alpha-local",
@@ -134978,7 +134975,6 @@
             },
             "required_fields": [
               "schema",
-              "schemaVersion",
               "environment",
               "buildProfile",
               "target",
@@ -135104,10 +135100,6 @@
                 "const": "app-runtime-config-package",
                 "type": "string"
               },
-              "schemaVersion": {
-                "const": "1",
-                "type": "string"
-              },
               "signature": {
                 "format": "strict_base64_ed25519_signature",
                 "type": "string"
@@ -135145,7 +135137,6 @@
             },
             "required_fields": [
               "schema",
-              "schemaVersion",
               "environment",
               "buildProfile",
               "target",
@@ -135182,10 +135173,6 @@
                 "const": "app-runtime-config-trust",
                 "type": "string"
               },
-              "schemaVersion": {
-                "const": "1",
-                "type": "string"
-              },
               "signatureAlgorithm": {
                 "const": "ed25519",
                 "type": "string"
@@ -135197,7 +135184,6 @@
             },
             "required_fields": [
               "schema",
-              "schemaVersion",
               "buildProfile",
               "signatureAlgorithm",
               "trustedPublicKeys"
@@ -350502,7 +350488,7 @@
     },
     {
       "path": "platform/config.yaml",
-      "sha256": "b2b0ac6548ad7e39776f43e0e82183aefeb128106408dfa7230a81899ba15e2f",
+      "sha256": "ba45ad0dd00946ae56d90940f83f474ed21984229c88b5b774e4cda262b529f2",
       "mediaType": "application/yaml",
       "content": {
         "configs": [
@@ -352364,7 +352350,7 @@
             "type": "int"
           },
           {
-            "default": "2026-07-09",
+            "default": "2026-08-14",
             "key": "sys.content-service.ip_location.data_version",
             "reload": "restart",
             "rollout": "progressive",

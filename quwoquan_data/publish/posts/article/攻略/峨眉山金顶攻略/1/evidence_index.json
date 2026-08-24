@@ -1,0 +1,16 @@
+{
+  "schema": "quwoquan_data.evidence_index",
+  "stage": "5.review",
+  "executionId": "20260824--travel-article-m2-emeishan--leshan--pilot-002",
+  "executionBinding": "frozen",
+  "objectRef": "posts/article/攻略/峨眉山金顶攻略/1",
+  "evidence": [
+    {"kind": "rubric_review", "ref": "5.review/rubric_review.json", "sha256": "sha256:14622ca5c429e662f616f7428fdfef6f1b16f6f54171671570b77d3d58137eba"},
+    {"kind": "quality_review", "ref": "5.review/quality_review.json", "sha256": "sha256:1b7e55037e006d514f446b9497420947d36dc353e9c84df189134244a9730def"},
+    {"kind": "rights_review", "ref": "5.review/rights_review.json", "sha256": "sha256:816560d0c5b58b24d6ba943aeac96dd7e3822b949594e846a485f2509b128d82"},
+    {"kind": "deterministic_gate", "ref": "5.review/deterministic_gate.json", "sha256": "sha256:1ef314ea21bb73a75546b29831cae68b8a57e36e0ff46dd204df85cb7034a041"},
+    {"kind": "media_reference_review", "ref": "5.review/media_ref_review.json", "sha256": "sha256:83dbc3613795327616dbd8639a304ae37db80554c54e3b0bd4c99bad445d7600"},
+    {"kind": "finalization_report", "ref": "5.review/finalization_report.json", "sha256": "sha256:cf770c2c9a901a7fa36ce86a7e229fdc6e24847b79c1604009938914d1c0752e"},
+    {"kind": "independent_reviewer_result", "ref": "5.review/reviewer_result.json", "sha256": "sha256:85b56d9868af977dfa442b779a029f562695ff626102e2420b46749d5fa81729"}
+  ]
+}

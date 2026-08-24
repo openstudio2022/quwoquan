@@ -666,19 +666,23 @@ LOCAL_GAMMA_LEGAL_STATIC_ROOT="${LOCAL_GAMMA_LEGAL_STATIC_ROOT:-$default_legal_s
 # 因此 root 与 digest 必须一起从同一次读取派生：只绑其一会让代理端的证据头
 # 与实际挂载的包脱钩。
 if [[ -z "${LOCAL_GAMMA_PUBLIC_WEB_ROOT:-}" || -z "${QWQ_PUBLIC_WEB_CONTENT_DIGEST:-}" ]]; then
-  public_web_binding="$(PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - "$QWQ_LOCAL_RELEASE_TARGET" <<'PY'
-import json
+  public_web_binding="$(PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - "$QWQ_LOCAL_RELEASE_TARGET" "$CONFIG_SOURCE_ENV" "$ROOT" <<'PY'
 import sys
+from pathlib import Path
 
-from quwoquan_ops.cli.lib.output_paths import deployment_target_path
-
-package_root = deployment_target_path(
-    sys.argv[1], "standalone-packages", "web", "packages", "public-web"
+from quwoquan_ops.cli.lib.local_release_web_hosting import (
+    materialize_local_release_web_hosting,
 )
-release_root = package_root / "current"
-manifest = json.loads((release_root / "manifest.json").read_text(encoding="utf-8"))
-print(release_root.resolve() / "public")
-print("sha256:" + str(manifest["contentSHA256"]))
+
+# hosting 根 = immutable 包 + 物化后的 runtime-config trust/package（配置外置，
+# Caddy 从 /srv/web serve 这两个文件，包本体按契约不携带）。
+hosting_root, digest = materialize_local_release_web_hosting(
+    repo_root=Path(sys.argv[3]),
+    environment=sys.argv[2],
+    target=sys.argv[1],
+)
+print(hosting_root.resolve())
+print(digest)
 PY
 )" || {
     echo "[local-release] FAIL: immutable public Web package is unavailable; run stackctl package --env ${CONFIG_SOURCE_ENV} --kind web" >&2

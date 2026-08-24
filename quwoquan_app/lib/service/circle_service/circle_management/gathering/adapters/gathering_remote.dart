@@ -1,8 +1,7 @@
-import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/runtime/transport/generated/circle/circle_request_page_ids.g.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/adapters/gathering_wire_codec.dart';
-import 'package:quwoquan_app/service/circle_service/circle_management/gathering_plan/adapters/gathering_plan_wire_codec.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/gathering_plan/application/public/gathering_plan_ports.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/application/public/gathering_ports.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/application/public/gathering_presentation_models.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/domain/gathering_models.dart';
@@ -26,10 +25,14 @@ final class RemoteGatheringFacet
   const RemoteGatheringFacet({
     required this.client,
     required this.invocationContext,
+    required this.planReader,
   });
 
   final cloud.GeneratedCloudOperationClient client;
   final GatheringInvocationContextFactory invocationContext;
+
+  /// Plan 是独立对象，看板只经它的公开 port 读取，不触碰其内部投影实现。
+  final GatheringBoardPlanReader planReader;
 
   Future<GatheringCommandResult> _mapCommand(
     Future<cloud.GatheringCommandResult> wire,
@@ -405,36 +408,8 @@ final class RemoteGatheringFacet
     }
     return gatheringBoardCircleFromPrivateWire(
       wire,
-      plan: await _loadBoardPlan(normalized),
+      plan: await planReader.loadPlan(normalized),
     );
-  }
-
-  /// Plan 是 Gathering 的可选伴生对象，读不到不得让整个看板失败：
-  /// 未创建 / 无权限 / 其他失败分别落到独立的 capability reason，
-  /// 由看板 Plan 区自己表达，不与活动主体事实混淆。
-  Future<GatheringBoardPlanSlice> _loadBoardPlan(String gatheringId) async {
-    try {
-      final wire = await client.circleGatheringPlanGetGatheringPlan(
-        cloud.GatheringPlanByGatheringQuery(gatheringId: gatheringId),
-        context: invocationContext(CircleRequestPageIds.getGatheringPlan),
-      );
-      return gatheringBoardPlanFromWire(wire);
-    } on CloudException catch (error) {
-      return gatheringBoardPlanUnavailable(
-        switch (error.type) {
-          CloudErrorType.notFound =>
-            GatheringBoardCapabilityUnavailableReason.notConfigured,
-          CloudErrorType.forbidden =>
-            GatheringBoardCapabilityUnavailableReason.permissionDenied,
-          _ => GatheringBoardCapabilityUnavailableReason.temporarilyUnavailable,
-        },
-        switch (error.type) {
-          CloudErrorType.notFound => ChatText.boardPlanNotConfigured,
-          CloudErrorType.forbidden => ChatText.boardPlanPermissionDenied,
-          _ => ChatText.boardPlanUnavailable,
-        },
-      );
-    }
   }
 
   @override

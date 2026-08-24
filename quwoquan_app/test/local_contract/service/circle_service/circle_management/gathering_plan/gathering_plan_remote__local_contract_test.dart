@@ -14,6 +14,7 @@ import 'package:quwoquan_app/runtime/transport/executor/cloud_operation_client_f
 import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/gathering_board_ports.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/adapters/gathering_remote.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/gathering_plan/adapters/gathering_plan_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     as cloud;
 
@@ -135,19 +136,28 @@ RemoteGatheringFacet _remote(
       gatewayBaseUri: Uri.parse('https://test-gateway.example.com'),
     ),
   );
+  cloud.CloudOperationInvocationContext context(
+    String clientPageId, {
+    String? idempotencyKey,
+  }) => cloud.CloudOperationInvocationContext(
+    surfaceId: 'gatheringBoard',
+    routeId: 'gatheringBoard',
+    clientPageId: clientPageId,
+    actor: const cloud.CloudOperationActorContext(
+      accountId: 'account-1',
+      personaId: 'persona-1',
+    ),
+    idempotencyKey: idempotencyKey,
+  );
+  // 本用例断言的是 Plan 读取语义，同时覆盖它经 board port 接线的那一跳：
+  // 注入真实 plan facet 而不是替身，才能证明 port 两侧的契约是同一份。
   return RemoteGatheringFacet(
     client: client,
-    invocationContext: (String clientPageId, {String? idempotencyKey}) =>
-        cloud.CloudOperationInvocationContext(
-          surfaceId: 'gatheringBoard',
-          routeId: 'gatheringBoard',
-          clientPageId: clientPageId,
-          actor: const cloud.CloudOperationActorContext(
-            accountId: 'account-1',
-            personaId: 'persona-1',
-          ),
-          idempotencyKey: idempotencyKey,
-        ),
+    invocationContext: context,
+    planReader: RemoteGatheringPlanFacet(
+      client: client,
+      invocationContext: context,
+    ),
   );
 }
 

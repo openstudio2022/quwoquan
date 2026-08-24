@@ -41,7 +41,6 @@ final class RuntimeConfigPackageStore {
 
   private static final String TRUST_SCHEMA = "app-runtime-config-trust";
   private static final String PACKAGE_SCHEMA = "app-runtime-config-package";
-  private static final String SCHEMA_VERSION = "1";
   private static final String SIGNATURE_ALGORITHM = "ed25519";
   private static final long MAXIMUM_LIFETIME_MILLIS = TimeUnit.DAYS.toMillis(1);
   private static final long MAXIMUM_FUTURE_SKEW_MILLIS = TimeUnit.MINUTES.toMillis(5);
@@ -56,11 +55,10 @@ final class RuntimeConfigPackageStore {
           "(secret|password|private.?key|access.?token|api.?key|credential)",
           Pattern.CASE_INSENSITIVE);
   private static final Set<String> TRUST_FIELDS =
-      Set.of("schema", "schemaVersion", "buildProfile", "signatureAlgorithm", "trustedPublicKeys");
+      Set.of("schema", "buildProfile", "signatureAlgorithm", "trustedPublicKeys");
   private static final Set<String> PACKAGE_FIELDS =
       Set.of(
           "schema",
-          "schemaVersion",
           "environment",
           "buildProfile",
           "target",
@@ -492,7 +490,6 @@ final class RuntimeConfigPackageStore {
     JsonObject trust = decodeDocument(bytes, "runtime_config_trust_malformed");
     if (!exactFields(trust, TRUST_FIELDS)
         || !TRUST_SCHEMA.equals(stringValue(trust, "schema"))
-        || !SCHEMA_VERSION.equals(stringValue(trust, "schemaVersion"))
         || !SIGNATURE_ALGORITHM.equals(stringValue(trust, "signatureAlgorithm"))) {
       throw new RuntimeConfigException("runtime_config_trust_malformed");
     }
@@ -512,8 +509,7 @@ final class RuntimeConfigPackageStore {
       JsonObject packageDocument, TrustProjection trust, String expectedPackageDigest)
       throws RuntimeConfigException {
     if (!exactFields(packageDocument, PACKAGE_FIELDS)
-        || !PACKAGE_SCHEMA.equals(stringValue(packageDocument, "schema"))
-        || !SCHEMA_VERSION.equals(stringValue(packageDocument, "schemaVersion"))) {
+        || !PACKAGE_SCHEMA.equals(stringValue(packageDocument, "schema"))) {
       throw new RuntimeConfigException("runtime_config_schema_mismatch");
     }
     if (!SIGNATURE_ALGORITHM.equals(stringValue(packageDocument, "signatureAlgorithm"))) {

@@ -35,7 +35,6 @@ launch_policies:
     build_profiles: [prod]
 
 runtime_config_package:
-  schema_version: "1"
   signature_algorithm: ed25519
   max_lifetime_seconds: 86400
   max_future_skew_seconds: 300
@@ -50,7 +49,6 @@ runtime_config_package:
 # environment、target、endpoint 或 package。runtime package 自带公钥只能与本 envelope
 # 做完全一致性校验，不能建立信任。信任根轮换会产生新的 App/Web artifact。
 runtime_config_trust:
-  schema_version: "1"
   signature_algorithm: ed25519
   build_profiles: [nonprod, prod]
 
@@ -108,7 +106,7 @@ runtime_config_error_codes:
   runtime_config_package_empty: runtime package 内容为空。
   runtime_config_package_too_large: runtime package 超出尺寸上限。
   runtime_config_package_malformed: runtime package 解码或结构非法。
-  runtime_config_schema_mismatch: package schema/schemaVersion 与契约不符。
+  runtime_config_schema_mismatch: package schema 与契约不符。
   runtime_config_profile_mismatch: package buildProfile 与消费方 profile 不符。
   runtime_config_target_mismatch: package target 与请求 target 不符。
   runtime_config_launch_policy_mismatch: package launchPolicy 与 manifest 不符。
@@ -149,13 +147,11 @@ schemas:
     additional_fields: false
     required_fields:
       - schema
-      - schemaVersion
       - buildProfile
       - signatureAlgorithm
       - trustedPublicKeys
     fields:
       schema: { type: string, const: app-runtime-config-trust }
-      schemaVersion: { type: string, const: "1" }
       buildProfile: { type: string, allowed_values: [nonprod, prod] }
       signatureAlgorithm: { type: string, const: ed25519 }
       trustedPublicKeys: { type: object, value_type: string }
@@ -169,7 +165,6 @@ schemas:
     additional_fields: false
     required_fields:
       - schema
-      - schemaVersion
       - environment
       - buildProfile
       - target
@@ -186,7 +181,6 @@ schemas:
       - signature
     fields:
       schema: { type: string, const: app-runtime-config-package }
-      schemaVersion: { type: string, const: "1" }
       environment: { type: string, allowed_values: [alpha, beta, gamma, prod] }
       buildProfile: { type: string, allowed_values: [nonprod, prod] }
       target: { type: string, allowed_values: [alpha-local, beta-local, gamma-local, prod-sim, prod-hosted] }
@@ -240,7 +234,6 @@ schemas:
     additional_fields: false
     required_fields:
       - schema
-      - schemaVersion
       - environment
       - buildProfile
       - target
@@ -252,7 +245,6 @@ schemas:
       - expectedActiveDigest
     fields:
       schema: { type: string, const: app-runtime-config-activation-request }
-      schemaVersion: { type: string, const: "1" }
       environment: { type: string, allowed_values: [alpha, beta, gamma, prod] }
       buildProfile: { type: string, allowed_values: [nonprod, prod] }
       target: { type: string, allowed_values: [alpha-local, beta-local, gamma-local, prod-sim, prod-hosted] }
@@ -272,7 +264,6 @@ schemas:
     additional_fields: false
     required_fields:
       - schema
-      - schemaVersion
       - status
       - requestDigest
       - environment
@@ -287,7 +278,6 @@ schemas:
       - validationIssues
     fields:
       schema: { type: string, const: app-runtime-config-activation-receipt }
-      schemaVersion: { type: string, const: "1" }
       status: { type: string, allowed_values: [activated, failed] }
       requestDigest: { type: string, format: sha256_identity }
       environment: { type: string, allowed_values: ["", alpha, beta, gamma, prod] }

@@ -27,7 +27,9 @@ import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/runtime/errors/domain_error_code.dart';
 import 'package:quwoquan_app/runtime/errors/generated/circle/circle_errors.g.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
+
 import '../../../../../support/service/recommendation_service/recommendation/recommendation_feature_profile_view/intersection_fixtures.dart';
+
 import 'package:quwoquan_app/service/circle_service/circle_management/circle_behavior_fact/application/public/circle_behavior_fact_appender.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle_group/application/public/circle_group_ports.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle_membership/application/public/circle_membership_ports.dart';
@@ -40,6 +42,7 @@ import 'package:quwoquan_app/service/circle_service/circle_management/circle/pre
 import 'package:quwoquan_app/service/circle_service/circle_management/circle_file/presentation/section_storage.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/presentation/call_permission_guard.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
 import '../../../../../support/service/circle_service/circle_management/circle/circle_query_typed_double.dart';
 import '../../../../../support/service/content_service/content/content_behavior_fact/recording_content_behavior_repository.dart';
 
@@ -408,9 +411,8 @@ void main() {
         circleId: circleId,
         overrides: <Override>[
           currentUserIdProvider.overrideWithValue(viewerId),
-          objectSharedReasonsProvider(
-            query,
-          ).overrideWith((_) async => const []),
+          objectSharedReasonsProvider(query)
+              .overrideWith((_) async => const []),
         ],
       );
 

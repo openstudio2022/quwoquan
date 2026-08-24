@@ -440,11 +440,10 @@ void main() {
   });
 }
 
-typedef _PendingListHandler =
-    Future<CircleMembershipPageSlice> Function(
-      PendingCircleMembershipListQuery query,
-      int call,
-    );
+typedef _PendingListHandler = Future<CircleMembershipPageSlice> Function(
+  PendingCircleMembershipListQuery query,
+  int call,
+);
 
 final class _ApprovalFixture
     implements

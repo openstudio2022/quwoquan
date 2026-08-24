@@ -61,10 +61,15 @@ void main() {
   });
 
   test('CircleGroup Reader rejects aggregate storage and audit aliases', () {
-    expect(decodeCircleGroupSlice(circleGroupSliceFixture()).groupId, 'group-1');
+    expect(
+      decodeCircleGroupSlice(circleGroupSliceFixture()).groupId,
+      'group-1',
+    );
     expect(
       // 拒绝 _id alias：未知/存储键不得进入 Reader 解码
-      () => decodeCircleGroupSlice(circleGroupSliceFixture()..['_id'] = 'group-1'),
+      () => decodeCircleGroupSlice(
+        circleGroupSliceFixture()..['_id'] = 'group-1',
+      ),
       throwsFormatException,
     );
     expect(
@@ -74,5 +79,4 @@ void main() {
       throwsFormatException,
     );
   });
-
 }

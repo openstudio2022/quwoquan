@@ -4,7 +4,6 @@ import 'package:cryptography/cryptography.dart';
 import 'package:crypto/crypto.dart' as crypto;
 
 const String runtimePackageSchema = 'app-runtime-config-package';
-const String runtimePackageSchemaVersion = '1';
 const String runtimePackageTestLiveLaunchPolicy = 'test_live';
 const String runtimePackageProdReleaseLaunchPolicy = 'prod_release';
 const Duration runtimePackageMaximumLifetime = Duration(hours: 24);
@@ -39,7 +38,6 @@ const Set<String> runtimePackageEndpointKeys = <String>{
 
 const Set<String> runtimePackageEnvelopeKeys = <String>{
   'schema',
-  'schemaVersion',
   'environment',
   'buildProfile',
   'target',
@@ -111,7 +109,6 @@ class RuntimePackageValidationException implements Exception {
 class RuntimeConfigPackage {
   const RuntimeConfigPackage({
     required this.schema,
-    required this.schemaVersion,
     required this.environment,
     required this.buildProfile,
     required this.target,
@@ -128,7 +125,6 @@ class RuntimeConfigPackage {
   });
 
   final String schema;
-  final String schemaVersion;
   final String environment;
   final String buildProfile;
   final String target;
@@ -240,7 +236,6 @@ class RuntimeConfigPackage {
 
     return RuntimeConfigPackage(
       schema: requiredString('schema'),
-      schemaVersion: requiredString('schemaVersion'),
       environment: requiredString('environment'),
       buildProfile: requiredString('buildProfile'),
       target: requiredString('target'),
@@ -265,7 +260,6 @@ class RuntimeConfigPackage {
     'launchPolicy': launchPolicy,
     'runtime': runtimeValues,
     'schema': schema,
-    'schemaVersion': schemaVersion,
     'signatureAlgorithm': 'ed25519',
     'signatureKeyId': signatureKeyId,
     'sourceGitSha': sourceGitSha,
@@ -348,9 +342,6 @@ class RuntimePackageResolver {
 
     if (package.schema != runtimePackageSchema) {
       invalidKeys.add('schema');
-    }
-    if (package.schemaVersion != runtimePackageSchemaVersion) {
-      invalidKeys.add('schemaVersion');
     }
     if (package.buildProfile != trustedBuildProfile) {
       invalidKeys.add('buildProfile');

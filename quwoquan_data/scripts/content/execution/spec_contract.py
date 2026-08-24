@@ -90,9 +90,17 @@ class CoverageTarget:
     type_tag_refs: tuple[str, ...] = ()
     aliases: tuple[str, ...] = ()
     qualified_homepage_source: QualifiedHomepageSource | None = None
+    publish_angle: str | None = None
+    publish_title: str | None = None
+    publish_seq: int | None = None
 
     @classmethod
     def from_mapping(cls, payload: Mapping[str, Any]) -> "CoverageTarget":
+        publish_seq = payload.get("publishSeq")
+        if publish_seq is not None and (
+            not isinstance(publish_seq, int) or publish_seq < 1
+        ):
+            raise ValueError("coverage target publishSeq must be a positive integer")
         return cls(
             name=_string(payload, "name"),
             entity_type=_string(payload, "entityType"),
@@ -105,6 +113,9 @@ class CoverageTarget:
                 if isinstance(raw := payload.get("qualifiedHomepageSource"), Mapping)
                 else None
             ),
+            publish_angle=_optional_string(payload, "publishAngle"),
+            publish_title=_optional_string(payload, "publishTitle"),
+            publish_seq=publish_seq,
         )
 
     def to_dict(self) -> dict[str, object]:
@@ -122,6 +133,12 @@ class CoverageTarget:
             payload["aliases"] = list(self.aliases)
         if self.qualified_homepage_source is not None:
             payload["qualifiedHomepageSource"] = self.qualified_homepage_source.to_dict()
+        if self.publish_angle:
+            payload["publishAngle"] = self.publish_angle
+        if self.publish_title:
+            payload["publishTitle"] = self.publish_title
+        if self.publish_seq is not None:
+            payload["publishSeq"] = self.publish_seq
         return payload
 
 

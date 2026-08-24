@@ -23,8 +23,11 @@ def _bind_artifact_identity_mount_material(
     if re.fullmatch(r"sha256:[0-9a-f]{64}", config_digest) is None:
         raise ValueError("artifact identity mount configuration digest is unresolved")
     run_root = Path(str(environment.get("QWQ_RUN_ROOT") or "").strip())
-    if not str(run_root) or str(run_root) == "." or not run_root.is_dir():
+    if not str(run_root) or str(run_root) == ".":
         raise ValueError("artifact identity mount run root is unavailable")
+    # run root 是本次命令自有的证据目录，报告写入前可能尚未物化；
+    # 挂载材料是该目录的第一批产物，按需创建而不是要求先在场。
+    run_root.mkdir(parents=True, exist_ok=True)
     identity_path = run_root / "artifact-identity.json"
     if identity_path.exists():
         identity_path.unlink()
@@ -68,6 +71,13 @@ def _bind_artifact_identity_mount_material(
         root / "quwoquan_ops" / "environments" / env_name,
         facts_root / "quwoquan_ops" / "environments" / env_name,
     )
+    # facts 树以 :ro 挂为容器 /app；compose 还会在其内部嵌套挂载
+    # platform-ops-service 的可写 process 目录，挂载点必须随材料预置，
+    # 否则 runc 无法在只读 rootfs 里创建 mountpoint。
+    (
+        facts_root
+        / ".qwq_output/env/repo/local/control-plane/process/platform-ops-service"
+    ).mkdir(parents=True, exist_ok=True)
     environment["QWQ_COMPOSE_PLATFORM_OPS_FACTS_ROOT"] = str(facts_root)
 
 

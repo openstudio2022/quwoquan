@@ -123,21 +123,27 @@ def main() -> int:
                 f"{ERROR_STATE.relative_to(ROOT)}: page error state must expose accessibility live region",
             )
 
+    # 本地启动契约的 owner 是 run.sh 与 launcher handoff 校验器，Gradle 只编译。
+    # 因此这里查的是 Gradle 有没有重新拿回 target authority，而不是它有没有
+    # 自带校验任务——后者本身就是第二真相源。
     gradle = ANDROID_GRADLE.read_text(encoding="utf-8")
-    if "verifyAndroidLocalLauncherContract" not in gradle:
-        fail(
-            failures,
-            f"{ANDROID_GRADLE.relative_to(ROOT)}: missing verifyAndroidLocalLauncherContract",
-        )
     if "startLocalStackIfNeeded" in gradle or "autoStartStack" in gradle:
         fail(
             failures,
             f"{ANDROID_GRADLE.relative_to(ROOT)}: must not auto-start local stack",
         )
-    if "ProcessBuilder" in gradle and "reverse" in gradle and "verifyAndroidLocalLauncherContract" not in gradle:
+    if "ProcessBuilder" in gradle and "reverse" in gradle:
         fail(
             failures,
             f"{ANDROID_GRADLE.relative_to(ROOT)}: Gradle must not establish adb reverse itself",
+        )
+    # 只查注入面。Gradle 里那条「编译期不得消费 runtime dart-define」的禁止性
+    # 守卫必须保留，它正是 signed package 单轨的守门人。
+    if "dartDefinesDigest" in gradle or "--dart-define=" in gradle:
+        fail(
+            failures,
+            f"{ANDROID_GRADLE.relative_to(ROOT)}: runtime configuration is owned by the "
+            "signed runtime package, not by Gradle dart-define plumbing",
         )
 
     wrapper = IOS_WRAPPER.read_text(encoding="utf-8")

@@ -7,6 +7,7 @@ import 'package:quwoquan_app/service/circle_service/circle_management/circle_gro
 import 'package:quwoquan_app/service/circle_service/circle_management/circle_membership/adapters/membership_remote.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle_post_placement/adapters/post_placement_remote.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/adapters/gathering_remote.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/gathering_plan/adapters/gathering_plan_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// circle domain 的 production Remote adapter 种类。
@@ -47,10 +48,18 @@ final class CircleProductionComposition {
       CircleProductionAdapter.gathering => RemoteGatheringFacet(
         client: client,
         invocationContext: context,
+        planReader: RemoteGatheringPlanFacet(
+          client: client,
+          invocationContext: context,
+        ),
       ),
       CircleProductionAdapter.gatheringBoardCircle => RemoteGatheringFacet(
         client: client,
         invocationContext: context,
+        planReader: RemoteGatheringPlanFacet(
+          client: client,
+          invocationContext: context,
+        ),
       ),
       CircleProductionAdapter.group => RemoteCircleGroupFacet(
         client: client,

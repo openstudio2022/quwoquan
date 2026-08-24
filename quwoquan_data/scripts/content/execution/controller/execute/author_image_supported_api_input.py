@@ -216,6 +216,7 @@ def _author_one(
     context: ExecutionContext,
     author_model: Any,
     runner: Callable[[ExecutionContext, str], AgentRunOutcome],
+    object_ref: str = "",
 ) -> dict[str, Any]:
     token = hashlib.sha256(asset_id.encode()).hexdigest()[:20]
     object_root = workspace / "evidence/source_authors/objects" / token
@@ -273,7 +274,8 @@ def _author_one(
     envelope = build_agent_result_envelope(
         job={
             "jobId": stable_failure_fingerprint([execution_id, asset_id, "author"]),
-            "executionId": execution_id, "ref": f"/professional-image/{asset_id}",
+            "executionId": execution_id,
+            "ref": object_ref or f"/professional-image/{asset_id}",
             "stage": "author",
         },
         files=[{"path": "author-result.json", "sha256": output_sha, "role": "image_author_result"}],
@@ -317,6 +319,7 @@ def author_supported_api_images(
     acquisition_receipt_ref: str,
     asset_ids: Sequence[str],
     runner: Callable[[ExecutionContext, str], AgentRunOutcome] | None = None,
+    object_ref: str = "",
 ) -> dict[str, Any]:
     selected = tuple(str(value).strip() for value in asset_ids)
     if (
@@ -326,6 +329,10 @@ def author_supported_api_images(
     ):
         raise ProfessionalImageSupportedApiAuthorError(
             "DATA.SOURCE.AUTHOR_INPUT_INVALID: distinct non-empty asset ids are required"
+        )
+    if object_ref and len(selected) != 1:
+        raise ProfessionalImageSupportedApiAuthorError(
+            "DATA.SOURCE.AUTHOR_INPUT_INVALID: --object-ref requires exactly one asset id"
         )
     root = acquisition_root.expanduser().resolve()
     rows, context, author_model, workspace, root = _author_inputs(
@@ -357,6 +364,7 @@ def author_supported_api_images(
             context=context,
             author_model=author_model,
             runner=runner,
+            object_ref=object_ref,
         ),
         default_failure_code="DATA.SOURCE.AUTHOR_ASSET_EXCLUDED",
     )
@@ -383,6 +391,7 @@ def handle_author_image_supported_api_input(args: argparse.Namespace) -> None:
             acquisition_root=Path(args.acquisition_root).expanduser().resolve(),
             acquisition_receipt_ref=str(args.acquisition_receipt_ref),
             asset_ids=tuple(args.asset_id or ()),
+            object_ref=str(getattr(args, "object_ref", "") or ""),
         )
     except (FileNotFoundError, OSError, TypeError, ValueError, ProfessionalImageSupportedApiAuthorError) as exc:
         batch = getattr(exc, "batch_result", None)
@@ -402,6 +411,11 @@ def register_author_image_supported_api_input_parser(sub: argparse._SubParsersAc
     parser.add_argument("--acquisition-root", required=True)
     parser.add_argument("--acquisition-receipt-ref", required=True)
     parser.add_argument("--asset-id", action="append", required=True)
+    parser.add_argument(
+        "--object-ref",
+        default="",
+        help="receipt 协议对象根（posts/image/<角度>/<标题>/<序号>）；仅允许单 asset",
+    )
     parser.set_defaults(handler=handle_author_image_supported_api_input)
 
 

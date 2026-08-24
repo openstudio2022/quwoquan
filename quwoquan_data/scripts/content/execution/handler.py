@@ -21,6 +21,9 @@ from content.execution.controller.execute.acquire_images import (
 from content.execution.controller.execute.acquire_videos import (
     register_acquire_videos_parser,
 )
+from content.execution.controller.execute.bind_acquired_media_unit import (
+    register_bind_acquired_media_unit_parsers,
+)
 from content.execution.controller.execute.discard import register_task_discard_parser
 from content.execution.controller.execute.drain_pool_delivery import (
     register_drain_pool_delivery_parser,
@@ -96,6 +99,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     register_prepare_image_supported_api_input_parser(commands)
     register_prepare_video_manual_input_parser(commands)
     register_acquire_videos_parser(commands)
+    register_bind_acquired_media_unit_parsers(commands)
     register_review_asset_parser(commands)
     register_review_image_supported_api_input_parser(commands)
     register_author_image_supported_api_input_parser(commands)

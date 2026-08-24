@@ -120,15 +120,22 @@ def write_admitted_sourced_video_unit(
     property_release_status: str,
     takedown_policy: str,
     entity_type: str | None = None,
+    object_dir: Path | None = None,
+    frozen_source_unit_id: str = "",
 ) -> Path:
-    """Materialize one source unit only when every admission fact passes."""
+    """Materialize one source unit only when every admission fact passes.
+
+    receipt 协议 execution 的 video 对象根在 `posts/video/**`（载体分根布局），
+    此时调用方显式传 object_dir；缺省仍按 entityRef 解析 entities 对象目录。
+    """
     if not source_video_path.is_file():
         raise FileNotFoundError(source_video_path)
-    object_dir = resolve_entity_object_dir(
-        execution_id,
-        object_ref,
-        etype_hint=entity_type,
-    )
+    if object_dir is None:
+        object_dir = resolve_entity_object_dir(
+            execution_id,
+            object_ref,
+            etype_hint=entity_type,
+        )
     source_kind = str(source_unit.get("sourceKind") or "").strip()
     if source_kind not in VIDEO_SOURCE_KINDS:
         raise ValueError(f"unsupported sourced video sourceKind: {source_kind}")
@@ -149,12 +156,40 @@ def write_admitted_sourced_video_unit(
         source_kind=source_kind,
         publication_admission=publication_admission,
     )
+    from core.source_layout import build_layout
+
+    entity_name = str(object_ref or "").strip("/").rsplit("/", 1)[-1]
     manifest = write_source_unit(
         object_dir,
         ordinal=int(source_unit.get("ordinal") or 1),
         source_id=source_id,
         source_md=attribution_text,
         clean_md=attribution_text,
+        quality={
+            "sourceId": source_id,
+            "entity": entity_name,
+            "quality": "High",
+            "score": 100,
+            "reasons": [
+                "sourced_video_admission",
+                "acquisition_receipt_binding",
+            ],
+            "url": source_post_url,
+            "statusCode": 200,
+            "fetchSucceeded": True,
+        },
+        layout=build_layout(
+            source_kind=source_kind,
+            extractor="sourced_video_direct_download",
+            title=str(source_unit.get("title") or attribution_text),
+            blocks=[
+                {
+                    "type": "paragraph",
+                    "text": attribution_text,
+                    "sectionSlug": "",
+                }
+            ],
+        ),
         platform=platform,
         source_category="tourism_video",
         source_kind=source_kind,
@@ -180,6 +215,7 @@ def write_admitted_sourced_video_unit(
             "canonicalUrl": source_post_url,
             "finalUrl": source_post_url,
         },
+        frozen_source_unit_id=frozen_source_unit_id,
     )
     unit_dir = execution_source_unit_dir(
         execution_id,

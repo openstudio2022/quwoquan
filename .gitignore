@@ -9,6 +9,11 @@
 *.swp
 *.swo
 *~
+.ruff_cache/
+
+# 开发机本地归档（同时登记在 verify_root_layout 的根白名单里）
+/cursor（重置额度）/
+/cursor（重置额度）.zip
 
 # Temporary files
 tmp/

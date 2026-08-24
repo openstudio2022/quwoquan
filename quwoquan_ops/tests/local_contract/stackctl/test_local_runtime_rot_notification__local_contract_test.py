@@ -130,7 +130,7 @@ def _runner(
                 "",
             )
         if "image inspect" in joined:
-            return subprocess.CompletedProcess(argv, 0, "sha256:probe", "")
+            return subprocess.CompletedProcess(argv, 0, "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "")
         return subprocess.CompletedProcess(
             argv,
             0,

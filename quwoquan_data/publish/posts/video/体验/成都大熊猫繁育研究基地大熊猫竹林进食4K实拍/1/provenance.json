@@ -1,0 +1,43 @@
+{
+  "executionId": "20260824--travel-video-m-panda--chengdu--pilot-001",
+  "agentRunId": "video-author-claude-20260824-r1",
+  "agentModel": "claude-fable-5",
+  "renderStrategy": "sourced_video_transcode",
+  "outputAudioStatus": "preserved_authorized",
+  "sources": [
+    {
+      "assetRef": "sources/成都大熊猫繁育研究基地__tourism_video_site__cb969ea7/assets/source.webm",
+      "sourceRef": "https://commons.wikimedia.org/wiki/File:Chengdu_Research_Base_of_Giant_Panda_Breeding-P1680515_Date_2019-12-27.webm",
+      "rightsRef": "sources/成都大熊猫繁育研究基地__tourism_video_site__cb969ea7/rights/permission_evidence.json",
+      "mediaProbeRef": "sources/成都大熊猫繁育研究基地__tourism_video_site__cb969ea7/media/probe.json",
+      "watermarkEvidenceRef": "sources/成都大熊猫繁育研究基地__tourism_video_site__cb969ea7/media/watermark_evidence.json",
+      "audioRightsEvidenceRef": "sources/成都大熊猫繁育研究基地__tourism_video_site__cb969ea7/rights/audio_rights_evidence.json",
+      "sha256": "sha256:06a8ccc9b944a9e626375d5f90913ec48c5a4fe6323a31be2738988eddd20069",
+      "isOriginal": false,
+      "originalCreatorId": null,
+      "originalCreatorName": "Josep Panadero",
+      "originalCreatorProfileUrl": null,
+      "platform": "Wikimedia Commons",
+      "sourcePostUrl": "https://commons.wikimedia.org/wiki/File:Chengdu_Research_Base_of_Giant_Panda_Breeding-P1680515_Date_2019-12-27.webm",
+      "originalAssetUrl": "https://upload.wikimedia.org/wikipedia/commons/8/88/Chengdu_Research_Base_of_Giant_Panda_Breeding-P1680515_Date_2019-12-27.webm?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "attributionText": "Chengdu Research Base of Giant Panda Breeding-P1680515 Date 2019-12-27.webm — Josep Panadero — CC BY-SA 4.0 — https://commons.wikimedia.org/wiki/File:Chengdu_Research_Base_of_Giant_Panda_Breeding-P1680515_Date_2019-12-27.webm",
+      "rightsBasis": "CC BY-SA 4.0",
+      "commercialAuthorizationStatus": "verified",
+      "publicationAdmission": "commercial_release",
+      "distributionDecision": "commercial_allowed",
+      "authorizationProofUrl": "https://commons.wikimedia.org/wiki/File:Chengdu_Research_Base_of_Giant_Panda_Breeding-P1680515_Date_2019-12-27.webm",
+      "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "riskAcceptanceId": null,
+      "watermarkStatus": "absent",
+      "audioRightsStatus": "licensed",
+      "modelReleaseStatus": "not_required",
+      "propertyReleaseStatus": "not_required",
+      "collectedAt": "2026-08-24T01:41:50.072823+00:00",
+      "takedownPolicy": "quwoquan_standard_notice_and_takedown",
+      "directDownload": true,
+      "accessControlBypassed": false,
+      "drmDetected": false,
+      "basis": "CC BY-SA 4.0"
+    }
+  ]
+}

@@ -7,12 +7,14 @@ from __future__ import annotations
 
 import importlib.util
 import os
-import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
+from quwoquan_app.scripts.device.verify_flutter_run_defines import (
+    RUNTIME_VALUE_DEFINE_KEYS,
+)
 
 SCRIPT = (
     Path(__file__).resolve().parents[3]
@@ -31,52 +33,54 @@ def _load_subject():
     return module
 
 
+def _runtime_values() -> dict[str, str]:
+    """按 canonical 键映射派生取值替身，测试不自持第二份键集合。"""
+    values = {key: f"https://{key.lower()}.example" for key in RUNTIME_VALUE_DEFINE_KEYS}
+    values["appRuntimeEnv"] = "beta"
+    values["gatewayBaseUrl"] = "https://gateway.example"
+    return values
+
+
+_RUNTIME_VALUES = _runtime_values()
+
+
 class FlutterTestGuardRuntimeEnvironmentContractTest(unittest.TestCase):
     def test_stackctl_environment_selects_the_packaged_runtime(self) -> None:
         subject = _load_subject()
-        completed = subprocess.CompletedProcess(
-            ["print-app-env"],
-            0,
-            "--dart-define=APP_RUNTIME_ENV=beta\n",
-            "",
-        )
         with mock.patch.dict(
             os.environ,
             {"QWQ_APP_RUNTIME_ENV": "beta", "QWQ_DEPLOY_TARGET": "beta-local"},
             clear=False,
-        ), mock.patch.object(subject.subprocess, "run", return_value=completed) as run:
+        ), mock.patch.object(
+            subject, "test_live_runtime_values", return_value=_RUNTIME_VALUES
+        ) as resolve:
             args = subject._with_runtime_environment_defines([])
 
+        # 取值与 App 同源：runner 直接向 test_live 取值面要该环境的 endpoint，
+        # 不再经由第二个 CLI 进程转译。
+        self.assertEqual(resolve.call_args.args, ("beta", "beta-local"))
         self.assertIn("--dart-define=APP_RUNTIME_ENV=beta", args)
-        self.assertEqual(run.call_args.args[0][2:4], ["--env", "beta"])
-        self.assertEqual(
-            run.call_args.args[0][run.call_args.args[0].index("--launch-policy") + 1],
-            "test_live",
+        self.assertIn(
+            "--dart-define=CLOUD_GATEWAY_BASE_URL=https://gateway.example",
+            args,
         )
 
     def test_explicit_dart_define_overrides_the_process_environment(self) -> None:
         subject = _load_subject()
-        completed = subprocess.CompletedProcess(
-            ["print-app-env"],
-            0,
-            "--dart-define=APP_RUNTIME_ENV=gamma\n",
-            "",
-        )
+        overridden = {**_RUNTIME_VALUES, "appRuntimeEnv": "gamma"}
         with mock.patch.dict(
             os.environ,
             {"QWQ_APP_RUNTIME_ENV": "beta", "QWQ_DEPLOY_TARGET": "gamma-local"},
             clear=False,
-        ), mock.patch.object(subject.subprocess, "run", return_value=completed) as run:
+        ), mock.patch.object(
+            subject, "test_live_runtime_values", return_value=overridden
+        ) as resolve:
             args = subject._with_runtime_environment_defines(
                 ["--dart-define=APP_RUNTIME_ENV=gamma"]
             )
 
+        self.assertEqual(resolve.call_args.args, ("gamma", "gamma-local"))
         self.assertEqual(args.count("--dart-define=APP_RUNTIME_ENV=gamma"), 1)
-        self.assertEqual(run.call_args.args[0][2:4], ["--env", "gamma"])
-        self.assertEqual(
-            run.call_args.args[0][run.call_args.args[0].index("--launch-policy") + 1],
-            "test_live",
-        )
 
     def test_serial_mode_only_runs_files_that_declare_the_serial_tag(self) -> None:
         subject = _load_subject()

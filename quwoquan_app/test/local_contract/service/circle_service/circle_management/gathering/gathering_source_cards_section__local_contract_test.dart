@@ -20,6 +20,7 @@ import 'package:quwoquan_app/service/circle_service/circle_management/gathering/
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/presentation/gathering_source_cards_section.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart'
     show RuntimeFailureBase;
+
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
 import '../../../../../support/runtime/homepage_source_cards_boundary_overrides.dart';
 

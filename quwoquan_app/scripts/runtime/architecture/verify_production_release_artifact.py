@@ -281,8 +281,9 @@ def main() -> int:
             else ""
         ),
         "launchTarget": str(handoff.get("target") or ""),
-        "dartDefinesDigest": str(handoff.get("dartDefinesDigest") or ""),
-        "runtimeConfigDigest": str(handoff.get("runtimeConfigDigest") or ""),
+        "runtimeConfigPackageDigest": str(
+            handoff.get("runtimeConfigPackageDigest") or ""
+        ),
         "effectiveLaunchManifestDigest": str(
             handoff.get("effectiveLaunchManifestDigest") or ""
         ),

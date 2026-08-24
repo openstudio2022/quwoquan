@@ -27,8 +27,8 @@ quwoquan_data/schema/
   execution_manifest.json
   0.plan/
   sources/
-  entities/**/<1.download..5.review>/
-  posts/<kind>/**/<1.download..5.review>/
+  entities/<域>/<类型>/<名称>/<1.download..5.review>/          # 仅 homepage 载体
+  posts/<carrier>/<angle>/<title>/<seq>/<1.download..5.review>/ # article|image|video
   _shared/
     execution_state.json          # 唯一状态快照，只经 save_execution_state 写
     receipts/<seq>-<stage>.json   # 阶段交接回执链（权威条目，create-once）
@@ -36,6 +36,16 @@ quwoquan_data/schema/
   evidence/
   publish_ref.json
 ```
+
+对象根按载体分根 **fail closed**（DEC-027，与 canonical publish 同构）：
+article/image/video 对象落在 `entities/**` 下、或 homepage 对象落在
+`posts/**` 下，都会被 `verify content-execution-layout` 在 `0.plan` /
+`1.download` 截面拦截。post 载体的 `<angle>/<title>/<seq>` 坐标由
+`0.plan/target_set.json` 逐 target 冻结
+（`publishAngle/publishTitle/publishSeq`，schema 真相源
+`quwoquan_data/schema/execution/target_set.schema.json`），对象五阶段目录
+按该坐标创建；creator 与 tag 绑定（`creatorProfileRef/tagRefs`）由
+`3.compose/writing_pack.json` 冻结。
 
 - 工作包根条目 allowlist 由 `quwoquan_data/scripts/core/paths.py` 拥有；
   `_shared` 条目必须先登记角色（authoritative/reclaimable）再写入。

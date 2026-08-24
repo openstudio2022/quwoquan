@@ -1,0 +1,16 @@
+{
+  "schema": "quwoquan_data.evidence_index",
+  "stage": "5.review",
+  "executionId": "20260823--travel-article-m1-first--leshan--pilot-001",
+  "executionBinding": "frozen",
+  "objectRef": "entities/地点/景区/乐山大佛",
+  "evidence": [
+    {"kind": "rubric_review", "ref": "5.review/rubric_review.json", "sha256": "sha256:833f8c614f1d0d7ffd1dfe447ade5e268793b4a101e7d38892b2e2e8c27725fd"},
+    {"kind": "quality_review", "ref": "5.review/quality_review.json", "sha256": "sha256:db73542ae92705bc189664b974e376c83877b743b17fc9c6604dfc71ba4668f2"},
+    {"kind": "rights_review", "ref": "5.review/rights_review.json", "sha256": "sha256:6b0959c1755a2be7e372921c6c6b118af0f7bb382304bb7d8b788fd0e106e743"},
+    {"kind": "deterministic_gate", "ref": "5.review/deterministic_gate.json", "sha256": "sha256:2f3eb9fb05148516dbf992d1dea61f121e38f24f669a008199ac1e9b5e918358"},
+    {"kind": "media_reference_review", "ref": "5.review/media_ref_review.json", "sha256": "sha256:2f93292641b0388f1dc33a330ab578dfc873d225ff7d39656cdb71ed6a4af5bc"},
+    {"kind": "finalization_report", "ref": "5.review/finalization_report.json", "sha256": "sha256:d1938238a0553c60b8f0faeafc031d37ea70c7c4b7c7a7f30bd17e7d13461777"},
+    {"kind": "independent_reviewer_result", "ref": "5.review/reviewer_result.json", "sha256": "sha256:d097ee78d96e82c26cf9b8f9993abe7fbe0126fbe39562b72b8908763c77c110"}
+  ]
+}

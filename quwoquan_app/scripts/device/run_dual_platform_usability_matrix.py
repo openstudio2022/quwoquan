@@ -18,6 +18,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from quwoquan_app.scripts.device.verify_flutter_run_defines import (
+    RUNTIME_VALUE_DEFINE_KEYS,
+)
 
 ROOT = Path(__file__).resolve().parents[3]
 APP = ROOT / "quwoquan_app"
@@ -265,7 +268,12 @@ def _readback_command(
     report_path: Path,
     release_id: str,
 ) -> list[str]:
-    defines = dict(handoff["dartDefines"])
+    # endpoint 取值只来自 handoff 携带的签名 runtime package；编译期 define 已退役。
+    runtime_values = dict(handoff["runtimeConfigPackage"]["runtime"])
+    defines = {
+        define_key: str(runtime_values[value_key])
+        for value_key, define_key in RUNTIME_VALUE_DEFINE_KEYS.items()
+    }
     command = [
         "python3",
         str(READBACK_RUNNER),

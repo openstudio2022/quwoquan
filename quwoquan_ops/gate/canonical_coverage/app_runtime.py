@@ -11,6 +11,9 @@ from typing import Mapping, Sequence
 
 import quwoquan_ops.gate.canonical_coverage as cc
 from quwoquan_app.scripts._common.flutter_test_selection import declares_serial_tests
+from quwoquan_app.scripts.device.verify_flutter_run_defines import (
+    RUNTIME_VALUE_DEFINE_KEYS,
+)
 
 from .constants import CoverageError, _tail
 
@@ -32,21 +35,23 @@ APP_TEST_SELECTION_POLICY = Path("scripts/_common/flutter_test_selection.py")
 # These caller-owned variables may narrow the test set or change the resolved
 # runtime package. Canonical coverage owns both decisions and therefore removes
 # every ambient value before launching the guarded runner.
+# 恰好覆盖下游三个 selector 真实读取的进程环境键。endpoint 与 rollout 类键在
+# runtime package cutover 后由环境拓扑拥有，下游不再从进程环境取，因此留在这里
+# 只会让「清理面」与「读取面」分叉成两份事实。
 APP_COVERAGE_CLEARED_ENV_KEYS = (
-    "APP_LEGAL_BASE_URL",
-    "APP_ROLLOUT_MODE",
     "FLUTTER_TEST_CONCURRENCY",
     "FLUTTER_TEST_SERIAL_MODE",
     "FLUTTER_TEST_SHARD_INDEX",
     "FLUTTER_TEST_TOTAL_SHARDS",
-    "LOCAL_GAMMA_GATEWAY_BASE_URL",
-    "LOCAL_GAMMA_MEDIA_AVATAR_BASE_URL",
-    "LOCAL_GAMMA_MEDIA_IMAGE_BASE_URL",
-    "LOCAL_GAMMA_MEDIA_UPLOAD_BASE_URL",
-    "LOCAL_GAMMA_MEDIA_VIDEO_BASE_URL",
-    "LOCAL_GAMMA_RTC_MEDIA_CONNECTION_URL",
-    "QWQ_APP_LAUNCH_MODE",
+    # 签名材料与 source identity 是 runtime package 的输入；覆盖率子进程必须
+    # 从零装配，否则宿主上一次打包留下的密钥或 capsule 会决定本次度量结果。
+    "QWQ_APP_RUNTIME_CONFIG_SIGNING_KEY_ID",
+    "QWQ_APP_RUNTIME_CONFIG_SIGNING_PRIVATE_KEY_FILE",
+    "QWQ_APP_RUNTIME_CONFIG_TRUSTED_PUBLIC_KEYS_FILE",
     "QWQ_DEPLOY_TARGET",
+    "QWQ_PACKAGE_SOURCE_CAPSULE_MANIFEST",
+    "QWQ_PACKAGE_SOURCE_REVISION",
+    "QWQ_PACKAGE_SOURCE_TREE_DIGEST",
 )
 
 
@@ -102,22 +107,38 @@ def resolved_app_runtime_defines() -> dict[str, str]:
             f"(exit={completed.returncode}): {_tail(completed.stderr)}"
         )
     try:
-        payload = json.loads(completed.stdout)
+        package = json.loads(completed.stdout)
     except json.JSONDecodeError as error:
-        raise CoverageError("App coverage runtime defines are not JSON") from error
-    if not isinstance(payload, dict) or not all(
+        raise CoverageError("App coverage runtime package is not JSON") from error
+    if not isinstance(package, dict):
+        raise CoverageError("App coverage runtime package must be a JSON object")
+    # 解析器交出的是完整 signed runtime package；宿主测试的 define 向量只从它的
+    # runtime 段派生，保持与 canonical launcher handoff 同一份 runtime 事实。
+    runtime = package.get("runtime")
+    if not isinstance(runtime, dict) or not all(
         isinstance(key, str) and isinstance(value, str)
-        for key, value in payload.items()
+        for key, value in runtime.items()
     ):
-        raise CoverageError("App coverage runtime defines must be string-only object")
-    if payload.get("APP_RUNTIME_ENV") != APP_COVERAGE_RUNTIME_ENV:
+        raise CoverageError("App coverage runtime values must be string-only object")
+    defines = {
+        define_key: runtime[value_key]
+        for value_key, define_key in RUNTIME_VALUE_DEFINE_KEYS.items()
+        if value_key in runtime
+    }
+    missing = sorted(set(RUNTIME_VALUE_DEFINE_KEYS) - set(runtime))
+    if missing:
+        raise CoverageError(
+            "App coverage runtime package is missing runtime values: "
+            + ", ".join(missing)
+        )
+    defines["APP_LAUNCH_POLICY"] = str(package.get("launchPolicy") or "")
+    if defines["APP_RUNTIME_ENV"] != APP_COVERAGE_RUNTIME_ENV:
         raise CoverageError("App coverage runtime environment is not canonical alpha")
-    if payload.get("APP_LAUNCH_POLICY") != APP_COVERAGE_LAUNCH_POLICY:
+    if defines["APP_LAUNCH_POLICY"] != APP_COVERAGE_LAUNCH_POLICY:
         raise CoverageError("App coverage launch policy is not canonical test_live")
-    public_origin = payload.get("PUBLIC_WEB_BASE_URL", "")
-    if not public_origin.startswith("https://"):
+    if not defines["PUBLIC_WEB_BASE_URL"].startswith("https://"):
         raise CoverageError("App coverage public Web origin must be explicit HTTPS")
-    return dict(sorted(payload.items()))
+    return dict(sorted(defines.items()))
 
 
 def guarded_app_coverage_command(

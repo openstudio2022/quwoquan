@@ -350,7 +350,7 @@ private struct NativeRuntimeConfigActivationResult {
 
 private enum NativeRuntimeConfigStore {
   private static let packageFields: Set<String> = [
-    "schema", "schemaVersion", "environment", "buildProfile", "target",
+    "schema", "environment", "buildProfile", "target",
     "launchPolicy", "issuedAt", "expiresAt", "sourceGitSha", "sourceTreeDigest",
     "runtime", "payloadDigest", "signatureAlgorithm", "signatureKeyId",
     "trustedPublicKeys", "signature",
@@ -518,10 +518,9 @@ private enum NativeRuntimeConfigStore {
     )
     let trust = try decodeDocument(trustData, malformedError: .trustMalformed)
     guard Set(trust.keys) == [
-      "schema", "schemaVersion", "buildProfile", "signatureAlgorithm", "trustedPublicKeys",
+      "schema", "buildProfile", "signatureAlgorithm", "trustedPublicKeys",
     ],
       trust["schema"] as? String == "app-runtime-config-trust",
-      trust["schemaVersion"] as? String == "1",
       trust["signatureAlgorithm"] as? String == "ed25519",
       let buildProfile = nonEmptyString(trust["buildProfile"]),
       ["nonprod", "prod"].contains(buildProfile)
@@ -543,8 +542,7 @@ private enum NativeRuntimeConfigStore {
     expectedPackageDigest: String?
   ) throws -> NativeRuntimeConfigActiveProjection {
     guard Set(package.keys) == packageFields,
-          package["schema"] as? String == "app-runtime-config-package",
-          package["schemaVersion"] as? String == "1"
+          package["schema"] as? String == "app-runtime-config-package"
     else {
       throw NativeRuntimeConfigReadError.schemaMismatch
     }
@@ -932,7 +930,7 @@ struct NativeRuntimeConfigActivationConsumeResult {
 
 enum NativeRuntimeConfigActivationCoordinator {
   private static let requestFields: Set<String> = [
-    "schema", "schemaVersion", "environment", "buildProfile", "target", "package",
+    "schema", "environment", "buildProfile", "target", "package",
     "packageDigest", "trustEnvelopeDigest", "effectiveLaunchManifest",
     "effectiveLaunchManifestDigest", "expectedActiveDigest",
   ]
@@ -946,7 +944,7 @@ enum NativeRuntimeConfigActivationCoordinator {
     "consumerLeaseId",
   ]
   private static let receiptFields: Set<String> = [
-    "schema", "schemaVersion", "status", "requestDigest", "environment", "buildProfile",
+    "schema", "status", "requestDigest", "environment", "buildProfile",
     "target", "packageDigest", "trustEnvelopeDigest", "effectiveLaunchManifestDigest",
     "previousActiveDigest", "activePackageDigest", "errorCode", "validationIssues",
   ]
@@ -1148,7 +1146,6 @@ enum NativeRuntimeConfigActivationCoordinator {
     let receipt = try readActiveReceiptDocument()
     guard Set(receipt.keys) == receiptFields,
           receipt["schema"] as? String == "app-runtime-config-activation-receipt",
-          receipt["schemaVersion"] as? String == "1",
           receipt["status"] as? String == "activated",
           receipt["errorCode"] as? String == "",
           let issues = receipt["validationIssues"] as? [Any],
@@ -1176,7 +1173,6 @@ enum NativeRuntimeConfigActivationCoordinator {
   private static func validateRequest(_ request: [String: Any]) throws {
     guard Set(request.keys) == requestFields,
           request["schema"] as? String == "app-runtime-config-activation-request",
-          request["schemaVersion"] as? String == "1",
           let environment = nonEmptyString(request["environment"]),
           let buildProfile = nonEmptyString(request["buildProfile"]),
           let target = nonEmptyString(request["target"]),
@@ -1228,7 +1224,6 @@ enum NativeRuntimeConfigActivationCoordinator {
   ) -> [String: Any] {
     [
       "schema": "app-runtime-config-activation-receipt",
-      "schemaVersion": "1",
       "status": status,
       "requestDigest": requestDigest,
       "environment": request["environment"] as? String ?? "",

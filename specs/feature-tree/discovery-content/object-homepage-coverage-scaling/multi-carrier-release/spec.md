@@ -374,16 +374,16 @@
 - 依赖：`source-discovery-scale-reliability` 的来源发现证据契约保持不变；M100 governed 路径重启（`OPEN-006`）前完成即可。
 
 <a id="open-011"></a>
-### OPEN-011 receipt 协议 execution 的 publish→ship 后缀不可达
+### OPEN-011 receipt 协议 execution 的 succeeded 终态被消费核验的 video 供给硬门阻断
 
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：当前 receipt 协议 execution 在 `5.review` pass 后没有可执行的 publish 正向链，只能落 `verdict=blocked` receipt，execution 无法到达 `succeeded`，新协议因此覆盖不了发布后缀。`release pool-append` 只准入已在 canonical 的对象，`task drain-pool-delivery` 仅接受 `manual_required` 且 `lastFailedStage=publish` 的失败重放，退役编排层的 `task execute` 不属于本协议，三者都不能把 approved 对象物化并写入 canonical publish。`stage-contracts/publish.md` 的 PRE 引用 `verify execution-readiness`，而该门要求 execution 终态、`model_readiness.json` 与 `posts/<carrier>` 布局，语义属退役编排层。article 对象可被布局到 `entities/**` 而非 `posts/article/**`，`verify content-execution-layout` 与 `verify stage-artifacts` 均不拦截该漂移。
-- 尚缺实现：receipt 协议下的 publish 原子链，即成品物化出对象根 `article.md`+`manifest.json`、canonical 写入与 pool 准入的单命令或冻结序列。publish 契约 PRE 判据需替换为适配 receipt 协议的门。article 归 `posts/article/**` 的布局约定需进入 layout 与 stage-artifacts 检查器并 fail closed。
-- 尚缺验收证据：缺 `GWT-020.t1..t3` 的 local_contract 与真实 execution 后缀证据——publish 原子链幂等与失败终态、布局漂移被 `0.plan`/`1.download` 门拦截、ship 落 `next=END` receipt 后 `verify release-lifecycle` 与 `stackctl verify --env gamma` 通过。
-- 完成判定：`GWT-020.t1..t3` 成立，一个真实 receipt 协议 execution 从 publish 走到 `ship` 落 `next=END` receipt 且 `execution_state.status=succeeded`。
-- 依赖：Data owner 需裁决成品物化的写入责任段（`5.review` POST 或 publish DURING）与 canonical 写入 allowlist。publish 契约 PRE 修订属契约变更需过评审。退役编排层的 `execution-readiness` 门保持存量 campaign 路径不动。
+- 影响或价值：当前 receipt 协议 execution 仍无法到达 `succeeded` 终态，尽管 publish 原子链（`release publish-execution`，`DEC-027`）、载体分根布局 fail closed 与 release/ship 导入已由真实 execution 走通——M2 execution（峨眉山 article）publish 与 release receipt 均 pass，research release 导入 gamma 成功且环境 45/45 健康。ship 阶段完成判据不可达的链条：gamma 导入即 `activated`，`verify release-lifecycle` 要求消费核验 `verifyRunId`；消费核验（`ship verify --readiness-phase consumer`）按 environment-topology-and-packaging 契约硬性要求 `premium_stream` feed 暴露 release-bound playable video，而 `feed_service` 对 `premium_stream` surface 要求 active supply `PlayableVideoReady`。当前内容池无 video 可入 release：存量 canonical video 对象的 execution asset review receipt（`data/tasks/<id>/evidence/asset_reviews/receipts/`）已随工作包清理且按字节摘要冻结不可重建，release eligibility 门 fail closed（`DATA.POOL.OBJECT_INVALID`）。`readiness receipt` 又是 health user availability release 层与 `stackctl verify --profile integration` 的先决，缺口向环境验收面级联。
+- 尚缺实现：video lane 进入 receipt 协议并生产至少一个带完整 admission/评审证据链的新 video 对象（`stage-contracts` 十阶段 + media source admission exact pair），使 research release 含 playable video。
+- 尚缺验收证据：缺 `GWT-020.t3` 的收尾——含 video 的 release 重导入后 `ship verify` 消费核验 PASS 产出 `release-readiness.json`，`verify release-lifecycle` 与 `stackctl verify --env gamma --profile integration` 通过，ship receipt `next=END` 且 `execution_state.status=succeeded`。
+- 完成判定：`GWT-020.t3` 成立，一个真实 receipt 协议 execution 的 ship receipt 落 `next=END` 且 `execution_state.status=succeeded`；import 门只消费声明能力探针（readiness receipt 不再倒置为首个导入前置）保持由 local_contract 锚定。
+- 依赖：video lane 接入 receipt 协议（四载体扩展工作的一部分）；media source admission 真实来源与权利链证据。M1 article 的 `DATA.POOL.REFERENCE_MISSING`（乐山大佛 homepage entity 缺失）由 homepage lane 接线承接。
 
 <a id="open-012"></a>
 ### OPEN-012 receipt/claim 薄驱动层缺少行为级测试锚定
@@ -395,4 +395,32 @@
 - 尚缺实现：进程组级超时终止、round timeout 与 claim TTL 的关系约束、stage 枚举收敛到单一真相源。
 - 尚缺验收证据：上列各行为的 local_contract 或门禁，每项一测且不放宽生产语义。
 - 完成判定：`GWT-020.t4..t5` 成立。
+- 依赖：无外部阻断。
+
+<a id="open-013"></a>
+### OPEN-013 carrier dispatch 与 publish execution 重构留下 20 项红测试
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：当前 carrier dispatch 与 publish execution 的生产面已是新形态，
+  契约测试仍锚定旧调用面，两者构成两份互相矛盾的调用契约，语义漂移无门禁可依。
+- 生产面归属：`content/release/canonical/{publish_execution,receipt_materialize,post_promotion}.py`、
+  `content/execution/controller/execute/bind_acquired_media_unit.py`、
+  `content/execution/{handler,spec_contract}.py`、
+  `content/release/environment/consistency.py`、`content/source/sourced_video_unit.py`。
+- 失锚观察点：`quwoquan_data/tests/local_contract/execution/` 下
+  `test_semantic_wave_dispatch__carrier_selective`、
+  `test_pool_delivery__independent_failure_domain`、`test_cli_environment`、
+  `test_content_execution_layout__identity_keys`、`test_execution_manifest_fixture__identity`。
+- 失锚观察点（续）：`quwoquan_data/tests/local_contract/source/` 下
+  `test_download_gate__behavior_article_capacity`、`test_image_collection_gate__behavior`、
+  `test_independent_asset_review__provenance_admission`。
+- 落盘隔离缺陷：`test_download_gate__behavior_article_capacity` 直接写
+  `quwoquan_data/publish`，必须改回只写 tempfile 临时根。
+- 尚缺实现：把上列观察点的调用面迁到新的 dispatch/publish execution 签名；
+  `test_download_gate__behavior_article_capacity` 改为只写 tempfile 临时根。
+- 尚缺验收证据：上列观察点全部锚定新调用面，且 `bash quwoquan_ops/gate/commit_gate.sh`
+  的 data 测试段无需按影响面排除 `quwoquan_data`。
+- 完成判定：`GWT-020.t1..t3` 成立。
 - 依赖：无外部阻断。

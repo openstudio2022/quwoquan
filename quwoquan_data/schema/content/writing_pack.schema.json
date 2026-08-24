@@ -111,6 +111,21 @@
       ],
       "description": "主底稿来源 ref（风格与事实锚点）"
     },
+    "creatorProfileRef": {
+      "type": "string",
+      "pattern": "^qwq_creator_[a-z0-9_]+$",
+      "description": "canonical publish/creators/ 下的 creator 目录名；物化器据此派生 manifest creator 绑定字段"
+    },
+    "tagRefs": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z]+/.+"
+      },
+      "description": "canonical tags 引用（publish-closure 校验无悬空）；由 3.compose 从既有 canonical tag 集选择"
+    },
     "allowedContactNumbers": {
       "type": "array",
       "uniqueItems": true,

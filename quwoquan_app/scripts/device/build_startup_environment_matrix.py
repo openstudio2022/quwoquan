@@ -111,10 +111,6 @@ def _build_command(platform: str, handoff: dict[str, Any]) -> list[str]:
     else:
         command.extend(["web", "--debug"])
     command.extend(["--target", str(handoff["entrypoint"])])
-    command.extend(
-        f"--dart-define={key}={value}"
-        for key, value in dict(handoff["dartDefines"]).items()
-    )
     return command
 
 
@@ -161,23 +157,21 @@ def main() -> int:
             process_env["QWQ_APP_RUNTIME_ENV"] = environment
             process_env["QWQ_LAUNCH_TARGET"] = str(handoff["target"])
             process_env["QWQ_APP_BUILD_CONTEXT"] = "package-only"
-            process_env["QWQ_DART_DEFINES_DIGEST"] = str(
-                handoff["dartDefinesDigest"]
-            )
             process_env["QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST"] = str(
-                handoff["runtimeConfigDigest"]
+                handoff["runtimeConfigPackageDigest"]
             )
             process_env["QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST"] = str(
                 handoff["effectiveLaunchManifestDigest"]
             )
+            runtime_values = handoff["runtimeConfigPackage"]["runtime"]
             process_env["QWQ_APP_RECOVERY_BASE_URL"] = str(
-                handoff["recoveryBaseUrl"]
+                runtime_values["gatewayBaseUrl"]
             )
             process_env["QWQ_APP_PUBLIC_WEB_URL"] = str(
-                handoff["publicWebBaseUrl"]
+                runtime_values["publicWebBaseUrl"]
             )
             process_env["QWQ_APP_DOWNLOAD_BASE_URL"] = str(
-                handoff["appDownloadBaseUrl"]
+                runtime_values["appDownloadBaseUrl"]
             )
             if platform == "ios" and args.ios_simulator_id:
                 process_env["QWQ_IOS_SIMULATOR_UDID"] = args.ios_simulator_id
@@ -211,8 +205,9 @@ def main() -> int:
                     "runtimeTarget": handoff["target"],
                     "platform": platform,
                     "entrypoint": handoff["entrypoint"],
-                    "dartDefinesDigest": handoff["dartDefinesDigest"],
-                    "runtimeConfigDigest": handoff["runtimeConfigDigest"],
+                    "runtimeConfigPackageDigest": handoff[
+                        "runtimeConfigPackageDigest"
+                    ],
                     "effectiveLaunchManifestDigest": handoff[
                         "effectiveLaunchManifestDigest"
                     ],

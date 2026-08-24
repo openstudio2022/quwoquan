@@ -11,6 +11,7 @@ import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/adapters/circle_lifecycle_remote.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/adapters/circle_query_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
 import '../../../../../support/runtime/remote_api_path_test_harness.dart';
 
 http.Response _responseFor(http.Request request) {
@@ -220,11 +221,7 @@ void main() {
     test('getCircleFeed 透传 identity/type query', () async {
       try {
         await repo.feed(
-          CircleFeedQuery(
-            circleId: 'c1',
-            identity: 'work',
-            type: 'article',
-          ),
+          CircleFeedQuery(circleId: 'c1', identity: 'work', type: 'article'),
         );
       } catch (_) {}
       expect(log.last.query['identity'], 'work');

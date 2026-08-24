@@ -85,7 +85,6 @@ class AppRuntimeConfigSigningSecurityContractTest(unittest.TestCase):
             )
             package = {
                 "schema": "app-runtime-config-package",
-                "schemaVersion": "1",
                 "environment": "alpha",
                 "signature": "must-be-excluded",
                 "runtime": {"gatewayBaseUrl": "https://api.alpha.quwoquan.com"},

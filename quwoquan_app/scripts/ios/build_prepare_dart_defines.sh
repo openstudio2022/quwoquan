@@ -154,7 +154,6 @@ except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
     raise SystemExit(f"runtime trust envelope is malformed: {exc}")
 required = {
     "schema",
-    "schemaVersion",
     "buildProfile",
     "signatureAlgorithm",
     "trustedPublicKeys",
@@ -163,7 +162,6 @@ if not isinstance(trust, dict) or set(trust) != required:
     raise SystemExit("runtime trust envelope fields do not match the canonical schema")
 if (
     trust.get("schema") != "app-runtime-config-trust"
-    or trust.get("schemaVersion") != "1"
     or trust.get("buildProfile") != build_profile
     or trust.get("signatureAlgorithm") != "ed25519"
 ):

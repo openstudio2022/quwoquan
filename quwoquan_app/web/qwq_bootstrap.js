@@ -28,7 +28,6 @@
   var RUNTIME_CONFIG_PACKAGE_PATH = "/runtime-config-package.json";
   var TRUST_SCHEMA = "app-runtime-config-trust";
   var PACKAGE_SCHEMA = "app-runtime-config-package";
-  var EXPECTED_SCHEMA_VERSION = "1";
   var MAX_LIFETIME_MS = 24 * 60 * 60 * 1000;
   var MAX_FUTURE_SKEW_MS = 5 * 60 * 1000;
   var CRITICAL_RESOURCE = /(flutter_bootstrap\.js|flutter\.js|main\.dart\.(js|mjs|wasm)|canvaskit|FontManifest\.json|\.ttf|\.otf|\.woff2?)([?#].*)?$/;
@@ -49,7 +48,6 @@
   var ENDPOINT_KEYS = VALUE_KEYS.slice(1);
   var PACKAGE_KEYS = [
     "schema",
-    "schemaVersion",
     "environment",
     "buildProfile",
     "target",
@@ -67,7 +65,6 @@
   ];
   var TRUST_KEYS = [
     "schema",
-    "schemaVersion",
     "buildProfile",
     "signatureAlgorithm",
     "trustedPublicKeys",
@@ -222,7 +219,6 @@
     exactKeys(trustEnvelope, TRUST_KEYS, "runtime-trust-envelope-invalid");
     if (
       trustEnvelope.schema !== TRUST_SCHEMA ||
-      trustEnvelope.schemaVersion !== EXPECTED_SCHEMA_VERSION ||
       ["nonprod", "prod"].indexOf(trustEnvelope.buildProfile) < 0 ||
       trustEnvelope.signatureAlgorithm !== "ed25519"
     ) {
@@ -283,10 +279,7 @@
         throw configFailure("runtime-endpoint-invalid");
       }
     });
-    if (
-      packageValue.schema !== PACKAGE_SCHEMA ||
-      packageValue.schemaVersion !== EXPECTED_SCHEMA_VERSION
-    ) {
+    if (packageValue.schema !== PACKAGE_SCHEMA) {
       throw configFailure("runtime-schema-invalid");
     }
     if (

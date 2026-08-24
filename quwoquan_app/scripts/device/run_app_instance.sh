@@ -112,6 +112,15 @@ if [[ -z "$LAUNCH_RECEIPT" ]]; then
   LAUNCH_RECEIPT="$QWQ_OUTPUT_ROOT/env/repo/runs/$(date -u +%Y%m%dT%H%M%SZ)-$$-${TARGET_NAME}-${safe_device}-app-launch/attempt.json"
 fi
 
+# 本地 target 的 endpoint 都是 public 域名走本地栈，证书链在启动前必须成立：
+# 等到 App 起来后再失败，暴露出来的是难以归因的网络错误而不是缺失的信任材料。
+# prod-hosted 已在上面退出，prod-sim 消费的是已签名制品，两者都不在此校验面。
+if [[ "$TARGET_NAME" != "prod-sim" ]]; then
+  PYTHONDONTWRITEBYTECODE=1 python3 \
+    "$ROOT_DIR/quwoquan_ops/cli/lib/public_domain_tls.py" verify \
+    --target "$TARGET_NAME" >/dev/null || exit $?
+fi
+
 if [[ "$TARGET_NAME" == "prod-sim" ]]; then
   command=(
     python3 "$APP_DIR/scripts/device/launch_release_artifact.py"

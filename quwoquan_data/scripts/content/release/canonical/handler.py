@@ -32,6 +32,9 @@ from content.release.canonical.garbage_collection import (
     apply_canonical_gc,
     plan_canonical_gc,
 )
+from content.release.canonical.publish_execution import (
+    handle_publish_execution,  # noqa: F401
+)
 from content.release.canonical.handler_pool import (
     handle_pool_append,  # noqa: F401
     handle_pool_attribution_repair,  # noqa: F401

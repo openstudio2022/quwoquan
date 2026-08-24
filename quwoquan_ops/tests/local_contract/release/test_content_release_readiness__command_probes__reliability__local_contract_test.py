@@ -56,6 +56,82 @@ def test_content_release_readiness__import_ignores_commercial_doctor__local_cont
     assert result["schema"] == "quwoquan_ops.ship_readiness_receipt"
 
 
+def test_content_release_readiness__import_ignores_user_availability_blocker(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    """import 门只消费声明能力的探针结论（DEC-027 后缀链的 bootstrap 前提）。
+
+    health 附带的 user availability 聚合中 release_active 层描述的是「当前
+    serving release 的已验证证据」，首个 release 的导入正是为了创造这份证据；
+    把导入后才存在的 readiness receipt 倒置为导入前置会形成 bootstrap 死锁。
+    """
+    monkeypatch.setattr(
+        stackctl,
+        "command_health",
+        lambda _args: {
+            "exitCode": 1,
+            "details": [
+                "user availability/release failed: content release evidence is "
+                "unavailable: active release has no valid research readiness "
+                "receipt: no receipt exists"
+            ],
+            "reportDir": "health",
+        },
+    )
+    monkeypatch.setattr(
+        stackctl,
+        "_read_json_object",
+        lambda _path: {"checks": list(_IMPORT_SCOPE_CHECKS)},
+    )
+
+    result = stackctl.command_content_readiness(
+        argparse.Namespace(
+            phase="import",
+            env="gamma",
+            report_dir=str(tmp_path),
+            output_format="json",
+        )
+    )
+
+    assert result["exitCode"] == 0
+    assert result["outcome"] == "PASS"
+
+
+def test_content_release_readiness__import_keeps_probe_findings_gate_block(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    """import 门对真实能力探针失败仍必须 fail-closed，过滤只豁免 availability。"""
+    monkeypatch.setattr(
+        stackctl,
+        "command_health",
+        lambda _args: {
+            "exitCode": 1,
+            "details": ["media/media-edge-health failed: HTTP 502"],
+            "reportDir": "health",
+        },
+    )
+    monkeypatch.setattr(
+        stackctl,
+        "_read_json_object",
+        lambda _path: {"checks": list(_IMPORT_SCOPE_CHECKS)},
+    )
+
+    result = stackctl.command_content_readiness(
+        argparse.Namespace(
+            phase="import",
+            env="gamma",
+            report_dir=str(tmp_path),
+            output_format="json",
+        )
+    )
+
+    assert result["exitCode"] == 2
+    assert result["outcome"] == "GATE_BLOCK"
+    assert any("media-edge-health" in item for item in result["details"])
+
+
 def test_content_release_readiness__missing_declared_probe_is_gate_block__local_contract(
     monkeypatch,
     tmp_path: Path,

@@ -176,6 +176,18 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     supply_chain_drill.add_argument("--device-id", default="")
     supply_chain_drill.set_defaults(handler=owner.handle_supply_chain_drill)
 
+    publish_execution = commands.add_parser(
+        "publish-execution",
+        help="receipt 协议 publish 原子链：物化 approved 对象并经单对象事务写 canonical（DEC-027）",
+    )
+    publish_execution.add_argument("--execution-id", required=True)
+    publish_execution.add_argument(
+        "--apply",
+        action="store_true",
+        help="显式执行物化与 canonical 写入；省略时只校验并输出 plan 结果",
+    )
+    publish_execution.set_defaults(handler=owner.handle_publish_execution)
+
     pool_append = commands.add_parser(
         "pool-append",
         help="逐对象校验或显式追加作者、实体主页和内容准入记录",

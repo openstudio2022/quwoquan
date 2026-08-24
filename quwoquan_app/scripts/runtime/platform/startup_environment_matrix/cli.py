@@ -225,8 +225,9 @@ def main() -> int:
             "iosDefineKeys": sorted(ios),
             "runtimeTarget": handoff.get("target", ""),
             "entrypoint": handoff.get("entrypoint", ""),
-            "dartDefinesDigest": handoff.get("dartDefinesDigest", ""),
-            "runtimeConfigDigest": handoff.get("runtimeConfigDigest", ""),
+            "runtimeConfigPackageDigest": handoff.get(
+                "runtimeConfigPackageDigest", ""
+            ),
             "effectiveLaunchManifestDigest": handoff.get(
                 "effectiveLaunchManifestDigest",
                 "",

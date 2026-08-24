@@ -32,6 +32,7 @@ import 'package:quwoquan_app/service/chat_service/chat/conversation/application/
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/adapters/gathering_remote.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/application/public/gathering_presentation_models.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/domain/gathering_models.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/gathering_plan/adapters/gathering_plan_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     as cloud;
 
@@ -817,7 +818,16 @@ RemoteGatheringFacet _remote(
       gatewayBaseUri: Uri.parse('https://test-gateway.example.com'),
     ),
   );
-  return RemoteGatheringFacet(client: client, invocationContext: _context);
+  // Plan 是独立对象，看板经它的公开 port 读取；这里注入同一 client 的真实
+  // production 实现，保持被测装配与 runtime/di 一致。
+  return RemoteGatheringFacet(
+    client: client,
+    invocationContext: _context,
+    planReader: RemoteGatheringPlanFacet(
+      client: client,
+      invocationContext: _context,
+    ),
+  );
 }
 
 cloud.CloudOperationInvocationContext _context(

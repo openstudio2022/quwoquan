@@ -32,6 +32,7 @@ import 'package:quwoquan_app/service/circle_service/circle_management/circle_gro
 import 'package:quwoquan_app/service/circle_service/circle_management/circle_membership/application/public/circle_membership_ports.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
 import '../../../../../support/service/circle_service/circle_management/circle/circle_query_typed_double.dart';
 import '../../../../../support/service/content_service/content/content_behavior_fact/recording_content_behavior_repository.dart';
 
@@ -802,9 +803,9 @@ void main() {
       // 游客态：不直接提交加入，先登记续接并进入登录页。
       expect(callLog, isEmpty);
       expect(find.text('LOGIN'), findsOneWidget);
-      (container.read(authSessionControllerProvider.notifier)
-              as _FlippableCircleSession)
-          .loginNow();
+      (container.read(
+        authSessionControllerProvider.notifier,
+      ) as _FlippableCircleSession).loginNow();
       await tester.pumpAndSettle();
 
       // 登录成功：只续接一次加入（open 圈子收敛 active，随后自动申请默认群）。

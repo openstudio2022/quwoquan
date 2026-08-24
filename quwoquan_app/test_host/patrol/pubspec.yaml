@@ -26,6 +26,9 @@ dev_dependencies:
   patrol: ^4.5.0
   flutter_lints: ^6.0.0
   test_api: ^0.7.12
+  # canonical 镜像里的 sqflite 契约测试与主树同源，宿主必须镜像同一 dev 依赖，
+  # 否则镜像树在 analyze 阶段就解析不到 ffi 工厂。
+  sqflite_common_ffi: ^2.4.2
 
 # dependency_overrides 只在解析根包上生效：host 当根时 quwoquan_app 自己的
 # 28 条 override 一概失效，vendored 插件会退回 pub.dev 求解，离线缓存里没有

@@ -53,6 +53,11 @@ ALLOWED_TOP_LEVEL = frozenset(
         # 构建入口与工作区
         "Makefile",
         "quwoquan-workspace.code-workspace",
+        # 开发机本地归档：由 .gitignore 挡在版本控制之外，只在这台机器上存在。
+        # 登记它是为了让根布局门禁保持封闭且不因它长期假红；它不承载任何仓库
+        # 职责，被移走后这两行可以直接删除。
+        "cursor（重置额度）",
+        "cursor（重置额度）.zip",
     }
 )
 

@@ -44,7 +44,24 @@
           "geoTagRef": { "type": "string" },
           "geoTagRefs": { "type": "array", "items": { "type": "string" } },
           "typeTagRefs": { "type": "array", "items": { "type": "string" } },
-          "aliases": { "type": "array", "items": { "type": "string" } }
+          "aliases": { "type": "array", "items": { "type": "string" } },
+          "publishAngle": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[^/]+$",
+            "description": "post 载体发布坐标第二段（posts/<carrier>/<angle>/…）；receipt 协议 0.plan 冻结，物化不自算"
+          },
+          "publishTitle": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[^/]+$",
+            "description": "post 载体发布坐标第三段（canonical 内同 angle 下唯一）"
+          },
+          "publishSeq": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "post 载体发布坐标第四段；默认 1，同 title 重写递增"
+          }
           ,"qualifiedHomepageSource": {
             "type": "object",
             "required": ["provider", "title", "url"],

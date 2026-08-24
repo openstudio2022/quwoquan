@@ -7,7 +7,9 @@ void main() {
   test(
     'CircleMembership commands use operation-specific generated ABI',
     () async {
-      final executor = CircleRecordingExecutor(response: circleMembershipCommandResultFixture());
+      final executor = CircleRecordingExecutor(
+        response: circleMembershipCommandResultFixture(),
+      );
       final client = GeneratedCloudOperationClient(executor);
       const context = CloudOperationInvocationContext(
         surfaceId: 'circleDetail',
@@ -45,7 +47,9 @@ void main() {
   test(
     'CircleMembership self query strictly decodes persona identity',
     () async {
-      final executor = CircleRecordingExecutor(response: circleMembershipSliceFixture());
+      final executor = CircleRecordingExecutor(
+        response: circleMembershipSliceFixture(),
+      );
       final client = GeneratedCloudOperationClient(executor);
 
       final membership = await client
@@ -74,8 +78,8 @@ void main() {
       ..['userId'] = 'persona-1';
     expect(() => decodeCircleMembershipSlice(alias), throwsFormatException);
 
-    final unknown = circleMembershipSliceFixture()..['displayName'] = 'compat alias';
+    final unknown = circleMembershipSliceFixture()
+      ..['displayName'] = 'compat alias';
     expect(() => decodeCircleMembershipSlice(unknown), throwsFormatException);
   });
-
 }

@@ -33,7 +33,6 @@ LAUNCH_MANIFEST_METADATA = (
 )
 _RUNTIME_CONFIG_TRUST_ENVELOPE_FIELDS = {
     "schema",
-    "schemaVersion",
     "buildProfile",
     "signatureAlgorithm",
     "trustedPublicKeys",
@@ -131,7 +130,6 @@ def load_launch_manifest_contract(
         or not isinstance(runtime_package_contract.get("max_future_skew_seconds"), int)
         or int(runtime_package_contract["max_future_skew_seconds"]) < 0
         or not isinstance(runtime_trust_contract, dict)
-        or runtime_trust_contract.get("schema_version") != "1"
         or runtime_trust_contract.get("signature_algorithm") != "ed25519"
         or runtime_trust_contract.get("build_profiles") != ["nonprod", "prod"]
         or not isinstance(runtime_value_keys, dict)
@@ -233,8 +231,6 @@ def load_launch_manifest_contract(
         != _RUNTIME_CONFIG_TRUST_ENVELOPE_FIELDS
         or set(trust_fields) != _RUNTIME_CONFIG_TRUST_ENVELOPE_FIELDS
         or trust_schema["schema_value"] != "app-runtime-config-trust"
-        or trust_fields.get("schemaVersion", {}).get("const")
-        != runtime_trust_contract["schema_version"]
         or trust_fields.get("signatureAlgorithm", {}).get("const")
         != runtime_trust_contract["signature_algorithm"]
         or trust_fields.get("buildProfile", {}).get("allowed_values")
@@ -254,8 +250,6 @@ def load_launch_manifest_contract(
         != set(runtime_value_keys)
         or set(runtime_values_field.get("fields", {})) != set(runtime_value_keys)
         or runtime_fields.get("signatureAlgorithm", {}).get("const") != "ed25519"
-        or runtime_fields.get("schemaVersion", {}).get("const")
-        != runtime_package_contract.get("schema_version")
     ):
         raise LaunchManifestContractError(
             "runtime_config_package schema disagrees with its canonical declaration"
@@ -374,7 +368,6 @@ def build_runtime_config_activation_request(
     schema = selected_contract["schemas"]["runtime_config_activation_request"]
     request = {
         "schema": schema["schema_value"],
-        "schemaVersion": schema["fields"]["schemaVersion"]["const"],
         "environment": handoff.get("environment"),
         "buildProfile": handoff.get("buildProfile"),
         "target": handoff.get("target"),
@@ -600,7 +593,6 @@ def build_runtime_config_trust_envelope(
     trust_contract = selected_contract["runtime_config_trust"]
     envelope = {
         "schema": schema["schema_value"],
-        "schemaVersion": trust_contract["schema_version"],
         "buildProfile": build_profile,
         "signatureAlgorithm": trust_contract["signature_algorithm"],
         "trustedPublicKeys": canonical_keyring,

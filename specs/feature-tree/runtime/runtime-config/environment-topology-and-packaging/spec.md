@@ -270,3 +270,24 @@
 - 风险：无引用的生成文件让「prod 只有 Release」这条 metadata 事实在物理树上不可自证，读者需要额外推断哪些配置是死的。
 - 完成判定：codegen 按各 buildProfile 的 `distribution_class.build_modes` 求交后产出 xcconfig，`GWT-002` 绑定的 iOS 身份矩阵契约同时断言 project/Podfile/scheme 三处无引用且这两份 xcconfig 不再生成；生成清单随之收敛。
 - 依赖：Go codegen 与其 local_contract，属 iOS 构建身份矩阵面。
+
+<a id="open-007"></a>
+### OPEN-007 Patrol runner 入口的归属在门禁与实现之间对立
+
+- 类型：`risk`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：同一份 Patrol runner 入口被一条断言要求不存在、被一次显式恢复提交
+  要求存在，两个判据同时是「当前真相」，读者无法确定哪一侧该改。
+- 对立事实一：`quwoquan_ops/tests/local_contract/environment/test_environment_patrol_smoke__local_contract_test.py`
+  的 `test_remote_patrol_keeps_125s_video_contract_without_app_bundle` 断言
+  `quwoquan_app/test/user_acceptance/patrol/patrol_test_main.dart` 不存在。
+- 对立事实二：该文件受版本控制且是主测试树的 Patrol runner 入口，物理存在。
+- 同域失锚项：同目录 `test_core_readback_requires_and_forwards_one_release_envelope`
+  的观察点同样与当前 release envelope 转发实现对立，需与本项一并裁决。
+- 尚缺实现：裁定 Patrol runner 入口的唯一归属——留在主测试树，或只存在于
+  `test_host/patrol`。裁定后另一侧随之删除，不保留兼容壳。
+- 尚缺验收证据：`patrol_test_main.dart` 的存在与否只有一处判据，且上列两个观察点
+  与该判据一致。
+- 完成判定：`GWT-002` 绑定的 patrol smoke 契约成立。
+- 依赖：无外部阻断。
