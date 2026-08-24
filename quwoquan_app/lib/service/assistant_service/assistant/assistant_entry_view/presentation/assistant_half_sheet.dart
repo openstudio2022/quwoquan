@@ -28,6 +28,7 @@ import 'package:quwoquan_app/runtime/di/app_providers_client_sync.dart'
 import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart'
     show runtimeErrorSemantic, runtimeFailureFromError;
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
+import 'package:quwoquan_app/service/assistant_service/assistant/assistant_entry_view/domain/assistant_entry_chip_intent.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/page_context/application/public/assistant_open_context.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import 'package:quwoquan_app/runtime/di/runtime_observability_dependencies.dart';
@@ -140,37 +141,36 @@ class _AssistantHalfSheetState extends ConsumerState<AssistantHalfSheet> {
     super.dispose();
   }
 
-  /// chip 点击真实分发：按 actionType 落地真实指令或跳转。
-  /// command → 进入会话页并携带指令；route → 跳转目标路由；setting → 打开设置。
+  /// chip 点击真实分发：领域层解析目标，这里只负责导航。
   /// 仅在用户主动打开半弹窗时出现，无自动弹窗骚扰（克制出现）。
   void _dispatchChip(BuildContext context, AssistantEntryChip chip) {
-    switch (chip.actionType) {
-      case 'route':
-        switch (chip.value) {
-          case 'circles':
-            return _closeAndPush(AppRoutePaths.circles);
-          case 'create':
-            return _closeAndPush(AppRoutePaths.create());
-        }
-        return _closeAndPush(
-          AppRoutePaths.assistantPersonal,
-          extra: widget.openContext,
-        );
-      case 'setting':
+    final intent = resolveAssistantEntryChipIntent(chip);
+    switch (intent.kind) {
+      case AssistantEntryChipIntentKind.namedDestination:
+        return _closeAndPush(_routeForDestination(intent.destination!));
+      case AssistantEntryChipIntentKind.settings:
         return _closeAndPush(AppRoutePaths.settings);
-      case 'command':
-      default:
+      case AssistantEntryChipIntentKind.assistantSession:
+        final query = intent.query;
         return _closeAndPush(
           AppRoutePaths.assistantPersonal,
-          extra: widget.openContext.copyWith(
-            hints: <String, dynamic>{
-              ...widget.openContext.hints,
-              'autoSendQuery': chip.label,
-            },
-          ),
+          extra: query == null
+              ? widget.openContext
+              : widget.openContext.copyWith(
+                  hints: <String, dynamic>{
+                    ...widget.openContext.hints,
+                    'autoSendQuery': query,
+                  },
+                ),
         );
     }
   }
+
+  String _routeForDestination(String destination) =>
+      switch (AssistantEntryChipDestination.values.byName(destination)) {
+        AssistantEntryChipDestination.circles => AppRoutePaths.circles,
+        AssistantEntryChipDestination.create => AppRoutePaths.create(),
+      };
 
   void _dispatchSuggestedAction(AssistantEntryAction action) {
     _closeAndPush(

@@ -100102,7 +100102,12 @@
         ]
       },
       "app": {
-        "domain": [],
+        "domain": [
+          {
+            "path": "quwoquan_app/lib/service/assistant_service/assistant/assistant_entry_view/domain/assistant_entry_chip_intent.dart",
+            "sha256": "6c2b4be939f4bca1b069ac6520002684e81b8b7301e41fe3207a635c025f92a5"
+          }
+        ],
         "application": [
           {
             "path": "quwoquan_app/lib/service/assistant_service/assistant/assistant_entry_view/application/assistant_entry_query.dart",
@@ -100121,6 +100126,10 @@
         ],
         "presentation": [],
         "localContract": [
+          {
+            "path": "quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_entry_view/assistant_entry_chip_intent__local_contract_test.dart",
+            "sha256": "bf60a61fb82bea8c5871a2c3d9502d44900940977bb13a9189032ff31be58796"
+          },
           {
             "path": "quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_entry_view/assistant_entry_remote__local_contract_test.dart",
             "sha256": "2449e48fbcacdb962c306ed47a7a984115fa29660da042af4c27f348b7f13c47"
@@ -119234,7 +119243,7 @@
           },
           {
             "path": "quwoquan_service/services/realtime-gateway/tests/local_contract/realtime/connection/connection_error_semantics__local_contract_test.go",
-            "sha256": "67d96a836fcb5d2958abf464f03495bd472bc27b5f2835e4832db6fdfcdcd31c"
+            "sha256": "174beafa288a631d0fdd5f05b609452ec14b77e127015a7b9c553e5f95a5354b"
           },
           {
             "path": "quwoquan_service/services/realtime-gateway/tests/local_contract/realtime/connection/connection_policy__contract__local_contract_test.go",
@@ -128298,7 +128307,7 @@
     },
     {
       "path": "_shared/app_launch_manifest.yaml",
-      "sha256": "b9901e0c7091db442e49661aef314301b0d760d9f62ca65220421735480c2502"
+      "sha256": "0547701b555dc692527de29711ebffc23801251ddf761e541edb29d7a34ec327"
     },
     {
       "path": "_shared/app_pages.yaml",
@@ -134226,7 +134235,7 @@
     },
     {
       "path": "_shared/app_launch_manifest.yaml",
-      "sha256": "b9901e0c7091db442e49661aef314301b0d760d9f62ca65220421735480c2502",
+      "sha256": "0547701b555dc692527de29711ebffc23801251ddf761e541edb29d7a34ec327",
       "mediaType": "application/yaml",
       "content": {
         "description": "Android、iOS、App 与 Ops 共同消费的启动清单、launcher handoff 和摘要协议；runtime 拥有组合语义，各平台不得复制字段或摘要规则。",
@@ -134254,8 +134263,10 @@
           "APP.LAUNCH.prod_artifact_required": "prod-sim 必须显式给出 canonical Release artifact manifest。",
           "APP.LAUNCH.prod_debug_forbidden": "Prod 不接受 Debug 构建或直接 Flutter 执行。",
           "APP.LAUNCH.prod_hosted_flutter_forbidden": "prod-hosted 只消费已签名制品、安装回执与显式 rollout 授权。",
+          "APP.LAUNCH.receipt_absent": "supervisor 未产出 attempt receipt，缺席不得塌陷为空回执。",
           "APP.LAUNCH.receipt_invalid": "attempt receipt 不满足本 schema。",
           "APP.LAUNCH.receipt_timeout": "等待终态超时且未观测到 typed failure。",
+          "APP.LAUNCH.receipt_unreadable": "attempt receipt 存在但读取失败，读取失败不得当作缺席。",
           "APP.LAUNCH.runtime_config_activation_failed": "runtime package 验证、原子写入或 active readback 未完成。",
           "APP.LAUNCH.runtime_config_missing": "安装后平台私有容器没有可激活或可读取的 runtime package。",
           "APP.LAUNCH.runtime_dependency_unavailable": "目标 runtime 的必需容器已退出或 unhealthy，编译安装前即阻断。",

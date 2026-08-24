@@ -237,13 +237,11 @@ val externalAndroidRuntimeConfigAssetRoot =
                 trust.keys ==
                 setOf(
                     "schema",
-                    "schemaVersion",
                     "buildProfile",
                     "signatureAlgorithm",
                     "trustedPublicKeys",
                 ) &&
                 trust["schema"] == "app-runtime-config-trust" &&
-                trust["schemaVersion"] == "1" &&
                 trust["buildProfile"] == selectedBuildProfile &&
                 trust["signatureAlgorithm"] == "ed25519" &&
                 (trust["trustedPublicKeys"] as? Map<*, *>)?.isNotEmpty() == true,

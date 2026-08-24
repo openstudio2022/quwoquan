@@ -474,9 +474,10 @@ class ExternalProviderGovernanceContractTest(unittest.TestCase):
             set(compiled["providerConformanceCapabilityIds"]),
             expected_conformance_capabilities,
         )
-        # location.poi.search 已在 alpha 启用 protocol substitute 并进入 conformance；
-        # route.read 仍无消费点，保持在 conformance 集之外。
-        self.assertIn(
+        # location.poi.search 已在四环境对齐为 not_required（nonprod 三环境必须
+        # 与 prod 共享同一状态），与 route.read 一样保持在 conformance 集之外，
+        # 待消费点落地再翻牌。
+        self.assertNotIn(
             "location.poi.search", compiled["providerConformanceCapabilityIds"]
         )
         self.assertNotIn(

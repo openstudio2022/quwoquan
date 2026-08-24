@@ -21,10 +21,11 @@ from .evidence_validation import (
     _validate_runtime_evidence,
 )
 from .package_probe import (
-    _ios_defines,
+    _ios_compile_defines,
     _launcher_handoff,
-    _runtime_defines,
-    _validate_defines,
+    _runtime_package,
+    _validate_compile_defines,
+    _validate_runtime_package,
 )
 from .reporting import _case, _case_counts, _report_status, _write_report
 
@@ -152,7 +153,7 @@ def main() -> int:
             prod_issues: list[str] = []
             rejection_reason = ""
             try:
-                _runtime_defines(environment)
+                _runtime_package(environment)
             except RuntimeError as exc:
                 rejection_reason = str(exc).strip()
                 if rejection_reason != _PROD_TEST_LIVE_REJECTION:
@@ -205,11 +206,11 @@ def main() -> int:
         ios: dict[str, str] = {}
         handoff: dict[str, Any] = {}
         try:
-            runtime = _runtime_defines(environment)
-            ios = _ios_defines(environment)
+            runtime = _runtime_package(environment)
+            ios = _ios_compile_defines(environment)
             handoff = _launcher_handoff(environment)
-            package_issues.extend(_validate_defines(environment, runtime))
-            package_issues.extend(_validate_defines(environment, ios))
+            package_issues.extend(_validate_runtime_package(environment, runtime))
+            package_issues.extend(_validate_compile_defines(environment, ios))
             manifest_digest = str(
                 handoff.get("effectiveLaunchManifestDigest") or ""
             )

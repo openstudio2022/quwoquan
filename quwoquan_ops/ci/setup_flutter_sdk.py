@@ -8,9 +8,12 @@ import hashlib
 import json
 import os
 import re
+import ssl
 import subprocess
 import sys
 import tempfile
+import time
+import urllib.error
 import urllib.request
 from collections.abc import Mapping
 from pathlib import Path, PurePosixPath
@@ -18,6 +21,8 @@ from typing import Any
 
 MANIFEST_BASE_URL = "https://storage.googleapis.com/flutter_infra_release/releases"
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+_MANIFEST_ATTEMPTS = 4
+_MANIFEST_RETRY_BASE_SECONDS = 2
 OS_NAMES = {
     "linux": "linux",
     "Linux": "linux",
@@ -37,9 +42,36 @@ ARCH_NAMES = {
 
 
 def _download_json(url: str) -> dict[str, Any]:
+    """取 release manifest；只对传输层瞬时故障退避重试。
+
+    self-hosted runner 到 Flutter 镜像会出现 TLS 半连接被对端切断
+    (`SSLEOFError`)。manifest 是纯读取且后续仍按 sha256 校验归档，重试不放松
+    任何完整性约束；解析失败与 HTTP 状态错误不重试，那是确定性失败。
+    """
+
     request = urllib.request.Request(url, headers={"User-Agent": "quwoquan-ci/1"})
-    with urllib.request.urlopen(request, timeout=30) as response:
-        return json.load(response)
+    last_error: OSError | None = None
+    for attempt in range(_MANIFEST_ATTEMPTS):
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                return json.load(response)
+        except urllib.error.HTTPError:
+            raise
+        except (urllib.error.URLError, ssl.SSLError, TimeoutError) as error:
+            last_error = error
+            if attempt + 1 == _MANIFEST_ATTEMPTS:
+                break
+            delay = _MANIFEST_RETRY_BASE_SECONDS * (2**attempt)
+            print(
+                f"Flutter release manifest attempt {attempt + 1}/"
+                f"{_MANIFEST_ATTEMPTS} failed ({error}); retrying in {delay}s",
+                file=sys.stderr,
+            )
+            time.sleep(delay)
+    raise RuntimeError(
+        f"Flutter release manifest is unreachable after {_MANIFEST_ATTEMPTS} "
+        f"attempts: {last_error}"
+    )
 
 
 def select_current_release(

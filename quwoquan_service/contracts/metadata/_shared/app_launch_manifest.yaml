@@ -81,6 +81,8 @@ launch_blockers:
   APP.LAUNCH.device_unavailable: 目标设备不可用或未被 canonical 设备发现认领。
   APP.LAUNCH.platform_unsupported: 目标平台不属于 android、ios。
   APP.LAUNCH.receipt_invalid: attempt receipt 不满足本 schema。
+  APP.LAUNCH.receipt_absent: supervisor 未产出 attempt receipt，缺席不得塌陷为空回执。
+  APP.LAUNCH.receipt_unreadable: attempt receipt 存在但读取失败，读取失败不得当作缺席。
   APP.LAUNCH.receipt_timeout: 等待终态超时且未观测到 typed failure。
   APP.LAUNCH.runtime_dependency_unavailable: 目标 runtime 的必需容器已退出或 unhealthy，编译安装前即阻断。
   APP.LAUNCH.runtime_config_missing: 安装后平台私有容器没有可激活或可读取的 runtime package。

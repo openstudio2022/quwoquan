@@ -249,6 +249,18 @@ def _run_release_video_delivery_probe(
     return evidence, report_path
 
 
+# consumer 起就要求 `premium_stream` 有 release-bound 读回，与 receipt 校验器同源
+# （environment-topology-and-packaging REQ-002）。实时探测一度只从 research 起校验，
+# 于是同一件事有两套判断；这里收敛成唯一闭集。
+_PREMIUM_BOUND_PHASES = frozenset(
+    {
+        ReadinessPhase.CONSUMER,
+        ReadinessPhase.RESEARCH,
+        ReadinessPhase.COMMERCIAL,
+    }
+)
+
+
 def _release_feed_post_expectations(
     receipt: dict[str, Any],
     *,
@@ -281,7 +293,7 @@ def _release_feed_post_expectations(
         "content_feed": discovery_ids,
         "video_book_feed": video_ids,
     }
-    if readiness_phase in {ReadinessPhase.RESEARCH, ReadinessPhase.COMMERCIAL}:
+    if readiness_phase in _PREMIUM_BOUND_PHASES:
         expectations["premium_feed"] = premium_video_ids
     empty = sorted(name for name, post_ids in expectations.items() if not post_ids)
     if empty:
@@ -319,11 +331,7 @@ def _run_release_feed_readback_probe(
                 (
                     "content_feed",
                     "video_book_feed",
-                    *(
-                        ("premium_feed",)
-                        if readiness_phase in {ReadinessPhase.RESEARCH, ReadinessPhase.COMMERCIAL}
-                        else ()
-                    ),
+                    *(("premium_feed",) if readiness_phase in _PREMIUM_BOUND_PHASES else ()),
                     "media_sample",
                 )
             ),

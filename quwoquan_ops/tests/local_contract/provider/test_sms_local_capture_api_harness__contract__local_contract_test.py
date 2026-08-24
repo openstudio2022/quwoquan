@@ -162,6 +162,8 @@ class SMSLocalCaptureAPIHarnessContractTest(unittest.TestCase):
             local_tls=target_tls,
         )
 
+        # 第四项是 Host 头：合并进 service-core 的模块必须带它才能被路由到，
+        # 独立监听的 api-edge 与 Provider 容器留空。
         self.assertEqual(
             probes,
             (
@@ -169,17 +171,25 @@ class SMSLocalCaptureAPIHarnessContractTest(unittest.TestCase):
                     "api-edge",
                     "https://api.alpha.quwoquan.com/healthz",
                     target_tls,
+                    "",
                 ),
-                ("user-service", "http://127.0.0.1:17240/healthz", None),
+                (
+                    "user-service",
+                    "http://127.0.0.1:17240/healthz",
+                    None,
+                    "user-service",
+                ),
                 (
                     "integration-service",
                     "http://127.0.0.1:17320/healthz",
                     None,
+                    "integration-service",
                 ),
                 (
                     "sms-provider-substitute",
                     "https://127.0.0.1:17330/healthz",
                     target_tls,
+                    "",
                 ),
             ),
         )

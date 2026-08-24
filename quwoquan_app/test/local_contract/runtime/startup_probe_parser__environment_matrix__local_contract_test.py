@@ -30,14 +30,14 @@ from verify_startup_environment_matrix import (
 
 
 class StartupProbeParserContractTest(unittest.TestCase):
-    def test_component_runtime_defines_use_exact_test_live_target(self) -> None:
-        defines = {
-            **{key: "value" for key in startup_matrix.REQUIRED_DEFINES},
-            "APP_RUNTIME_ENV": "beta",
+    def test_component_runtime_package_uses_exact_test_live_target(self) -> None:
+        runtime = {
+            **{key: "value" for key in startup_matrix.REQUIRED_RUNTIME_FIELDS},
+            "appRuntimeEnv": "beta",
         }
         completed = mock.Mock(
             returncode=0,
-            stdout=json.dumps(defines),
+            stdout=json.dumps({"environment": "beta", "runtime": runtime}),
             stderr="",
         )
 
@@ -45,7 +45,7 @@ class StartupProbeParserContractTest(unittest.TestCase):
             "startup_environment_matrix.package_probe._run",
             return_value=completed,
         ) as run:
-            self.assertEqual(startup_matrix._runtime_defines("beta"), defines)
+            self.assertEqual(startup_matrix._runtime_package("beta"), runtime)
 
         run.assert_called_once_with(
             "python3",
@@ -70,7 +70,7 @@ class StartupProbeParserContractTest(unittest.TestCase):
         with (
             mock.patch.object(
                 startup_matrix.cli,
-                "_runtime_defines",
+                "_runtime_package",
                 side_effect=RuntimeError("typed component probe failure"),
             ),
             mock.patch.object(sys, "argv", argv),
@@ -104,14 +104,19 @@ class StartupProbeParserContractTest(unittest.TestCase):
             ("gamma", "gamma-local"),
             ("prod", "prod-hosted"),
         )
-        defines = {key: "value" for key in startup_matrix.REQUIRED_DEFINES}
+        runtime = {
+            key: "value" for key in startup_matrix.REQUIRED_RUNTIME_FIELDS
+        }
 
-        def environment_defines(environment: str) -> dict[str, str]:
+        def environment_runtime(environment: str) -> dict[str, str]:
             if environment == "prod":
                 raise RuntimeError(
                     "test_live target/environment selection is invalid"
                 )
-            return {**defines, "APP_RUNTIME_ENV": environment}
+            return {**runtime, "appRuntimeEnv": environment}
+
+        def compile_defines(environment: str) -> dict[str, str]:
+            return {}
 
         def handoff(environment: str, target: str | None = None) -> dict[str, str]:
             resolved_target = target or startup_matrix.RUNTIME_TARGETS[environment]
@@ -304,13 +309,13 @@ class StartupProbeParserContractTest(unittest.TestCase):
             with (
                 mock.patch.object(
                     startup_matrix.cli,
-                    "_runtime_defines",
-                    side_effect=environment_defines,
+                    "_runtime_package",
+                    side_effect=environment_runtime,
                 ),
                 mock.patch.object(
                     startup_matrix.cli,
-                    "_ios_defines",
-                    side_effect=environment_defines,
+                    "_ios_compile_defines",
+                    side_effect=compile_defines,
                 ),
                 mock.patch.object(startup_matrix.cli, "_launcher_handoff", side_effect=handoff),
                 mock.patch.object(sys, "argv", argv),
@@ -361,14 +366,19 @@ class StartupProbeParserContractTest(unittest.TestCase):
         self,
     ) -> None:
         digest = "sha256:" + "a" * 64
-        defines = {key: "value" for key in startup_matrix.REQUIRED_DEFINES}
+        runtime = {
+            key: "value" for key in startup_matrix.REQUIRED_RUNTIME_FIELDS
+        }
 
-        def environment_defines(environment: str) -> dict[str, str]:
+        def environment_runtime(environment: str) -> dict[str, str]:
             if environment == "prod":
                 raise RuntimeError(
                     "test_live target/environment selection is invalid"
                 )
-            return {**defines, "APP_RUNTIME_ENV": environment}
+            return {**runtime, "appRuntimeEnv": environment}
+
+        def compile_defines(environment: str) -> dict[str, str]:
+            return {}
 
         def handoff(environment: str, target: str | None = None) -> dict[str, str]:
             self.assertNotEqual(environment, "prod")
@@ -390,13 +400,13 @@ class StartupProbeParserContractTest(unittest.TestCase):
             with (
                 mock.patch.object(
                     startup_matrix.cli,
-                    "_runtime_defines",
-                    side_effect=environment_defines,
+                    "_runtime_package",
+                    side_effect=environment_runtime,
                 ),
                 mock.patch.object(
                     startup_matrix.cli,
-                    "_ios_defines",
-                    side_effect=environment_defines,
+                    "_ios_compile_defines",
+                    side_effect=compile_defines,
                 ),
                 mock.patch.object(
                     startup_matrix.cli,
@@ -442,9 +452,9 @@ class StartupProbeParserContractTest(unittest.TestCase):
             )
 
     def test_prod_component_boundary_fails_if_test_live_is_accepted(self) -> None:
-        defines = {
-            **{key: "value" for key in startup_matrix.REQUIRED_DEFINES},
-            "APP_RUNTIME_ENV": "prod",
+        runtime = {
+            **{key: "value" for key in startup_matrix.REQUIRED_RUNTIME_FIELDS},
+            "appRuntimeEnv": "prod",
         }
         argv = [
             "verify_startup_environment_matrix.py",
@@ -455,8 +465,8 @@ class StartupProbeParserContractTest(unittest.TestCase):
         with (
             mock.patch.object(
                 startup_matrix.cli,
-                "_runtime_defines",
-                return_value=defines,
+                "_runtime_package",
+                return_value=runtime,
             ),
             mock.patch.object(sys, "argv", argv),
             redirect_stdout(output),
@@ -475,14 +485,19 @@ class StartupProbeParserContractTest(unittest.TestCase):
 
     def test_release_gate_keeps_missing_prod_physical_evidence_blocking(self) -> None:
         digest = "sha256:" + "f" * 64
-        defines = {key: "value" for key in startup_matrix.REQUIRED_DEFINES}
+        runtime = {
+            key: "value" for key in startup_matrix.REQUIRED_RUNTIME_FIELDS
+        }
 
-        def environment_defines(environment: str) -> dict[str, str]:
+        def environment_runtime(environment: str) -> dict[str, str]:
             if environment == "prod":
                 raise RuntimeError(
                     "test_live target/environment selection is invalid"
                 )
-            return {**defines, "APP_RUNTIME_ENV": environment}
+            return {**runtime, "appRuntimeEnv": environment}
+
+        def compile_defines(environment: str) -> dict[str, str]:
+            return {}
 
         def handoff(environment: str, target: str | None = None) -> dict[str, str]:
             return {
@@ -515,13 +530,13 @@ class StartupProbeParserContractTest(unittest.TestCase):
             with (
                 mock.patch.object(
                     startup_matrix.cli,
-                    "_runtime_defines",
-                    side_effect=environment_defines,
+                    "_runtime_package",
+                    side_effect=environment_runtime,
                 ),
                 mock.patch.object(
                     startup_matrix.cli,
-                    "_ios_defines",
-                    side_effect=environment_defines,
+                    "_ios_compile_defines",
+                    side_effect=compile_defines,
                 ),
                 mock.patch.object(
                     startup_matrix.cli,
@@ -563,14 +578,19 @@ class StartupProbeParserContractTest(unittest.TestCase):
 
     def test_partial_release_evidence_request_is_gate_blocked(self) -> None:
         digest = "sha256:" + "e" * 64
-        defines = {key: "value" for key in startup_matrix.REQUIRED_DEFINES}
+        runtime = {
+            key: "value" for key in startup_matrix.REQUIRED_RUNTIME_FIELDS
+        }
 
-        def environment_defines(environment: str) -> dict[str, str]:
+        def environment_runtime(environment: str) -> dict[str, str]:
             if environment == "prod":
                 raise RuntimeError(
                     "test_live target/environment selection is invalid"
                 )
-            return {**defines, "APP_RUNTIME_ENV": environment}
+            return {**runtime, "appRuntimeEnv": environment}
+
+        def compile_defines(environment: str) -> dict[str, str]:
+            return {}
 
         def handoff(environment: str, target: str | None = None) -> dict[str, str]:
             return {
@@ -601,13 +621,13 @@ class StartupProbeParserContractTest(unittest.TestCase):
             with (
                 mock.patch.object(
                     startup_matrix.cli,
-                    "_runtime_defines",
-                    side_effect=environment_defines,
+                    "_runtime_package",
+                    side_effect=environment_runtime,
                 ),
                 mock.patch.object(
                     startup_matrix.cli,
-                    "_ios_defines",
-                    side_effect=environment_defines,
+                    "_ios_compile_defines",
+                    side_effect=compile_defines,
                 ),
                 mock.patch.object(
                     startup_matrix.cli,

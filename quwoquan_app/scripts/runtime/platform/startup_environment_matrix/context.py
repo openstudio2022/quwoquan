@@ -57,16 +57,18 @@ DEVICE_PROFILES = {
         ("ios", "physical", "ios-physical"),
     ),
 }
-REQUIRED_DEFINES = {
-    "APP_RUNTIME_ENV",
-    "CLOUD_GATEWAY_BASE_URL",
-    "APP_LEGAL_BASE_URL",
-    "PUBLIC_WEB_BASE_URL",
-    "MEDIA_AVATAR_CDN_BASE_URL",
-    "MEDIA_IMAGE_CDN_BASE_URL",
-    "MEDIA_VIDEO_CDN_BASE_URL",
-    "MEDIA_UPLOAD_BASE_URL",
-    "RTC_MEDIA_CONNECTION_URL",
+# endpoint 只经安装后激活的 signed runtime package 下发，编译期 define 不再
+# 承载任何一项；这里查的是 package 的 runtime 段，不是 Dart define 键名。
+REQUIRED_RUNTIME_FIELDS = {
+    "appRuntimeEnv",
+    "gatewayBaseUrl",
+    "legalBaseUrl",
+    "publicWebBaseUrl",
+    "mediaAvatarCdnBaseUrl",
+    "mediaImageCdnBaseUrl",
+    "mediaVideoCdnBaseUrl",
+    "mediaUploadBaseUrl",
+    "rtcMediaConnectionUrl",
 }
 SPEC_REFS = (
     "specs/feature-tree/spec.md#uat-003",

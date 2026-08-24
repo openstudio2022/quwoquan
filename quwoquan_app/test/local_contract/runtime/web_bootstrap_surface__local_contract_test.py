@@ -103,7 +103,9 @@ class WebBootstrapSurfaceContractTest(unittest.TestCase):
         self.assertIn("RUNTIME_CONFIG_PACKAGE_PATH,\n      \"package\"", self.js)
         self.assertIn('TRUST_SCHEMA = "app-runtime-config-trust"', self.js)
         self.assertIn('PACKAGE_SCHEMA = "app-runtime-config-package"', self.js)
-        self.assertIn('EXPECTED_SCHEMA_VERSION = "1"', self.js)
+        # 契约单轨：runtime package 没有版本信封，Web 侧不得自带第二套版本判定。
+        self.assertNotIn("EXPECTED_SCHEMA_VERSION", self.js)
+        self.assertNotIn("schemaVersion", self.js)
         self.assertIn('signatureAlgorithm !== "ed25519"', self.js)
         self.assertIn('new URL(path, window.location.href)', self.js)
         self.assertIn('url.origin !== window.location.origin', self.js)

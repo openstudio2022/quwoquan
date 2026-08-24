@@ -237,6 +237,21 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
                 getattr(args, "rollback_release_attestation", "") or ""
             ),
         )
+        # 签名材料只由 env/target 决定，不依赖 capsule 或 baseline。放在任何落盘之前
+        # 解析，缺签名就不会留下半个 staging 树，也不用靠清理路径兜底。
+        try:
+            args._graphql_read_signing_material = (
+                _stackctl._resolve_graphql_read_signing_for_local_target(
+                    env_name, target_name
+                )
+            )
+        except (OSError, ValueError) as exc:
+            return {
+                "exitCode": 2,
+                "summary": f"stackctl package GraphQL signing inputs blocked for {env_name}",
+                "details": [str(exc)],
+            }
+
         capsule_parent = _stackctl.deployment_candidate_dir(
             target_name,
             "sha256:" + "0" * 64,
@@ -356,21 +371,6 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
                     "observabilityLogSink"
                 ],
                 "providerRuntime": reused_manifest["providerRuntime"],
-            }
-
-        try:
-            args._graphql_read_signing_material = (
-                _stackctl._resolve_graphql_read_signing_for_local_target(
-                    env_name, target_name
-                )
-            )
-        except (OSError, ValueError) as exc:
-            shutil.rmtree(staging_dir, ignore_errors=True)
-            return {
-                "exitCode": 2,
-                "summary": f"stackctl package GraphQL signing inputs blocked for {env_name}",
-                "details": [str(exc)],
-                "baselineId": baseline_id,
             }
 
         capsule_root = capsule_staging_root

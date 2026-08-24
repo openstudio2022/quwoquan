@@ -16,10 +16,14 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from pathlib import Path
 import unittest
+from unittest import mock
 
 import yaml
+
+from quwoquan_ops.cli import stackctl
 
 ROOT = Path(__file__).resolve().parents[4]
 
@@ -49,17 +53,30 @@ class ProdGrayRecommendationReadbackContractTest(unittest.TestCase):
         self.assertGreater(int(rec["min_impressions"]), 0)
 
     def test_stackctl_readback_queries_use_registered_metrics(self) -> None:
-        source = (ROOT / "quwoquan_ops/cli/stackctl.py").read_text(encoding="utf-8")
-        marker = "_read_recommendation_slo"
-        self.assertIn(marker, source, "推荐 readback 函数缺失（N2-5 回归）")
-        start = source.index("def _read_recommendation_slo")
-        end = source.index("def command_deploy", start)
-        function_body = source[start:end]
-        # 只校验 PromQL 查询字典段（函数参数名如 rec_policy 不是指标）。
-        # 字典闭合为行首缩进 4 空格的 "}"（PromQL f-string 内花括号不会顶行）。
-        queries_start = function_body.index("queries = {")
-        queries_end = function_body.index("\n    }", queries_start)
-        body = function_body[queries_start:queries_end]
+        # 观察真实行为而不是扫源码：readback 回执自带 queries 段，
+        # 直接读它就不会随函数迁移（stackctl -> commands/**）而断。
+        policy = yaml.safe_load(
+            (ROOT / "quwoquan_ops/policies/config-release/slo_thresholds.yaml").read_text(
+                encoding="utf-8"
+            )
+        )
+        rec_policy = policy["readback"]["recommendation"]
+        with mock.patch.object(
+            stackctl, "_prometheus_query_value", return_value=0.0
+        ) as query_value:
+            readback = stackctl._read_recommendation_slo(
+                "http://127.0.0.1:9090",
+                rec_policy["service"],
+                "5m",
+                rec_policy,
+                deadline_epoch=int(time.time()) + 60,
+            )
+        self.assertIsNotNone(readback, "推荐 readback 函数缺失或未对策略服务生效（N2-5 回归）")
+        queries = readback["queries"]
+        self.assertTrue(queries)
+        # 每条查询都真的发到 Prometheus，不允许只声明不执行。
+        self.assertEqual(len(query_value.call_args_list), len(queries))
+        body = "\n".join(queries.values())
         for metric in REC_METRIC_PATTERN.findall(body):
             self.assertIn(
                 metric,

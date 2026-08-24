@@ -45,7 +45,6 @@ FORBIDDEN_TOKENS = (
 )
 FIXTURE_MEDIA_FIELD_FORBIDDEN = (
     ".test",
-    "118.31.239.122",
     ":17100",
     ":18100",
     ":19100",

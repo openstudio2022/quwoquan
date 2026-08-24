@@ -6,6 +6,7 @@ spec_ref: specs/feature-tree/gateway-orchestrator-foundation/spec.md#dom-001
 from __future__ import annotations
 
 import base64
+import inspect
 import json
 import os
 from pathlib import Path
@@ -21,6 +22,7 @@ ROOT = Path(__file__).resolve().parents[4]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from quwoquan_ops.cli import stackctl
 from quwoquan_ops.cli.lib.graphql_read_registry_package import (
     SigningMaterial,
     materialize_graphql_read_runtime_config,
@@ -432,14 +434,18 @@ class GraphQLReadRegistryPackageContractTest(unittest.TestCase):
         self.assertNotIn("QWQ_GRAPHQL_READ_REGISTRY_SIGNING_PRIVATE_KEY_FILE", launcher)
 
     def test_stackctl_fails_signing_before_staging_and_seals_before_images(self) -> None:
-        source = (ROOT / "quwoquan_ops/cli/stackctl.py").read_text(encoding="utf-8")
-        command = source[source.index("def command_package(") :]
-        new_candidate = command[: command.index("def _command_package_unlocked(")]
-        self.assertLess(
-            new_candidate.index("resolve_graphql_read_signing_material(ROOT)"),
-            new_candidate.index("staging_dir = Path("),
+        # 跟着 stackctl 的再导出取真实实现源码：package 域已迁往
+        # quwoquan_ops/cli/commands/package_{domain,runtime}.py。
+        command = inspect.getsource(stackctl.command_package)
+        signing_index = command.index(
+            "_resolve_graphql_read_signing_for_local_target("
         )
-        unlocked = command[command.index("def _command_package_unlocked(") :]
+        first_mkdir_index = command.index("capsule_parent.mkdir(")
+        # 签名材料必须先于任何目录被创建就解析成功：缺签名时连一个空的 staging 树
+        # 都不该出现，因此这段区间里也不该有任何清理动作可做。
+        self.assertLess(signing_index, first_mkdir_index)
+        self.assertNotIn("rmtree", command[signing_index:first_mkdir_index])
+        unlocked = inspect.getsource(stackctl._command_package_unlocked)
         self.assertLess(
             unlocked.index("materialize_graphql_read_registry_package("),
             unlocked.index("_build_package_bound_local_images("),

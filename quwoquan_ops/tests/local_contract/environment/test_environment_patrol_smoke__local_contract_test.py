@@ -864,12 +864,17 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
         self.assertIn("publicSlicePrefix: media/video/s/media-canary-seek-125s/v1", profile_text)
         self.assertIn("media-canary-hour-boundary-3595s", profile_text)
 
-        self.assertFalse(
-            (
-                ROOT
-                / "quwoquan_app/test/user_acceptance/patrol/patrol_test_main.dart"
-            ).exists()
-        )
+        # Patrol runner shell 由 APP_PATROL_RUNNER_FILES 门禁要求存在（见
+        # quwoquan_ops/gate/scaffold/test_directory_layout/app_layout.py）。
+        # "without app bundle" 的判据是该入口只装 setUp/tearDown hook，不预启动
+        # App、不聚合用例；真实用例各自 launchPatrolAppOnce。
+        runner_main = (
+            ROOT / "quwoquan_app/test/user_acceptance/patrol/patrol_test_main.dart"
+        ).read_text(encoding="utf-8")
+        self.assertIn("patrolSetUp(", runner_main)
+        self.assertIn("patrolTearDown(", runner_main)
+        self.assertNotIn("patrolTest(", runner_main)
+        self.assertNotIn("launchPatrolAppOnce", runner_main)
         harness = (
             ROOT
             / "quwoquan_app/test/support/runtime/patrol/"

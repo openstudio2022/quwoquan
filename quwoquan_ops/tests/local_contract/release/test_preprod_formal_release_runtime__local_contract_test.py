@@ -11,13 +11,43 @@ from pathlib import Path
 from unittest import mock
 
 from quwoquan_ops.cli import stackctl
+from quwoquan_ops.cli.lib import read_only_user_availability
 
 
 DIGEST = "sha256:" + "a" * 64
 
+_AVAILABILITY_LAYERS = (
+    "build_ready",
+    "runtime_full_ready",
+    "provider_ready",
+    "release_active",
+    "content_exact_queries_ready",
+    "device_bound",
+    "content_live_passed",
+)
+
 
 def completed(returncode: int = 0) -> subprocess.CompletedProcess[str]:
     return subprocess.CompletedProcess([], returncode, stdout="", stderr="")
+
+
+def ready_availability_report(target: str, environment: str) -> dict[str, object]:
+    """A ready read-only availability aggregate, so health exit code isolates one layer."""
+    return {
+        "schema": read_only_user_availability.SCHEMA,
+        "target": target,
+        "environment": environment,
+        "observedAt": "2026-08-18T00:00:00Z",
+        "status": "ready",
+        "firstBlockerClass": "",
+        "firstBlocker": "",
+        "userAvailability": [
+            {"name": name, "status": "ready", "issues": []}
+            for name in _AVAILABILITY_LAYERS
+        ],
+        "metrics": [],
+        "evidence": {},
+    }
 
 
 class PreprodFormalReleaseRuntimeTest(unittest.TestCase):
@@ -647,13 +677,21 @@ class PreprodFormalReleaseRuntimeTest(unittest.TestCase):
                     "fetch_url",
                     side_effect=fetch_concurrently,
                 ),
+                # HTTP 探测的并发与顺序是本用例的被测面。read-only user
+                # availability 聚合读工作站真实候选/运行态，不隔离会让
+                # exitCode 随本机状态漂移。
+                mock.patch.object(
+                    stackctl,
+                    "_read_only_user_availability_report",
+                    return_value=ready_availability_report("beta-local", "beta"),
+                ),
                 mock.patch.object(stackctl, "_write_summary_bundle"),
                 mock.patch.object(stackctl, "_write_stdout_markdown"),
                 mock.patch.object(stackctl, "relpath", side_effect=str),
             ):
                 result = stackctl.command_health(args)
 
-            self.assertEqual(result["exitCode"], 0)
+            self.assertEqual(result["exitCode"], 0, result["details"])
             report = json.loads((report_dir / "report.json").read_text())
             self.assertEqual(report["httpProbeConcurrency"], 2)
             self.assertEqual(

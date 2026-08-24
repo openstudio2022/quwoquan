@@ -272,7 +272,6 @@ class StackctlAppArtifactIdentityTest(unittest.TestCase):
                 json.dumps(
                     {
                         "schema": "app-runtime-config-trust",
-                        "schemaVersion": "1",
                         "buildProfile": "nonprod",
                         "signatureAlgorithm": "ed25519",
                         "trustedPublicKeys": {
@@ -312,7 +311,6 @@ class StackctlAppArtifactIdentityTest(unittest.TestCase):
                 json.dumps(
                     {
                         "schema": "app-runtime-config-trust",
-                        "schemaVersion": "1",
                         "buildProfile": "nonprod",
                         "signatureAlgorithm": "ed25519",
                         "trustedPublicKeys": {

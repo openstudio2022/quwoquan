@@ -1,5 +1,5 @@
 // Code generated from the canonical assistant operation owner. DO NOT EDIT.
-// ContractGraph SHA256: 12b3df740d4258c939c822a6a6d7c4484d1d6a7f1930ad083c834c114c4ef130
+// ContractGraph SHA256: 8eb58b30af5b0a68a46189c1cdf634d15ae49e2fe4b048af1dc35656eb8a48b9
 
 library;
 

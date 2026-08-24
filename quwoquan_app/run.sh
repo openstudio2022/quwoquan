@@ -13,9 +13,10 @@ fi
 
 APP_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$APP_DIR/.." && pwd)"
+QWQ_OUTPUT_ROOT="${QWQ_OUTPUT_ROOT:-$ROOT_DIR/.qwq_output}"
 # bytecode 缓存统一落 local/cache/**：local/<target>/ 只允许 process/ 与 cache/，
 # 直接写 local/python-cache/<name> 会被 verify_output_layout 判为非法布局。
-export PYTHONPYCACHEPREFIX="${PYTHONPYCACHEPREFIX:-$ROOT_DIR/.qwq_output/env/repo/local/cache/python/app-launch}"
+export PYTHONPYCACHEPREFIX="${PYTHONPYCACHEPREFIX:-$QWQ_OUTPUT_ROOT/env/repo/local/cache/python/app-launch}"
 REQUESTED_ENVIRONMENT="${QWQ_ENVIRONMENT:-}"
 REQUESTED_TARGET=""
 REQUESTED_DEVICE_ID=""
@@ -881,7 +882,7 @@ fi
 
 set +e
 if [[ -z "$LAUNCH_RECEIPT" ]]; then
-  LAUNCH_RECEIPT="$ROOT_DIR/.qwq_output/env/repo/runs/$(date -u +%Y%m%dT%H%M%SZ)-$$-${QWQ_LAUNCH_TARGET}-app-launch/attempt.json"
+  LAUNCH_RECEIPT="$QWQ_OUTPUT_ROOT/env/repo/runs/$(date -u +%Y%m%dT%H%M%SZ)-$$-${QWQ_LAUNCH_TARGET}-app-launch/attempt.json"
 fi
 case "${QWQ_RUN_DEVICE_KIND:-}" in
   android*) LAUNCH_PLATFORM=android ;;
@@ -930,7 +931,7 @@ PY
 FLUTTER_RUN_EXIT_CODE=$?
 set -e
 
-TEST_LIVE_REPORT_DIR="$ROOT_DIR/.qwq_output/env/repo/runs/$(date -u +%Y%m%dT%H%M%SZ)-$$-${QWQ_LAUNCH_TARGET}-flutter-test-live"
+TEST_LIVE_REPORT_DIR="$QWQ_OUTPUT_ROOT/env/repo/runs/$(date -u +%Y%m%dT%H%M%SZ)-$$-${QWQ_LAUNCH_TARGET}-flutter-test-live"
 mkdir -p "$TEST_LIVE_REPORT_DIR"
 TEST_LIVE_REPORT_PATH="$TEST_LIVE_REPORT_DIR/report.json"
 python3 - \
@@ -965,7 +966,23 @@ import sys
 preflight = json.loads(preflight_json)
 delivery = json.loads(delivery_json)
 exit_code = int(flutter_exit_code)
-receipt = json.loads(pathlib.Path(launch_receipt_path).read_text(encoding="utf-8"))
+try:
+    raw_receipt = pathlib.Path(launch_receipt_path).read_text(encoding="utf-8")
+except FileNotFoundError:
+    raise SystemExit(
+        "APP.LAUNCH.receipt_absent: supervisor produced no launch attempt receipt at "
+        + launch_receipt_path
+    ) from None
+except OSError as error:
+    raise SystemExit(
+        f"APP.LAUNCH.receipt_unreadable: {launch_receipt_path}: {error}"
+    ) from None
+try:
+    receipt = json.loads(raw_receipt)
+except json.JSONDecodeError as error:
+    raise SystemExit(
+        f"APP.LAUNCH.receipt_invalid: {launch_receipt_path} is not valid JSON: {error}"
+    ) from None
 if receipt.get("schema") != "app-launch-attempt":
     raise SystemExit("APP.LAUNCH.receipt_invalid: test_live report requires app-launch-attempt")
 transition_states = [

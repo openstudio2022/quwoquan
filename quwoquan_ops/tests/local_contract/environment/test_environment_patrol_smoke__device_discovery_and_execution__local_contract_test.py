@@ -54,18 +54,25 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
             "emulator": True,
         }
 
-        command = smoke.patrol_command(
-            device,
-            args,
-            "patrol",
-            dart_define_file=Path("/tmp/patrol-secrets.json"),
-        )
+        # core readback 同时要求发布视频页数，由 app-content-uat 编排注入。
+        with mock.patch.dict(
+            os.environ,
+            {smoke.APP_CONTENT_VIDEO_PAGE_COUNT_ENV: "2"},
+            clear=False,
+        ):
+            command = smoke.patrol_command(
+                device,
+                args,
+                "patrol",
+                dart_define_file=Path("/tmp/patrol-secrets.json"),
+            )
 
         for destination, define_name in smoke.RELEASE_APP_UAT_DEFINES:
             self.assertIn(
                 f"--dart-define={define_name}={release_values[destination]}",
                 command,
             )
+        self.assertIn("--dart-define=DATA_RELEASE_VIDEO_PAGE_COUNT=2", command)
 
         missing = self._args(target=smoke.CORE_READBACK_TARGET)
         with self.assertRaisesRegex(ValueError, "immutable release envelope"):

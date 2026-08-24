@@ -424,18 +424,41 @@ def validate_observability_log_sink_package(
                 "Prod observability log sink must bind managed Elasticsearch"
             )
         return payload
-    if (
-        expected_environment not in {"alpha", "beta", "gamma"}
-        or expected_target != f"{expected_environment}-local"
-        or payload.get("deploymentMode") != "package-bound-local"
-        or payload.get("endpointRef") != "local_topology:elasticsearch"
-        or payload.get("secretEnvironmentKeys") != []
-        or payload.get("platform") not in {"arm64", "amd64"}
-        or payload.get("runtimeEndpoint") != "http://elasticsearch:9200"
-        or payload.get("clusterRef")
-        != f"target:{expected_target}/product-ops/elasticsearch"
+    # 每个身份字段单独报错：失败终态必须能指名是哪一个字段、期望什么、实到什么，
+    # 否则调用方只能看到一条无法定位的聚合拒绝。
+    identity_issues: list[str] = []
+    if expected_environment not in {"alpha", "beta", "gamma"}:
+        identity_issues.append(
+            f"expectedEnvironment={expected_environment!r}, "
+            "expected one of ['alpha', 'beta', 'gamma']"
+        )
+    elif expected_target != f"{expected_environment}-local":
+        identity_issues.append(
+            f"expectedTarget={expected_target!r}, "
+            f"expected {expected_environment + '-local'!r}"
+        )
+    for field, expected in (
+        ("deploymentMode", "package-bound-local"),
+        ("endpointRef", "local_topology:elasticsearch"),
+        ("secretEnvironmentKeys", []),
+        ("runtimeEndpoint", "http://elasticsearch:9200"),
+        ("clusterRef", f"target:{expected_target}/product-ops/elasticsearch"),
     ):
-        raise ValueError("local observability log-sink package identity is invalid")
+        actual = payload.get(field)
+        if actual != expected:
+            identity_issues.append(
+                f"{field}={actual!r}, expected {expected!r}"
+            )
+    if payload.get("platform") not in {"arm64", "amd64"}:
+        identity_issues.append(
+            f"platform={payload.get('platform')!r}, "
+            "expected one of ['arm64', 'amd64']"
+        )
+    if identity_issues:
+        raise ValueError(
+            "local observability log-sink package identity is invalid: "
+            + "; ".join(identity_issues)
+        )
     for field in (
         "imageDigest",
         "sourceComposeDigest",
