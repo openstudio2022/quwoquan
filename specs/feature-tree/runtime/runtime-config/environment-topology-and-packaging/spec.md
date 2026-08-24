@@ -220,6 +220,7 @@
 - THEN 两端分别交出绑定同一 release、App SHA、package identity 与 startup attempt 的 target-scoped 原始 CaseResult，父 report 不产生 Alpha-only aggregate 或 promotion passed，所有结论均为 `nonPromotable=true`。
 - THEN 空态窗口保存原 active release、应用 empty baseline、取得两端 `no_active_release` 结果并 same-digest replay 原 release；任一中断先恢复，恢复失败即停止且不执行后续窗口。
 - THEN 受控 Edge target 始终在 `finally` 恢复精确容器并通过 health，同一安装点击唯一重试后重新看到原 release。
+- THEN 精选池为空的环境以 `apply` 产出的导入报告为唯一输入完成首次激活，绑定收据记为 `release_import` 且不声明 verify 运行；池中已有条目的环境不接受该路径，其变更只认 consumer 档收据。
 
 ## 6. 依赖
 
@@ -317,16 +318,3 @@
 - 尚缺验收证据：一个契约测试用带计划外记录的 fake zone 证明 `verify` 会报出该记录，而不是静默通过。
 - 完成判定：`GWT-001` 的 DNS 治理子句扩展为「zone 内不存在未登记记录」，且该断言由 zone 级列举证据支撑。
 - 依赖：无外部阻断。
-
-<a id="open-011"></a>
-### OPEN-011 精选池首次填充在新环境上自我阻断
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：当前 `premium_stream` 的池条目只能由 `stackctl premium-pool` 写入，而它的两条绑定路径都反向依赖一次已通过的 consumer 档校验：`immutable-candidate` 要求 `readinessPhase in {consumer, commercial}` 的 receipt，`test-live` 要求携带 `verifyRunId` 的运行期 content binding。consumer 档校验本身又把「`premium_stream` 暴露至少一个 release 绑定的 `postId`」作为通过条件，因此没有精选池条目的环境无法完成首次激活，停在 `DATA.DELIVERY_RESTORE_UNAVAILABLE`，App 侧 `test_live` 预检随之无法取得内容绑定。
-- 尚缺实现：为「环境尚无精选池条目」这一初始状态提供一条不依赖 consumer 收据的绑定路径，其输入是 `apply` 已产出的导入证据，并保持条目在后续 consumer 校验中仍可被撤销。
-- 尚缺验收证据：一个契约测试从空池环境出发，仅凭 `apply` 证据完成一次 upsert 并使随后的 consumer 档校验通过，证明首次激活不再自我阻断。
-- 完成判定：`GWT-004` 的 GIVEN「Alpha 已激活一份可形成完整 `appUatEnvelope` 的 immutable release」可在一个尚无池条目的环境上从 `ship apply` 连续达成，中途不需要人工写库或跨环境搬运收据。
-- 依赖：无外部阻断；改动面与环境编排重构同属 `quwoquan_ops/cli/lib/premium_pool_release.py`，需与该重构的收敛结果对齐。
-
