@@ -35,6 +35,7 @@ from cloud_runtime_owner_analysis import (  # noqa: E402
     _canonical_adapter_paths,
     _collect_method_references,
     _commercially_blocked_methods,
+    _display_path,
     _legacy_cloud_paths,
     _without_dart_non_code,
 )
