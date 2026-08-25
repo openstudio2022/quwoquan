@@ -97,4 +97,6 @@ def test_every_app_ratchet_baseline_keeps_counts_and_governance_together() -> No
             document = json.loads(path.read_text(encoding="utf-8"))
             assert "_governance" in document, f"{path.name} 缺治理块"
             checked += 1
-    assert checked >= 4
+    # 下界只用来证明 glob 路径仍然有效；不锁定基线数量，否则棘轮退役会被这条
+    # 断言反向阻止，等于把存量当契约。
+    assert checked >= 1

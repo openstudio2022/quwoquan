@@ -2,6 +2,8 @@
 ///
 /// wire 上的 `actionType` / `value` 只在领域层判读一次；这里锁定闭集内取值、
 /// 未知取值的兜底，以及「未知目的地不得被当成某个具体页面」。
+library;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_entry_view/domain/assistant_entry_chip_intent.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'

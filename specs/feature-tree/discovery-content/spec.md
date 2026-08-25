@@ -271,16 +271,3 @@
  仍为零。让 `verified > 0` 需要数据生产侧发布带 `geoTagRef` 的 canonical 内容
  （或在线 UGC 进入 canonical 供给统计口径），扩充标签定义不会转化为可用信号。
 - 完成判定：`DOM-002` 可复跑，且 `verified > 0`（至少一条语义轴打通采集、供给、消费三级）
-
-<a id="open-003"></a>
-### OPEN-003 release import 不同写发现流 ReadModel，收货回执 discoveryPosts 恒为空
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：当前 `UpsertDiscoveryFeedWithOptions` 在生产装配中已无调用方，只剩自身与测试引用。
- 导入事务因此只写 `posts` 与 outbox，不同写发现流 ReadModel。
-- 影响或价值：缺少 `counts["feedUpserted"]` 的写入方，环境侧收货回执的 `readback.counts.discoveryPosts` 回读恒为 `null`。
- alpha 实测 `postsUpserted=5` 而 `discoveryPosts=null`，readiness 的非零判据永远不满足。
-- 影响或价值：仍留存的发现流数据早于当前 release 激活时刻，属历史遗留而非本次导入产物，新内容不会自动进入发现流。
-- 完成判定：`DOM-001` 对应行为满足，导入事务在同一事务内同写发现流并回传真实计数，`discoveryPosts` 等于该 release 实际可发现条数且由 api_integration 覆盖

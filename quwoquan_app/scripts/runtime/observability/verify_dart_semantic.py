@@ -9,8 +9,8 @@ Scans quwoquan_app/lib/**/*.dart for:
 2) iOS semantic style violations (chevron icon semantics, Cupertino page
    mixing Material interaction components, selector leading semantics).
 3) user-visible Chinese string literals in Text/label/title/hint/message
-   positions. Migrated domains are zero-tolerance; remaining domains use a
-   checked-in per-file ratchet that may only decrease.
+   positions. Zero tolerance across the whole tree: copy belongs in
+   UITextConstants.* or context.l10n.*, never inline in a widget.
 
 Visual-token rules exclude lib/design_system/ and lib/l10n/copy/. User-visible
 copy still scans design-system widgets because a reusable primitive must not own
@@ -37,7 +37,6 @@ from _common.paths import APP_ROOT, REPO_ROOT, SCRIPTS_ROOT
 
 
 import argparse
-import json
 import os
 import re
 import sys
@@ -84,29 +83,6 @@ USER_VISIBLE_TEXT_ARGUMENT = re.compile(
 )
 USER_VISIBLE_TEXT_CONSTRUCTOR = re.compile(
     r"\b(?:Text|SelectableText|AppToast\.show)\s*\("
-)
-
-# 本轮已批准的页面商用成熟度范围。这里零容忍，不接受 baseline。
-MIGRATED_TEXT_SCOPE_PREFIXES = (
-    "quwoquan_app/lib/service/content_service/",
-    "quwoquan_app/lib/service/chat_service/",
-    "quwoquan_app/lib/service/recommendation_service/",
-    "quwoquan_app/lib/runtime/shell/welcome/",
-    "quwoquan_app/lib/service/user_service/account/user_settings/presentation/",
-    "quwoquan_app/lib/runtime/shell/share/",
-)
-MIGRATED_TEXT_SCOPE_FILES = frozenset(
-    {
-        "quwoquan_app/lib/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/my_intersection_inbox_page.dart",
-    }
-)
-
-TEXT_BASELINE_PATH = os.path.join(
-    "quwoquan_app",
-    "scripts",
-    "runtime",
-    "observability",
-    "dart_semantic_text_baseline.json",
 )
 
 # iOS 语义风格检查（增量门禁）
@@ -300,75 +276,12 @@ def scan_user_visible_text_literals(
     return violations
 
 
-def load_text_baseline(repo_root: str) -> dict[str, int]:
-    path = os.path.join(repo_root, TEXT_BASELINE_PATH)
-    try:
-        with open(path, encoding="utf-8") as file:
-            raw = json.load(file)
-    except (OSError, json.JSONDecodeError) as error:
-        print(
-            f"verify_dart_semantic: ERROR reading text baseline: {error}",
-            file=sys.stderr,
-        )
-        return {}
-    counts = raw.get("counts")
-    if not isinstance(counts, dict):
-        return {}
-    result: dict[str, int] = {}
-    for key, value in counts.items():
-        if isinstance(key, str) and isinstance(value, int) and value >= 0:
-            result[key] = value
-    return result
-
-
-def is_migrated_text_scope(rel_path: str) -> bool:
-    return (
-        rel_path in MIGRATED_TEXT_SCOPE_FILES
-        or rel_path.startswith(MIGRATED_TEXT_SCOPE_PREFIXES)
-    )
-
-
-def stale_text_baseline_entries(
-    text_baseline: dict[str, int],
-    text_violations_by_file: dict[str, list[tuple[int, str, str]]],
-    *,
-    repo_root: str,
-    scan_root: str,
-) -> list[tuple[str, int, int]]:
-    """Return baseline entries that no longer carry real debt in this scan.
-
-    A deleted file, a file whose violation count decreased, a zero-count entry,
-    or an entry that moved into a zero-tolerance scope must be removed from the
-    checked-in ratchet. Focused ``--targets`` scans only judge entries physically
-    below that target, so unrelated baseline rows cannot become false stale.
-    """
-
-    resolved_scan_root = os.path.realpath(scan_root)
-    stale: list[tuple[str, int, int]] = []
-    for rel_path, allowed in sorted(text_baseline.items()):
-        absolute_path = os.path.realpath(os.path.join(repo_root, rel_path))
-        try:
-            if os.path.commonpath((resolved_scan_root, absolute_path)) != resolved_scan_root:
-                continue
-        except ValueError:
-            continue
-        current = len(text_violations_by_file.get(rel_path, []))
-        if allowed <= 0 or current < allowed or is_migrated_text_scope(rel_path):
-            stale.append((rel_path, allowed, current))
-    return stale
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description="Verify Dart semantic tokens")
     parser.add_argument(
         "--targets",
         default="quwoquan_app/lib",
         help="Path to scan (default: quwoquan_app/lib)",
-    )
-    parser.add_argument(
-        "--print-text-baseline",
-        action="store_true",
-        help="Print current out-of-scope text counts as JSON and exit",
     )
     args = parser.parse_args()
 
@@ -380,7 +293,6 @@ def main() -> int:
 
     all_violations: list[tuple[str, int, str, str]] = []
     text_violations_by_file: dict[str, list[tuple[int, str, str]]] = {}
-    text_baseline = load_text_baseline(root)
 
     for dirpath, _dirnames, filenames in os.walk(lib_root):
         for name in filenames:
@@ -403,49 +315,11 @@ def main() -> int:
             if text_violations:
                 text_violations_by_file[rel] = text_violations
 
-    if args.print_text_baseline:
-        print(
-            json.dumps(
-                {
-                    "description": (
-                        "范围外域用户可见中文文案字面量棘轮；"
-                        "页面商用成熟度专项范围始终零容忍，计数只减不增。"
-                    ),
-                    "counts": {
-                        rel: len(violations)
-                        for rel, violations in sorted(
-                            text_violations_by_file.items()
-                        )
-                        if not is_migrated_text_scope(rel)
-                    },
-                },
-                ensure_ascii=False,
-                indent=2,
-            )
-        )
-        return 0
-
-    stale_baseline = stale_text_baseline_entries(
-        text_baseline,
-        text_violations_by_file,
-        repo_root=root,
-        scan_root=lib_root,
-    )
-
     for rel, violations in sorted(text_violations_by_file.items()):
-        allowed = 0 if is_migrated_text_scope(rel) else text_baseline.get(rel, 0)
-        if len(violations) <= allowed:
-            continue
-        for line_no, line_content, hint in violations[allowed:]:
+        for line_no, line_content, hint in violations:
             all_violations.append((rel, line_no, line_content, hint))
 
     found = False
-    for rel, allowed, current in stale_baseline:
-        print(
-            f"{rel}: stale text baseline count={allowed}, current={current}; "
-            "remove or shrink this entry"
-        )
-        found = True
     for rel, line_no, line_content, hint in all_violations:
         print(f"{rel}:{line_no}: {hint}")
         print(f"  {line_content.strip()}")
@@ -454,7 +328,7 @@ def main() -> int:
     if found:
         print(
             "\nverify_dart_semantic: 视觉与用户文案必须使用语义 token；"
-            "范围外文案 baseline 只允许递减",
+            "用户可见文案零容忍，请改用 UITextConstants.* 或 context.l10n.*",
             file=sys.stderr,
         )
         return 1

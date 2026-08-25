@@ -5,6 +5,7 @@ import 'package:quwoquan_app/design_system/object_page/profile_ios_components.da
 import 'package:quwoquan_app/design_system/semantics/settings_semantic_constants.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 
 /// 圈子紧凑卡片：头像（或封面）+ 名称 + 创作数，横向布局。
 class CircleCompactCard extends StatelessWidget {
@@ -82,7 +83,7 @@ class CircleCompactCard extends StatelessWidget {
                   ),
                   SizedBox(height: AppSpacing.intraGroupXs),
                   Text(
-                    '$postCount 创作',
+                    CommunityText.circleWorkCount(postCount),
                     style: TextStyle(
                       fontSize: AppTypography.iosFootnote,
                       fontWeight: AppTypography.normal,

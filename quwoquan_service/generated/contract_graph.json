@@ -100128,7 +100128,7 @@
         "localContract": [
           {
             "path": "quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_entry_view/assistant_entry_chip_intent__local_contract_test.dart",
-            "sha256": "bf60a61fb82bea8c5871a2c3d9502d44900940977bb13a9189032ff31be58796"
+            "sha256": "567f5c330abc2443573082219ae34eabf261cb57b4e5b9a646dd6006e5518b9b"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_entry_view/assistant_entry_remote__local_contract_test.dart",
@@ -114267,6 +114267,10 @@
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/trust_safety/post_moderation_case/application/moderation_error_semantics__local_contract_test.go",
             "sha256": "0d40b966efd49fa3334e2953b97261821abfe89bc45a801bceedd14eeae0e4f4"
+          },
+          {
+            "path": "quwoquan_service/services/content-service/tests/local_contract/trust_safety/post_moderation_case/application/moderation_idempotency_and_guards__local_contract_test.go",
+            "sha256": "883c1382bb15c12f62ffa074ad5f60b593e0a1c9ff24a021151e248e6b59e2c5"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/trust_safety/post_moderation_case/application/moderation_operations__local_contract_test.go",
