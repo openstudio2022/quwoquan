@@ -81,7 +81,7 @@ def analyze_screenshot(path: Path, offset_ms: int | None = None) -> ScreenshotAn
         if distance > 34:
             foreground += 1
     foreground_ratio = foreground / max(len(pixels), 1)
-    stddev = ImageStat.Stat(crop).stddev
+    stddev = pil_image_stat.Stat(crop).stddev
     stddev_avg = sum(stddev) / max(len(stddev), 1)
     near_white_background = min(median_rgb) >= 250
     brand_blue_base = (

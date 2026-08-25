@@ -66,6 +66,22 @@ def is_substantive_implementation_source(path: Path) -> bool:
     return bool(without_single_imports.strip())
 
 
+def go_import_declarations(text: str) -> str:
+    """Return only the import declarations of a Go source file.
+
+    Cross-service dependency can only be established through an import.  Service
+    paths appearing elsewhere are data — scan roots, contract inventories, error
+    strings — and treating them as dependencies makes the boundary check fire on
+    tests that legitimately enumerate other services' paths.
+    """
+
+    blocks = re.findall(r"(?ms)^\s*import\s*\((.*?)^\s*\)\s*$", text)
+    singles = re.findall(
+        r'(?m)^\s*import\s+(?:[A-Za-z_][A-Za-z0-9_]*\s+)?("[^"]+")\s*$', text
+    )
+    return "\n".join([*blocks, *singles])
+
+
 def is_substantive_test_source(path: Path) -> bool:
     """Return whether *path* contains at least one non-empty executable test.
 

@@ -75,6 +75,7 @@ from .repository import (  # noqa: E402
     service_roots,
 )
 from .source_analysis import (  # noqa: E402
+    go_import_declarations,
     is_substantive_implementation_source,
     is_substantive_test_source,
     lifecycle_handler_binding_issues,
@@ -115,6 +116,7 @@ __all__ = [
     "camel_to_snake",
     "compose_ownership_violations",
     "domain_service_names",
+    "go_import_declarations",
     "is_substantive_implementation_source",
     "is_substantive_test_source",
     "lifecycle_authored_consumers",

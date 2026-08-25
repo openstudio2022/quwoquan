@@ -77,23 +77,18 @@ class VerifyDartSemanticTextTest(unittest.TestCase):
         self.assertEqual(constants, [])
         self.assertEqual(generated, [])
 
-    def test_migrated_scope_is_zero_tolerance(self) -> None:
-        self.assertTrue(
-            self.verifier.is_migrated_text_scope(
-                "quwoquan_app/lib/service/content_service/content/post/presentation/example.dart"
-            )
-        )
-        self.assertFalse(
-            self.verifier.is_migrated_text_scope(
-                "quwoquan_app/lib/service/rtc_service/rtc/call_session/presentation/example.dart"
-            )
-        )
-        self.assertTrue(
-            self.verifier.is_migrated_text_scope(
-                "quwoquan_app/lib/service/recommendation_service/recommendation/"
-                "recommendation_feature_profile_view/presentation/intersection_statement_row.dart"
-            )
-        )
+    def test_every_scope_is_zero_tolerance(self) -> None:
+        # 曾经按域豁免的作用域现在与已迁移域同判，门禁不再有例外面。
+        for relative_path in (
+            "quwoquan_app/lib/service/content_service/content/post/presentation/example.dart",
+            "quwoquan_app/lib/service/rtc_service/rtc/call_session/presentation/example.dart",
+        ):
+            with self.subTest(relative_path=relative_path):
+                violations = self.scan(
+                    relative_path,
+                    "Widget build() => Card(title: '未迁移文案');\n",
+                )
+                self.assertEqual(len(violations), 1)
 
     def test_generated_metadata_is_outside_visual_token_scan(self) -> None:
         lib_root = "/repo/quwoquan_app/lib"
@@ -148,49 +143,6 @@ class VerifyDartSemanticTextTest(unittest.TestCase):
             "Widget build() => Card(title: '旧目录文案');\n",
         )
         self.assertEqual(violations, [])
-
-    def test_deleted_and_decreased_text_baselines_are_stale(self) -> None:
-        stale = self.verifier.stale_text_baseline_entries(
-            {
-                "quwoquan_app/lib/ui/deleted.dart": 2,
-                "quwoquan_app/lib/service/rtc_service/rtc/call_session/presentation/reduced.dart": 3,
-                "quwoquan_app/lib/service/rtc_service/rtc/call_session/presentation/current.dart": 1,
-            },
-            {
-                "quwoquan_app/lib/service/rtc_service/rtc/call_session/presentation/reduced.dart": [
-                    (1, "title: '一'", "copy"),
-                ],
-                "quwoquan_app/lib/service/rtc_service/rtc/call_session/presentation/current.dart": [
-                    (1, "title: '一'", "copy"),
-                ],
-            },
-            repo_root="/repo",
-            scan_root="/repo/quwoquan_app/lib",
-        )
-
-        self.assertEqual(
-            stale,
-            [
-                ("quwoquan_app/lib/service/rtc_service/rtc/call_session/presentation/reduced.dart", 3, 1),
-                ("quwoquan_app/lib/ui/deleted.dart", 2, 0),
-            ],
-        )
-
-    def test_focused_scan_does_not_mark_other_domains_stale(self) -> None:
-        stale = self.verifier.stale_text_baseline_entries(
-            {
-                "quwoquan_app/lib/service/entity_service/entity_homepage/homepage/presentation/page.dart": 2,
-                "quwoquan_app/lib/service/rtc_service/rtc/call_session/presentation/page.dart": 2,
-            },
-            {},
-            repo_root="/repo",
-            scan_root="/repo/quwoquan_app/lib/service/rtc_service",
-        )
-
-        self.assertEqual(
-            stale,
-            [("quwoquan_app/lib/service/rtc_service/rtc/call_session/presentation/page.dart", 2, 0)],
-        )
 
 
 if __name__ == "__main__":

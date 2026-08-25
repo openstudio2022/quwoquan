@@ -16,6 +16,7 @@ from .constants import (
 )
 from .repository import domain_service_names, relative, service_roots
 from .source_analysis import (
+    go_import_declarations,
     is_substantive_implementation_source,
     is_substantive_test_source,
     lifecycle_handler_binding_issues,
@@ -306,7 +307,10 @@ class SourceVerificationMixin:
                 if not path.is_file() or path.suffix not in {".go", ".py"}:
                     continue
                 text = path.read_text(encoding="utf-8", errors="replace")
-                for imported_service, _ in SERVICE_IMPORT_RE.findall(text):
+                imports = (
+                    go_import_declarations(text) if path.suffix == ".go" else text
+                )
+                for imported_service, _ in SERVICE_IMPORT_RE.findall(imports):
                     if imported_service != service.name:
                         self.error(
                             f"{relative(path)}: cross-service internal/generated import from {imported_service}"
@@ -321,7 +325,7 @@ class SourceVerificationMixin:
                 if not is_test and len(parts) >= 4 and parts[0] == "internal":
                     source_context, source_object = parts[1:3]
                     for imported_service, target_context, target_object, target_layer in (
-                        OBJECT_PRIVATE_IMPORT_RE.findall(text)
+                        OBJECT_PRIVATE_IMPORT_RE.findall(imports)
                     ):
                         if imported_service != service.name:
                             continue

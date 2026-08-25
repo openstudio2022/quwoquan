@@ -1245,6 +1245,8 @@ test-gate-companion-local-contract: prepare-test-python
 		quwoquan_ops/tests/local_contract/gate/test_api_path_unversioned__contract__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_app_architecture__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_app_client_contract_kind_alignment__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_app_uat_widget_key_references__dangling_reference__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_domain_governance__authority_and_trust__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_behavior_event_type_contract__shared_enum_parity__contract__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_canonical_recommendation_policy__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/ci/test_ci_cd_evidence_contracts__canonical__local_contract_test.py \
@@ -1320,6 +1322,7 @@ test-gate-companion-local-contract: prepare-test-python
 		quwoquan_data/tests/local_contract/release/test_execution_readiness__behavior__functional__local_contract_test.py \
 		quwoquan_data/tests/local_contract/release/test_publish_purity__canonical_media__contract__local_contract_test.py \
 		quwoquan_data/tests/local_contract/release/test_publish_purity__committed_transaction_holds_no_media__contract__local_contract_test.py \
+		quwoquan_data/tests/local_contract/execution/test_content_execution_layout__identity_keys__contract__local_contract_test.py \
 		quwoquan_data/tests/local_contract/execution/test_scale_parameterization__single_source__contract__local_contract_test.py \
 		quwoquan_data/tests/local_contract/execution/test_script_architecture__retired_module_names__contract__local_contract_test.py \
 		quwoquan_data/tests/local_contract/execution/test_source_digest__execution_release__contract__local_contract_test.py \
