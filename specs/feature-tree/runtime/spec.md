@@ -147,6 +147,7 @@ runtime 作为跨端云机制领域服务，治理共享 runtime 包和 integrat
 - [`runtime-test-pyramid`](./runtime-test-pyramid/spec.md)：以 local_contract、api_integration、user_acceptance 形成唯一测试分层和环境证据模型。
 - [`runtime-testinfra`](./runtime-testinfra/spec.md)：以 canonical 目录发现三层测试，以强类型请求按需准备隔离数据，并从真实执行、回读与清理生成证据。
 - [`system-architecture-and-engineering-guide`](./system-architecture-and-engineering-guide/spec.md)：领域服务对象优先目录、metadata 单轨、四环境配置、唯一运行拓扑、外部能力和三层测试治理。
+- [`system-topology-and-networking`](./system-topology-and-networking/spec.md)：南北向公开入口（gateway/DNS/TLS/CDN）与东西向平面组网（子网四平面、端口块、east-west URL）的唯一叙事收口，字面值只引用环境 YAML 真相源。
 
 ## 5. 领域要求
 
@@ -191,6 +192,7 @@ runtime 作为跨端云机制领域服务，治理共享 runtime 包和 integrat
 - Service：`quwoquan_service`（跨域基础设施、生成链与未被更具体 L1 路径认领的 Service 工程根）、`quwoquan_service/contracts`
 - Service：`quwoquan_service/services/integration-service`（外部能力机制进程）
 - Service（协作引用，不用于代码归属）：`quwoquan_service/runtime`、`quwoquan_ops`
+- Agent：`.agents`（跨 harness 工作流技能真相源）、`.claude`、`.codex`、`.cursor`（各 harness 触发加速器、规则与生成产物载体；语义归 `development-workflow-governance`）
 - 测试：
   - `local_contract`：`quwoquan_service/runtime`、`quwoquan_app/test/local_contract/journeys/connector_management`
   - `api_integration`：`quwoquan_ops/tests`

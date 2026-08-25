@@ -90,6 +90,7 @@ def _candidate_and_previous_evidence(output_root: Path) -> None:
             "manifestDigest": DIGEST,
             "importRunId": "apply-existing",
             "verifyRunId": "verify-existing",
+            "readinessPhase": "research",
             "contentImportReportRef": candidate_import.relative_to(
                 output_root
             ).as_posix(),
@@ -110,6 +111,7 @@ def _candidate_and_previous_evidence(output_root: Path) -> None:
             "manifestDigest": PREVIOUS_DIGEST,
             "importRunId": "apply-previous",
             "verifyRunId": "verify-previous",
+            "readinessPhase": "research",
             "postIds": ["post-previous"],
             "verifiedAt": "2026-08-10T00:00:00Z",
             "passed": True,

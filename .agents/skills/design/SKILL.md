@@ -76,6 +76,7 @@ DEC 定稿前四问：
 
 ## HANDOFF
 
+- **完成判据**：见 [completion-criteria](../review/references/completion-criteria.md) 本工作流段；证据链条目带命令+退出码+时间戳+SHA，下游过期即复跑。
 - **产出物**：DEC 集。
 - **未决项去向**：未定案的方案分叉转 `OPEN-###` 或明确 Out of Scope。
 - **唯一合法下游**：`dev`；其 PRE 需要本工作流的对象边界裁决结论与 command/query 分流结论。

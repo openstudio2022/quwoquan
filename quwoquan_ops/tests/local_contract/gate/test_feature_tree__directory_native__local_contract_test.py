@@ -157,6 +157,26 @@ def test_code_path_resolves_from_l1_engineering_ownership(tmp_path: Path, monkey
     assert owner.node_id == "domain"
 
 
+def test_agent_asset_path_resolves_from_l1_agent_ownership(tmp_path: Path, monkeypatch) -> None:
+    # spec_ref: specs/feature-tree/runtime/runtime-agentpack/feature-context-discovery/spec.md#gwt-001
+    root = build_tree(tmp_path)
+    write(root / ".agents" / "skills" / "review" / "SKILL.md", "# skill\n")
+    write(root / ".cursor" / "skills" / "demo" / "SKILL.md", "# stub\n")
+    l1_spec = root / "specs" / "feature-tree" / "domain" / "spec.md"
+    l1_spec.write_text(
+        "# L1 Domain Service：领域 (`domain`)\n\n"
+        "## 7. 工程归属\n\n"
+        "- Agent：`.agents`、`.claude`、`.codex`、`.cursor`\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(ft_context, "REPO_ROOT", root)
+    monkeypatch.setattr(ft_context, "TREE_ROOT", root / "specs" / "feature-tree")
+    nodes = feature_tree.discover_nodes()
+
+    assert feature_tree.resolve_target(".agents/skills/review/SKILL.md", nodes).node_id == "domain"
+    assert feature_tree.resolve_target(".cursor/skills/demo/SKILL.md", nodes).node_id == "domain"
+
+
 def test_canonical_app_object_test_resolves_from_its_production_domain(
     tmp_path: Path,
     monkeypatch,
@@ -676,3 +696,16 @@ def test_semantic_anchor_changes_detects_added_and_removed_ids(
         "modified": [],
         "deleted": ["REQ-001"],
     }
+
+
+def test_outcome_clause_split_ignores_separators_inside_code_spans() -> None:
+    """中文子句误切负例：反引号内的分隔符是标识符的一部分，不是子句边界。"""
+    # spec_ref: specs/feature-tree/platform-ops-governance/spec.md#dom-001
+    from quwoquan_ops.cli.lib.feature_tree.parsing import outcome_sub_clauses
+
+    assert outcome_sub_clauses("回读 `a；b` 字段，且校验通过") == [
+        "回读 `a；b` 字段",
+        "校验通过",
+    ]
+    assert outcome_sub_clauses("写入成功，并发请求不阻塞") == ["写入成功，并发请求不阻塞"]
+    assert outcome_sub_clauses("A 成立；B 成立") == ["A 成立", "B 成立"]

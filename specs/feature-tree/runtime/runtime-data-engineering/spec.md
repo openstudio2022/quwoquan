@@ -97,6 +97,7 @@
 - 上游能力：[`runtime`](../spec.md) 声明的领域入口。
 - 下游能力：本目录直接 Story 及其公开结果。
 - 一致性要求：遵循本层或父 L1 DEC 声明的一致性边界。
+- 「可发布」判定单轨：在数据工程内，环境 readiness 收据是否可发布只由 `quwoquan_data/scripts/verify/release_publishability.py` 的 typed 谓词裁定，CLI 入口为 `verify release-publishability`；phase 闭集与 phase↔lifecycle 对齐规则不得在数据工程脚本中重复定义。对象池准入、素材可发布与 execution 准出是各自独立的谓词，不共用该措辞。跨仓消费方（如 `quwoquan_ops/ci/generate_release_bound_environment_identity.py` 的 release-bound 身份校验）以 wire schema `environment_release_readiness.schema.json` 为锚做收据身份验证，属已登记消费，不构成第二份可发布谓词。
 
 ## 7. 集成验收
 

@@ -1,6 +1,8 @@
 # review 派发注册表 —— 以工作流名为键的 profile 条件装配
 #
-# board 的解析顺序（执行语义见 ../SKILL.md「执行」段）：
+# 装配唯一执行体：quwoquan_ops/cli/review_dispatch.py（board 不手工解析本表），
+# 语义由 quwoquan_ops/tests/local_contract/gate/test_review_dispatch__cli__local_contract_test.py 锁住。
+# 解析顺序（执行语义见 ../SKILL.md「执行」段）：
 # 1. profiles：changed_paths 命中 paths、或 deliverable 命中 deliverables，即激活该 profile。
 # 2. workflows.<name>.bindings：逐条求值 when——省略 when 表示恒装配；
 #    when 为 profile 列表时任一命中即装配。同一角色可装配 base 加多个 profile checklist。

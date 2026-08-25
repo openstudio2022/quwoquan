@@ -48,6 +48,14 @@ def _previous_receipt(output: Path, environment: str) -> Path:
         "releaseClass": "research",
         "productLifecycleState": "research",
         "readinessPhase": "research",
+        # research 收据的 schema 条件必需字段（allOf: readinessPhase=research）；
+        # 单轨谓词同样要求它们非空。
+        "internalSubjectHash": "sha256:" + "c" * 64,
+        "researchIsolationVerificationRef": (
+            f"env/{environment}/runs/data-release/release-m100/"
+            f"verify-{environment}/research-isolation-verification.json"
+        ),
+        "researchIsolationVerificationDigest": "sha256:" + "d" * 64,
         "verifyRunId": f"verify-{environment}",
         "activationEnvelope": activation,
         "activationEnvelopeDigest": document_digest(activation),

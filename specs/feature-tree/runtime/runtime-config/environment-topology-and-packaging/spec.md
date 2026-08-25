@@ -27,14 +27,13 @@
 <a id="req-001"></a>
 ### REQ-001 环境拓扑与打包
 
-- 受支持环境必须在各自 `runtime.yaml` 声明完整 `edge / media / service / data` 子网与结构化 `urlRoles`。
+- 子网四平面与结构化 `urlRoles` 的声明要求由 [`system-topology-and-networking` REQ-002](../../system-topology-and-networking/spec.md#req-002) 拥有；本 Story 消费其 topology resolver 投影完成环境装配与打包。
 
 <a id="req-002"></a>
 ### REQ-002 各环境 runtime.yaml 声明完整网络与公开入口
 
-- 受支持环境必须在各自 `runtime.yaml` 声明完整 `edge / media / service / data` 子网与结构化 `urlRoles`；`publicBases` 只能由 target resolver 生成。
-- `alpha` 与其他环境使用同一 Remote composition/schema/网络平面，只能在容量、endpoint、访问控制、数据 release 和第三方 sandbox 策略上差异化。
-- 本地 host 端口必须来自 1000 端口块 + plane + 10 端口槽位模型，canonical 端口以 `0` 结尾。
+- `publicBases` 只能由 target resolver 生成；子网四平面与 `urlRoles` 的声明要求见 [`system-topology-and-networking` REQ-002](../../system-topology-and-networking/spec.md#req-002)。
+- `alpha` 与其他环境使用同一 Remote composition/schema/网络平面（平面同构事实由 [`system-topology-and-networking` REQ-002](../../system-topology-and-networking/spec.md#req-002) 拥有），只能在容量、endpoint、访问控制、数据 release 和第三方 sandbox 策略上差异化；本条是环境差异化维度的唯一清单。
 - App / Service env package 都必须携带 canonical unversioned schema identity、artifact policy 摘要与机器可读报告。
 - App 产品支持面固定为 Android、iOS 与 Web；未持有平台工程、包身份、签名和真实安装启动证据的平台不得进入 metadata、schema、CI 或发布矩阵。
 - Android 与 iOS 可执行制品必须由 `stackctl package` 从同一只读 source capsule 按 `buildProfile(nonprod|prod)` 构建，Web 只生成一份共享 bundle；每次组件构建必须显式选择 build product，并在写 manifest 前回读包身份、签名、artifact digest 与生产纯度。AppArtifact 只携带 build-profile 级 trust envelope，不携带 target runtime config package。Alpha/Beta/Gamma 的签名 runtime config package 必须在安装后由 canonical activation 写入同一 nonprod App 的平台私有容器，不得触发重编、重签或改变完整 APK/`.app`/IPA 摘要。
@@ -43,25 +42,9 @@
 - `prod` 只能读取 `prod` 包；禁止 `prod-gray` 环境、目录或 artifact。
 - 同一环境存在多个部署 target 时，每个 target 必须写入独立 package 目录，并从环境 `urlRoles + target urlOverrides + portProfile` 的解析结果投影 App 运行时端点；禁止复制环境默认 target 的 URL 或跨 target 复用可变产物。
 - `prod-hosted` artifact 禁止包含 mock/seed/debug/local/test host 与跨环境 URL；`prod-sim` 仍属于 `prod` 环境，但全部公共入口必须使用 `*.sim.quwoquan.com`，不得命中生产 host、增加第五环境或放宽 `prod-hosted` 纯度门。
-- 每个环境的 Web、API、RTC、Ops、CDN 与 Upload 公开入口只由 `environments/<env>/runtime.yaml → stackctl target resolver → launch/artifact manifest` 这一唯一数据流生成，每级绑定上游摘要；本规格只引用 URL role（`publicWeb / api / rtc / ops / cdn / upload`）与 resolver，不复制 host、端口或 URL 字面值，任何第二份拓扑复制均为 `GATE_BLOCK`。浏览器 API 固定走同源 `/api` 反代，禁止按请求头猜测 Web/API。
-- 媒体读取按 `/media/avatar|image|video` 分段挂在媒体读取 role 下；App 安装包下载固定为 CDN role 的 `/download` 路径，上传保持独立 upload role。
-- `quwoquan_ops/environments/domain_governance.yaml` 登记 public、derived deep-link、OAuth callback、east-west、third-party 与 test-only URL 分类；运行时消费者只能读取 topology resolver 投影，不得再定义公开 authority。
-- `domain_governance.yaml` 只拥有 URL role 的身份、分类、owner、exposure 与 consumer；各环境 `runtime.yaml` 只拥有 `scheme / host / portRole / pathBase / tlsProfile`。resolver 只合并互不重叠的字段，任何重复 ownership 必须 `GATE_BLOCK`。
-- `domain_governance.yaml` 的 `dnsZones` 是公网 DNS 记录的唯一声明面，每个 canonical 环境 target 恰好一个 zone。记录名要么是 zone 自己的 apex 与 wildcard 加 `apexFollowers`，要么由该 target 的 topology host 派生；`dnsZones` 覆盖的名字集合内不得存在第二份人工维护的记录，任何未被 zone 覆盖的 topology host 必须 `GATE_BLOCK`。zone 内计划面之外的名字不在本规格的单轨范围内，其对账登记为 `OPEN-009`。
-- 收敛的所有权边界按记录类型判定：地址类型（`A`/`AAAA`/`CNAME`）与 zone 级授权类型（`CAA`/`MX`）由计划完全拥有，同组内多余值即漂移、必须清除；`TXT` 是共享类型，计划只拥有自己声明的 `v=` 方法（SPF、DMARC），备案与第三方站点校验令牌既不被占用改写也不被删除，只在 receipt 的 `observedUnmanaged` 中如实上报。
-- 记录身份必须在期望侧与现网侧归一：结构化值（`CAA` 的 `data`）与线上文本（`content`）算出同一身份，已一致的记录报 `unchanged` 且不产生任何 provider 写入。收敛对稳态必须幂等，否则 apply receipt 无法区分漂移与稳态。
-- 权威 DNS 写入只经供应商中立 provider 接口进行，服务商由 `dnsProvider.kind` 单点选择。凭据的形状是服务商知识，只能由 provider 实现解释，中立层只声明「变量名 -> 部件名」的投影；工具链、门禁、CI secret 名与 workflow 不得出现厂商专有字段、厂商 API 域名或厂商专有变量名。DoH 证据必须来自至少两个相互独立的公共解析器，且任一解析器都不得属于权威服务商——用服务商自家解析器核对自家写入等于自证。
-- provisioning 与 ACME challenge 使用两个独立凭据。`acmeChallengeAuthority.providerEnforcement` 必须如实声明 challenge 凭据的可写范围由服务商 IAM 强制还是仅由凭据隔离加工具链行为保证，禁止把无法强制的范围描述成已强制；把「只变更 `_acme-challenge`」当作已成立的事实断言也属于此列。
-- 生产 edge 地址是部署时事实，只能经受保护变量注入，禁止入库。它不是机密——公网 DNS 本就可查——用变量的理由是换机只改注入值、不产生仓库改动，因此它与受版本控制的 SSH 管理端点是两个互不替代的投影，同值也不得合并。未注入时生产地址记录保持缺席并在 plan/apply/verify 的 `pending` 中显式报告；缺席不得降级为占位值、不得被解释为要求删除现存记录，非全球可路由或格式非法的地址必须 fail closed。
-- 覆盖或删除现存生产 DNS 记录是破坏性动作：收敛必须先整体算出将发生的动作，未取得显式确认时先行 fail closed 且不做部分收敛，定时触发只做 plan 与漂移核对。首次下发生产记录不属于破坏性动作，不需要该确认。
-- canonical publicWeb 始终是 apex，`www` 只能作为 `apexFollowers` 与 apex 共享同一份地址记录，不得用 CNAME 表达。同一条 edge 地址事实只有一种表达，apex 地址缺席时 follower 一同缺席，计划面不得让 CNAME 与地址记录落在同一个受管名字上。非生产四个 zone 的公网记录统一解析到 loopback 并发布 null MX 与 SPF deny；生产 apex 不发布 null MX，以便将来接入收件而无需先撤销一条显式拒收声明。本域名不收件，因此 CAA 与 DMARC 都不得声明回报邮箱——声明一个投递不到的地址等于制造一条不成立的安全通道。
-- 每个 zone 必须显式选一个 `caaProfiles` 条目：签发公共证书的 zone 用允许清单，不签发的用 `deny-all`。省略 CAA 从而继承 apex 允许清单必须 `GATE_BLOCK`，`caaProfiles` 的选择必须与该 target 的 TLS profile 归属一致。
-- 每个 zone 的 apex 必须同时发布 SPF deny 与 `_dmarc` 的 `p=reject` 策略，覆盖 envelope 与 header From 两条伪造路径。任何 mail guard 缺少 `dmarc` 或 DMARC 策略非 reject 必须 fail closed。
-- derived link 的 origin 只来自 `publicWeb` role，path 只来自 `quwoquan_service/contracts/metadata/_shared/link_templates.yaml`；user-service 使用生成的 `linktemplates.UserWebPath`，App/Data/Service 禁止再拼接 `/u/`、`/post/` 等第二份公开业务路径。
-- Alpha/Beta/Gamma 本地 target 使用同一个 `local-managed` TLS profile；stackctl 从 topology 解析 SAN，在 target-scoped 仓外部署根生成叶证书、CA 与 resolver handoff，并负责受管 Simulator/Emulator 的信任安装与撤销。App、测试和脚本不得关闭证书校验、使用 `curl -k`、改写 canonical URL 或增加 localhost fallback。
+- 南北向公开入口（URL role、gateway 数据流、公网 DNS、TLS profile、CDN、derived link）与东西向端口块模型由 [`system-topology-and-networking`](../../system-topology-and-networking/spec.md) 拥有；本 Story 只消费 topology resolver 投影完成打包、装配与验收，不复制组网规则。
 - local environment matrix 的 `emulator_only` 设备 profile 只要求 iOS Simulator 与 Android Emulator，并且只能签发 `ALPHA_BETA_GAMMA_EMULATOR_ONLY_FUNCTIONAL_GREEN`、`nonPromotable=true` 与 Android 真机 waiver；它不得写入正式 Green Matrix、Provider 140-cell 或 Prod artifact closure。正式 `ALPHA_BETA_GAMMA_LOCAL_GREEN` 继续要求独立 Android 真机回执。
-- `prod-sim` 与 `prod-hosted` 都使用 DNS-01 公共 CA，且都由仓内 `tlsProfiles` 拥有签发自动化；TLS profile 不得把证书自动化推给无 owner 的外部发布面。`verify` 的证书覆盖面从 `tlsProfiles` 派生，禁止另立 target 清单——另立会让新增 profile 默默落在覆盖面外，看起来通过其实没验。任何 Prod package 必须拒绝 local-managed CA、信任材料与 resolver handoff。
-- 非生产 Web hosting 必须以响应头声明 `noindex` 且保持环境访问控制；四环境分别拥有 DNS、证书、配置与部署 composition，不从 Prod 继承，但引用同一 Web bundle 摘要。
+- 四环境分别拥有配置与部署 composition，不从 Prod 继承，但引用同一 Web bundle 摘要；非生产 Web hosting 的 `noindex` 与 DNS/证书策略由 [`system-topology-and-networking`](../../system-topology-and-networking/spec.md) 拥有。
 - `stackctl status` 是严格只读诊断：只能读取既有进程、package、receipt 与 HTTP 状态，禁止创建或刷新 secret、物化 Provider、启动服务、执行修复或改变环境事实；缺失依赖必须以失败状态返回。
 - `stackctl package` 的 immutable candidate 合同用于显式内容验收与 Prod 发布。package plan 必须先派生本次实际读取的 `deploymentInputClosure`，在短 capture 窗口把 staged、unstaged、untracked 精确字节复制到 target-scoped、只读、content-addressed package input capsule，并绑定唯一 `baselineId`；capture 期间闭包变化使该次 capture fail closed 并可重试。
 - capsule 不得 hardlink 回 live tree，不得跟随仓库外 symlink，且拒绝 FIFO、device 与 socket。App、Service、Ops、ContractGraph、GraphQL、OCI 与 candidate/rollback release 只能从同一 capsule 构建。长构建结束只复核 capsule manifest/tree digest、各 artifact 的同 capsule provenance 与 candidate CAS，不再比较 live workspace；capsule 封存后的任意工作区变化不影响该 candidate。已存在 candidate 只能在全部 package digest 一致时复用且禁止覆盖。

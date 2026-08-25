@@ -14,6 +14,7 @@ from content.release.environment.activation_envelope import (
     file_digest,
 )
 from core.schema import assert_valid
+from verify.release_publishability import evaluate_release_readiness_receipt
 
 _PREVIOUS_ENVIRONMENT = {
     "alpha": None,
@@ -115,6 +116,11 @@ def load_previous_environment_activation(
         raise EnvironmentActivationEnvelopeError(
             "previous environment activation envelope is missing"
         )
+    verdict = evaluate_release_readiness_receipt(receipt)
+    if not verdict.publishable or verdict.phase != "research":
+        raise EnvironmentActivationEnvelopeError(
+            "previous environment readiness is not a publishable research receipt"
+        )
     if (
         receipt.get("verificationChecksum") != _checksum(receipt)
         or receipt.get("activationEnvelopeDigest") != document_digest(activation)
@@ -122,10 +128,6 @@ def load_previous_environment_activation(
         or receipt.get("releaseId") != release_id
         or receipt.get("manifestDigest") != manifest_digest
         or receipt.get("sourceIdentitySetDigest") != source_identity_set_digest
-        or receipt.get("releaseClass") != "research"
-        or receipt.get("productLifecycleState") != "research"
-        or receipt.get("readinessPhase") != "research"
-        or receipt.get("passed") is not True
         or activation.get("environment") != previous
         or activation.get("releaseId") != release_id
         or activation.get("manifestDigest") != manifest_digest

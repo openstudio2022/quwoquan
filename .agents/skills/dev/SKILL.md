@@ -60,6 +60,10 @@ checklist 约束（复制进回复并逐项勾选）；对象扩展分流由本�
   `本计划引入 / 并行会话中间态 / 存量债 / 环境 flaky`。
   并行中间态**不修不掩盖**，如实交接。
 
+交互协议（[interaction-protocols](../review/references/interaction-protocols.md)）：
+每完成一个子任务、每次意外失败、每次准备扩大改动面，按协议 4 对照反串讲承诺做
+三级裁决；跨界判定用 `git status` 并行交集自查，禁止顺手扩围修复。
+
 ## 交付件
 
 **实现增量**：代码 / metadata / 测试 diff、受影响 metadata 路径与目标测试结果。
@@ -86,8 +90,10 @@ checklist 约束（复制进回复并逐项勾选）；对象扩展分流由本�
 
 ## HANDOFF
 
+- **完成判据**：见 [completion-criteria](../review/references/completion-criteria.md) 本工作流段；证据链条目带命令+退出码+时间戳+SHA，下游过期即复跑。
 - **产出物**：实现增量 + POST 评审结论。
 - **未决项去向**：残量转最低 owner 节点 `OPEN-###`，或判 Out of Scope；
   并行会话交接项双向列出。
 - **唯一合法下游**：`plan-next`；用户明确要求提交时 `commit`。
 - **证据链**：三层测试结果、门禁输出、失败项及其归因、POST 评审报告。
+- **交接单**：轮次结束落 `.qwq_output/env/repo/runs/handoff/<轮次>/manifest.md`，过 `make verify-handoff-manifest` 后交接。

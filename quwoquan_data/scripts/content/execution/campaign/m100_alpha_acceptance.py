@@ -10,6 +10,7 @@ from typing import Any
 
 from core.io import read_json
 from core.schema import assert_valid
+from verify.release_publishability import evaluate_release_readiness_receipt
 from governance.coverage.distribution import load_content_distribution_policy
 
 
@@ -121,17 +122,18 @@ def _validate_readiness(
         "environment_release_readiness",
         label="M100 Alpha release readiness",
     )
+    verdict = evaluate_release_readiness_receipt(readiness)
     expected = {
         "schema": "quwoquan_data.environment_release_readiness",
         "environment": "alpha",
         "releaseId": promotion.get("releaseId"),
         "manifestDigest": promotion.get("manifestDigest"),
-        "releaseClass": "research",
-        "productLifecycleState": "research",
-        "readinessPhase": "research",
-        "passed": True,
     }
-    if any(readiness.get(field) != value for field, value in expected.items()):
+    if (
+        not verdict.publishable
+        or verdict.phase != "research"
+        or any(readiness.get(field) != value for field, value in expected.items())
+    ):
         raise M100AlphaAcceptanceError(
             "DATA.SCALE.ALPHA_M100_READBACK_DRIFT: Alpha readiness does not bind "
             "the promoted M100 research release"

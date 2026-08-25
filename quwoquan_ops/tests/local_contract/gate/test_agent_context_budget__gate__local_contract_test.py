@@ -514,6 +514,79 @@ class AgentContextBudgetGateTest(unittest.TestCase):
         issues = self.module.check_review_registry()
         self.assertTrue(any("gate 重复归属" in issue for issue in issues), issues)
 
+    # ── harness stub 体量负例 ─────────────────────────────────────────
+    def test_detects_fat_harness_stub(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-005
+        """宿主技能目录超出 stub 体量说明语义回流，形成第二真相源。"""
+        self._use_fixture_root()
+        body = "\n".join(["规范真相源：.agents/skills/x/SKILL.md"] * 15)
+        self._write(
+            ".cursor/skills/fat-stub/SKILL.md",
+            f"---\nname: fat-stub\ndescription: d\n---\n\n{body}\n",
+        )
+        issues = self.module.check_harness_stubs()
+        self.assertTrue(any("行上限" in issue for issue in issues), issues)
+
+    def test_detects_harness_stub_without_truth_source_pointer(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-005
+        self._use_fixture_root()
+        self._write(
+            ".codex/skills/blind-stub/SKILL.md",
+            "---\nname: blind-stub\ndescription: d\n---\n\n自带一套说法。\n",
+        )
+        issues = self.module.check_harness_stubs()
+        self.assertTrue(any("未指向 .agents/skills/" in issue for issue in issues), issues)
+
+    # ── 完成判据单轨负例 ──────────────────────────────────────────────
+    def test_detects_missing_completion_criteria_table(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/development-workflow-governance/spec.md#sit-002.t2
+        self._use_fixture_root()
+        issues = self.module.check_completion_criteria()
+        self.assertTrue(any("缺完成判据表" in issue for issue in issues), issues)
+
+    def test_detects_workflow_missing_from_criteria_table(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/development-workflow-governance/spec.md#sit-002.t2
+        self._use_fixture_root()
+        self._write(
+            ".agents/skills/review/references/completion-criteria.md",
+            "# 表\n\n## explore\n\n- verify: `make x` 退出 0\n",
+        )
+        issues = self.module.check_completion_criteria()
+        self.assertTrue(any("缺 workflow `dev`" in issue for issue in issues), issues)
+
+    def test_detects_criteria_section_without_verify_line(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/development-workflow-governance/spec.md#sit-002.t2
+        self._use_fixture_root()
+        sections = "\n\n".join(
+            f"## {wf}\n\n- verify: `make x` 退出 0"
+            for wf in self.module.WORKFLOW_SKILLS
+            if wf != "dev"
+        )
+        self._write(
+            ".agents/skills/review/references/completion-criteria.md",
+            f"# 表\n\n{sections}\n\n## dev\n\n- check: 只有 check 没有 verify\n",
+        )
+        issues = self.module.check_completion_criteria()
+        self.assertTrue(any("缺 `- verify:` 判据行" in issue for issue in issues), issues)
+
+    def test_detects_handoff_not_referencing_criteria_table(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/development-workflow-governance/spec.md#sit-002.t2
+        self._use_fixture_root()
+        sections = "\n\n".join(
+            f"## {wf}\n\n- verify: `make x` 退出 0"
+            for wf in self.module.WORKFLOW_SKILLS
+        )
+        self._write(
+            ".agents/skills/review/references/completion-criteria.md",
+            f"# 表\n\n{sections}\n",
+        )
+        self._write(
+            ".agents/skills/dev/SKILL.md",
+            "---\nname: dev\ndescription: d\n---\n\n## HANDOFF\n\n- 产出物：x\n",
+        )
+        issues = self.module.check_completion_criteria()
+        self.assertTrue(any("未引用完成判据表" in issue for issue in issues), issues)
+
     # ── 重复正文负例 ──────────────────────────────────────────────────
     def test_detects_duplicated_paragraph_across_skill_files(self) -> None:
         """同一段正文出现在两个文件就是第二真相源，改一处漏一处。"""

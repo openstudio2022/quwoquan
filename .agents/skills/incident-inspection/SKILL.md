@@ -85,6 +85,7 @@ observability checklist 只评审某次变更的指标、日志、告警和追�
 
 ## HANDOFF
 
+- **完成判据**：见 [completion-criteria](../review/references/completion-criteria.md) 本工作流段；证据链条目带命令+退出码+时间戳+SHA，下游过期即复跑。
 - **产出物**：脱敏巡检报告。
 - **未决项去向**：不可复现的 fingerprint 保留 report-only 状态与继续观察条件。
 - **唯一合法下游**：可复现的代码缺陷交接 `dev`（附异常样本、fingerprint、复现命令）；

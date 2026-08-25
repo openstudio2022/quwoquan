@@ -37,6 +37,7 @@ from core.control_types import ContentType
 from core.io import write_json
 from core.paths import OUTPUT_ROOT, REPO_ROOT
 from core.schema import assert_valid
+from verify.release_publishability import readiness_phase_issue
 
 CONTENT_POST_OPERATIONS_PATH = (
     REPO_ROOT
@@ -486,10 +487,9 @@ def write_post_api_verification(
     readiness_phase: str = "commercial",
 ) -> Path:
     """Write schema-validated, release-bound public post API evidence."""
-    if readiness_phase not in {"research", "consumer", "commercial"}:
-        raise PostApiVerificationError(
-            "post API verification readiness_phase must be research, consumer or commercial"
-        )
+    phase_issue = readiness_phase_issue(readiness_phase)
+    if phase_issue is not None:
+        raise PostApiVerificationError(f"post API verification {phase_issue}")
     if readiness_phase == "research":
         raise PostApiVerificationError(
             "DATA.RESEARCH.IDENTITY_ADAPTER_UNAVAILABLE: GATE_BLOCK research "
@@ -516,11 +516,10 @@ def write_post_api_verification(
             client,
             cases,
             creators_by_author,
-            # App 视频书唯一消费 premium_stream 池；consumer readiness 同样必须
+            # App 视频书唯一消费 premium_stream 池；全部 readiness phase 都必须
             # 证明 premium_stream release-bound 非空读回（environment-topology-
             # and-packaging spec），否则 typed_video 绿会被误当成视频书绿。
-            include_premium_stream=readiness_phase
-            in {"research", "consumer", "commercial"},
+            include_premium_stream=True,
         )
         creator_rows = [
             _verify_author_profile(client, creator)

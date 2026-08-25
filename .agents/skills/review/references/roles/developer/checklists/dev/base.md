@@ -15,6 +15,13 @@
   [result-state-semantics](../../references/result-state-semantics.md)
   check: 逐个失败路径确认落在「在场有值 / 在场为空 / 缺席 / 失败」之一且不混淆
 - [SHOULD NOT] 为单一实现造接口，或为一次性逻辑建框架
+- [SHOULD] 门禁咬合自证（Red 验证）用临时文件或临时目录构造违规，不改真实受控文件；
+  必须改真实文件时用编辑工具逐步撤销，不用 `git checkout --` 恢复（会把未提交增量覆盖回 HEAD）
+  check: POST 评审复核自证方法；对真实受控文件用 git 恢复完成的自证，判失败
+- [MUST] 运行仓库 python 入口一律走 make 目标（如 `make review-dispatch-plan ARGS=...`）；
+  无 make 目标时用 `python3 -B`。裸跑绕过 Makefile 的 `PYTHONPYCACHEPREFIX`，会在源码树留下
+  `__pycache__`（已两轮复发）
+  gate: make verify-python-script-governance
 
 ## POST 自检
 

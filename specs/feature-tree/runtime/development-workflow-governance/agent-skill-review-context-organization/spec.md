@@ -48,6 +48,7 @@
 
 - 上下文门禁：`quwoquan_ops/gate/verify_agent_context_budget.py`
 - 注册表：`.agents/skills/review/references/registry.yaml`
+- 派发装配唯一执行体：`quwoquan_ops/cli/review_dispatch.py`（派发清单与去重 gate 计划落 `.qwq_output/env/repo/runs/review/`）
 - 子代理生成器：`quwoquan_ops/tools/generate_codex_agents.py`
 
 ## 5. 验收场景

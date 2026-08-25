@@ -458,9 +458,10 @@ class StackctlDevSessionResumeComposeTest(StackctlDevSessionTestBase):
                     destination_root=report_dir / "rendered",
                 )
             payload = json.loads(outputs[0].read_text(encoding="utf-8"))
+            # symlink TMPDIR（macOS /var -> /private/var）下两侧展开程度可能不同，比较前归一。
             self.assertEqual(
-                payload["services"]["api"]["build"]["context"],
-                str(build_context.resolve()),
+                Path(payload["services"]["api"]["build"]["context"]).resolve(),
+                build_context.resolve(),
             )
             self.assertEqual(
                 payload["services"]["api"]["build"]["dockerfile"],
@@ -493,8 +494,8 @@ class StackctlDevSessionResumeComposeTest(StackctlDevSessionTestBase):
                 )
             payload = json.loads(outputs[1].read_text(encoding="utf-8"))
             self.assertEqual(
-                payload["services"]["api"]["build"]["context"],
-                str((root / "service").resolve()),
+                Path(payload["services"]["api"]["build"]["context"]).resolve(),
+                (root / "service").resolve(),
             )
 
     def test_mutable_compose_execution_copy_resolves_relative_bind_sources(self) -> None:
@@ -521,10 +522,10 @@ class StackctlDevSessionResumeComposeTest(StackctlDevSessionTestBase):
                 )
 
             payload = json.loads(outputs[0].read_text(encoding="utf-8"))
-            self.assertEqual(
-                payload["services"]["product-ops-service"]["volumes"],
-                [f"{policy.resolve()}:/etc/qwq/policy.yaml:ro"],
-            )
+            [bind] = payload["services"]["product-ops-service"]["volumes"]
+            bind_source, bind_rest = bind.split(":", 1)
+            self.assertEqual(Path(bind_source).resolve(), policy.resolve())
+            self.assertEqual(bind_rest, "/etc/qwq/policy.yaml:ro")
 
     def test_product_ops_policy_bind_resolves_from_canonical_source(self) -> None:
         source = (

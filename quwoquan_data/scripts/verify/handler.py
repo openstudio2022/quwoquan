@@ -24,8 +24,36 @@ from verify.gate import gate_verify
 from verify.verify_execution_readiness import READINESS_MODES
 
 
+# 无参 verify 门的统一转发表：cmd -> verify 模块名（模块必须暴露 main() -> int）。
+_NO_ARG_VERIFIER_MODULES = {
+    "single-contract-source": "verify_single_contract_source",
+    "works-classification": "verify_works_classification",
+    "output-root-isolation": "verify_output_root_isolation",
+    "runtime-input-ownership": "verify_runtime_input_ownership",
+    "reusable-data-contract": "verify_reusable_data_contract",
+    "publish-purity": "verify_publish_purity",
+    "publish-closure": "verify_publish_closure",
+    "cli-first": "verify_cli_first",
+    "script-architecture": "verify_script_architecture",
+    "python-symbols": "verify_python_symbols",
+    "control-literals": "verify_control_literals",
+    "scale-parameterization": "verify_scale_parameterization",
+    "object-size-budget": "verify_object_size_budget",
+    "execution-identity-purity": "verify_execution_identity_purity",
+    "cursor-credential-contract": "verify_cursor_credential_contract",
+    "active-runtime-preflight": "verify_no_active_data_runtime",
+    "data-layout": "verify_data_layout",
+    "coverage-static-identity": "verify_coverage_static_identity",
+    "media-release-contract": "verify_media_release_contract",
+}
+
+
 def handle_verify(args: argparse.Namespace) -> None:
     cmd = getattr(args, "verify_command", None)
+    if cmd in _NO_ARG_VERIFIER_MODULES:
+        from importlib import import_module
+
+        raise SystemExit(import_module(f"verify.{_NO_ARG_VERIFIER_MODULES[cmd]}").main())
     if cmd == "all":
         handle_all()
         return
@@ -41,18 +69,6 @@ def handle_verify(args: argparse.Namespace) -> None:
     if cmd == "promote-golden":
         handle_promote_golden(args)
         return
-    if cmd == "single-contract-source":
-        from verify.verify_single_contract_source import main as single_contract_source_main
-
-        raise SystemExit(single_contract_source_main())
-    if cmd == "works-classification":
-        from verify.verify_works_classification import main as works_classification_main
-
-        raise SystemExit(works_classification_main())
-    if cmd == "output-root-isolation":
-        from verify.verify_output_root_isolation import main as output_root_isolation_main
-
-        raise SystemExit(output_root_isolation_main())
     if cmd == "content-execution-layout":
         from verify.verify_content_execution_layout import main as execution_layout_main
 
@@ -68,46 +84,6 @@ def handle_verify(args: argparse.Namespace) -> None:
             argv.append("--require-reviewed")
         argv.extend(["--mode", str(args.mode)])
         raise SystemExit(execution_readiness_main(argv))
-    if cmd == "runtime-input-ownership":
-        from verify.verify_runtime_input_ownership import main as runtime_input_ownership_main
-
-        raise SystemExit(runtime_input_ownership_main())
-    if cmd == "reusable-data-contract":
-        from verify.verify_reusable_data_contract import main as reusable_data_contract_main
-
-        raise SystemExit(reusable_data_contract_main())
-    if cmd == "publish-purity":
-        from verify.verify_publish_purity import main as publish_purity_main
-
-        raise SystemExit(publish_purity_main())
-    if cmd == "publish-closure":
-        from verify.verify_publish_closure import main as publish_closure_main
-
-        raise SystemExit(publish_closure_main())
-    if cmd == "cli-first":
-        from verify.verify_cli_first import main as cli_first_main
-
-        raise SystemExit(cli_first_main())
-    if cmd == "script-architecture":
-        from verify.verify_script_architecture import main as script_architecture_main
-
-        raise SystemExit(script_architecture_main())
-    if cmd == "python-symbols":
-        from verify.verify_python_symbols import main as python_symbols_main
-
-        raise SystemExit(python_symbols_main())
-    if cmd == "control-literals":
-        from verify.verify_control_literals import main as control_literals_main
-
-        raise SystemExit(control_literals_main())
-    if cmd == "scale-parameterization":
-        from verify.verify_scale_parameterization import main as scale_parameterization_main
-
-        raise SystemExit(scale_parameterization_main())
-    if cmd == "object-size-budget":
-        from verify.verify_object_size_budget import main as object_size_budget_main
-
-        raise SystemExit(object_size_budget_main())
     if cmd == "source-digest":
         from verify.verify_source_digest import main as source_digest_main
 
@@ -115,10 +91,10 @@ def handle_verify(args: argparse.Namespace) -> None:
         if getattr(args, "source_execution_id", None):
             argv.extend(["--execution-id", str(args.source_execution_id)])
         raise SystemExit(source_digest_main(argv))
-    if cmd == "execution-identity-purity":
-        from verify.verify_execution_identity_purity import main as identity_purity_main
+    if cmd == "release-publishability":
+        from verify.release_publishability import main as release_publishability_main
 
-        raise SystemExit(identity_purity_main())
+        raise SystemExit(release_publishability_main(["--receipt", str(args.publishability_receipt)]))
     if cmd == "release-lifecycle":
         from verify.verify_release_lifecycle import main as release_lifecycle_main
 
@@ -148,10 +124,6 @@ def handle_verify(args: argparse.Namespace) -> None:
                 ]
             )
         )
-    if cmd == "cursor-credential-contract":
-        from verify.verify_cursor_credential_contract import main as credential_contract_main
-
-        raise SystemExit(credential_contract_main())
     if cmd == "homepage-media-completeness":
         from verify.verify_homepage_media_completeness import main as homepage_media_main
 
@@ -164,22 +136,6 @@ def handle_verify(args: argparse.Namespace) -> None:
                 ["--execution", str(args.execution), "--entity", str(args.entity)]
             )
         )
-    if cmd == "active-runtime-preflight":
-        from verify.verify_no_active_data_runtime import main as active_runtime_preflight_main
-
-        raise SystemExit(active_runtime_preflight_main())
-    if cmd == "data-layout":
-        from verify.verify_data_layout import main as data_layout_main
-
-        raise SystemExit(data_layout_main())
-    if cmd == "coverage-static-identity":
-        from verify.verify_coverage_static_identity import main as coverage_static_identity_main
-
-        raise SystemExit(coverage_static_identity_main())
-    if cmd == "media-release-contract":
-        from verify.verify_media_release_contract import main as media_release_contract_main
-
-        raise SystemExit(media_release_contract_main())
     if cmd == "stage-artifacts":
         from verify.stage_artifacts import verify_stage_artifacts
 
@@ -532,6 +488,8 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
         help="显式选择 current execution candidate；省略时不从 tasks 历史推断",
     )
     sub.add_parser("execution-identity-purity", help="校验 active code 已删除旧运行身份与旧路径")
+    prp = sub.add_parser("release-publishability", help="唯一「可发布」谓词：判定一份环境 readiness 收据是否可发布")
+    prp.add_argument("--receipt", dest="publishability_receipt", required=True, help="release-readiness.json 收据路径")
     release_lifecycle = sub.add_parser("release-lifecycle", help="校验 immutable release 的闭环证据")
     release_lifecycle.add_argument("--release", dest="lifecycle_release", required=True)
     release_lifecycle.add_argument("--environment", choices=("alpha", "beta", "gamma", "prod"))

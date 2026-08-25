@@ -29,6 +29,7 @@ from content.release.environment.research_isolation_verification import (
 )
 from core.io import read_json
 from core.release_layout import payload_file
+from verify.release_publishability import phase_lifecycle_alignment_issue
 
 
 def _read_object(path: Path, *, label: str, issues: list[str]) -> dict[str, Any]:
@@ -96,18 +97,13 @@ def environment_release_readiness_issues(
     if readiness.get("feedQueries") != post_verification.get("feedQueries"):
         issues.append(f"{path}: feedQueries drift from post verification")
     readiness_phase = str(readiness.get("readinessPhase") or "")
-    expected_lifecycle = {
-        "research": "research",
-        "commercial": "commercial",
-    }.get(readiness_phase)
-    if expected_lifecycle is not None and any(
-        readiness.get(field) != expected_lifecycle
-        for field in ("releaseClass", "productLifecycleState")
-    ):
-        issues.append(
-            f"{path}: readinessPhase={readiness_phase} requires "
-            f"releaseClass=productLifecycleState={expected_lifecycle}"
-        )
+    alignment_issue = phase_lifecycle_alignment_issue(
+        readiness_phase,
+        str(readiness.get("releaseClass") or ""),
+        str(readiness.get("productLifecycleState") or ""),
+    )
+    if alignment_issue is not None:
+        issues.append(f"{path}: {alignment_issue}")
     isolation_fields = (
         "internalSubjectHash",
         "researchIsolationVerificationRef",

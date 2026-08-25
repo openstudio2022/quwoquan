@@ -48,6 +48,8 @@
 
 - 显式调用工作流技能与自然语言意图必须使用同一 `RESOLVE / PRE / DURING / POST / HANDOFF` 五段执行契约；两者只在 RESOLVE 的输入方式上不同，产出同一 `(workflow, deliverable, scope)` 三元组。
 - 工作流之间必须经 HANDOFF 交接：未决项必须落到「最低可关闭节点 `OPEN-###`」「Out of Scope」「下一工作流承接」三者之一；HANDOFF 必须声明唯一合法下游并覆盖其输入必需项，下一工作流的 RESOLVE 必须消费上一工作流的 HANDOFF，断链必须阻断。
+- 轮次 HANDOFF 的物理形态是交接单：按需落 `.qwq_output/env/repo/runs/handoff/<轮次>/manifest.md`（宪法四项加证据字段「命令+退出码+时间戳+工作树 SHA」），由 `quwoquan_ops/gate/verify_handoff_manifest.py` 校验四项齐全、证据字段完整、未决项三向裁决零悬空。下游消费时证据过期即复跑，不得转抄结论。
+- 各工作流完成判据以 `.agents/skills/review/references/completion-criteria.md` 为唯一判据表（完成 = 指定 verify 命令退出 0，禁止计数或抽样等代理指标），表存在性与各 SKILL.md HANDOFF 段引用由 `quwoquan_ops/gate/verify_agent_context_budget.py` 校验。
 - 动态上下文、总览和变更报告只写入 `.qwq_output`。
 - 目录、链接、章节、验收证据和禁止文件必须由可执行门禁校验。
 
@@ -83,6 +85,22 @@
 - THEN 输出包含唯一 owner、父链、要求、验收、设计决定、metadata、测试证据、OPEN 与 Git 影响。
 - AND 任何人工索引、节点级 acceptance、changelog 或中央 backlog 回潮都会阻断。
 
+<a id="sit-002"></a>
+### SIT-002 轮次交接与完成判据机器可裁定
+
+- GIVEN 一个完成任一工作流轮次并进入 HANDOFF 的会话。
+- WHEN 轮次输出交接单且后继轮次的 RESOLVE 消费该交接单。
+- THEN 交接单含宪法 HANDOFF 四项与证据字段（命令、退出码、时间戳、工作树 SHA）并通过校验门禁，未决项三向裁决零悬空。
+- AND 各工作流的完成判据来自唯一判据表且为指定 verify 命令退出 0，证据过期时下游复跑而非转抄结论。
+
+<a id="sit-003"></a>
+### SIT-003 教训沉淀与并行会话合法合入
+
+- GIVEN 交接单出现跨轮重复缺口或评审同类 finding 复发，且存在多个并行会话共用工作树。
+- WHEN 触发 distill 沉淀提议并有会话申请合入。
+- THEN 规则候选带触发场景、根因层、建议落点与 gate/check 绑定，经人确认后走 prd/dev 正常工作流落地。
+- AND 合入按「scope-green + foreign-red 登记」裁定：本会话 scope 内门禁全绿、域外已知红已登记进交接单缺口段。
+
 ## 8. 开放事项
 
 <a id="open-001"></a>
@@ -93,3 +111,21 @@
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：部分节点仍以同节点 OPEN 声明尚缺直接测试 `spec_ref`，影响自动验收覆盖率。
 - 完成判定：`SIT-001` 及全部节点验收锚点均有真实测试 `spec_ref`，且不再依赖 OPEN 代替证据。
+
+<a id="open-004"></a>
+### OPEN-004 distill 沉淀工作流与资产垃圾回收
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：缺教训沉淀工作流，同一教训跨会话重犯——「稳定规则写回 AGENTS.md」只是自觉条款，无工作流、无自动化、无审计（出处：调研转录 `0c4c608c-7219-47c2-bcda-5c66dcf93294`）。回写必须是「提议 + 人确认 + prd/dev 正常工作流」，agent 不得绕过工作流直接修改规则资产。
+- 完成判定：`SIT-003` 的沉淀子句由真实工作流覆盖——新建 distill 顶层工作流技能（落位 .agents/skills/distill/，输入为交接单跨轮重复缺口、评审 finding 复发、用户同类纠正第二次出现，输出为带触发场景、根因层、建议落点、gate/check 绑定的规则候选，无绑定只能落 SHOULD/ADVISORY）并通过 `make verify-agent-context-budget`。资产垃圾回收报告（skill 死引用、harness 分叉、AGENTS.md 与特性树重复正文）可重复生成于 `.qwq_output`。
+
+<a id="open-005"></a>
+### OPEN-005 并行会话合法合入协议
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：缺并行会话的合法合入通道，并行脏树与 ContractGraph 互锁反复出现（出处：调研转录 `0c4c608c-7219-47c2-bcda-5c66dcf93294`，归纳计数「至少 8 会话」待精确复核），无静止窗口与合法合入通道时门禁正确变红反而逼出 `--no-verify`。
+- 完成判定：`SIT-003` 的合入子句由真实 gate/check 覆盖——「scope-green + foreign-red 登记」合法合入态（本会话 scope 内门禁全绿、域外已知红登记进轮次交接单缺口段后允许合入）写入本节点能力要求并绑定 gate/check；ContractGraph accept 的静止窗口/原子 accept 约定有门禁化表达。

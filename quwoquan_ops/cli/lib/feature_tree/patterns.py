@@ -8,10 +8,11 @@ ACCEPTANCE_ID_RE = re.compile(r"^#{3,6}\s+(UAT|DOM|SIT|GWT)-(\d{3,})\b", re.MULT
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$", re.MULTILINE)
 LINK_RE = re.compile(r"(?<!!)\[[^\]]*\]\(([^)]+)\)")
 PATH_RE = re.compile(
-    r"`((?:quwoquan_app|quwoquan_service|quwoquan_data|quwoquan_ops|\.github)(?:/[^`\s；，]+)*)`"
+    r"`((?:quwoquan_app|quwoquan_service|quwoquan_data|quwoquan_ops"
+    r"|\.github|\.agents|\.claude|\.codex|\.cursor)(?:/[^`\s；，]+)*)`"
 )
 ENGINEERING_CLAIM_RE = re.compile(
-    r"^-\s+(App|Contracts|Metadata|Service|Data|Ops|CI)(?:（[^）]*）)?："
+    r"^-\s+(App|Contracts|Metadata|Service|Data|Ops|CI|Agent)(?:（[^）]*）)?："
 )
 SPEC_REF_RE = re.compile(
     r"specs/feature-tree/(?:[A-Za-z0-9_.-]+/)*spec\.md#[A-Za-z0-9_.%\-\u4e00-\u9fff]+"

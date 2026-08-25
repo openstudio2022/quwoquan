@@ -49,6 +49,10 @@ metadata:
   完成项直接成为当前 REQ，不保留完成状态。
 - [MUST NOT] 创建 acceptance YAML、registry、index、changelog、任务台账或成熟度矩阵。
 
+交互协议（[interaction-protocols](../review/references/interaction-protocols.md)）：
+改变规格的澄清决策按协议 2 就地落进本次 spec 增量；用户口令实质改变范围时按协议 3
+显式声明「vN→vN+1 及原因」再落笔。
+
 ## 交付件
 
 **spec 增量**：规格 diff、验收锚点、OPEN 变化，以及「是否达到 design 门槛」的明确判定。
@@ -73,9 +77,11 @@ metadata:
 
 ## HANDOFF
 
+- **完成判据**：见 [completion-criteria](../review/references/completion-criteria.md) 本工作流段；证据链条目带命令+退出码+时间戳+SHA，下游过期即复跑。
 - **产出物**：目标父链的 `spec.md` 增量；确有设计变化时附上层设计输入。
 - **未决项去向**：新增或变更的 `OPEN-###` 及其所在节点。
 - **唯一合法下游**：达到设计门槛（对象边界、跨域/跨服务、外部依赖、状态迁移、质量权衡、
   观测或回滚分叉）交给 `design`；否则直接交给 `dev`。交接前确认基线可冻结——父链唯一、
   REQ 与 UAT/DOM/SIT/GWT 均可被三层测试绑定、metadata owner 明确、与并行会话无未裁决冲突。
 - **证据链**：`make verify-feature-tree` 与 `make feature-tree-change-report` 输出。
+- **交接单**：轮次结束落 `.qwq_output/env/repo/runs/handoff/<轮次>/manifest.md` 并过 `make verify-handoff-manifest`。

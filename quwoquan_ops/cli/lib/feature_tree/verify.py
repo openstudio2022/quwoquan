@@ -8,6 +8,14 @@ import sys
 from pathlib import Path
 
 from . import context
+
+# 本包有两种装载形态：quwoquan_ops.cli.lib.feature_tree（repo root 在 sys.path）
+# 与顶层 feature_tree（cli/lib 在 sys.path）。后者下相对导入越界，回退兄弟模块名。
+try:
+    from ..gate_output import emit_gate_result, finding
+except ImportError:
+    from gate_output import emit_gate_result, finding
+
 from .commands import command_change_report
 from .delta import clause_binding_transitions, open_anchor_ratchet_targets
 from .evidence import canonical_spec_ref, test_spec_refs
@@ -389,6 +397,9 @@ def command_verify(args: argparse.Namespace) -> int:
             errors.append(
                 "当前 Git diff 存在未归属工程变更；见 feature-tree/change-report.md"
             )
+    emit_gate_result(
+        "verify-feature-tree", [finding(error) for error in errors], context.REPO_ROOT
+    )
     if errors:
         print(f"GATE_BLOCK: feature-tree 发现 {len(errors)} 个问题", file=sys.stderr)
         for error in errors:

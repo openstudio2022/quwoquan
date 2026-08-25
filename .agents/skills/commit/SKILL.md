@@ -57,6 +57,7 @@ metadata:
 
 ## HANDOFF
 
+- **完成判据**：见 [completion-criteria](../review/references/completion-criteria.md) 本工作流段；证据链条目带命令+退出码+时间戳+SHA，下游过期即复跑。
 - **产出物**：提交回执。
 - **未决项去向**：剩余工作树状态与未提交残量如实列出。
 - **唯一合法下游**：报告给用户（用户要求 push / PR 时按其明确指令执行）。

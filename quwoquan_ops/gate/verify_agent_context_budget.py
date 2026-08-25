@@ -37,6 +37,9 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 
+sys.path.insert(0, str(ROOT / "quwoquan_ops/cli/lib"))
+from gate_output import emit_gate_result, finding  # noqa: E402
+
 # 依赖与构建缓存不参与治理，且全量遍历它们会让门禁从秒级退化到半分钟级。
 PRUNED_DIR_NAMES = {
     ".git",
@@ -63,6 +66,11 @@ SKILL_DESCRIPTION_TOTAL_BUDGET = 8000
 SKILL_DESCRIPTION_EACH_BUDGET = 500
 # 命令是薄壳：frontmatter + 一行指向 SKILL.md。超过说明命令又开始承载语义。
 COMMAND_FILE_LINE_BUDGET = 12
+# .cursor/.codex 宿主技能目录只放触发入口 stub：frontmatter + 指向 .agents/skills
+# 真相源的指针。超过行数上限说明 stub 又开始承载语义，形成第二真相源。
+# .claude/skills 是与真相源逐字一致的生成镜像，不适用本上限。
+HARNESS_STUB_LINE_BUDGET = 10
+HARNESS_STUB_SKILL_GLOBS = (".cursor/skills/*/SKILL.md", ".codex/skills/*/SKILL.md")
 
 SPEC_FRONTMATTER_FIELDS = {
     "name",
@@ -777,6 +785,63 @@ def check_generated_subagents() -> list[str]:
     return [f"Codex 子代理生成物不是最新: {line.strip()}" for line in detail if line.strip()]
 
 
+COMPLETION_CRITERIA_REL = ".agents/skills/review/references/completion-criteria.md"
+
+
+def check_completion_criteria() -> list[str]:
+    """完成判据单轨：每个工作流的准出只有判据表一个定义。
+
+    表缺段、段缺 verify 行、SKILL 的 HANDOFF 不引用表，三者任一都意味着
+    「完成」退回口头宣称，代理指标就会重新冒充准出。
+    """
+    issues: list[str] = []
+    table = ROOT / COMPLETION_CRITERIA_REL
+    if not table.is_file():
+        return [f"缺完成判据表 {COMPLETION_CRITERIA_REL}"]
+    text = table.read_text(encoding="utf-8")
+    sections = re.findall(r"^##\s+([a-z-]+)\s*$", text, re.M)
+    for workflow in WORKFLOW_SKILLS:
+        if workflow not in sections:
+            issues.append(f"{COMPLETION_CRITERIA_REL}: 缺 workflow `{workflow}` 的判据段")
+    for match in re.finditer(r"^##\s+([a-z-]+)\s*$(.*?)(?=^##\s|\Z)", text, re.M | re.S):
+        if "- verify:" not in match.group(2):
+            issues.append(
+                f"{COMPLETION_CRITERIA_REL}: `{match.group(1)}` 段缺 `- verify:` 判据行"
+            )
+    for workflow in WORKFLOW_SKILLS:
+        skill = ROOT / f".agents/skills/{workflow}/SKILL.md"
+        if not skill.is_file():
+            continue  # 缺失由 check_workflow_skills 负责报
+        handoff = skill.read_text(encoding="utf-8").split("## HANDOFF", 1)
+        if len(handoff) == 2 and "completion-criteria" not in handoff[1]:
+            issues.append(
+                f".agents/skills/{workflow}/SKILL.md: HANDOFF 段未引用完成判据表 "
+                "completion-criteria.md"
+            )
+    return issues
+
+
+def check_harness_stubs() -> list[str]:
+    issues: list[str] = []
+    for pattern in HARNESS_STUB_SKILL_GLOBS:
+        for stub in sorted(ROOT.glob(pattern)):
+            if stub.is_symlink():
+                continue
+            rel = _rel(stub)
+            text = stub.read_text(encoding="utf-8")
+            lines = len(text.splitlines())
+            if lines > HARNESS_STUB_LINE_BUDGET:
+                issues.append(
+                    f"{rel}: {lines} 行超过 harness stub {HARNESS_STUB_LINE_BUDGET} 行上限；"
+                    "宿主目录只放触发入口，语义写回 .agents/skills/ 真相源"
+                )
+            if ".agents/skills/" not in text:
+                issues.append(
+                    f"{rel}: 未指向 .agents/skills/ 真相源；stub 必须只是指针"
+                )
+    return issues
+
+
 CHECKS = (
     ("必需上下文源", check_required_sources),
     ("五段执行契约", check_lifecycle_contract),
@@ -789,6 +854,8 @@ CHECKS = (
     ("review 派发表", check_review_registry),
     ("重复正文", check_duplicate_body),
     ("子代理生成物", check_generated_subagents),
+    ("harness stub 体量", check_harness_stubs),
+    ("完成判据单轨", check_completion_criteria),
 )
 
 
@@ -799,6 +866,15 @@ def main() -> int:
         if issues:
             failures.append((label, issues))
 
+    emit_gate_result(
+        "verify-agent-context-budget",
+        [
+            finding(f"[{label}] {issue}")
+            for label, issues in failures
+            for issue in issues
+        ],
+        ROOT,
+    )
     if failures:
         print("[verify_agent_context_budget] FAIL", file=sys.stderr)
         for label, issues in failures:

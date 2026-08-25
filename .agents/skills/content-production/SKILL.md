@@ -108,6 +108,7 @@ metadata:
 
 ## HANDOFF
 
+- **完成判据**：见 [completion-criteria](../review/references/completion-criteria.md) 本工作流段；证据链条目带命令+退出码+时间戳+SHA，下游过期即复跑。
 - **产出物**：release 与 UAT 证据（receipt 链 + 环境 run 路径），报告给用户。
 - **未决项去向**：blocked receipt 的 `openItems` 已落 `return_to_stage` /
   `gate_block` / `out_of_scope` 三者之一；恢复入口 [recovery.md](references/recovery.md)。

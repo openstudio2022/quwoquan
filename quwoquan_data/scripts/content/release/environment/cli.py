@@ -5,6 +5,7 @@ import argparse
 
 from content.release.environment.handler import VALID_ENVS, handle_ship
 from core.control_types import ReleaseRunKind
+from verify.release_publishability import READINESS_PHASES
 
 
 def register_parser(subparsers: argparse._SubParsersAction) -> None:
@@ -55,7 +56,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     )
     verify.add_argument(
         "--readiness-phase",
-        choices=("research", "consumer", "commercial"),
+        choices=sorted(READINESS_PHASES),
         default="commercial",
         help=(
             "research 只接受受保护内部身份与私有短签媒体证据；consumer "

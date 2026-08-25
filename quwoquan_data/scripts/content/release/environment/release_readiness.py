@@ -36,6 +36,10 @@ from content.release.model import DataSourceOwner, ReleaseKind
 from core.io import read_json, write_json
 from core.release_layout import attestation_root, payload_digest, payload_file
 from core.schema import assert_valid
+from verify.release_publishability import (
+    phase_lifecycle_alignment_issue,
+    readiness_phase_issue,
+)
 
 
 class EnvironmentReleaseReadinessError(ValueError):
@@ -105,10 +109,9 @@ def write_environment_release_readiness(
     readiness_phase: str = "commercial",
 ) -> Path:
     """Write append-only, release-bound proof for Ops readiness composition."""
-    if readiness_phase not in {"research", "consumer", "commercial"}:
-        raise EnvironmentReleaseReadinessError(
-            "readiness_phase must be research, consumer or commercial"
-        )
+    phase_issue = readiness_phase_issue(readiness_phase)
+    if phase_issue is not None:
+        raise EnvironmentReleaseReadinessError(phase_issue)
 
     header_path = payload_file(release_root, "release.json")
     desired_path = payload_file(release_root, "desired_state.json")
@@ -168,13 +171,12 @@ def write_environment_release_readiness(
         raise EnvironmentReleaseReadinessError("readiness receipt requires a content release")
     release_class = str(header.get("releaseClass") or "")
     product_lifecycle_state = str(header.get("productLifecycleState") or "")
-    expected_release_class = "research" if readiness_phase == "research" else "commercial" if readiness_phase == "commercial" else release_class
-    if readiness_phase in {"research", "commercial"} and (
-        release_class != expected_release_class
-        or product_lifecycle_state != expected_release_class
-    ):
+    alignment_issue = phase_lifecycle_alignment_issue(
+        readiness_phase, release_class, product_lifecycle_state
+    )
+    if alignment_issue is not None:
         raise EnvironmentReleaseReadinessError(
-            "readiness phase drifts from immutable release lifecycle"
+            f"readiness phase drifts from immutable release lifecycle: {alignment_issue}"
         )
     lifecycle_fields = (
         "releaseClass",
@@ -329,18 +331,17 @@ def write_environment_release_readiness(
         for row in feed_queries
         if isinstance(row, Mapping)
     }
+    # App 视频书唯一消费 premium_stream 池：全部 readiness phase 都必须携带并
+    # 证明 premium_stream 读回（对齐 environment-topology-and-packaging spec；
+    # typed_video 绿不代表视频书绿）。
     required_query_names = {
         "discovery_work",
         "typed_article",
         "typed_image",
         "typed_video",
         "homepage_recommend",
+        "premium_stream",
     }
-    # App 视频书唯一消费 premium_stream 池：consumer/research/commercial 三个
-    # 非 import 阶段都必须携带并证明 premium_stream 读回（对齐 environment-
-    # topology-and-packaging spec；typed_video 绿不代表视频书绿）。
-    if readiness_phase in {"research", "consumer", "commercial"}:
-        required_query_names.add("premium_stream")
     if set(queries_by_name) != required_query_names:
         raise EnvironmentReleaseReadinessError(
             "feedQueries do not match the declared readiness phase"
@@ -387,17 +388,12 @@ def write_environment_release_readiness(
         raise EnvironmentReleaseReadinessError(
             "identity=work&type=video does not prove a release-bound video postId"
         )
-    if readiness_phase in {"research", "consumer", "commercial"} and (
-        not premium_ids or not premium_ids.issubset(release_post_ids)
-    ):
+    if not premium_ids or not premium_ids.issubset(release_post_ids):
         raise EnvironmentReleaseReadinessError(
             "premium_stream does not prove a release-bound postId"
         )
     premium_playable_video_ids = premium_ids & video_ids & verified_playable_video_ids
-    if (
-        readiness_phase in {"research", "consumer", "commercial"}
-        and not premium_playable_video_ids
-    ):
+    if not premium_playable_video_ids:
         raise EnvironmentReleaseReadinessError(
             "premium_stream does not expose a release-bound video with a playable media probe"
         )

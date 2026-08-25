@@ -18,6 +18,7 @@ from content.release.environment.activation_recovery import (
 )
 from core.io import read_json
 from core.paths import REPO_ROOT
+from verify.release_publishability import readiness_phase_issue
 
 
 ENVIRONMENTS = frozenset({"alpha", "beta", "gamma", "prod"})
@@ -213,8 +214,11 @@ def previous_import_run_id(previous: PreviousVerifiedRelease) -> str:
 
 
 def readiness_phase(path: Path) -> str:
-    value = str(read_json(path).get("readinessPhase") or "research")
-    return value if value in {"research", "consumer", "commercial"} else "research"
+    value = str(read_json(path).get("readinessPhase") or "")
+    issue = readiness_phase_issue(value)
+    if issue is not None:
+        raise SupplyChainDrillError(f"{path}: {issue}")
+    return value
 
 
 def runtime_state(value: Mapping[str, object] | None) -> tuple[bool, str]:

@@ -31,6 +31,7 @@ from content.release.model import ReleaseKind
 from core.control_types import ReleaseRunKind, ReleaseRunStatus
 from core.io import read_json
 from core.release_layout import payload_digest, payload_file
+from verify.release_publishability import readiness_phase_issue
 
 _SENSITIVE_RECEIPT_ASSIGNMENT = re.compile(
     r"(?i)\b(authorization|access[_-]?token|refresh[_-]?token|token|password|"
@@ -186,10 +187,9 @@ def _verify_release_consumers(
     readiness_phase = str(
         getattr(args, "readiness_phase", "commercial") or "commercial"
     ).strip()
-    if readiness_phase not in {"research", "consumer", "commercial"}:
-        raise SystemExit(
-            "[ship] --readiness-phase must be research, consumer or commercial"
-        )
+    phase_issue = readiness_phase_issue(readiness_phase)
+    if phase_issue is not None:
+        raise SystemExit(f"[ship] --readiness-phase: {phase_issue}")
     lifecycle_exit_ref = str(
         getattr(args, "lifecycle_exit_ref", "") or ""
     ).strip()

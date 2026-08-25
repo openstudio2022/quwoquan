@@ -105,6 +105,7 @@
 .PHONY: verify
 .PHONY: verify-global-increment-constraints
 .PHONY: verify-agent-context-budget
+.PHONY: review-dispatch-plan
 .PHONY: verify-retired-runtime-architecture
 .PHONY: verify-service-ddd-cqrs-baseline
 .PHONY: verify-commercial-contract-generation
@@ -848,6 +849,15 @@ verify-global-increment-constraints:
 # Agent 上下文治理：三家 harness 的预算、载体分配、引用有效性与 checklist 分级。
 verify-agent-context-budget:
 	@python3 quwoquan_ops/gate/verify_agent_context_budget.py
+
+# 校验轮次交接单（HANDOFF 物理形态）：四项齐全、三向裁决零悬空、证据字段完整。
+# 不带参数校验最新轮次；MANIFEST=<path> 校验指定文件。
+verify-handoff-manifest:
+	@python3 quwoquan_ops/gate/verify_handoff_manifest.py $(MANIFEST)
+
+# 生成 review 派发清单与去重 gate 计划（board 装配唯一执行体）；ARGS 透传。
+review-dispatch-plan:
+	@python3 quwoquan_ops/cli/review_dispatch.py $(ARGS)
 
 verify-retired-runtime-architecture:
 	@python3 quwoquan_ops/gate/verify_retired_runtime_architecture.py

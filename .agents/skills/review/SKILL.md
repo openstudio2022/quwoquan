@@ -47,17 +47,24 @@ changed_paths:                # POST 必填，PRE 可为计划中的路径
 
 自由度：低（装配与派发是固定序列）。
 
-1. 由 `changed_paths` 与 `deliverable` 按 registry 的 `profiles` 规则派生 profile 集合。
-2. 按 registry 中该 workflow 的 binding 逐条求值 `when`，装配每个命中角色的
-   base + profile checklist；未匹配 profile 的角色不派发。
-3. `changed_paths` 命中 `triggers` 时追加对应领域角色。
-4. **POST 先取证再评审**：从选中 bundle 收集全部 `gate:` 命令，去重后执行一次，
+1. 运行编排脚本生成派发清单——装配的唯一执行体，board 不手工解析注册表：
+
+   ```bash
+   python3 quwoquan_ops/cli/review_dispatch.py \
+     --workflow <workflow> --segment <segment> --changed-paths <路径...> \
+     --out .qwq_output/env/repo/runs/review/<UTC时间戳>-<workflow>-<segment>
+   ```
+
+2. `plan.json` 即派发清单（profile 派生 + `when` 求值 + gate 保序去重的结果）；
+   board 按清单派发，不增删角色。评审收口后把汇总结论写同目录 `summary.md`，
+   供轮次交接单与下一轮 RESOLVE 引用。
+3. **POST 先取证再评审**：按 `plan.json` 的 `gates` 逐条执行一次，
    形成 evidence map；测试结果是证据，文档状态不是。任何失败先归因四选一：
    `本计划引入 / 并行会话中间态 / 存量债 / 环境 flaky`，归因需基线对照证据
    （HEAD 重跑、`git log --follow`、复跑）。并行中间态如实交接，**不修不掩盖**。
    环境阻塞（URL、token、容器、凭证缺失）如实报告并说明影响的证据层，
    [MUST NOT] 静默跳过或用静态声明代替执行。
-5. 按「先规格符合性、再质量」两阶段并行派发只读 reviewer（`concurrency.max_parallel` 分批）。
+4. 按「先规格符合性、再质量」两阶段并行派发只读 reviewer（`concurrency.max_parallel` 分批）。
    **派发 prompt 必须自包含**：子代理不继承主会话技能与推理历史，只拿交付件、
    显式文件路径与共享 evidence。模板：
 
@@ -114,10 +121,12 @@ GATE_BLOCK 2 条 | PR_WARN 3 条 | 提示 1 条
 
 ## HANDOFF
 
+- **完成判据**：见 [completion-criteria](references/completion-criteria.md) 本工作流段；证据链条目带命令+退出码+时间戳+SHA，下游过期即复跑。
 - **产出物**：评审报告，回填调用方工作流的 HANDOFF。
 - **未决项去向**：PR_WARN 裁决结果与未完成角色由调用方承接。
 - **唯一合法下游**：调用方工作流（`GATE_BLOCK` 时调用方停在 DURING）。
-- **证据链**：evidence map、各 reviewer 原始输出。
+- **证据链**：`.qwq_output/env/repo/runs/review/<run>/` 下的 `plan.json` 与
+  `summary.md`、evidence map、各 reviewer 原始输出。
 
 ## 扩展
 

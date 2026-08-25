@@ -40,6 +40,10 @@ metadata:
 - [MUST NOT] 回滚、覆盖或清理与本目标无关的用户改动。**脏工作树是常态。**
 - [MUST NOT] 扫描或创建中央台账——本仓库不存在中央台账。
 
+交互协议（[interaction-protocols](../review/references/interaction-protocols.md)）：
+RESOLVE 产出后先做协议 1 做前反串讲——五项呈现即继续，写不出验证判据不许开工；
+澄清按协议 2 归宿分流。纯查询豁免反串讲与交接单。
+
 ## 交付件
 
 **RESOLVE 报告**：唯一 `(workflow, deliverable, scope)`、完整父链、In/Out Scope、验收意图
@@ -65,7 +69,9 @@ metadata:
 
 ## HANDOFF
 
+- **完成判据**：见 [completion-criteria](../review/references/completion-criteria.md) 本工作流段；证据链条目带命令+退出码+时间戳+SHA，下游过期即复跑。
 - **产出物**：RESOLVE 报告。
 - **未决项去向**：已知 OPEN 清单、并行冲突风险、受影响棘轮当前值。
 - **唯一合法下游**：`prd`（纯查询任务直接答复用户，不交接）；RESOLVE 报告必须覆盖 `prd` 输入段全部必需项。
 - **证据链**：`make feature-context` 输出、`git status` 交集结论。
+- **交接单**：轮次结束按需落 `.qwq_output/env/repo/runs/handoff/<轮次>/manifest.md` 并过 `make verify-handoff-manifest`（纯查询豁免）。

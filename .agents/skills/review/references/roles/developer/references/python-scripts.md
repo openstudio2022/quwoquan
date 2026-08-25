@@ -16,6 +16,9 @@
 | `quwoquan_ops` | concern-first，不按业务特性建脚本岛 | 跨环境验收脚本只进入 `quwoquan_ops/tests/acceptance/user_acceptance/service_ops/<service>`；`producer: ops` 的 readiness case runner 直接指向该树内实现脚本并携带 `readiness_case` / `spec_ref` 双向标注（canonical 形态由 readiness loader 校验） |
 | `quwoquan_data/scripts` | CLI-first | 服从 `quwoquan_data/scripts/verify/verify_script_architecture.py`；顶层只允许 `cli.py`、`core/`、`content/`、`governance/`、`verify/` |
 
+判定 tracked 路径形态（实体目录还是 symlink）用 `git ls-files -s <path>`
+（mode `120000` 即 symlink）；`ls` 会静默跟随链接，不可作为形态证据。
+
 ## 命名
 
 稳定可执行路径、schema key 和测试标识**禁止**阶段名：`t1..t4`、`m6`、`m7`、`b10`、

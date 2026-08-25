@@ -140,3 +140,24 @@
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：领域边界、上下游依赖、工程映射和服务治理清晰。
 - 完成判定：`DOM-001` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-002"></a>
+### OPEN-002 全局容量规划与灾备观测统稿 L2
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：缺全局容量规划、灾备与观测统稿的 L2 owner，相关知识散落。具体 P0 缺口已在 [`commercial-readiness-risk-closure/spec.md#OPEN-007`](./commercial-readiness-risk-closure/spec.md#open-007)（备份恢复演练与 RPO/RTO）与 [`commercial-readiness-risk-closure/spec.md#OPEN-008`](./commercial-readiness-risk-closure/spec.md#open-008)（日志统一 collector 上云）登记，本 OPEN 只补「统稿 L2 结构」缺口，不重复登记具体风险项。
+- 完成判定：`DOM-003` 的容量水位可用性证据获得统稿 owner——本 L1 下建立容量/灾备/观测统稿 L2（经 prd→design 流程），上述两条现存 OPEN 由该 L2 承接或保留原节点并被其引用；`make verify-feature-tree` 退出 0。
+
+<a id="open-003"></a>
+### OPEN-003 门禁输出机器可读化
+
+- 类型：`capability_gap`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：尚缺全链路机器可读的 GATE_BLOCK 输出——统一 schema（`quwoquan_ops/cli/lib/gate_output.py`）虽已接入 `verify-agent-context-budget` / `verify-handoff-manifest` / `verify-feature-tree` 并锁定中文子句误切负例，其余门禁仍以自由文本为主，AI 消费失败信息与自动修复闭环低效（出处：AI 工程资产调研，转录 `0c4c608c-7219-47c2-bcda-5c66dcf93294` 及门禁结构调研）。另一缺口：`review_dispatch.py` 的 `collect_gates` 不区分可直跑门与参数化门，checklist 中 3 类参数化命令会被原样派发且无参必失败（`make verify-data-release-consistency` 需 `RELEASE_FILE`、`make feature-context TARGET=<...>` 两个占位符变体、`verify release-lifecycle --release <releaseId>`；R3 POST 评审实证第一类）。
+- 完成判定：`DOM-001` 剩余三项全部落地。
+  - `quwoquan_ops/gate/gate_repo.sh` 输出含结构化 summary。
+  - `spec_ref` 扫描对「字符串字面量假绑定」有负例合约测试并收紧生产规则（当前实测 28 文件 38 行无 `spec_ref` 标记仍被计入，收紧前需先清存量或显式登记）。
+  - `review_dispatch` 把含 `<...>` 占位符或已知参数化目标的 gate 标记为 `parameterized` 独立字段（执行方须绑定实参或显式判 N/A，不混入可直跑 gates），并有合约测试锁定。

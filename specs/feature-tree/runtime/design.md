@@ -57,6 +57,7 @@
 - [`runtime-test-pyramid`](./runtime-test-pyramid/spec.md)：以 local_contract、api_integration、user_acceptance 形成唯一测试分层和环境证据模型。
 - [`runtime-testinfra`](./runtime-testinfra/spec.md)：以 canonical 目录发现三层测试，以强类型请求按需准备隔离数据，并从真实执行、回读与清理生成证据。
 - [`system-architecture-and-engineering-guide`](./system-architecture-and-engineering-guide/spec.md)：领域服务对象优先目录、metadata 单轨、四环境配置、唯一运行拓扑、外部能力和三层测试治理。
+- [`system-topology-and-networking`](./system-topology-and-networking/spec.md)：南北向公开入口（gateway/DNS/TLS/CDN）与东西向平面组网（子网四平面、端口块、east-west URL）的唯一叙事收口，字面值只引用环境 YAML 真相源。
 - 工程边界由 spec 的“工程归属”声明；设计不复制具体实现文件。
 
 ## 5. 关键决策
@@ -84,6 +85,18 @@
 - 可测试观察面：api_integration 证明同一 nonprod bytes 分别装配 Alpha 与 Gamma 配置后 endpoint 和数据隔离正确，错配或过期配置在业务 listener 前失败。
 - 可测试观察面：user_acceptance 仍按 Alpha、Beta、Gamma、Prod 顺序回读 App、服务、配置和 activation identity，且 stage 或渠道变化不产生新组件。
 - 影响能力：[`runtime-config`](./runtime-config/spec.md)、[`deliver-deploy-prod-pipeline`](./deliver-deploy-prod-pipeline/spec.md)、[`runtime-external-integration`](./runtime-external-integration/spec.md)
+
+<a id="dec-003"></a>
+### DEC-003 组网事实单轨叙事与供应商中立收敛
+
+- 决策：南北向公开入口与东西向平面组网只有一套叙事（[`system-topology-and-networking`](./system-topology-and-networking/spec.md)）与唯一 YAML 真相源（`domain_governance.yaml`、各环境 `runtime.yaml`、`local_env_port_manifest.yaml`、`prod/access-isolation.yaml`）；公开入口只经 `runtime.yaml → target resolver → manifest` 唯一数据流生成，规格正文不复制 host、端口、CIDR、账号字面值。
+- 决策：公网 DNS 收敛按记录类型划分所有权——地址类型与 zone 级授权类型由计划完全拥有，`TXT` 为共享类型只拥有自己声明的 `v=` 方法；权威写入只经供应商中立 provider 接口，DoH 证据必须来自独立于权威服务商的双公共解析器。
+- 决策：`prod-hosted` 运维访问按 `edge / media / service / data` 四平面隔离，平面、账号与凭据投影事实只由 `prod/access-isolation.yaml` 拥有。
+- 理由：组网事实曾散落在 L3 打包 Story 叙事与 ops 文档中，agent 与开发者需跨文件拼凑；字面值多处复制已产生第二真相源与维度清单漂移。
+- 被否决方案：组网叙事继续留在 L3 打包 Story，导致叙事与装配耦合。
+- 被否决方案：新建组网 L1（违反「部署边界不形成新 L1」）；在规格正文复制 YAML 字面值。
+- 可测试观察面：domain governance / stackctl 既有门禁测试；L2 SIT 直绑证据由该 spec `OPEN-001` 承接。
+- 影响能力：[`system-topology-and-networking`](./system-topology-and-networking/spec.md)、[`runtime-config`](./runtime-config/spec.md)、[`deliver-deploy-prod-pipeline`](./deliver-deploy-prod-pipeline/spec.md)
 
 ## 6. 质量与运行约束
 

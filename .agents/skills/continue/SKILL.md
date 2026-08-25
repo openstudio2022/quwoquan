@@ -46,6 +46,10 @@ metadata:
 判定依据是输入段的证据（todo 状态、HANDOFF、计划），不是对话印象；拿不准时先做
 最小取证（`git status`、gate 输出、计划文件）再判。
 
+交互协议（[interaction-protocols](../review/references/interaction-protocols.md)）：
+模式 B 消费上一轮交接单时证据 SHA 过期即复跑，不得转抄结论；续跑中同样执行
+协议 4 的三级裁决与协议 3 的漂移升版。
+
 ## 交付件
 
 **推进结果与诚实汇报**：已完成事项、未完成事项、验证结果、阻塞点四段齐全。
@@ -69,8 +73,10 @@ metadata:
 
 ## HANDOFF
 
+- **完成判据**：见 [completion-criteria](../review/references/completion-criteria.md) 本工作流段；证据链条目带命令+退出码+时间戳+SHA，下游过期即复跑。
 - **产出物**：推进结果与诚实汇报；模式 B/C 下附被移交工作流的 HANDOFF。
 - **未决项去向**：未完成项留在会话 todo 或转最低可关闭节点的 `OPEN-###`，不允许悬空。
 - **唯一合法下游**：被续跑的工作流本身（A 为原工作流、B 为 `plan-next` 及新一轮、
   C 为 `dev`）；全部收口时报告给用户。
 - **证据链**：todo 对账结果、已跑 gate/测试输出、阻塞点原文。
+- **交接单**：收口轮次落 `.qwq_output/env/repo/runs/handoff/<轮次>/manifest.md` 并过 `make verify-handoff-manifest`。

@@ -37,6 +37,8 @@ metadata:
 2. **并行任务归因** — 用 `git status` 区分本计划改动与并行会话改动。每个失败或红灯
    强制归因四选一：`本计划引入 / 并行会话中间态 / 存量债 / 环境 flaky`。
    归因必须有基线对照证据（HEAD 重跑、`git log --follow`、文件归属、复跑）。
+   [MAY]「并行会话中间态」用最小 stash 对照取证：`git stash push -- <本轮文件>`
+   后复跑门禁再 `git stash pop`（pathspec 只触碰本会话 scope 内文件），红灯仍在即失败预存。
    [MUST NOT] 无证据断言「与我无关」。列出双向交接项。
 3. **环境与门禁健康** — 重跑影响面门禁确认归零。检查长期阻塞信号：
    `stackctl health/verify` 证据、连续多轮红且无 owner 的门禁、凭证或网络或容器依赖缺失。
@@ -46,6 +48,9 @@ metadata:
    [explore/references/decision-tree-interview.md](../explore/references/decision-tree-interview.md)
    问用户。逐项三选一：`当前增量直接修复 / 写入最低 owner 节点 OPEN / 明确 Out of Scope`。
    OPEN 的完成判定必须引用验收锚点。受影响棘轮基线逐个列出当前值与收敛方向，只减不增。
+   [MUST] 每个新发现问题先做泛化判定「孤例还是一类」；判为一类的必须系统性排查
+   （全仓扫描 / gate 化 / 棘轮化）一次收敛并加防回潮锁，禁止单点修复后靠下一轮
+   plan-next 兜底——这是 plan-next 自然收敛（而非无休止循环）的前提。
    [MUST NOT] 中央风险台账、changelog 或成熟度矩阵。
 5. **闭环判定** — 按批次列：完成项与证据、未完成项与缺口、初始风险与现状的逐条对照、
    剩余阻断。判定三选一：`闭环 / 带残量闭环（棘轮与 OPEN 承接）/ GATE_BLOCK`。
@@ -57,6 +62,10 @@ metadata:
 2. 跑 `make feature-tree-overview` 与 `make feature-tree-change-report`。
 3. 下一轮计划写在**当前会话**，含目标、规格增量、实施任务、验收锚点、测试层、
    质量门与退出条件。[MUST NOT] 创建 tracked task、plan 文件或 changelog。
+
+交互协议（[interaction-protocols](../review/references/interaction-protocols.md)）：
+对账输入优先取上一轮交接单（`make verify-handoff-manifest` 通过的 manifest.md），
+证据 SHA 过期即复跑，不得转抄结论；闭环判定后按协议 5 呈现交接报告并落本轮交接单。
 
 ## 交付件
 
@@ -79,7 +88,9 @@ metadata:
 
 ## HANDOFF
 
+- **完成判据**：见 [completion-criteria](../review/references/completion-criteria.md) 本工作流段；证据链条目带命令+退出码+时间戳+SHA，下游过期即复跑。
 - **产出物**：闭环判定、下一轮会话计划。
 - **未决项去向**：全部落到 OPEN、Out of Scope 或下一轮任务，不允许悬空。
 - **唯一合法下游**：下一轮的 `explore`（新目标）或 `dev`（基线已冻结的续作）。
 - **证据链**：对账表、归因证据、门禁复跑结果。
+- **交接单**：本轮 manifest.md 落 `.qwq_output/env/repo/runs/handoff/<轮次>/` 并过 `make verify-handoff-manifest`。
