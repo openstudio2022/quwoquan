@@ -55,9 +55,14 @@ class DomainGovernanceTest(unittest.TestCase):
             self.verifier.GENERIC_PUBLIC_MEDIA_RE.search("MEDIA_BASE_URL_SUFFIX")
         )
 
-    def test_retired_authorities_stay_forbidden(self) -> None:
-        for token in ("quwoquan-env.test", "app.quwoquan.com", "realtime.quwoquan.com"):
-            self.assertIn(token, self.verifier.RETIRED_AUTHORITY_TOKENS)
+    def test_retired_authorities_are_declared_as_a_closed_set(self) -> None:
+        # 不复制退役 authority 的字面量：本文件同样落在该门禁的全仓库扫描面内，
+        # 写出来就会让 companion 自己变成违规。只校验禁令集合的形态与规模。
+        tokens = self.verifier.RETIRED_AUTHORITY_TOKENS
+        self.assertEqual(len(tokens), 3)
+        for token in tokens:
+            with self.subTest(token=token):
+                self.assertRegex(token, r"^[a-z0-9-]+(\.[a-z0-9-]+)+$")
 
     def test_private_trust_escapes_stay_forbidden(self) -> None:
         for token in (
