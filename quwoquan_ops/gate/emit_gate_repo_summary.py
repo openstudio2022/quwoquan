@@ -24,6 +24,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+ALLOWED_SCOPES = ("all", "service", "app", "portal", "data", "patrol")
 
 sys.path.insert(0, str(ROOT / "quwoquan_ops/cli/lib"))
 from gate_output import emit_gate_result, finding  # noqa: E402
@@ -31,7 +32,7 @@ from gate_output import emit_gate_result, finding  # noqa: E402
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--scope", required=True)
+    parser.add_argument("--scope", required=True, choices=ALLOWED_SCOPES)
     parser.add_argument("--exit-code", type=int, required=True)
     parser.add_argument("--failed-command", default="")
     parser.add_argument(

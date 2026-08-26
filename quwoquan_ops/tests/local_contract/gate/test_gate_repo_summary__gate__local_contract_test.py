@@ -67,6 +67,22 @@ class GateRepoSummaryContractTest(unittest.TestCase):
             self.assertEqual(_read_summary(Path(tmp), "all")["status"], "pass")
             self.assertEqual(_read_summary(Path(tmp), "data")["status"], "block")
 
+    def test_invalid_scope_fails_without_writing_outside_gate_directory(self) -> None:
+        """非法输入是失败态：argparse 拒绝，且不得把路径分隔符拼进落盘文件名。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            result = _run_emitter(
+                root,
+                "--scope",
+                "../escaped",
+                "--exit-code",
+                "2",
+            )
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("invalid choice", result.stderr)
+            self.assertFalse((root / ".qwq_output").exists())
+            self.assertFalse((root / "escaped.json").exists())
+
     def test_gate_repo_sh_wires_exit_trap_to_emitter(self) -> None:
         """接线锁：gate_repo.sh 必须经 EXIT trap 调发射器，且 ERR trap 记录失败命令。"""
         text = GATE_REPO_SH.read_text(encoding="utf-8")
