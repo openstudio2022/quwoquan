@@ -598,13 +598,6 @@ jobs:
       - id: flutter
         name: Resolve repository-pinned Flutter SDK
         run: python3 quwoquan_ops/ci/setup_flutter_sdk.py resolve --version-file quwoquan_app/.flutter-version
-      - name: Cache lock-bound Dart dependencies
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          path: ~/.pub-cache
-          key: "pub-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('quwoquan_app/pubspec.lock') }}"
-          restore-keys: |
-            pub-${{ runner.os }}-${{ runner.arch }}-
       - name: Install verified Flutter SDK
         env:
           FLUTTER_ARCHIVE_URL: ${{ steps.flutter.outputs.archive_url }}
@@ -615,6 +608,8 @@ jobs:
             --archive-url "$FLUTTER_ARCHIVE_URL" \
             --cache-path "$FLUTTER_CACHE_PATH" \
             --sha256 "$FLUTTER_SHA256"
+      # 持久化 self-hosted runner 直接复用本地 Pub cache；远端 restore 在命中后
+      # 仍会等待 segment timeout，反而把官方日历关键路径固定拉长约十分钟。
       - name: Resolve locked App dependencies
         working-directory: quwoquan_app
         run: flutter pub get --enforce-lockfile
@@ -653,13 +648,6 @@ jobs:
       - id: flutter
         name: Resolve repository-pinned Flutter SDK
         run: python3 quwoquan_ops/ci/setup_flutter_sdk.py resolve --version-file quwoquan_app/.flutter-version
-      - name: Cache lock-bound Dart dependencies
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          path: ~/.pub-cache
-          key: "pub-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('quwoquan_app/pubspec.lock') }}"
-          restore-keys: |
-            pub-${{ runner.os }}-${{ runner.arch }}-
       - name: Install verified Flutter SDK
         env:
           FLUTTER_ARCHIVE_URL: ${{ steps.flutter.outputs.archive_url }}
@@ -670,6 +658,8 @@ jobs:
             --archive-url "$FLUTTER_ARCHIVE_URL" \
             --cache-path "$FLUTTER_CACHE_PATH" \
             --sha256 "$FLUTTER_SHA256"
+      # 与 serial lane 同一持久化 runner 策略；依赖身份仍由 lockfile 与
+      # --enforce-lockfile 约束，缓存不参与准出身份。
       - name: Resolve locked App dependencies
         working-directory: quwoquan_app
         run: flutter pub get --enforce-lockfile

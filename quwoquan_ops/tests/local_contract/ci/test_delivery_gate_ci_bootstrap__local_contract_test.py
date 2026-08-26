@@ -158,6 +158,46 @@ def test_delivery_gate_bootstrap_uses_pinned_verified_toolchains() -> None:
     assert 'actionlint\" -version | head -n 1)\" = \"v1.7.7\"' in workflow
 
 
+def test_delivery_pub_cache_is_hosted_only() -> None:
+    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(
+        encoding="utf-8"
+    )
+    jobs = {
+        "static": ("quwoquan_app_static", "quwoquan_app_tests"),
+        "tests": ("quwoquan_app_tests", "quwoquan_app_serial"),
+        "serial": ("quwoquan_app_serial", "quwoquan_app_coverage"),
+        "coverage": ("quwoquan_app_coverage", "quwoquan_app"),
+    }
+    bodies = {
+        phase: workflow[
+            workflow.index(f"  {job_name}:\n") : workflow.index(
+                f"\n  {next_job_name}:\n", workflow.index(f"  {job_name}:\n")
+            )
+        ]
+        for phase, (job_name, next_job_name) in jobs.items()
+    }
+    cache_action = "uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830"
+
+    for phase in ("static", "tests"):
+        body = bodies[phase]
+        assert "runs-on: ubuntu-latest" in body
+        assert "Cache lock-bound Dart dependencies" in body
+        assert cache_action in body
+        assert "path: ~/.pub-cache" in body
+
+    for phase in ("serial", "coverage"):
+        body = bodies[phase]
+        assert "runs-on: [self-hosted, macOS, ARM64]" in body
+        assert "Cache lock-bound Dart dependencies" not in body
+        assert cache_action not in body
+        assert "path: ~/.pub-cache" not in body
+
+    for phase, body in bodies.items():
+        assert "flutter pub get --enforce-lockfile" in body
+        assert f"GATE_APP_PHASE: {phase}" in body
+        assert "bash quwoquan_ops/gate/gate_repo.sh --scope app" in body
+
+
 def test_ops_portal_build_receives_the_external_deploy_root() -> None:
     workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
     job_start = workflow.index("  ops_portal:\n")
