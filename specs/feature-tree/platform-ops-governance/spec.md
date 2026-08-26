@@ -67,6 +67,7 @@
 - workflow 只按 candidate/run 读取 hosted exact-byte approval readback；该 readback 必须声明 `nativeProtection=false` 与 `enforcement=external_hosted_ledger`。缺 request/approved、签名无效、重复 delivery 不同 payload、顺序或身份漂移均 `GATE_BLOCK`，不得用 job queue、Deployment status 或人工布尔值替代。
 - 门禁 GATE_BLOCK 结构化输出只经 `quwoquan_ops/cli/lib/gate_output.py` 统一 schema 落盘 `.qwq_output/env/repo/runs/gate/`。`quwoquan_ops/gate/gate_repo.sh` 经 EXIT trap 调 `emit_gate_repo_summary.py` 发射整链结构化 summary，按 scope 独立落盘（以上支撑 DOM-001 的机器可读裁定能力）。
 - `spec_ref` 测试证据只认两种显式绑定形态：ref 同行前置独立 `spec_ref` token（注释或常量），或独占一行的 `spec_ref:` 后接连续列表项。裸字符串字面量（fixture、断言消息、`not_a_spec_ref` 子串、Go `SpecRef:` 数据字段）不构成绑定，正反例由 feature-tree 合约测试锁定。
+- `spec_ref` 语法解析全仓单轨：唯一 lexical 入口是 feature-tree 库 `extract_spec_refs`（正则定义于 `quwoquan_ops/cli/lib/feature_tree/patterns.py`）；coverage-map、service-architecture、domain-remote、provider-conformance 等消费方只保留语义校验（验收锚点类型过滤、`.tN` 子句剥离、目标存在性、原文行序重建），不得自带第二套语法解析正则。AST 级结构测试锁定该唯一定义点：`re.compile` 与 `re.match/search/findall` 等直接调用形态的解析正则定义即红。
 - 评审派发 `quwoquan_ops/cli/review_dispatch.py`（工程归属经 `make feature-context` 机器裁定归本领域）输出的 plan.json 把 gate 拆为可直跑 `gates` 与 `parameterized_gates` 两字段。占位符是唯一判据：需实参的 gate 行必须在 checklist 内自带 `<...>` 占位符，不维护平行的已知目标闭集。参数化门由执行方绑定实参后执行或显式判 N/A，不得无参直跑。
 
 <a id="req-003"></a>
