@@ -95,5 +95,5 @@
 - 类型：`capability_gap`
 - 优先级：`P3`
 - 准出影响：`track`
-- 影响或价值：尚缺直接断言「四平面完整」与「east-west URL 只来自治理分类投影」两个折叠分句的测试——`sit-002.t1` 现绑定的端口块槽位测试只实证端口模型分句，另两分句的回归只能靠 `verify-env-topology` 门禁间接兜底。
-- 完成判定：`SIT-002` 的 t1 子句中「四平面完整」「east-west URL 只来自治理分类投影」两分句各有名实相符的直接测试 `spec_ref`（读 `runtime.yaml` subnets 断言四平面、读 `domain_governance.yaml` east-west 分类断言 URL 投影来源），且不再依赖本 OPEN 代替证据。
+- 影响或价值：尚缺直接断言 t1「四平面完整」「east-west URL 只来自治理分类投影」与 t2「`prod-hosted` 运维访问按四平面隔离」三个折叠分句的测试——`sit-002.t1` 现绑定的端口块槽位测试只实证端口模型分句，`sit-002.t2` 现绑定的 soak 测试只实证凭据事实来自 `access-isolation.yaml`，其余分句只能靠环境门禁间接兜底。
+- 完成判定：`SIT-002` 的上述三个分句各有名实相符的直接测试 `spec_ref`（读 `runtime.yaml` subnets 断言四平面、读 `domain_governance.yaml` east-west 分类断言 URL 投影来源、读 `access-isolation.yaml` 断言 `prod-hosted` 四平面访问隔离），且不再依赖本 OPEN 代替证据。

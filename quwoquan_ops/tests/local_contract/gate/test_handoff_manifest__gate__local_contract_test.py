@@ -83,6 +83,15 @@ class HandoffManifestGateTest(unittest.TestCase):
         self.assertTrue(any("缺泛化判定" in i for i in issues), issues)
         self.assertFalse(any("未决项悬空" in i for i in issues), issues)
 
+    def test_generalization_marker_does_not_match_incidental_substring(self) -> None:
+        """「统一类型」含「一类」子串，但不是结构化泛化判定，不得假通过。"""
+        text = VALID.replace(
+            "- 组网知识升格（孤例）：下一工作流 `prd` 承接",
+            "- 组网知识升格按统一类型处理：下一工作流 `prd` 承接",
+        )
+        issues = self.module.validate(text, "m.md")
+        self.assertTrue(any("缺泛化判定" in i for i in issues), issues)
+
     def test_detects_evidence_without_fields(self) -> None:
         """无退出码/时间戳/SHA 的证据无法复跑，只能被转抄——必须拦。"""
         text = VALID.replace(
@@ -102,7 +111,8 @@ class HandoffManifestGateTest(unittest.TestCase):
 
     def test_accepts_explicit_no_pending_declaration(self) -> None:
         text = VALID.replace(
-            "- 谓词单轨缺口：转 `OPEN-007`\n- 组网知识升格：下一工作流 `prd` 承接",
+            "- 谓词单轨缺口（一类：已全仓 AST 扫描收敛并加防回潮锁）：转 `OPEN-007`\n"
+            "- 组网知识升格（孤例）：下一工作流 `prd` 承接",
             "- 无未决项",
         )
         self.assertEqual([], self.module.validate(text, "m.md"))
