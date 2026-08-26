@@ -31,7 +31,12 @@ from .delta import (  # noqa: F401
     open_anchor_ratchet_targets,
     semantic_anchor_changes,
 )
-from .evidence import canonical_spec_ref, iter_test_files, test_spec_refs  # noqa: F401
+from .evidence import (  # noqa: F401
+    canonical_spec_ref,
+    extract_spec_refs,
+    iter_test_files,
+    test_spec_refs,
+)
 from .gitio import git_changed_paths, git_head_text  # noqa: F401
 from .nodes import Node, discover_nodes, node_for_spec, parent_chain  # noqa: F401
 from .ownership import (  # noqa: F401

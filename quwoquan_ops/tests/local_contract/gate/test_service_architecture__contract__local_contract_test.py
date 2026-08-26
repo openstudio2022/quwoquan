@@ -136,6 +136,44 @@ def test_object_evidence_requires_an_existing_feature_tree_acceptance_anchor(
     ]
 
 
+def test_object_evidence_accepts_list_block_and_rejects_bare_strings(
+    tmp_path: Path,
+) -> None:
+    """列表块与同行 marker 同源生效；裸字符串字面量不构成对象证据。"""
+    marker = "spec_" + "ref"
+    spec_path = "specs/feature-tree/sample/" "capability/story/spec.md"
+    spec = tmp_path / spec_path
+    spec.parent.mkdir(parents=True)
+    spec.write_text(
+        '# Story\n\n<a id="gwt-001"></a>\n### GWT-001 behavior\n',
+        encoding="utf-8",
+    )
+
+    block = tmp_path / "test_block.py"
+    block.write_text(
+        '"""Docstring contract.\n'
+        f"{marker}:\n"
+        f"  - {spec_path}#gwt-001.t2\n"
+        '"""\n'
+        "def test_contract():\n    assert 1 == 1\n",
+        encoding="utf-8",
+    )
+    refs, issues = valid_object_test_spec_refs(block, tmp_path)
+    # `.tN` 子句剥离到主锚点做存在性校验。
+    assert refs == {f"{spec_path}#gwt-001"}
+    assert issues == []
+
+    bare_only = tmp_path / "test_bare.py"
+    bare_only.write_text(
+        f'bare = "{spec_path}#gwt-001"\n'
+        "def test_contract():\n    assert 1 == 1\n",
+        encoding="utf-8",
+    )
+    refs, issues = valid_object_test_spec_refs(bare_only, tmp_path)
+    assert refs == set()
+    assert issues == []
+
+
 def test_object_semantics_are_kind_aware_and_reject_generic_placeholders() -> None:
     projection = {
         "kind": "projection",

@@ -98,12 +98,8 @@ GENERIC_OBJECT_DESCRIPTION_RE = re.compile(
     r"(?:领域对象契约|domain\s+object\s+contract|business\s+object\s+contract)",
     re.IGNORECASE,
 )
-OBJECT_TEST_SPEC_REF_RE = re.compile(
-    r"(?m)^\s*(?://|#)\s*spec_ref:\s*"
-    r"(specs/feature-tree/(?:[A-Za-z0-9_.-]+/)*spec\.md)#"
-    r"((?:uat|dom|sit|gwt)-\d{3,})\b",
-    re.IGNORECASE,
-)
+# spec_ref 语法解析统一由 feature-tree 库唯一 lexical 入口承担
+#（source_analysis.valid_object_test_spec_refs 消费），本处不再定义第二套正则。
 OBJECT_ACCESS_BY_KIND = {
     "aggregate_root": {
         "commands": "aggregate_facade",

@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import Any
 
 
+from quwoquan_ops.cli.lib.feature_tree.evidence import extract_spec_refs
+
 GOVERNED_DOMAINS = (
     "entity",
     "notification",
@@ -25,10 +27,10 @@ GOVERNED_DOMAINS = (
 CONTRACT_GRAPH_PATH = Path("quwoquan_service/generated/contract_graph.json")
 APP_API_TEST_PREFIX = "quwoquan_app/test/api_integration/service/"
 APP_API_TEST_SUFFIX = "__api_integration_test.dart"
-SPEC_REF = re.compile(
-    r"spec_ref:\s*specs/feature-tree/[^\s#]+/spec\.md#"
-    r"(?:uat|dom|sit|gwt)-\d+",
-    re.IGNORECASE,
+# spec_ref 语法解析复用 feature-tree 库唯一 lexical 入口；本处只保留语义过滤：
+# 稳定证据必须至少有一个指向验收锚点（`.tN` 子句同样成立）的显式绑定。
+_ACCEPTANCE_ANCHOR = re.compile(
+    r"^(?:uat|dom|sit|gwt)-\d+(?:\.t\d+)?$", re.IGNORECASE
 )
 HARNESS_IMPORT = re.compile(
     r"import\s+'([^']*support/runtime/api_contract/"
@@ -76,6 +78,14 @@ class DomainRemoteApiCase:
 
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def has_stable_spec_ref(source: str) -> bool:
+    """源码是否声明了至少一个指向验收锚点的显式 spec_ref 绑定。"""
+    return any(
+        _ACCEPTANCE_ANCHOR.match(ref.partition("#")[2])
+        for ref in extract_spec_refs(source)
+    )
 
 
 def _graph_document(root: Path) -> dict[str, Any]:
@@ -212,7 +222,7 @@ def validate_cases(
             issues.append(
                 f"{case.domain}: ContractGraph digest is stale for {case.test_path}"
             )
-        if SPEC_REF.search(source) is None:
+        if not has_stable_spec_ref(source):
             issues.append(f"{case.domain}: test lacks stable spec_ref: {case.test_path}")
         for label, pattern in FORBIDDEN_SOURCE_PATTERNS.items():
             if pattern.search(source):

@@ -39,6 +39,25 @@ SPEC.loader.exec_module(ratchet)
 
 
 class AppDomainRemoteApiIntegrationContractTest(unittest.TestCase):
+    def test_stable_spec_ref_accepts_marker_and_list_block_only(self) -> None:
+        """同行 marker 与列表块同源生效；裸字符串与非验收锚点不算稳定证据。"""
+        marker = "spec_" + "ref"
+        path = "specs/feature-tree/sample/spec.md"
+        self.assertTrue(
+            evidence.has_stable_spec_ref(f"// {marker}: {path}#gwt-001\n")
+        )
+        self.assertTrue(
+            evidence.has_stable_spec_ref(
+                f"// {marker}:\n//   - {path}#sit-002.t1\n"
+            )
+        )
+        self.assertFalse(
+            evidence.has_stable_spec_ref(f'const bare = "{path}#gwt-001";\n')
+        )
+        self.assertFalse(
+            evidence.has_stable_spec_ref(f"// {marker}: {path}#req-004\n")
+        )
+
     def test_contract_graph_derives_one_valid_object_case_per_domain(self) -> None:
         cases, discovery_issues = evidence.discover_cases(ROOT)
         validated, validation_issues = evidence.validate_cases(ROOT, cases)
