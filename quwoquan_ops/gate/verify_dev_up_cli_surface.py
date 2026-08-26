@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
@@ -26,9 +27,16 @@ STACKCTL = ROOT / "quwoquan_ops" / "cli" / "stackctl.py"
 
 
 def run(argv: list[str]) -> subprocess.CompletedProcess[str]:
+    env = os.environ.copy()
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    env["PYTHONPYCACHEPREFIX"] = str(
+        ROOT
+        / ".qwq_output/env/repo/local/test-runtime/cache/bytecode/dev-up-cli-surface"
+    )
     return subprocess.run(
         argv,
         cwd=str(ROOT),
+        env=env,
         text=True,
         capture_output=True,
         check=False,
