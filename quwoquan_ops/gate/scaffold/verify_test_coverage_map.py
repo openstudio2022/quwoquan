@@ -18,6 +18,9 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[3]
+# 导入仓内包前禁写字节码：裸跑本 gate 不得在源码树留 __pycache__（与
+# cli/feature_tree.py 等入口惯例一致）。
+sys.dont_write_bytecode = True
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 # 完全限定包路径导入：顶层名 `feature_tree` 被 cli/feature_tree.py 薄壳占用，
