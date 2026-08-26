@@ -66,7 +66,7 @@
 - 私有仓无法启用原生 required reviewers 时，生产审批事实由本领域独立 hosted approval authority 拥有。受控 GitHub App/webhook 只接收官方 event/action 闭集，验证签名与 delivery ID 后按 request→approved 追加，并绑定 installation、repository、workflow run、head SHA、candidate、environment 与 reviewer decision。
 - workflow 只按 candidate/run 读取 hosted exact-byte approval readback；该 readback 必须声明 `nativeProtection=false` 与 `enforcement=external_hosted_ledger`。缺 request/approved、签名无效、重复 delivery 不同 payload、顺序或身份漂移均 `GATE_BLOCK`，不得用 job queue、Deployment status 或人工布尔值替代。
 - 门禁 GATE_BLOCK 结构化输出只经 `quwoquan_ops/cli/lib/gate_output.py` 统一 schema 落盘 `.qwq_output/env/repo/runs/gate/`。`quwoquan_ops/gate/gate_repo.sh` 经 EXIT trap 调 `emit_gate_repo_summary.py` 发射整链结构化 summary，按 scope 独立落盘（以上支撑 DOM-001 的机器可读裁定能力）。
-- `spec_ref` 测试证据只认单行绑定形态：ref 所在行、ref 之前有大小写不敏感的 `spec_ref` 记号（注释或常量声明）。裸字符串字面量（fixture、断言消息、Go `SpecRef:` 数据字段）不构成绑定，负例由 feature-tree 合约测试锁定。
+- `spec_ref` 测试证据只认两种显式绑定形态：ref 同行前置独立 `spec_ref` token（注释或常量），或独占一行的 `spec_ref:` 后接连续列表项。裸字符串字面量（fixture、断言消息、`not_a_spec_ref` 子串、Go `SpecRef:` 数据字段）不构成绑定，正反例由 feature-tree 合约测试锁定。
 - 评审派发 `quwoquan_ops/cli/review_dispatch.py`（工程归属经 `make feature-context` 机器裁定归本领域）输出的 plan.json 把 gate 拆为可直跑 `gates` 与 `parameterized_gates` 两字段。占位符是唯一判据：需实参的 gate 行必须在 checklist 内自带 `<...>` 占位符，不维护平行的已知目标闭集。参数化门由执行方绑定实参后执行或显式判 N/A，不得无参直跑。
 
 <a id="req-003"></a>
