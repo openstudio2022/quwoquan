@@ -22,7 +22,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$ROOT"
 QWQ_OUTPUT_ROOT="${QWQ_OUTPUT_ROOT:-$ROOT/.qwq_output}"
 QWQ_DEPLOY_WORK_ROOT="${QWQ_DEPLOY_WORK_ROOT:-${XDG_CACHE_HOME:-$HOME/.cache}/quwoquan/deploy}"
-PROD_DEPLOY_TARGET_ROOT="$(PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+PROD_DEPLOY_TARGET_ROOT="$(PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 -B - <<'PY'
 from quwoquan_ops.cli.lib.output_paths import deployment_work_root
 
 print(deployment_work_root("prod-hosted"))
@@ -160,7 +160,7 @@ run_remote_bash() {
 # 解析本 stage 的 host / deployment instance / replica 计划。输出只包含
 # SSH credential 逻辑 id，不包含私钥或 Secret Bundle。
 plan_args=(
-  python3 quwoquan_ops/cli/prod/prod_hosted_topology.py
+  python3 -B quwoquan_ops/cli/prod/prod_hosted_topology.py
   --stage "$ROLLOUT_STAGE"
   --format tsv
 )
@@ -191,7 +191,7 @@ echo "[deploy] prod-hosted stage=$ROLLOUT_STAGE instance=$INSTANCE_SUFFIX imageT
 
 # 凭据硬校验（缺失/非法即硬失败，禁止失败放通）。
 # 真实发布（DRY_RUN=false）必须硬失败；dry-run 预览给出告警但仍展示发布计划。
-if ! python3 quwoquan_ops/cli/prod/validate_prod_plane_credentials.py --stage "$ROLLOUT_STAGE"; then
+if ! python3 -B quwoquan_ops/cli/prod/validate_prod_plane_credentials.py --stage "$ROLLOUT_STAGE"; then
   if [[ "$DRY_RUN" != "true" ]]; then
     echo "::error::prod 平面 SSH 凭据硬校验未通过，终止发布" >&2
     exit 2
@@ -218,7 +218,7 @@ deploy_plane() {
 
   if [[ "$plane" == "service" || "$plane" == "edge" ]]; then
     local render_dir
-    render_dir="$(PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - "$render_name" <<'PY'
+    render_dir="$(PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 -B - "$render_name" <<'PY'
 import sys
 
 from quwoquan_ops.cli.lib.output_paths import deployment_render_dir
@@ -248,10 +248,10 @@ PY
       if [[ -n "$RELEASE_MANIFEST" ]]; then
         image_load_args+=(--release-manifest "$RELEASE_MANIFEST")
       fi
-      python3 quwoquan_ops/cli/prod/load_prod_plane_images.py \
+      python3 -B quwoquan_ops/cli/prod/load_prod_plane_images.py \
         "${image_load_args[@]}"
     else
-      python3 quwoquan_ops/cli/prod/render_prod_plane_stack.py \
+      python3 -B quwoquan_ops/cli/prod/render_prod_plane_stack.py \
         --plane "$plane" \
         --instance "$INSTANCE_SUFFIX" \
         --replica-id "$replica_id" \
@@ -267,7 +267,7 @@ PY
       if [[ "$PROD_IMAGE_DELIVERY_MODE" == "skip" ]]; then
         echo "[skip] service plane image delivery skipped; assuming remote images are already prepared"
       elif [[ "$PROD_IMAGE_DELIVERY_MODE" == "prebuilt" ]]; then
-        python3 quwoquan_ops/cli/prod/load_prod_plane_images.py \
+        python3 -B quwoquan_ops/cli/prod/load_prod_plane_images.py \
           --plane "$plane" \
           --host "$ssh_host" \
           --key-dir "$PROD_SSH_KEY_DIR" \
@@ -417,7 +417,7 @@ deploy_observability_replica() {
   fi
 
   local runtime_plan
-  runtime_plan="$(python3 - "$ACCESS_MANIFEST" <<'PY'
+  runtime_plan="$(python3 -B - "$ACCESS_MANIFEST" <<'PY'
 import re
 import sys
 from pathlib import PurePosixPath
@@ -534,7 +534,7 @@ systemctl --user is-active --quiet \"\$systemd_unit_file\"
 for health_url in ${health_urls//,/ }; do
   curl --fail --silent --show-error --max-time 10 \"\$health_url\" >/dev/null
 done
-python3 - <<'PY'
+python3 -B - <<'PY'
 import json
 import urllib.request
 
@@ -577,7 +577,7 @@ update_stable_gray_router_replica() {
     return 2
   fi
   local render_dir
-  render_dir="$(PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - "$replica_id" <<'PY'
+  render_dir="$(PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 -B - "$replica_id" <<'PY'
 import sys
 
 from quwoquan_ops.cli.lib.output_paths import deployment_render_dir
@@ -591,7 +591,7 @@ print(
 )
 PY
 )"
-  python3 quwoquan_ops/cli/prod/render_prod_plane_stack.py \
+  python3 -B quwoquan_ops/cli/prod/render_prod_plane_stack.py \
     --plane service \
     --instance prod \
     --replica-id "$replica_id" \
