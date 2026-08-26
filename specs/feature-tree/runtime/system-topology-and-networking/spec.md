@@ -90,10 +90,10 @@
 ## 8. 开放事项
 
 <a id="open-002"></a>
-### OPEN-002 SIT-002 部分折叠分句缺直接测试
+### OPEN-002 east-west URL 尚缺 resolver 投影与直接测试
 
 - 类型：`capability_gap`
 - 优先级：`P3`
 - 准出影响：`track`
-- 影响或价值：尚缺直接断言 t1「四平面完整」「east-west URL 只来自治理分类投影」与 t2「`prod-hosted` 运维访问按四平面隔离」三个折叠分句的测试——`sit-002.t1` 现绑定的端口块槽位测试只实证端口模型分句，`sit-002.t2` 现绑定的 soak 测试只实证凭据事实来自 `access-isolation.yaml`，其余分句只能靠环境门禁间接兜底。
-- 完成判定：`SIT-002` 的上述三个分句各有名实相符的直接测试 `spec_ref`（读 `runtime.yaml` subnets 断言四平面、读 `domain_governance.yaml` east-west 分类断言 URL 投影来源、读 `access-isolation.yaml` 断言 `prod-hosted` 四平面访问隔离），且不再依赖本 OPEN 代替证据。
+- 影响或价值：尚缺由 `environment_topology` resolver 生成、带 `east-west-upstream` 治理分类的服务发现 URL 只读投影；运行时消费者仍直接读取 target `origins` / environment config，无法真实证明 `SIT-002` t1 的「east-west URL 只来自治理分类投影」。四平面完整、端口块槽位、`prod-hosted` 四平面独立账号/凭据与凭据来源分句均已有直接测试绑定。
+- 完成判定：`SIT-002` t1 具备正反测试，证明 resolver 只从 `east-west-upstream` 分类与环境服务发现事实生成投影，运行时消费者只读该投影，未知分类、重复 ownership 与自造 URL 均 fail closed。

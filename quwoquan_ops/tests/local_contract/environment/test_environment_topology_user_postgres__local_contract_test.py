@@ -14,6 +14,16 @@ class EnvironmentTopologyUserPostgresContractTest(unittest.TestCase):
         issues = validate_environment_topology(load_environment_topology())
         self.assertEqual(issues, [])
 
+    def test_every_environment_declares_exactly_the_four_runtime_planes(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/system-topology-and-networking/spec.md#sit-002.t1
+        topology = load_environment_topology()
+        for env_name, environment in topology["environments"].items():
+            with self.subTest(environment=env_name):
+                self.assertEqual(
+                    set(environment["subnets"]),
+                    {"edge", "media", "service", "data"},
+                )
+
     def test_local_import_without_user_postgres_port_role_fails_closed(self) -> None:
         topology = copy.deepcopy(load_environment_topology())
         del topology["targets"]["alpha-local"]["dataRelease"]["userPostgresPortRole"]

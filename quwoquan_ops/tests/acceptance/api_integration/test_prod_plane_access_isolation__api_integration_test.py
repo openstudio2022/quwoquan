@@ -64,6 +64,7 @@ class ProdPlaneAccessIsolationTest(unittest.TestCase):
 
     @unittest.skipIf(yaml is None, "PyYAML required")
     def test_planes_accounts_and_secrets_single_source(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/system-topology-and-networking/spec.md#sit-002.t2
         data = yaml.safe_load(ACCESS.read_text(encoding="utf-8"))
         runtime = yaml.safe_load(RUNTIME.read_text(encoding="utf-8"))
         self.assertEqual(data["management"]["purpose"], "ssh-only-management")
