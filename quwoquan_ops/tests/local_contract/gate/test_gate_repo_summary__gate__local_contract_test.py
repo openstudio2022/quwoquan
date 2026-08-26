@@ -92,6 +92,19 @@ class GateRepoSummaryContractTest(unittest.TestCase):
         # 发射器失败不得改变门禁退出语义。
         self.assertIn('--failed-command "$_gate_failed_command" || true', text)
 
+    def test_gate_repo_preserves_exit_two_when_emitter_rejects_scope(self) -> None:
+        """真实 EXIT trap 行为：发射器失败也不得把原始用法错误包装成成功。"""
+        result = subprocess.run(
+            ["bash", str(GATE_REPO_SH), "--scope", "../escaped"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertIn("invalid scope", result.stderr)
+        self.assertIn("invalid choice", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
