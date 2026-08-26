@@ -1,8 +1,7 @@
 """Matched-edge serving/training feature parity contract.
 
-spec_ref:
-  - specs/feature-tree/recommendation-platform/rec-model-training/training-pipeline/spec.md#gwt-001
-  - specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure/spec.md#gwt-001
+spec_ref: specs/feature-tree/recommendation-platform/rec-model-training/training-pipeline/spec.md#gwt-001
+spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure/spec.md#gwt-001
 """
 
 from __future__ import annotations

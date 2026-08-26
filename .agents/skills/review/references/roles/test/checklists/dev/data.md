@@ -14,7 +14,7 @@
 - [MUST] 数据契约与复用输入校验通过
   gate: make verify-quwoquan-data
 - [MUST] release 一致性成立（本次触及发布流时）
-  gate: make verify-data-release-consistency
+  gate: make verify-data-release-consistency RELEASE_FILE=<release json 路径>
 
 ## HANDOFF 交接
 

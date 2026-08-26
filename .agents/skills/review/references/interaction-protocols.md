@@ -49,3 +49,17 @@
 
 同类缺口或用户同类纠正第二次出现 → 触发 distill 回写提议；回写永远是
 「提议 + 人确认 + prd/dev 正常工作流」，agent 不得绕过工作流直接修改规则资产。
+
+## 6. 评审取证：本地视图不可当真相
+
+评审员（含 reviewer 子代理沙箱）就 git 状态下 finding 前，必须用权威命令取证，
+不得凭工作树表象或跟踪 ref 推断——曾有两条 finding 因此被驳回（沙箱物化 symlink、
+跟踪 ref 陈旧误判未推送）：
+
+- 是否已推送：`git ls-remote <remote> <branch>` 直查远端，跟踪 ref（`origin/...`）
+  可能陈旧，`git status` 的 ahead/behind 不作数。
+- 文件形态（symlink/普通文件）：`git ls-files -s <path>` 看 index mode
+  （120000=symlink），沙箱与检出视图可能把 symlink 物化为目录。
+- 提交内容归属：以 `git log` / `git show` 的提交事实为准，工作树脏改动不代表提交内容。
+
+取证不到权威证据时，finding 降级为问题（question）而非断言（violation）。

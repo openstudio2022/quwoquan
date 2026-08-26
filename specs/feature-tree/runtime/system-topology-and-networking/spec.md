@@ -89,11 +89,11 @@
 
 ## 8. 开放事项
 
-<a id="open-001"></a>
-### OPEN-001 组网 SIT 尚缺本节点直绑测试证据
+<a id="open-002"></a>
+### OPEN-002 SIT-002 部分折叠分句缺直接测试
 
 - 类型：`capability_gap`
-- 优先级：`P2`
+- 优先级：`P3`
 - 准出影响：`track`
-- 影响或价值：尚缺以本节点锚点为 `spec_ref` 的直接测试——组网收敛的环境级证据当前绑定在 [`environment-topology-and-packaging` GWT-001](../runtime-config/environment-topology-and-packaging/spec.md#gwt-001)，本 L2 的 SIT 子句暂无独立绑定，影响本节点验收覆盖率统计。
-- 完成判定：`SIT-001` 与 `SIT-002` 的结果子句具备真实测试 `spec_ref`（可由现有 stackctl/domain governance 门禁测试迁移绑定），且不再依赖本 OPEN 代替证据。
+- 影响或价值：尚缺直接断言「四平面完整」与「east-west URL 只来自治理分类投影」两个折叠分句的测试——`sit-002.t1` 现绑定的端口块槽位测试只实证端口模型分句，另两分句的回归只能靠 `verify-env-topology` 门禁间接兜底。
+- 完成判定：`SIT-002` 的 t1 子句中「四平面完整」「east-west URL 只来自治理分类投影」两分句各有名实相符的直接测试 `spec_ref`（读 `runtime.yaml` subnets 断言四平面、读 `domain_governance.yaml` east-west 分类断言 URL 投影来源），且不再依赖本 OPEN 代替证据。

@@ -34,6 +34,12 @@ REFERENCES_DIR = REPO_ROOT / ".agents/skills/review/references"
 REGISTRY_PATH = REFERENCES_DIR / "registry.yaml"
 
 _GATE_LINE_RE = re.compile(r"^\s*gate:\s*(?P<command>\S.*?)\s*$")
+# 参数化门唯一判据：命令自带 `<...>` 占位符。需要实参的 gate 行必须在
+# checklist 里写明占位符（如 `RELEASE_FILE=<release json 路径>`）——这里不
+# 维护「已知参数化目标」闭集，避免与 checklist/Makefile 形成第二真相源。
+# 执行方须绑定实参后执行或显式判 N/A，不得与可直跑 gates 混排派发——
+# 无参直跑必失败（R3 POST 评审实证）。
+_PLACEHOLDER_RE = re.compile(r"<[^<>]+>")
 
 
 def derive_profiles(
@@ -65,16 +71,26 @@ def assemble_bindings(bindings: list[dict], active_profiles: list[str]) -> list[
     return selected
 
 
-def collect_gates(checklists: list[str]) -> list[str]:
-    """从选中 checklist 提取 gate: 命令，保序去重——相同 gate 只执行一次。"""
-    seen: dict[str, None] = {}
+def collect_gates(checklists: list[str]) -> tuple[list[str], list[str]]:
+    """从选中 checklist 提取 gate: 命令，保序去重——相同 gate 只执行一次。
+
+    返回 (gates, parameterized_gates)：前者可直跑；后者含 `<...>` 占位符，
+    执行方须绑实参或显式判 N/A。命令统一剥掉包裹反引号。
+    """
+    runnable: dict[str, None] = {}
+    parameterized: dict[str, None] = {}
     for checklist in checklists:
         text = (REFERENCES_DIR / checklist).read_text(encoding="utf-8")
         for line in text.splitlines():
             match = _GATE_LINE_RE.match(line)
-            if match:
-                seen.setdefault(match.group("command"))
-    return list(seen)
+            if not match:
+                continue
+            command = match.group("command").strip("`")
+            if _PLACEHOLDER_RE.search(command):
+                parameterized.setdefault(command)
+            else:
+                runnable.setdefault(command)
+    return list(runnable), list(parameterized)
 
 
 def build_plan(
@@ -101,7 +117,9 @@ def build_plan(
         registry.get("profiles") or {}, changed_paths, resolved_deliverable
     )
     dispatches = assemble_bindings(config.get("bindings") or [], active_profiles)
-    gates = collect_gates([item["checklist"] for item in dispatches])
+    gates, parameterized_gates = collect_gates(
+        [item["checklist"] for item in dispatches]
+    )
 
     roles: dict[str, list[str]] = {}
     for item in dispatches:
@@ -118,6 +136,7 @@ def build_plan(
             for role, checklists in roles.items()
         ],
         "gates": gates,
+        "parameterized_gates": parameterized_gates,
         "generated_at": _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
         "head_sha": _head_sha(),
     }

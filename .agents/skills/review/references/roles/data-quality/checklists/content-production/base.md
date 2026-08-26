@@ -19,7 +19,7 @@
   check: 通读正文；命中任一项即判失败并指出具体段落
 - [MUST NOT] 内容角度、实体类型、`tagRefs`、manifest、asset id、source paths、
   发布账本互相不一致；不一致先修契约或数据，不用代码绕过
-  gate: make verify-data-release-consistency
+  gate: make verify-data-release-consistency RELEASE_FILE=<release json 路径>
 - [MUST NOT] 把 contract fixture、测试 seed 或基础设施探针投影到 feed/homepage/profile
   gate: make verify-app-mock-isolation
 
@@ -30,7 +30,7 @@
 - [MUST] Data 仓库门通过
   gate: make verify-quwoquan-data
 - [MUST] 发布一致性成立
-  gate: make verify-data-release-consistency
+  gate: make verify-data-release-consistency RELEASE_FILE=<release json 路径>
 - [MUST] 三层测试证据齐备：`local_contract` schema/静态/CLI/模块、
   `api_integration` importer/真实存储或环境采样、`user_acceptance` 用户消费链路
   gate: make verify-test-coverage-map

@@ -35,8 +35,8 @@ VALID = """# 轮次交接单
 
 ## 未决项去向
 
-- 谓词单轨缺口：转 `OPEN-007`
-- 组网知识升格：下一工作流 `prd` 承接
+- 谓词单轨缺口（一类：已全仓 AST 扫描收敛并加防回潮锁）：转 `OPEN-007`
+- 组网知识升格（孤例）：下一工作流 `prd` 承接
 
 ## 唯一合法下游
 
@@ -72,6 +72,16 @@ class HandoffManifestGateTest(unittest.TestCase):
         text = VALID.replace("转 `OPEN-007`", "还没想好怎么办")
         issues = self.module.validate(text, "m.md")
         self.assertTrue(any("未决项悬空" in i for i in issues), issues)
+
+    def test_detects_pending_item_without_generalization(self) -> None:
+        """有裁决但缺「孤例/一类」泛化判定——举一反三必须留痕，不许只靠自觉。"""
+        text = VALID.replace(
+            "- 组网知识升格（孤例）：下一工作流 `prd` 承接",
+            "- 组网知识升格：下一工作流 `prd` 承接",
+        )
+        issues = self.module.validate(text, "m.md")
+        self.assertTrue(any("缺泛化判定" in i for i in issues), issues)
+        self.assertFalse(any("未决项悬空" in i for i in issues), issues)
 
     def test_detects_evidence_without_fields(self) -> None:
         """无退出码/时间戳/SHA 的证据无法复跑，只能被转抄——必须拦。"""

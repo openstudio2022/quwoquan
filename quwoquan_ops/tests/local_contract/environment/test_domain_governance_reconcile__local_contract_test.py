@@ -82,6 +82,7 @@ class DnsApplyReconciliationLocalContractTest(unittest.TestCase):
 
     def test_matching_record_with_correct_ttl_is_left_untouched(self) -> None:
         """spec_ref: environment-topology-and-packaging GWT-001（稳态记录不产生 provider 写入）"""
+        # spec_ref: specs/feature-tree/runtime/system-topology-and-networking/spec.md#sit-001.t1
         provider = _RecordingProvider(
             [
                 {
@@ -124,6 +125,7 @@ class DnsApplyReconciliationLocalContractTest(unittest.TestCase):
         self,
     ) -> None:
         """spec_ref: environment-topology-and-packaging GWT-001（破坏性生产动作缺确认即 fail closed）"""
+        # spec_ref: specs/feature-tree/runtime/system-topology-and-networking/spec.md#sit-001.t2
         provider = _RecordingProvider(
             [
                 {

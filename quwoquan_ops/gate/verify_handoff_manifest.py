@@ -7,7 +7,8 @@ HANDOFF 是宪法要求的工作流间交接契约，但聊天文本无法校验
 
 1. 头部字段：`intent 终版`、`新轮触发判定`。
 2. 宪法四项段落齐全：`## 产出物`、`## 未决项去向`、`## 唯一合法下游`、`## 证据链`。
-3. 未决项三向裁决零悬空：每条落到「转 OPEN-###」「Out of Scope」「下一工作流承接」之一。
+3. 未决项三向裁决零悬空：每条落到「转 OPEN-###」「Out of Scope」「下一工作流承接」之一；
+   且每条带泛化判定「孤例」或「一类」留痕（显式「无未决项」豁免）。
 4. 证据链每条带「命令 + 退出码 + 时间戳 + 工作树 SHA」，下游消费时过期即复跑。
 
 用法：
@@ -37,6 +38,9 @@ REQUIRED_SECTIONS = ("## 产出物", "## 未决项去向", "## 唯一合法下�
 
 # 三向裁决：转 OPEN / Out of Scope / 下一工作流承接。「无未决项」显式声明也合法。
 RESOLUTION_RE = re.compile(r"OPEN-\d{3,}|Out of Scope|承接|无未决项")
+# 泛化判定留痕：把「举一反三」从自觉条款变成结构字段——每条未决项必须判
+# 「孤例」还是「一类」（一类须写系统性排查方式）；「无未决项」声明豁免。
+GENERALIZATION_RE = re.compile(r"孤例|一类|无未决项")
 EVIDENCE_RE = re.compile(
     r"exit=\d+.*\d{4}-\d{2}-\d{2}.*\b[0-9a-f]{7,40}\b|\d{4}-\d{2}-\d{2}.*exit=\d+.*\b[0-9a-f]{7,40}\b"
 )
@@ -69,6 +73,11 @@ def validate(text: str, rel: str) -> list[str]:
                 issues.append(
                     f"{rel}: 未决项悬空「{bullet[:40]}」——必须落到"
                     "「转 OPEN-###」「Out of Scope」「下一工作流承接」之一"
+                )
+            if not GENERALIZATION_RE.search(bullet):
+                issues.append(
+                    f"{rel}: 未决项缺泛化判定「{bullet[:40]}」——必须标注"
+                    "「孤例」或「一类」（一类须写系统性排查方式）"
                 )
 
     downstream = _section(text, "## 唯一合法下游")

@@ -17,6 +17,12 @@ ENGINEERING_CLAIM_RE = re.compile(
 SPEC_REF_RE = re.compile(
     r"specs/feature-tree/(?:[A-Za-z0-9_.-]+/)*spec\.md#[A-Za-z0-9_.%\-\u4e00-\u9fff]+"
 )
+# 绑定标记：只有 ref 所在行、ref 出现之前带 `spec_ref` 记号（不区分大小写，如
+# `# spec_ref:` 注释或 `SPEC_REF = ` 常量）才计入证据。裸字符串字面量（fixture、
+# 断言消息、文档提及）不构成绑定——曾实测 28 文件 38 行假绑定被计入。
+# Go 结构体字段 `SpecRef:`（无下划线）是 readiness 数据、非该测试的绑定声明，
+# 故意不匹配。
+SPEC_REF_MARKER_RE = re.compile(r"spec_ref", re.IGNORECASE)
 REPO_SPEC_PATH_RE = re.compile(r"`(specs/[A-Za-z0-9_./-]+\.md)(?:#[^`]*)?`")
 # 复合验收的结果子句：结果角色的顶层 bullet 是子句的载体。角色只由行首关键字决定，
 # `GIVEN`/`WHEN`/`条件：` 是前置条件，`AND` 不表达独立性、只继承最近一条角色 bullet 的角色，

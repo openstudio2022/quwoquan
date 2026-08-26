@@ -122,6 +122,7 @@ WORKFLOW_SKILLS = (
     "environment-ops",
     "content-production",
     "incident-inspection",
+    "distill",
 )
 
 # 有 Cursor 命令的工作流。命令文件与 metadata.command 必须双向一一映射。
@@ -821,8 +822,44 @@ def check_completion_criteria() -> list[str]:
     return issues
 
 
+def _claude_skills_index_mode() -> tuple[str | None, str | None]:
+    """`.claude/skills` 在 git index 中的 mode。
+
+    返回 (mode, git_error) 四态：git 成功且有条目 → (mode, None)；git 成功但
+    未跟踪 → (None, None)；git 自身失败 → (None, 错误细节)——失败不得与
+    「未跟踪」混淆编码，错误细节必须留痕。
+    """
+    try:
+        out = subprocess.run(
+            ["git", "ls-files", "-s", ".claude/skills"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except OSError as exc:
+        return None, str(exc)
+    except subprocess.CalledProcessError as exc:
+        return None, (exc.stderr or str(exc)).strip()
+    first = out.stdout.split()
+    return (first[0] if first else None), None
+
+
 def check_harness_stubs() -> list[str]:
     issues: list[str] = []
+    # .claude/skills 必须以 symlink（git mode 120000）指向 .agents/skills 真相源；
+    # 物化为普通目录会形成随时间漂移的第二副本（reviewer 曾据物化视图误判）。
+    mode, git_error = _claude_skills_index_mode()
+    if git_error is not None:
+        issues.append(
+            f".claude/skills: 无法取得 git index 形态（git 失败：{git_error}）——"
+            "形态锁不得静默放过，修复 git 环境后复跑"
+        )
+    elif mode != "120000":
+        issues.append(
+            f".claude/skills: git index mode={mode or '未跟踪'}，应为 120000（symlink）；"
+            "物化副本会与 .agents/skills 真相源漂移，请恢复 symlink 后提交"
+        )
     for pattern in HARNESS_STUB_SKILL_GLOBS:
         for stub in sorted(ROOT.glob(pattern)):
             if stub.is_symlink():

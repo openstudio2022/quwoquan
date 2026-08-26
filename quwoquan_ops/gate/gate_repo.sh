@@ -34,6 +34,20 @@ if [[ "${1:-}" == "--scope" ]]; then
   scope="${2:-}"
 fi
 
+# 结构化 summary：EXIT trap 按 gate_output 统一 schema 落盘最终结果；
+# ERR trap 捕获主 shell 最后失败命令（子 shell 内部失败只有退出码，best-effort）。
+# set -E 让 ERR trap 进入函数与子 shell；发射器自身失败不改变门禁退出语义。
+set -E
+_gate_failed_command=""
+trap '_gate_failed_command=$BASH_COMMAND' ERR
+emit_structured_summary() {
+  local exit_code=$?
+  python3 -B quwoquan_ops/gate/emit_gate_repo_summary.py \
+    --scope "$scope" --exit-code "$exit_code" \
+    --failed-command "$_gate_failed_command" || true
+}
+trap emit_structured_summary EXIT
+
 gate_change_range_args=()
 if [[ -n "${GATE_CHANGE_BASE_SHA:-}" || -n "${GATE_CHANGE_HEAD_SHA:-}" ]]; then
   if [[ -z "${GATE_CHANGE_BASE_SHA:-}" || -z "${GATE_CHANGE_HEAD_SHA:-}" ]]; then

@@ -70,3 +70,9 @@
 - deliverable：脱敏巡检报告。
 - verify: 只读工作流，无变更判据；报告生成命令退出 0。
 - check: 每个 fingerprint 有优先级、owner 与 `report-only / handoff-dev` 结论；无复现证据不进入修复。
+
+## distill
+
+- deliverable：规则候选清单。
+- verify: `make verify-agent-context-budget` 退出 0（候选与既有资产结构合规、落点无重复正文）。
+- check: 每条候选带触发场景、根因层、建议落点与 gate/check 绑定（无绑定候选不标 MUST）；每条有两次及以上独立复发证据；本轮 diff 无未经确认的规则资产变更，已确认候选由 prd/dev 承接。

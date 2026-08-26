@@ -709,3 +709,37 @@ def test_outcome_clause_split_ignores_separators_inside_code_spans() -> None:
     ]
     assert outcome_sub_clauses("写入成功，并发请求不阻塞") == ["写入成功，并发请求不阻塞"]
     assert outcome_sub_clauses("A 成立；B 成立") == ["A 成立", "B 成立"]
+
+
+def test_bare_string_literal_spec_ref_is_not_evidence(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """假绑定负例：无 spec_ref 标记的裸字符串字面量不计入证据。
+
+    只认单行形态——ref 所在行、ref 之前有大小写不敏感的 `spec_ref` 记号
+    （注释或常量声明）。fixture 字面量、断言消息、Go 结构体字段 `SpecRef:`
+    （无下划线，属 readiness 数据）都不构成绑定。
+    """
+    # spec_ref: specs/feature-tree/platform-ops-governance/spec.md#dom-001
+    from quwoquan_ops.cli.lib.feature_tree import evidence as ft_evidence
+
+    root = tmp_path / "repo"
+    write(
+        root / "quwoquan_ops" / "tests" / "sample__local_contract_test.py",
+        "# spec_ref: specs/feature-tree/spec.md#uat-001\n"
+        'SPEC_REF = "specs/feature-tree/spec.md#uat-002"\n'
+        'bare = "specs/feature-tree/spec.md#uat-003"\n'
+        'msg = "见 specs/feature-tree/spec.md#uat-004 锚点"\n',
+    )
+    write(
+        root / "quwoquan_service" / "x" / "readiness__contract__local_contract_test.go",
+        'SpecRef: "specs/feature-tree/spec.md#uat-005",\n',
+    )
+    monkeypatch.setattr(ft_context, "REPO_ROOT", root)
+
+    assert ft_evidence.test_spec_refs() == {
+        "quwoquan_ops/tests/sample__local_contract_test.py": {
+            "specs/feature-tree/spec.md#uat-001",
+            "specs/feature-tree/spec.md#uat-002",
+        }
+    }

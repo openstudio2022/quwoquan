@@ -859,6 +859,11 @@ verify-handoff-manifest:
 review-dispatch-plan:
 	@python3 quwoquan_ops/cli/review_dispatch.py $(ARGS)
 
+# 资产垃圾回收报告（僵尸 reference / harness 分叉 / AGENTS.md 与特性树重复正文），
+# 报告型不阻断，落 .qwq_output/env/repo/runs/asset-gc/report.md。
+asset-gc-report:
+	@python3 quwoquan_ops/tools/report_asset_gc.py
+
 verify-retired-runtime-architecture:
 	@python3 quwoquan_ops/gate/verify_retired_runtime_architecture.py
 
@@ -1252,6 +1257,8 @@ test-gate-companion-local-contract: prepare-test-python
 		quwoquan_ops/tests/local_contract/provider/test_provider_conformance_evidence_source_coverage__contract__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/provider/test_provider_conformance_evidence_attestation_promotion__contract__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_agent_context_budget__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_handoff_manifest__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_gate_repo_summary__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_api_path_unversioned__contract__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_app_architecture__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_app_client_contract_kind_alignment__gate__local_contract_test.py \

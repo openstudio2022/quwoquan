@@ -179,6 +179,7 @@ def test_container_mount_set_order_is_canonical_but_mount_fields_remain_strict()
 
 
 def test_inventory_rejects_port_outside_canonical_target_block() -> None:
+    # spec_ref: specs/feature-tree/runtime/system-topology-and-networking/spec.md#sit-002.t1
     inventory = docker_inventory()
     container_key = ("docker", "inspect", CONTAINER_ID)
     container = json.loads(inventory[container_key].stdout)

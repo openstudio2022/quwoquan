@@ -537,6 +537,36 @@ class AgentContextBudgetGateTest(unittest.TestCase):
         issues = self.module.check_harness_stubs()
         self.assertTrue(any("未指向 .agents/skills/" in issue for issue in issues), issues)
 
+    def test_detects_materialized_claude_skills_directory(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-005
+        """`.claude/skills` 物化为普通目录（index mode 非 120000）即漂移候选，必须报。"""
+        self._use_fixture_root()
+        self._write(".claude/skills/dev/SKILL.md", "物化副本。\n")
+        self._track(".claude/skills/dev/SKILL.md")
+        issues = self.module.check_harness_stubs()
+        self.assertTrue(
+            any(".claude/skills" in i and "120000" in i for i in issues), issues
+        )
+
+    def test_symlinked_claude_skills_passes_form_lock(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-005
+        self._use_fixture_root()
+        self._write(".agents/skills/dev/SKILL.md", "真相源。\n")
+        (self.root / ".claude").mkdir()
+        (self.root / ".claude/skills").symlink_to(self.root / ".agents/skills")
+        self._track(".claude/skills")
+        issues = self.module.check_harness_stubs()
+        self.assertFalse(any(".claude/skills" in i for i in issues), issues)
+
+    def test_git_failure_reports_error_detail_not_untracked(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-005
+        """git 自身失败必须带错误细节报 issue，不得与「未跟踪」混淆编码。"""
+        self._use_fixture_root(git=False)
+        issues = self.module.check_harness_stubs()
+        claude = [i for i in issues if ".claude/skills" in i]
+        self.assertTrue(any("git 失败" in i for i in claude), issues)
+        self.assertFalse(any("未跟踪" in i for i in claude), issues)
+
     # ── 完成判据单轨负例 ──────────────────────────────────────────────
     def test_detects_missing_completion_criteria_table(self) -> None:
         # spec_ref: specs/feature-tree/runtime/development-workflow-governance/spec.md#sit-002.t2

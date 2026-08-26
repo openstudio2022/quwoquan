@@ -17,7 +17,7 @@
 
 已知目标路径时执行 `make feature-context TARGET=<spec-or-code-path>`；代码路径若被多个 L1 同优先级认领或没有 owner，返回 `GATE_BLOCK`，先修规格归属。
 
-工作流语义由 `.agents/skills/<name>/SKILL.md` 定义：`explore`、`prd`、`design`、`dev`、`continue`、`plan-next`、`review`、`commit`，以及自动触发的 `environment-ops`、`content-production`、`incident-inspection`。技能由模型按 `description` 自动匹配，用户是否输入斜杠命令都不改变本契约。评审由 `.agents/skills/review` 在每个工作流的 PRE 与 POST 派发。
+工作流语义由 `.agents/skills/<name>/SKILL.md` 定义：`explore`、`prd`、`design`、`dev`、`continue`、`plan-next`、`review`、`commit`，以及自动触发的 `environment-ops`、`content-production`、`incident-inspection`、`distill`。技能由模型按 `description` 自动匹配，用户是否输入斜杠命令都不改变本契约。评审由 `.agents/skills/review` 在每个工作流的 PRE 与 POST 派发。
 
 ## 每次任务五段执行契约
 

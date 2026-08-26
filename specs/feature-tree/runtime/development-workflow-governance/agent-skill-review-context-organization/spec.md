@@ -82,6 +82,7 @@
 - THEN bundle 只含匹配 profile 的角色 checklist，并满足以下约束。
   - 不匹配技术栈的 gate 不出现在证据计划中。
   - 相同 gate 在计划内只出现一次。
+  - 含 `<...>` 占位符的参数化 gate 与可直跑 gate 分列两字段，执行方绑定实参后执行或显式判 N/A，不得混排派发。
 
 <a id="gwt-005"></a>
 ### GWT-005 三家 harness 同源一致

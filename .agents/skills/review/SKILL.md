@@ -59,7 +59,10 @@ changed_paths:                # POST 必填，PRE 可为计划中的路径
    board 按清单派发，不增删角色。评审收口后把汇总结论写同目录 `summary.md`，
    供轮次交接单与下一轮 RESOLVE 引用。
 3. **POST 先取证再评审**：按 `plan.json` 的 `gates` 逐条执行一次，
-   形成 evidence map；测试结果是证据，文档状态不是。任何失败先归因四选一：
+   形成 evidence map；测试结果是证据，文档状态不是。`parameterized_gates`
+   里的命令含 `<...>` 占位符，board 必须绑定本轮实参后执行，或逐条显式判
+   N/A 并写明理由（如本轮无 release 对象），[MUST NOT] 无参直跑或静默跳过。
+   任何失败先归因四选一：
    `本计划引入 / 并行会话中间态 / 存量债 / 环境 flaky`，归因需基线对照证据
    （HEAD 重跑、`git log --follow`、复跑）。并行中间态如实交接，**不修不掩盖**。
    环境阻塞（URL、token、容器、凭证缺失）如实报告并说明影响的证据层，

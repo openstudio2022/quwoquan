@@ -65,6 +65,9 @@
 - immutable runtime 退出必须绑定 canonical running startup receipt 与其 `candidateDigest` 对应的只读 candidate root；candidate 自身 package/Graph/provider/observability/Compose 字节仍须完整校验，但不得因当前工作区已生成下一版 Graph 而拒绝停止旧 candidate。
 - 私有仓无法启用原生 required reviewers 时，生产审批事实由本领域独立 hosted approval authority 拥有。受控 GitHub App/webhook 只接收官方 event/action 闭集，验证签名与 delivery ID 后按 request→approved 追加，并绑定 installation、repository、workflow run、head SHA、candidate、environment 与 reviewer decision。
 - workflow 只按 candidate/run 读取 hosted exact-byte approval readback；该 readback 必须声明 `nativeProtection=false` 与 `enforcement=external_hosted_ledger`。缺 request/approved、签名无效、重复 delivery 不同 payload、顺序或身份漂移均 `GATE_BLOCK`，不得用 job queue、Deployment status 或人工布尔值替代。
+- 门禁 GATE_BLOCK 结构化输出只经 `quwoquan_ops/cli/lib/gate_output.py` 统一 schema 落盘 `.qwq_output/env/repo/runs/gate/`。`quwoquan_ops/gate/gate_repo.sh` 经 EXIT trap 调 `emit_gate_repo_summary.py` 发射整链结构化 summary，按 scope 独立落盘（以上支撑 DOM-001 的机器可读裁定能力）。
+- `spec_ref` 测试证据只认单行绑定形态：ref 所在行、ref 之前有大小写不敏感的 `spec_ref` 记号（注释或常量声明）。裸字符串字面量（fixture、断言消息、Go `SpecRef:` 数据字段）不构成绑定，负例由 feature-tree 合约测试锁定。
+- 评审派发 `quwoquan_ops/cli/review_dispatch.py`（工程归属经 `make feature-context` 机器裁定归本领域）输出的 plan.json 把 gate 拆为可直跑 `gates` 与 `parameterized_gates` 两字段。占位符是唯一判据：需实参的 gate 行必须在 checklist 内自带 `<...>` 占位符，不维护平行的已知目标闭集。参数化门由执行方绑定实参后执行或显式判 N/A，不得无参直跑。
 
 <a id="req-003"></a>
 ### REQ-003 候选绑定的保留数据修复必须在业务 API 启动前完成
@@ -150,14 +153,3 @@
 - 影响或价值：缺全局容量规划、灾备与观测统稿的 L2 owner，相关知识散落。具体 P0 缺口已在 [`commercial-readiness-risk-closure/spec.md#OPEN-007`](./commercial-readiness-risk-closure/spec.md#open-007)（备份恢复演练与 RPO/RTO）与 [`commercial-readiness-risk-closure/spec.md#OPEN-008`](./commercial-readiness-risk-closure/spec.md#open-008)（日志统一 collector 上云）登记，本 OPEN 只补「统稿 L2 结构」缺口，不重复登记具体风险项。
 - 完成判定：`DOM-003` 的容量水位可用性证据获得统稿 owner——本 L1 下建立容量/灾备/观测统稿 L2（经 prd→design 流程），上述两条现存 OPEN 由该 L2 承接或保留原节点并被其引用；`make verify-feature-tree` 退出 0。
 
-<a id="open-003"></a>
-### OPEN-003 门禁输出机器可读化
-
-- 类型：`capability_gap`
-- 优先级：`P2`
-- 准出影响：`track`
-- 影响或价值：尚缺全链路机器可读的 GATE_BLOCK 输出——统一 schema（`quwoquan_ops/cli/lib/gate_output.py`）虽已接入 `verify-agent-context-budget` / `verify-handoff-manifest` / `verify-feature-tree` 并锁定中文子句误切负例，其余门禁仍以自由文本为主，AI 消费失败信息与自动修复闭环低效（出处：AI 工程资产调研，转录 `0c4c608c-7219-47c2-bcda-5c66dcf93294` 及门禁结构调研）。另一缺口：`review_dispatch.py` 的 `collect_gates` 不区分可直跑门与参数化门，checklist 中 3 类参数化命令会被原样派发且无参必失败（`make verify-data-release-consistency` 需 `RELEASE_FILE`、`make feature-context TARGET=<...>` 两个占位符变体、`verify release-lifecycle --release <releaseId>`；R3 POST 评审实证第一类）。
-- 完成判定：`DOM-001` 剩余三项全部落地。
-  - `quwoquan_ops/gate/gate_repo.sh` 输出含结构化 summary。
-  - `spec_ref` 扫描对「字符串字面量假绑定」有负例合约测试并收紧生产规则（当前实测 28 文件 38 行无 `spec_ref` 标记仍被计入，收紧前需先清存量或显式登记）。
-  - `review_dispatch` 把含 `<...>` 占位符或已知参数化目标的 gate 标记为 `parameterized` 独立字段（执行方须绑定实参或显式判 N/A，不混入可直跑 gates），并有合约测试锁定。

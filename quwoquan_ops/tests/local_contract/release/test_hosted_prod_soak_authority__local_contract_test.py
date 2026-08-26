@@ -287,6 +287,7 @@ def test_trusted_hosted_soak_readback_returns_derived_claims(tmp_path: Path) -> 
 def test_producer_projects_raw_observations_without_secret_material(
     tmp_path: Path,
 ) -> None:
+    # spec_ref: specs/feature-tree/runtime/system-topology-and-networking/spec.md#sit-002.t2
     soak_path, rollout, manifest = _fixture(tmp_path)
     soak = json.loads(soak_path.read_text(encoding="utf-8"))["receipt"]
 

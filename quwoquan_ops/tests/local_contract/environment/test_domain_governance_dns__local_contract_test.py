@@ -73,6 +73,7 @@ class DomainGovernanceDnsLocalContractTest(unittest.TestCase):
 
     def test_public_resolvers_stay_independent_of_the_authoritative_vendor(self) -> None:
         """spec_ref: environment-topology-and-packaging GWT-001（两个相互独立的公共解析器）"""
+        # spec_ref: specs/feature-tree/runtime/system-topology-and-networking/spec.md#sit-001.t2
         policy = domain_governance._policy()
         resolvers = domain_governance._resolvers(policy)
         self.assertGreaterEqual(len(resolvers), 2)
@@ -110,6 +111,7 @@ class DomainGovernanceDnsLocalContractTest(unittest.TestCase):
         self,
     ) -> None:
         """spec_ref: environment-topology-and-packaging GWT-001（本地 SAN 由 topology 派生）"""
+        # spec_ref: specs/feature-tree/runtime/system-topology-and-networking/spec.md#sit-001.t2
         with tempfile.TemporaryDirectory() as temporary:
             deploy_root = Path(temporary) / "deploy"
             with mock.patch.dict(
@@ -278,6 +280,7 @@ class ProdEdgeAddressLocalContractTest(unittest.TestCase):
 
     def test_injected_edge_address_covers_every_prod_topology_host(self) -> None:
         """spec_ref: environment-topology-and-packaging GWT-001（注入后覆盖全部 topology host）"""
+        # spec_ref: specs/feature-tree/runtime/system-topology-and-networking/spec.md#sit-001.t1
         records = domain_governance.desired_dns_records("1.2.3.4")
         addressed = {
             str(record["name"])

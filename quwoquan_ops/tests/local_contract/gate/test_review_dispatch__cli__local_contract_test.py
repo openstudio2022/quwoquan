@@ -89,6 +89,64 @@ class ReviewDispatchAssemblyTest(unittest.TestCase):
         self.assertEqual(len(plan["gates"]), len(set(plan["gates"])))
         self.assertIn("make verify-retired-terms-zero", plan["gates"])
 
+    def test_parameterized_gates_are_split_out_of_runnable(self) -> None:
+        """参数化门（含 `<...>` 占位符）不得混入可直跑 gates。
+
+        无参直跑必失败（R3 POST 评审实证）。占位符是唯一判据——需要实参的
+        gate 行必须在 checklist 里自带占位符（如
+        `make verify-data-release-consistency RELEASE_FILE=<release json 路径>`），
+        不维护平行的「已知参数化目标」闭集。
+        """
+        gates, parameterized = _cli.collect_gates(
+            [
+                str(path.relative_to(_REPO_ROOT / ".agents/skills/review/references"))
+                for path in (
+                    _REPO_ROOT / ".agents/skills/review/references/roles"
+                ).rglob("*.md")
+                if "/checklists/" in path.as_posix()
+            ]
+        )
+        for command in gates:
+            self.assertIsNone(
+                _cli._PLACEHOLDER_RE.search(command),
+                f"可直跑 gates 混入占位符命令：{command}",
+            )
+            self.assertFalse(
+                command.startswith("`") or command.endswith("`"),
+                f"gate 命令未剥反引号：{command}",
+            )
+        # 需实参的 gate 必须不出现在可直跑侧（占位符判据生效的实例锁）。
+        self.assertFalse(
+            any(command.startswith("make verify-data-release-consistency") for command in gates),
+            gates,
+        )
+        self.assertTrue(
+            any(
+                command.startswith("make verify-data-release-consistency")
+                and "RELEASE_FILE=<" in command
+                for command in parameterized
+            ),
+            parameterized,
+        )
+        self.assertTrue(
+            any("feature-context TARGET=<" in command for command in parameterized)
+        )
+        self.assertTrue(
+            any("--release <releaseId>" in command for command in parameterized)
+        )
+
+    def test_plan_json_has_parameterized_gates_field(self) -> None:
+        plan = _cli.build_plan(
+            _registry,
+            "dev",
+            "POST",
+            None,
+            ["quwoquan_ops/gate/verify_handoff_manifest.py"],
+        )
+        self.assertIn("parameterized_gates", plan)
+        overlap = set(plan["gates"]) & set(plan["parameterized_gates"])
+        self.assertEqual(overlap, set(), f"两字段不得重叠：{overlap}")
+
     def test_unknown_workflow_exits_2(self) -> None:
         with self.assertRaises(SystemExit) as ctx:
             _cli.build_plan(_registry, "commit", "POST", None, [])

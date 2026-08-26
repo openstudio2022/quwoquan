@@ -13,7 +13,7 @@
 ### In Scope
 
 - AppRoot/L1/L2/L3 的目录、规格、设计与验收规则。
-- 工作流技能（`explore/prd/design/dev/continue/plan-next/review/commit` 与自动触发的 `environment-ops/content-production/incident-inspection`）的统一模板、上下文链与工作流间交接契约。
+- 工作流技能（`explore/prd/design/dev/continue/plan-next/review/commit` 与自动触发的 `environment-ops/content-production/incident-inspection/distill`）的统一模板、上下文链与工作流间交接契约。
 - 按 `(workflow, deliverable, profiles)` 派发角色评审的 review 机制与分级语义。
 - 跨 harness（Cursor / Codex / Claude Code）的指令载体分配与上下文预算。
 - 动态特性上下文、总览、变更影响报告和机器门禁。
@@ -49,6 +49,9 @@
 - 显式调用工作流技能与自然语言意图必须使用同一 `RESOLVE / PRE / DURING / POST / HANDOFF` 五段执行契约；两者只在 RESOLVE 的输入方式上不同，产出同一 `(workflow, deliverable, scope)` 三元组。
 - 工作流之间必须经 HANDOFF 交接：未决项必须落到「最低可关闭节点 `OPEN-###`」「Out of Scope」「下一工作流承接」三者之一；HANDOFF 必须声明唯一合法下游并覆盖其输入必需项，下一工作流的 RESOLVE 必须消费上一工作流的 HANDOFF，断链必须阻断。
 - 轮次 HANDOFF 的物理形态是交接单：按需落 `.qwq_output/env/repo/runs/handoff/<轮次>/manifest.md`（宪法四项加证据字段「命令+退出码+时间戳+工作树 SHA」），由 `quwoquan_ops/gate/verify_handoff_manifest.py` 校验四项齐全、证据字段完整、未决项三向裁决零悬空。下游消费时证据过期即复跑，不得转抄结论。
+- 交接单每条未决项必须带泛化判定「孤例」或「一类」留痕，判为一类的须写明系统性排查方式。门禁只强制留痕存在（显式声明「无未决项」时豁免）；排查方式完整性由 POST 评审 check 承担，不在门禁强制范围内。
+- 教训沉淀由 `distill` 工作流（`.agents/skills/distill/SKILL.md`）承接：输入为交接单跨轮重复缺口、评审 finding 复发、用户同类纠正第二次，输出为带触发场景、根因层、建议落点、gate/check 绑定四字段的规则候选（无绑定候选不得标 MUST）。回写只走「提议 + 人确认 + prd/dev 正常工作流」，agent 不得绕过工作流直接修改规则资产。
+- 资产垃圾回收报告（僵尸 reference、harness 分叉、AGENTS.md 与特性树重复正文）由 `make asset-gc-report` 可重复生成于 `.qwq_output/env/repo/runs/asset-gc/`，回收裁决走 distill / plan-next。
 - 各工作流完成判据以 `.agents/skills/review/references/completion-criteria.md` 为唯一判据表（完成 = 指定 verify 命令退出 0，禁止计数或抽样等代理指标），表存在性与各 SKILL.md HANDOFF 段引用由 `quwoquan_ops/gate/verify_agent_context_budget.py` 校验。
 - 动态上下文、总览和变更报告只写入 `.qwq_output`。
 - 目录、链接、章节、验收证据和禁止文件必须由可执行门禁校验。
@@ -66,6 +69,15 @@
 - checklist 每条必须带 `MUST / MUST NOT / SHOULD / SHOULD NOT / MAY / ADVISORY` 分级；标 MUST 的条目必须绑定真实存在的 `gate:` 命令或客观可判定的 `check:` 谓词，否则必须降级为 SHOULD。
 - 指令真相源必须放在三家 harness 共享载体（`AGENTS.md` 与 `.agents/skills/`）；harness 专属目录只允许放触发加速器与生成产物。
 - 任一工作目录下 `AGENTS.md` 的合并总量必须落在最严 harness 的上下文预算内，超限必须阻断而不是静默截断。
+
+<a id="req-004"></a>
+### REQ-004 并行会话合法合入协议
+
+- 合法合入态唯一定义为「scope-green + foreign-red 登记」：本会话 scope（当前计划与本会话 changed_paths）内影响面门禁全绿，且域外已知红以带归因与泛化判定的条目登记进该轮次交接单缺口段后，允许提交并推送 `dev1.0`。
+- 不得以工作树整体全绿为合入前提——并行脏树是常态；也不得以域外红为由使用 `--no-verify` 绕过门禁。
+- 混合文件（本会话与并行会话改动同文件）采用部分暂存提交，只提交本会话语义行。
+- 归因或取证用的 stash/restore 操作必须以 pathspec 显式限定在本会话 scope 内文件，禁止无差别 `git stash`/`git checkout --` 触碰并行会话未提交增量——无差别恢复会把他会话未提交的 spec 增量静默还原回 HEAD 态。
+- ContractGraph 静止窗口：contract view 构建与 accept 期间持有静止窗口，其他会话不得并发修改 canonical contracts；builder 对构建期漂移 fail-closed。遇 Graph 红先判定是否为窗口冲突（等待后复跑），再做失败归因。
 
 ## 6. 契约与依赖
 
@@ -112,20 +124,11 @@
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：部分节点仍以同节点 OPEN 声明尚缺直接测试 `spec_ref`，影响自动验收覆盖率。
 - 完成判定：`SIT-001` 及全部节点验收锚点均有真实测试 `spec_ref`，且不再依赖 OPEN 代替证据。
 
-<a id="open-004"></a>
-### OPEN-004 distill 沉淀工作流与资产垃圾回收
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：缺教训沉淀工作流，同一教训跨会话重犯——「稳定规则写回 AGENTS.md」只是自觉条款，无工作流、无自动化、无审计（出处：调研转录 `0c4c608c-7219-47c2-bcda-5c66dcf93294`）。回写必须是「提议 + 人确认 + prd/dev 正常工作流」，agent 不得绕过工作流直接修改规则资产。
-- 完成判定：`SIT-003` 的沉淀子句由真实工作流覆盖——新建 distill 顶层工作流技能（落位 .agents/skills/distill/，输入为交接单跨轮重复缺口、评审 finding 复发、用户同类纠正第二次出现，输出为带触发场景、根因层、建议落点、gate/check 绑定的规则候选，无绑定只能落 SHOULD/ADVISORY）并通过 `make verify-agent-context-budget`。资产垃圾回收报告（skill 死引用、harness 分叉、AGENTS.md 与特性树重复正文）可重复生成于 `.qwq_output`。
-
 <a id="open-005"></a>
-### OPEN-005 并行会话合法合入协议
+### OPEN-005 并行会话合法合入协议 gate/check 实现
 
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：缺并行会话的合法合入通道，并行脏树与 ContractGraph 互锁反复出现（出处：调研转录 `0c4c608c-7219-47c2-bcda-5c66dcf93294`，归纳计数「至少 8 会话」待精确复核），无静止窗口与合法合入通道时门禁正确变红反而逼出 `--no-verify`。
-- 完成判定：`SIT-003` 的合入子句由真实 gate/check 覆盖——「scope-green + foreign-red 登记」合法合入态（本会话 scope 内门禁全绿、域外已知红登记进轮次交接单缺口段后允许合入）写入本节点能力要求并绑定 gate/check；ContractGraph accept 的静止窗口/原子 accept 约定有门禁化表达。
+- 影响或价值：尚缺可执行 gate/check 与直接测试 `spec_ref`——协议语义已冻结为 `REQ-004`（scope-green + foreign-red 登记、部分暂存、scope 内 pathspec、ContractGraph 静止窗口），但语义只靠自觉时，并行脏树互锁仍可能逼出 `--no-verify`（出处：调研转录 `0c4c608c-7219-47c2-bcda-5c66dcf93294`）。
+- 完成判定：`SIT-003` 的合入子句（`.t2`）由真实 gate/check 覆盖——`REQ-004` 的合法合入态有可执行校验（如提交前 scope-green 自动判定、交接单 foreign-red 登记联动检查），ContractGraph 静止窗口约定有门禁化表达，且对应测试带 `spec_ref` 绑定。

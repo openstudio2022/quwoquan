@@ -217,3 +217,12 @@ workflows:
         checklist: roles/observability/checklists/incident-inspection/base.md
       - role: ops
         checklist: roles/ops/checklists/incident-inspection/base.md
+
+  distill:
+    segments: [POST]
+    deliverable: rule-candidates
+    bindings:
+      - role: architect
+        checklist: roles/architect/checklists/distill/base.md
+      - role: user
+        checklist: roles/user/checklists/distill/base.md
