@@ -12,14 +12,14 @@ from typing import Iterable
 # 逃逸与目标存在性。用完全限定包路径导入：顶层名 `feature_tree` 被
 # cli/feature_tree.py 薄壳占用，短名导入会与其冲突。
 from quwoquan_ops.cli.lib.feature_tree.evidence import extract_spec_refs
+from quwoquan_ops.cli.lib.feature_tree.patterns import ACCEPTANCE_ANCHOR_RE
 
 from .constants import ROOT
 from .object_semantics import camel_to_snake
 
-# 对象证据只认验收锚点；`.tN` 子句剥离到主锚点做存在性校验（语义过滤，非语法解析）。
-_ACCEPTANCE_ANCHOR_RE = re.compile(
-    r"^((?:uat|dom|sit|gwt)-\d{3,})(?:\.t\d+)?$", re.IGNORECASE
-)
+# 对象证据只认验收锚点；`.tN` 子句剥离到主锚点做存在性校验（语义过滤，非语法
+# 解析）。闭集与位数引用 feature-tree 库唯一定义点。
+_ACCEPTANCE_ANCHOR_RE = ACCEPTANCE_ANCHOR_RE
 
 
 def is_substantive_implementation_source(path: Path) -> bool:

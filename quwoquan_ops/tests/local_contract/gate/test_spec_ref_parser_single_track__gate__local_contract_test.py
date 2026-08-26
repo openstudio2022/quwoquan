@@ -5,6 +5,7 @@ evidence.extract_spec_refs 提供状态机）；任何门禁/工具再定义第�
 spec_ref 解析正则都会形成静默漏计的第二真相源（R4 最终复审实证）。
 本测试以 AST 级判据扫描全仓非测试 Python 源，锁死第五套解析器出现。
 """
+# spec_ref: specs/feature-tree/platform-ops-governance/spec.md#dom-001
 from __future__ import annotations
 
 import ast
@@ -86,7 +87,9 @@ def test_repo_defines_spec_ref_parser_only_in_feature_tree_patterns() -> None:
                 text = path.read_text(encoding="utf-8")
             except (UnicodeDecodeError, OSError):
                 continue
-            if "re.compile" not in text:
+            # 预筛须与判据覆盖面对齐：re.match 等直调形态不含 "re.compile"
+            # 字样，按 "re." 存在性粗筛（architect 复审实证的预筛盲点）。
+            if "re." not in text:
                 continue
             if "spec_ref" not in text.lower() and "specs/feature-tree" not in text:
                 continue

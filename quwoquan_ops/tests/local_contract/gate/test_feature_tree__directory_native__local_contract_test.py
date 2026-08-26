@@ -719,10 +719,13 @@ def test_bare_string_literal_spec_ref_is_not_evidence(
     from quwoquan_ops.cli.lib.feature_tree import evidence as ft_evidence
 
     root = tmp_path / "repo"
+    # fixture 内 marker token 用源码级相邻字符串拆开：本文件自身也在证据扫描
+    # 范围内，同行完整 marker 会把 fixture 行泄漏为本文件的假绑定（test 复审
+    # 实证 uat-002 曾被计入 coverage map）。
     write(
         root / "quwoquan_ops" / "tests" / "sample__local_contract_test.py",
-        "# spec_ref: specs/feature-tree/spec.md#uat-001\n"
-        'SPEC_REF = "specs/feature-tree/spec.md#uat-002"\n'
+        "# spec_" "ref: specs/feature-tree/spec.md#uat-001\n"
+        "SPEC_" 'REF = "specs/feature-tree/spec.md#uat-002"\n'
         "spec_ref:\n"
         "  - specs/feature-tree/spec.md#uat-006\n"
         "  - specs/feature-tree/spec.md#uat-007\n"

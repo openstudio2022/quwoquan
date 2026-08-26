@@ -16,6 +16,7 @@ from typing import Any
 
 
 from quwoquan_ops.cli.lib.feature_tree.evidence import extract_spec_refs
+from quwoquan_ops.cli.lib.feature_tree.patterns import ACCEPTANCE_ANCHOR_RE
 
 GOVERNED_DOMAINS = (
     "entity",
@@ -29,9 +30,8 @@ APP_API_TEST_PREFIX = "quwoquan_app/test/api_integration/service/"
 APP_API_TEST_SUFFIX = "__api_integration_test.dart"
 # spec_ref 语法解析复用 feature-tree 库唯一 lexical 入口；本处只保留语义过滤：
 # 稳定证据必须至少有一个指向验收锚点（`.tN` 子句同样成立）的显式绑定。
-_ACCEPTANCE_ANCHOR = re.compile(
-    r"^(?:uat|dom|sit|gwt)-\d+(?:\.t\d+)?$", re.IGNORECASE
-)
+# 闭集与位数引用 feature-tree 库唯一定义点。
+_ACCEPTANCE_ANCHOR = ACCEPTANCE_ANCHOR_RE
 HARNESS_IMPORT = re.compile(
     r"import\s+'([^']*support/runtime/api_contract/"
     r"[a-z0-9_]+_api_contract_harness\.dart)';"

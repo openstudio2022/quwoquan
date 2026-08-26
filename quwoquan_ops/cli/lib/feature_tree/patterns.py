@@ -50,6 +50,13 @@ ACCEPTANCE_SECTION_RE = re.compile(
 )
 # 子句级 spec_ref：`...spec.md#gwt-004.t2` 绑定该锚点第 2 个结果子句。
 CLAUSE_ANCHOR_RE = re.compile(r"^((?:uat|dom|sit|gwt)-\d{3,})\.t(\d+)$")
+# 验收锚点闭集与位数的唯一定义点：消费方语义过滤（coverage-map、
+# service-architecture、domain-remote 等）引用本常量做「验收锚点 + 可选 .tN
+# 子句」判定（group(1) 为剥离子句后的主锚点），不得各自字面枚举闭集——
+# 新增锚点类型只改这一处。位数与 ACCEPTANCE_ID_RE 同源为 \d{3,}。
+ACCEPTANCE_ANCHOR_RE = re.compile(
+    r"^((?:uat|dom|sit|gwt)-\d{3,})(?:\.t\d+)?$", re.IGNORECASE
+)
 OPEN_BLOCK_RE = re.compile(r"^###\s+(OPEN-\d{3,})\b[\s\S]*?(?=^###\s|^##\s|\Z)", re.MULTILINE)
 FORBIDDEN_GLOBALS = (
     "tree_index.yaml",

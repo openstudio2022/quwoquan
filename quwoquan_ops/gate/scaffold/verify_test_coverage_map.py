@@ -26,6 +26,9 @@ if str(ROOT) not in sys.path:
 # 完全限定包路径导入：顶层名 `feature_tree` 被 cli/feature_tree.py 薄壳占用，
 # 短名导入会在同进程（如 pytest 全目录收集）中与其冲突。
 from quwoquan_ops.cli.lib.feature_tree.evidence import extract_spec_refs  # noqa: E402
+from quwoquan_ops.cli.lib.feature_tree.patterns import (  # noqa: E402
+    ACCEPTANCE_ANCHOR_RE,
+)
 
 TEST_ROOTS = (
     ROOT / "quwoquan_app/test",
@@ -34,8 +37,9 @@ TEST_ROOTS = (
     ROOT / "quwoquan_service/services",
     ROOT / "quwoquan_service/control-plane",
 )
-# 本门只关注验收锚点绑定；`.tN` 子句剥离到主锚点，其余锚点（req/dec 等）不进映射。
-CASE_ANCHOR = re.compile(r"^((?:uat|dom|sit|gwt)-\d+)(?:\.t\d+)?$", re.IGNORECASE)
+# 本门只关注验收锚点绑定；`.tN` 子句剥离到主锚点，其余锚点（req/dec 等）不进
+# 映射。闭集与位数引用 feature-tree 库唯一定义点，不在本地字面枚举。
+CASE_ANCHOR = ACCEPTANCE_ANCHOR_RE
 TEST_FILE = re.compile(
     r"(?:_test\.go|_test\.dart|_test\.py|__local_contract_test\.go|"
     r"__api_integration_test\.go)$"

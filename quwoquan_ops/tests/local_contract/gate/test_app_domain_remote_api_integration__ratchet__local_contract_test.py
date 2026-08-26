@@ -1,4 +1,5 @@
 """Five-domain generated Remote API integration gate and stackctl contract."""
+# spec_ref: specs/feature-tree/platform-ops-governance/spec.md#dom-001
 
 from __future__ import annotations
 
