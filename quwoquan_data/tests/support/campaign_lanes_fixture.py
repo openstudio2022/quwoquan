@@ -275,6 +275,43 @@ if phase == "publish":
     }
 
 selected = qualified + len(discards)
+# 零合格终态必须带唯一 typed 原因（DEC-005）。review 阶段观测到的零合格只可能是
+# 「全部对象质量被拒」，其判定依据是本 lane 真实写下的逐对象排除台账，摘要按台账
+# 字节现算，与生产写者同一形态。
+zero_qualified_reason = {}
+if status == "blocked":
+    basis_name = f"{carrier}-{phase}-zero-qualified-basis.json"
+    basis_document = {
+        "schema": "quwoquan_data.zero_qualified_basis_evidence",
+        "rootExecutionId": root_id,
+        "executionId": execution_id,
+        "carrier": carrier,
+        "phase": phase,
+        "evaluatedObjectCount": selected,
+        "admittedObjectCount": 0,
+        "objectExclusions": discards,
+    }
+    basis_bytes = (
+        json.dumps(basis_document, ensure_ascii=False, indent=2) + "\n"
+    ).encode("utf-8")
+    (receipts / basis_name).write_bytes(basis_bytes)
+    zero_qualified_reason = {
+        "zeroQualifiedReason": {
+            "code": "ALL_OBJECTS_QUALITY_REJECTED",
+            "observedStage": "review",
+            "determinedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "operatorAction": "repair_source",
+            "nonResumableBasis": {
+                "summary": (
+                    f"{carrier} lane 的 {selected} 个候选对象在 review 全部被拒"
+                ),
+                "evidenceRef": f"receipts/{basis_name}",
+                "evidenceDigest": (
+                    "sha256:" + hashlib.sha256(basis_bytes).hexdigest()
+                ),
+            },
+        }
+    }
 payload = {
     "schema": "quwoquan_data.content_campaign_lane_receipt",
     "rootExecutionId": root_id,
@@ -289,6 +326,7 @@ payload = {
     "discardedCount": len(discards),
     "shortfallCount": max(0, quota - qualified),
     "discards": discards,
+    **zero_qualified_reason,
     **publish_binding,
 }
 if phase == "publish":

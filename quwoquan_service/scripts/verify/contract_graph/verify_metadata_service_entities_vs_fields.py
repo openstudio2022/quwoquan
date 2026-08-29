@@ -7,6 +7,8 @@ import json
 import sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True
+
 try:
     import yaml
 except ImportError:

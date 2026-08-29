@@ -557,16 +557,22 @@ class ChatMessageNotifier extends Notifier<ChatMessageState>
         conversationId: conversationId,
         lastSeq: lastSeq,
       );
+      if (!ref.mounted) return;
       if (syncResp.messages.isNotEmpty) {
         final hydrated = await _hydrateSenderSnapshots(
           syncResp.messages.map(_normalizeSenderAvatar).toList(growable: false),
         );
+        if (!ref.mounted) return;
         final merged = _mergeMessages(state.messages, hydrated);
         state = state.copyWith(messages: _sorted(merged));
         unawaited(_persistMessages(hydrated));
       }
-    } catch (e) {
-      state = state.copyWith(error: runtimeErrorDisplayMessage(e));
+    } catch (error, stackTrace) {
+      if (!ref.mounted) {
+        Error.throwWithStackTrace(error, stackTrace);
+      }
+      state = state.copyWith(error: runtimeErrorDisplayMessage(error));
+      Error.throwWithStackTrace(error, stackTrace);
     }
   }
 
@@ -632,6 +638,7 @@ class ChatMessageNotifier extends Notifier<ChatMessageState>
         limit: 200,
         sort: MemberListSort.joinedAsc,
       );
+      if (!ref.mounted) return messages;
       final memberByUserId = {
         for (final member in members)
           if (member.userId.isNotEmpty) member.userId: member,
@@ -657,6 +664,7 @@ class ChatMessageNotifier extends Notifier<ChatMessageState>
           .toList(growable: false);
     } catch (error, stackTrace) {
       // best-effort：快照水合失败降级为原始消息，上报保留观测面。
+      if (!ref.mounted) return messages;
       unawaited(
         ref
             .read(exceptionTelemetryPortProvider)

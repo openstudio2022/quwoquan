@@ -1,0 +1,146 @@
+schema_version: 1
+
+feature_context_manifest:
+  schema_version: 1
+  max_bytes: 8192
+  required_fields:
+    - schema_version
+    - target
+    - resolved_owner
+    - owner_chain
+    - canonical_contexts
+    - applicable_agents
+    - profiles
+    - open_items
+  owner_chain_fields: [level, node_id, path]
+  context_fields: [path, anchor, kind]
+  open_item_fields: [path, id, title, release_impact]
+
+review_plan:
+  schema_version: 2
+  required_fields:
+    - schema_version
+    - workflow
+    - segment
+    - round
+    - deliverable
+    - scope
+    - changed_paths
+    - profiles
+    - contexts
+    - reviewers
+    - skipped_reviewers
+    - evidence
+    - fingerprint
+    - previous_fingerprint
+    - evidence_reusable
+    - invocation_count
+    - context_bytes
+    - incomplete_roles
+    - invalidations
+    - terminal
+    - head_sha
+    - generated_at
+  context_fields: [path, anchor, kind, exists, content_digest]
+  reviewer_fields:
+    - role
+    - kind
+    - required
+    - profile
+    - checklist
+    - evidence
+    - context_bytes
+  evidence_fields:
+    - id
+    - command
+    - segment
+    - required
+    - covers
+    - command_digest
+    - consumers
+    - reusable
+  context_bytes_fields: [manifest, reviewers, max_reviewer, limit]
+  incomplete_role_fields: [role, required, reason, code]
+  invalidation_fields: [code, message]
+  terminal_fields: [status, codes, failed_evidence]
+  limits_source: .agents/skills/review/references/registry.yaml#limits
+  workflow_source: .agents/skills/review/references/registry.yaml#workflows
+  profile_source: .agents/skills/review/references/registry.yaml#profiles
+  evidence_source: .agents/skills/review/references/registry.yaml#evidence
+  fingerprint_inputs:
+    - head_sha
+    - workflow
+    - deliverable
+    - scope
+    - changed_paths
+    - profiles
+    - contexts
+    - reviewers
+    - review_assets
+    - evidence
+  fingerprint_snapshot_fields:
+    - path
+    - exists
+    - state
+    - tracked
+    - git_status
+    - content_digest
+  fingerprint_reviewer_fields: [role, kind, required, profile, checklist]
+  fingerprint_evidence_fields: [id, required, covers, command_digest]
+
+evidence_fingerprint:
+  schema_version: 1
+  serialization_version: evidence-fingerprint-v0
+  digest_payload_fields:
+    git: [head_sha, merge_base_sha]
+    workspace: [tracked_digest, untracked_digest, deleted_digest, renamed_digest, symlink_digest]
+    assets: [canonical_assets_digest, review_assets_digest]
+    execution: [commands_digest, toolchain_digest, provider_digest, generator_digest]
+  receipt_fields: [captured_at, captured_by]
+  digest_excludes_receipt: true
+  path_sort: bytewise-utf8
+  absent_vs_empty: distinct
+  symlink: path-and-target-content
+  required_fixtures:
+    - same-input-different-captured-at-same-digest
+    - path-order-invariance
+    - any-payload-byte-change-different-digest
+
+terminal_codes:
+  REVIEW.EVIDENCE_FAILED:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: pass_the_same_evidence_then_generate_initial
+  REVIEW.REQUIRED_REVIEWER_INCOMPLETE:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: restore_executor_then_explicitly_reopen
+  REVIEW.OPTIONAL_REVIEWER_INCOMPLETE:
+    severity: PR_WARN
+    automatic_retry: false
+    recovery: explicitly_adjudicate_fix_open_or_out_of_scope
+  REVIEW.CANCELLED:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: resume_only_after_explicit_user_request
+  REVIEW.FINGERPRINT_CHANGED:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: rerun_evidence_for_the_new_fingerprint
+  REVIEW.NEW_REVIEW_REQUIRED:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: resolve_owner_profile_and_generate_new_initial
+
+tracked_projections:
+  authoring_source: .agents/skills/review/references/reviewer-executor.md
+  generator: quwoquan_ops/tools/generate_agent_adapters.py
+  outputs:
+    - .cursor/agents/reviewer.md
+    - .codex/agents/reviewer.toml
+  manual_edit: forbidden
+
+runtime_outputs:
+  root: .qwq_output
+  disposable: true
+  tracked: false

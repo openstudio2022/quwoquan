@@ -7,6 +7,7 @@ class ArticleFrontispieceView extends StatelessWidget {
     required this.template,
     required this.fontPreset,
     required this.coverUrl,
+    this.coverBinding = const MediaDeliveryBinding.absent(),
     this.imageKey = const ValueKey<String>('article-frontispiece-image'),
     this.paperTexture,
   });
@@ -15,6 +16,11 @@ class ArticleFrontispieceView extends StatelessWidget {
   final ArticleTemplatePreset template;
   final ArticleFontPreset fontPreset;
   final String coverUrl;
+
+  /// 封面的 typed 交付绑定（DEC-033）。私有封面换签后仍由文章图组件渲染，
+  /// 因此公开与私有两路共用同一套加载体验，不出现两种观感。
+  final MediaDeliveryBinding coverBinding;
+
   final Key imageKey;
   final ArticlePaperTexture? paperTexture;
 
@@ -45,7 +51,23 @@ class ArticleFrontispieceView extends StatelessWidget {
                 child: Stack(
                   fit: StackFit.expand,
                   children: <Widget>[
-                    ArticleAdaptiveImage(key: imageKey, imageUrl: coverUrl),
+                    mediaDeliveryImage(
+                      binding: coverBinding,
+                      kind: MediaDeliveryKind.image,
+                      publicBuilder: (context, publicUrl) =>
+                          ArticleAdaptiveImage(
+                            key: imageKey,
+                            imageUrl: publicUrl,
+                          ),
+                      signedReadyBuilder:
+                          (context, deliveryUrl, cacheIdentity) =>
+                              ArticleAdaptiveImage(
+                                key: imageKey,
+                                imageUrl: coverUrl,
+                                signedDeliveryUrl: deliveryUrl,
+                                signedCacheIdentity: cacheIdentity,
+                              ),
+                    ),
                     Positioned.fill(
                       child: DecoratedBox(
                         decoration: BoxDecoration(

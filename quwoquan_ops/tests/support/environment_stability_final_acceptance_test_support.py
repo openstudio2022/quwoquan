@@ -37,6 +37,7 @@ from quwoquan_ops.cli.lib.environment_stability_final_acceptance import (
 )
 from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
     APPLICATION_PACKAGES,
+    DISTRIBUTION_EVIDENCE_PATHS,
     ENVIRONMENTS,
     RELEASE_CLOSURE_PATHS,
     canonical_candidate_digest,
@@ -617,6 +618,24 @@ class FinalAcceptanceFixture:
         configurations = self._build_configs()
         applications = self._build_applications()
         ops_portal = self._build_ops_portal()
+        distribution_descriptors: dict[str, dict[str, str]] = {}
+        distribution_schemas = {
+            "publicWeb": "client-app.web.official-release",
+            "androidOfficialRelease": "client-app.android.official-release",
+        }
+        for evidence_key, relative in DISTRIBUTION_EVIDENCE_PATHS.items():
+            distribution_path = _write(
+                self.artifact / relative,
+                {
+                    "schema": distribution_schemas[evidence_key],
+                    "sourceGitSha": COMMIT,
+                    "sourceTreeDigest": TREE,
+                },
+            )
+            distribution_descriptors[evidence_key] = {
+                "path": relative,
+                "digest": sha256_file(distribution_path),
+            }
         manifest: dict[str, Any] = {
             "schema": "release-evidence-manifest",
             "releaseTrainId": None,
@@ -647,6 +666,10 @@ class FinalAcceptanceFixture:
                 for index, environment in enumerate(ENVIRONMENTS, start=1)
             },
             "applicationPackages": applications,
+            "publicWeb": distribution_descriptors["publicWeb"],
+            "androidOfficialRelease": distribution_descriptors[
+                "androidOfficialRelease"
+            ],
             "opsPortal": ops_portal,
             "contractGraphDigest": contract_digest,
             "requiredEvidence": {

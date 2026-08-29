@@ -1,6 +1,6 @@
 """提示词模板渲染器（P1 核心）：把 prompt 正文从 .py 字符串拼接迁出到 md 模板。
 
-设计原则（参照 claude code / codex 业界系统提示词最佳实践）：
+设计原则（宿主无关的系统提示词格式）：
 - **真相源外置**：所有 prompt 正文落 `quwoquan_data/prompts/{homepage,article,image,video,_shared}/*.md`，
   `.py` 只负责「加载模板 + 计算动态数据块 + 校验占位符 + 组装」，禁止再在脚本里硬编码 prompt 正文。
 - **业界格式骨架**：系统提示词用 XML 标签分区（`<role>/<capabilities>/<constraints>(always/never)/

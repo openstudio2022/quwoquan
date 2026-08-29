@@ -541,6 +541,9 @@ func buildActivity(seed projectionSeed, direction string) activitymodel.Activity
 			}
 		}
 	}
+	// 预览图的 typed 交付声明与 previewImage 同源配对（DEC-033）：配不上任何
+	// 媒体条目即两字段都缺席，不猜 accessMode——猜 public 会让私有封面直连。
+	previewImageAssetID, previewImageAccessMode := previewImageDelivery(post, previewImage)
 	if previewUnavailable {
 		previewText = ""
 		previewImage = ""
@@ -581,6 +584,8 @@ func buildActivity(seed projectionSeed, direction string) activitymodel.Activity
 		ContextText:            contextText,
 		PreviewMediaKind:       previewMediaKind(post, previewUnavailable),
 		PreviewImageURL:        previewImage,
+		PreviewImageAssetID:    previewImageAssetID,
+		PreviewImageAccessMode: previewImageAccessMode,
 		PreviewText:            previewText,
 		PreviewUnavailable:     previewUnavailable,
 		PreviewObjectID:        post.ID,
@@ -709,3 +714,24 @@ var (
 	_ postports.OutboxPublisher     = (*PostTargetProjector)(nil)
 	_ readfactports.OutboxPublisher = (*ReadFactProjector)(nil)
 )
+
+// previewImageDelivery 把预览图 URL 配对回 post 媒体条目的 typed 交付声明。
+func previewImageDelivery(post activityports.PostSlice, previewImage string) (string, string) {
+	target := strings.TrimSpace(previewImage)
+	if target == "" {
+		return "", ""
+	}
+	for _, media := range post.MediaItems {
+		if strings.TrimSpace(media.CoverURL) == target {
+			assetID := strings.TrimSpace(media.CoverAssetID)
+			if assetID == "" {
+				assetID = strings.TrimSpace(media.MediaAssetID)
+			}
+			return assetID, strings.TrimSpace(media.AccessMode)
+		}
+		if strings.TrimSpace(media.URL) == target {
+			return strings.TrimSpace(media.MediaAssetID), strings.TrimSpace(media.AccessMode)
+		}
+	}
+	return "", ""
+}

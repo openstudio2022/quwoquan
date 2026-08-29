@@ -24,6 +24,9 @@ import 'package:quwoquan_app/runtime/di/runtime_package_dependencies.dart'
     show publicContentLinkBuilderProvider;
 import 'package:quwoquan_app/runtime/transport/media/avatar_image_url.dart';
 import 'package:quwoquan_app/runtime/transport/media/content_media_url.dart';
+import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart'
+    show MediaDeliveryKind;
+import 'package:quwoquan_app/runtime/di/media_delivery_composition.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
@@ -541,12 +544,47 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
         semantic: impactSemantic,
       ),
     ]);
-    // 头像源在 Shell 层只选择一次，避免主头像与吸顶头像走不同兜底路径。
-    final avatarUrl = _firstNonEmptyString([
-      widget.initialAvatarUrl,
-      if (isMine) userData?.avatarUrl,
-      profile?.avatarUrl,
-    ]);
+    // 头像源在 Shell 层按完整 binding 只选择一次，避免先按 URL 过滤后丢失
+    // signedGrant 声明。路由快照与本人编辑态是公开来源；只有选择到 persona
+    // 投影时原样保留 assetId/accessMode，包括 URL-less 私有绑定与矛盾投影，
+    // 由统一 typed 入口分别渲染或 fail-closed。
+    final initialAvatarUrl = widget.initialAvatarUrl?.trim() ?? '';
+    final userAvatarUrl = isMine ? (userData?.avatarUrl?.trim() ?? '') : '';
+    final profileAvatarUrl = profile?.avatarUrl.trim() ?? '';
+    final profileHasDeliveryBinding =
+        profile != null &&
+        (profile.avatarAccessMode != null ||
+            (profile.avatarAssetId?.trim().isNotEmpty ?? false) ||
+            profileAvatarUrl.isNotEmpty);
+    final MediaDeliveryBinding avatarBinding;
+    if (initialAvatarUrl.isNotEmpty) {
+      avatarBinding = MediaDeliveryBinding(
+        assetId: '',
+        accessMode: null,
+        publicUrl: initialAvatarUrl,
+      );
+    } else if (userAvatarUrl.isNotEmpty) {
+      avatarBinding = MediaDeliveryBinding(
+        assetId: '',
+        accessMode: null,
+        publicUrl: userAvatarUrl,
+      );
+    } else if (profileHasDeliveryBinding) {
+      avatarBinding = MediaDeliveryBinding(
+        assetId: profile.avatarAssetId?.trim() ?? '',
+        accessMode: profile.avatarAccessMode,
+        publicUrl: profileAvatarUrl,
+      );
+    } else {
+      avatarBinding = const MediaDeliveryBinding.absent();
+    }
+    final avatarUrl = avatarBinding.publicUrl.trim().isEmpty
+        ? null
+        : avatarBinding.publicUrl.trim();
+    final avatarAssetId = avatarBinding.assetId.trim().isEmpty
+        ? null
+        : avatarBinding.assetId.trim();
+    final avatarAccessMode = avatarBinding.accessMode;
     final profileName = profile?.displayName.trim() ?? '';
     final displayName =
         widget.initialDisplayName ??
@@ -604,6 +642,8 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
                 c,
                 isDark: isDark,
                 avatarUrl: avatarUrl,
+                avatarAssetId: avatarAssetId,
+                avatarAccessMode: avatarAccessMode,
                 displayName: displayName,
                 bio: bio,
                 state: state,
@@ -617,6 +657,8 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
           border: border,
           displayName: displayName,
           avatarUrl: avatarUrl,
+          avatarAssetId: avatarAssetId,
+          avatarAccessMode: avatarAccessMode,
           opacity: identity,
           backgroundOpacity: bgOpacity,
           contentForegroundIsDark: contentForegroundIsDark,

@@ -71,28 +71,33 @@ def test_fixture_recipe_is_derived_from_content_type(
         shutil.rmtree(workspace.execution_root(execution_id), ignore_errors=True)
 
 
-def test_cursor_auto_manifest_first_use_freezes_exact_binding() -> None:
-    execution_id = "20260716--travel-article-cursor-auto--test-region-b--pilot-997"
+def test_a_frozen_selection_cannot_be_reopened_under_another_selection() -> None:
+    """The manifest freezes which semantic selection authored the execution.
+
+    Reusing an executionId under a different selection is refused rather than
+    re-frozen, because the frozen binding is what later attempts and receipts are
+    checked against. `cursor_auto` is not usable here: it is admitted only as a
+    retry of a typed grok failure, which the failover admission tests cover.
+    """
+
+    execution_id = "20260716--travel-article-grok-freeze--test-region-b--pilot-997"
     try:
-        _receipt_path, preflight_binding = ready_semantic_preflight("cursor_auto")
+        _receipt_path, preflight_binding = ready_semantic_preflight("cursor_grok")
         manifest = build_execution_fixture(
             execution_id,
-            semantic_selection_id="cursor_auto",
+            semantic_selection_id="cursor_grok",
             semantic_preflight_binding=preflight_binding,
         )
         assert manifest["retryOf"] is None
-        assert manifest["semanticSelectionId"] == "cursor_auto"
+        assert manifest["semanticSelectionId"] == "cursor_grok"
         assert manifest["semanticRuntime"] == "local"
         assert manifest["semanticPreflightReceipt"] == preflight_binding
-        assert manifest["modelBinding"] == {
-            "provider": "cursor_sdk",
-            "authorModel": "auto",
-            "authorModelFamily": "auto",
-            "authorModelParameters": [],
-            "reviewerModel": "auto",
-            "reviewerModelFamily": "auto",
-            "reviewerModelParameters": [],
-        }
+        assert manifest["modelBinding"]["provider"] == "cursor_sdk"
+        assert manifest["modelBinding"]["authorModelFamily"] == "grok"
+        assert (
+            manifest["modelBinding"]["reviewerModel"]
+            == manifest["modelBinding"]["authorModel"]
+        )
         with pytest.raises(ValueError, match="does not match expected selection"):
             build_execution_fixture(
                 execution_id,

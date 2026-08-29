@@ -76,14 +76,19 @@ def _has_typed_upgrade_descriptor(
     method_name: str,
     request_encoder: str,
 ) -> bool:
-    qualified_request = _qualified_symbol_pattern(request_type)
-    qualified_encoder = _qualified_symbol_pattern(request_encoder)
+    # dart format 会把限定符与符号拆到多行，因此点号两侧必须容忍空白。
+    def _wrapped_qualified(symbol: str) -> str:
+        return rf"(?:[A-Za-z][A-Za-z0-9_]*\s*\.\s*)?{re.escape(symbol)}"
+
+    qualified_request = _wrapped_qualified(request_type)
+    qualified_encoder = _wrapped_qualified(request_encoder)
+    # dart format 会在长泛型与标识符间换行，匹配必须容忍任意空白。
     return re.search(
-        rf"\bstatic\s+final\s+CloudOperationUpgradeDescriptor<"
-        rf"{qualified_request}>\s+{re.escape(method_name)}\s*=\s*"
-        rf"CloudOperationUpgradeDescriptor<{qualified_request}>\s*\("
-        rf"[\s\S]*?\boperation:\s*appCloudOperationContracts\["
-        rf"AppCloudOperationIds\.{re.escape(method_name)}\]!\s*,"
+        rf"\bstatic\s+final\s+CloudOperationUpgradeDescriptor<\s*"
+        rf"{qualified_request}\s*>\s+{re.escape(method_name)}\s*=\s*"
+        rf"CloudOperationUpgradeDescriptor<\s*{qualified_request}\s*>\s*\("
+        rf"[\s\S]*?\boperation:\s*appCloudOperationContracts\[\s*"
+        rf"AppCloudOperationIds\s*\.\s*{re.escape(method_name)}\s*\]!\s*,"
         rf"[\s\S]*?\brequestEncoder:\s*{qualified_encoder}\s*,"
         rf"[\s\S]*?\)\s*;",
         source,

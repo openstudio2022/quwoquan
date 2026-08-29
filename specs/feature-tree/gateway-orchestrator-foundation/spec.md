@@ -73,6 +73,7 @@
 
 - App 与公众业务读面的统一入口为 `POST /graphql`；Query root 只按有用户查询价值、授权边界和成本预算的 Query Slice 暴露，不按聚合根或对象类别机械开放，且不提供 GraphQL Mutation。
 - Prod 只接受随受审计发布包签名并登记的 persisted query hash；hash 必须精确绑定 operation、对象集合、授权和成本预算，未知 hash、任意 query text、在线注册、超成本查询和 mutation 全部拒绝。
+- package 前必须把同一 checked-in generated registry 的全部 entry 交给生产 `ValidateExecutableEntry`，并将每个 owner persisted handler 的 operation/hash/rootField 与对象 authoring YAML/GraphQL document 双向闭集校验；registry `selectedFields` 必须与 API Edge exact owner-response 字段集合完全相同。只编译生产包、或让测试与实现复制同一个手写 hash，不构成 composition readiness。
 - `POST /graphql` 的 canonical operation 只能在签名 registry 解出 persisted query hash 后由 GraphQL 专属 authorizer 裁决；通用 REST method/path guard 不得把共享 `/graphql` 路径误判为重复路由，也不得代替 registry 猜测具体 operation。普通 REST route 仍须保持 method/path 唯一并在冲突时 fail-closed。
 - GraphQL 专属 authorizer 的部署描述符集合必须包含 gateway-owned persisted query operation；它不因 gateway 缺少 REST owner upstream 而从 ContractGraph 授权集合消失，同时不得把 gateway operation 注入通用 REST owner proxy。
 - App 侧 gateway-owned persisted query 必须由 `lib/service/api_edge/<context>/<object>/{application,adapters}` 承载对象级 typed port 与 Remote adapter；业务对象只消费该 public port，不得直接持有签名 hash、GraphQL envelope、generated transport 或 invocation context 装配。

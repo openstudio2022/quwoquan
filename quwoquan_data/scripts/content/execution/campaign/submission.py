@@ -22,7 +22,9 @@ from core.source_digest import (
 
 from content.execution.campaign.external_inputs import (
     content_source_revision,
+    envelope_acquisition_root,
     external_inputs_digest,
+    frozen_acquisition_root_ref,
     verify_external_input_refs,
 )
 from content.execution.campaign.carrier_execution_policy import carrier_operation
@@ -271,9 +273,9 @@ def write_submission(
         external_refs = verify_external_input_refs(
             identity.content_type.value,
             envelope.get("externalInputRefs") or [],
-            acquisition_root=(
-                acquisition_root or paths.SOURCE_ACQUISITION_ROOT
-            ).resolve(),
+            acquisition_root=envelope_acquisition_root(
+                envelope, override=acquisition_root
+            ),
             source_revision=source_revision,
             source_digest=str(source["digest"]),
             entity_catalog_digest=catalog_digest,
@@ -403,6 +405,11 @@ def write_submission(
         "externalInputRefs": external_refs,
         "externalInputsDigest": external_inputs_digest(external_refs),
     }
+    # 下游 capsule 物化要按同一基准根再解析一次这些 ref；基准根不随提交向下传，
+    # 物化侧就只能取默认根，冻结出的 ref 在那里指不到任何字节。
+    carried_acquisition_root_ref = frozen_acquisition_root_ref(campaign_envelope)
+    if carried_acquisition_root_ref:
+        stable["acquisitionRootRef"] = carried_acquisition_root_ref
     if request.scale_source_pool is not None:
         stable["scaleSourcePool"] = dict(request.scale_source_pool)
         stable["sourcePoolEvidenceRootRef"] = request.source_pool_evidence_root_ref

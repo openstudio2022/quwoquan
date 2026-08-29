@@ -2,6 +2,7 @@
 
 正文自 run_environment_patrol_smoke.py 逐字搬入。
 """
+
 from __future__ import annotations
 
 import argparse
@@ -28,6 +29,12 @@ from quwoquan_ops.cli.lib.flutter_android_device_proxy import (
 from quwoquan_ops.cli.lib.local_runtime_consumer_lease import (
     acquire_consumer_lease,
 )
+from quwoquan_ops.cli.lib.package_reuse.patrol_command_envelope import (
+    PATROL_COMMAND_ENVELOPE_DIGEST_ENV,
+    closed_patrol_child_environment,
+    strip_proxy_environment,
+    validate_patrol_command_environment,
+)
 
 from .cli_args import summarize_output
 from .constants import (
@@ -47,13 +54,46 @@ from .session import (
 )
 
 
+def _canonical_emulator_flag(device: dict[str, Any]) -> bool:
+    emulator = device.get("emulator")
+    if type(emulator) is not bool:
+        raise RuntimeError(
+            "GATE_BLOCK: Patrol device emulator field must be an explicit boolean"
+        )
+    return emulator
+
+
+def _resolved_patrol_flutter(environment: dict[str, str]) -> tuple[str, bool]:
+    if environment.get(PATROL_COMMAND_ENVELOPE_DIGEST_ENV):
+        try:
+            identity = validate_patrol_command_environment(environment)
+        except (OSError, TypeError, ValueError) as error:
+            raise RuntimeError(
+                "GATE_BLOCK: Patrol sealed Flutter command identity drifted"
+            ) from error
+        return identity["executable"], True
+    discovered = shutil.which("flutter", path=environment.get("PATH", ""))
+    if discovered is None:
+        raise RuntimeError("GATE_BLOCK: Flutter executable is required for Patrol")
+    return str(Path(discovered).resolve()), False
+
+
 def _device_command_env(
     args: argparse.Namespace,
     device: dict[str, Any],
     *,
     launcher_handoff: dict[str, Any] | None = None,
 ) -> dict[str, str]:
-    env = dict(os.environ)
+    if os.environ.get(PATROL_COMMAND_ENVELOPE_DIGEST_ENV):
+        try:
+            env = closed_patrol_child_environment(os.environ)
+        except (OSError, TypeError, ValueError) as error:
+            raise RuntimeError(
+                "GATE_BLOCK: Patrol sealed command environment drifted"
+            ) from error
+    else:
+        env = strip_proxy_environment(os.environ)
+    emulator = _canonical_emulator_flag(device)
     runtime_env = args.runtime_env.strip() or _runtime_env_for_alias(args.env_name)
     launch_target = _local_target_for_environment_alias(args.env_name)
     try:
@@ -75,48 +115,43 @@ def _device_command_env(
         env["QWQ_RUN_DEVICE_ID"] = device_id
         env["ANDROID_SERIAL"] = device_id
         adb = resolve_android_debug_bridge()
-        if adb:
-            adb_directory = str(Path(adb).parent)
+        real_flutter, sealed = _resolved_patrol_flutter(env)
+        if not sealed:
+            adb_directory = str(Path(adb).parent) if adb else ""
             existing_path = env.get("PATH", "")
             path_entries = existing_path.split(os.pathsep) if existing_path else []
-            if adb_directory not in path_entries:
+            if adb_directory and adb_directory not in path_entries:
                 env["PATH"] = (
                     f"{adb_directory}{os.pathsep}{existing_path}"
                     if existing_path
                     else adb_directory
                 )
-        real_flutter = shutil.which("flutter", path=env.get("PATH", ""))
-        if real_flutter is None:
-            raise RuntimeError(
-                "GATE_BLOCK: Flutter executable is required for Android Patrol"
-            )
         proxy_devices = [
             {
                 "id": str(device.get("id", "")).strip(),
                 "name": str(device.get("name", "")).strip(),
                 "targetPlatform": str(device.get("targetPlatform", "")).strip(),
-                "emulator": bool(device.get("emulator", False)),
+                "emulator": emulator,
                 "isSupported": True,
             }
         ]
         env[PATROL_FLUTTER_COMMAND_ENV] = f"{sys.executable} {ANDROID_DEVICE_PROXY}"
-        env[REAL_FLUTTER_ENV] = str(Path(real_flutter).resolve())
+        env[REAL_FLUTTER_ENV] = real_flutter
         env[ANDROID_DEVICE_INVENTORY_ENV] = json.dumps(
             proxy_devices,
             ensure_ascii=False,
             separators=(",", ":"),
         )
-    elif (
-        target == "ios"
-        and bool(device.get("emulator", False))
-        and _is_local_target(args.env_name)
-    ):
+    elif target == "ios" and emulator and _is_local_target(args.env_name):
         device_id = str(device.get("id", "")).strip()
         if not device_id:
             raise RuntimeError(
                 "GATE_BLOCK: local iOS Simulator Patrol requires an explicit device id"
             )
         env["QWQ_IOS_SIMULATOR_UDID"] = device_id
+        real_flutter, _sealed = _resolved_patrol_flutter(env)
+        env[PATROL_FLUTTER_COMMAND_ENV] = f"{sys.executable} {ANDROID_DEVICE_PROXY}"
+        env[REAL_FLUTTER_ENV] = real_flutter
     if launcher_handoff is not None:
         _apply_launcher_handoff_to_command_env(env, launcher_handoff)
         if env["QWQ_APP_RUNTIME_ENV"] != runtime_env:
@@ -141,9 +176,7 @@ def _prepare_android_local_port_reverse(
     """反向映射 canonical HTTPS/WSS authority 使用的本地 target 端口。"""
 
     target_platform = str(device.get("targetPlatform", "")).strip().lower()
-    if not (
-        _is_local_target(args.env_name) and target_platform.startswith("android")
-    ):
+    if not (_is_local_target(args.env_name) and target_platform.startswith("android")):
         return {"status": "skipped", "reason": "not-required"}
     adb = resolve_android_debug_bridge()
     device_id = str(device.get("id", "")).strip()
@@ -206,11 +239,10 @@ def _acquire_patrol_consumer_lease(
     """Bind one Android or iOS Simulator Patrol build to its local runtime."""
 
     target_platform = str(device.get("targetPlatform", "")).strip().lower()
+    emulator = _canonical_emulator_flag(device)
     is_android = target_platform.startswith("android")
-    is_ios_simulator = target_platform == "ios" and bool(device.get("emulator", False))
-    if not _is_local_target(args.env_name) or not (
-        is_android or is_ios_simulator
-    ):
+    is_ios_simulator = target_platform == "ios" and emulator
+    if not _is_local_target(args.env_name) or not (is_android or is_ios_simulator):
         return None
     device_id = str(device.get("id", "")).strip()
     if not device_id:
@@ -258,9 +290,12 @@ def _acquire_patrol_consumer_lease(
     )
     if is_android:
         port_list = ",".join(str(port) for port in ports)
-        reverse_receipt_digest = "sha256:" + hashlib.sha256(
-            f"{target_name}\0{device_id}\0{port_list}".encode("utf-8")
-        ).hexdigest()
+        reverse_receipt_digest = (
+            "sha256:"
+            + hashlib.sha256(
+                f"{target_name}\0{device_id}\0{port_list}".encode()
+            ).hexdigest()
+        )
         command_env.update(
             {
                 "QWQ_ANDROID_LOCAL_PORTS": port_list,
@@ -282,9 +317,7 @@ def _bind_patrol_consumer_lease_to_handoff(
     """Update the same deterministic lease with its exact launcher identity."""
 
     target_name, device_id, consumer, lease_id = consumer_lease
-    is_android = str(device.get("targetPlatform") or "").lower().startswith(
-        "android"
-    )
+    is_android = str(device.get("targetPlatform") or "").lower().startswith("android")
     ports = [
         int(value)
         for value in command_env.get("QWQ_ANDROID_LOCAL_PORTS", "").split(",")
@@ -325,6 +358,7 @@ def _reset_release_uat_device_state(
 
     device_id = str(device.get("id", "")).strip()
     target = str(device.get("targetPlatform", "")).strip().lower()
+    emulator = _canonical_emulator_flag(device)
     if not device_id:
         raise RuntimeError("release-bound UAT device identity is empty")
 
@@ -335,15 +369,19 @@ def _reset_release_uat_device_state(
     )
     reset_rows: list[dict[str, Any]] = []
     if target == "ios":
-        if not bool(device.get("emulator", False)):
+        if not emulator:
             raise RuntimeError(
                 "release-bound iOS UAT requires a simulator with resettable App state"
             )
         for bundle_id in ios_release_uat_bundle_ids(runtime_env, "debug"):
             command = ["xcrun", "simctl", "uninstall", device_id, bundle_id]
-            result = subprocess.run(command, text=True, capture_output=True, check=False)
+            result = subprocess.run(
+                command, text=True, capture_output=True, check=False
+            )
             output = ((result.stdout or "") + (result.stderr or "")).strip()
-            absent = "not installed" in output.lower() or "no such file" in output.lower()
+            absent = (
+                "not installed" in output.lower() or "no such file" in output.lower()
+            )
             if result.returncode != 0 and not absent:
                 raise RuntimeError(
                     f"release-bound iOS UAT App reset failed for {bundle_id}: "
@@ -359,7 +397,9 @@ def _reset_release_uat_device_state(
     elif target.startswith("android"):
         adb = resolve_android_debug_bridge()
         if adb is None:
-            raise RuntimeError("release-bound Android UAT requires adb for App state reset")
+            raise RuntimeError(
+                "release-bound Android UAT requires adb for App state reset"
+            )
         android_uat_package = android_release_uat_package(runtime_env, "debug")
         package_path_command = [
             str(adb),

@@ -268,6 +268,9 @@ class GlobalTopBarIconButton extends StatelessWidget {
                       isDark,
                       surface: surface,
                     ),
+                shadows: AppNavigationSemanticConstants.chromeActionIconShadows(
+                  surface: surface,
+                ),
               ),
             ),
           ),

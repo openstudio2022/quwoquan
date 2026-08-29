@@ -15,8 +15,7 @@ enum SearchObjectType {
   entityHomepage('entity.homepage'),
   userProfile('user.profile'),
   tag('tag'),
-  integrationLocationPoi('integration.location_poi'),
-  ;
+  integrationLocationPoi('integration.location_poi');
 
   const SearchObjectType(this.wireValue);
 
@@ -63,8 +62,7 @@ enum RetrieveTarget {
   location('location'),
   circle('circle'),
   group('group'),
-  chat('chat'),
-  ;
+  chat('chat');
 
   const RetrieveTarget(this.wireValue);
 
@@ -98,8 +96,7 @@ enum RetrieveTarget {
 
 enum SearchConversationType {
   direct('direct'),
-  group('group'),
-  ;
+  group('group');
 
   const SearchConversationType(this.wireValue);
 
@@ -121,5 +118,21 @@ enum SearchConversationType {
 final class RetrieveToolContract {
   const RetrieveToolContract._();
 
-  static const List<String> forbiddenFields = <String>['type', 'relation', 'anchors', 'kind', 'mode', 'strategy', 'purpose', 'visibility', 'fields', 'where', 'query', 'objectTypes', 'contentTypes', 'tags', 'timeRange'];
+  static const List<String> forbiddenFields = <String>[
+    'type',
+    'relation',
+    'anchors',
+    'kind',
+    'mode',
+    'strategy',
+    'purpose',
+    'visibility',
+    'fields',
+    'where',
+    'query',
+    'objectTypes',
+    'contentTypes',
+    'tags',
+    'timeRange',
+  ];
 }

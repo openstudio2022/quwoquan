@@ -489,6 +489,30 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
     ];
   }
 
+  /// 逐页 typed 交付绑定（DEC-033）。
+  ///
+  /// 交付形态只从投影读取：`mediaItems` 的 mediaAssetId/accessMode 在场即按其
+  /// 声明分流，不从 URL 形态反推。已换到原图的页保持私有绑定——原图本就是
+  /// 私有资产，短签地址由 coordinator 持有并按 TTL 换签，不在此处传裸 URL。
+  List<MediaDeliveryBinding> _imageDeliveriesForPost(ContentPostViewData post) {
+    final urls = _imageUrlsForPost(post);
+    final imageItems = _workItemFor(post).mediaItems
+        .where((media) => media.kind == 'image' && media.url.trim().isNotEmpty)
+        .toList(growable: false);
+    return <MediaDeliveryBinding>[
+      for (var index = 0; index < urls.length; index++)
+        MediaDeliveryBinding(
+          assetId: index < imageItems.length
+              ? (imageItems[index].mediaAssetId?.trim() ?? '')
+              : '',
+          accessMode: index < imageItems.length
+              ? imageItems[index].accessMode
+              : null,
+          publicUrl: urls[index],
+        ),
+    ];
+  }
+
   String? _originalMediaIdFor(ContentPostViewData post, int imageIndex) {
     final item = _workItemFor(post);
     final imageItems = item.mediaItems
@@ -558,9 +582,8 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
                     durationMs: post.durationMs,
                     mediaAssetId: _workItemFor(post).mediaAssetId,
                     mediaAssetVersion: _workItemFor(post).mediaAssetVersion,
-                    previewTrackManifestUrl: _workItemFor(
-                      post,
-                    ).previewTrackManifestUrl,
+                    previewTrackManifestUrl: _workItemFor(post)
+                        .previewTrackManifestUrl,
                     previewTrackVersion: _workItemFor(post).previewTrackVersion,
                     hlsCmafMasterManifestUrl: post.hlsCmafMasterManifestUrl,
                     hlsCmafDescriptorVersion: post.hlsCmafDescriptorVersion,
@@ -595,14 +618,21 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
             mediaAssetId: item.mediaAssetId,
             mediaAssetVersion: item.mediaAssetVersion,
           ),
+          videoBinding: MediaDeliveryBinding(
+            assetId: item.mediaAssetId?.trim() ?? '',
+            accessMode: item.accessMode,
+            publicUrl: item.url.trim(),
+          ),
           deliveryReference: delivery,
           adaptiveDeliveryReference: adaptiveDelivery,
           adaptiveDescriptorVersion: item.hlsCmafDescriptorVersion ?? 0,
-          coverReference: resolver.tryResolve(
-            item.coverUrl,
-            kind: MediaDeliveryKind.image,
-            assetId: item.mediaAssetId ?? post.id,
-            version: item.mediaAssetVersion ?? 0,
+          // 封面是独立资产：资产身份取 coverAssetId，交付形态取投影 typed 声明。
+          // 旧实现取视频自身的 mediaAssetId 并以 post.id 兜底，那既张冠李戴又让
+          // 对象标识冒充媒体资产标识，换签必然失败。
+          coverBinding: MediaDeliveryBinding(
+            assetId: item.coverAssetId?.trim() ?? '',
+            accessMode: item.accessMode,
+            publicUrl: item.coverUrl?.trim() ?? '',
           ),
           verifiedDuration: item.durationMs == null
               ? null
@@ -888,5 +918,42 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
         _expandedCaptionPostIds.add(postId);
       }
     });
+  }
+
+  /// 文本 moment 背景封面的 typed 交付绑定（DEC-033）。
+  ///
+  /// 渲染 URL 取自 raw projection 的 `coverUrl`，而资产身份与交付形态只在投影
+  /// `mediaItems` 的逐媒体声明里；两者按 URL 对齐。投影未声明该 URL 时落契约
+  /// 缺席走公开路，不猜一个资产身份去换签。
+  MediaDeliveryBinding _textMomentBackgroundBinding(ContentPostViewData post) {
+    final coverUrl =
+        _rawPostById(
+          post.id,
+        )?[ContentMediaPostProjectionKeys.coverUrl]?.toString().trim() ??
+        '';
+    if (coverUrl.isEmpty) {
+      return const MediaDeliveryBinding.absent();
+    }
+    for (final media in post.mediaItems) {
+      if ((media.coverUrl?.trim() ?? '') == coverUrl) {
+        return MediaDeliveryBinding(
+          assetId: media.coverAssetId?.trim() ?? '',
+          accessMode: media.accessMode,
+          publicUrl: coverUrl,
+        );
+      }
+      if (media.url.trim() == coverUrl) {
+        return MediaDeliveryBinding(
+          assetId: media.mediaAssetId?.trim() ?? '',
+          accessMode: media.accessMode,
+          publicUrl: coverUrl,
+        );
+      }
+    }
+    return MediaDeliveryBinding(
+      assetId: '',
+      accessMode: null,
+      publicUrl: coverUrl,
+    );
   }
 }

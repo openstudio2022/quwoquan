@@ -5,98 +5,184 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 
-	platformredis "quwoquan_service/internal/platform/redis"
-	configrelease "quwoquan_service/runtime/configrelease"
 	rterr "quwoquan_service/runtime/errors"
-	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/runtime/reliabletask"
-	"quwoquan_service/runtime/servicehost"
+	"quwoquan_service/runtime/servicekit"
 	generated "quwoquan_service/services/chat-service/generated/chat/conversation"
+	chatconfig "quwoquan_service/services/chat-service/internal/chat/conversation/infrastructure/runtimeconfig"
 )
 
-func resolveRuntimeIdentity() (serviceName, appEnv, configRoot, configVersion, imageVersion string, err error) {
-	serviceName = strings.TrimSpace(
-		servicehost.ModuleEnvironmentValue("chat-service", "SERVICE_NAME"),
-	)
-	if serviceName == "" {
-		serviceName = "chat-service"
-	}
-	appEnv = getenvOrDefault("APP_ENV", "alpha")
-	configRoot = os.Getenv("CONFIG_ROOT")
-	configVersion = servicehost.ModuleEnvironmentValue(
-		"chat-service",
-		"CONFIG_VERSION",
-	)
-	imageVersion = os.Getenv("IMAGE_VERSION")
+// serviceName 是本模块在 composition.yaml、compose service name 与 specs 中
+// 共用的同一字面值，也是 env 前缀 CHAT 的派生输入。
+const serviceName = "chat-service"
 
-	if !isValidAppEnv(appEnv) {
-		return "", "", "", "", "", fmt.Errorf("APP_ENV must be one of alpha|beta|gamma|prod, got %q", appEnv)
-	}
-	if requiresConfigVersion(appEnv) && strings.TrimSpace(configVersion) == "" {
-		return "", "", "", "", "", fmt.Errorf("CONFIG_VERSION is required when APP_ENV=%s", appEnv)
-	}
-	return serviceName, appEnv, configRoot, configVersion, imageVersion, nil
+const (
+	minAccountSecurityAuthorityTimeout = 50 * time.Millisecond
+	maxAccountSecurityAuthorityTimeout = 5 * time.Second
+)
+
+// config 是 chat-service 的声明式配置：通用段内嵌 servicekit.BaseConfig，
+// 三个 Redis scene 的 env 键由服务前缀 CHAT 与 envPrefix 链派生，与部署面
+// 注入点逐字对齐。MongoDB 与 reliable-task/sync 段沿用环境装配（secretRefs、
+// compose、prod plane、gamma mirror）已固定的无前缀契约键，用 envAbsolute
+// 逐字保留。
+type config struct {
+	servicekit.BaseConfig `yaml:",inline"`
+
+	MongoDB struct {
+		URI      string `yaml:"uri" env:"MONGO_URI" required:"true"`
+		Database string `yaml:"database" env:"MONGO_DATABASE" required:"true"`
+	} `yaml:"mongodb"`
+
+	// realtime 承载实时扇出与 resume，general 承载持久化事实流与缓存，
+	// reliable_task 承载可靠任务 ready index。
+	Redis struct {
+		Realtime     servicekit.RedisSceneConfig `yaml:"realtime" envPrefix:"REDIS_REALTIME"`
+		General      servicekit.RedisSceneConfig `yaml:"general" envPrefix:"REDIS_GENERAL"`
+		ReliableTask servicekit.RedisSceneConfig `yaml:"reliable_task" envPrefix:"REDIS_RELIABLE_TASK"`
+	} `yaml:"redis"`
+
+	// Dependencies 是纯部署面契约：这些无前缀键由环境装配注入，不进入
+	// 配置快照，因此不声明 yaml 路径——否则会凭空多出一份 schema 真相源。
+	Dependencies struct {
+		UserServiceBaseURL    string `yaml:"-" envAbsolute:"USER_SERVICE_BASE_URL"`
+		CircleServiceBaseURL  string `yaml:"-" envAbsolute:"CIRCLE_SERVICE_BASE_URL"`
+		GatewayBaseURL        string `yaml:"-" envAbsolute:"GATEWAY_BASE_URL"`
+		ContentServiceBaseURL string `yaml:"-" envAbsolute:"CONTENT_SERVICE_BASE_URL"`
+	} `yaml:"-"`
+
+	Runtime struct {
+		Media struct {
+			GroupAvatarCDNBaseURL     string `yaml:"group_avatar_cdn_base_url" env:"GROUP_AVATAR_CDN_BASE_URL"`
+			GroupAvatarLocalMediaRoot string `yaml:"group_avatar_local_media_root" env:"GROUP_AVATAR_LOCAL_MEDIA_ROOT"`
+		} `yaml:"media"`
+		Sync struct {
+			PatchTTLHours int `yaml:"patch_ttl_hours" envAbsolute:"RUNTIME_SYNC_PATCH_TTL_HOURS"`
+		} `yaml:"sync"`
+		ReliableTask struct {
+			ReadyIndex struct {
+				Enabled bool   `yaml:"enabled" envAbsolute:"RELIABLE_TASK_READY_INDEX_ENABLED"`
+				Stream  string `yaml:"stream" envAbsolute:"RELIABLE_TASK_READY_INDEX_STREAM"`
+				Group   string `yaml:"group" envAbsolute:"RELIABLE_TASK_READY_INDEX_GROUP"`
+				Queue   string `yaml:"queue" envAbsolute:"RELIABLE_TASK_READY_INDEX_QUEUE"`
+			} `yaml:"ready_index"`
+		} `yaml:"reliable_task"`
+		Observability struct {
+			RuntimeMedia struct {
+				GroupAvatarRecomputeDurationMsP95 float64 `yaml:"group_avatar_recompute_duration_ms_p95"`
+				GroupAvatarFallbackRatio          float64 `yaml:"group_avatar_fallback_ratio"`
+				HintToPullDelayMsP95              float64 `yaml:"hint_to_pull_delay_ms_p95"`
+				PatchFanoutFailureRatio           float64 `yaml:"patch_fanout_failure_ratio"`
+			} `yaml:"runtime_media"`
+		} `yaml:"observability"`
+	} `yaml:"runtime"`
 }
 
-func isValidAppEnv(env string) bool {
-	switch env {
-	case "alpha", "beta", "gamma", "prod":
-		return true
-	default:
-		return false
-	}
+// DeclaredEnvKeys 暴露声明派生的 env 覆盖键全集，供等价断言测试锁定键集
+// 不随重构漂移。
+func DeclaredEnvKeys() ([]string, error) {
+	return servicekit.EnvOverrideKeys(servicekit.DefaultEnvPrefix(serviceName), &config{})
 }
 
-func requiresConfigVersion(env string) bool {
-	switch env {
-	case "gamma", "prod":
-		return true
-	default:
-		return false
+// snapshotGuard 拒收仍带退役配置段的渲染快照：账号安全 authority 的配置面
+// 已上收到通用段 user_account_security_authority，形状过时的快照会让通用段
+// 全部落到零值，而零值超时会被后续边界校验当成一次「配置缺失」而不是「快照
+// 形状过时」，掩盖真正的根因。
+func snapshotGuard(raw []byte) error {
+	var document struct {
+		Runtime struct {
+			Auth map[string]any `yaml:"auth"`
+		} `yaml:"runtime"`
 	}
-}
-
-func getenvOrDefault(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
+	if err := yaml.Unmarshal(raw, &document); err != nil {
+		return fmt.Errorf("parse config snapshot for retired section validation: %w", err)
 	}
-	return fallback
-}
-
-func hostname() string {
-	h, err := os.Hostname()
-	if err != nil {
-		return "unknown"
-	}
-	return h
-}
-
-func mergeConfigFile(cfg *config, path string) error {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	if err := yaml.Unmarshal(raw, cfg); err != nil {
-		return fmt.Errorf("parse %s: %w", path, err)
+	if document.Runtime.Auth != nil {
+		return fmt.Errorf(
+			"runtime.auth is retired; declare user_account_security_authority instead",
+		)
 	}
 	return nil
 }
 
-func loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (config, error) {
-	cfg := config{}
-	path, err := configrelease.File(configRoot, serviceName, appEnv)
-	if err != nil {
-		return config{}, err
+// validateChatConfig 承接迁移前散落在 main.go 与 chatconfig 里的 fail-closed
+// 校验：账号安全 authority 的 origin 与超时边界、三个跨服务依赖的 origin
+// 形态。它在骨架 required 校验之后、任何观测栈与基础设施连接之前执行，
+// 所以非法配置不产生外部副作用。
+func validateChatConfig(cfg *config) error {
+	authority := cfg.UserAccountSecurityAuthority
+	if _, err := chatconfig.RequireInternalServiceBaseURL(
+		"user_account_security_authority.base_url",
+		authority.BaseURL,
+	); err != nil {
+		return fmt.Errorf("account security authority user-service URL: %w", err)
 	}
-	if err := mergeConfigFile(&cfg, path); err != nil {
-		return config{}, fmt.Errorf("read generated runtime config: %w", err)
+	timeout := time.Duration(authority.TimeoutMs) * time.Millisecond
+	if timeout < minAccountSecurityAuthorityTimeout ||
+		timeout > maxAccountSecurityAuthorityTimeout {
+		return fmt.Errorf(
+			"account security authority timeout must be between %s and %s, got %dms",
+			minAccountSecurityAuthorityTimeout,
+			maxAccountSecurityAuthorityTimeout,
+			authority.TimeoutMs,
+		)
 	}
-	return cfg, nil
+
+	if _, err := cfg.resolveUserServiceBaseURL(); err != nil {
+		return fmt.Errorf("user dependency invalid: %w", err)
+	}
+	if _, err := cfg.resolveCircleServiceBaseURL(); err != nil {
+		return fmt.Errorf("circle dependency invalid: %w", err)
+	}
+	if _, err := cfg.resolveContentServiceBaseURL(); err != nil {
+		return fmt.Errorf("content dependency invalid: %w", err)
+	}
+	return nil
+}
+
+func (cfg *config) resolveUserServiceBaseURL() (string, error) {
+	return chatconfig.RequireInternalServiceBaseURL(
+		"USER_SERVICE_BASE_URL", cfg.Dependencies.UserServiceBaseURL,
+	)
+}
+
+// resolveCircleServiceBaseURL 保留 GATEWAY_BASE_URL 兜底：两个键都是既有的
+// 部署面注入点，取决于该环境把圈子读路径挂在服务本体还是网关后面。
+func (cfg *config) resolveCircleServiceBaseURL() (string, error) {
+	value := strings.TrimSpace(cfg.Dependencies.CircleServiceBaseURL)
+	if value == "" {
+		value = strings.TrimSpace(cfg.Dependencies.GatewayBaseURL)
+	}
+	return chatconfig.RequireInternalServiceBaseURL(
+		"CIRCLE_SERVICE_BASE_URL or GATEWAY_BASE_URL", value,
+	)
+}
+
+func (cfg *config) resolveContentServiceBaseURL() (string, error) {
+	return chatconfig.RequireInternalServiceBaseURL(
+		"CONTENT_SERVICE_BASE_URL", cfg.Dependencies.ContentServiceBaseURL,
+	)
+}
+
+// resolveRedisScenes 把三份 scene 配置装配成四个 codegen scene 名：rec 复用
+// general；reliable_task 整段缺席时同样复用 general，让只接一套 Redis 的环境
+// 不必重复声明第三份地址。复用的是完整一段，缺席判据由 servicekit 统一持有。
+func resolveRedisScenes(cfg *config) map[string]servicekit.RedisSceneConfig {
+	reliableTask := cfg.Redis.ReliableTask
+	if reliableTask.IsUndeclared() {
+		reliableTask = cfg.Redis.General
+	}
+	return map[string]servicekit.RedisSceneConfig{
+		"realtime":     cfg.Redis.Realtime,
+		"general":      cfg.Redis.General,
+		"rec":          cfg.Redis.General,
+		"reliabletask": reliableTask,
+	}
 }
 
 func loadReliableTaskCatalog(configRoot string) (reliabletask.Catalog, error) {
@@ -174,13 +260,6 @@ func splitCSV(raw string) []string {
 	return out
 }
 
-func validateRuntimeConfigurationIdentity(cfg config, configVersion string) error {
-	if strings.TrimSpace(configVersion) != "" && strings.TrimSpace(cfg.Config.Version) != "" && cfg.Config.Version != configVersion {
-		return fmt.Errorf("CONFIG_VERSION mismatch: env=%s file=%s", configVersion, cfg.Config.Version)
-	}
-	return nil
-}
-
 func newDerivedMediaFileServer(localRoot string) http.Handler {
 	root := filepath.Clean(strings.TrimSpace(localRoot))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -224,117 +303,4 @@ func writeDerivedMediaError(w http.ResponseWriter, r *http.Request, status int, 
 		}),
 		rterr.HTTPWriteOptionsFromRequest(r),
 	)
-}
-
-func applyEnvOverrides(cfg *config) {
-	if v := os.Getenv("MONGO_URI"); v != "" {
-		cfg.MongoDB.URI = v
-	}
-	if v := os.Getenv("MONGO_DATABASE"); v != "" {
-		cfg.MongoDB.Database = v
-	}
-
-	applyRedisSceneEnv("CHAT_REDIS_REALTIME", &cfg.Redis.Realtime)
-	applyRedisSceneEnv("CHAT_REDIS_GENERAL", &cfg.Redis.General)
-	applyRedisSceneEnv("CHAT_REDIS_RELIABLE_TASK", &cfg.Redis.ReliableTask)
-
-	if v := os.Getenv("REDIS_ADDR"); v != "" {
-		if cfg.Redis.General.Addr == "" {
-			cfg.Redis.General.Addr = v
-		}
-		if cfg.Redis.Realtime.Addr == "" {
-			cfg.Redis.Realtime.Addr = v
-		}
-		if cfg.Redis.ReliableTask.Addr == "" {
-			cfg.Redis.ReliableTask.Addr = v
-		}
-	}
-	if v := os.Getenv("RELIABLE_TASK_READY_INDEX_ENABLED"); v == "true" || v == "1" {
-		cfg.Runtime.ReliableTask.ReadyIndex.Enabled = true
-	}
-	if v := os.Getenv("RELIABLE_TASK_READY_INDEX_STREAM"); v != "" {
-		cfg.Runtime.ReliableTask.ReadyIndex.Stream = v
-	}
-	if v := os.Getenv("RELIABLE_TASK_READY_INDEX_GROUP"); v != "" {
-		cfg.Runtime.ReliableTask.ReadyIndex.Group = v
-	}
-	if v := os.Getenv("RELIABLE_TASK_READY_INDEX_QUEUE"); v != "" {
-		cfg.Runtime.ReliableTask.ReadyIndex.Queue = v
-	}
-	if v := os.Getenv("CHAT_GROUP_AVATAR_CDN_BASE_URL"); v != "" {
-		cfg.Runtime.Media.GroupAvatarCDNBaseURL = v
-	}
-	if v := os.Getenv("CHAT_GROUP_AVATAR_LOCAL_MEDIA_ROOT"); v != "" {
-		cfg.Runtime.Media.GroupAvatarLocalMediaRoot = v
-	}
-	if v := os.Getenv("RUNTIME_SYNC_PATCH_TTL_HOURS"); v != "" {
-		if hours, err := strconv.Atoi(v); err == nil {
-			cfg.Runtime.Sync.PatchTTLHours = hours
-		}
-	}
-}
-
-func applyRedisSceneEnv(prefix string, cfg *redisSceneCfg) {
-	if v := os.Getenv(prefix + "_MODE"); v != "" {
-		cfg.Mode = v
-	}
-	if v := os.Getenv(prefix + "_ADDR"); v != "" {
-		cfg.Addr = v
-	}
-	if v := os.Getenv(prefix + "_ADDRS"); v != "" {
-		cfg.Addrs = strings.Split(v, ",")
-	}
-	if v := os.Getenv(prefix + "_PASSWORD"); v != "" {
-		cfg.Password = v
-	}
-	if v := os.Getenv(prefix + "_TLS"); v == "true" || v == "1" {
-		cfg.TLS = true
-	}
-}
-
-func buildRedisRouter(cfg config) *rtredis.Router {
-	routerCfg := rtredis.RouterConfig{
-		Scenes: map[string]rtredis.SceneConfig{
-			"realtime":     toSceneConfig(cfg.Redis.Realtime),
-			"general":      toSceneConfig(cfg.Redis.General),
-			"rec":          toSceneConfig(cfg.Redis.General),
-			"reliabletask": toSceneConfig(resolveReliableTaskRedisScene(cfg)),
-		},
-		PrefixRoutes: rtredis.DefaultRouterConfig().PrefixRoutes,
-		DefaultScene: "general",
-	}
-	return platformredis.MustNewRouter(routerCfg)
-}
-
-func resolveReliableTaskRedisScene(cfg config) redisSceneCfg {
-	scene := cfg.Redis.ReliableTask
-	if strings.TrimSpace(scene.Mode) == "" &&
-		strings.TrimSpace(scene.Addr) == "" &&
-		len(scene.Addrs) == 0 {
-		return cfg.Redis.General
-	}
-	return scene
-}
-
-func toSceneConfig(r redisSceneCfg) rtredis.SceneConfig {
-	mode := strings.ToLower(strings.TrimSpace(r.Mode))
-	if mode == "" {
-		mode = "standalone"
-	}
-	if mode == "standalone" && r.Addr == "" {
-		mode = "memory"
-	}
-	if mode == "cluster" && len(r.Addrs) == 0 {
-		mode = "memory"
-	}
-	return rtredis.SceneConfig{
-		Mode:         mode,
-		Addr:         r.Addr,
-		Addrs:        r.Addrs,
-		Password:     r.Password,
-		DB:           r.DB,
-		TLS:          r.TLS,
-		PoolSize:     r.Pool.Size,
-		MinIdleConns: r.Pool.MinIdle,
-	}
 }

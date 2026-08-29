@@ -1,11 +1,10 @@
 """矩阵结果 CaseResult / Markdown 落盘与 claim 计算（自原单文件逐字搬移）。"""
+
 from __future__ import annotations
 
 import json
 from pathlib import Path
 from typing import Any
-
-from quwoquan_ops.cli.lib.local_env_gate_timing import utc_now
 
 # 测试通过 mock.patch.object(matrix_mod, "write_timing_bundle") 拦截 timing 写出；
 # 保持包属性延迟访问以兼容 monkeypatch。
@@ -16,8 +15,10 @@ from quwoquan_ops.cli.lib.local_env_gate_matrix.identity import (
     EMULATOR_ONLY_CLAIM,
     PROFILE_LOCAL_ENV_GATE,
     SPEC_REFS,
+    _SHA256,
     _evidence_path,
 )
+from quwoquan_ops.cli.lib.local_env_gate_timing import utc_now
 
 
 def _write_matrix_result(
@@ -29,19 +30,33 @@ def _write_matrix_result(
     wall_seconds: float,
     exit_code: int,
     failure_category: str,
-    baseline_id: str,
+    release_train_id: str,
+    package_baselines: dict[str, str],
     release: dict[str, str],
     matrix_run_id: str,
     execution_class: str,
     device_profile: str,
 ) -> dict[str, Any]:
-    passed = exit_code == 0 and tuple(environments) == CANONICAL_TARGETS
+    identity_complete = (
+        _SHA256.fullmatch(release_train_id) is not None
+        and set(package_baselines) == set(CANONICAL_TARGETS)
+        and all(
+            _SHA256.fullmatch(str(package_baselines[target] or "")) is not None
+            for target in CANONICAL_TARGETS
+        )
+    )
+    passed = (
+        exit_code == 0
+        and tuple(environments) == CANONICAL_TARGETS
+        and identity_complete
+    )
+    effective_failure_category = failure_category or (
+        "" if identity_complete else "receipt_identity"
+    )
     live_evidence = execution_class == "live"
     claim = (
         EMULATOR_ONLY_CLAIM
-        if passed
-        and live_evidence
-        and device_profile == DEVICE_PROFILE_EMULATOR_ONLY
+        if passed and live_evidence and device_profile == DEVICE_PROFILE_EMULATOR_ONLY
         else "ALPHA_BETA_GAMMA_LOCAL_GREEN"
         if passed and live_evidence
         else "CONTRACT_SIMULATION_PASSED"
@@ -59,7 +74,7 @@ def _write_matrix_result(
         claim=claim,
         cache_mode="package-bound",
         extras={
-            "failureCategory": failure_category,
+            "failureCategory": effective_failure_category,
             "targets": list(CANONICAL_TARGETS),
             "executed": executed,
             "skipped": skipped,
@@ -82,11 +97,16 @@ def _write_matrix_result(
         "wallClockSeconds": round(wall_seconds, 3),
         "softBudgetSeconds": budgets["softBudgetSeconds"],
         "hardBudgetSeconds": budgets["hardBudgetSeconds"],
-        "failureCategory": failure_category,
+        "failureCategory": effective_failure_category,
         "matrixRunId": matrix_run_id,
         "executionClass": execution_class,
         "deviceProfile": device_profile,
-        "baselineId": baseline_id,
+        "releaseTrainId": release_train_id,
+        "packageBaselines": {
+            target: str(package_baselines.get(target) or "")
+            for target in CANONICAL_TARGETS
+            if str(package_baselines.get(target) or "")
+        },
         "releaseId": release.get("releaseId", ""),
         "releaseDigest": release.get("releaseDigest", ""),
         "timingPath": _evidence_path(timing_path),
@@ -118,7 +138,16 @@ def _write_matrix_result(
                 f"- status: `{status}`",
                 f"- claim: `{claim}`",
                 f"- executed/skipped: `{executed}/{skipped}`",
-                f"- failureCategory: `{failure_category or 'none'}`",
+                f"- failureCategory: `{effective_failure_category or 'none'}`",
+                f"- releaseTrainId: `{release_train_id or 'missing'}`",
+                "- packageBaselines: `"
+                + json.dumps(
+                    payload["packageBaselines"],
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+                + "`",
                 f"- timing: `{_evidence_path(timing_path)}`",
                 "",
             ]
@@ -133,7 +162,7 @@ def _write_matrix_result(
             f"executed={executed}",
             f"skipped={skipped}",
             f"timing={_evidence_path(timing_path)}",
-            f"failureCategory={failure_category or 'none'}",
+            f"failureCategory={effective_failure_category or 'none'}",
             f"deviceProfile={device_profile}",
         ],
         "reportDir": _evidence_path(matrix_dir),
@@ -142,4 +171,6 @@ def _write_matrix_result(
         "executed": executed,
         "skipped": skipped,
         "wallClockSeconds": round(wall_seconds, 3),
+        "releaseTrainId": release_train_id,
+        "packageBaselines": dict(payload["packageBaselines"]),
     }

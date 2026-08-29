@@ -58,18 +58,42 @@ class CanonicalSearchHit {
       title: m['title'] as String,
       snippet: m['snippet'] as String?,
       score: (m['score'] as num).toDouble(),
-      matchedTerms: List<String>.unmodifiable(List<String>.from(m['matchedTerms'] as List)),
-      matchedTags: List<String>.unmodifiable(List<String>.from(m['matchedTags'] as List)),
-      evidence: _parseProjectionDtoList(m['evidence'], CanonicalSearchEvidence.fromMap),
-      geo: m['geo'] == null ? null : CanonicalSearchGeoPoint.fromMap(_parseStringKeyMap(m['geo'])!),
-      distanceKm: m['distanceKm'] == null ? null : (m['distanceKm'] as num).toDouble(),
+      matchedTerms: List<String>.unmodifiable(
+        List<String>.from(m['matchedTerms'] as List),
+      ),
+      matchedTags: List<String>.unmodifiable(
+        List<String>.from(m['matchedTags'] as List),
+      ),
+      evidence: _parseProjectionDtoList(
+        m['evidence'],
+        CanonicalSearchEvidence.fromMap,
+      ),
+      geo: m['geo'] == null
+          ? null
+          : CanonicalSearchGeoPoint.fromMap(_parseStringKeyMap(m['geo'])!),
+      distanceKm: m['distanceKm'] == null
+          ? null
+          : (m['distanceKm'] as num).toDouble(),
       placeName: m['placeName'] as String?,
       connectionState: m['connectionState'] as String?,
-      intersectionReason: m['intersectionReason'] == null ? null : CanonicalSearchIntersectionReason.fromMap(_parseStringKeyMap(m['intersectionReason'])!),
-      rankReasons: _parseProjectionDtoList(m['rankReasons'], CanonicalSearchRankReason.fromMap),
+      intersectionReason: m['intersectionReason'] == null
+          ? null
+          : CanonicalSearchIntersectionReason.fromMap(
+              _parseStringKeyMap(m['intersectionReason'])!,
+            ),
+      rankReasons: _parseProjectionDtoList(
+        m['rankReasons'],
+        CanonicalSearchRankReason.fromMap,
+      ),
       rankPosition: m['rankPosition'] as int?,
-      content: m['content'] == null ? null : CanonicalSearchContentHit.fromMap(_parseStringKeyMap(m['content'])!),
-      payload: m['payload'] == null ? null : CanonicalSearchPayload.fromMap(_parseStringKeyMap(m['payload'])!),
+      content: m['content'] == null
+          ? null
+          : CanonicalSearchContentHit.fromMap(
+              _parseStringKeyMap(m['content'])!,
+            ),
+      payload: m['payload'] == null
+          ? null
+          : CanonicalSearchPayload.fromMap(_parseStringKeyMap(m['payload'])!),
     );
   }
 
@@ -83,13 +107,17 @@ class CanonicalSearchHit {
       'score': score,
       'matchedTerms': matchedTerms,
       'matchedTags': matchedTags,
-      'evidence': evidence.map((value) => value.toMap()).toList(growable: false),
+      'evidence': evidence
+          .map((value) => value.toMap())
+          .toList(growable: false),
       'geo': geo?.toMap(),
       'distanceKm': distanceKm,
       'placeName': placeName,
       'connectionState': connectionState,
       'intersectionReason': intersectionReason?.toMap(),
-      'rankReasons': rankReasons.map((value) => value.toMap()).toList(growable: false),
+      'rankReasons': rankReasons
+          .map((value) => value.toMap())
+          .toList(growable: false),
       'rankPosition': rankPosition,
       'content': content?.toMap(),
       'payload': payload?.toMap(),
@@ -160,63 +188,143 @@ void _validateCanonicalSearchHitWire(Map<String, dynamic> m) {
     'content',
     'payload',
   };
-  final unknown = m.keys.where((key) => !allowed.contains(key)).toList(growable: false);
+  final unknown = m.keys
+      .where((key) => !allowed.contains(key))
+      .toList(growable: false);
   if (unknown.isNotEmpty) {
-    throw FormatException('CanonicalSearchHit contains unknown fields: ${unknown.join(',')}');
+    throw FormatException(
+      'CanonicalSearchHit contains unknown fields: ${unknown.join(',')}',
+    );
   }
-  if (!m.containsKey('target') || m['target'] == null || (m['target'] is! String)) {
-    throw FormatException('CanonicalSearchHit.target has an invalid wire value');
+  if (!m.containsKey('target') ||
+      m['target'] == null ||
+      (m['target'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchHit.target has an invalid wire value',
+    );
   }
-  if (!m.containsKey('objectType') || m['objectType'] == null || (m['objectType'] is! String)) {
-    throw FormatException('CanonicalSearchHit.objectType has an invalid wire value');
+  if (!m.containsKey('objectType') ||
+      m['objectType'] == null ||
+      (m['objectType'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchHit.objectType has an invalid wire value',
+    );
   }
-  if (!m.containsKey('objectId') || m['objectId'] == null || (m['objectId'] is! String)) {
-    throw FormatException('CanonicalSearchHit.objectId has an invalid wire value');
+  if (!m.containsKey('objectId') ||
+      m['objectId'] == null ||
+      (m['objectId'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchHit.objectId has an invalid wire value',
+    );
   }
-  if (!m.containsKey('title') || m['title'] == null || (m['title'] is! String)) {
+  if (!m.containsKey('title') ||
+      m['title'] == null ||
+      (m['title'] is! String)) {
     throw FormatException('CanonicalSearchHit.title has an invalid wire value');
   }
-  if (m.containsKey('snippet') && m['snippet'] != null && (m['snippet'] is! String)) {
-    throw FormatException('CanonicalSearchHit.snippet has an invalid wire value');
+  if (m.containsKey('snippet') &&
+      m['snippet'] != null &&
+      (m['snippet'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchHit.snippet has an invalid wire value',
+    );
   }
   if (!m.containsKey('score') || m['score'] == null || (m['score'] is! num)) {
     throw FormatException('CanonicalSearchHit.score has an invalid wire value');
   }
-  if (!m.containsKey('matchedTerms') || m['matchedTerms'] == null || (m['matchedTerms'] is! List || (m['matchedTerms'] as List).any((value) => value is! String))) {
-    throw FormatException('CanonicalSearchHit.matchedTerms has an invalid wire value');
+  if (!m.containsKey('matchedTerms') ||
+      m['matchedTerms'] == null ||
+      (m['matchedTerms'] is! List ||
+          (m['matchedTerms'] as List).any((value) => value is! String))) {
+    throw FormatException(
+      'CanonicalSearchHit.matchedTerms has an invalid wire value',
+    );
   }
-  if (!m.containsKey('matchedTags') || m['matchedTags'] == null || (m['matchedTags'] is! List || (m['matchedTags'] as List).any((value) => value is! String))) {
-    throw FormatException('CanonicalSearchHit.matchedTags has an invalid wire value');
+  if (!m.containsKey('matchedTags') ||
+      m['matchedTags'] == null ||
+      (m['matchedTags'] is! List ||
+          (m['matchedTags'] as List).any((value) => value is! String))) {
+    throw FormatException(
+      'CanonicalSearchHit.matchedTags has an invalid wire value',
+    );
   }
-  if (!m.containsKey('evidence') || m['evidence'] == null || (m['evidence'] is! List || (m['evidence'] as List).any((value) => value is! Map || value.keys.any((key) => key is! String)))) {
-    throw FormatException('CanonicalSearchHit.evidence has an invalid wire value');
+  if (!m.containsKey('evidence') ||
+      m['evidence'] == null ||
+      (m['evidence'] is! List ||
+          (m['evidence'] as List).any(
+            (value) => value is! Map || value.keys.any((key) => key is! String),
+          ))) {
+    throw FormatException(
+      'CanonicalSearchHit.evidence has an invalid wire value',
+    );
   }
-  if (m.containsKey('geo') && m['geo'] != null && (m['geo'] is! Map || (m['geo'] as Map).keys.any((key) => key is! String))) {
+  if (m.containsKey('geo') &&
+      m['geo'] != null &&
+      (m['geo'] is! Map ||
+          (m['geo'] as Map).keys.any((key) => key is! String))) {
     throw FormatException('CanonicalSearchHit.geo has an invalid wire value');
   }
-  if (m.containsKey('distanceKm') && m['distanceKm'] != null && (m['distanceKm'] is! num)) {
-    throw FormatException('CanonicalSearchHit.distanceKm has an invalid wire value');
+  if (m.containsKey('distanceKm') &&
+      m['distanceKm'] != null &&
+      (m['distanceKm'] is! num)) {
+    throw FormatException(
+      'CanonicalSearchHit.distanceKm has an invalid wire value',
+    );
   }
-  if (m.containsKey('placeName') && m['placeName'] != null && (m['placeName'] is! String)) {
-    throw FormatException('CanonicalSearchHit.placeName has an invalid wire value');
+  if (m.containsKey('placeName') &&
+      m['placeName'] != null &&
+      (m['placeName'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchHit.placeName has an invalid wire value',
+    );
   }
-  if (m.containsKey('connectionState') && m['connectionState'] != null && (m['connectionState'] is! String)) {
-    throw FormatException('CanonicalSearchHit.connectionState has an invalid wire value');
+  if (m.containsKey('connectionState') &&
+      m['connectionState'] != null &&
+      (m['connectionState'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchHit.connectionState has an invalid wire value',
+    );
   }
-  if (m.containsKey('intersectionReason') && m['intersectionReason'] != null && (m['intersectionReason'] is! Map || (m['intersectionReason'] as Map).keys.any((key) => key is! String))) {
-    throw FormatException('CanonicalSearchHit.intersectionReason has an invalid wire value');
+  if (m.containsKey('intersectionReason') &&
+      m['intersectionReason'] != null &&
+      (m['intersectionReason'] is! Map ||
+          (m['intersectionReason'] as Map).keys.any((key) => key is! String))) {
+    throw FormatException(
+      'CanonicalSearchHit.intersectionReason has an invalid wire value',
+    );
   }
-  if (!m.containsKey('rankReasons') || m['rankReasons'] == null || (m['rankReasons'] is! List || (m['rankReasons'] as List).any((value) => value is! Map || value.keys.any((key) => key is! String)))) {
-    throw FormatException('CanonicalSearchHit.rankReasons has an invalid wire value');
+  if (!m.containsKey('rankReasons') ||
+      m['rankReasons'] == null ||
+      (m['rankReasons'] is! List ||
+          (m['rankReasons'] as List).any(
+            (value) => value is! Map || value.keys.any((key) => key is! String),
+          ))) {
+    throw FormatException(
+      'CanonicalSearchHit.rankReasons has an invalid wire value',
+    );
   }
-  if (m.containsKey('rankPosition') && m['rankPosition'] != null && (m['rankPosition'] is! int)) {
-    throw FormatException('CanonicalSearchHit.rankPosition has an invalid wire value');
+  if (m.containsKey('rankPosition') &&
+      m['rankPosition'] != null &&
+      (m['rankPosition'] is! int)) {
+    throw FormatException(
+      'CanonicalSearchHit.rankPosition has an invalid wire value',
+    );
   }
-  if (m.containsKey('content') && m['content'] != null && (m['content'] is! Map || (m['content'] as Map).keys.any((key) => key is! String))) {
-    throw FormatException('CanonicalSearchHit.content has an invalid wire value');
+  if (m.containsKey('content') &&
+      m['content'] != null &&
+      (m['content'] is! Map ||
+          (m['content'] as Map).keys.any((key) => key is! String))) {
+    throw FormatException(
+      'CanonicalSearchHit.content has an invalid wire value',
+    );
   }
-  if (m.containsKey('payload') && m['payload'] != null && (m['payload'] is! Map || (m['payload'] as Map).keys.any((key) => key is! String))) {
-    throw FormatException('CanonicalSearchHit.payload has an invalid wire value');
+  if (m.containsKey('payload') &&
+      m['payload'] != null &&
+      (m['payload'] is! Map ||
+          (m['payload'] as Map).keys.any((key) => key is! String))) {
+    throw FormatException(
+      'CanonicalSearchHit.payload has an invalid wire value',
+    );
   }
 }
 
@@ -236,7 +344,6 @@ List<T> _parseProjectionDtoList<T>(
   }
   return out;
 }
-
 
 Map<String, dynamic>? _parseStringKeyMap(dynamic v) {
   if (v == null) return null;

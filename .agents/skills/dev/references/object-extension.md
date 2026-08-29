@@ -77,7 +77,7 @@ make gate
 - query 直接读 Reader/Slice，不为展示路径加载 aggregate。
 - generated 文件禁止手改；边界缺失时回 metadata/design，不在 generator 里猜。
 - prod 不装配 Memory、Noop、Mock、fixture、seed 或默认 secret（生产装配纯净规则见
-  `review/references/roles/architect/references/production-wiring-and-test-doubles.md`）。
+  `specs/feature-tree/runtime/system-architecture-and-engineering-guide/design.md#dec-019`）。
 
 ## 三个特殊场景
 

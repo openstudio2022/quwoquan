@@ -5,6 +5,7 @@ import 'package:quwoquan_app/runtime/errors/generated/ops/ops_event_record_error
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 import 'package:quwoquan_app/runtime/config/runtime_package_resolver.dart';
+import 'package:quwoquan_app/runtime/config/generated/app_launch_contract.g.dart';
 import 'package:quwoquan_app/runtime/platform/native_runtime_config_bridge.dart';
 
 class CloudRuntimeConfigurationException implements Exception {
@@ -38,6 +39,8 @@ abstract final class CloudRuntimeConfig {
   static String? _verifiedRuntimeConfigPackageDigest;
   static String? _verifiedRuntimeConfigTrustEnvelopeDigest;
   static String? _effectiveLaunchManifestDigest;
+  static String? _launchProvenance;
+  static String? _runtimeConfigSupplyMode;
 
   static bool get isHydrated => _resolvedPackage != null;
 
@@ -86,7 +89,15 @@ abstract final class CloudRuntimeConfig {
 
   static String get webAppMobileDownloadUrl => appDownloadBaseUrl;
 
-  static String get launchMode => 'external_runtime_package';
+  static String get launchProvenance {
+    _requiredPackage();
+    return _launchProvenance ?? '';
+  }
+
+  static String get runtimeConfigSupplyMode {
+    _requiredPackage();
+    return _runtimeConfigSupplyMode ?? '';
+  }
 
   static String? get effectiveLaunchManifestDigest {
     _requiredPackage();
@@ -136,6 +147,8 @@ abstract final class CloudRuntimeConfig {
           verifiedIdentity?.trustEnvelopeDigest;
       _effectiveLaunchManifestDigest =
           verifiedIdentity?.effectiveLaunchManifestDigest;
+      _launchProvenance = verifiedIdentity?.launchProvenance;
+      _runtimeConfigSupplyMode = verifiedIdentity?.runtimeConfigSupplyMode;
     } on NativeRuntimeConfigReadException catch (error) {
       _clearHydratedState();
       throw CloudRuntimeConfigurationException(
@@ -201,7 +214,12 @@ abstract final class CloudRuntimeConfig {
         'configurationState': 'missing',
       };
     }
-    return resolvedPackage.runtimeDefineSummary;
+    return <String, String>{
+      ...resolvedPackage.runtimeDefineSummary,
+      if (_launchProvenance != null) 'launchProvenance': _launchProvenance!,
+      if (_runtimeConfigSupplyMode != null)
+        'runtimeConfigSupplyMode': _runtimeConfigSupplyMode!,
+    };
   }
 
   /// runtime package 未水合或非法时的 typed unavailable；配置完整时返回 null。
@@ -266,6 +284,8 @@ abstract final class CloudRuntimeConfig {
     _verifiedRuntimeConfigPackageDigest = null;
     _verifiedRuntimeConfigTrustEnvelopeDigest = null;
     _effectiveLaunchManifestDigest = null;
+    _launchProvenance = null;
+    _runtimeConfigSupplyMode = null;
   }
 
   static String _canonicalPackageDigest() {
@@ -298,6 +318,8 @@ abstract final class CloudRuntimeConfig {
     final packageDigest = bridgeValue['runtimeConfigPackageDigest'];
     final trustDigest = bridgeValue['runtimeConfigTrustEnvelopeDigest'];
     final manifestDigest = bridgeValue['effectiveLaunchManifestDigest'];
+    final launchProvenance = bridgeValue['launchProvenance'];
+    final runtimeConfigSupplyMode = bridgeValue['runtimeConfigSupplyMode'];
     final invalidKeys = <String>{};
     for (final entry in <String, Object?>{
       'runtimeConfigPackageDigest': packageDigest,
@@ -308,6 +330,14 @@ abstract final class CloudRuntimeConfig {
           !_sha256Identity.hasMatch(entry.value! as String)) {
         invalidKeys.add(entry.key);
       }
+    }
+    if (launchProvenance is! String ||
+        !appLaunchProvenances.contains(launchProvenance)) {
+      invalidKeys.add('launchProvenance');
+    }
+    if (runtimeConfigSupplyMode is! String ||
+        !runtimeConfigSupplyModes.contains(runtimeConfigSupplyMode)) {
+      invalidKeys.add('runtimeConfigSupplyMode');
     }
     if (packageDigest is String &&
         _sha256Identity.hasMatch(packageDigest) &&
@@ -337,6 +367,8 @@ abstract final class CloudRuntimeConfig {
       packageDigest: packageDigest as String,
       trustEnvelopeDigest: trustDigest as String,
       effectiveLaunchManifestDigest: manifestDigest as String,
+      launchProvenance: launchProvenance as String,
+      runtimeConfigSupplyMode: runtimeConfigSupplyMode as String,
     );
   }
 
@@ -448,9 +480,13 @@ final class _VerifiedRuntimeConfigIdentity {
     required this.packageDigest,
     required this.trustEnvelopeDigest,
     required this.effectiveLaunchManifestDigest,
+    required this.launchProvenance,
+    required this.runtimeConfigSupplyMode,
   });
 
   final String packageDigest;
   final String trustEnvelopeDigest;
   final String effectiveLaunchManifestDigest;
+  final String launchProvenance;
+  final String runtimeConfigSupplyMode;
 }

@@ -5,8 +5,7 @@ import os
 import shutil
 import subprocess
 import sys
-from typing import Sequence
-
+from collections.abc import Sequence
 
 ANDROID_DEVICE_INVENTORY_ENV = "QWQ_PATROL_ANDROID_DEVICE_INVENTORY"
 REAL_FLUTTER_ENV = "QWQ_PATROL_REAL_FLUTTER"
@@ -18,6 +17,23 @@ def _is_machine_device_inventory(args: Sequence[str]) -> bool:
 
 def _is_verbose_doctor(args: Sequence[str]) -> bool:
     return "doctor" in args and "--verbose" in args
+
+
+def _patrol_build_args(args: Sequence[str]) -> list[str]:
+    forwarded = list(args)
+    if "--no-pub" in forwarded:
+        return forwarded
+    if (
+        len(forwarded) >= 2
+        and forwarded[0] == "build"
+        and forwarded[1]
+        in {
+            "apk",
+            "ios",
+        }
+    ):
+        forwarded.insert(2, "--no-pub")
+    return forwarded
 
 
 def _print_java_version() -> int:
@@ -47,7 +63,7 @@ def _load_device_inventory() -> list[dict[str, object]]:
         raise RuntimeError("Android Patrol device inventory must be a non-empty list")
     for index, device in enumerate(payload):
         if not isinstance(device, dict):
-            raise RuntimeError(f"Android Patrol device {index} must be an object")
+            raise TypeError(f"Android Patrol device {index} must be an object")
         required = ("id", "name", "targetPlatform", "emulator")
         if any(key not in device for key in required):
             raise RuntimeError(f"Android Patrol device {index} is incomplete")
@@ -61,17 +77,20 @@ def _load_device_inventory() -> list[dict[str, object]]:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
-    if _is_machine_device_inventory(args):
+    has_android_inventory = bool(
+        os.environ.get(ANDROID_DEVICE_INVENTORY_ENV, "").strip()
+    )
+    if has_android_inventory and _is_machine_device_inventory(args):
         json.dump(_load_device_inventory(), sys.stdout, ensure_ascii=False)
         sys.stdout.write("\n")
         return 0
-    if _is_verbose_doctor(args):
+    if has_android_inventory and _is_verbose_doctor(args):
         return _print_java_version()
 
     real_flutter = os.environ.get(REAL_FLUTTER_ENV, "").strip()
     if not real_flutter or not os.path.isabs(real_flutter):
         raise RuntimeError(f"{REAL_FLUTTER_ENV} must be an absolute executable path")
-    os.execv(real_flutter, [real_flutter, *args])
+    os.execv(real_flutter, [real_flutter, *_patrol_build_args(args)])
     return 127
 
 

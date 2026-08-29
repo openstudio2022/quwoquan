@@ -21,6 +21,8 @@ type contentPostDetailBase struct {
 	AuthorID                *string            `json:"authorId"`
 	AuthorDisplayName       *string            `json:"authorDisplayName"`
 	AuthorAvatarURL         *string            `json:"authorAvatarUrl"`
+	AuthorAvatarAssetID     *string            `json:"authorAvatarAssetId"`
+	AuthorAvatarAccessMode  *string            `json:"authorAvatarAccessMode"`
 	Title                   *string            `json:"title"`
 	Body                    *string            `json:"body"`
 	Summary                 *string            `json:"summary"`
@@ -121,19 +123,21 @@ func projectContentPostDetailBase(detail postports.PostDetailSlice) (any, error)
 	}
 	return contentPostDetailBase{
 		PostID: postID, ContentType: contentType,
-		ContentIdentity:    nullable(string(detail.ContentIdentity)),
-		AssistantUsePolicy: nullable(detail.AssistantUsePolicy),
-		AuthorID:           nullable(string(detail.AuthorPersonaID)),
-		AuthorDisplayName:  nullable(detail.AuthorDisplayName),
-		AuthorAvatarURL:    nullable(detail.AuthorAvatarURL),
-		Title:              nullable(detail.Title), Body: nullable(detail.Body), Summary: nullable(detail.Summary),
+		ContentIdentity:        nullable(string(detail.ContentIdentity)),
+		AssistantUsePolicy:     nullable(detail.AssistantUsePolicy),
+		AuthorID:               nullable(string(detail.AuthorPersonaID)),
+		AuthorDisplayName:      nullable(detail.AuthorDisplayName),
+		AuthorAvatarURL:        nullable(detail.AuthorAvatarURL),
+		AuthorAvatarAssetID:    nullable(detail.AuthorAvatarAssetID),
+		AuthorAvatarAccessMode: nullable(detail.AuthorAvatarAccessMode),
+		Title:                  nullable(detail.Title), Body: nullable(detail.Body), Summary: nullable(detail.Summary),
 		CoverURL: nullable(detail.CoverURL), SourceAttribution: attribution,
 		Location: location, LocationName: nullable(detail.LocationName), GeoTagRef: nullable(detail.GeoTagRef),
 		VisitedAt: nullableTime(detail.VisitedAt), PrimaryHomepageID: nullable(detail.PrimaryHomepageID),
 		CanonicalEntityID: nullable(detail.CanonicalEntityID), PrimaryHomepageType: nullable(detail.PrimaryHomepageType),
 		PrimaryHomepageSnapshot: homepage, Status: status, Visibility: visibility,
 		GatheringRef: nullable(detail.GatheringRef),
-		LikeCount: detail.LikeCount, CommentCount: detail.CommentCount,
+		LikeCount:    detail.LikeCount, CommentCount: detail.CommentCount,
 		ShareCount: detail.ShareCount, ViewCount: detail.ViewCount,
 		CreatedAt: formatTime(detail.CreatedAt), UpdatedAt: formatTime(detail.UpdatedAt),
 		PublishedAt: nullableTime(detail.PublishedAt),

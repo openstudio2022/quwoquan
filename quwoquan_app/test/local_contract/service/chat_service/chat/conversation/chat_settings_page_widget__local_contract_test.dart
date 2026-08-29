@@ -543,7 +543,7 @@ void main() {
     });
   });
 
-  // spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/spec.md#sit-001
+  // spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/session-governance-actions/spec.md#gwt-001
   group('ChatSettingsPage — 免打扰/置顶真实接线', () {
     ChatInboxCacheEntry inboxEntry({
       required bool muted,
@@ -729,7 +729,7 @@ void main() {
       expect(find.byType(AppSkeletonListRows), findsNothing);
     });
 
-    // spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/spec.md#sit-001
+    // spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/session-governance-actions/spec.md#gwt-001
     testWidgets('查找聊天记录入口打开会话内搜索面板', (tester) async {
       _suppressImageErrors();
       await tester.binding.setSurfaceSize(const Size(390, 1400));

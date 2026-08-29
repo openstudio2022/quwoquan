@@ -34,6 +34,7 @@ def handle_calibrate_capacity(args: argparse.Namespace) -> None:
                 for value in args.execution_state
             ),
             output_dir=output_dir,
+            missed_heartbeat_tolerance=int(args.missed_heartbeat_tolerance),
             supersedes_calibration_id=(
                 str(args.supersedes_calibration_id).strip()
                 if args.supersedes_calibration_id
@@ -95,6 +96,15 @@ def register_calibrate_capacity_parser(
         action="append",
         required=True,
         help="含逐对象 timing 的真实 execution_state.json；可重复",
+    )
+    parser.add_argument(
+        "--missed-heartbeat-tolerance",
+        type=int,
+        required=True,
+        help=(
+            "判定失去心跳前可容忍的漏拍数；过期阈值等于心跳间隔乘以本值，"
+            "无默认值，必须由标定者显式声明"
+        ),
     )
     parser.add_argument("--supersedes-calibration-id")
     parser.add_argument(

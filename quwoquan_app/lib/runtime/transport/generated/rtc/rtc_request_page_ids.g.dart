@@ -14,7 +14,8 @@ class RtcRequestPageIds {
     'JoinCall': 'rtc.token',
     'LeaveCall': 'rtc.leave.call',
     'ListCalls': 'rtc.history',
-    'RecoverRtcAccountClosureDeadLetter': 'rtc.recover.rtc.account.closure.dead.letter',
+    'RecoverRtcAccountClosureDeadLetter':
+        'rtc.recover.rtc.account.closure.dead.letter',
     'RejectCall': 'rtc.reject',
     'ReportMediaConnected': 'rtc.report.media.connected',
     'StartScreenShare': 'rtc.screenShare.start',
@@ -32,7 +33,8 @@ class RtcRequestPageIds {
   static const String joinCall = 'rtc.token';
   static const String leaveCall = 'rtc.leave.call';
   static const String listCalls = 'rtc.history';
-  static const String recoverRtcAccountClosureDeadLetter = 'rtc.recover.rtc.account.closure.dead.letter';
+  static const String recoverRtcAccountClosureDeadLetter =
+      'rtc.recover.rtc.account.closure.dead.letter';
   static const String rejectCall = 'rtc.reject';
   static const String reportMediaConnected = 'rtc.report.media.connected';
   static const String startScreenShare = 'rtc.screenShare.start';

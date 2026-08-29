@@ -1,6 +1,6 @@
 // spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/conversation-entry-matrix/spec.md#gwt-001
 // spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/conversation-entry-matrix/spec.md#gwt-001.t1
-// spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/spec.md#sit-002
+// spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/spec.md#sit-002.t1
 package api_integration
 
 import (

@@ -1,6 +1,6 @@
 overrides:
-  sys.content-service.accountSecurityAuthority.baseUrl: http://user-service:18081
-  sys.content-service.accountSecurityAuthority.timeoutMs: 300
+  sys.content-service.user_account_security_authority.base_url: http://user-service:18081
+  sys.content-service.user_account_security_authority.timeout_ms: 300
   sys.content-service.embedding.enabled: true
   sys.content-service.es.enabled: true
   sys.content-service.ip_location.provider: deterministic
@@ -11,7 +11,7 @@ overrides:
   sys.content-service.tag_service.url: http://tag-service:18092
 secretRefs:
   sys.content-service.research_identity.attestation_key_base64: CONTENT_RESEARCH_IDENTITY_ATTESTATION_KEY_BASE64
-  sys.content-service.mongo.uri: MONGO_URI
+  sys.content-service.mongo.uri: CONTENT_MONGO_URI
   sys.content-service.oss.access_key_id: CONTENT_OSS_ACCESS_KEY_ID
   sys.content-service.oss.access_key_secret: CONTENT_OSS_ACCESS_KEY_SECRET
   sys.content-service.redis.general.password: CONTENT_REDIS_GENERAL_PASSWORD

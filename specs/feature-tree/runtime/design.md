@@ -98,6 +98,17 @@
 - 可测试观察面：domain governance / stackctl 既有门禁测试；L2 SIT 直绑证据由该 spec `OPEN-001` 承接。
 - 影响能力：[`system-topology-and-networking`](./system-topology-and-networking/spec.md)、[`runtime-config`](./runtime-config/spec.md)、[`deliver-deploy-prod-pipeline`](./deliver-deploy-prod-pipeline/spec.md)
 
+<a id="dec-004"></a>
+### DEC-004 冷启动按最小 authority 闭包破环，业务 admission 不旁路
+
+- 决策：当完整拓扑存在“业务服务 readiness 等待控制面事实、控制面 readiness 又等待该业务进程承载的 authority”循环时，环境编排只先拉起基础设施与 authority owner 进程，并消费 owner 已声明的精确内部 pre-admission 健康面；随后启动控制面、通过原公开鉴权 command 写入事实，最后进入完整拓扑 up。
+- 决策：当前实验策略冷启动顺序固定为 `基础设施 -> service-core authority owner (--no-deps) -> service-core shallow /healthz -> product-ops (--no-deps) -> Product Ops 公开策略 command -> 完整业务栈`。`service-core` 容器 healthcheck 只探 liveness，用于证明全部 module 已完成 Build/Bind/Start；不得通过 Compose dependency graph 或 aggregate `/readyz` 等待策略事实，也不得为破环放宽 Product Ops 公共 operation、直写存储或注入服务私有策略。
+- 理由：`service-core` 的 Search/Recommendation aggregate readiness 等待 `ExperimentPolicyActivated`，而 Product Ops 的账号安全 readiness 需要 `service-core` 内 UserAccount authority；只启动 Product Ops 会让其 admission 永久关闭，但不等待 owner 的 shallow health 又会把 module 构造失败误记为短暂竞态。
+- 被否决方案：扩大 503 重试集合或无限延长 deadline、取消账号安全 readiness、把 Product Ops command 加入公共 pre-admission、数据库/Redis seed、以及先沿 Compose dependency graph 或 aggregate `/readyz` 等待完整业务 readiness。
+- 失败恢复：authority owner 进程退出、内部健康面不可达、Product Ops admission 未开放或公开 command 失败时保留首个 typed blocker，逆序清理本 attempt；不得将部分容器或 package PASS 记为运行健康。
+- 可测试观察面：local_contract 锁定上述顺序、`--no-deps` 破环与公开 command 单轨；真实环境验收绑定同一 candidate 的 package、startup attempt、policy receipt、strict health 和逆序 teardown。
+- 影响能力：[`deliver-deploy-prod-pipeline`](./deliver-deploy-prod-pipeline/spec.md)、[`runtime-config`](./runtime-config/spec.md)、[`runtime-governance`](./runtime-governance/spec.md)
+
 ## 6. 质量与运行约束
 
 - 环境和 rollout stage 是证据维度。任何商用外部能力缺 Gamma Port 对等替身证据、Prod 真实 Adapter 证据、观测或回滚均不能准出。

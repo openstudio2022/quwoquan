@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import Any
 
 
+sys.dont_write_bytecode = True
+
 def _find_repo_root() -> Path:
     for candidate in Path(__file__).resolve().parents:
         if (candidate / "quwoquan_app").is_dir() and (

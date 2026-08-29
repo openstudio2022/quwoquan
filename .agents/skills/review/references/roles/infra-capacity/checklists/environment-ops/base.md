@@ -1,18 +1,7 @@
-# infra-capacity · environment-ops · base
+# infra-capacity · environment-ops
 
-成本口径见 [cost-model](../../references/cost-model.md)。
-
-## POST 自检
-
-- [MUST] 放量前确认目标环境容量满足预估峰值，并写明依据（当前水位 + 增量预估）
-  check: 放量决定无容量数据支撑，判失败
-- [MUST] 回滚版本的资源占用已确认可承载，回滚不受容量阻塞
-  check: 回滚路径依赖已释放或已缩容的资源，判失败
-- [SHOULD] 本次环境变更的成本增量已按 cost-model 口径估算
-
-## HANDOFF 交接
-
-- 产出：容量核对结论与成本增量估算
-- 未决项去向：容量缺口转 `OPEN-###` 并标注阻断的放量 step
-- 下一步：放量推进由 environment-ops 工作流承接
-- 证据链：水位数据来源
+- [MUST] 放量前目标与回滚版本容量均满足峰值，并写明当前水位与增量依据。
+  evidence: environment-release-evidence
+- [MUST] 回滚不依赖已释放或已缩容资源。
+  check: 读取 rollout/rollback 资源绑定；依赖不可用资源时判失败。
+- [SHOULD] 环境变更的成本增量有可复核估算。

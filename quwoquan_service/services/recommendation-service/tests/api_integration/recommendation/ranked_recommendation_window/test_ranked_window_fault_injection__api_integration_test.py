@@ -298,7 +298,8 @@ def test_model_bucket_without_artifact_degrades_to_rule_over_real_transport(
         )
         assert response.status_code == 200
         payload = response.json()
-        # 无可用模型时按 CascadeScorer 语义降级 rule；窗口如实落 rule 桶。
+        # 策略分配仍是 model；无可用模型时实际执行轨道如实降级 rule。
+        assert payload["experimentBucket"] == "model"
         assert payload["modelBucket"] == "rule"
         assert payload["modelReleaseId"] is None
         assert payload["items"], "degraded ranking must still deliver candidates"

@@ -36,6 +36,9 @@ def validate_readiness_closure(
 ) -> dict[str, set[str]]:
     """Validate and return exact IDs proven by the immutable object graph."""
 
+    # DEC-031：research 私有交付的回读证据以相对 CAS key 闭合、不做匿名取回
+    # 探测；commercial 保持匿名 CDN URL 与逐资产取回探测闭合。
+    research_release = header.get("releaseClass") == "research"
     _assert_attestation_projection(
         release_root=release_root,
         header=header,
@@ -140,6 +143,9 @@ def validate_readiness_closure(
             avatar.get("assetId"), label=f"creator avatarAssetId {normalized}"
         )
         media = media_by_id.get(avatar_id)
+        # research：avatar 不做匿名取回探测（avatarProbeCount=0）；
+        # commercial：逐资产全量取回探测（avatarProbeCount=1）。
+        expected_probe_count = 0 if research_release else 1
         if (
             media is None
             or evidence is None
@@ -150,22 +156,31 @@ def validate_readiness_closure(
             or evidence.get("personaId") != persona_id
             or evidence.get("avatarAssetId") != avatar_id
             or evidence.get("avatarMediaReady") is not True
-            or evidence.get("avatarProbeCount") != 1
+            or evidence.get("avatarProbeCount") != expected_probe_count
             or evidence.get("usesPlatformDefaultAvatar") is not False
         ):
             raise ReleaseReadinessClosureError(
                 f"creator/avatar readback drifts from release object: {normalized}"
             )
-        avatar_probe = evidence.get("avatarProbe")
-        if not isinstance(avatar_probe, Mapping):
-            raise ReleaseReadinessClosureError(
-                f"creator avatar probe is missing: {normalized}"
+        if research_release:
+            if (
+                evidence.get("avatarProbe") is not None
+                or evidence.get("avatarUrl") != media.get("privateObjectKey")
+            ):
+                raise ReleaseReadinessClosureError(
+                    f"creator avatar private delivery drifts: {normalized}"
+                )
+        else:
+            avatar_probe = evidence.get("avatarProbe")
+            if not isinstance(avatar_probe, Mapping):
+                raise ReleaseReadinessClosureError(
+                    f"creator avatar probe is missing: {normalized}"
+                )
+            _assert_probe_matches_asset(
+                probe=avatar_probe,
+                asset=media,
+                require_full_hash=True,
             )
-        _assert_probe_matches_asset(
-            probe=avatar_probe,
-            asset=media,
-            require_full_hash=True,
-        )
         author_ids.append(author_id)
         creator_author_ids[normalized] = author_id
         avatar_ids.add(avatar_id)
@@ -203,16 +218,33 @@ def validate_readiness_closure(
                 f"homepage creator/tag closure drifts: {normalized}"
             )
         row = homepage_rows.get(normalized)
-        cover_slice = (
-            _url_slice(row.get("coverUrl"), label=f"homepage cover URL {normalized}")
-            if row is not None
-            else ""
-        )
+        # DEC-031：research 的 homepage 封面回读是相对 CAS key，直接与
+        # privateObjectKey 闭合；commercial 是匿名 CDN URL，取 path 段与
+        # publicSliceKey 闭合。
+        if research_release:
+            cover_slice = (
+                _text(
+                    row.get("coverUrl"),
+                    label=f"homepage cover ref {normalized}",
+                ).lstrip("/")
+                if row is not None
+                else ""
+            )
+            delivery_key_field = "privateObjectKey"
+        else:
+            cover_slice = (
+                _url_slice(
+                    row.get("coverUrl"), label=f"homepage cover URL {normalized}"
+                )
+                if row is not None
+                else ""
+            )
+            delivery_key_field = "publicSliceKey"
         candidates = [
             asset
             for asset in owner_assets.get(f"entities/{normalized}", [])
             if asset.get("kind") == "image"
-            and asset.get("publicSliceKey") == cover_slice
+            and asset.get(delivery_key_field) == cover_slice
         ]
         if len(candidates) != 1:
             raise ReleaseReadinessClosureError(
@@ -233,6 +265,11 @@ def validate_readiness_closure(
     illustrated_article_ids: set[str] = set()
     verified_image_work_ids: set[str] = set()
     playable_video_ids: set[str] = set()
+    # post 域对象闭包：research readback（GetResearchReleaseReadback）按
+    # posts 集合聚合 entityRefs（runtime 规范形态）与 post 拥有的媒体资产，
+    # readiness 用同口径的 release 权威值与之精确闭合。
+    post_entity_refs: set[str] = set()
+    post_media_asset_ids: set[str] = set()
     for post_id, binding in binding_by_id.items():
         post_ref = _normalized_ref(binding.get("postRef"), kind="posts")
         manifest = _object(
@@ -273,7 +310,15 @@ def validate_readiness_closure(
                 raise ReleaseReadinessClosureError(
                     f"release video attribution is missing: {post_ref}"
                 )
+        for entity_runtime_ref in manifest.get("normalizedEntityRefs") or []:
+            normalized_entity_ref = str(entity_runtime_ref or "").strip()
+            if normalized_entity_ref:
+                post_entity_refs.add(normalized_entity_ref)
         owned = owner_assets.get(f"posts/{post_ref}", [])
+        for asset in owned:
+            post_media_asset_ids.add(
+                _text(asset.get("assetId"), label=f"owned media assetId {post_ref}")
+            )
         probes = row.get("mediaProbes")
         if not isinstance(probes, list):
             raise ReleaseReadinessClosureError(
@@ -298,11 +343,23 @@ def validate_readiness_closure(
                 asset.get("assetId"), label=f"owned media assetId {post_ref}"
             )
             require_full_hash = asset.get("kind") != "video"
-            _assert_probe_matches_asset(
-                probe=probes_by_id[asset_id],
-                asset=asset,
-                require_full_hash=require_full_hash,
-            )
+            if research_release:
+                probe = probes_by_id[asset_id]
+                if (
+                    probe.get("deliveryRef") != asset.get("privateObjectKey")
+                    or probe.get("anonymousStatus") not in {401, 403}
+                    or probe.get("expectedSha256") != asset.get("sha256")
+                    or probe.get("expectedBytes") != asset.get("bytes")
+                ):
+                    raise ReleaseReadinessClosureError(
+                        f"research media probe drifts from release authority: {asset_id}"
+                    )
+            else:
+                _assert_probe_matches_asset(
+                    probe=probes_by_id[asset_id],
+                    asset=asset,
+                    require_full_hash=require_full_hash,
+                )
             if require_full_hash:
                 image_count += 1
                 image_asset_ids.add(asset_id)
@@ -335,6 +392,8 @@ def validate_readiness_closure(
         "verifiedImageWorkIds": verified_image_work_ids,
         "playableVideoIds": playable_video_ids,
         "mediaAssetIds": set(media_by_id),
+        "postEntityRefs": post_entity_refs,
+        "postMediaAssetIds": post_media_asset_ids,
     }
 
 

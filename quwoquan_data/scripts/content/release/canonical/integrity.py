@@ -16,7 +16,13 @@ from core.image_rules import image_caption_quality_issue
 from core import paths
 from core.paths import execution_root, release_root
 from content.post.article.base_draft import ARTICLE_MIN_BASE_DRAFT_CHARS, base_draft_readiness
+from content.release.canonical.media_holding_closure import (
+    MediaReferenceRecordError,
+    judge_media_closure,
+    media_references_in_release_manifest,
+)
 from core.content_source_registry import homepage_source_can_seed_base_draft
+from core.control_types import MediaClosureVerdict
 from core.tree_integrity import tree_integrity_stats
 from core.release_layout import objects_merkle, payload_file, verify_release_holdings
 from content.release.environment.consistency import scan_release_contract
@@ -361,6 +367,38 @@ def _entity_homepage_issues(root: Path, runtime_batch: Path | None) -> list[str]
     return issues
 
 
+def _media_closure_issues(release_id: str, media_manifest: Mapping[str, Any]) -> list[str]:
+    """判定这个 release 声明的媒体字节能否被 content library 兑现。
+
+    以清单声明为起点而不是以 `payload/media/` 里物化了什么为起点。后者在那个目录
+    整个不在场时枚举出零条持有，于是「一条都没判过」与「每一条都完好」得出同一个
+    结论；而字节由库唯一持有，release 目录里那份引用副本在或不在都不改变库是否还
+    握着这些字节。库整体不可达时不逐条报缺席：那会把一次卷掉线读成一批对象的内容
+    缺陷。
+    """
+
+    try:
+        references = media_references_in_release_manifest(media_manifest)
+    except (MediaReferenceRecordError, ValueError) as error:
+        return [f"{release_id}: media_manifest declares an unusable media reference: {error}"]
+    if not references:
+        return []
+    report = judge_media_closure(references)
+    if report.verdict is MediaClosureVerdict.HONOURED:
+        return []
+    if report.verdict is MediaClosureVerdict.LIBRARY_UNREACHABLE:
+        return [
+            f"{release_id}: DATA.RELEASE.MEDIA_LIBRARY_UNREACHABLE: {report.detail}; "
+            f"recovery={report.library_recovery} libraryRoot={report.library_root}"
+        ]
+    return [
+        f"{release_id}: DATA.RELEASE.HOLDING_UNREACHABLE: {outcome.state}: "
+        f"{outcome.reference.reference_ref} sha256={outcome.reference.digest}: "
+        f"{outcome.detail}; recovery={outcome.recovery}"
+        for outcome in report.unhonoured
+    ]
+
+
 def _desired_refs(value: Mapping[str, Any]) -> dict[str, list[str]]:
     desired = value.get("desiredRefs") if isinstance(value.get("desiredRefs"), Mapping) else {}
     return {
@@ -451,6 +489,7 @@ def _release_integrity(release_id: str, root: Path) -> dict[str, Any]:
         issues.append(f"{release_id}: media_manifest.assets must be an array")
     else:
         stats["assetCount"] = len(actual_assets)
+        issues.extend(_media_closure_issues(release_id, media))
     consistency = scan_release_contract(contract, release_root=root)
     for issue in consistency["blockingIssues"]:
         code = str(issue.get("code") or "")

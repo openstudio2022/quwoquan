@@ -154,6 +154,12 @@ def validate_video_work_package(package_dir: Path) -> list[str]:
             not attribution.get(field) for field in attribution_required
         ):
             issues.append("video manifest sourceAttribution is incomplete")
+        elif "derivedModifications" not in attribution:
+            # 在场为空（空数组 = 逐字节原样）是合法事实，缺席不是：缺席时读不出
+            # 交付副本到底有没有被改过，所以不能与空数组同路放行。
+            issues.append(
+                "video manifest sourceAttribution omits derivedModifications"
+            )
         elif attribution.get("watermarkStatus") != "absent":
             issues.append("video manifest watermark is not absent")
     return issues

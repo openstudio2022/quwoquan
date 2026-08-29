@@ -61,35 +61,44 @@ def test_contract_spec_and_dart_changes_keep_their_required_static_gates() -> No
 def test_python_test_selection_uses_the_narrow_owner_tree() -> None:
     assert select_pytest_paths(
         ["quwoquan_ops/policies/gates/assistant_search_weak_typing_baseline.json"]
-    ) == ["quwoquan_ops/tests/local_contract/gate"]
+    ) == (["quwoquan_ops/tests/local_contract/gate"], [])
     assert select_pytest_paths(
         ["quwoquan_ops/cli/commands/dev_session_runtime.py"]
-    ) == [
-        "quwoquan_ops/tests/local_contract/stackctl/"
-        "test_stackctl_dev_session_mutable_startup_gate__local_contract_test.py",
-        "quwoquan_ops/tests/local_contract/stackctl/"
-        "test_stackctl_dev_session_resume_compose__local_contract_test.py",
-        "quwoquan_ops/tests/local_contract/stackctl/"
-        "test_stackctl_dev_session_runtime_reuse__local_contract_test.py",
-    ]
+    ) == (
+        [
+            "quwoquan_ops/tests/local_contract/stackctl/"
+            "test_stackctl_dev_session_mutable_startup_gate__local_contract_test.py",
+            "quwoquan_ops/tests/local_contract/stackctl/"
+            "test_stackctl_dev_session_resume_compose__local_contract_test.py",
+            "quwoquan_ops/tests/local_contract/stackctl/"
+            "test_stackctl_dev_session_runtime_reuse__local_contract_test.py",
+        ],
+        [],
+    )
     assert select_pytest_paths(
         [
             "quwoquan_ops/tests/local_contract/ci/"
             "test_delivery_gate_ci_bootstrap__local_contract_test.py"
         ]
-    ) == [
-        "quwoquan_ops/tests/local_contract/ci/"
-        "test_delivery_gate_ci_bootstrap__local_contract_test.py"
-    ]
+    ) == (
+        [
+            "quwoquan_ops/tests/local_contract/ci/"
+            "test_delivery_gate_ci_bootstrap__local_contract_test.py"
+        ],
+        [],
+    )
 
 
 def test_commit_gate_changes_select_only_their_focused_contracts() -> None:
-    expected = [
-        "quwoquan_ops/tests/local_contract/ci/"
-        "test_commit_gate_fast_path__local_contract_test.py",
-        "quwoquan_ops/tests/local_contract/gate/"
-        "test_commit_gate_select__local_contract_test.py",
-    ]
+    expected = (
+        [
+            "quwoquan_ops/tests/local_contract/ci/"
+            "test_commit_gate_fast_path__local_contract_test.py",
+            "quwoquan_ops/tests/local_contract/gate/"
+            "test_commit_gate_select__local_contract_test.py",
+        ],
+        [],
+    )
 
     assert select_pytest_paths(["quwoquan_ops/gate/commit_gate.sh"]) == expected
     assert select_pytest_paths(["quwoquan_ops/gate/commit_gate_select.py"]) == expected
@@ -98,7 +107,10 @@ def test_commit_gate_changes_select_only_their_focused_contracts() -> None:
 def test_supply_chain_gate_selects_its_release_contract() -> None:
     assert select_pytest_paths(
         ["quwoquan_ops/gate/verify_github_supply_chain.py"]
-    ) == [
-        "quwoquan_ops/tests/local_contract/release/"
-        "test_service_supply_chain_provenance__supply_chain__local_contract_test.py"
-    ]
+    ) == (
+        [
+            "quwoquan_ops/tests/local_contract/release/"
+            "test_service_supply_chain_provenance__supply_chain__local_contract_test.py"
+        ],
+        [],
+    )

@@ -67,7 +67,9 @@ class RtcCallInitiatedPayload {
     }, 'RtcCallInitiatedPayload');
     return RtcCallInitiatedPayload(
       callId: payload['callId'] as String?,
-      callType: payload['callType'] == null ? null : CallType.fromWire(payload['callType'], 'RtcSignalPayload.callType'),
+      callType: payload['callType'] == null
+          ? null
+          : CallType.fromWire(payload['callType'], 'RtcSignalPayload.callType'),
       initiatorId: payload['initiatorId'] as String?,
       initiatorRingtoneId: payload['initiatorRingtoneId'] as String?,
       conversationId: payload['conversationId'] as String?,
@@ -81,7 +83,8 @@ class RtcCallInitiatedPayload {
     if (callId != null) 'callId': callId!,
     if (callType != null) 'callType': callType!.wireName,
     if (initiatorId != null) 'initiatorId': initiatorId!,
-    if (initiatorRingtoneId != null) 'initiatorRingtoneId': initiatorRingtoneId!,
+    if (initiatorRingtoneId != null)
+      'initiatorRingtoneId': initiatorRingtoneId!,
     if (conversationId != null) 'conversationId': conversationId!,
     if (circleId != null) 'circleId': circleId!,
     if (maxParticipants != null) 'maxParticipants': maxParticipants!,
@@ -132,7 +135,9 @@ class RtcCallRingingPayload {
       eventId: payload['eventId'] as String?,
       callId: payload['callId'] as String?,
       targetPersonaId: payload['targetPersonaId'] as String?,
-      callType: payload['callType'] == null ? CallType.audio : CallType.fromWire(payload['callType'], 'RtcSignalPayload.callType'),
+      callType: payload['callType'] == null
+          ? CallType.audio
+          : CallType.fromWire(payload['callType'], 'RtcSignalPayload.callType'),
       callerName: payload['callerName'] as String?,
       callerAvatarUrl: payload['callerAvatarUrl'] as String?,
       sourceLabel: payload['sourceLabel'] as String?,
@@ -158,10 +163,7 @@ class RtcCallRingingPayload {
 
 /// WS payload for metadata event `CallAnswered` (`client_ws_type` = [rtcWsTypeCallAnswered]).
 class RtcCallAnsweredPayload {
-  const RtcCallAnsweredPayload({
-    this.callId,
-    this.userId,
-  });
+  const RtcCallAnsweredPayload({this.callId, this.userId});
 
   final String? callId;
   final String? userId;
@@ -253,10 +255,17 @@ class RtcCallEndedPayload {
     }, 'RtcCallEndedPayload');
     return RtcCallEndedPayload(
       callId: payload['callId'] as String?,
-      callType: payload['callType'] == null ? null : CallType.fromWire(payload['callType'], 'RtcSignalPayload.callType'),
+      callType: payload['callType'] == null
+          ? null
+          : CallType.fromWire(payload['callType'], 'RtcSignalPayload.callType'),
       initiatorId: payload['initiatorId'] as String?,
       conversationId: payload['conversationId'] as String?,
-      endReason: payload['endReason'] == null ? null : EndReason.fromWire(payload['endReason'], 'RtcSignalPayload.endReason'),
+      endReason: payload['endReason'] == null
+          ? null
+          : EndReason.fromWire(
+              payload['endReason'],
+              'RtcSignalPayload.endReason',
+            ),
       durationMs: (payload['durationMs'] as num?)?.toInt(),
       participantCount: (payload['participantCount'] as num?)?.toInt(),
       startedAt: payload['startedAt'] as String?,
@@ -348,10 +357,7 @@ class RtcParticipantLeftPayload {
 
 /// WS payload for metadata event `ScreenShareStarted` (`client_ws_type` = [rtcWsTypeScreenShareStarted]).
 class RtcScreenShareStartedPayload {
-  const RtcScreenShareStartedPayload({
-    this.callId,
-    this.userId,
-  });
+  const RtcScreenShareStartedPayload({this.callId, this.userId});
 
   final String? callId;
   final String? userId;
@@ -375,10 +381,7 @@ class RtcScreenShareStartedPayload {
 
 /// WS payload for metadata event `ScreenShareStopped` (`client_ws_type` = [rtcWsTypeScreenShareStopped]).
 class RtcScreenShareStoppedPayload {
-  const RtcScreenShareStoppedPayload({
-    this.callId,
-    this.userId,
-  });
+  const RtcScreenShareStoppedPayload({this.callId, this.userId});
 
   final String? callId;
   final String? userId;
@@ -494,23 +497,35 @@ RtcWsPayload parseRtcWsPayload({
 }) {
   switch (wireType) {
     case rtcWsTypeCallInitiated:
-      return RtcCallInitiatedWsPayload(RtcCallInitiatedPayload.fromWire(payload));
+      return RtcCallInitiatedWsPayload(
+        RtcCallInitiatedPayload.fromWire(payload),
+      );
     case rtcWsTypeCallRinging:
       return RtcCallRingingWsPayload(RtcCallRingingPayload.fromWire(payload));
     case rtcWsTypeCallAnswered:
       return RtcCallAnsweredWsPayload(RtcCallAnsweredPayload.fromWire(payload));
     case rtcWsTypeCallConnected:
-      return RtcCallConnectedWsPayload(RtcCallConnectedPayload.fromWire(payload));
+      return RtcCallConnectedWsPayload(
+        RtcCallConnectedPayload.fromWire(payload),
+      );
     case rtcWsTypeCallEnded:
       return RtcCallEndedWsPayload(RtcCallEndedPayload.fromWire(payload));
     case rtcWsTypeParticipantJoined:
-      return RtcParticipantJoinedWsPayload(RtcParticipantJoinedPayload.fromWire(payload));
+      return RtcParticipantJoinedWsPayload(
+        RtcParticipantJoinedPayload.fromWire(payload),
+      );
     case rtcWsTypeParticipantLeft:
-      return RtcParticipantLeftWsPayload(RtcParticipantLeftPayload.fromWire(payload));
+      return RtcParticipantLeftWsPayload(
+        RtcParticipantLeftPayload.fromWire(payload),
+      );
     case rtcWsTypeScreenShareStarted:
-      return RtcScreenShareStartedWsPayload(RtcScreenShareStartedPayload.fromWire(payload));
+      return RtcScreenShareStartedWsPayload(
+        RtcScreenShareStartedPayload.fromWire(payload),
+      );
     case rtcWsTypeScreenShareStopped:
-      return RtcScreenShareStoppedWsPayload(RtcScreenShareStoppedPayload.fromWire(payload));
+      return RtcScreenShareStoppedWsPayload(
+        RtcScreenShareStoppedPayload.fromWire(payload),
+      );
     default:
       throw FormatException('Unsupported RTC realtime event type: $wireType');
   }
@@ -529,9 +544,19 @@ const rtcWsKnownWireTypes = <String>[
   rtcWsTypeScreenShareStopped,
 ];
 
-void _rtcRequireExactFields(Map<String, dynamic> payload, Set<String> allowed, String path) {
-  final unknown = payload.keys.where((key) => !allowed.contains(key)).toList(growable: false);
-  if (unknown.isNotEmpty) { throw FormatException('$path contains unknown fields: ${unknown.join(',')}'); }
+void _rtcRequireExactFields(
+  Map<String, dynamic> payload,
+  Set<String> allowed,
+  String path,
+) {
+  final unknown = payload.keys
+      .where((key) => !allowed.contains(key))
+      .toList(growable: false);
+  if (unknown.isNotEmpty) {
+    throw FormatException(
+      '$path contains unknown fields: ${unknown.join(',')}',
+    );
+  }
 }
 
 /// `CallInitiated.payload_fields`（codegen 与 events.yaml 同步）。
@@ -561,10 +586,7 @@ const rtcCallRingingPayloadWireKeys = <String>[
 ];
 
 /// `CallAnswered.payload_fields`（codegen 与 events.yaml 同步）。
-const rtcCallAnsweredPayloadWireKeys = <String>[
-  'callId',
-  'userId',
-];
+const rtcCallAnsweredPayloadWireKeys = <String>['callId', 'userId'];
 
 /// `CallConnected.payload_fields`（codegen 与 events.yaml 同步）。
 const rtcCallConnectedPayloadWireKeys = <String>[
@@ -602,14 +624,7 @@ const rtcParticipantLeftPayloadWireKeys = <String>[
 ];
 
 /// `ScreenShareStarted.payload_fields`（codegen 与 events.yaml 同步）。
-const rtcScreenShareStartedPayloadWireKeys = <String>[
-  'callId',
-  'userId',
-];
+const rtcScreenShareStartedPayloadWireKeys = <String>['callId', 'userId'];
 
 /// `ScreenShareStopped.payload_fields`（codegen 与 events.yaml 同步）。
-const rtcScreenShareStoppedPayloadWireKeys = <String>[
-  'callId',
-  'userId',
-];
-
+const rtcScreenShareStoppedPayloadWireKeys = <String>['callId', 'userId'];

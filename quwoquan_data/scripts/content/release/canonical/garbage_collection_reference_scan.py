@@ -30,6 +30,41 @@ if TYPE_CHECKING:
         ReferenceGraph,
     )
 
+# 每个受治理证据根及其节点 kind。引用图与墓碑回填都从这里取根，因此「哪些树算治理
+# 证据」只有一处写法；两侧各自维护一份清单时，回填会漏掉图会扫的树，从而把可解析的
+# 引用误判成永久缺席。
+GOVERNED_EVIDENCE_OUTPUT_ROOTS: tuple[tuple[str, str], ...] = (
+    (RESEARCH_SCALE_PROMOTIONS_OUTPUT_REF, "promotion_evidence"),
+    # 只有四个真实环境的激活与消费回执参与可达性。`env/repo/` 是仓库本地缓存与会话
+    # 产物根（AGENTS.md 已把缓存重定向到此），里面的 preflight 报告是观测而不是任何
+    # 对象存活的依据；把它算进证据面会让回收器因为读到自己的测试临时目录而无法运行。
+    ("env/alpha", "activation_readiness_evidence"),
+    ("env/beta", "activation_readiness_evidence"),
+    ("env/gamma", "activation_readiness_evidence"),
+    ("env/prod", "activation_readiness_evidence"),
+    (
+        "data/local/workspace/content-campaign-submissions",
+        "campaign_reconciliation_evidence",
+    ),
+    ("data/local/release-identity-recoveries", "identity_recovery_evidence"),
+    (
+        "data/local/workspace/release-identity-incidents",
+        "identity_incident_evidence",
+    ),
+    ("data/local/reviewed-closure-adoptions", "adoption_evidence"),
+    ("data/local/cache/protected-quarantines", "quarantine_receipt_evidence"),
+    ("data/local/workspace/object-transactions", "transaction_evidence"),
+)
+
+# 治理证据树内部显式声明的非证据段。运行时包 payload 由 release 可重建，不可能是任何
+# 对象存活的依据；它同时是 Flutter 资产清单这类非 object JSON 的所在，把它算进证据面
+# 会让回收器在读到打包产物时直接判否。
+NON_EVIDENCE_PATH_SEGMENTS = frozenset({"mutable-runtime"})
+
+
+def _is_non_evidence(path: Path) -> bool:
+    return not NON_EVIDENCE_PATH_SEGMENTS.isdisjoint(path.parts)
+
 _EXECUTION_ID_KEYS = frozenset(
     {
         "executionId",
@@ -292,6 +327,8 @@ def scan_tree(graph: ReferenceGraph, root: Path, *, kind: str) -> None:
     if root.is_symlink() or not root.is_dir():
         raise typed_gc_error("EVIDENCE_INVALID", f"evidence root is invalid: {root}")
     for path in sorted(root.rglob("*.json")):
+        if _is_non_evidence(path):
+            continue
         scan_json_file(graph, path, kind=kind)
 
 
@@ -309,8 +346,74 @@ def collect_absent_execution_proofs(output_root: Path) -> set[str]:
             proofs |= known_absent_execution_ids(document)
     return proofs
 
+def _reference_sites(
+    value: Any,
+    *,
+    source: str,
+    sites: dict[str, set[tuple[str, str]]],
+) -> None:
+    if isinstance(value, Mapping):
+        for key, child in value.items():
+            if (
+                key in _EXECUTION_ID_KEYS
+                and isinstance(child, str)
+                and child.strip()
+                and not child.startswith(_ACQUISITION_ID_NAMESPACE)
+            ):
+                relation = (
+                    "retry_ancestor" if key == "retryOf" else _evidence_reason(source)
+                )
+                sites.setdefault(child.strip(), set()).add((source, relation))
+            elif key in _EXECUTION_IDS_KEYS and isinstance(child, list):
+                for execution_id in child:
+                    if isinstance(execution_id, str) and execution_id.strip():
+                        sites.setdefault(execution_id.strip(), set()).add(
+                            (source, _evidence_reason(source))
+                        )
+            _reference_sites(child, source=source, sites=sites)
+    elif isinstance(value, list):
+        for child in value:
+            _reference_sites(child, source=source, sites=sites)
+
+
+def collect_execution_reference_sites(
+    *,
+    output_root: Path,
+    publish_root: Path,
+    release_root: Path,
+) -> dict[str, set[tuple[str, str]]]:
+    """Report which governed documents name each execution, without judging it.
+
+    Deliberately does not fail on an unresolvable id: this is the read the
+    tombstone backfill needs precisely because `build_reference_graph` cannot get
+    that far — it fails closed on the very references the backfill exists to give
+    a terminal state.
+    """
+
+    sites: dict[str, set[tuple[str, str]]] = {}
+    roots = [publish_root, release_root]
+    roots.extend(output_root / relative for relative, _kind in GOVERNED_EVIDENCE_OUTPUT_ROOTS)
+    roots.append(output_root / "data/tasks")
+    for root in roots:
+        if not root.is_dir() or root.is_symlink():
+            continue
+        for path in sorted(root.rglob("*.json")):
+            if path.is_symlink() or not path.is_file() or _is_non_evidence(path):
+                continue
+            source = source_ref(
+                path,
+                output_root=output_root,
+                publish_root=publish_root,
+            )
+            _reference_sites(_read_json(path), source=source, sites=sites)
+    return sites
+
+
 __all__ = [
+    "GOVERNED_EVIDENCE_OUTPUT_ROOTS",
+    "NON_EVIDENCE_PATH_SEGMENTS",
     "collect_absent_execution_proofs",
+    "collect_execution_reference_sites",
     "known_absent_execution_ids",
     "scan_json_file",
     "scan_tree",

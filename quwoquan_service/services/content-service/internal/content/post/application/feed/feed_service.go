@@ -160,6 +160,10 @@ type ListFeedRequest struct {
 	// FeedRequestID 客户端回显的归因 id：首刷为空，分页/继续加载回显服务端首刷下发的 id。
 	FeedRequestID   string
 	BlockedKeywords []string
+	// ResearchPrincipal 由 HTTP handler 从已验签 principal 的 research role
+	// 派生（DEC-032）：active release 为 research 时，匿名与非 research 认证
+	// 请求在此单点收敛为 no_active_release 语义的缺席结果。
+	ResearchPrincipal bool
 }
 
 const rankedFeedSessionIDMaxBytes = 128
@@ -181,30 +185,39 @@ func validateRankedFeedSessionID(sessionID string) error {
 }
 
 type FeedItemView struct {
-	PostID                   string   `json:"postId"`
-	ContentType              string   `json:"contentType"`
-	ContentIdentity          string   `json:"contentIdentity"`
-	AssistantUsePolicy       string   `json:"assistantUsePolicy,omitempty"`
-	AuthorID                 string   `json:"authorId"`
-	AuthorDisplayName        string   `json:"authorDisplayName,omitempty"`
-	AuthorAvatarURL          string   `json:"authorAvatarUrl,omitempty"`
-	Title                    string   `json:"title,omitempty"`
-	Body                     string   `json:"body,omitempty"`
-	Summary                  string   `json:"summary,omitempty"`
-	MediaURLs                []string `json:"mediaUrls,omitempty"`
-	VideoURL                 string   `json:"videoUrl,omitempty"`
-	MediaAssetID             string   `json:"mediaAssetId,omitempty"`
-	MediaAssetVersion        int64    `json:"mediaAssetVersion,omitempty"`
-	HLSCMAFMasterManifestURL string   `json:"hlsCmafMasterManifestUrl,omitempty"`
-	HLSCMAFDescriptorVersion int64    `json:"hlsCmafDescriptorVersion,omitempty"`
-	CoverURL                 string   `json:"coverUrl,omitempty"`
-	ThumbnailURL             string   `json:"thumbnailUrl,omitempty"`
-	DurationMs               int64    `json:"durationMs,omitempty"`
-	Width                    int64    `json:"width,omitempty"`
-	Height                   int64    `json:"height,omitempty"`
-	LikeCount                int64    `json:"likeCount"`
-	CommentCount             int64    `json:"commentCount"`
-	ShareCount               int64    `json:"shareCount"`
+	PostID             string `json:"postId"`
+	ContentType        string `json:"contentType"`
+	ContentIdentity    string `json:"contentIdentity"`
+	AssistantUsePolicy string `json:"assistantUsePolicy,omitempty"`
+	AuthorID           string `json:"authorId"`
+	AuthorDisplayName  string `json:"authorDisplayName,omitempty"`
+	AuthorAvatarURL    string `json:"authorAvatarUrl,omitempty"`
+	// AuthorAvatarAssetID/AuthorAvatarAccessMode 作者头像的媒体交付绑定
+	// （DEC-033，契约 authorAvatarAssetId/authorAvatarAccessMode）：signed_grant
+	// 时 App 以 avatarAssetId 换取短签；缺席（省略键）表示无头像或存量 public。
+	AuthorAvatarAssetID    string   `json:"authorAvatarAssetId,omitempty"`
+	AuthorAvatarAccessMode string   `json:"authorAvatarAccessMode,omitempty"`
+	Title                  string   `json:"title,omitempty"`
+	Body                   string   `json:"body,omitempty"`
+	Summary                string   `json:"summary,omitempty"`
+	MediaURLs              []string `json:"mediaUrls,omitempty"`
+	VideoURL               string   `json:"videoUrl,omitempty"`
+	// MediaItems 逐媒体交付绑定（契约 mediaItems，DEC-033）：每项携带
+	// mediaAssetId/accessMode 与 video poster 的 coverAssetId；为空时端按
+	// mediaUrls/videoUrl 派生 public 单一序列。
+	MediaItems               []postports.PostMediaItemSlice `json:"mediaItems,omitempty"`
+	MediaAssetID             string                         `json:"mediaAssetId,omitempty"`
+	MediaAssetVersion        int64                          `json:"mediaAssetVersion,omitempty"`
+	HLSCMAFMasterManifestURL string                         `json:"hlsCmafMasterManifestUrl,omitempty"`
+	HLSCMAFDescriptorVersion int64                          `json:"hlsCmafDescriptorVersion,omitempty"`
+	CoverURL                 string                         `json:"coverUrl,omitempty"`
+	ThumbnailURL             string                         `json:"thumbnailUrl,omitempty"`
+	DurationMs               int64                          `json:"durationMs,omitempty"`
+	Width                    int64                          `json:"width,omitempty"`
+	Height                   int64                          `json:"height,omitempty"`
+	LikeCount                int64                          `json:"likeCount"`
+	CommentCount             int64                          `json:"commentCount"`
+	ShareCount               int64                          `json:"shareCount"`
 	// ViewerLiked viewer 维度点赞态：true/false 为服务端权威值；nil（wire 省略）
 	// 表示本次响应未附着 viewer 态（匿名请求或附着降级），端侧不得据此回滚本地态。
 	ViewerLiked *bool  `json:"viewerLiked,omitempty"`
@@ -393,16 +406,18 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 	nextCursorKind := feedCursorKindRecommendation
 	var nextRecommendationContinuation *rtrec.RankedFeedContinuation
 	policyDigest := ""
+	experimentBucket := ""
 	seenPostIDs := map[string]struct{}{}
 	activeSupply := ActiveSupplySnapshot{}
-	if releaseBoundRecommend || releaseBoundVideoBook {
-		if s.activeSupply == nil {
-			terminalStage = rtrec.FailureStageActiveSupplyMissing
-			return nil, requiredDependencyFailure(
-				terminalStage,
-				fmt.Errorf("active content release snapshot reader is not configured"),
-			)
-		}
+	releaseBound := releaseBoundRecommend || releaseBoundVideoBook
+	if releaseBound && s.activeSupply == nil {
+		terminalStage = rtrec.FailureStageActiveSupplyMissing
+		return nil, requiredDependencyFailure(
+			terminalStage,
+			fmt.Errorf("active content release snapshot reader is not configured"),
+		)
+	}
+	if s.activeSupply != nil {
 		var supplyErr error
 		activeSupply, supplyErr = s.activeSupply.ActiveSupplySnapshot(ctx)
 		if supplyErr != nil {
@@ -412,6 +427,26 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 				fmt.Errorf("read active content release snapshot: %w", supplyErr),
 			)
 		}
+		// DEC-032 匿名内容面收敛：active release 为 research 时，全部 feed
+		// 内容读面（推荐、频道、具名浏览时间线、视频书、社交流）只对
+		// research principal 在场。匿名与非 research 认证请求收敛为
+		// no_active_release 缺席结果，且不回显 releaseId/manifestDigest，
+		// 不泄露 research release 的存在性；分页请求同样收敛（rollout
+		// 中途切换 release class 时游标随之失效）。收敛必须先于任何路由
+		// 分支：具名浏览（identity=work 无 type）等 PostReader 查询同样
+		// 能读回 release 承载内容，漏收敛即隔离泄露。
+		if strings.TrimSpace(activeSupply.ReleaseClass) == "research" &&
+			!req.ResearchPrincipal {
+			terminalOutcome = rtrec.FeedTerminalEmpty
+			return emptyListFeedResponse(
+				feedRequestID,
+				FeedEmptyReasonNoActiveRelease,
+				"",
+				"",
+			), nil
+		}
+	}
+	if releaseBound {
 		if activeSupply.IsEmpty() {
 			if requestedCursor != "" {
 				terminalStage = rtrec.FailureStageActiveSupplyMissing
@@ -513,11 +548,14 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 			AuthorID:                 authorID,
 			AuthorDisplayName:        post.AuthorDisplayName,
 			AuthorAvatarURL:          post.AuthorAvatarURL,
+			AuthorAvatarAssetID:      post.AuthorAvatarAssetID,
+			AuthorAvatarAccessMode:   post.AuthorAvatarAccessMode,
 			Title:                    post.Title,
 			Body:                     post.Body,
 			Summary:                  post.Summary,
 			MediaURLs:                append([]string(nil), post.MediaURLs...),
 			VideoURL:                 post.VideoURL,
+			MediaItems:               append([]postports.PostMediaItemSlice(nil), post.MediaItems...),
 			MediaAssetID:             adaptiveDelivery.MediaAssetID,
 			MediaAssetVersion:        adaptiveDelivery.MediaAssetVersion,
 			HLSCMAFMasterManifestURL: adaptiveDelivery.HLSCMAFMasterManifestURL,
@@ -624,7 +662,15 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 					fmt.Errorf("recommendation policy digest changed within one feed response"),
 				)
 			}
+			if experimentBucket != "" && experimentBucket != page.ExperimentBucket {
+				terminalStage = rtrec.FailureStageRankedWindowUnavailable
+				return nil, requiredDependencyFailure(
+					terminalStage,
+					fmt.Errorf("recommendation experiment bucket changed within one feed response"),
+				)
+			}
 			policyDigest = page.PolicyDigest
+			experimentBucket = page.ExperimentBucket
 			nextRecommendationContinuation = rankedContinuation(page)
 			recallIDs := make([]postports.PostID, 0, len(page.Items))
 			for _, item := range page.Items {
@@ -846,9 +892,10 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 				releaseBoundRecommend || releaseBoundVideoBook,
 				activeSupply.ManifestDigest,
 			),
-			policyDigest: policyDigest,
-			createdAt:    pageCreatedAt,
-			expiresAt:    deliveryPageExpiresAt,
+			policyDigest:     policyDigest,
+			experimentBucket: experimentBucket,
+			createdAt:        pageCreatedAt,
+			expiresAt:        deliveryPageExpiresAt,
 		}); appendErr != nil {
 			terminalStage = rtrec.FailureStageDeliveryPageUnavailable
 			return nil, requiredDependencyFailure(terminalStage, appendErr)

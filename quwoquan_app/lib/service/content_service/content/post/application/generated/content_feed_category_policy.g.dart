@@ -4,8 +4,7 @@
 final class ContentFeedCategoryPolicy {
   const ContentFeedCategoryPolicy._();
 
-  static const Map<String, String> feedCategoryToRequestType =
-      <String, String>{
+  static const Map<String, String> feedCategoryToRequestType = <String, String>{
     'article': 'article',
     'following': 'micro',
     'images': 'image',

@@ -1,6 +1,8 @@
 """Exact-resource recovery for an orphaned local Compose project.
 
-candidate 客观不可用时的合法拆除自成一条子主题，见
+Docker 采样、端点所有权与 attestation 判据自成一条子主题，见
+`test_orphan_compose_teardown__attestation_inventory__local_contract_test`；
+candidate 客观不可用时的合法拆除见
 `test_orphan_compose_teardown__undownable_candidate__local_contract_test`。
 """
 
@@ -17,7 +19,6 @@ candidate 客观不可用时的合法拆除自成一条子主题，见
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from subprocess import CompletedProcess
 
@@ -25,243 +26,51 @@ import pytest
 
 from quwoquan_ops.cli import stackctl
 from quwoquan_ops.cli.lib import orphan_compose_teardown as contract
+from quwoquan_ops.cli.lib import startup_attempt_receipt
 from quwoquan_ops.tests.support.orphan_compose_teardown_test_support import (
     CONTAINER_ID,
-    IMAGE_DIGEST,
     NETWORK_ID,
     PROJECT,
     SECOND_CONTAINER_ID,
     SECOND_NETWORK_ID,
-    docker_inventory,
     install_stackctl_fakes,
     multi_sample,
-    ports,
     post_sample,
     repair_args,
     sample,
     write_completed_partial_consumption,
 )
+from quwoquan_ops.tests.support.startup_attempt_receipt_test_support import (
+    _composition,
+)
 
 
-def test_attestation_binds_exact_compose_resources_and_is_create_once(
-    tmp_path: Path,
-) -> None:
-    snapshot = sample()
-    attestation = contract.seal_attestation(snapshot)
-    path = tmp_path / "orphaned-compose-teardown-attestation.json"
-
-    contract.write_attestation_create_once(path, attestation, allowed_root=tmp_path)
-    loaded = contract.load_attestation(
-        path,
-        allowed_root=tmp_path,
-        expected_target="alpha-local",
-    )
-
-    assert loaded == attestation
-    assert loaded["project"] == PROJECT
-    assert loaded["snapshot"]["containers"][0]["imageDigest"] == IMAGE_DIGEST
-    assert loaded["snapshot"]["networks"][0]["id"] == NETWORK_ID
-    assert loaded["snapshot"]["volumes"][0]["name"].endswith("mongo-data")
-    with pytest.raises(contract.OrphanComposeTeardownError, match="already exists"):
-        contract.write_attestation_create_once(path, attestation, allowed_root=tmp_path)
-
-
-def test_attestation_rejects_stale_arbitrary_project_and_live_drift(
-    tmp_path: Path,
-) -> None:
-    sampled_at = datetime.now(timezone.utc)
-    snapshot = sample()
-    attestation = contract.seal_attestation(snapshot, sampled_at=sampled_at)
-    path = tmp_path / "orphaned-compose-teardown-attestation.json"
-    contract.write_attestation_create_once(path, attestation, allowed_root=tmp_path)
-
-    with pytest.raises(contract.OrphanComposeTeardownError, match="stale"):
-        contract.load_attestation(
-            path,
-            allowed_root=tmp_path,
-            expected_target="alpha-local",
-            now=sampled_at
-            + timedelta(seconds=contract.ATTESTATION_TTL_SECONDS + 1),
-        )
-    forged = dict(attestation)
-    forged["project"] = "operator_supplied_project"
-    with pytest.raises(contract.OrphanComposeTeardownError, match="project mismatch"):
-        contract.validate_attestation(forged, now=sampled_at)
-    changed = json.loads(json.dumps(snapshot))
-    changed["networks"].append({"id": "extra-live-resource"})
-    with pytest.raises(contract.OrphanComposeTeardownError, match="changed"):
-        contract.assert_snapshot_unchanged(attestation, changed)
-
-
-def test_inventory_rejects_foreign_network_attachment_and_out_of_block_port() -> None:
-    inventory = docker_inventory()
-    network_key = ("docker", "network", "inspect", NETWORK_ID)
-    network = json.loads(inventory[network_key].stdout)
-    network[0]["Containers"] = {"d" * 64: {"Name": "foreign-live-container"}}
-    inventory[network_key] = CompletedProcess([], 0, json.dumps(network), "")
-
-    with pytest.raises(contract.OrphanComposeTeardownError, match="non-attested"):
-        contract.sample_snapshot(
-            target="alpha-local",
-            canonical_ports=ports(),
-            run_command=lambda argv: inventory[tuple(argv)],
-        )
-
-
-def test_inventory_rejects_truncated_docker_identity_even_if_inspect_expands_it() -> None:
-    inventory = docker_inventory()
-    label_filter = f"label=com.docker.compose.project={PROJECT}"
-    list_key = (
-        "docker",
-        "ps",
-        "--no-trunc",
-        "-aq",
-        "--filter",
-        label_filter,
-    )
-    short_id = CONTAINER_ID[:12]
-    full_inspection = inventory[("docker", "inspect", CONTAINER_ID)]
-    inventory[list_key] = CompletedProcess([], 0, short_id + "\n", "")
-    inventory[("docker", "inspect", short_id)] = full_inspection
-
-    with pytest.raises(contract.OrphanComposeTeardownError, match="set drifted"):
-        contract.sample_snapshot(
-            target="alpha-local",
-            canonical_ports=ports(),
-            run_command=lambda argv: inventory[tuple(argv)],
-        )
-
-
-def test_container_mount_set_order_is_canonical_but_mount_fields_remain_strict() -> None:
-    inspection = json.loads(
-        docker_inventory()[("docker", "inspect", CONTAINER_ID)].stdout
-    )[0]
-    first = {
-        "Type": "bind",
-        "Source": "/candidate/content",
-        "Destination": "/runtime/content",
-        "Mode": "ro",
-        "RW": False,
-        "Propagation": "rprivate",
+def _with_legacy_livekit_udp_endpoint(
+    snapshot: dict[str, object],
+) -> dict[str, object]:
+    endpoint = {
+        "role": "livekit-rtc-udp",
+        "hostPort": 2019,
+        "protocol": "udp",
     }
-    second = {
-        "Type": "volume",
-        "Name": "provider-data",
-        "Source": "/var/lib/docker/volumes/provider-data/_data",
-        "Destination": "/runtime/provider",
-        "Driver": "local",
-        "Mode": "z",
-        "RW": True,
-        "Propagation": "",
-    }
-    inspection["Mounts"] = [first, second]
-    forward = contract._container_descriptor(
-        inspection,
-        project=PROJECT,
-        canonical_ports={17000},
+    snapshot["canonicalPorts"].append(
+        {"name": "livekit-rtc-udp", "port": 17160, "open": True}
     )
-    inspection["Mounts"] = [second, first]
-    reversed_order = contract._container_descriptor(
-        inspection,
-        project=PROJECT,
-        canonical_ports={17000},
-    )
-    changed_first = {**first, "Destination": "/runtime/content-changed"}
-    inspection["Mounts"] = [second, changed_first]
-    changed = contract._container_descriptor(
-        inspection,
-        project=PROJECT,
-        canonical_ports={17000},
-    )
-
-    assert forward["configurationDigest"] == reversed_order["configurationDigest"]
-    assert forward["configurationDigest"] != changed["configurationDigest"]
-
-
-def test_inventory_rejects_port_outside_canonical_target_block() -> None:
-    # spec_ref: specs/feature-tree/runtime/system-topology-and-networking/spec.md#sit-002.t1
-    inventory = docker_inventory()
-    container_key = ("docker", "inspect", CONTAINER_ID)
-    container = json.loads(inventory[container_key].stdout)
-    container[0]["HostConfig"]["PortBindings"]["8443/tcp"][0]["HostPort"] = "18000"
-    inventory[container_key] = CompletedProcess([], 0, json.dumps(container), "")
-    with pytest.raises(contract.OrphanComposeTeardownError, match="another target block"):
-        contract.sample_snapshot(
-            target="alpha-local",
-            canonical_ports=ports(),
-            run_command=lambda argv: inventory[tuple(argv)],
-            other_target_port_blocks=[
-                {"target": "beta-local", "blockStart": 18000, "blockEnd": 18999}
-            ],
-            port_probe=lambda _port: True,
-        )
-
-
-def test_inventory_attests_live_legacy_port_outside_all_target_blocks() -> None:
-    inventory = docker_inventory()
-    container_key = ("docker", "inspect", CONTAINER_ID)
-    container = json.loads(inventory[container_key].stdout)
-    container[0]["HostConfig"]["PortBindings"]["8443/tcp"][0]["HostPort"] = "2019"
-    inventory[container_key] = CompletedProcess([], 0, json.dumps(container), "")
-    inventory[
-        (
-            "docker",
-            "ps",
-            "--no-trunc",
-            "-q",
-            "--filter",
-            "publish=2019",
-        )
-    ] = CompletedProcess([], 0, CONTAINER_ID + "\n", "")
-
-    snapshot = contract.sample_snapshot(
-        target="alpha-local",
-        canonical_ports=ports(),
-        run_command=lambda argv: inventory[tuple(argv)],
-        other_target_port_blocks=[
-            {"target": "beta-local", "blockStart": 18000, "blockEnd": 18999},
-            {"target": "gamma-local", "blockStart": 19000, "blockEnd": 19999},
-        ],
-        port_probe=lambda port: port == 2019,
-    )
-
-    assert snapshot["projectPublishedHostPorts"] == [2019]
-    assert snapshot["nonCanonicalPublishedHostPorts"] == [2019]
-    attestation = contract.seal_attestation(snapshot)
-    with pytest.raises(contract.OrphanComposeTeardownError, match="remain occupied"):
-        contract.assert_post_teardown_state(
-            attestation,
-            post_sample(snapshot),
-            port_probe=lambda port: port == 2019,
-        )
-    contract.assert_post_teardown_state(
-        attestation,
-        post_sample(snapshot),
-        port_probe=lambda _port: False,
-    )
-
-
-def test_removal_plan_uses_only_exact_ids_and_preserves_volumes() -> None:
-    snapshot = sample()
-    attestation = contract.seal_attestation(snapshot)
-
-    assert contract.exact_removal_commands(attestation) == [
-        ["docker", "rm", "--force", CONTAINER_ID],
-        ["docker", "network", "rm", NETWORK_ID],
+    snapshot["publishedEndpoints"] = [
+        endpoint,
+        {"role": "api-edge", "hostPort": 17000, "protocol": "tcp"},
     ]
-    contract.assert_post_teardown_state(
-        attestation,
-        post_sample(snapshot),
-        port_probe=lambda _port: False,
-    )
-    changed_volume = post_sample(snapshot)
-    changed_volume["volumes"] = []
-    with pytest.raises(contract.OrphanComposeTeardownError, match="volumes must be preserved"):
-        contract.assert_post_teardown_state(
-            attestation,
-            changed_volume,
-            port_probe=lambda _port: False,
-        )
+    snapshot["containers"][0]["publishedEndpoints"] = [
+        {"role": "api-edge", "hostPort": 17000, "protocol": "tcp"}
+    ]
+    snapshot["containers"][1]["name"] = "quwoquan_alpha_release-livekit-sfu-1"
+    snapshot["containers"][1]["service"] = "livekit-sfu"
+    snapshot["containers"][1]["labels"][
+        "com.docker.compose.service"
+    ] = "livekit-sfu"
+    snapshot["containers"][1]["publishedEndpoints"] = [endpoint]
+    return snapshot
+
 
 
 def test_repair_plans_without_mutation_then_consumes_only_after_confirmation(
@@ -269,9 +78,7 @@ def test_repair_plans_without_mutation_then_consumes_only_after_confirmation(
     tmp_path: Path,
 ) -> None:
     report_dir = install_stackctl_fakes(monkeypatch, tmp_path)
-    snapshot = multi_sample()
-    snapshot["projectPublishedHostPorts"] = [17000, 2019]
-    snapshot["nonCanonicalPublishedHostPorts"] = [2019]
+    snapshot = _with_legacy_livekit_udp_endpoint(multi_sample())
     post_snapshot = post_sample(snapshot)
     samples = iter((snapshot, snapshot, post_snapshot))
     monkeypatch.setattr(
@@ -283,13 +90,8 @@ def test_repair_plans_without_mutation_then_consumes_only_after_confirmation(
     waited: list[object] = []
     monkeypatch.setattr(
         stackctl,
-        "_wait_for_network_ports_released",
-        lambda target, **_kwargs: waited.append(target) or [],
-    )
-    monkeypatch.setattr(
-        stackctl,
-        "_wait_for_exact_tcp_ports_released",
-        lambda ports: waited.append(list(ports)) or [],
+        "_wait_for_published_endpoints_released",
+        lambda endpoints: waited.append(list(endpoints)) or [],
     )
 
     def run_command(argv: list[str]) -> CompletedProcess[str]:
@@ -331,7 +133,154 @@ def test_repair_plans_without_mutation_then_consumes_only_after_confirmation(
         SECOND_CONTAINER_ID,
     ]
     assert payload["removedNetworkIds"] == [NETWORK_ID, SECOND_NETWORK_ID]
-    assert waited == ["alpha-local", [2019]]
+    assert waited == [
+        [
+            {"role": "livekit-rtc-udp", "hostPort": 2019, "protocol": "udp"},
+            {"role": "api-edge", "hostPort": 17000, "protocol": "tcp"},
+        ]
+    ]
+
+
+def test_receipt_and_attestation_project_conflict_blocks_before_docker_or_transition(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    report_dir = install_stackctl_fakes(monkeypatch, tmp_path)
+    attested_project = "quwoquan_alpha_release_78142_3"
+    receipt_project = "quwoquan_alpha_release_99103_1"
+    attestation = contract.seal_attestation(sample(project=attested_project))
+    path = tmp_path / "orphaned-compose-teardown-attestation.json"
+    contract.write_attestation_create_once(
+        path,
+        attestation,
+        allowed_root=tmp_path,
+    )
+    receipt_path = tmp_path / "process/startup_attempt.json"
+    composition = _composition()
+    monkeypatch.setattr(
+        startup_attempt_receipt,
+        "startup_attempt_path",
+        lambda _target: receipt_path,
+    )
+    monkeypatch.setattr(startup_attempt_receipt, "output_root", lambda: tmp_path)
+    startup_attempt_receipt.transition_startup_attempt(
+        env="alpha",
+        target="alpha-local",
+        attempt_id="receipt-project-conflict",
+        status="prepared",
+        workload="content-release",
+        compose_project=receipt_project,
+        candidate_digest="sha256:" + "b" * 64,
+        configuration_digest="sha256:" + "c" * 64,
+        provider_runtime_digest="sha256:" + "d" * 64,
+        observability_log_sink_digest="sha256:" + "e" * 64,
+        image_transport_tag=composition["imageVersion"],
+        image_composition=composition,
+    )
+    startup_attempt_receipt.transition_startup_attempt(
+        env="alpha",
+        target="alpha-local",
+        attempt_id="receipt-project-conflict",
+        status="stopped",
+    )
+    monkeypatch.setattr(
+        stackctl,
+        "load_startup_attempt",
+        startup_attempt_receipt.load_startup_attempt,
+    )
+    monkeypatch.setattr(
+        contract,
+        "sample_snapshot",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AssertionError("project conflict must block before Docker sampling")
+        ),
+    )
+    monkeypatch.setattr(
+        stackctl,
+        "run",
+        lambda _argv: (_ for _ in ()).throw(
+            AssertionError("project conflict must block before Docker mutation")
+        ),
+    )
+    monkeypatch.setattr(
+        stackctl,
+        "transition_startup_attempt",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AssertionError("project conflict must block before receipt transition")
+        ),
+    )
+    monkeypatch.setattr(
+        contract,
+        "write_consumption_create_once",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("project conflict must block before terminal fact")
+        ),
+    )
+    result = stackctl._repair_orphaned_compose(
+        repair_args(path, confirm=True),
+        environment="alpha",
+        report_dir=report_dir,
+    )
+
+    assert result["exitCode"] == 2
+    assert "differs from the current startup receipt" in result["details"][0]
+    assert not path.with_name("orphaned-compose-teardown-consumption.json").exists()
+
+
+def test_absent_receipt_plan_discovers_once_then_confirmation_uses_attested_project(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    report_dir = install_stackctl_fakes(monkeypatch, tmp_path)
+    monkeypatch.setattr(stackctl, "load_startup_attempt", lambda _target: None)
+    project = "quwoquan_alpha_release_78142_3"
+    snapshot = multi_sample(project=project)
+    samples = iter((snapshot, snapshot, post_sample(snapshot)))
+    sampled_projects: list[str] = []
+
+    def sample_snapshot(**kwargs: object) -> dict[str, object]:
+        sampled_projects.append(str(kwargs["project"]))
+        return next(samples)
+
+    monkeypatch.setattr(contract, "sample_snapshot", sample_snapshot)
+    discovery_calls = 0
+
+    def discover_exact_project(**_kwargs: object) -> str:
+        nonlocal discovery_calls
+        discovery_calls += 1
+        if discovery_calls != 1:
+            raise AssertionError("confirmation must use the attested exact project")
+        return project
+
+    monkeypatch.setattr(contract, "discover_exact_project", discover_exact_project)
+    monkeypatch.setattr(
+        stackctl,
+        "run",
+        lambda argv: CompletedProcess(argv, 0, "removed", ""),
+    )
+    path = tmp_path / "orphaned-compose-teardown-attestation.json"
+
+    planned = stackctl._repair_orphaned_compose(
+        repair_args(path, confirm=False),
+        environment="alpha",
+        report_dir=report_dir,
+    )
+    consumed = stackctl._repair_orphaned_compose(
+        repair_args(path, confirm=True),
+        environment="alpha",
+        report_dir=report_dir,
+    )
+
+    assert planned["exitCode"] == 0
+    assert consumed["exitCode"] == 0
+    assert discovery_calls == 1
+    assert sampled_projects == [project, project, project]
+    assert contract.load_attestation(
+        path,
+        allowed_root=tmp_path,
+        expected_target="alpha-local",
+        allow_expired=True,
+    )["project"] == project
 
 
 def test_partial_failure_is_consumed_with_exact_success_journal_and_cannot_replay(
@@ -452,6 +401,11 @@ def test_completed_partial_consumption_converges_audit_only_without_removal(
     report = json.loads((report_dir / "report.json").read_text(encoding="utf-8"))
     assert report["auditOnly"] is True
     assert report["destructiveRepairPerformed"] is False
+    assert report["startupAttempt"] == {
+        "target": "alpha-local",
+        "status": "stopped",
+        "composeProject": PROJECT,
+    }
 
 
 @pytest.mark.parametrize("invalid_kind", ["failed-command", "incomplete-ids"])
@@ -532,15 +486,38 @@ def test_convergence_rejects_noncanonical_port_still_occupied(
     tmp_path: Path,
 ) -> None:
     report_dir = install_stackctl_fakes(monkeypatch, tmp_path)
-    snapshot = multi_sample()
-    snapshot["projectPublishedHostPorts"] = [17000, 2019]
-    snapshot["nonCanonicalPublishedHostPorts"] = [2019]
+    snapshot = _with_legacy_livekit_udp_endpoint(multi_sample())
     path = tmp_path / "orphaned-compose-teardown-attestation.json"
     write_completed_partial_consumption(path, snapshot)
+    consumption_path = path.with_name("orphaned-compose-teardown-consumption.json")
+    consumption_bytes = consumption_path.read_bytes()
     monkeypatch.setattr(
         stackctl,
-        "_wait_for_exact_tcp_ports_released",
-        lambda ports: [2019],
+        "_wait_for_published_endpoints_released",
+        lambda endpoints: [
+            endpoint for endpoint in endpoints if endpoint["hostPort"] == 2019
+        ],
+    )
+    monkeypatch.setattr(
+        stackctl,
+        "transition_startup_attempt",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AssertionError("occupied endpoint must block receipt transition")
+        ),
+    )
+    monkeypatch.setattr(
+        contract,
+        "write_convergence_create_once",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("occupied endpoint must block convergence fact")
+        ),
+    )
+    monkeypatch.setattr(
+        stackctl,
+        "_publish_orphan_terminal_success",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AssertionError("occupied endpoint must block terminal success")
+        ),
     )
     commands: list[list[str]] = []
     monkeypatch.setattr(stackctl, "run", lambda argv: commands.append(argv))
@@ -554,6 +531,8 @@ def test_convergence_rejects_noncanonical_port_still_occupied(
     assert result["exitCode"] == 2
     assert "2019" in result["details"][0]
     assert commands == []
+    assert consumption_path.read_bytes() == consumption_bytes
+    assert not path.with_name("orphaned-compose-teardown-convergence.json").exists()
 
 
 @pytest.mark.parametrize(

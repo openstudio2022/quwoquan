@@ -30,17 +30,17 @@ class AssistantContextRequirementWire {
   final String fallbackPolicy;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'slotId': slotId,
-        'required': required,
-        'acceptedSourceKinds': acceptedSourceKinds,
-        'authority': authority.wireName,
-        'sensitivity': sensitivity.wireName,
-        'consentScopes': consentScopes,
-        'freshnessSeconds': freshnessSeconds,
-        'tokenBudget': tokenBudget,
-        'resolverRef': resolverRef,
-        'fallbackPolicy': fallbackPolicy,
-      };
+    'slotId': slotId,
+    'required': required,
+    'acceptedSourceKinds': acceptedSourceKinds,
+    'authority': authority.wireName,
+    'sensitivity': sensitivity.wireName,
+    'consentScopes': consentScopes,
+    'freshnessSeconds': freshnessSeconds,
+    'tokenBudget': tokenBudget,
+    'resolverRef': resolverRef,
+    'fallbackPolicy': fallbackPolicy,
+  };
 
   factory AssistantContextRequirementWire.fromJson(Map<String, dynamic> json) {
     const allowedFields = <String>{
@@ -59,44 +59,94 @@ class AssistantContextRequirementWire {
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('AssistantContextRequirementWire response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'AssistantContextRequirementWire response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (!json.containsKey('slotId') || json['slotId'] == null || (json['slotId'] is! String)) {
-      throw const FormatException('AssistantContextRequirementWire field slotId has an invalid wire value');
+    if (!json.containsKey('slotId') ||
+        json['slotId'] == null ||
+        (json['slotId'] is! String)) {
+      throw const FormatException(
+        'AssistantContextRequirementWire field slotId has an invalid wire value',
+      );
     }
-    if (json.containsKey('required') && json['required'] != null && (json['required'] is! bool)) {
-      throw const FormatException('AssistantContextRequirementWire field required has an invalid wire value');
+    if (json.containsKey('required') &&
+        json['required'] != null &&
+        (json['required'] is! bool)) {
+      throw const FormatException(
+        'AssistantContextRequirementWire field required has an invalid wire value',
+      );
     }
-    if (json.containsKey('acceptedSourceKinds') && json['acceptedSourceKinds'] != null && (json['acceptedSourceKinds'] is! List || (json['acceptedSourceKinds'] as List).any((item) => item is! String))) {
-      throw const FormatException('AssistantContextRequirementWire field acceptedSourceKinds has an invalid wire value');
+    if (json.containsKey('acceptedSourceKinds') &&
+        json['acceptedSourceKinds'] != null &&
+        (json['acceptedSourceKinds'] is! List ||
+            (json['acceptedSourceKinds'] as List).any(
+              (item) => item is! String,
+            ))) {
+      throw const FormatException(
+        'AssistantContextRequirementWire field acceptedSourceKinds has an invalid wire value',
+      );
     }
-    if (!json.containsKey('authority') || json['authority'] == null || (json['authority'] is! String)) {
-      throw const FormatException('AssistantContextRequirementWire field authority has an invalid wire value');
+    if (!json.containsKey('authority') ||
+        json['authority'] == null ||
+        (json['authority'] is! String)) {
+      throw const FormatException(
+        'AssistantContextRequirementWire field authority has an invalid wire value',
+      );
     }
-    if (!json.containsKey('sensitivity') || json['sensitivity'] == null || (json['sensitivity'] is! String)) {
-      throw const FormatException('AssistantContextRequirementWire field sensitivity has an invalid wire value');
+    if (!json.containsKey('sensitivity') ||
+        json['sensitivity'] == null ||
+        (json['sensitivity'] is! String)) {
+      throw const FormatException(
+        'AssistantContextRequirementWire field sensitivity has an invalid wire value',
+      );
     }
-    if (json.containsKey('consentScopes') && json['consentScopes'] != null && (json['consentScopes'] is! List || (json['consentScopes'] as List).any((item) => item is! String))) {
-      throw const FormatException('AssistantContextRequirementWire field consentScopes has an invalid wire value');
+    if (json.containsKey('consentScopes') &&
+        json['consentScopes'] != null &&
+        (json['consentScopes'] is! List ||
+            (json['consentScopes'] as List).any((item) => item is! String))) {
+      throw const FormatException(
+        'AssistantContextRequirementWire field consentScopes has an invalid wire value',
+      );
     }
-    if (json.containsKey('freshnessSeconds') && json['freshnessSeconds'] != null && (json['freshnessSeconds'] is! num)) {
-      throw const FormatException('AssistantContextRequirementWire field freshnessSeconds has an invalid wire value');
+    if (json.containsKey('freshnessSeconds') &&
+        json['freshnessSeconds'] != null &&
+        (json['freshnessSeconds'] is! num)) {
+      throw const FormatException(
+        'AssistantContextRequirementWire field freshnessSeconds has an invalid wire value',
+      );
     }
-    if (json.containsKey('tokenBudget') && json['tokenBudget'] != null && (json['tokenBudget'] is! num)) {
-      throw const FormatException('AssistantContextRequirementWire field tokenBudget has an invalid wire value');
+    if (json.containsKey('tokenBudget') &&
+        json['tokenBudget'] != null &&
+        (json['tokenBudget'] is! num)) {
+      throw const FormatException(
+        'AssistantContextRequirementWire field tokenBudget has an invalid wire value',
+      );
     }
-    if (!json.containsKey('resolverRef') || json['resolverRef'] == null || (json['resolverRef'] is! String)) {
-      throw const FormatException('AssistantContextRequirementWire field resolverRef has an invalid wire value');
+    if (!json.containsKey('resolverRef') ||
+        json['resolverRef'] == null ||
+        (json['resolverRef'] is! String)) {
+      throw const FormatException(
+        'AssistantContextRequirementWire field resolverRef has an invalid wire value',
+      );
     }
-    if (json.containsKey('fallbackPolicy') && json['fallbackPolicy'] != null && (json['fallbackPolicy'] is! String)) {
-      throw const FormatException('AssistantContextRequirementWire field fallbackPolicy has an invalid wire value');
+    if (json.containsKey('fallbackPolicy') &&
+        json['fallbackPolicy'] != null &&
+        (json['fallbackPolicy'] is! String)) {
+      throw const FormatException(
+        'AssistantContextRequirementWire field fallbackPolicy has an invalid wire value',
+      );
     }
     return AssistantContextRequirementWire(
       slotId: (json['slotId'] as String?)?.trim() ?? "",
       required: json['required'] == true,
       acceptedSourceKinds: _assistantStringList(json['acceptedSourceKinds']),
-      authority: parseAssistantContextAuthorityStrict((json['authority'] as String?)?.trim() ?? ''),
-      sensitivity: parseAssistantContextSensitivityStrict((json['sensitivity'] as String?)?.trim() ?? ''),
+      authority: parseAssistantContextAuthorityStrict(
+        (json['authority'] as String?)?.trim() ?? '',
+      ),
+      sensitivity: parseAssistantContextSensitivityStrict(
+        (json['sensitivity'] as String?)?.trim() ?? '',
+      ),
       consentScopes: _assistantStringList(json['consentScopes']),
       freshnessSeconds: (json['freshnessSeconds'] as num?)?.toInt() ?? 0,
       tokenBudget: (json['tokenBudget'] as num?)?.toInt() ?? 0,
@@ -107,7 +157,10 @@ class AssistantContextRequirementWire {
 
   static List<String> _assistantStringList(Object? value) {
     if (value is List) {
-      return value.map((item) => item.toString().trim()).where((item) => item.isNotEmpty).toList(growable: false);
+      return value
+          .map((item) => item.toString().trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
     }
     return const <String>[];
   }
@@ -138,35 +191,57 @@ class AssistantContextProfileWire {
   final String assetDigest;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'profileId': profileId,
-        'requirements': requirements.map((item) => item.toJson()).toList(growable: false),
-        'assetDigest': assetDigest,
-      };
+    'profileId': profileId,
+    'requirements': requirements
+        .map((item) => item.toJson())
+        .toList(growable: false),
+    'assetDigest': assetDigest,
+  };
 
   factory AssistantContextProfileWire.fromJson(Map<String, dynamic> json) {
-    const allowedFields = <String>{
-      'profileId',
-      'requirements',
-      'assetDigest',
-    };
+    const allowedFields = <String>{'profileId', 'requirements', 'assetDigest'};
     final unknownFields = json.keys
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('AssistantContextProfileWire response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'AssistantContextProfileWire response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (!json.containsKey('profileId') || json['profileId'] == null || (json['profileId'] is! String)) {
-      throw const FormatException('AssistantContextProfileWire field profileId has an invalid wire value');
+    if (!json.containsKey('profileId') ||
+        json['profileId'] == null ||
+        (json['profileId'] is! String)) {
+      throw const FormatException(
+        'AssistantContextProfileWire field profileId has an invalid wire value',
+      );
     }
-    if (json.containsKey('requirements') && json['requirements'] != null && (json['requirements'] is! List || (json['requirements'] as List).any((item) => item is! Map))) {
-      throw const FormatException('AssistantContextProfileWire field requirements has an invalid wire value');
+    if (json.containsKey('requirements') &&
+        json['requirements'] != null &&
+        (json['requirements'] is! List ||
+            (json['requirements'] as List).any((item) => item is! Map))) {
+      throw const FormatException(
+        'AssistantContextProfileWire field requirements has an invalid wire value',
+      );
     }
-    if (!json.containsKey('assetDigest') || json['assetDigest'] == null || (json['assetDigest'] is! String)) {
-      throw const FormatException('AssistantContextProfileWire field assetDigest has an invalid wire value');
+    if (!json.containsKey('assetDigest') ||
+        json['assetDigest'] == null ||
+        (json['assetDigest'] is! String)) {
+      throw const FormatException(
+        'AssistantContextProfileWire field assetDigest has an invalid wire value',
+      );
     }
     return AssistantContextProfileWire(
       profileId: (json['profileId'] as String?)?.trim() ?? "",
-      requirements: (json['requirements'] as List?)?.whereType<Map>().map((item) => AssistantContextRequirementWire.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantContextRequirementWire>[],
+      requirements:
+          (json['requirements'] as List?)
+              ?.whereType<Map>()
+              .map(
+                (item) => AssistantContextRequirementWire.fromJson(
+                  item.cast<String, dynamic>(),
+                ),
+              )
+              .toList(growable: false) ??
+          const <AssistantContextRequirementWire>[],
       assetDigest: (json['assetDigest'] as String?)?.trim() ?? "",
     );
   }

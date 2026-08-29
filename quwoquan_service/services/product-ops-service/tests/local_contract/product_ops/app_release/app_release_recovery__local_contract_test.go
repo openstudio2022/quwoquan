@@ -65,6 +65,32 @@ func TestAppReleaseVersionResponseContainsOnlyRecoveryContractFields(t *testing.
 	}
 }
 
+func TestIOSRecoveryResponseKeepsAppStoreChannelOutOfPublicStartupWire(t *testing.T) {
+	service := newAppReleaseService(t)
+	mux := http.NewServeMux()
+	httpadapter.NewHandler(service).Register(mux)
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, httptest.NewRequest(
+		http.MethodGet,
+		"/ops/app-recovery/version?platform=ios&appVersion=1.8.1&buildNumber=18100",
+		nil,
+	))
+	if response.Code != http.StatusOK {
+		t.Fatalf("ios version status=%d body=%s", response.Code, response.Body.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode ios version response: %v", err)
+	}
+	if value, present := payload["updateUrl"]; !present || value != nil {
+		t.Fatalf("public ios updateUrl must be explicit null, payload=%v", payload)
+	}
+	if payload["updateState"] != "available" ||
+		payload["recoveryUrl"] != "https://download.quwoquan.example/download/ios" {
+		t.Fatalf("ios recovery policy=%v", payload)
+	}
+}
+
 func TestAppReleaseDerivesUpdateStateFromBuildOnly(t *testing.T) {
 	service := newAppReleaseService(t)
 	for _, test := range []struct {
@@ -97,7 +123,7 @@ func TestAppReleaseSupportsWebAsAnIndependentPlatform(t *testing.T) {
 		t.Fatalf("web version: %v", err)
 	}
 	if result.Platform != "web" || result.UpdateState != apprelease.UpdateStateAvailable ||
-		result.UpdateURL != "https://download.quwoquan.example/" {
+		result.UpdateURL == nil || *result.UpdateURL != "https://download.quwoquan.example/" {
 		t.Fatalf("web version=%+v", result)
 	}
 }

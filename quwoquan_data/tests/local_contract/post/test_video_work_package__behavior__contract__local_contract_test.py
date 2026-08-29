@@ -38,6 +38,7 @@ def _source_video() -> dict[str, object]:
         "propertyReleaseStatus": "not_required",
         "collectedAt": "2026-08-03T00:00:00Z",
         "takedownPolicy": "quwoquan_standard_notice_and_takedown",
+        "derivedModifications": [],
         "directDownload": True,
         "accessControlBypassed": False,
         "drmDetected": False,

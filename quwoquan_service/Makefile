@@ -8,6 +8,7 @@
 .PHONY: verify-assistant-tool-catalog codegen-assistant-tool-catalog
 .PHONY: codegen-event-constants
 .PHONY: verify-app-shell-navigation codegen-app-shell-navigation verify-app-identity codegen-app-identity
+.PHONY: verify-app-launch-contract codegen-app-launch-contract
 .PHONY: verify-domain-model-compatibility
 
 SCENARIO ?= content_feed
@@ -225,6 +226,10 @@ verify-graphql-read-registry: service-contract-view
 		-candidate-digest "$(GRAPHQL_READ_REGISTRY_EXAMPLE_CANDIDATE_DIGEST)" \
 		-output services/api-edge/resources/policies/graphql_read/persisted_query_registry.example.json \
 		-check
+	go test ./services/api-edge/tests/local_contract/graphql_read/persisted_query_execution \
+		-run '^TestCheckedInGeneratedRegistryEntriesUseRealRuntimeBindings$$' -count=1
+	go test ./services/content-service/tests/local_contract/content/post/adapters/inbound/graphql \
+		-run '^TestContentRuntimeBindingsMatchAuthoringPersistedQueries$$' -count=1
 
 verify-graphql-app-client: service-contract-view
 	go run ./tools/codegen_graphql_app_client \
@@ -303,7 +308,9 @@ verify-redis-routes:
 codegen-redis-routes:
 	python3 scripts/codegen/gen_redis_router_config.py
 
-codegen: codegen-redis-routes codegen-contract-graph codegen-observability-catalog codegen-api-edge-errors codegen-assistant-service-errors codegen-assistant-runtime-enums codegen-assistant-reader-descriptors codegen-assistant-tool-catalog codegen-assistant-citation-destinations codegen-link-templates-go codegen-external-provider-bindings codegen-content-service codegen-circle-service codegen-entity-service codegen-notification-service codegen-rtc-service codegen-realtime-gateway codegen-integration-service codegen-product-ops-service codegen-platform-ops-service codegen-user-service codegen-chat-service codegen-chat-domain-events codegen-storage codegen-event-constants codegen-rec-model-python codegen-rec-policy codegen-rec-intersection codegen-impact codegen-control-plane-runtime codegen-ops-portal
+codegen: codegen-redis-routes codegen-observability-catalog codegen-api-edge-errors codegen-assistant-service-errors codegen-assistant-runtime-enums codegen-assistant-reader-descriptors codegen-assistant-tool-catalog codegen-assistant-citation-destinations codegen-link-templates-go codegen-external-provider-bindings codegen-content-service codegen-circle-service codegen-entity-service codegen-notification-service codegen-rtc-service codegen-realtime-gateway codegen-integration-service codegen-product-ops-service codegen-platform-ops-service codegen-user-service codegen-chat-service codegen-chat-domain-events codegen-storage codegen-event-constants codegen-rec-model-python codegen-rec-policy codegen-rec-intersection codegen-impact codegen-control-plane-runtime codegen-ops-portal
+	# ContractGraph 消费上述生成器可能更新的全部 metadata，必须作为最终固定点生成。
+	$(MAKE) codegen-contract-graph
 
 codegen-openapi: service-contract-view
 	go run ./tools/qwq_contract generate-openapi --metadata-dir "$(CONTRACT_VIEW)" --repo-root "$(REPO_ROOT)"
@@ -352,6 +359,13 @@ codegen-app-identity: service-contract-view
 
 verify-app-identity: service-contract-view
 	go run ./tools/codegen_app_metadata --metadata-dir "$(CONTRACT_VIEW)" --app-dir ../quwoquan_app --app-identity-only --check-app-identity --app-identity-manifest ../quwoquan_app/tool/app_identity_codegen/generated_manifest.json
+
+codegen-app-launch-contract: service-contract-view
+	go run ./tools/codegen_app_metadata --metadata-dir "$(CONTRACT_VIEW)" --app-dir ../quwoquan_app --app-launch-contract-only --app-launch-contract-manifest ../quwoquan_app/tool/app_launch_contract_codegen/generated_manifest.json
+
+verify-app-launch-contract: service-contract-view
+	go run ./tools/codegen_app_metadata --metadata-dir "$(CONTRACT_VIEW)" --app-dir ../quwoquan_app --app-launch-contract-only --check-app-launch-contract --app-launch-contract-manifest ../quwoquan_app/tool/app_launch_contract_codegen/generated_manifest.json
+	PYTHONDONTWRITEBYTECODE=1 python3 ../quwoquan_app/test/local_contract/runtime/app_generated_manifest_gate__local_contract_test.py
 
 codegen-app-shell-navigation: service-contract-view
 	go run ./tools/codegen_app_metadata --metadata-dir "$(CONTRACT_VIEW)" --app-dir ../quwoquan_app --shell-navigation-metadata-only --shell-navigation-manifest ../quwoquan_app/tool/shell_navigation_codegen/generated_manifest.json

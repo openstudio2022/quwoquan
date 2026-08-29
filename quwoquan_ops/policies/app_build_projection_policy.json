@@ -1,0 +1,111 @@
+{
+  "schema": "quwoquan_ops.app_build_projection_policy.v1",
+  "policies": {
+    "flutter-android-3.47-gradle-8.14-agp-8.11.1": {
+      "toolchain": {
+        "androidGradlePlugin": "8.11.1",
+        "flutter": "3.47.x",
+        "gradle": "8.14",
+        "kotlin": "2.2.20",
+        "platform": "android"
+      },
+      "exact": {
+        "quwoquan_app/.dart_tool/native_assets.yaml": [
+          "file"
+        ],
+        "quwoquan_app/.dart_tool/package_config.json": [
+          "file"
+        ],
+        "quwoquan_app/.dart_tool/package_graph.json": [
+          "file"
+        ],
+        "quwoquan_app/.dart_tool/version": [
+          "file"
+        ],
+        "quwoquan_app/.flutter-plugins-dependencies": [
+          "file"
+        ],
+        "quwoquan_app/android/local.properties": [
+          "file"
+        ]
+      },
+      "subtrees": [
+        "quwoquan_app/.dart_tool/flutter_build",
+        "quwoquan_app/.dart_tool/hooks_runner",
+        "quwoquan_app/.dart_tool/lib",
+        "quwoquan_app/.dart_tool/native_assets",
+        "quwoquan_app/.dart_tool/qwq_android_dependency_state",
+        "quwoquan_app/.dart_tool/qwq_android_gradle_dependency",
+        "quwoquan_app/.dart_tool/qwq_pub_cache",
+        "quwoquan_app/android/.gradle",
+        "quwoquan_app/android/.kotlin",
+        "quwoquan_app/android/app/build",
+        "quwoquan_app/android/build",
+        "quwoquan_app/build"
+      ],
+      "reject": [
+        "quwoquan_app/android/app/src",
+        "quwoquan_app/integration_test",
+        "quwoquan_app/test_host"
+      ]
+    },
+    "flutter-ios-3.47-cocoapods-1.16.2": {
+      "toolchain": {
+        "cocoapods": "1.16.2",
+        "flutter": "3.47.x",
+        "platform": "ios"
+      },
+      "exact": {
+        "quwoquan_app/.dart_tool/native_assets.yaml": [
+          "file"
+        ],
+        "quwoquan_app/.dart_tool/package_config.json": [
+          "file"
+        ],
+        "quwoquan_app/.dart_tool/package_graph.json": [
+          "file"
+        ],
+        "quwoquan_app/.dart_tool/version": [
+          "file"
+        ],
+        "quwoquan_app/.flutter-plugins-dependencies": [
+          "file"
+        ],
+        "quwoquan_app/ios/Flutter/Generated.xcconfig": [
+          "file"
+        ],
+        "quwoquan_app/ios/Flutter/flutter_export_environment.sh": [
+          "file"
+        ]
+      },
+      "subtrees": [
+        "quwoquan_app/.dart_tool/flutter_build",
+        "quwoquan_app/.dart_tool/hooks_runner",
+        "quwoquan_app/.dart_tool/lib",
+        "quwoquan_app/.dart_tool/native_assets",
+        "quwoquan_app/.dart_tool/qwq_ios_cocoapods_dependency",
+        "quwoquan_app/.dart_tool/qwq_pub_cache",
+        "quwoquan_app/build",
+        "quwoquan_app/ios/.symlinks",
+        "quwoquan_app/ios/Flutter/ephemeral",
+        "quwoquan_app/ios/Pods",
+        "quwoquan_app/ios/Runner.xcworkspace"
+      ],
+      "reject": [
+        "quwoquan_app/integration_test",
+        "quwoquan_app/ios/Runner",
+        "quwoquan_app/test_host"
+      ]
+    },
+    "none": {
+      "toolchain": {
+        "cocoapods": "none",
+        "flutter": "none",
+        "platform": "none"
+      },
+      "exact": {},
+      "subtrees": [],
+      "reject": []
+    }
+  }
+}

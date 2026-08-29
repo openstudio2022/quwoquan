@@ -22,6 +22,10 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
+import sys
+
+sys.dont_write_bytecode = True
+
 from quwoquan_ops.ci.release_bound_data_evidence import (
     DataEvidenceError,
     validate_data_evidence,

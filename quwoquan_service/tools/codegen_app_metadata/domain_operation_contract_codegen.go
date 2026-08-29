@@ -19,6 +19,7 @@ type domainOperationContractSpec struct {
 	ExternalImports          map[string]struct{}
 	ExternalExports          map[string]struct{}
 	EnumMembers              map[string][]canonicalRequestEnumMember
+	EnumUnknownMembers       map[string]string
 }
 
 // generateDomainOperationContracts emits the response side of every generic
@@ -207,6 +208,7 @@ func externalizeSharedDomainModels(
 		ExternalImports:          map[string]struct{}{},
 		ExternalExports:          map[string]struct{}{},
 		EnumMembers:              map[string][]canonicalRequestEnumMember{},
+		EnumUnknownMembers:       map[string]string{},
 	}
 	return nil
 }
@@ -250,20 +252,23 @@ func externalizeSharedDomainEnums(
 		return err
 	}
 	type enumOwner struct {
-		owner   string
-		members []canonicalRequestEnumMember
+		owner         string
+		members       []canonicalRequestEnumMember
+		unknownMember string
 	}
 	ownersByEnum := map[string][]enumOwner{}
 	for owner, spec := range specs {
 		for name, members := range spec.EnumMembers {
 			ownersByEnum[name] = append(ownersByEnum[name], enumOwner{
-				owner:   owner,
-				members: members,
+				owner:         owner,
+				members:       members,
+				unknownMember: spec.EnumUnknownMembers[name],
 			})
 		}
 	}
 
 	shared := map[string][]canonicalRequestEnumMember{}
+	sharedUnknownMembers := map[string]string{}
 	for name, enumOwners := range ownersByEnum {
 		if len(enumOwners) < 2 {
 			continue
@@ -279,10 +284,17 @@ func externalizeSharedDomainEnums(
 			return enumOwners[left].owner < enumOwners[right].owner
 		})
 		fingerprint := domainEnumFingerprint(enumOwners[0].members)
+		unknownMember := enumOwners[0].unknownMember
 		for _, candidate := range enumOwners[1:] {
 			if domainEnumFingerprint(candidate.members) != fingerprint {
 				return fmt.Errorf(
 					"shared enum %s has conflicting domain member mappings",
+					name,
+				)
+			}
+			if candidate.unknownMember != unknownMember {
+				return fmt.Errorf(
+					"shared enum %s has conflicting client_unknown_member declarations",
 					name,
 				)
 			}
@@ -295,11 +307,15 @@ func externalizeSharedDomainEnums(
 			)
 		}
 		shared[name] = enumOwners[0].members
+		if unknownMember != "" {
+			sharedUnknownMembers[name] = unknownMember
+		}
 		for _, enumOwner := range enumOwners {
 			spec := specs[enumOwner.owner]
 			spec.ExternalImports[sharedDomainOperationEnumsImport] = struct{}{}
 			spec.ExternalExports[sharedDomainOperationEnumsImport] = struct{}{}
 			delete(spec.EnumMembers, name)
+			delete(spec.EnumUnknownMembers, name)
 		}
 	}
 
@@ -314,7 +330,7 @@ func externalizeSharedDomainEnums(
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		renderDomainWireEnum(&output, name, shared[name])
+		renderDomainWireEnum(&output, name, shared[name], sharedUnknownMembers[name])
 	}
 	writeFile(filepath.Join(
 		appDir,
@@ -410,6 +426,7 @@ func loadDomainOperationContractSpec(
 		ExternalImports:          map[string]struct{}{},
 		ExternalExports:          map[string]struct{}{},
 		EnumMembers:              map[string][]canonicalRequestEnumMember{},
+		EnumUnknownMembers:       map[string]string{},
 	}
 	enumValues, err := loadCanonicalRequestEnumValues()
 	if err != nil {
@@ -527,6 +544,7 @@ func externalizeCanonicalDomainModels(
 					ExternalImports:          map[string]struct{}{},
 					ExternalExports:          map[string]struct{}{},
 					EnumMembers:              map[string][]canonicalRequestEnumMember{},
+					EnumUnknownMembers:       map[string]string{},
 				}
 				specs[targetImport] = target
 			}
@@ -563,12 +581,31 @@ func finalizeDomainOperationContractSpec(
 	if err != nil {
 		return err
 	}
+	unknownMembers, err := loadCanonicalRequestEnumUnknownMembers()
+	if err != nil {
+		return err
+	}
 	for _, model := range spec.Models {
 		if err := collectDomainEnumMembers(spec.EnumMembers, model, enumValues); err != nil {
 			return err
 		}
 	}
-	for enumRef := range spec.EnumMembers {
+	if spec.EnumUnknownMembers == nil {
+		spec.EnumUnknownMembers = map[string]string{}
+	}
+	for enumRef, members := range spec.EnumMembers {
+		if unknownMember := unknownMembers[enumRef]; unknownMember != "" {
+			for _, member := range members {
+				if member.DartMember == unknownMember {
+					return fmt.Errorf(
+						"enum %s client_unknown_member %q collides with a canonical member",
+						enumRef,
+						unknownMember,
+					)
+				}
+			}
+			spec.EnumUnknownMembers[enumRef] = unknownMember
+		}
 		if enumRef == "IntersectionDimension" {
 			if err := validateCanonicalIntersectionDimensionMembers(
 				spec.EnumMembers[enumRef],
@@ -582,12 +619,14 @@ func finalizeDomainOperationContractSpec(
 			spec.ExternalImports[packageInternalIntersectionContractVocabularyImport] = struct{}{}
 			spec.ExternalExports[packageInternalIntersectionContractVocabularyImport] = struct{}{}
 			delete(spec.EnumMembers, enumRef)
+			delete(spec.EnumUnknownMembers, enumRef)
 			continue
 		}
 		if externalImport := generatedExternalEnumImport(spec.Domain, enumRef); externalImport != "" {
 			spec.ExternalImports[externalImport] = struct{}{}
 			spec.ExternalExports[externalImport] = struct{}{}
 			delete(spec.EnumMembers, enumRef)
+			delete(spec.EnumUnknownMembers, enumRef)
 		}
 	}
 	return nil

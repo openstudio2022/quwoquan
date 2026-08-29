@@ -9,6 +9,8 @@ class PersonaProfileViewData {
     required this.displayName,
     this.nicknameCustomized = false,
     required this.avatarUrl,
+    this.avatarAssetId,
+    this.avatarAccessMode,
     this.avatarVersion = 0,
     required this.backgroundUrl,
     required this.bio,
@@ -37,6 +39,11 @@ class PersonaProfileViewData {
   /// 引导用户改名）；true = 用户已改名，主页不再展示编辑画笔。
   final bool nicknameCustomized;
   final String avatarUrl;
+
+  /// 头像的媒体交付绑定（DEC-033）：release authority 的资产标识与交付形态。
+  /// 契约缺席即为 null，禁止以 personaId 冒充资产标识。
+  final String? avatarAssetId;
+  final MediaDeliveryAccessMode? avatarAccessMode;
   final int avatarVersion;
   final String backgroundUrl;
   final String bio;
@@ -72,6 +79,8 @@ class PersonaProfileViewData {
       displayName: displayName,
       nicknameCustomized: nicknameCustomized,
       avatarUrl: avatarUrl,
+      avatarAssetId: avatarAssetId,
+      avatarAccessMode: avatarAccessMode,
       avatarVersion: avatarVersion,
       backgroundUrl: backgroundUrl,
       bio: bio,

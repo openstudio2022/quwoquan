@@ -52,6 +52,37 @@ runtime_config_trust:
   signature_algorithm: ed25519
   build_profiles: [nonprod, prod]
 
+# 配置供给方式与启动来源正交。当前 AppArtifact 只接受安装后由平台私有容器读取的
+# 外部签名 package；入口 provenance 的闭集唯一来自 app_artifact_manifest。
+runtime_config_supply_modes:
+  - external_runtime_package
+
+# attempt 状态顺序由本段唯一拥有。terminal states 是 statuses 去除 forward_states
+# 的稳定差集；消费者不得再手写状态闭集或前进顺序。
+app_launch_attempt_statuses:
+  - prepared
+  - compiling
+  - compiled
+  - installing
+  - installed
+  - configuring
+  - configured
+  - launching
+  - launched
+  - runtime_degraded
+  - failed
+  - stopped
+app_launch_attempt_forward_states:
+  - prepared
+  - compiling
+  - compiled
+  - installing
+  - installed
+  - configuring
+  - configured
+  - launching
+  - launched
+
 # 运行值只允许本段声明的 string-only endpoint/launch keys。内容 release、灰度、渠道与
 # secret 不进入 runtime package；消费方不得从 app_runtime.yaml 自行扩张字段集合。
 runtime_value_keys:
@@ -67,7 +98,8 @@ runtime_value_keys:
   mediaUploadBaseUrl: { type: string, category: endpoint, required: true }
   rtcMediaConnectionUrl: { type: string, category: endpoint, required: true }
 
-# launcher 侧 typed blocker 的唯一真相源。这些码由 launcher、packager 与恢复面产生，
+# launcher 侧 typed blocker 的唯一真相源。这些码由 launcher、packager、UAT evidence
+# binding 与恢复面产生，
 # 不经过服务端请求，因此不进任何服务 errors.yaml；消费方只允许引用本枚举。
 launch_blockers:
   APP.LAUNCH.compile_failed: 编译未产出可安装制品。
@@ -85,8 +117,12 @@ launch_blockers:
   APP.LAUNCH.receipt_unreadable: attempt receipt 存在但读取失败，读取失败不得当作缺席。
   APP.LAUNCH.receipt_timeout: 等待终态超时且未观测到 typed failure。
   APP.LAUNCH.runtime_dependency_unavailable: 目标 runtime 的必需容器已退出或 unhealthy，编译安装前即阻断。
+  APP.LAUNCH.runtime_config_trust_missing: build-profile trust envelope 缺失或非法，禁止产生可安装制品。
   APP.LAUNCH.runtime_config_missing: 安装后平台私有容器没有可激活或可读取的 runtime package。
   APP.LAUNCH.runtime_config_activation_failed: runtime package 验证、原子写入或 active readback 未完成。
+  APP.LAUNCH.workspace_entrypoint_inactive: 工作区投影存在性、当前终端命令解析或 IDE profile 尚未进入受支持状态。
+  APP.LAUNCH.launch_surface_unsupported: 启动入口不属于 canonical launcher、工作区字面 Flutter 或受控制 IDE profile。
+  APP.UAT.page_artifact_binding_missing: 页面自动化实际安装并启动的 AppArtifact 缺少与同 target canonical launch 的完整身份绑定或逐字段不一致，禁止生成页面通过结果。
   APP.WEB.recovery_unavailable: 恢复 Web 静态面不可达，不得据此生成 launched 或 ready 假证据。
 
 # 原生 runtime config 面（MethodChannel、activation receipt、原生日志）可见错误码的唯一
@@ -271,6 +307,8 @@ schemas:
       - environment
       - buildProfile
       - target
+      - launchProvenance
+      - runtimeConfigSupplyMode
       - packageDigest
       - trustEnvelopeDigest
       - effectiveLaunchManifestDigest
@@ -285,6 +323,8 @@ schemas:
       environment: { type: string, allowed_values: ["", alpha, beta, gamma, prod] }
       buildProfile: { type: string, allowed_values: ["", nonprod, prod] }
       target: { type: string, allowed_values: ["", alpha-local, beta-local, gamma-local, prod-sim, prod-hosted] }
+      launchProvenance: { type: string, allowed_values_ref: app_artifact_manifest.launch_provenances, allow_empty: true }
+      runtimeConfigSupplyMode: { type: string, allowed_values_ref: runtime_config_supply_modes, allow_empty: true }
       packageDigest: { type: string, format: optional_sha256_identity }
       trustEnvelopeDigest: { type: string, format: optional_sha256_identity }
       effectiveLaunchManifestDigest: { type: string, format: optional_sha256_identity }
@@ -296,8 +336,8 @@ schemas:
         items: { type: string, min_length: 1 }
     constraints:
       - receipt 只能由原生 gate 在读取制品内 trust、验证 request/package/manifest/profile/target、完成 CAS 原子写入并回读 active package 后生成；host 回显不构成证据。
-      - status=activated 时 errorCode 与 validationIssues 必须为空、previousActiveDigest 必须等于 request.expectedActiveDigest、activePackageDigest 必须等于 packageDigest，且 environment/buildProfile/target/packageDigest/trustEnvelopeDigest/effectiveLaunchManifestDigest 必须全部非空并与 request 逐字段一致。
-      - status=failed 时 errorCode 必须非空且 validationIssues 必须至少包含该稳定错误码；request 尚可安全解码时身份字段必须与 request 一致，request 缺失或无法解码时身份字段为空，不得伪造；失败不得覆盖上一份成功 active receipt，私有 active package必须保持 CAS 前状态或由 installer 原子回滚。
+      - status=activated 时 errorCode 与 validationIssues 必须为空、previousActiveDigest 必须等于 request.expectedActiveDigest、activePackageDigest 必须等于 packageDigest，且 environment/buildProfile/target/launchProvenance/runtimeConfigSupplyMode/packageDigest/trustEnvelopeDigest/effectiveLaunchManifestDigest 必须全部非空并与 request 的 effectiveLaunchManifest 逐字段一致。
+      - status=failed 时 errorCode 必须非空且 validationIssues 必须至少包含该稳定错误码；request 尚可安全解码时身份字段必须与 request 及其 effectiveLaunchManifest 一致，request 缺失或无法解码时身份字段为空，不得伪造；失败不得覆盖上一份成功 active receipt，私有 active package必须保持 CAS 前状态或由 installer 原子回滚。
       - errorCode 与 validationIssues 的每个成员必须来自 runtime_config_error_codes 闭集。active receipt 自身的缺失、读取 IO 失败与解码失败分别使用 runtime_config_activation_receipt_missing、runtime_config_activation_receipt_read_failed 与 runtime_config_activation_receipt_malformed，不得归入 activation request 错误语义。
       - 记录 failed receipt 时若当前 active digest 读取失败，activePackageDigest 必须保持最后已知 CAS 值（previousActiveDigest），且 validationIssues 必须追加 runtime_config_activation_rollback_failed 表示 CAS 后状态未知；读取失败不得折叠为空 digest 或宣称 active 缺席。
 
@@ -311,10 +351,21 @@ schemas:
       - environment
       - target
       - platform
+      - buildProfile
       - buildMode
       - runMode
+      - launchProvenance
+      - runtimeConfigSupplyMode
       - artifactDigest
+      - runtimeConfigTrustEnvelopeDigest
+      - runtimeConfigPackageDigest
+      - applicationId
+      - flutterVersion
+      - commandResolutionDigest
       - launchDigest
+      - startupTerminalAttemptId
+      - startupTerminalEvidenceDigest
+      - startupTerminalEvidenceRef
       - status
       - transitions
       - warnings
@@ -333,13 +384,24 @@ schemas:
       environment: { type: string, allowed_values: [alpha, beta, gamma, prod] }
       target: { type: string, allowed_values: [alpha-local, beta-local, gamma-local, prod-sim, prod-hosted] }
       platform: { type: string, allowed_values: [android, ios] }
+      buildProfile: { type: string, allowed_values: [nonprod, prod] }
       buildMode: { type: string, allowed_values: [debug, profile, release] }
       runMode: { type: string, allowed_values: [content-live, ui-only, release-artifact] }
-      artifactDigest: { type: string }
-      launchDigest: { type: string }
+      launchProvenance: { type: string, allowed_values_ref: app_artifact_manifest.launch_provenances }
+      runtimeConfigSupplyMode: { type: string, allowed_values_ref: runtime_config_supply_modes }
+      artifactDigest: { type: string, format: optional_sha256_identity }
+      runtimeConfigTrustEnvelopeDigest: { type: string, format: sha256_identity }
+      runtimeConfigPackageDigest: { type: string, format: sha256_identity }
+      applicationId: { type: string, min_length: 1 }
+      flutterVersion: { type: string, min_length: 1 }
+      commandResolutionDigest: { type: string, format: sha256_identity }
+      launchDigest: { type: string, format: optional_sha256_identity }
+      startupTerminalAttemptId: { type: string }
+      startupTerminalEvidenceDigest: { type: string, format: optional_sha256_identity }
+      startupTerminalEvidenceRef: { type: string }
       status:
         type: string
-        allowed_values: [prepared, compiling, compiled, installing, installed, configuring, configured, launching, launched, runtime_degraded, failed, stopped]
+        allowed_values_ref: app_launch_attempt_statuses
       transitions:
         type: array
         items: { type: object }
@@ -365,8 +427,12 @@ schemas:
       nonPromotable: { type: boolean }
     constraints:
       - transitions 只能按 prepared → compiling → compiled → installing → installed → configuring → configured → launching → launched 前进；failed、runtime_degraded 与 stopped 是显式终态，不得倒推或补写 launched。
-      - 编译、安装和启动失败的 firstBlocker 分别为 APP.LAUNCH.compile_failed、APP.LAUNCH.install_failed 与 APP.LAUNCH.launch_failed；无 active package 使用 APP.LAUNCH.runtime_config_missing，runtime package 验证、原子写入或 readback 失败使用 APP.LAUNCH.runtime_config_activation_failed；Prod Debug 必须在 prepared 后以 APP.LAUNCH.prod_debug_forbidden 失败。
-      - ui-only 允许把 runtime、Provider、TLS、transport 与 content readiness 记入 warnings 后继续，但 runtime package/trust 缺失或 activation 失败仍须阻断；content-live 与 release-artifact 不得把同一问题降级为 warning。
+      - prepared/compiling 允许 artifactDigest 为空；写入 compiled transition 时必须在同一次原子回执更新中填入本次 canonical executor 实际产出的 Android APK 或 iOS .app payload sha256，installed transition 前必须在真实安装完成后对同一路径按 AppArtifact payload digest 算法重读且完全相等。出现 compiled 后 artifactDigest 必须始终非空且不可变；产物缺失或不可读以 APP.LAUNCH.compile_failed 阻断，安装前后错配以 APP.LAUNCH.install_failed 阻断，源码、配置、handoff 或 package digest 不得冒充制品摘要。
+      - buildProfile 必须与 environment 满足 launch_policies 和 app_artifact_manifest.build_profiles 的单轨映射；launchProvenance 必须来自 app_artifact_manifest.launch_provenances，runtimeConfigSupplyMode 必须来自 runtime_config_supply_modes。
+      - runtimeConfigTrustEnvelopeDigest/runtimeConfigPackageDigest 必须与同 attempt 的 handoff、制品回读与 activation receipt 一致；applicationId 必须匹配 buildProfile × buildMode 的生成身份，commandResolutionDigest 只记录脱敏后的 SDK/入口解析身份。
+      - startupTerminalAttemptId/startupTerminalEvidenceDigest/startupTerminalEvidenceRef 必须全空或全非空；非空时 evidence 必须是同一 launchAttemptId、artifactDigest、device/applicationId、launchProvenance/runtimeConfigSupplyMode/effectiveLaunchManifestDigest 的 cold startup_safe_terminal/routerShell canonical receipt。严格 app-content-uat 必须先原子绑定该 receipt 才可把 VM attach 推进为 launched；仅有 app.started/debugPort 不构成 launched。
+      - 编译、安装和启动失败的 firstBlocker 分别为 APP.LAUNCH.compile_failed、APP.LAUNCH.install_failed 与 APP.LAUNCH.launch_failed；缺 build-profile trust 使用 APP.LAUNCH.runtime_config_trust_missing，无 active package 使用 APP.LAUNCH.runtime_config_missing，runtime package 验证、原子写入或 readback 失败使用 APP.LAUNCH.runtime_config_activation_failed；Prod Debug 必须在 prepared 后以 APP.LAUNCH.prod_debug_forbidden 失败。
+      - Alpha/Beta/Gamma 的 test_live 下，ui-only 与 content-live 都把 service、Provider、TLS、transport、content、observability、capacity 与 drift readiness 记入 warnings 后继续真实编译、安装、activation 与启动；身份、信任、非法 target、最小 package、工具链、真实编译、设备或 activation 失败仍须阻断。release-artifact、immutable candidate、内容 UAT 与 Prod readiness 不得消费这些 warnings 作为通过。
       - stopped 只表示用户或父进程正常停止已启动会话，不得解释为编译失败，也不得清理 App 或环境数据。
       - prod-sim 的 release-artifact 只允许 Android exact Release emulator artifact；Flutter iOS Simulator 只支持 Debug，iOS Release/Profile 必须以 APP.LAUNCH.ios_release_simulator_unsupported 阻断，不能生成或消费伪 Release 启动回执。
       - firstBlocker 非空时只允许取 launch_blockers 声明的码；不得写入自由文本或服务端错误码。
@@ -384,7 +450,8 @@ schemas:
       - buildProfile
       - target
       - entrypoint
-      - launchMode
+      - launchProvenance
+      - runtimeConfigSupplyMode
       - launchPolicy
       - runtimeConfigPackageDigest
       - runtimeConfigTrustEnvelopeDigest
@@ -396,7 +463,8 @@ schemas:
       buildProfile: { type: string, allowed_values: [nonprod, prod] }
       target: { type: string, allowed_values: [alpha-local, beta-local, gamma-local, prod-sim, prod-hosted] }
       entrypoint: { type: string, const: lib/main_prod.dart }
-      launchMode: { type: string, min_length: 1 }
+      launchProvenance: { type: string, allowed_values_ref: app_artifact_manifest.launch_provenances }
+      runtimeConfigSupplyMode: { type: string, allowed_values_ref: runtime_config_supply_modes }
       launchPolicy: { type: string, allowed_values: [test_live, prod_release] }
       runtimeConfigPackageDigest: { type: string, format: sha256_identity }
       runtimeConfigTrustEnvelopeDigest: { type: string, format: sha256_identity }
@@ -422,7 +490,7 @@ schemas:
       - transport.required=true 只允许 local_transport_targets，且端口集合必须相等，receipt digest 与 consumer lease ID 必须是 sha256 identity。
       - transport.required=false 时端口和本地 transport identity 必须为空；这种 package-only 或未附带设备 transport 的 handoff 不得成为 runtime UAT 证据。
       - prod-hosted 必须令 local transport 为 false，且全部端口与本地 transport identity 为空。
-      - buildProfile、launchPolicy 必须与 environment 满足 launch_policies 和 app_artifact_manifest.build_profiles 的映射；launchMode 只记录启动来源（launch provenance），任何消费方不得据此改变业务行为。
+      - buildProfile、launchPolicy 必须与 environment 满足 launch_policies 和 app_artifact_manifest.build_profiles 的映射；launchProvenance 必须来自 app_artifact_manifest.launch_provenances 且不得改变业务行为，runtimeConfigSupplyMode 必须来自 runtime_config_supply_modes。
       - runtimeConfigPackageDigest 必须等于 handoff 所携带 runtimeConfigPackage 的 digest_contract canonical JSON 摘要。
       - runtimeConfigTrustEnvelopeDigest 必须等于已安装 AppArtifact/Web bootstrap 内匹配 buildProfile 的 runtime_config_trust_envelope 摘要；handoff 只携带摘要，不复制 keyring。
       - 本清单不携带内容 release 身份；内容激活身份只由 Content API 响应在运行时下发。
@@ -436,7 +504,8 @@ schemas:
       - buildProfile
       - target
       - entrypoint
-      - launchMode
+      - launchProvenance
+      - runtimeConfigSupplyMode
       - launchPolicy
       - runtimeConfigPackageDigest
       - runtimeConfigTrustEnvelopeDigest
@@ -452,7 +521,8 @@ schemas:
       buildProfile: { type: string, source: app_effective_launch_manifest.buildProfile }
       target: { type: string, source: app_effective_launch_manifest.target }
       entrypoint: { type: string, source: app_effective_launch_manifest.entrypoint }
-      launchMode: { type: string, source: app_effective_launch_manifest.launchMode }
+      launchProvenance: { type: string, source: app_effective_launch_manifest.launchProvenance }
+      runtimeConfigSupplyMode: { type: string, source: app_effective_launch_manifest.runtimeConfigSupplyMode }
       launchPolicy: { type: string, source: app_effective_launch_manifest.launchPolicy }
       runtimeConfigPackageDigest: { type: string, source: app_effective_launch_manifest.runtimeConfigPackageDigest }
       runtimeConfigTrustEnvelopeDigest: { type: string, source: app_effective_launch_manifest.runtimeConfigTrustEnvelopeDigest }

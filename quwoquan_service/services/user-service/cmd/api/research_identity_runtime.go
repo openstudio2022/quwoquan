@@ -13,6 +13,27 @@ func loadManagedAcceptanceIdentity() (researchapp.ManagedAcceptanceIdentity, err
 	return researchapp.LoadManagedAcceptanceIdentity()
 }
 
+// resolveResearchAccountAllowlist 复用 research identity 授权解析取账号闭集
+// （DEC-032）：授权未启用时返回空闭集且无错误，登录签发不附加 research role；
+// 启用但配置不闭合时 fail closed，与 session/attestation 组合的失败面一致。
+func resolveResearchAccountAllowlist(
+	appEnv string,
+	cfg config,
+) ([]string, error) {
+	authority, err := researchapp.ResolveResearchIdentityAuthority(
+		appEnv,
+		cfg.ResearchIdentity.Enabled,
+		cfg.ResearchIdentity.TTLSeconds,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if !authority.Enabled {
+		return nil, nil
+	}
+	return authority.AccountIDs, nil
+}
+
 func buildResearchSessionHandler(
 	appEnv string,
 	cfg config,

@@ -45,8 +45,12 @@ VM/CI 单测使用：
 ## 本地依赖纯度策略（2026-06-22）
 
 - `quwoquan_app/run.sh` 与 `quwoquan_app/scripts/env/run_flutter_test_guarded.py`
-  统一使用 `flutter pub get --offline`，并以 `flutter run --no-pub` 启动，禁止
+  统一使用 `flutter pub get --offline`，并由 canonical launcher 在内部以
+  `flutter run --no-pub` 启动，禁止
   启动链偷偷联网补依赖。
+- 操作者不得直接执行 `flutter run --no-pub`。Cursor 字面 `flutter run -d <device-id>`
+  必须先经 `make app-activate-flutter-facade`、Reload Window 和新终端
+  `command -v flutter` 校验，由 workspace facade 接管 runtime trust handoff。
 - iOS 侧要求 `ios/Podfile.lock` 与 `ios/Pods/Manifest.lock` 完全一致；若 drift，
   启动脚本直接 fail-closed，而不是在运行时尝试修复 pod graph。
 - Android 自定义上游 AAR（`webrtc-sdk`、`audioswitch`、`livekit noise`）已固定

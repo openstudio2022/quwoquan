@@ -13,7 +13,6 @@ ACTIVE_PATHS = (
     ROOT / "README.md",
     ROOT / "quwoquan_data" / "AGENTS.md",
     ROOT / "quwoquan_ops" / "AGENTS.md",
-    ROOT / ".cursor" / "rules" / "07-ios-native-ux.mdc",
     ROOT / ".agents" / "skills" / "environment-ops" / "SKILL.md",
     ROOT / ".agents" / "skills" / "content-production" / "SKILL.md",
     ROOT / ".github" / "workflows" / "deploy-prod-auto.yml",

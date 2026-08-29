@@ -194,7 +194,13 @@ class CircleStateNotifier extends Notifier<CircleState> {
   Future<void> joinCircle() async {
     final previousStatus = state.joinStatus;
     final previousVersion = state.membershipVersion;
-    final joinPolicy = state.circleData?.joinPolicy ?? CircleJoinPolicy.open;
+    final circle = state.circleData;
+    if (circle == null) {
+      // 详情未到达时没有 joinPolicy 事实可读。替它取 open 会让 approval 圈子
+      // 乐观显示「已加入」而实际只到 pending，也会向 inviteOnly 圈子发出本不该发的请求。
+      return;
+    }
+    final joinPolicy = circle.joinPolicy;
     if (joinPolicy == CircleJoinPolicy.inviteOnly) {
       return;
     }

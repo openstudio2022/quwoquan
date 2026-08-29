@@ -58,6 +58,9 @@ BANNED_PATHS = {
 ALLOWED_OPS_ENVIRONMENT_ROOT_FILES = {
     "commit_gate_sla_verification.json",
     "commit_gate_timing_baseline.json",
+    # 全局跨服务配置默认层：只为服务 schema 已声明的键供值，不引入新键，因此
+    # 不构成配置键的第二真相源。
+    "config-defaults.yaml",
     "data_execution_fleet.json",
     "domain_governance.yaml",
     "local_env_port_manifest.yaml",

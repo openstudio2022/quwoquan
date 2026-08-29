@@ -70,12 +70,9 @@ class AssetGcReportTest(unittest.TestCase):
                 root / ".cursor/skills/dead/SKILL.md",
                 "---\nname: dead\n---\n\n见 .agents/skills/gone/SKILL.md\n",
             )
-            (root / ".claude").mkdir(parents=True)
-            (root / ".claude/skills").mkdir()
             issues = _tool.collect_harness_forks(root)
             self.assertTrue(any("分叉候选" in i for i in issues), issues)
             self.assertTrue(any("死指针" in i for i in issues), issues)
-            self.assertTrue(any(".claude/skills" in i for i in issues), issues)
 
     def test_duplicate_body_between_agents_and_tree_is_reported(self) -> None:
         paragraph = "这是一段足够长的治理正文，" * 10
@@ -96,16 +93,17 @@ class AssetGcReportTest(unittest.TestCase):
             self.assertEqual(report.count("- 无候选"), 3, report)
 
     def test_distill_skill_locks_candidate_structure_and_writeback(self) -> None:
-        """SIT-003 沉淀子句的真相源锁：四字段候选结构、人确认回写、prd/dev 下游。"""
+        """SIT-003 沉淀子句锁定候选结构、人确认与正常下游。"""
         text = (_REPO_ROOT / ".agents/skills/distill/SKILL.md").read_text(
             encoding="utf-8"
         )
-        for token in ("触发场景", "根因层", "建议落点", "gate/check 绑定"):
+        for token in ("触发场景", "根因层", "唯一 owner 层", "gate/check/evidence 绑定"):
             self.assertIn(token, text, f"distill SKILL 缺候选字段「{token}」")
         self.assertIn("人确认", text.replace(" ", ""))
-        self.assertIn("不直接修改任何规则资产", text)
-        self.assertIn("`prd`", text.split("## HANDOFF", 1)[1])
-        self.assertIn("`dev`", text.split("## HANDOFF", 1)[1])
+        self.assertIn("不直接改规则/规格/gate", text)
+        handoff = text.split("## 条件性交接", 1)[1]
+        self.assertIn("prd", handoff)
+        self.assertIn("dev", handoff)
 
     @staticmethod
     def _tmp():

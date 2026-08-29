@@ -100,6 +100,71 @@ func (identity MutableTestLiveOperationIdentity) Validate() error {
 	return nil
 }
 
+// resolveMutableTestLiveBoundary decides which operationBoundary a guard
+// mount must enforce for the current process composition. Absent schema
+// sentinel selects the public boundary; a partial or drifted mutable identity
+// fails closed before any HTTP handler is built.
+func resolveMutableTestLiveBoundary(
+	environment string,
+	lookup LookupEnvironment,
+) (operationBoundary, error) {
+	if lookup == nil {
+		return publicOperationBoundary, fmt.Errorf("runtime identity environment lookup is required")
+	}
+	schema, schemaPresent := lookup(runtimeIdentitySchemaEnv)
+	schema = strings.TrimSpace(schema)
+	if !schemaPresent || schema == "" {
+		for _, name := range mutableTestLiveExclusiveIdentityEnvironment {
+			value, _ := lookup(name)
+			if strings.TrimSpace(value) != "" {
+				return publicOperationBoundary, fmt.Errorf(
+					"mutable test-live operation identity missing %s",
+					runtimeIdentitySchemaEnv,
+				)
+			}
+		}
+		return publicOperationBoundary, nil
+	}
+	values := make(map[string]string, len(mutableTestLiveIdentityEnvironment))
+	values[runtimeIdentitySchemaEnv] = schema
+	for _, name := range mutableTestLiveIdentityEnvironment[1:] {
+		value, _ := lookup(name)
+		value = strings.TrimSpace(value)
+		values[name] = value
+	}
+	for _, name := range mutableTestLiveIdentityEnvironment {
+		if values[name] == "" {
+			return publicOperationBoundary, fmt.Errorf(
+				"mutable test-live operation identity missing %s",
+				name,
+			)
+		}
+	}
+	if values[runtimeNonPromotableEnv] != "true" {
+		return publicOperationBoundary, fmt.Errorf(
+			"mutable test-live non-promotable identity is invalid",
+		)
+	}
+	imageVersion, _ := lookup(runtimeImageVersionEnv)
+	configVersion, _ := lookup(runtimeServiceConfigurationVersionEnv)
+	identity := MutableTestLiveOperationIdentity{
+		Schema:               values[runtimeIdentitySchemaEnv],
+		LaunchPolicy:         values[runtimeLaunchPolicyEnv],
+		NonPromotable:        true,
+		Environment:          strings.TrimSpace(environment),
+		DeclaredEnvironment:  values[runtimeDeclaredEnvironmentEnv],
+		Target:               values[runtimeTargetEnv],
+		MutableStateDigest:   values[runtimeMutableStateDigestEnv],
+		ImageVersion:         strings.TrimSpace(imageVersion),
+		ConfigurationDigest:  values[runtimeConfigurationDigestEnv],
+		RuntimeConfigVersion: strings.TrimSpace(configVersion),
+	}
+	if err := identity.Validate(); err != nil {
+		return publicOperationBoundary, err
+	}
+	return runtimeOperationBoundary, nil
+}
+
 // OperationAuthorizationForRuntime selects the ordinary commercial boundary
 // unless the dedicated mutable test-live schema sentinel is present. Immutable
 // release compositions legitimately carry general runtime environment, target
@@ -111,50 +176,27 @@ func OperationAuthorizationForRuntime(
 	environment string,
 	lookup LookupEnvironment,
 ) (func(http.Handler) http.Handler, error) {
-	if lookup == nil {
-		return nil, fmt.Errorf("runtime identity environment lookup is required")
+	boundary, err := resolveMutableTestLiveBoundary(environment, lookup)
+	if err != nil {
+		return nil, err
 	}
-	schema, schemaPresent := lookup(runtimeIdentitySchemaEnv)
-	schema = strings.TrimSpace(schema)
-	if !schemaPresent || schema == "" {
-		for _, name := range mutableTestLiveExclusiveIdentityEnvironment {
-			value, _ := lookup(name)
-			if strings.TrimSpace(value) != "" {
-				return nil, fmt.Errorf("mutable test-live operation identity missing %s", runtimeIdentitySchemaEnv)
-			}
-		}
-		return RequireGeneratedOperationAuthorization(descriptors), nil
+	return requireGeneratedOperationAuthorization(descriptors, boundary), nil
+}
+
+// EnforceOperationAuthorizationForRuntime 是 EnforceGeneratedOperationAuthorization
+// 的 runtime 身份感知版本：ContractGraph 已登记的 method+path 一律执行 generated
+// authorization，未登记的迁移期路径继续 pass-through。唯一差别在 blocked operation
+// 的边界选择——验证通过的 mutable test-live 身份使用 runtimeOperationBoundary，
+// 让 blocked operation 到达 handler 以产生 readiness 证据；其余组合（含全部
+// immutable release runtime）保持 publicOperationBoundary fail-closed。
+func EnforceOperationAuthorizationForRuntime(
+	descriptors []OperationSecurityDescriptor,
+	environment string,
+	lookup LookupEnvironment,
+) (func(http.Handler) http.Handler, error) {
+	boundary, err := resolveMutableTestLiveBoundary(environment, lookup)
+	if err != nil {
+		return nil, err
 	}
-	values := make(map[string]string, len(mutableTestLiveIdentityEnvironment))
-	values[runtimeIdentitySchemaEnv] = schema
-	for _, name := range mutableTestLiveIdentityEnvironment[1:] {
-		value, _ := lookup(name)
-		value = strings.TrimSpace(value)
-		values[name] = value
-	}
-	for _, name := range mutableTestLiveIdentityEnvironment {
-		if values[name] == "" {
-			return nil, fmt.Errorf("mutable test-live operation identity missing %s", name)
-		}
-	}
-	if values[runtimeNonPromotableEnv] != "true" {
-		return nil, fmt.Errorf("mutable test-live non-promotable identity is invalid")
-	}
-	imageVersion, _ := lookup(runtimeImageVersionEnv)
-	configVersion, _ := lookup(runtimeServiceConfigurationVersionEnv)
-	return RequireGeneratedOperationAuthorizationForTestLive(
-		descriptors,
-		MutableTestLiveOperationIdentity{
-			Schema:               values[runtimeIdentitySchemaEnv],
-			LaunchPolicy:         values[runtimeLaunchPolicyEnv],
-			NonPromotable:        true,
-			Environment:          strings.TrimSpace(environment),
-			DeclaredEnvironment:  values[runtimeDeclaredEnvironmentEnv],
-			Target:               values[runtimeTargetEnv],
-			MutableStateDigest:   values[runtimeMutableStateDigestEnv],
-			ImageVersion:         strings.TrimSpace(imageVersion),
-			ConfigurationDigest:  values[runtimeConfigurationDigestEnv],
-			RuntimeConfigVersion: strings.TrimSpace(configVersion),
-		},
-	)
+	return enforceGeneratedOperationAuthorization(descriptors, boundary), nil
 }

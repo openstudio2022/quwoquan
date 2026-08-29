@@ -117,7 +117,8 @@ void main() {
 
       expect(find.byType(LoginPage), findsOneWidget);
 
-      await tester.tap(find.byIcon(CupertinoIcons.xmark));
+      // REQ-012：根步骤顶栏为返回箭头，箭头即执行宿主关闭策略。
+      await tester.tap(find.byIcon(CupertinoIcons.back));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
 
@@ -148,7 +149,8 @@ void main() {
 
       expect(find.byType(LoginPage), findsOneWidget);
 
-      await tester.tap(find.byIcon(CupertinoIcons.xmark));
+      // REQ-012：根步骤顶栏为返回箭头，箭头即执行宿主关闭策略。
+      await tester.tap(find.byIcon(CupertinoIcons.back));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
 

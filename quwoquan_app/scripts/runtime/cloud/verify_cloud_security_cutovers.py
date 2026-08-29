@@ -7,6 +7,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True
+
 _SCRIPTS_ROOT = next(
     parent
     for parent in Path(__file__).resolve().parents
@@ -185,7 +187,10 @@ def main() -> int:
     require(
         "quwoquan_app/lib/service/realtime_gateway/realtime/connection/adapters/longpoll_transport.dart",
         "RealtimeConnectionCredential.resolveHttp",
-        "_loadCursor(credential.cursorPartition)",
+        "final cursorLoaded = await _loadCursor(",
+        "credential.cursorPartition,",
+        "generation,",
+        "Future<bool> _loadCursor(String partition, int generation)",
         "long poll requires generated realtime operation gateway",
         ".longPoll(timeout:",
     )

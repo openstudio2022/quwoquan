@@ -8,6 +8,7 @@
 - ``references``：入口引用图与脚本间 import 图。
 - ``roles``：脚本角色派生与 orphan 候选判定。
 - ``hygiene``：命名、缓存/临时文件卫生与无 owner tool。
+- ``bytecode_guard``：可直接调用入口的字节码抑制守卫（防源码树 pyc 回潮）。
 - ``structure``：App/Service/Ops/Data 目录结构规则。
 - ``line_budget``：Python 文件行数硬顶（Data scripts 由其自有 600 行门负责）。
 - ``report``：报告组装、CLI 参数与 main 入口。

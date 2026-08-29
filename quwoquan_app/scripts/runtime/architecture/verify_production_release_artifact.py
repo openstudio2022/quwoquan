@@ -13,6 +13,8 @@ import zipfile
 from collections.abc import Iterable
 from pathlib import Path
 
+sys.dont_write_bytecode = True
+
 _SCRIPTS_ROOT = next(
     parent
     for parent in Path(__file__).resolve().parents
@@ -244,13 +246,14 @@ def main() -> int:
                     )
                 for key in (
                     "environment",
+                    "buildProfile",
                     "target",
                     "entrypoint",
-                    "launchMode",
-                    "dartDefinesDigest",
-                    "runtimeConfigDigest",
-                    "recoveryBaseUrl",
-                    "publicWebBaseUrl",
+                    "launchProvenance",
+                    "runtimeConfigSupplyMode",
+                    "launchPolicy",
+                    "runtimeConfigPackageDigest",
+                    "runtimeConfigTrustEnvelopeDigest",
                     "requiresLocalTransport",
                     "transport",
                 ):

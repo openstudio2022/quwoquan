@@ -10,71 +10,160 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-	"time"
 
 	rtauth "quwoquan_service/runtime/auth"
-	accountsecurity "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/accountsecurity"
+	"quwoquan_service/runtime/servicekit"
 )
 
-func TestEntityAccountSecurityAuthorityUsesScopedServiceCredential(t *testing.T) {
-	tokenConfig := entityAccountSecurityTokenConfig()
-	verifier, err := rtauth.NewHS256Verifier(tokenConfig)
+// authority 客户端的构造轨只有一条：servicekit 骨架按服务声明的
+// AuthorityScopes 装配（DEC-028）。本文件因此直接对骨架装配取证，而不是对
+// 服务内的等价构造器——后者没有生产读取点，对它取证证明不了生产行为。
+func entityAuthStack(t *testing.T, baseURL string, timeoutMs int) (*servicekit.AuthStack, error) {
+	t.Helper()
+	t.Setenv("AUTH_JWT_SECRET", strings.Repeat("s", 64))
+	t.Setenv("AUTH_JWT_ISSUER", "quwoquan-auth")
+	t.Setenv("AUTH_JWT_AUDIENCE", "quwoquan-app")
+	t.Setenv("AUTH_JWT_TOKEN_VERSION", "1")
+	t.Setenv("APP_ENV", "alpha")
+	t.Setenv("SERVICE_NAME", "entity-service")
+
+	identity, err := servicekit.ResolveIdentity("entity-service")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("resolve identity: %v", err)
 	}
+	return servicekit.NewAuthStack(identity, servicekit.AuthStackSpec{
+		OperationDescriptors: []rtauth.OperationSecurityDescriptor{{
+			CanonicalOperationID: "entity.homepage.get",
+			ContractGraphSHA256:  strings.Repeat("a", 64),
+			Transport:            "http",
+			Method:               http.MethodGet,
+			PathTemplate:         "/entity/homepages/{homepageId}",
+			OperationKind:        "query",
+			TimeoutMilliseconds:  2000,
+		}},
+		AccountSecurityAuthority: servicekit.AccountSecurityAuthoritySpec{
+			BaseURL:   baseURL,
+			TimeoutMs: timeoutMs,
+			Scopes:    entityDeclaredAuthorityScopes(t),
+		},
+		// entity-service 不提供设备票据认证能力，与 bootstrap.go 的声明一致。
+		SkipDeviceTicketAuth: true,
+	})
+}
+
+// entityDeclaredAuthorityScopes 从 bootstrap.go 读取本服务声明的 scope，
+// 使凭据取证绑定真实声明而不是测试里重抄一份常量——重抄会让声明改动后
+// 测试仍然通过。
+func entityDeclaredAuthorityScopes(t *testing.T) []string {
+	t.Helper()
+	source := readEntityBootstrapSource(t)
+	const marker = "AuthorityScopes:"
+	index := strings.Index(source, marker)
+	if index < 0 {
+		t.Fatal("bootstrap.go must declare AuthorityScopes")
+	}
+	line := source[index:]
+	if end := strings.Index(line, "\n"); end >= 0 {
+		line = line[:end]
+	}
+	open := strings.Index(line, "{")
+	close := strings.LastIndex(line, "}")
+	if open < 0 || close <= open {
+		t.Fatalf("AuthorityScopes declaration is not a literal slice: %q", line)
+	}
+	var scopes []string
+	for _, raw := range strings.Split(line[open+1:close], ",") {
+		if scope := strings.Trim(strings.TrimSpace(raw), `"`); scope != "" {
+			scopes = append(scopes, scope)
+		}
+	}
+	if len(scopes) == 0 {
+		t.Fatalf("AuthorityScopes declaration is empty: %q", line)
+	}
+	return scopes
+}
+
+func readEntityBootstrapSource(t *testing.T) string {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join(entityServiceRoot(t), "cmd", "api", "bootstrap.go"))
+	if err != nil {
+		t.Fatalf("read entity bootstrap: %v", err)
+	}
+	return string(raw)
+}
+
+func entityServiceRoot(t *testing.T) string {
+	t.Helper()
+	_, source, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("resolve entity-service test source")
+	}
+	return filepath.Clean(filepath.Join(filepath.Dir(source), "../../../../"))
+}
+
+func TestEntityAccountSecurityAuthorityUsesScopedServiceCredential(t *testing.T) {
+	var verifier *rtauth.Verifier
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/internal/user/accounts/entity-owner/security" {
-			t.Fatalf("path=%q", r.URL.Path)
+			t.Errorf("path=%q", r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+			return
 		}
 		token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 		claims, err := verifier.Verify(token)
 		if err != nil {
-			t.Fatalf("verify service credential: %v", err)
+			t.Errorf("verify service credential: %v", err)
+			w.WriteHeader(http.StatusUnauthorized)
+			return
 		}
 		if claims.Subject != "service:entity-service" ||
 			!hasScope(strings.Fields(claims.Scope), "user.account.security.read") {
-			t.Fatalf("claims=%+v", claims)
+			t.Errorf("claims=%+v", claims)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"accountState":"active","authEpoch":4}`))
 	}))
 	defer server.Close()
 
-	authority, err := accountsecurity.NewAuthority(
-		tokenConfig,
-		accountsecurity.Config{BaseURL: server.URL, TimeoutMS: 250},
-	)
+	stack, err := entityAuthStack(t, server.URL, 250)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("auth stack: %v", err)
 	}
-	if _, err := authority.ReadAccountSecurity(context.Background(), "entity-owner"); err != nil {
+	verifier = stack.AccessVerifier
+	if stack.AccountSecurityAuthority == nil {
+		t.Fatal("骨架必须为 entity-service 装配 authority 客户端")
+	}
+	if _, err := stack.AccountSecurityAuthority.ReadAccountSecurity(
+		context.Background(), "entity-owner",
+	); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestEntityAccountSecurityAuthorityFailsStartupForInvalidConfig(t *testing.T) {
-	tokenConfig := entityAccountSecurityTokenConfig()
-	for _, config := range []accountsecurity.Config{
-		{TimeoutMS: 250},
-		{BaseURL: "https://user-service.internal/path", TimeoutMS: 250},
-		{BaseURL: "https://user-service.internal", TimeoutMS: 0},
-	} {
-		if _, err := accountsecurity.NewAuthority(tokenConfig, config); err == nil {
-			t.Fatalf("invalid authority config=%+v must fail", config)
-		}
+	cases := map[string]struct {
+		baseURL   string
+		timeoutMs int
+	}{
+		"missing base url": {baseURL: "", timeoutMs: 250},
+		"base url carries a path": {
+			baseURL: "https://user-service.internal/path", timeoutMs: 250,
+		},
+		"non-positive timeout": {baseURL: "https://user-service.internal", timeoutMs: 0},
+	}
+	for name, testCase := range cases {
+		t.Run(name, func(t *testing.T) {
+			if _, err := entityAuthStack(t, testCase.baseURL, testCase.timeoutMs); err == nil {
+				t.Fatal("非法 authority 配置必须让装配失败")
+			}
+		})
 	}
 }
 
 func TestEntityAccountSecurityAuthorityUsesDeploymentOriginForHostedEnvironments(
 	t *testing.T,
 ) {
-	_, source, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("resolve entity-service test source")
-	}
-	serviceRoot := filepath.Clean(
-		filepath.Join(filepath.Dir(source), "../../../../"),
-	)
+	serviceRoot := entityServiceRoot(t)
 	expectedOrigins := map[string]string{
 		"gamma": "http://user-service:18081",
 		"prod":  "http://user-service:18081",
@@ -107,13 +196,7 @@ func TestEntityAccountSecurityAuthorityUsesDeploymentOriginForHostedEnvironments
 func TestEntityAccountSecurityAuthorityUsesTargetTopologyForLocalEnvironments(
 	t *testing.T,
 ) {
-	_, source, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("resolve entity-service test source")
-	}
-	serviceRoot := filepath.Clean(
-		filepath.Join(filepath.Dir(source), "../../../../"),
-	)
+	serviceRoot := entityServiceRoot(t)
 	for _, environment := range []string{"alpha", "beta"} {
 		configPath := filepath.Join(
 			serviceRoot,
@@ -155,18 +238,6 @@ func TestEntityAccountSecurityAuthorityUsesTargetTopologyForLocalEnvironments(
 		if !strings.Contains(string(raw), expected) {
 			t.Fatalf("%s does not derive account authority from target topology", path)
 		}
-	}
-}
-
-func entityAccountSecurityTokenConfig() rtauth.TokenConfig {
-	return rtauth.TokenConfig{
-		Secret:       []byte("entity-account-security-test-secret-at-least-32-bytes"),
-		Issuer:       "quwoquan-test",
-		Audience:     "quwoquan-test",
-		Type:         rtauth.TokenTypeAccess,
-		TokenVersion: 1,
-		TTL:          time.Minute,
-		ClockSkew:    time.Second,
 	}
 }
 

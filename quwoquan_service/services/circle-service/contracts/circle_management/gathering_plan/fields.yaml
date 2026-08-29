@@ -174,8 +174,10 @@ types:
 enums:
   PlanItemKind:
     values: [agenda, place, route_segment, task, checklist, note]
+    client_unknown_member: unknown
   PlanTravelMode:
     values: [walk, bicycle, transit, drive, ferry, other]
+    client_unknown_member: unknown
   PlanAcknowledgementMode:
     values: [none, affected_participations]
   PlanAcknowledgementStatus:

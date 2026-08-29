@@ -353,6 +353,19 @@ def reachability_snapshot(
         "releaseIdentityIncidentExecutionRefs": sorted(incident_execution_refs),
         "reviewedClosureAdoptionSourceReleaseRefs": sorted(adoption_release_refs),
         "reviewedClosureAdoptionExecutionRefs": sorted(adoption_execution_refs),
+        # The terminal state `GWT-007` asks the plan to record: these executions
+        # are referenced by evidence that cannot be rewritten, and the tombstone
+        # is what lets the plan stay executable instead of failing on them.
+        "reclaimedExecutions": [
+            {
+                "executionId": tombstone.execution_id,
+                "reclaimReason": tombstone.reason.value,
+                "tombstoneRef": tombstone.ref,
+            }
+            for _execution_id, tombstone in sorted(
+                graph.reclaimed_execution_tombstones.items()
+            )
+        ],
         "referenceGraph": graph.document(),
     }
 

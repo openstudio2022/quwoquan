@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import sys
 
+sys.dont_write_bytecode = True
+
 from .secret_material import _print_shell_environment
 
 if __name__ == "__main__":

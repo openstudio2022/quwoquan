@@ -562,7 +562,7 @@ func (s *ConversationService) createDirectConversation(
 		OriginIntersectionSnapshot: req.OriginIntersectionSnapshot,
 		MaxGroupSize:               maxGroupSize,
 		ReceiptEnabled:             receiptEnabled,
-		Status:                     "active",
+		Status:                     model.ConversationStatusActive,
 		CreatedAt:                  now,
 		UpdatedAt:                  now,
 	}

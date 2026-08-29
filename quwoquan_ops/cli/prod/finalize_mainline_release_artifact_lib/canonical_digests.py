@@ -11,6 +11,7 @@ from typing import Any
 from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
     APPLICATION_PACKAGES,
     DIGEST_PATTERN,
+    DISTRIBUTION_EVIDENCE_PATHS,
     ENVIRONMENTS,
     SCHEMA,
 )
@@ -109,6 +110,10 @@ def _candidate_projection(payload: dict[str, Any]) -> dict[str, Any]:
     source = payload.get("source")
     artifacts = payload.get("environmentArtifacts")
     applications = payload.get("applicationPackages")
+    distributions = {
+        evidence_key: payload.get(evidence_key)
+        for evidence_key in DISTRIBUTION_EVIDENCE_PATHS
+    }
     provider = payload.get("providerEvidence")
     test = payload.get("testEvidence")
     contract_graph = payload.get("contractGraphDigest")
@@ -121,6 +126,12 @@ def _candidate_projection(payload: dict[str, Any]) -> dict[str, Any]:
         APPLICATION_PACKAGES
     ):
         raise ValueError("candidate App build product material is incomplete")
+    if any(
+        not isinstance(descriptor, dict)
+        or DIGEST_PATTERN.fullmatch(str(descriptor.get("digest") or "")) is None
+        for descriptor in distributions.values()
+    ):
+        raise ValueError("candidate distribution evidence is incomplete")
     if not isinstance(provider, dict) or not isinstance(test, dict):
         raise ValueError("candidate qualification material is incomplete")
     if DIGEST_PATTERN.fullmatch(str(contract_graph or "")) is None:
@@ -174,6 +185,10 @@ def _candidate_projection(payload: dict[str, Any]) -> dict[str, Any]:
         },
         "environmentArtifacts": projected_artifacts,
         "applicationPackages": projected_applications,
+        "distributionEvidence": {
+            evidence_key: {"digest": descriptor["digest"]}
+            for evidence_key, descriptor in sorted(distributions.items())
+        },
         "contractGraphDigest": contract_graph,
         "providerEvidence": {"digest": provider.get("digest")},
         "testEvidence": {

@@ -234,7 +234,7 @@ def build_test_handoff_fixture(
     environment: str,
     target: str,
     *,
-    launch_mode: str,
+    launch_provenance: str,
     extra_arguments: tuple[str, ...] = (),
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     contract = launcher_module.load_launch_manifest_contract()
@@ -244,8 +244,8 @@ def build_test_handoff_fixture(
             environment,
             "--target",
             target,
-            "--launch-mode",
-            launch_mode,
+            "--launch-provenance",
+            launch_provenance,
             *extra_arguments,
         ]
     )
@@ -271,14 +271,14 @@ def build_test_handoff(
     environment: str,
     target: str,
     *,
-    launch_mode: str,
+    launch_provenance: str,
     extra_arguments: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     handoff, _ = build_test_handoff_fixture(
         launcher_module,
         environment,
         target,
-        launch_mode=launch_mode,
+        launch_provenance=launch_provenance,
         extra_arguments=extra_arguments,
     )
     return handoff

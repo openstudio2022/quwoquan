@@ -13,7 +13,10 @@ from typing import Any, Protocol
 from content.source.research.plan_state import _source
 from core.data_issue import DataIssue
 from core.schema import assert_valid
-from core.source_attribution import canonical_source_attribution
+from core.source_attribution import (
+    canonical_source_attribution,
+    derived_modifications_value,
+)
 
 
 EVIDENCE_SCHEMA = "quwoquan.content.article_source_discovery_evidence"
@@ -58,6 +61,8 @@ def public_article_source_attribution(
             "propertyReleaseStatus": "not_required",
             "collectedAt": captured_at,
             "takedownPolicy": "remove_on_verified_rights_or_source_dispute",
+            # 公共文章页承载的是正文事实引用，本身不落媒体字节，因此没有衍生修改。
+            "derivedModifications": derived_modifications_value(),
         }
     )
 

@@ -139,7 +139,7 @@ func releaseMediaClosureFixture(
 
 func TestReleaseMediaAuthorityClosesAllGeoContentCarriers(t *testing.T) {
 	root, expected := releaseMediaClosureFixture(t)
-	assets, err := LoadReleaseMediaAssets(root, "release-geo-media")
+	assets, err := LoadReleaseMediaAssets(root, "release-geo-media", "commercial")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -293,6 +293,7 @@ func TestReleaseMediaAuthorityRejectsBrokenRightsClosure(t *testing.T) {
 			if _, err := LoadReleaseMediaAssets(
 				root,
 				"release-geo-media",
+				"commercial",
 			); err == nil {
 				t.Fatal("broken rights closure must fail closed")
 			}

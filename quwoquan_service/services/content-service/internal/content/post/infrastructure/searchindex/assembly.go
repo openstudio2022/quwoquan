@@ -227,6 +227,9 @@ func ApplyESEnvOverrides(cfg *ESConfig) {
 	if cfg == nil {
 		return
 	}
+	// endpoints 只覆盖地址，不改写 Enabled：启用与否只由 SEARCH_ES_ENABLED 声明。
+	// 让地址在场顺带打开开关会让 Enabled 不再是它自己的真相源，注入顺序一变，
+	// 一个显式的 false 就被地址静默翻成 true。
 	if v := strings.TrimSpace(os.Getenv("SEARCH_ES_ENDPOINTS")); v != "" {
 		parts := strings.Split(v, ",")
 		eps := make([]string, 0, len(parts))
@@ -236,7 +239,6 @@ func ApplyESEnvOverrides(cfg *ESConfig) {
 			}
 		}
 		cfg.Endpoints = eps
-		cfg.Enabled = true
 	}
 	if v := strings.TrimSpace(os.Getenv("SEARCH_ES_USERNAME")); v != "" {
 		cfg.Username = v

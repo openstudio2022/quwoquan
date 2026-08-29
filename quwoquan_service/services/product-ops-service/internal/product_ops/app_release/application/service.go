@@ -53,14 +53,14 @@ type VersionQuery struct {
 }
 
 type VersionResult struct {
-	Platform                string `json:"platform"`
-	LatestVersion           string `json:"latestVersion"`
-	LatestBuild             string `json:"latestBuild"`
-	MinimumSupportedVersion string `json:"minimumSupportedVersion"`
-	MinimumSupportedBuild   string `json:"minimumSupportedBuild"`
-	UpdateState             string `json:"updateState"`
-	UpdateURL               string `json:"updateUrl"`
-	RecoveryURL             string `json:"recoveryUrl"`
+	Platform                string  `json:"platform"`
+	LatestVersion           string  `json:"latestVersion"`
+	LatestBuild             string  `json:"latestBuild"`
+	MinimumSupportedVersion string  `json:"minimumSupportedVersion"`
+	MinimumSupportedBuild   string  `json:"minimumSupportedBuild"`
+	UpdateState             string  `json:"updateState"`
+	UpdateURL               *string `json:"updateUrl"`
+	RecoveryURL             string  `json:"recoveryUrl"`
 }
 
 type Service struct {
@@ -141,9 +141,17 @@ func (s *Service) Version(query VersionQuery) (VersionResult, error) {
 		MinimumSupportedVersion: release.MinimumSupportedVersion,
 		MinimumSupportedBuild:   release.MinimumSupportedBuild,
 		UpdateState:             updateState,
-		UpdateURL:               release.UpdateURL,
+		UpdateURL:               publicRecoveryUpdateURL(query.Platform, release),
 		RecoveryURL:             release.RecoveryURL,
 	}, nil
+}
+
+func publicRecoveryUpdateURL(platform string, release Release) *string {
+	if platform == PlatformIOS {
+		return nil
+	}
+	updateURL := strings.TrimSpace(release.UpdateURL)
+	return &updateURL
 }
 
 func (s *Service) Release(platform string) (Release, bool) {

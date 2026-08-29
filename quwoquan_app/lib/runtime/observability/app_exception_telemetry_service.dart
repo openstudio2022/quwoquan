@@ -65,7 +65,14 @@ class AppExceptionTelemetryService implements ExceptionTelemetryPort {
   }) async {
     final logger = _logger;
     if (logger == null) return;
-    final fingerprint = _fingerprint(source, exceptionText, stackText);
+    final fingerprint = _fingerprint(
+      source: source,
+      exceptionText: exceptionText,
+      stackText: stackText,
+      operationId: operationId,
+      runtimeFailure: runtimeFailure,
+      exceptionType: exceptionType,
+    );
     if (!_rememberFingerprint(fingerprint)) return;
     final resolvedPage = pageName.trim().isEmpty || pageName == 'app'
         ? AppPageContextStore.instance.pageName
@@ -156,17 +163,27 @@ class AppExceptionTelemetryService implements ExceptionTelemetryPort {
     return true;
   }
 
-  /// 指纹基于脱敏归一化后的方法栈（而非原始 stack 文本），使同一故障在不同
-  /// 时刻/路径/内存地址下聚合为同一指纹，与 AppRuntimeDiagnostics 的
-  /// stack-identity 语义对齐。
-  String _fingerprint(String source, String exceptionText, String stackText) =>
-      sha256
-          .convert(
-            utf8.encode(
-              '$source\n$exceptionText\n${_methodStack(stackText).join('\n')}',
-            ),
-          )
-          .toString();
+  String _fingerprint({
+    required String source,
+    required String exceptionText,
+    required String stackText,
+    required String operationId,
+    required RuntimeFailureBase? runtimeFailure,
+    required String exceptionType,
+  }) {
+    final normalizedType = exceptionType.trim();
+    final normalizedFailureCode = runtimeFailure?.code.trim() ?? '';
+    final errorIdentity = normalizedType.isNotEmpty
+        ? '$normalizedType\n$normalizedFailureCode\n${operationId.trim()}'
+        : exceptionText;
+    return sha256
+        .convert(
+          utf8.encode(
+            '$source\n$errorIdentity\n${_methodStack(stackText).join('\n')}',
+          ),
+        )
+        .toString();
+  }
 
   List<String> _methodStack(String stackText) {
     final methods = <String>[];

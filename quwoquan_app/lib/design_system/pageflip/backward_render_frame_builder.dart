@@ -75,7 +75,7 @@ class _BackwardVisualGeometry {
 /// Builds a backward [StPageFlipRenderFrame] with BACK semantic direction and
 /// forward-isomorphic visual geometry in portrait mode.
 ///
-/// 路线 B 主线（参见 `.cursor/rules/12-pageflip-backward-mainline.mdc`）：
+/// 路线 B 主线（参见 dual-rail-discovery-redesign DEC-002）：
 /// builder 不再产出任何派生多边形（previousFoldSurfacePolygon/previousFront
 /// FoldPolygon/previousBackFoldPolygon/currentResidualPolygon 等）。portrait
 /// BACK 的 sheet/current/F/E 使用 forward-isomorphic calculation，页面绑定和

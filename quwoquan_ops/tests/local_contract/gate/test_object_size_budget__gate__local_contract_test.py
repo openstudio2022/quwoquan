@@ -159,12 +159,18 @@ class ObjectSizeBudgetGateLocalContractTest(unittest.TestCase):
             self.assertEqual(module.object_carrier("posts", "article/攻略/标题/1"), "article")
 
     def test_video_carrier_gets_the_larger_budget(self) -> None:
-        """一个对象是一份消费者价值，编码轨道是 video 独有的成本，不能外溢到图文。"""
+        """一个对象是一份消费者价值，编码轨道是 video 独有的成本，不能外溢到图文。
+
+        取值本身不在这里声明：门禁只能经 ``object_storage_budget_bytes`` 从
+        ``media_processing.policy.yaml`` 取值，本例钉的是「载体分档确实生效」，
+        而不是把同一批数字在测试里再抄一遍变成第二真相源。
+        """
 
         with self._sandbox() as (module, sandbox):
             self.assertEqual(module.MEBIBYTE, MEBIBYTE)
-            self.assertEqual(module.VIDEO_OBJECT_BUDGET_BYTES, 50 * MEBIBYTE)
-            self.assertEqual(module.DEFAULT_OBJECT_BUDGET_BYTES, 10 * MEBIBYTE)
+            declared_video = module.object_storage_budget_bytes("video")
+            declared_default = module.object_storage_budget_bytes("default")
+            self.assertGreater(declared_video, declared_default)
             _publish_object(sandbox, "posts/video/体验/标题/1", documents={"post.json": "{}"})
             _publish_object(sandbox, "posts/image/画报/标题/1", documents={"post.json": "{}"})
             _publish_object(sandbox, "entities/地点/景区/峨眉山", documents={"entity.json": "{}"})
@@ -173,9 +179,9 @@ class ObjectSizeBudgetGateLocalContractTest(unittest.TestCase):
             entity, _ = self._closure(
                 module, sandbox, "entities/地点/景区/峨眉山", kind="entities"
             )
-            self.assertEqual(video.budget_bytes, 50 * MEBIBYTE)
-            self.assertEqual(image.budget_bytes, 10 * MEBIBYTE)
-            self.assertEqual(entity.budget_bytes, 10 * MEBIBYTE)
+            self.assertEqual(video.budget_bytes, declared_video)
+            self.assertEqual(image.budget_bytes, declared_default)
+            self.assertEqual(entity.budget_bytes, declared_default)
 
     def test_duplicate_reference_to_one_body_is_counted_once(self) -> None:
         """同一份内容在一个对象内被引用两次是引用语义缺陷，不该在这里换来双倍预算。"""

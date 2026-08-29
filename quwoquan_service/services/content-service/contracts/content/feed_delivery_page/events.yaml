@@ -11,6 +11,7 @@ events:
   - personaId
   - scenario
   - windowId
+  - experimentBucket
   - modelBucket
   - modelChannel
   - modelReleaseId

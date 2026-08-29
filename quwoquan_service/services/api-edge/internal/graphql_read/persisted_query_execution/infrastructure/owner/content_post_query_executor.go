@@ -40,7 +40,7 @@ type contentBundleBinding struct {
 
 var contentBundleBindings = map[string]contentBundleBinding{
 	"ContentPostDetailBase": newContentBundleBinding(
-		"ContentPostDetailBase", "content.post.GetPost", "3525412614f94647191c1fead96cc6da3bdc452bf0bec9edd92af4793aed3110",
+		"ContentPostDetailBase", "content.post.GetPost", "3a73f535735fcbb64f7de0db524e9dab2ca1f41d7f1fec91c68053dfde5bc80f",
 		"contentPostDetailBase", []string{"article", "image", "micro", "video"}, baseResponseSpec(),
 	),
 	"ContentPostDetailSemantic": newContentBundleBinding(
@@ -266,7 +266,36 @@ func validateEntry(entry domain.Entry) (contentBundleBinding, error) {
 		len(entry.ObjectIDs) != 1 || entry.ObjectIDs[0] != contentPostObjectID {
 		return contentBundleBinding{}, errors.New("persisted query entry is not an exact content.post GetPost bundle binding")
 	}
+	if err := validateSelectedFields(entry, binding.response); err != nil {
+		return contentBundleBinding{}, err
+	}
 	return binding, nil
+}
+
+func validateSelectedFields(entry domain.Entry, response objectSpec) error {
+	if entry.AppClientBundle == nil {
+		return errors.New("persisted query entry is missing its app client selectedFields binding")
+	}
+	selected := entry.AppClientBundle.SelectedFields
+	if len(selected) != len(response.fields) {
+		return errors.New("persisted query selectedFields do not match the exact owner response field set")
+	}
+	seen := make(map[string]struct{}, len(selected))
+	for _, field := range selected {
+		if _, duplicate := seen[field]; duplicate {
+			return errors.New("persisted query selectedFields contain a duplicate field")
+		}
+		seen[field] = struct{}{}
+		if _, exists := response.fields[field]; !exists {
+			return fmt.Errorf("persisted query selectedFields contain unbound owner response field %s", field)
+		}
+	}
+	for field := range response.fields {
+		if _, exists := seen[field]; !exists {
+			return fmt.Errorf("persisted query selectedFields omit owner response field %s", field)
+		}
+	}
+	return nil
 }
 
 func validateVariables(variables map[string]any) (string, error) {

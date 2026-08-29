@@ -25,6 +25,11 @@ APP_LAUNCHER_HANDOFF_BUILDER = (
 PATROL_TEST_DIRECTORY = "test/patrol"
 PATROL_ANDROID_PACKAGE = "com.quwoquan.testhost.patrol"
 PATROL_IOS_BUNDLE_ID = "com.quwoquan.testhost.patrol"
+# 宿主的 activation 冷启动壳。生产壳还要接 launch screen、启动健康与 Flutter 引擎，宿主壳
+# 只消费一次 activation 请求，因此 FQCN 不同；由此处显式交出，不由包名反推。
+PATROL_ANDROID_ACTIVATION_COMPONENT = (
+    "com.quwoquan.testhost.patrol.RuntimeConfigActivationActivity"
+)
 DEFAULT_REPORT = REPO_ROOT / ".qwq_output" / "env" / "repo" / "runs" / "device-matrix" / "environment-smoke" / "report.json"
 DEFAULT_TARGET = (
     "test/user_acceptance/journeys/home_video_playback/"
@@ -164,7 +169,8 @@ PROVIDER_CONFORMANCE_RUNTIME_IDENTITY_MUTABLE_FIELDS = frozenset(
 CANONICAL_TEST_LIVE_DART_DEFINE_KEYS = frozenset(
     {
         "APP_RUNTIME_ENV",
-        "QWQ_APP_LAUNCH_MODE",
+        "QWQ_APP_LAUNCH_PROVENANCE",
+        "QWQ_RUNTIME_CONFIG_SUPPLY_MODE",
         "APP_LAUNCH_POLICY",
         "CLOUD_GATEWAY_BASE_URL",
         "APP_LEGAL_BASE_URL",

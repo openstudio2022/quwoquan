@@ -30,6 +30,7 @@ from quwoquan_data.tests.local_contract.source.test_scale_source_pool__milestone
 from quwoquan_data.tests.local_contract.source.test_scale_source_pool__milestone_readiness__contract__local_contract_test import (
     _candidate as _scale_pool_candidate,
 )
+from support.scale_source_pool_projection_fixture import _media_admission_row
 
 
 CARRIERS = ("homepage", "article", "image", "video")
@@ -453,6 +454,15 @@ def _scale_pool_fixture(
     *,
     source_revision: str,
 ) -> tuple[dict[str, object], dict[str, object], str, dict[str, dict[str, object]], str]:
+    # 媒体候选引用的 admission receipt 必须真实铸出：池的深校验把 receipt 与引用它的
+    # 候选逐字段比对，只写指针的候选在 plan 构造期无声通过、到绑定期才整批 shortfall。
+    # receipt 冻结铸出时的 source identity，因此按本 fixture 自己派生的 revision 铸。
+    identity = {
+        "sourceRevision": source_revision,
+        "sourceDigest": SOURCE_DIGEST,
+        "entityCatalogDigest": CATALOG_DIGEST,
+    }
+    evidence_root = output / "data/local/workspace/scale-source-pools/m100/evidence"
     candidates: list[dict[str, object]] = []
     for carrier in ("homepage", "article"):
         candidates.extend(
@@ -466,11 +476,26 @@ def _scale_pool_fixture(
         + ["Wikimedia Commons"] * 30
     )
     candidates.extend(
-        _scale_pool_candidate("image", index, provider=provider)
+        _media_admission_row(
+            evidence_root=evidence_root,
+            carrier="image",
+            index=index,
+            provider=provider,
+            object_ref=f"posts/image/画报/image-{index:05d}/1",
+            identity=identity,
+        )
         for index, provider in enumerate(image_providers)
     )
     candidates.extend(
-        _scale_pool_candidate("video", index, provider="Pexels Videos")
+        _media_admission_row(
+            evidence_root=evidence_root,
+            carrier="video",
+            index=index,
+            provider="Pexels Videos",
+            object_ref=f"posts/video/旅行/video-{index:05d}/1",
+            identity=identity,
+            comparison_count=100,
+        )
         for index in range(100)
     )
     for row in candidates:
@@ -499,7 +524,6 @@ def _scale_pool_fixture(
     )
     pool_plan_path = output / "data/local/workspace/scale-source-pools/m100/plan.json"
     _write(pool_plan_path, pool_plan)
-    evidence_root = output / "data/local/workspace/scale-source-pools/m100/evidence"
     for relative, body in EVIDENCE_PAYLOADS.values():
         destination = evidence_root / relative
         destination.parent.mkdir(parents=True, exist_ok=True)

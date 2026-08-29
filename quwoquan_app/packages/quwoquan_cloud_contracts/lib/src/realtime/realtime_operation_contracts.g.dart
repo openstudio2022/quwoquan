@@ -1,5 +1,5 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: 05b1683f93feb5234ad8184f318b5d32e9f340e4d7e36d1e833581cfc400702c
+// ContractGraph SHA256: 2ba8995ae51f9f431ebc75e30f64d31285cc4cfb724f0ef1d8473c11011a5469
 
 library;
 
@@ -11,15 +11,15 @@ export "../generated/realtime/realtime_event_catalog.g.dart";
 part '../generated/requests/realtime/realtime_operation_contracts.g.requests.g.dart';
 
 final class ConnectionTicket {
-  const ConnectionTicket({
-    required this.ticket,
-    required this.expiresAt,
-  });
+  const ConnectionTicket({required this.ticket, required this.expiresAt});
 
   final String ticket;
   final DateTime expiresAt;
 
-  factory ConnectionTicket.fromWire(Map<String, Object?> map, [String path = "ConnectionTicket"]) {
+  factory ConnectionTicket.fromWire(
+    Map<String, Object?> map, [
+    String path = "ConnectionTicket",
+  ]) {
     _rejectUnknownFields(map, const <String>{"ticket", "expiresAt"}, path);
     return ConnectionTicket(
       ticket: _requiredString(map["ticket"], '$path.ticket'),
@@ -44,12 +44,29 @@ final class LongPollResponse {
   final String nextCursor;
   final bool transportResumed;
 
-  factory LongPollResponse.fromWire(Map<String, Object?> map, [String path = "LongPollResponse"]) {
-    _rejectUnknownFields(map, const <String>{"events", "nextCursor", "transportResumed"}, path);
+  factory LongPollResponse.fromWire(
+    Map<String, Object?> map, [
+    String path = "LongPollResponse",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "events",
+      "nextCursor",
+      "transportResumed",
+    }, path);
     return LongPollResponse(
-      events: List<RealtimeEventEnvelope>.unmodifiable(_requiredList(map["events"], '$path.events').asMap().entries.map((entry) => RealtimeEventEnvelope.fromWire(_requiredObject(entry.value, '$path.events' + '[${entry.key}]'), '$path.events' + '[${entry.key}]'))),
+      events: List<RealtimeEventEnvelope>.unmodifiable(
+        _requiredList(map["events"], '$path.events').asMap().entries.map(
+          (entry) => RealtimeEventEnvelope.fromWire(
+            _requiredObject(entry.value, '$path.events' + '[${entry.key}]'),
+            '$path.events' + '[${entry.key}]',
+          ),
+        ),
+      ),
       nextCursor: _requiredString(map["nextCursor"], '$path.nextCursor'),
-      transportResumed: _requiredBool(map["transportResumed"], '$path.transportResumed'),
+      transportResumed: _requiredBool(
+        map["transportResumed"],
+        '$path.transportResumed',
+      ),
     );
   }
 
@@ -61,10 +78,16 @@ final class LongPollResponse {
 }
 
 ConnectionTicket decodeConnectionTicket(Object? response) =>
-    ConnectionTicket.fromWire(_requiredObject(response, "ConnectionTicket"), "ConnectionTicket");
+    ConnectionTicket.fromWire(
+      _requiredObject(response, "ConnectionTicket"),
+      "ConnectionTicket",
+    );
 
 LongPollResponse decodeLongPollResponse(Object? response) =>
-    LongPollResponse.fromWire(_requiredObject(response, "LongPollResponse"), "LongPollResponse");
+    LongPollResponse.fromWire(
+      _requiredObject(response, "LongPollResponse"),
+      "LongPollResponse",
+    );
 
 void decodeEmptyResponse(Object? response) {
   if (response != null) {
@@ -95,7 +118,9 @@ void _rejectUnknownFields(
   final unknown = value.keys.where((key) => !allowed.contains(key)).toList()
     ..sort();
   if (unknown.isNotEmpty) {
-    throw FormatException('$path contains unknown fields: ${unknown.join(', ')}');
+    throw FormatException(
+      '$path contains unknown fields: ${unknown.join(', ')}',
+    );
   }
 }
 

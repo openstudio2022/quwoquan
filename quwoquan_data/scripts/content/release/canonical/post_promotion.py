@@ -246,6 +246,7 @@ def promote_post_object(
             tree_integrity_stats(canonical_post)["merkleRoot"]
         ),
         "objectClosureDigest": str(applied.get("objectClosureDigest") or ""),
+        "admissionResult": "replayed" if canonical_ready else "appended",
     }
 
 

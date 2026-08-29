@@ -46,6 +46,7 @@ type GetRankedRecommendationPageQuery struct {
 type RankedRecommendationPage struct {
 	WindowId              string                     `json:"windowId"`
 	Scenario              string                     `json:"scenario"`
+	ExperimentBucket      string                     `json:"experimentBucket"`
 	ModelBucket           string                     `json:"modelBucket"`
 	ModelChannel          *string                    `json:"modelChannel,omitempty"`
 	ModelReleaseId        *string                    `json:"modelReleaseId,omitempty"`

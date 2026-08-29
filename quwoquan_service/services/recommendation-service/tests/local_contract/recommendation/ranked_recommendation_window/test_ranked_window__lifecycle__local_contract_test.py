@@ -45,6 +45,7 @@ class _Store:
 
 def _ranking(count: int = 5) -> RankingResult:
     return RankingResult(
+        experiment_bucket="model",
         model_bucket="model",
         model_channel="champion",
         model_release_id="release-001",
@@ -99,6 +100,7 @@ def test_ranked_window_has_fixed_expiry_and_stable_ordinals() -> None:
         scenario="content_feed",
         request_digest="request-digest-001",
         ranking=RankingResult(
+            experiment_bucket="model",
             model_bucket="model",
             model_channel="champion",
             model_release_id="release-001",
@@ -244,6 +246,7 @@ def test_ranked_window_rejects_duplicate_or_unbounded_candidates() -> None:
             scenario="content_feed",
             request_digest="request-digest-001",
             ranking=RankingResult(
+                experiment_bucket="rule",
                 model_bucket="rule",
                 model_channel=None,
                 model_release_id=None,
@@ -285,6 +288,7 @@ def test_ranked_window_freezes_bounded_unique_object_cards() -> None:
         scenario="content_feed",
         request_digest="request-object-card",
         ranking=RankingResult(
+            experiment_bucket=ranking.experiment_bucket,
             model_bucket=ranking.model_bucket,
             model_channel=ranking.model_channel,
             model_release_id=ranking.model_release_id,
@@ -313,6 +317,7 @@ def test_ranked_window_freezes_bounded_unique_object_cards() -> None:
         scenario="content_feed",
         request_digest="request-gathering-card",
         ranking=RankingResult(
+            experiment_bucket=ranking.experiment_bucket,
             model_bucket=ranking.model_bucket,
             model_channel=ranking.model_channel,
             model_release_id=ranking.model_release_id,
@@ -337,6 +342,7 @@ def test_ranked_window_freezes_bounded_unique_object_cards() -> None:
                 scenario="content_feed",
                 request_digest="request-invalid-object-card",
                 ranking=RankingResult(
+                    experiment_bucket=ranking.experiment_bucket,
                     model_bucket=ranking.model_bucket,
                     model_channel=ranking.model_channel,
                     model_release_id=ranking.model_release_id,

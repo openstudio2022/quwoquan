@@ -62,6 +62,29 @@ fields:
   api_exposure: read
   ops_exposure: read
   role: projection
+# cover 的配对媒体资产标识与交付访问模式（DEC-033），与 HomepageDetailView 同一
+# 范式：research 相位的 coverUrl 是相对私有 CAS 引用，App 按 coverAssetId 换短签。
+- name: coverAssetId
+  source: coverAssetId
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: coverAccessMode
+  source: coverAccessMode
+  type: enum
+  enum_ref: MediaDeliveryAccessMode
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
 - name: city
   source: city
   type: string

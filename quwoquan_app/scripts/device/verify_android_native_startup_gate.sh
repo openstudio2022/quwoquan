@@ -19,7 +19,7 @@ cd "${REPO_ROOT}"
 python3 quwoquan_app/scripts/device/build_launcher_handoff.py \
   --env alpha \
   --target alpha-local \
-  --launch-mode native_startup_instrumentation \
+  --launch-provenance canonical_launcher \
   >"${HANDOFF_FILE}"
 
 eval "$(

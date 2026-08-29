@@ -11,6 +11,7 @@ import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.
 import 'package:quwoquan_app/service/content_service/content/post/presentation/home_featured_immersive_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/home_primary_tab_strip.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/design_system/semantics/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/design_system/navigation/tab_swipe_switch_region.dart';
 import 'package:quwoquan_app/design_system/semantics/settings_semantic_constants.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
@@ -492,59 +493,64 @@ class _HomePageState extends ConsumerState<HomePage>
       systemNavigationBarIconBrightness: barForegroundBrightness,
     );
 
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: statusBarStyle,
-      child: CupertinoPageScaffold(
-        backgroundColor: bg,
-        child: Material(
-          type: MaterialType.transparency,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                key: const ValueKey<String>('home-primary-tab-chrome'),
-                height:
-                    effectiveTopInset + AppSpacing.primaryTopBarHeight(context),
-                padding: EdgeInsets.only(top: effectiveTopInset),
-                decoration: BoxDecoration(color: bg),
-                child: SizedBox(
-                  height: AppSpacing.primaryTopBarHeight(context),
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: AppSpacing.feedContentHorizontal(context),
-                    ),
-                    child: Row(
-                      children: [
-                        // 频道条自身横向滚动，因此让出右侧固定宽度给全局搜索与小趣，
-                        // 频道再多也不会把这两个入口挤出屏幕。
-                        Expanded(
-                          child: HomePrimaryTabStrip(
-                            activeChannelId: effectiveActiveChannelId,
-                            onChannelChanged: _handleChannelChange,
-                            onHorizontalDragEnd: _handleTabSwipeDragEnd,
-                            isDark: isDark,
-                            channels: channels,
+    return Semantics(
+      container: true,
+      identifier: AppNavigationSemanticConstants.homeSurfaceIdentifier,
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: statusBarStyle,
+        child: CupertinoPageScaffold(
+          backgroundColor: bg,
+          child: Material(
+            type: MaterialType.transparency,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  key: const ValueKey<String>('home-primary-tab-chrome'),
+                  height:
+                      effectiveTopInset +
+                      AppSpacing.primaryTopBarHeight(context),
+                  padding: EdgeInsets.only(top: effectiveTopInset),
+                  decoration: BoxDecoration(color: bg),
+                  child: SizedBox(
+                    height: AppSpacing.primaryTopBarHeight(context),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: AppSpacing.feedContentHorizontal(context),
+                      ),
+                      child: Row(
+                        children: [
+                          // 频道条自身横向滚动，因此让出右侧固定宽度给全局搜索与小趣，
+                          // 频道再多也不会把这两个入口挤出屏幕。
+                          Expanded(
+                            child: HomePrimaryTabStrip(
+                              activeChannelId: effectiveActiveChannelId,
+                              onChannelChanged: _handleChannelChange,
+                              onHorizontalDragEnd: _handleTabSwipeDragEnd,
+                              isDark: isDark,
+                              channels: channels,
+                            ),
                           ),
-                        ),
-                        SizedBox(width: AppSpacing.intraGroupXs),
-                        const GlobalTopActions(),
-                      ],
+                          SizedBox(width: AppSpacing.intraGroupXs),
+                          const GlobalTopActions(),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-              Expanded(
-                child: TabSwipeSwitchRegion(
-                  enabled:
-                      effectiveActiveChannelId !=
-                      HomePrimaryTabStrip.featuredChannelId,
-                  onSwipe: _handleTabSwipe,
-                  child: widget.isStartupHomeActive
-                      ? _buildBody(isDark, channels, effectiveActiveChannelId)
-                      : const SizedBox.shrink(),
+                Expanded(
+                  child: TabSwipeSwitchRegion(
+                    enabled:
+                        effectiveActiveChannelId !=
+                        HomePrimaryTabStrip.featuredChannelId,
+                    onSwipe: _handleTabSwipe,
+                    child: widget.isStartupHomeActive
+                        ? _buildBody(isDark, channels, effectiveActiveChannelId)
+                        : const SizedBox.shrink(),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

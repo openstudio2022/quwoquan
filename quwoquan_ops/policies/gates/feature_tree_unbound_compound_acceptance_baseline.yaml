@@ -41,16 +41,6 @@ entries:
   anchor: GWT-003
 - spec: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/skill-progressive-disclosure-routing/spec.md
   anchor: GWT-004
-- spec: specs/feature-tree/chat-conversation/contact-and-session-governance/spec.md
-  anchor: SIT-001
-- spec: specs/feature-tree/chat-conversation/contact-and-session-governance/spec.md
-  anchor: SIT-002
-- spec: specs/feature-tree/chat-conversation/contact-and-session-governance/spec.md
-  anchor: SIT-003
-- spec: specs/feature-tree/chat-conversation/contact-and-session-governance/spec.md
-  anchor: SIT-004
-- spec: specs/feature-tree/chat-conversation/contact-and-session-governance/spec.md
-  anchor: SIT-005
 - spec: specs/feature-tree/chat-conversation/group-creation-member-management/group-settings/spec.md
   anchor: GWT-001
 - spec: specs/feature-tree/chat-conversation/group-creation-member-management/member-add-remove-policy/spec.md
@@ -123,8 +113,6 @@ entries:
   anchor: GWT-003
 - spec: specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/bucketing-strategy-engine/spec.md
   anchor: GWT-001
-- spec: specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/spec.md
-  anchor: SIT-001
 - spec: specs/feature-tree/recommendation-platform/evaluation-and-flywheel/offline-replay-evaluation/spec.md
   anchor: GWT-001
 - spec: specs/feature-tree/recommendation-platform/evaluation-and-flywheel/online-ab-significance/spec.md
@@ -145,8 +133,6 @@ entries:
   anchor: GWT-001
 - spec: specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/spec.md
   anchor: GWT-001
-- spec: specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/spec.md
-  anchor: GWT-004
 - spec: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md
   anchor: GWT-001
 - spec: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md
@@ -167,10 +153,6 @@ entries:
   anchor: GWT-001
 - spec: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/spec.md
   anchor: SIT-001
-- spec: specs/feature-tree/spec.md
-  anchor: UAT-001
-- spec: specs/feature-tree/spec.md
-  anchor: UAT-009
 - spec: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update/spec.md
   anchor: GWT-001
 - spec: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update/spec.md
@@ -193,22 +175,6 @@ entries:
   anchor: GWT-002
 - spec: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/career-interest-profile-editor/spec.md
   anchor: GWT-004
-- spec: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-persona-homepage-unification/spec.md
-  anchor: GWT-001
-- spec: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-persona-homepage-unification/spec.md
-  anchor: GWT-002
-- spec: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-persona-homepage-unification/spec.md
-  anchor: GWT-003
-- spec: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-persona-homepage-unification/spec.md
-  anchor: GWT-004
-- spec: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-persona-homepage-unification/spec.md
-  anchor: GWT-005
-- spec: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-persona-homepage-unification/spec.md
-  anchor: GWT-006
-- spec: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-persona-homepage-unification/spec.md
-  anchor: GWT-007
-- spec: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-persona-homepage-unification/spec.md
-  anchor: GWT-008
 - spec: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/profile-commercial-readiness/spec.md
   anchor: GWT-001
 - spec: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/profile-commercial-readiness/spec.md

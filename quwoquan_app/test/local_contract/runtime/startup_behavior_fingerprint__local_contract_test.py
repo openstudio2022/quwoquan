@@ -31,7 +31,7 @@ def _sample(**overrides: object) -> dict[str, object]:
         "failureCode": "",
         "launcherResolution": {"matchesExpectedGate": True},
         # 入口/身份/时序维度：指纹必须对它们不敏感。
-        "launchMode": "canonical_launcher",
+        "launchProvenance": "canonical_launcher",
         "deviceKind": "android-simulator",
         "deviceId": "emulator-5554",
         "attemptId": "attempt-a",
@@ -47,7 +47,7 @@ class BehaviorFingerprintContractTest(unittest.TestCase):
         base = derive_behavior_fingerprint(_sample(), release_id="rel-1")
         varied = derive_behavior_fingerprint(
             _sample(
-                launchMode="direct_flutter_run",
+                launchProvenance="workspace_flutter_run",
                 deviceKind="android-physical",
                 deviceId="R5CT10ABCDE",
                 attemptId="attempt-b",
@@ -79,13 +79,13 @@ class BehaviorFingerprintContractTest(unittest.TestCase):
         samples = [
             _sample(),
             _sample(
-                launchMode="release_package",
+                launchProvenance="release_package",
                 deviceKind="android-physical",
                 attemptId="attempt-b",
             ),
             _sample(
                 platform="ios",
-                launchMode="direct_flutter_run",
+                launchProvenance="workspace_flutter_run",
                 deviceKind="ios-simulator",
                 attemptId="attempt-c",
                 launcherResolution=None,
@@ -100,7 +100,7 @@ class BehaviorFingerprintContractTest(unittest.TestCase):
         samples = [
             _sample(),
             _sample(
-                launchMode="release_package",
+                launchProvenance="release_package",
                 attemptId="attempt-b",
                 canonicalTerminal="safeShell",
             ),
@@ -108,7 +108,7 @@ class BehaviorFingerprintContractTest(unittest.TestCase):
         issues = fingerprint_equivalence_issues(samples, label="evidence.json")
         self.assertEqual(len(issues), 1)
         self.assertIn("behavior fingerprint diverged", issues[0])
-        self.assertIn("launchMode=release_package", issues[0])
+        self.assertIn("launchProvenance=release_package", issues[0])
 
 
 if __name__ == "__main__":

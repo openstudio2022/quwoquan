@@ -3,6 +3,13 @@
 // spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-012
 // spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-012.t3
 // spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-012.t4
+// spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-017
+// spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-017.t1
+// spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-017.t3
+// spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-017.t5
+// spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-018
+// spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-018.t1
+// spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-020
 
 import 'dart:async';
 import 'dart:io';
@@ -20,7 +27,9 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     hide ContentDiscoveryFeedQuery;
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/observability/analytics.dart';
+import 'package:quwoquan_app/runtime/shell/navigation/generated/app_pages.g.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/adapters/media_download_cache.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/video_preview_track_query.dart';
 import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/discovery_feed_page.dart';
@@ -30,6 +39,8 @@ import 'package:quwoquan_app/service/content_service/content/post/application/co
 import 'package:quwoquan_app/service/content_service/trust_safety/report/application/public/content_report_ports.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_detail_payload.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/public/post_article_detail_projector.dart';
+import 'package:quwoquan_app/service/content_service/content/post/adapters/post_view_projection.dart';
 import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/discovery_feed_query.dart'
     show ContentDiscoveryFeedQuery, kFeedSortRecommend;
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_projection_codec.dart';
@@ -46,8 +57,11 @@ import 'package:quwoquan_app/service/content_service/media/media_asset/presentat
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/media_page_flip_book.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/media_caption_widgets.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/public/media_viewer_extra.dart';
+import 'package:quwoquan_app/runtime/transport/media/content_media_url.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
+import 'package:quwoquan_app/runtime/transport/media/media_load_failure_cache.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/runtime/di/works_viewer_article_dependencies.dart';
 import 'package:quwoquan_app/runtime/di/runtime_observability_dependencies.dart';
 import 'package:quwoquan_app/runtime/di/video_preview_track_dependencies.dart';
 import 'package:quwoquan_app/runtime/auth/auth_continuation.dart';
@@ -66,11 +80,14 @@ import 'package:quwoquan_app/runtime/testing/test_keys.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/icons/app_custom_icons.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/design_system/spacing/immersive_media_wait_motion.dart';
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
+import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/immersive_engagement_bar.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/immersive_viewer_layout.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/video_player_widget.dart';
+import 'package:quwoquan_app/service/content_service/content/post/presentation/article_content_block_renderer.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/article_reader/pageflip/host/article_read_only_book_deck.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/article_reader/pageflip/host/article_reader_flip_host.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/unified_media_viewer_page.dart';
@@ -86,6 +103,7 @@ import '../../../../../support/service/content_service/content/post/content_face
 import '../../../../../support/runtime/platform/media/fake_video_player_platform.dart';
 import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 import '../../../../../support/runtime/platform/storage/sqflite_ffi_test_support.dart';
+import '../../../../../support/runtime/observability/recording_app_telemetry_recorder.dart';
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
 
 import 'package:http/testing.dart';
@@ -138,6 +156,25 @@ final MediaEndpointConfig _testMediaEndpointConfig = MediaEndpointConfig(
   videoBaseUrl: 'https://example.com/media/video',
   attachmentBaseUrl: 'https://example.com',
 );
+
+final class _EndpointBoundPostArticleDetailProjector
+    implements PostArticleDetailProjector {
+  const _EndpointBoundPostArticleDetailProjector(this.endpointConfig);
+
+  final MediaEndpointConfig endpointConfig;
+
+  @override
+  ContentArticleRender project(
+    Map<String, dynamic> raw, {
+    required String fallbackArticleId,
+  }) {
+    return projectArticleDetailView(
+      raw,
+      fallbackArticleId: fallbackArticleId,
+      mediaResolver: MediaDeliveryResolver(endpointConfig),
+    );
+  }
+}
 
 List<Override> _sealedViewerBoundaryOverrides() => <Override>[
   ...sealedCloudBoundaryOverrides(),
@@ -310,6 +347,16 @@ IntersectionTarget _intersectionTargetFor({
         routeId: 'homepageDetail',
       );
   }
+}
+
+final class _HttpStatusTestException implements Exception {
+  const _HttpStatusTestException(this.statusCode, this.message);
+
+  final int statusCode;
+  final String message;
+
+  @override
+  String toString() => '_HttpStatusTestException($statusCode, $message)';
 }
 
 class _FakeHttpOverrides extends HttpOverrides {
@@ -1854,10 +1901,9 @@ void main() {
     final railFinder = find.byKey(const ValueKey('immersive-engagement-rail'));
     final barRect = tester.getRect(barFinder);
     final railRect = tester.getRect(railFinder);
-    final barContext = tester.element(barFinder);
-    final expectedSideInset =
-        AppSpacing.containerLg +
-        AppSpacing.appChromeBottomSafeSideInset(barContext, 34);
+    // 对齐轨道单源（REQ-019）：文章阶段底栏与正文 contentPadding 同源，
+    // 不再叠加底部安全区侧向保护。
+    const expectedSideInset = AppSpacing.containerLg;
 
     expect(
       (railRect.left - barRect.left - expectedSideInset).abs(),
@@ -3198,11 +3244,10 @@ void main() {
     expect((bottomRailRect.right - topRailRect.right).abs(), lessThan(1));
 
     final barContext = tester.element(find.byType(ImmersiveEngagementBar));
-    final expectedBottomInset =
-        ImmersiveViewerLayout.bottomChromeHorizontalPadding(
-          barContext,
-          layoutSpec: ImmersiveViewerStageLayoutSpec.mediaStage,
-        );
+    final expectedBottomInset = ImmersiveViewerLayout.horizontalPadding(
+      barContext,
+      layoutSpec: ImmersiveViewerStageLayoutSpec.mediaStage,
+    );
     expect((bottomRailRect.left - expectedBottomInset).abs(), lessThan(1));
     expect(
       (viewerRect.right - bottomRailRect.right - expectedBottomInset).abs(),
@@ -3846,8 +3891,10 @@ void main() {
 
   testWidgets('canonical viewer 经 typed media facet 加载当前原图', (tester) async {
     final post = _photoPost();
+    // 原图换签已收敛到 SignedMediaDeliveryCoordinator，短签校验（https +
+    // sign + t）随之生效，夹具必须给出真实签名形态的交付地址。
     final originalUrl = Uri.parse(
-      'https://cdn.example.com/original/photo-1.jpg',
+      'https://cdn.example.com/original/photo-1.jpg?sign=sig-original&t=1893456300',
     );
     final mediaFacet = _RecordingContentMediaFacet(originalUrl);
     await tester.pumpWidget(
@@ -3901,7 +3948,11 @@ void main() {
 
     expect(mediaFacet.requestedMediaIds, <String>['asset-photo-1']);
     expect(
-      tester.widget<ImageBookCanvas>(find.byType(ImageBookCanvas)).imageUrls,
+      tester
+          .widget<ImageBookCanvas>(find.byType(ImageBookCanvas))
+          .deliveries
+          .map((binding) => binding.publicUrl)
+          .toList(growable: false),
       <String>[originalUrl.toString()],
     );
     expect(find.text(MediaText.imageOriginalLoaded), findsOneWidget);
@@ -5576,7 +5627,7 @@ void main() {
     expect(statusScrim.height, moreOrLessEquals(AppSpacing.twenty));
   });
 
-  testWidgets('文章阅读使用底部页码且封面与标题正文共用第一页', (tester) async {
+  testWidgets('文章阅读使用底部页码且标题封面在首屏、正文翻页可达', (tester) async {
     final post = _articlePost();
 
     await tester.pumpWidget(
@@ -5666,7 +5717,9 @@ void main() {
       findsNothing,
     );
     expect(find.text(post.title), findsWidgets);
-    expect(find.textContaining('第一页前言'), findsWidgets);
+    // 首屏以标题+封面为确定性结构；正文具体分布由真实画布几何与 4:3
+    // 后备比例决定，不把某一句必须同页写成第二套排版真相源。
+    expect(_articleProgressLabel(tester), startsWith('1 / '));
 
     // Dark Paper：文章作品默认深色纸张舞台，页码两侧带可点 chevron。
     expect(
@@ -5693,6 +5746,274 @@ void main() {
       find.byKey(const ValueKey<String>('works-article-page-next')),
       findsOneWidget,
     );
+
+    await _flipArticleToLastPage(tester);
+    _expectArticleAdvancedPastFirstPage(tester);
+    expect(
+      find.textContaining('第一页前言'),
+      findsWidgets,
+      reason: '标题/封面占用前置分页时正文必须在后续页可达，不得丢失',
+    );
+  });
+
+  testWidgets('文章图片状态转换保持分页几何，打开关闭图片书记录 catalog 并恢复阅读页', (tester) async {
+    final post = _articlePost();
+    final analytics = _FakeAnalyticsService();
+    final telemetry = RecordingAppTelemetryRecorder();
+    final articleObjectKey =
+        'media/image/s/test/article/image-viewer/v1/'
+        'inline-${DateTime.now().microsecondsSinceEpoch}.jpg';
+    MediaLoadFailureCache.instance.clear();
+    addTearDown(MediaLoadFailureCache.instance.clear);
+    final articleIdentity = resolveContentMediaUrl(
+      articleObjectKey,
+      endpointConfig: _testMediaEndpointConfig,
+    );
+    MediaLoadFailureCache.instance.recordFailure(
+      articleIdentity,
+      error: const _HttpStatusTestException(404, 'controlled initial failure'),
+      candidateUrl: articleIdentity,
+    );
+    final rawArticle = _articleMarkdownRaw(
+      post,
+      '---\n'
+      'title: ${post.title}\n'
+      'template: ${post.articleTemplate}\n'
+      'fontPreset: ${post.articleFontPreset}\n'
+      '---\n\n'
+      ':::figure id="article-image" layout="fullWidth" caption=""\n'
+      'asset://article-image\n'
+      ':::\n',
+      extra: <String, dynamic>{
+        'articleAssetManifest': <String, dynamic>{
+          'schema': 'article-asset-manifest',
+          'markdownDialect': 'qwq-rich-md',
+          'articleMarkdownDigest': 'fixture:image-viewer',
+          'assets': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'assetId': 'article-image',
+              'publicSliceKey': articleObjectKey,
+              'role': 'inline',
+              'width': 1200,
+              'height': 900,
+            },
+          ],
+        },
+      },
+    );
+
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: <ContentPostViewData>[post],
+          externalPostViews: <ContentSurfaceView>[
+            ContentSurfaceViewMapper.fromDto(post),
+          ],
+          rawPostsById: _viewerRawByPostId(<String, Map<String, dynamic>>{
+            post.id: rawArticle,
+          }),
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+        overrides: <Override>[
+          postArticleDetailProjectorProvider.overrideWithValue(
+            _EndpointBoundPostArticleDetailProjector(_testMediaEndpointConfig),
+          ),
+          analyticsProvider.overrideWithValue(analytics),
+          appTelemetryReporterProvider.overrideWithValue(telemetry),
+        ],
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await _pumpSettledFrames(tester);
+
+    final nextPage = find.byKey(
+      const ValueKey<String>('works-article-page-next'),
+    );
+    // DEC-033：内嵌图经 typed 交付入口分流后才渲染文章自有原子，手势件与原子
+    // 之间因此多了一层。锚在「包含该原子的可点手势件」上，不锚具体层级结构。
+    Finder tappableArticleImages() => find
+        .ancestor(
+          of: find.byType(ArticleAdaptiveImage),
+          matching: find.byWidgetPredicate(
+            (widget) => widget is GestureDetector && widget.onTap != null,
+          ),
+        )
+        .hitTestable();
+    var articleImages = tappableArticleImages();
+    for (
+      var pageGuard = 0;
+      articleImages.evaluate().isEmpty && pageGuard < 20;
+      pageGuard += 1
+    ) {
+      expect(nextPage, findsOneWidget, reason: '含图片文章必须能通过真实分页到达图片页。');
+      await tester.tap(nextPage);
+      await _pumpSettledFrames(tester);
+      articleImages = tappableArticleImages();
+    }
+    expect(articleImages, findsWidgets);
+
+    Finder articleGesture() => tappableArticleImages().first;
+    Finder articleImage() => find
+        .descendant(
+          of: articleGesture(),
+          matching: find.byType(ArticleAdaptiveImage),
+        )
+        .first;
+    Finder articleNetworkImage() => find.descendant(
+      of: articleImage(),
+      matching: find.byType(AppCachedNetworkImage),
+    );
+    Finder articleState(Key key) =>
+        find.descendant(of: articleImage(), matching: find.byKey(key));
+    final frameSize = tester.getSize(articleImage());
+    final progressBeforeTransitions = _articleProgressLabel(tester);
+    void expectStableArticleGeometry(String reason) {
+      expect(tester.getSize(articleImage()), frameSize, reason: reason);
+      expect(
+        _articleProgressLabel(tester),
+        progressBeforeTransitions,
+        reason: '$reason；文章当前页与总页数均不得变化。',
+      );
+    }
+
+    expect(
+      tester.widget<ArticleAdaptiveImage>(articleImage()).imageUrl,
+      articleIdentity,
+      reason: '文章投影与图片组件必须消费同一测试媒体端点。',
+    );
+    expect(articleNetworkImage(), findsOneWidget);
+    expect(articleState(articleImageSourceAbsentKey), findsNothing);
+    expect(articleState(articleImageFailedSurfaceKey), findsOneWidget);
+    expectStableArticleGeometry('终态失败必须保留图片预留框与文章页数');
+    final imageStateBeforeRetry = tester.state(articleImage());
+    final failedGeneration = tester
+        .widget<AppCachedNetworkImage>(articleNetworkImage())
+        .key;
+
+    await tester.tap(articleState(articleImageRetryKey));
+    await tester.pump();
+    expect(articleState(articleImageDelayedIndicatorKey), findsOneWidget);
+    expect(
+      MediaLoadFailureCache.instance.shouldSkipNetwork(articleIdentity),
+      isFalse,
+      reason: '显式 Retry 必须先清除当前交付 identity 的负缓存。',
+    );
+    expect(
+      tester.widget<AppCachedNetworkImage>(articleNetworkImage()).key,
+      isNot(failedGeneration),
+      reason: 'Retry 必须以新 generation 重建真实图片加载链路。',
+    );
+    expect(tester.state(articleImage()), same(imageStateBeforeRetry));
+    expectStableArticleGeometry('failure → retry/loading 必须沿用原占位框');
+
+    var networkImage = tester.widget<AppCachedNetworkImage>(
+      articleNetworkImage(),
+    );
+    networkImage.onLoadFailed!(StateError('controlled retry failure'));
+    await tester.pump(const Duration(milliseconds: 16));
+    expect(articleState(articleImageDelayedIndicatorKey), findsOneWidget);
+    expect(articleState(articleImageFailedSurfaceKey), findsNothing);
+    expectStableArticleGeometry('loading → pending failure 不得触发重新分页');
+    await tester.pump(ImmersiveMediaWaitMotion.indicatorMinDisplay);
+    await tester.pump(const Duration(milliseconds: 16));
+    expect(articleState(articleImageFailedSurfaceKey), findsOneWidget);
+    expectStableArticleGeometry('loading → failure 不得触发重新分页');
+
+    await tester.tap(articleState(articleImageRetryKey));
+    await tester.pump();
+    expect(articleState(articleImageDelayedIndicatorKey), findsOneWidget);
+    expectStableArticleGeometry('failure → retry/loading（第二次）必须沿用原占位框');
+    networkImage = tester.widget<AppCachedNetworkImage>(articleNetworkImage());
+    networkImage.onLoadSucceeded!();
+    await tester.pump(ImmersiveMediaWaitMotion.indicatorMinDisplay);
+    await tester.pump(const Duration(milliseconds: 16));
+    expect(articleState(articleImageFailedSurfaceKey), findsNothing);
+    expect(
+      tester
+          .widget<AnimatedOpacity>(
+            articleState(articleImagePresentedContentKey),
+          )
+          .opacity,
+      1,
+      reason: '最短展示窗口结束后图片内容必须进入 ready。',
+    );
+    await tester.pump(ImmersiveMediaWaitMotion.crossFade);
+    await tester.pump(const Duration(milliseconds: 16));
+    expect(
+      articleState(articleImageDelayedIndicatorKey),
+      findsNothing,
+      reason: '交叉淡出完成后不得残留等待层。',
+    );
+    expectStableArticleGeometry('loading → success 不得触发重新分页');
+
+    final progressBeforeOpen = _articleProgressLabel(tester);
+    await tester.tap(articleGesture());
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byKey(worksArticleImageViewerSurfaceKey), findsOneWidget);
+    final openEvents = telemetry.recorded.where(
+      (event) =>
+          event.eventType == 'product_action' &&
+          event.extensions['journey'] == 'article_reader' &&
+          event.action == 'image_viewer_open',
+    );
+    expect(openEvents, hasLength(1));
+    expect(openEvents.single.pageName, PageNames.workBrowser);
+    expect(openEvents.single.extensions['objectId'], post.id);
+    expect(openEvents.single.extensions['targetId'], 'article-image');
+
+    final canvas = tester.widget<ImageBookCanvas>(find.byType(ImageBookCanvas));
+    canvas.onMediaLoad!(
+      const ImageBookMediaLoadEvent(
+        result: 'success',
+        durationMs: 12,
+        candidatesTried: 1,
+      ),
+    );
+    await tester.pump();
+
+    final matchingImageViewerLoads = telemetry.recorded.where(
+      (event) =>
+          event.eventType == 'media_load_state' &&
+          event.extensions['mediaType'] == 'image' &&
+          event.extensions['result'] == 'success' &&
+          event.extensions['objectId'] == post.id &&
+          event.extensions['durationMs'] == 12 &&
+          event.extensions['candidatesTried'] == 1,
+    );
+    expect(matchingImageViewerLoads, hasLength(1));
+    final imageViewerLoad = matchingImageViewerLoads.single;
+    expect(imageViewerLoad.pageName, PageNames.workBrowser);
+    expect(
+      imageViewerLoad.extensions['surfaceId'],
+      AppUiSurfaces.workBrowser.id,
+    );
+    expect(imageViewerLoad.extensions['objectType'], 'contentPost');
+    expect(imageViewerLoad.extensions['objectId'], post.id);
+    expect(imageViewerLoad.extensions['durationMs'], 12);
+    expect(imageViewerLoad.extensions['candidatesTried'], 1);
+
+    await tester.tap(find.byKey(worksArticleImageViewerCloseKey));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byKey(worksArticleImageViewerSurfaceKey), findsNothing);
+    expect(_articleProgressLabel(tester), progressBeforeOpen);
+    final closeEvents = telemetry.recorded.where(
+      (event) =>
+          event.eventType == 'product_action' &&
+          event.extensions['journey'] == 'article_reader' &&
+          event.action == 'image_viewer_close',
+    );
+    expect(closeEvents, hasLength(1));
+    expect(closeEvents.single.pageName, PageNames.workBrowser);
+    expect(closeEvents.single.extensions['objectId'], post.id);
+    expect(closeEvents.single.extensions['targetId'], 'article-image');
   });
 
   testWidgets('文章交集句位于翻页指示器下方并保持在内容区底部', (tester) async {
@@ -5754,11 +6075,10 @@ void main() {
       find.byKey(const ValueKey('immersive-engagement-rail')),
     );
     final barContext = tester.element(find.byType(ImmersiveEngagementBar));
-    final expectedSideInset =
-        ImmersiveViewerLayout.bottomChromeHorizontalPadding(
-          barContext,
-          layoutSpec: ImmersiveViewerStageLayoutSpec.articleStage,
-        );
+    final expectedSideInset = ImmersiveViewerLayout.horizontalPadding(
+      barContext,
+      layoutSpec: ImmersiveViewerStageLayoutSpec.articleStage,
+    );
 
     expect(
       (intersectionRect.left - expectedSideInset).abs(),
@@ -6122,7 +6442,9 @@ void main() {
     expect(find.byType(ArticleReaderFlipHost), findsOneWidget);
     expect(find.byKey(TestKeys.articlePageCurlLayer), findsOneWidget);
 
-    // 页角热区向内拖拽会揭开相邻页：断言末节内容（位于第 2 页）被翻出到组件树。
+    // 页角热区向内拖拽会揭开相邻页：断言页码前进（翻页行为本身）。
+    // 不绑定特定小节落在第几页——页容量由渲染几何单源决定（GWT-015），
+    // 内容分布断言会随几何修正漂移。
     final deckRect = tester.getRect(find.byType(ArticleReadOnlyBookDeck));
     await tester.dragFrom(
       Offset(deckRect.right - 2, deckRect.bottom - 80),
@@ -6130,7 +6452,7 @@ void main() {
     );
     await _pumpSettledFrames(tester);
 
-    expect(find.textContaining('小节14'), findsWidgets);
+    _expectArticleAdvancedPastFirstPage(tester);
   });
 
   testWidgets('长文阅读会自动降级为 book-style pager', (tester) async {
@@ -6164,6 +6486,61 @@ void main() {
 
     expect(find.byKey(TestKeys.articleBookStylePager), findsOneWidget);
     expect(find.byKey(TestKeys.articlePageCurlLayer), findsNothing);
+  });
+
+  testWidgets('沉浸文章宿主消费远端 page curl=false 后进入既有分页器且保持可读', (tester) async {
+    final post = _articlePost();
+    final analytics = _FakeAnalyticsService();
+    final configRepository = _ConfigurableContentConfigRepository(
+      appConfig: <String, dynamic>{
+        'content': <String, dynamic>{
+          'feature_flags': <String, dynamic>{
+            'enable_article_book_reader': true,
+            'enable_article_page_curl': false,
+          },
+        },
+      },
+    );
+
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+          rawPostsById: _viewerRawByPostId({
+            post.id: _articleMarkdownRaw(post, _multiPageArticleMarkdown(post)),
+          }),
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+        overrides: [analyticsProvider.overrideWithValue(analytics)],
+        useProductionRuntimeConfig: true,
+        configRepository: configRepository,
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await _pumpSettledFrames(tester);
+
+    expect(find.byType(ArticleReadOnlyBookDeck), findsOneWidget);
+    expect(find.byKey(TestKeys.articleBookStylePager), findsOneWidget);
+    expect(find.byKey(TestKeys.articlePageCurlLayer), findsNothing);
+
+    final progressBeforeStep = _articleProgressLabel(tester);
+    await tester.tap(
+      find.byKey(const ValueKey<String>('works-article-page-next')),
+    );
+    await _pumpSettledFrames(tester);
+    expect(_articleProgressLabel(tester), isNot(progressBeforeStep));
+
+    final fallbackEvents = analytics.events.where(
+      (event) =>
+          event.eventName == 'article_reader_fallback_rate' &&
+          event.properties['reason'] == 'page_curl_disabled',
+    );
+    expect(fallbackEvents, hasLength(1));
   });
 
   testWidgets('文章 book reader 总开关关闭时仍使用统一阅读器并上报 feature 关闭 fallback', (

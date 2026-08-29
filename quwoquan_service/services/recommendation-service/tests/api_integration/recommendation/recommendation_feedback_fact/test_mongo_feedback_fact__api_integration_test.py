@@ -1,4 +1,5 @@
 # spec_ref: specs/feature-tree/recommendation-platform/spec.md#dom-001
+# spec_ref: specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/spec.md#sit-001.t2
 # readiness_case: append-feedback-api
 from datetime import datetime, timezone
 import hashlib
@@ -31,6 +32,7 @@ class _ExposureReader:
         return SimpleNamespace(
             exposure_id="exposure-001",
             subject_id="persona-stream-001",
+            experiment_bucket="model",
         )
 
 
@@ -74,6 +76,8 @@ def test_content_behavior_stream_persists_feedback_before_ack(
         "entityRefs": [],
         "authorId": "persona-author",
         "feedRequestId": "feed-stream-001",
+        # Client behavior cannot select or overwrite experiment attribution.
+        "experimentBucket": "rule",
         "occurredAt": occurred_at,
     }
     real_redis.xadd(
@@ -100,9 +104,11 @@ def test_content_behavior_stream_persists_feedback_before_ack(
     )
 
     assert consumer.process_once() == 1
-    assert mongo_database["recommendation_feedback_facts"].count_documents(
+    persisted = mongo_database["recommendation_feedback_facts"].find_one(
         {"sourceEventId": event_id}
-    ) == 1
+    )
+    assert persisted is not None
+    assert persisted["experimentBucket"] == "model"
     assert len(projector.feedback_ids) == 1
     assert real_redis.xpending(CONTENT_BEHAVIOR_STREAM, CONSUMER_GROUP)[
         "pending"
@@ -119,6 +125,7 @@ def test_feedback_fact_has_one_source_event_identity_in_mongo(mongo_database) ->
         source_event_id="behavior-001",
         exposure_id="exposure-001",
         feed_request_id="request-001",
+        experiment_bucket="model",
         subject_id="account-001",
         persona_id="persona-001",
         target_type="post",

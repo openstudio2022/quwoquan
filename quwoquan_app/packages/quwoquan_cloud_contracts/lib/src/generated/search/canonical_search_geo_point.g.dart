@@ -5,10 +5,7 @@ class CanonicalSearchGeoPoint {
   final double lat;
   final double lng;
 
-  CanonicalSearchGeoPoint({
-    required this.lat,
-    required this.lng,
-  });
+  CanonicalSearchGeoPoint({required this.lat, required this.lng});
 
   factory CanonicalSearchGeoPoint.fromMap(Map<String, dynamic> m) {
     _validateCanonicalSearchGeoPointWire(m);
@@ -19,36 +16,32 @@ class CanonicalSearchGeoPoint {
   }
 
   Map<String, dynamic> toMap() {
-    return <String, dynamic>{
-      'lat': lat,
-      'lng': lng,
-    };
+    return <String, dynamic>{'lat': lat, 'lng': lng};
   }
 
-  CanonicalSearchGeoPoint copyWith({
-    double? lat,
-    double? lng,
-  }) {
-    return CanonicalSearchGeoPoint(
-      lat: lat ?? this.lat,
-      lng: lng ?? this.lng,
-    );
+  CanonicalSearchGeoPoint copyWith({double? lat, double? lng}) {
+    return CanonicalSearchGeoPoint(lat: lat ?? this.lat, lng: lng ?? this.lng);
   }
 }
 
 void _validateCanonicalSearchGeoPointWire(Map<String, dynamic> m) {
-  const allowed = <String>{
-    'lat',
-    'lng',
-  };
-  final unknown = m.keys.where((key) => !allowed.contains(key)).toList(growable: false);
+  const allowed = <String>{'lat', 'lng'};
+  final unknown = m.keys
+      .where((key) => !allowed.contains(key))
+      .toList(growable: false);
   if (unknown.isNotEmpty) {
-    throw FormatException('CanonicalSearchGeoPoint contains unknown fields: ${unknown.join(',')}');
+    throw FormatException(
+      'CanonicalSearchGeoPoint contains unknown fields: ${unknown.join(',')}',
+    );
   }
   if (!m.containsKey('lat') || m['lat'] == null || (m['lat'] is! num)) {
-    throw FormatException('CanonicalSearchGeoPoint.lat has an invalid wire value');
+    throw FormatException(
+      'CanonicalSearchGeoPoint.lat has an invalid wire value',
+    );
   }
   if (!m.containsKey('lng') || m['lng'] == null || (m['lng'] is! num)) {
-    throw FormatException('CanonicalSearchGeoPoint.lng has an invalid wire value');
+    throw FormatException(
+      'CanonicalSearchGeoPoint.lng has an invalid wire value',
+    );
   }
 }

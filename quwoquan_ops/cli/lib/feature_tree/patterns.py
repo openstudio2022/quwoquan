@@ -9,7 +9,7 @@ HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$", re.MULTILINE)
 LINK_RE = re.compile(r"(?<!!)\[[^\]]*\]\(([^)]+)\)")
 PATH_RE = re.compile(
     r"`((?:quwoquan_app|quwoquan_service|quwoquan_data|quwoquan_ops"
-    r"|\.github|\.agents|\.claude|\.codex|\.cursor)(?:/[^`\s；，]+)*)`"
+    r"|\.github|\.agents|\.codex|\.cursor)(?:/[^`\s；，]+)*)`"
 )
 ENGINEERING_CLAIM_RE = re.compile(
     r"^-\s+(App|Contracts|Metadata|Service|Data|Ops|CI|Agent)(?:（[^）]*）)?："

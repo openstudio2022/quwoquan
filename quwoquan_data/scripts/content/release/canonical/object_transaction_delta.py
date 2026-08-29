@@ -27,7 +27,13 @@ from content.release.canonical.object_transaction_contract import (
     canonical_destination,
     is_canonical_document,
 )
-from core.content_library import MEDIA_KIND, admit_library_entry, file_sha256
+from core.content_library import (
+    MEDIA_KIND,
+    MediaHoldingError,
+    admit_library_entry,
+    carry_media_reference,
+    file_sha256,
+)
 from core.paths import CONTROL_PLANE_TAXONOMY_ROOT
 from core.schema import assert_valid
 
@@ -37,6 +43,27 @@ DELTA_SCHEMA = "quwoquan_data.canonical_transaction_delta"
 
 def _delta_root(run_root: Path) -> Path:
     return run_root / "delta"
+
+
+def _own_media_body(source: Path, *, sha256: str) -> None:
+    """Give one body both of the homes an approved object needs, or fail the transaction.
+
+    The library answers every runtime resolution but lives outside the working
+    tree and cannot be rebuilt from version control; the carried reference is what
+    a fresh checkout rebuilds from. An object that reaches `approved` with only
+    one of the two is approved but not deliverable — the failure mode is that a
+    later release build reports the digest missing, long after the evidence that
+    would explain it was reclaimed. Both homes are therefore preconditions of the
+    apply, not follow-up chores.
+    """
+
+    try:
+        admit_library_entry(source, kind=MEDIA_KIND, sha256=sha256)
+        carry_media_reference(source, sha256=sha256, suffix=source.suffix)
+    except (MediaHoldingError, OSError, ValueError) as exc:
+        raise ObjectTransactionError(
+            f"media body cannot be owned for publish: {sha256}: {exc}"
+        ) from exc
 
 
 def _blob_ref(digest: str) -> Path:
@@ -126,11 +153,7 @@ def build_transaction_delta(
         for source in _files(object_root):
             relative = source.relative_to(object_root)
             if not is_canonical_document(relative):
-                admit_library_entry(
-                    source,
-                    kind=MEDIA_KIND,
-                    sha256=file_sha256(source),
-                )
+                _own_media_body(source, sha256=file_sha256(source))
                 continue
             _register_source(
                 sources,
@@ -140,9 +163,8 @@ def build_transaction_delta(
             )
 
         for row in package["casRows"]:
-            admit_library_entry(
+            _own_media_body(
                 package_root / _safe_rel(str(row["sourceRef"]), label="cas.sourceRef"),
-                kind=MEDIA_KIND,
                 sha256=str(row["sha256"]),
             )
 

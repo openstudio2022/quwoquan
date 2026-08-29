@@ -703,6 +703,8 @@ func PostDetailProjection() bson.D {
 		{Key: "experienceClaimMode", Value: 1},
 		{Key: "authorDisplayNameSnapshot", Value: 1},
 		{Key: "authorAvatarUrlSnapshot", Value: 1},
+		{Key: "authorAvatarAssetId", Value: 1},
+		{Key: "authorAvatarAccessMode", Value: 1},
 		{Key: "personaContextVersion", Value: 1},
 		{Key: "contentType", Value: 1},
 		{Key: "contentIdentity", Value: 1},
@@ -808,14 +810,17 @@ func AuthorPostProjection() bson.D {
 }
 
 // PostFeedProjection 是首页 Feed 的封闭 BSON 白名单。mediaItems 只读取
-// adaptive delivery 所需的 typed 子字段，避免为 HLS/CMAF 绑定把完整媒体序列
-// （封面、预览轨与展示文案等）放大到每次首页 hydration。
+// adaptive delivery 与逐媒体交付绑定（DEC-033：url/accessMode/coverAssetId）
+// 所需的 typed 子字段，避免把预览轨与展示文案等完整媒体序列放大到每次
+// 首页 hydration。
 func PostFeedProjection() bson.D {
 	return bson.D{
 		{Key: "_id", Value: 1},
 		{Key: "authorId", Value: 1},
 		{Key: "authorDisplayNameSnapshot", Value: 1},
 		{Key: "authorAvatarUrlSnapshot", Value: 1},
+		{Key: "authorAvatarAssetId", Value: 1},
+		{Key: "authorAvatarAccessMode", Value: 1},
 		{Key: "contentType", Value: 1},
 		{Key: "contentIdentity", Value: 1},
 		{Key: "title", Value: 1},
@@ -825,6 +830,10 @@ func PostFeedProjection() bson.D {
 		{Key: "mediaItems.kind", Value: 1},
 		{Key: "mediaItems.mediaAssetId", Value: 1},
 		{Key: "mediaItems.mediaAssetVersion", Value: 1},
+		{Key: "mediaItems.accessMode", Value: 1},
+		{Key: "mediaItems.url", Value: 1},
+		{Key: "mediaItems.coverUrl", Value: 1},
+		{Key: "mediaItems.coverAssetId", Value: 1},
 		{Key: "mediaItems.hlsCmafMasterManifestUrl", Value: 1},
 		{Key: "mediaItems.hlsCmafDescriptorVersion", Value: 1},
 		{Key: "videoUrl", Value: 1},

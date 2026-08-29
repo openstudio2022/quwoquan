@@ -130,4 +130,4 @@
 - 识别现场：`releaseimport/runtime.go` 的 `UpsertReleaseState` 仍把 `readback.counts.discoveryPosts` 映射到永不写入的 `counts["feedUpserted"]`，环境侧回读恒为 `null`。
 - 识别现场：`release_readiness.py` 与 `app_preflight_readiness.py` 仍以 `discoveryPosts` 非零作为环境准入判据，alpha 实测 `postsUpserted=5` 而 `discoveryPosts=null`，`contentBindingState` 因此无法进入 `bound`。
 - 识别现场：上述悬空引用属于本次退役的收尾范围，随读写真相收敛一并清除，不单独立项。
-- 完成判定：`SIT-001` 在 content-service 不再写 `rm_discovery_feed` 的前提下仍然成立（importer 幂等与冷启动 feed api_integration 证据通过），投影契约声明同步删除。
+- 完成判定：`SIT-001` 在 content-service 不再写 `rm_discovery_feed` 的前提下仍然成立。投影契约声明与 importer 写入同步删除，release readback/readiness 不再引用退役的 `discoveryPosts/feedUpserted`，而以 canonical Post/recommendation identity 判定 bound。Alpha/Beta/Gamma 对同一 `releaseId + manifestDigest` 的 import、activation、readback 均进入 `contentBindingState=bound`，首页 Remote UAT 读到同一 identity。无合格 release 时保持 typed blocker 或 `no_active_release`，不得以普通空列表通过。

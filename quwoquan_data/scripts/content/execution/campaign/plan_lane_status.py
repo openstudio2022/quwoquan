@@ -30,6 +30,13 @@ def apply_receipt_fields(
         lane_status = "partial"
     else:
         lane_status = "blocked"
+    # campaign 只投影 lane 回执里的同一个原因取值，不做转换映射也不自己写原因；
+    # lane 在 capsule 等更早阶段 blocked 时没有零合格终态，因此没有可投影的原因。
+    reason = receipt.get("zeroQualifiedReason")
+    if lane_status == "blocked" and reason is not None:
+        lanes[carrier]["zeroQualifiedReason"] = reason
+    else:
+        lanes[carrier].pop("zeroQualifiedReason", None)
     lanes[carrier].update(
         {
             "approvedQuota": int(receipt["approvedQuota"]),

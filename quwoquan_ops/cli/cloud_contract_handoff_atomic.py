@@ -94,6 +94,10 @@ def rebuild_graph() -> bool:
 def preview_breaking(snapshot: Path, snapshot_sha: str) -> tuple[bool, list[dict]]:
     """生成预览报告。返回 (成功, breakingChanges)。"""
     PREVIEW_REPORT.parent.mkdir(parents=True, exist_ok=True)
+    # 禁止把前一次 attempt 的报告误认成本次结果。handoff CLI 在发现 breaking
+    # 时会先原子写出 blocked preview，再以非零退出；该退出码是审核握手的一部分，
+    # 不是预览执行失败。
+    PREVIEW_REPORT.unlink(missing_ok=True)
     proc = _run(
         [
             sys.executable,
@@ -107,12 +111,21 @@ def preview_breaking(snapshot: Path, snapshot_sha: str) -> tuple[bool, list[dict
             str(PREVIEW_REPORT),
         ]
     )
-    if proc.returncode != 0 or not PREVIEW_REPORT.exists():
+    if not PREVIEW_REPORT.exists():
         print("  preview failed:")
         print("  " + "\n  ".join((proc.stdout + proc.stderr).splitlines()[-3:]))
         return False, []
-    report = json.loads(PREVIEW_REPORT.read_text(encoding="utf-8"))
-    return True, list(report.get("breakingChanges", []))
+    try:
+        report = json.loads(PREVIEW_REPORT.read_text(encoding="utf-8"))
+        breaking = list(report.get("breakingChanges", []))
+    except (json.JSONDecodeError, TypeError, ValueError):
+        print("  preview failed: report is not valid JSON")
+        return False, []
+    if proc.returncode != 0 and not breaking:
+        print("  preview failed:")
+        print("  " + "\n  ".join((proc.stdout + proc.stderr).splitlines()[-3:]))
+        return False, []
+    return True, breaking
 
 
 def accept_lock(

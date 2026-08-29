@@ -44,6 +44,7 @@ def _attribution() -> dict[str, object]:
         "propertyReleaseStatus": "not_required",
         "collectedAt": "2026-08-01T00:00:00Z",
         "takedownPolicy": "remove on substantiated request",
+        "derivedModifications": [],
         "authorizationProofUrl": "https://commons.wikimedia.org/wiki/File:history.jpg",
         "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
     }

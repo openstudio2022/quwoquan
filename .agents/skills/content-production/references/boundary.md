@@ -20,7 +20,7 @@
 6. **渐进披露**：SKILL.md ≤150 行、每份契约 ≤200 行；agent 只按需读当前阶段契约。
 7. **release 后缀同权**：publish 之后的 release/ship 与前段同等地位、同样有契约文件与验收命令；「成功」的定义包含环境导入回执。
 8. **评审独立性**：`5.review` 必须由独立会话执行（有 subagent 能力的宿主派 subagent，无此能力的宿主起新 loop 轮次），author 会话不得自评；`verify rubric --generation-family` 的 judge≠generator 校验兜底。
-9. **宿主无关**：skill 文本只依赖三种最低宿主能力——读文件、跑 shell 命令、（可选）派发子会话。规范真相源在 `.agents/skills/content-production/`。宿主入口只有两种合法形态：`.claude/skills` 是指向 `.agents/skills` 的 symlink（同一实体、零分叉；**对 `.claude/skills/**` 的任何写或删都会穿透到真相源本体，操作前必须先 `readlink` 确认**）；`.cursor/`、`.codex/` 放 ≤10 行指针 stub。禁止任何形态的全文镜像拷贝。
+9. **宿主无关**：skill 文本只依赖三种最低宿主能力——读文件、跑 shell 命令、（可选）派发子会话。规范真相源在 `.agents/skills/content-production/`，Cursor 与 Codex 直接消费同一份 Skill；各宿主 adapter/命令只是薄壳。禁止任何形态的全文镜像拷贝。
 10. **磁盘即交接**：任何阶段的交接物全部落在工作包磁盘（产物 + stage receipt），不依赖会话上下文。任何宿主、任何新会话都能从 [recovery.md](recovery.md) 判定表 + receipt 链恢复到精确断点。
 11. **容量治理不自建测量体系**（旧治理轨 calibration receipt 启动环）：宿主会话轨的并发上限只来自显式 fleet 参数，合法取值由上一级 milestone 的真实 fleet 回执标定（M1 → M10 → M100 → M1k 禁止跳级）；不读取、不生成 calibration receipt（设计归属 L2 `design.md#dec-028`）。
 

@@ -19,13 +19,26 @@ GatheringBoardPlanSlice gatheringBoardPlanFromWire(cloud.GatheringPlan wire) {
       ChatText.boardPlanUnavailable,
     );
   }
-  final items = [...current.items]
+  return gatheringBoardPlanRevisionFromWire(current);
+}
+
+/// 将任一 immutable revision 投影成与 current Board 相同的只读形状。
+GatheringBoardPlanSlice gatheringBoardPlanRevisionFromWire(
+  cloud.PlanRevision revision,
+) {
+  if (_requiresNewerClient(revision.items)) {
+    return gatheringBoardPlanUnavailable(
+      GatheringBoardCapabilityUnavailableReason.unsupported,
+      ChatText.boardPlanVersionUnsupported,
+    );
+  }
+  final items = [...revision.items]
     ..sort((left, right) => left.order.compareTo(right.order));
   return GatheringBoardPlanSlice(
     capability: GatheringBoardCapabilitySummary(
       state: GatheringBoardCapabilityState.available,
       summaryLabel: ChatText.boardPlanSummary(
-        current.revisionNumber,
+        revision.revisionNumber,
         items.length,
       ),
       itemCount: items.length,
@@ -56,6 +69,18 @@ cloud.PlanRevision? _currentRevision(cloud.GatheringPlan wire) {
   return null;
 }
 
+bool _requiresNewerClient(List<cloud.PlanItem> items) {
+  for (final item in items) {
+    if (item.kind == cloud.PlanItemKind.unknown) {
+      return true;
+    }
+    if (item.routeSegment?.travelMode == cloud.PlanTravelMode.unknown) {
+      return true;
+    }
+  }
+  return false;
+}
+
 GatheringBoardPlanItem _boardItem(cloud.PlanItem item) => switch (item.kind) {
   cloud.PlanItemKind.agenda => _agendaItem(item, item.agenda),
   cloud.PlanItemKind.place => _placeItem(item, item.place),
@@ -63,6 +88,9 @@ GatheringBoardPlanItem _boardItem(cloud.PlanItem item) => switch (item.kind) {
   cloud.PlanItemKind.task => _taskItem(item, item.task),
   cloud.PlanItemKind.checklist => _checklistItem(item, item.checklist),
   cloud.PlanItemKind.note => _noteItem(item, item.note),
+  cloud.PlanItemKind.unknown => throw StateError(
+    'unknown PlanItemKind must be rejected before item projection',
+  ),
 };
 
 GatheringBoardPlanItem _agendaItem(
@@ -188,6 +216,9 @@ String _travelModeLabel(cloud.PlanTravelMode mode) => switch (mode) {
   cloud.PlanTravelMode.drive => ChatText.boardPlanTravelDrive,
   cloud.PlanTravelMode.ferry => ChatText.boardPlanTravelFerry,
   cloud.PlanTravelMode.other => ChatText.boardPlanTravelOther,
+  cloud.PlanTravelMode.unknown => throw StateError(
+    'unknown PlanTravelMode must be rejected before item projection',
+  ),
 };
 
 String _timeLabel(DateTime value) {

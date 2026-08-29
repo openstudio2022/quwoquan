@@ -50,6 +50,9 @@ IOS_DEBUG_CONFIG_PATH = ROOT / "quwoquan_app/ios/Flutter/Base/Debug.xcconfig"
 IOS_PROFILE_CONFIG_PATH = ROOT / "quwoquan_app/ios/Flutter/Base/Profile.xcconfig"
 IOS_RELEASE_CONFIG_PATH = ROOT / "quwoquan_app/ios/Flutter/Base/Release.xcconfig"
 IOS_PROJECT_PATH = ROOT / "quwoquan_app/ios/Runner.xcodeproj/project.pbxproj"
+PACKAGE_APP_ARTIFACT_PATH = (
+    ROOT / "quwoquan_ops/cli/commands/package_app_artifact.py"
+)
 
 RELEASE_ONLY_CLASSES = {"store", "official_web", "hosted_web"}
 
@@ -152,13 +155,19 @@ class AppArtifactManifestMetadataTest(unittest.TestCase):
         self.assertEqual(
             set(self.document["launch_provenances"]),
             {
-                "direct_flutter_run",
                 "canonical_launcher",
+                "workspace_flutter_run",
+                "workspace_ide_debug",
                 "release_package",
                 "hot_restart",
                 "icon_cold_launch",
             },
         )
+
+    def test_package_compiler_scrubs_runtime_launch_identity(self) -> None:
+        source = PACKAGE_APP_ARTIFACT_PATH.read_text(encoding="utf-8")
+        self.assertIn('"QWQ_APP_LAUNCH_PROVENANCE"', source)
+        self.assertIn('"QWQ_RUNTIME_CONFIG_SUPPLY_MODE"', source)
 
     def test_canonical_manifest_loads_without_optional_site_packages(self) -> None:
         probe = (
@@ -434,9 +443,9 @@ class InstallLaunchPathMatrixTest(unittest.TestCase):
             ("prod", "ios", "release", "store", "release_package"),
             self.tuples,
         )
-        # 开发直连 Debug 与官网 APK 下载安装。
+        # 工作区 Flutter Debug 与官网 APK 下载安装。
         self.assertIn(
-            ("alpha", "ios", "debug", "dev_direct", "direct_flutter_run"),
+            ("alpha", "ios", "debug", "dev_direct", "workspace_flutter_run"),
             self.tuples,
         )
         self.assertIn(
@@ -465,10 +474,18 @@ class InstallLaunchPathMatrixTest(unittest.TestCase):
             if path.distribution_class == "hosted_web":
                 self.assertEqual(path.platform, "web", path)
 
-    def test_direct_flutter_run_is_limited_to_dev_direct(self) -> None:
+    def test_workspace_launch_provenances_are_non_promotable(self) -> None:
         for path in self.paths:
-            if path.launch_provenance == "direct_flutter_run":
-                self.assertEqual(path.distribution_class, "dev_direct", path)
+            if path.launch_provenance in {
+                "workspace_flutter_run",
+                "workspace_ide_debug",
+            }:
+                self.assertFalse(path.promotable, path)
+                self.assertIn(
+                    path.distribution_class,
+                    {"dev_direct", "simulator", "registered_device"},
+                    path,
+                )
 
     def test_promotable_paths_are_release_only_promotable_classes(self) -> None:
         for path in self.paths:

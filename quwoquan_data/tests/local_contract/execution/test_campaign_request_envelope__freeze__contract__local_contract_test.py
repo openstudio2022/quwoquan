@@ -450,6 +450,10 @@ def test_campaign_request_envelope_freeze__contract__local_contract_test(
         "handoffId": "local-contract",
         "handoffRevision": 1,
         "handoffDigest": "sha256:" + "9" * 64,
+        "sourceSelection": {
+            carrier: {"mode": "site_primary", "providers": ["wikipedia"]}
+            for carrier in ("homepage", "article", "image", "video")
+        },
     }
     with pytest.MonkeyPatch.context() as topic_patch:
         topic_patch.setattr(
@@ -548,6 +552,10 @@ def test_campaign_envelope_freeze_rejects_cross_lane_handoff_drift(
             "handoffId": "local-contract",
             "handoffRevision": 1 if carrier == "homepage" else 2,
             "handoffDigest": "sha256:" + "9" * 64,
+            "sourceSelection": {
+                lane: {"mode": "site_primary", "providers": ["wikipedia"]}
+                for lane in ("homepage", "article", "image", "video")
+            },
         }
         return (
             [],

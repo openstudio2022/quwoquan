@@ -259,6 +259,78 @@ abstract final class AppCloudOperationUpgradeDescriptors {
         )
         self.assertEqual(domains, frozenset({"realtime"}))
 
+    def test_generated_method_metadata_accepts_dart_formatter_wrapping(self) -> None:
+        metadata = self.verifier._parse_generated_method_metadata(
+            """
+abstract final class AppCloudOperationIds {
+  static const String
+  circleGatheringPlanCommitGatheringPlanProposal =
+      "circle.circle_management.gathering_plan.CommitGatheringPlanProposal";
+}
+const appCloudOperationContracts = <String, CloudOperationContract>{
+  "circle.circle_management.gathering_plan.CommitGatheringPlanProposal":
+      CloudOperationContract(
+        canonicalOperationId:
+            "circle.circle_management.gathering_plan.CommitGatheringPlanProposal",
+        domain: "circle",
+        transport: "json",
+      ),
+};
+""",
+            {"circleGatheringPlanCommitGatheringPlanProposal"},
+        )
+
+        self.assertEqual(
+            metadata["circleGatheringPlanCommitGatheringPlanProposal"],
+            self.verifier.GeneratedMethodMetadata(
+                "circle.circle_management.gathering_plan.CommitGatheringPlanProposal",
+                "circle",
+                "json",
+            ),
+        )
+
+    def test_wrapped_commercial_blocker_only_exempts_blocked_method(self) -> None:
+        blocked_method = "circleGatheringPlanCommitGatheringPlanProposal"
+        ready_method = "circleGatheringPlanCreateGatheringPlan"
+        generated_source = """
+abstract final class AppCloudOperationIds {
+  static const String
+  circleGatheringPlanCommitGatheringPlanProposal =
+      "circle.circle_management.gathering_plan.CommitGatheringPlanProposal";
+  static const String
+  circleGatheringPlanCreateGatheringPlan =
+      "circle.circle_management.gathering_plan.CreateGatheringPlan";
+}
+const appCloudOperationContracts = <String, CloudOperationContract>{
+  "circle.circle_management.gathering_plan.CommitGatheringPlanProposal":
+      CloudOperationContract(
+        canonicalOperationId:
+            "circle.circle_management.gathering_plan.CommitGatheringPlanProposal",
+        commercialStatus:
+            "blocked",
+      ),
+  "circle.circle_management.gathering_plan.CreateGatheringPlan":
+      CloudOperationContract(
+        canonicalOperationId:
+            "circle.circle_management.gathering_plan.CreateGatheringPlan",
+        commercialStatus:
+            "ready",
+      ),
+};
+"""
+
+        blocked_methods = self.verifier._commercially_blocked_methods(
+            generated_source
+        )
+        report = self.verifier._analyze_method_owners(
+            self.app_root,
+            {blocked_method, ready_method},
+            blocked_methods,
+        )
+
+        self.assertEqual(blocked_methods, frozenset({blocked_method}))
+        self.assertEqual(report.missing, frozenset({ready_method}))
+
     def test_graphql_method_uses_specialized_client_and_canonical_owner(
         self,
     ) -> None:

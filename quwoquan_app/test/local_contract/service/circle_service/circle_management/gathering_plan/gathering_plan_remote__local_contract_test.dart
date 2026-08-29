@@ -46,6 +46,55 @@ void main() {
       expect(board.plan.capability.itemCount, 1);
     });
 
+    test('production Remote 同一 GET 保留 canonical identity 与 Board 投影', () async {
+      final captured = <http.Request>[];
+      final facet = _planFacet(captured, _planResponse);
+
+      final result = await facet.readPlanResult('gathering-1');
+
+      expect(result.planId, 'plan-1');
+      expect(result.gatheringId, 'gathering-1');
+      expect(result.planVersion, 2);
+      expect(result.currentRevisionId, 'plan-revision-1');
+      expect(result.currentRevisionNumber, 1);
+      expect(result.currentRevisionDigest, 'plan-digest-1');
+      expect(result.board.items.single.planItemId, 'plan-item-1');
+      expect(captured, hasLength(1));
+    });
+
+    test(
+      'production Remote 以 stable cursor 读取 immutable Revision history',
+      () async {
+        final captured = <http.Request>[];
+        final facet = _planFacet(captured, (_) => _revisionPageResponse);
+
+        final page = await facet.listPlanRevisions(
+          'plan-1',
+          cursor: 'revision-cursor-1',
+          limit: 2,
+        );
+
+        final request = captured.single;
+        expect(request.method, 'GET');
+        expect(request.url.path, '/gathering-plans/plan-1/revisions');
+        expect(request.url.queryParameters, <String, String>{
+          'cursor': 'revision-cursor-1',
+          'limit': '2',
+        });
+        expect(
+          request.headers['X-Client-Operation-Id'],
+          cloud
+              .AppCloudOperationIds
+              .circleGatheringPlanListGatheringPlanRevisions,
+        );
+        expect(page.items.single.revisionId, 'plan-revision-1');
+        expect(page.items.single.revisionDigest, 'plan-digest-1');
+        expect(page.items.single.board.items.single.title, '集合出发');
+        expect(page.nextCursor, 'revision-cursor-2');
+        expect(page.hasMore, isTrue);
+      },
+    );
+
     test('Plan 未创建时看板只标记未配置，活动主体照常可读', () async {
       final board = await _boardWithPlanFailure(
         statusCode: 404,
@@ -114,7 +163,34 @@ RemoteGatheringFacet _remote(
   List<http.Request> captured,
   Object Function(http.Request request) responseFor,
 ) {
-  final client = buildGeneratedCloudOperationClient(
+  final client = _client(captured, responseFor);
+  return RemoteGatheringFacet(
+    client: client,
+    invocationContext: _invocationContext,
+    planReader: GatheringBoardPlanReaderFacade(
+      RemoteGatheringPlanFacet(
+        client: client,
+        invocationContext: _invocationContext,
+      ),
+    ),
+  );
+}
+
+RemoteGatheringPlanFacet _planFacet(
+  List<http.Request> captured,
+  Object Function(http.Request request) responseFor,
+) {
+  return RemoteGatheringPlanFacet(
+    client: _client(captured, responseFor),
+    invocationContext: _invocationContext,
+  );
+}
+
+cloud.GeneratedCloudOperationClient _client(
+  List<http.Request> captured,
+  Object Function(http.Request request) responseFor,
+) {
+  return buildGeneratedCloudOperationClient(
     httpClient: CloudHttpClient(
       client: MockClient((request) async {
         captured.add(request);
@@ -137,29 +213,21 @@ RemoteGatheringFacet _remote(
       gatewayBaseUri: Uri.parse('https://test-gateway.example.com'),
     ),
   );
-  cloud.CloudOperationInvocationContext context(
-    String clientPageId, {
-    String? idempotencyKey,
-  }) => cloud.CloudOperationInvocationContext(
-    surfaceId: 'gatheringBoard',
-    routeId: 'gatheringBoard',
-    clientPageId: clientPageId,
-    actor: const cloud.CloudOperationActorContext(
-      accountId: 'account-1',
-      personaId: 'persona-1',
-    ),
-    idempotencyKey: idempotencyKey,
-  );
-  // 本用例断言的是 Plan 读取语义，同时覆盖它经 board port 接线的那一跳：
-  // 注入真实 plan facet 而不是替身，才能证明 port 两侧的契约是同一份。
-  return RemoteGatheringFacet(
-    client: client,
-    invocationContext: context,
-    planReader: GatheringBoardPlanReaderFacade(
-      RemoteGatheringPlanFacet(client: client, invocationContext: context),
-    ),
-  );
 }
+
+cloud.CloudOperationInvocationContext _invocationContext(
+  String clientPageId, {
+  String? idempotencyKey,
+}) => cloud.CloudOperationInvocationContext(
+  surfaceId: 'gatheringBoard',
+  routeId: 'gatheringBoard',
+  clientPageId: clientPageId,
+  actor: const cloud.CloudOperationActorContext(
+    accountId: 'account-1',
+    personaId: 'persona-1',
+  ),
+  idempotencyKey: idempotencyKey,
+);
 
 const Map<String, Object?> _gatheringPlanResponse = <String, Object?>{
   'id': 'plan-1',
@@ -194,6 +262,33 @@ const Map<String, Object?> _gatheringPlanResponse = <String, Object?>{
   'acknowledgements': <Object?>[],
   'createdAt': '2026-08-09T01:00:00Z',
   'updatedAt': '2026-08-09T01:00:00Z',
+};
+
+const Map<String, Object?> _revisionPageResponse = <String, Object?>{
+  'items': <Object?>[
+    <String, Object?>{
+      'revisionId': 'plan-revision-1',
+      'revisionNumber': 1,
+      'baseRevisionNumber': 0,
+      'baseRevisionDigest': 'plan-digest-0',
+      'revisionDigest': 'plan-digest-1',
+      'committedByPersonaId': 'host-persona',
+      'items': <Object?>[
+        <String, Object?>{
+          'itemId': 'plan-item-1',
+          'kind': 'agenda',
+          'order': 1,
+          'agenda': <String, Object?>{'content': '集合出发', 'durationMinutes': 45},
+          'sourceRefs': <Object?>[],
+        },
+      ],
+      'acknowledgementPolicy': <String, Object?>{'mode': 'none'},
+      'affectedParticipationRefs': <Object?>[],
+      'committedAt': '2026-08-09T01:00:00Z',
+    },
+  ],
+  'nextCursor': 'revision-cursor-2',
+  'hasMore': true,
 };
 
 const Map<String, Object?> _privateDetailResponse = <String, Object?>{

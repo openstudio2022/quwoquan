@@ -63,8 +63,10 @@ def test_aggregate_release__payload_layout__contract__local_contract(tmp_path: P
     assert len(media["assets"]) == 1
     release_asset = media["assets"][0]
     assert "objectKey" not in release_asset
-    assert release_asset["publicSliceKey"].startswith("media/image/s/asset/")
-    assert payload_file(release, release_asset["publicSliceKey"]).is_file()
+    # DEC-031: research release delivers the CAS body, never a public slice.
+    assert "publicSliceKey" not in release_asset
+    assert release_asset["privateObjectKey"].startswith("media/objects/sha256/")
+    assert payload_file(release, release_asset["privateObjectKey"]).is_file()
     release_objects_text = "\n".join(
         path.read_text(encoding="utf-8")
         for path in sorted(payload_file(release, "objects").rglob("*.json"))

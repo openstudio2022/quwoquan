@@ -22,7 +22,8 @@ class TagRequestPageIds {
     'ValidateTagRefs': 'tag.validate.tag.refs',
   };
 
-  static const String activateTagTaxonomyRelease = 'tag.activate.tag.taxonomy.release';
+  static const String activateTagTaxonomyRelease =
+      'tag.activate.tag.taxonomy.release';
   static const String invertedObjects = 'tag.inverted.objects';
   static const String listDimensions = 'tag.list.dimensions';
   static const String listTagChildren = 'tag.list.tag.children';
@@ -33,7 +34,8 @@ class TagRequestPageIds {
   static const String searchByTags = 'tag.search.by.tags';
   static const String searchTags = 'tag.search.tags';
   static const String sharedTags = 'tag.shared.tags';
-  static const String stageTagTaxonomyRelease = 'tag.stage.tag.taxonomy.release';
+  static const String stageTagTaxonomyRelease =
+      'tag.stage.tag.taxonomy.release';
   static const String suggestTags = 'tag.suggest.tags';
   static const String tagCooccurrence = 'tag.tag.cooccurrence';
   static const String validateTagRefs = 'tag.validate.tag.refs';

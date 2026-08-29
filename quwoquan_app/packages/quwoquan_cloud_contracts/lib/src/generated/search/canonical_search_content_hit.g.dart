@@ -2,6 +2,7 @@
 // ignore_for_file: prefer_const_constructors, unnecessary_null_in_if_null_operators
 
 import '../../content/content_operation_contracts.g.dart';
+import '../shared_operation_enums.g.dart';
 
 class CanonicalSearchContentHit {
   final String postId;
@@ -10,6 +11,8 @@ class CanonicalSearchContentHit {
   final String? title;
   final String? summary;
   final String? coverUrl;
+  final String? coverAssetId;
+  final MediaDeliveryAccessMode? coverAccessMode;
   final String? authorId;
   final String? authorDisplayName;
   final String? authorAvatarUrl;
@@ -25,6 +28,8 @@ class CanonicalSearchContentHit {
     this.title,
     this.summary,
     this.coverUrl,
+    this.coverAssetId,
+    this.coverAccessMode,
     this.authorId,
     this.authorDisplayName,
     this.authorAvatarUrl,
@@ -38,18 +43,35 @@ class CanonicalSearchContentHit {
     _validateCanonicalSearchContentHitWire(m);
     return CanonicalSearchContentHit(
       postId: m['postId'] as String,
-      contentType: ContentType.fromWire(m['contentType'], 'CanonicalSearchContentHit.contentType'),
-      contentIdentity: m['contentIdentity'] == null ? null : ContentIdentity.fromWire(m['contentIdentity'], 'CanonicalSearchContentHit.contentIdentity'),
+      contentType: ContentType.fromWire(
+        m['contentType'],
+        'CanonicalSearchContentHit.contentType',
+      ),
+      contentIdentity: m['contentIdentity'] == null
+          ? null
+          : ContentIdentity.fromWire(
+              m['contentIdentity'],
+              'CanonicalSearchContentHit.contentIdentity',
+            ),
       title: m['title'] as String?,
       summary: m['summary'] as String?,
       coverUrl: m['coverUrl'] as String?,
+      coverAssetId: m['coverAssetId'] as String?,
+      coverAccessMode: m['coverAccessMode'] == null
+          ? null
+          : MediaDeliveryAccessMode.fromWire(
+              m['coverAccessMode'],
+              'CanonicalSearchContentHit.coverAccessMode',
+            ),
       authorId: m['authorId'] as String?,
       authorDisplayName: m['authorDisplayName'] as String?,
       authorAvatarUrl: m['authorAvatarUrl'] as String?,
       categoryId: m['categoryId'] as String?,
       subCategory: m['subCategory'] as String?,
       likeCount: m['likeCount'] as int,
-      publishedAt: m['publishedAt'] == null ? null : DateTime.parse(m['publishedAt'] as String),
+      publishedAt: m['publishedAt'] == null
+          ? null
+          : DateTime.parse(m['publishedAt'] as String),
     );
   }
 
@@ -61,6 +83,8 @@ class CanonicalSearchContentHit {
       'title': title,
       'summary': summary,
       'coverUrl': coverUrl,
+      'coverAssetId': coverAssetId,
+      'coverAccessMode': coverAccessMode?.wireName,
       'authorId': authorId,
       'authorDisplayName': authorDisplayName,
       'authorAvatarUrl': authorAvatarUrl,
@@ -78,6 +102,8 @@ class CanonicalSearchContentHit {
     String? title,
     String? summary,
     String? coverUrl,
+    String? coverAssetId,
+    MediaDeliveryAccessMode? coverAccessMode,
     String? authorId,
     String? authorDisplayName,
     String? authorAvatarUrl,
@@ -93,6 +119,8 @@ class CanonicalSearchContentHit {
       title: title ?? this.title,
       summary: summary ?? this.summary,
       coverUrl: coverUrl ?? this.coverUrl,
+      coverAssetId: coverAssetId ?? this.coverAssetId,
+      coverAccessMode: coverAccessMode ?? this.coverAccessMode,
       authorId: authorId ?? this.authorId,
       authorDisplayName: authorDisplayName ?? this.authorDisplayName,
       authorAvatarUrl: authorAvatarUrl ?? this.authorAvatarUrl,
@@ -112,6 +140,8 @@ void _validateCanonicalSearchContentHitWire(Map<String, dynamic> m) {
     'title',
     'summary',
     'coverUrl',
+    'coverAssetId',
+    'coverAccessMode',
     'authorId',
     'authorDisplayName',
     'authorAvatarUrl',
@@ -120,47 +150,116 @@ void _validateCanonicalSearchContentHitWire(Map<String, dynamic> m) {
     'likeCount',
     'publishedAt',
   };
-  final unknown = m.keys.where((key) => !allowed.contains(key)).toList(growable: false);
+  final unknown = m.keys
+      .where((key) => !allowed.contains(key))
+      .toList(growable: false);
   if (unknown.isNotEmpty) {
-    throw FormatException('CanonicalSearchContentHit contains unknown fields: ${unknown.join(',')}');
+    throw FormatException(
+      'CanonicalSearchContentHit contains unknown fields: ${unknown.join(',')}',
+    );
   }
-  if (!m.containsKey('postId') || m['postId'] == null || (m['postId'] is! String)) {
-    throw FormatException('CanonicalSearchContentHit.postId has an invalid wire value');
+  if (!m.containsKey('postId') ||
+      m['postId'] == null ||
+      (m['postId'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchContentHit.postId has an invalid wire value',
+    );
   }
-  if (!m.containsKey('contentType') || m['contentType'] == null || (m['contentType'] is! String)) {
-    throw FormatException('CanonicalSearchContentHit.contentType has an invalid wire value');
+  if (!m.containsKey('contentType') ||
+      m['contentType'] == null ||
+      (m['contentType'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchContentHit.contentType has an invalid wire value',
+    );
   }
-  if (m.containsKey('contentIdentity') && m['contentIdentity'] != null && (m['contentIdentity'] is! String)) {
-    throw FormatException('CanonicalSearchContentHit.contentIdentity has an invalid wire value');
+  if (m.containsKey('contentIdentity') &&
+      m['contentIdentity'] != null &&
+      (m['contentIdentity'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchContentHit.contentIdentity has an invalid wire value',
+    );
   }
   if (m.containsKey('title') && m['title'] != null && (m['title'] is! String)) {
-    throw FormatException('CanonicalSearchContentHit.title has an invalid wire value');
+    throw FormatException(
+      'CanonicalSearchContentHit.title has an invalid wire value',
+    );
   }
-  if (m.containsKey('summary') && m['summary'] != null && (m['summary'] is! String)) {
-    throw FormatException('CanonicalSearchContentHit.summary has an invalid wire value');
+  if (m.containsKey('summary') &&
+      m['summary'] != null &&
+      (m['summary'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchContentHit.summary has an invalid wire value',
+    );
   }
-  if (m.containsKey('coverUrl') && m['coverUrl'] != null && (m['coverUrl'] is! String)) {
-    throw FormatException('CanonicalSearchContentHit.coverUrl has an invalid wire value');
+  if (m.containsKey('coverUrl') &&
+      m['coverUrl'] != null &&
+      (m['coverUrl'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchContentHit.coverUrl has an invalid wire value',
+    );
   }
-  if (m.containsKey('authorId') && m['authorId'] != null && (m['authorId'] is! String)) {
-    throw FormatException('CanonicalSearchContentHit.authorId has an invalid wire value');
+  if (m.containsKey('coverAssetId') &&
+      m['coverAssetId'] != null &&
+      (m['coverAssetId'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchContentHit.coverAssetId has an invalid wire value',
+    );
   }
-  if (m.containsKey('authorDisplayName') && m['authorDisplayName'] != null && (m['authorDisplayName'] is! String)) {
-    throw FormatException('CanonicalSearchContentHit.authorDisplayName has an invalid wire value');
+  if (m.containsKey('coverAccessMode') &&
+      m['coverAccessMode'] != null &&
+      (m['coverAccessMode'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchContentHit.coverAccessMode has an invalid wire value',
+    );
   }
-  if (m.containsKey('authorAvatarUrl') && m['authorAvatarUrl'] != null && (m['authorAvatarUrl'] is! String)) {
-    throw FormatException('CanonicalSearchContentHit.authorAvatarUrl has an invalid wire value');
+  if (m.containsKey('authorId') &&
+      m['authorId'] != null &&
+      (m['authorId'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchContentHit.authorId has an invalid wire value',
+    );
   }
-  if (m.containsKey('categoryId') && m['categoryId'] != null && (m['categoryId'] is! String)) {
-    throw FormatException('CanonicalSearchContentHit.categoryId has an invalid wire value');
+  if (m.containsKey('authorDisplayName') &&
+      m['authorDisplayName'] != null &&
+      (m['authorDisplayName'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchContentHit.authorDisplayName has an invalid wire value',
+    );
   }
-  if (m.containsKey('subCategory') && m['subCategory'] != null && (m['subCategory'] is! String)) {
-    throw FormatException('CanonicalSearchContentHit.subCategory has an invalid wire value');
+  if (m.containsKey('authorAvatarUrl') &&
+      m['authorAvatarUrl'] != null &&
+      (m['authorAvatarUrl'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchContentHit.authorAvatarUrl has an invalid wire value',
+    );
   }
-  if (!m.containsKey('likeCount') || m['likeCount'] == null || (m['likeCount'] is! int)) {
-    throw FormatException('CanonicalSearchContentHit.likeCount has an invalid wire value');
+  if (m.containsKey('categoryId') &&
+      m['categoryId'] != null &&
+      (m['categoryId'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchContentHit.categoryId has an invalid wire value',
+    );
   }
-  if (m.containsKey('publishedAt') && m['publishedAt'] != null && (m['publishedAt'] is! String || DateTime.tryParse(m['publishedAt'] as String) == null)) {
-    throw FormatException('CanonicalSearchContentHit.publishedAt has an invalid wire value');
+  if (m.containsKey('subCategory') &&
+      m['subCategory'] != null &&
+      (m['subCategory'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchContentHit.subCategory has an invalid wire value',
+    );
+  }
+  if (!m.containsKey('likeCount') ||
+      m['likeCount'] == null ||
+      (m['likeCount'] is! int)) {
+    throw FormatException(
+      'CanonicalSearchContentHit.likeCount has an invalid wire value',
+    );
+  }
+  if (m.containsKey('publishedAt') &&
+      m['publishedAt'] != null &&
+      (m['publishedAt'] is! String ||
+          DateTime.tryParse(m['publishedAt'] as String) == null)) {
+    throw FormatException(
+      'CanonicalSearchContentHit.publishedAt has an invalid wire value',
+    );
   }
 }

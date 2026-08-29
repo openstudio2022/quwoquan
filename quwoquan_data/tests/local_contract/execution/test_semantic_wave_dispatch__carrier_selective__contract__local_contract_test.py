@@ -1,4 +1,9 @@
 # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-004
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#req-011
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-024.t1
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-024.t2
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-024.t3
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-024.t4
 from __future__ import annotations
 
 import copy
@@ -25,6 +30,7 @@ from content.source.research.scale_source_pool_runtime import (
 from core.io import write_json
 from core.schema import assert_valid
 from support.capacity_calibration_fixture import write_synthetic_capacity_receipt
+from support.scale_source_pool_projection_fixture import _media_admission_row
 from support.semantic_preflight_fixture import ready_semantic_preflight
 
 IDENTITY = {
@@ -65,10 +71,13 @@ def _attribution(carrier: str, index: int) -> dict[str, object]:
         "propertyReleaseStatus": "not_required",
         "collectedAt": "2026-08-11T00:00:00Z",
         "takedownPolicy": "remove on substantiated request",
+        "derivedModifications": [],
     }
 
 
-def _candidate(carrier: str, index: int) -> dict[str, object]:
+def _candidate(
+    carrier: str, index: int, *, evidence_root: Path | None = None
+) -> dict[str, object]:
     name = f"{carrier}-{index:03d}"
     prefix = {
         "homepage": "entities/地点/景区",
@@ -117,12 +126,29 @@ def _candidate(carrier: str, index: int) -> dict[str, object]:
         )
     else:
         # image/video 只声明 source admission 指针，evidence 套件字段禁止出现。
+        # 指针必须指向真实铸出的 receipt：池在校验期把 receipt 与引用它的候选逐字段
+        # 比对（objectRef/assetKind/contentSha256/rightsStatus/distributionDecision），
+        # 因此 receipt 只能按该候选自己的对象形态铸出。
+        if evidence_root is None:
+            raise AssertionError("media candidate requires an evidence root")
+        admission = _media_admission_row(
+            evidence_root=evidence_root,
+            carrier=carrier,
+            index=index,
+            provider=f"{carrier}-source",
+            candidate_id=name,
+            object_ref=str(row["objectRef"]),
+        )
         row.update(
             {
-                "sourceAdmissionRef": (
-                    f"data/source-admissions/{name}/admission.json"
-                ),
-                "sourceAdmissionDigest": _sha_text(f"admission:{name}"),
+                field: admission[field]
+                for field in (
+                    "sourceAdmissionRef",
+                    "sourceAdmissionDigest",
+                    "contentSha256",
+                    "rightsStatus",
+                    "distributionDecision",
+                )
             }
         )
     return row
@@ -139,7 +165,10 @@ def _inputs(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
     candidates = [
         *(_candidate("homepage", index) for index in range(24)),
         *(_candidate("article", index) for index in range(12)),
-        *(_candidate("image", index) for index in range(12)),
+        *(
+            _candidate("image", index, evidence_root=evidence)
+            for index in range(12)
+        ),
     ]
     plan = build_scale_source_pool_plan(
         pool_id="carrier-selective-m100-wave",
@@ -285,7 +314,10 @@ def test_explicit_workload_inspection_and_dispatch_preserve_independent_quotas(
     workloads = {"homepage": 7, "image": 11}
     candidates = [
         *(_candidate("homepage", index) for index in range(7)),
-        *(_candidate("image", index) for index in range(11)),
+        *(
+            _candidate("image", index, evidence_root=evidence)
+            for index in range(11)
+        ),
     ]
     plan = build_scale_source_pool_plan(
         pool_id="homepage-image-explicit-workload",

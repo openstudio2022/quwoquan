@@ -21,7 +21,7 @@
 
 - 文章摘要生成由 helper-read-summary 独立 Story 验收。
 - HLS/DASH ABR 在 feature flag 关闭时不属于首发交付。
-- 单对象存储预算的逐载体数值及其门禁实现：本能力只消费该预算而不认领它，其规格 owner 缺口见 [`image-delivery-variants`](./image-delivery-variants/spec.md) 的 `OPEN-006`。
+- 单对象存储预算的逐载体数值：本能力只消费该预算而不认领它，其规格 owner 为 [`multi-carrier-release`](../object-homepage-coverage-scaling/multi-carrier-release/spec.md#req-012) 的 `REQ-012`；发布侧判定形态的缺口见 [`image-delivery-variants`](./image-delivery-variants/spec.md) 的 `OPEN-006`。
 - 归一化衍生体的格式、重编码质量、EXIF/ICC 去留与源体摘要落点：本能力当前只支持 passthrough，四项裁决见 [`image-delivery-variants`](./image-delivery-variants/spec.md) 的 `OPEN-007`。
 - 批次级零合格原因值：发布侧只产出对象级排除码，批次终态原因归 [`multi-carrier-release`](../object-homepage-coverage-scaling/multi-carrier-release/spec.md) 所有。
 

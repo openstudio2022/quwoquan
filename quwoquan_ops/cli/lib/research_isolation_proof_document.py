@@ -129,13 +129,16 @@ def _segment_operations(segments: Mapping[str, Any]) -> list[Mapping[str, Any]]:
         denied["export"]["operation"],
         signed["issuanceOperation"],
         signed["accessOperation"],
+        signed["rangeAccessOperation"],
+        signed["forgedSignatureOperation"],
+        signed["tamperedExpiryOperation"],
         signed["auditReadbackOperation"],
         segments["positiveReadback"]["operation"],
     ]
     if any(not isinstance(row, Mapping) for row in rows):
         raise ResearchIsolationProbeError(
             "OPS.RESEARCH.PROOF_EVIDENCE_INCOMPLETE",
-            "runtime proof segments must carry all 12 operations",
+            "runtime proof segments must carry all 15 operations",
         )
     return rows
 
@@ -186,7 +189,7 @@ def build_runtime_proof_document(
         raise ResearchIsolationProbeError(
             "OPS.RESEARCH.PROOF_EVIDENCE_REUSED",
             "operation requestId/traceId must be globally unique across "
-            "all 12 probe operations",
+            "all 15 probe operations",
         )
     document: dict[str, Any] = {
         "schema": "quwoquan_data.research_isolation_verification",

@@ -1,5 +1,5 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: 05b1683f93feb5234ad8184f318b5d32e9f340e4d7e36d1e833581cfc400702c
+// ContractGraph SHA256: 2ba8995ae51f9f431ebc75e30f64d31285cc4cfb724f0ef1d8473c11011a5469
 
 library;
 
@@ -559,11 +559,17 @@ final class AppConfigActivationPolicy {
   final String defaultActivation;
   final String killSwitches;
 
-  factory AppConfigActivationPolicy.fromWire(Map<String, Object?> map, [String path = "AppConfigActivationPolicy"]) {
+  factory AppConfigActivationPolicy.fromWire(
+    Map<String, Object?> map, [
+    String path = "AppConfigActivationPolicy",
+  ]) {
     _rejectUnknownFields(map, const <String>{"default", "kill_switches"}, path);
     return AppConfigActivationPolicy(
       defaultActivation: _requiredString(map["default"], '$path.default'),
-      killSwitches: _requiredString(map["kill_switches"], '$path.kill_switches'),
+      killSwitches: _requiredString(
+        map["kill_switches"],
+        '$path.kill_switches',
+      ),
     );
   }
 
@@ -590,14 +596,30 @@ final class AppConfigSlice {
   final ContentAppConfig content;
   final String configHash;
 
-  factory AppConfigSlice.fromWire(Map<String, Object?> map, [String path = "AppConfigSlice"]) {
-    _rejectUnknownFields(map, const <String>{"schema", "fetchedAt", "maxAgeSec", "activationPolicy", "content", "configHash"}, path);
+  factory AppConfigSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "AppConfigSlice",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "schema",
+      "fetchedAt",
+      "maxAgeSec",
+      "activationPolicy",
+      "content",
+      "configHash",
+    }, path);
     return AppConfigSlice(
       schema: _requiredString(map["schema"], '$path.schema'),
       fetchedAt: _requiredTimestamp(map["fetchedAt"], '$path.fetchedAt'),
       maxAgeSec: _requiredPositiveInt(map["maxAgeSec"], '$path.maxAgeSec'),
-      activationPolicy: AppConfigActivationPolicy.fromWire(_requiredObject(map["activationPolicy"], '$path.activationPolicy'), '$path.activationPolicy'),
-      content: ContentAppConfig.fromWire(_requiredObject(map["content"], '$path.content'), '$path.content'),
+      activationPolicy: AppConfigActivationPolicy.fromWire(
+        _requiredObject(map["activationPolicy"], '$path.activationPolicy'),
+        '$path.activationPolicy',
+      ),
+      content: ContentAppConfig.fromWire(
+        _requiredObject(map["content"], '$path.content'),
+        '$path.content',
+      ),
       configHash: _requiredString(map["configHash"], '$path.configHash'),
     );
   }
@@ -623,11 +645,27 @@ final class AuthorCommentPageSlice {
   final String? nextCursor;
   final int total;
 
-  factory AuthorCommentPageSlice.fromWire(Map<String, Object?> map, [String path = "AuthorCommentPageSlice"]) {
-    _rejectUnknownFields(map, const <String>{"items", "nextCursor", "total"}, path);
+  factory AuthorCommentPageSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "AuthorCommentPageSlice",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "items",
+      "nextCursor",
+      "total",
+    }, path);
     return AuthorCommentPageSlice(
-      items: List<CommentListItem>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => CommentListItem.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
-      nextCursor: map["nextCursor"] == null ? null : _requiredString(map["nextCursor"], '$path.nextCursor'),
+      items: List<CommentListItem>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => CommentListItem.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      nextCursor: map["nextCursor"] == null
+          ? null
+          : _requiredString(map["nextCursor"], '$path.nextCursor'),
       total: _requiredInt(map["total"], '$path.total'),
     );
   }
@@ -666,20 +704,69 @@ final class AuthorImpactEvidenceItem {
   final List<IntersectionActionHint> actionHints;
   final IntersectionTarget? contentTarget;
 
-  factory AuthorImpactEvidenceItem.fromWire(Map<String, Object?> map, [String path = "AuthorImpactEvidenceItem"]) {
-    _rejectUnknownFields(map, const <String>{"evidenceId", "impactId", "helpType", "action", "intersectionDimension", "occurredAt", "summaryText", "sampleVisual", "representativeActor", "actionHints", "contentTarget"}, path);
+  factory AuthorImpactEvidenceItem.fromWire(
+    Map<String, Object?> map, [
+    String path = "AuthorImpactEvidenceItem",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "evidenceId",
+      "impactId",
+      "helpType",
+      "action",
+      "intersectionDimension",
+      "occurredAt",
+      "summaryText",
+      "sampleVisual",
+      "representativeActor",
+      "actionHints",
+      "contentTarget",
+    }, path);
     return AuthorImpactEvidenceItem(
       evidenceId: _requiredString(map["evidenceId"], '$path.evidenceId'),
       impactId: _requiredString(map["impactId"], '$path.impactId'),
       helpType: _requiredString(map["helpType"], '$path.helpType'),
       action: _requiredString(map["action"], '$path.action'),
-      intersectionDimension: _requiredString(map["intersectionDimension"], '$path.intersectionDimension'),
+      intersectionDimension: _requiredString(
+        map["intersectionDimension"],
+        '$path.intersectionDimension',
+      ),
       occurredAt: _requiredTimestamp(map["occurredAt"], '$path.occurredAt'),
       summaryText: _requiredString(map["summaryText"], '$path.summaryText'),
-      sampleVisual: map["sampleVisual"] == null ? null : IntersectionVisual.fromWire(_requiredObject(map["sampleVisual"], '$path.sampleVisual'), '$path.sampleVisual'),
-      representativeActor: map["representativeActor"] == null ? null : IntersectionRepresentativeActor.fromWire(_requiredObject(map["representativeActor"], '$path.representativeActor'), '$path.representativeActor'),
-      actionHints: List<IntersectionActionHint>.unmodifiable(_requiredList(map["actionHints"], '$path.actionHints').asMap().entries.map((entry) => IntersectionActionHint.fromWire(_requiredObject(entry.value, '$path.actionHints' + '[${entry.key}]'), '$path.actionHints' + '[${entry.key}]'))),
-      contentTarget: map["contentTarget"] == null ? null : IntersectionTarget.fromWire(_requiredObject(map["contentTarget"], '$path.contentTarget'), '$path.contentTarget'),
+      sampleVisual: map["sampleVisual"] == null
+          ? null
+          : IntersectionVisual.fromWire(
+              _requiredObject(map["sampleVisual"], '$path.sampleVisual'),
+              '$path.sampleVisual',
+            ),
+      representativeActor: map["representativeActor"] == null
+          ? null
+          : IntersectionRepresentativeActor.fromWire(
+              _requiredObject(
+                map["representativeActor"],
+                '$path.representativeActor',
+              ),
+              '$path.representativeActor',
+            ),
+      actionHints: List<IntersectionActionHint>.unmodifiable(
+        _requiredList(
+          map["actionHints"],
+          '$path.actionHints',
+        ).asMap().entries.map(
+          (entry) => IntersectionActionHint.fromWire(
+            _requiredObject(
+              entry.value,
+              '$path.actionHints' + '[${entry.key}]',
+            ),
+            '$path.actionHints' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      contentTarget: map["contentTarget"] == null
+          ? null
+          : IntersectionTarget.fromWire(
+              _requiredObject(map["contentTarget"], '$path.contentTarget'),
+              '$path.contentTarget',
+            ),
     );
   }
 
@@ -692,8 +779,11 @@ final class AuthorImpactEvidenceItem {
     "occurredAt": occurredAt.toUtc().toIso8601String(),
     "summaryText": summaryText,
     if (sampleVisual != null) "sampleVisual": sampleVisual!.toWire(),
-    if (representativeActor != null) "representativeActor": representativeActor!.toWire(),
-    "actionHints": actionHints.map((value) => value.toWire()).toList(growable: false),
+    if (representativeActor != null)
+      "representativeActor": representativeActor!.toWire(),
+    "actionHints": actionHints
+        .map((value) => value.toWire())
+        .toList(growable: false),
     if (contentTarget != null) "contentTarget": contentTarget!.toWire(),
   };
 }
@@ -715,13 +805,33 @@ final class AuthorImpactEvidencePage {
   final String nextCursor;
   final bool hasMore;
 
-  factory AuthorImpactEvidencePage.fromWire(Map<String, Object?> map, [String path = "AuthorImpactEvidencePage"]) {
-    _rejectUnknownFields(map, const <String>{"impactId", "evidenceSnapshotId", "totalCount", "items", "nextCursor", "hasMore"}, path);
+  factory AuthorImpactEvidencePage.fromWire(
+    Map<String, Object?> map, [
+    String path = "AuthorImpactEvidencePage",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "impactId",
+      "evidenceSnapshotId",
+      "totalCount",
+      "items",
+      "nextCursor",
+      "hasMore",
+    }, path);
     return AuthorImpactEvidencePage(
       impactId: _requiredString(map["impactId"], '$path.impactId'),
-      evidenceSnapshotId: _requiredString(map["evidenceSnapshotId"], '$path.evidenceSnapshotId'),
+      evidenceSnapshotId: _requiredString(
+        map["evidenceSnapshotId"],
+        '$path.evidenceSnapshotId',
+      ),
       totalCount: _requiredInt(map["totalCount"], '$path.totalCount'),
-      items: List<AuthorImpactEvidenceItem>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => AuthorImpactEvidenceItem.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
+      items: List<AuthorImpactEvidenceItem>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => AuthorImpactEvidenceItem.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
       nextCursor: _requiredString(map["nextCursor"], '$path.nextCursor'),
       hasMore: _requiredBool(map["hasMore"], '$path.hasMore'),
     );
@@ -788,32 +898,134 @@ final class AuthorImpactItem {
   final double previousStrength;
   final double strengthDelta;
 
-  factory AuthorImpactItem.fromWire(Map<String, Object?> map, [String path = "AuthorImpactItem"]) {
-    _rejectUnknownFields(map, const <String>{"helpType", "action", "intersectionDimension", "tagRef", "source", "count", "primaryText", "subtitleText", "impactId", "primarySpans", "sampleVisuals", "representativeActor", "actionHints", "countTarget", "evidenceSnapshotId", "countObjectKind", "propagationPath", "iconKey", "freshAt", "timeBucket", "lifecycleState", "previousStrength", "strengthDelta"}, path);
+  factory AuthorImpactItem.fromWire(
+    Map<String, Object?> map, [
+    String path = "AuthorImpactItem",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "helpType",
+      "action",
+      "intersectionDimension",
+      "tagRef",
+      "source",
+      "count",
+      "primaryText",
+      "subtitleText",
+      "impactId",
+      "primarySpans",
+      "sampleVisuals",
+      "representativeActor",
+      "actionHints",
+      "countTarget",
+      "evidenceSnapshotId",
+      "countObjectKind",
+      "propagationPath",
+      "iconKey",
+      "freshAt",
+      "timeBucket",
+      "lifecycleState",
+      "previousStrength",
+      "strengthDelta",
+    }, path);
     return AuthorImpactItem(
       helpType: _requiredString(map["helpType"], '$path.helpType'),
       action: _requiredString(map["action"], '$path.action'),
-      intersectionDimension: _requiredString(map["intersectionDimension"], '$path.intersectionDimension'),
+      intersectionDimension: _requiredString(
+        map["intersectionDimension"],
+        '$path.intersectionDimension',
+      ),
       tagRef: _requiredString(map["tagRef"], '$path.tagRef'),
       source: _requiredString(map["source"], '$path.source'),
       count: _requiredInt(map["count"], '$path.count'),
       primaryText: _requiredString(map["primaryText"], '$path.primaryText'),
       subtitleText: _requiredString(map["subtitleText"], '$path.subtitleText'),
       impactId: _requiredString(map["impactId"], '$path.impactId'),
-      primarySpans: List<IntersectionTextSpan>.unmodifiable(_requiredList(map["primarySpans"], '$path.primarySpans').asMap().entries.map((entry) => IntersectionTextSpan.fromWire(_requiredObject(entry.value, '$path.primarySpans' + '[${entry.key}]'), '$path.primarySpans' + '[${entry.key}]'))),
-      sampleVisuals: List<IntersectionVisual>.unmodifiable(_requiredList(map["sampleVisuals"], '$path.sampleVisuals').asMap().entries.map((entry) => IntersectionVisual.fromWire(_requiredObject(entry.value, '$path.sampleVisuals' + '[${entry.key}]'), '$path.sampleVisuals' + '[${entry.key}]'))),
-      representativeActor: map["representativeActor"] == null ? null : IntersectionRepresentativeActor.fromWire(_requiredObject(map["representativeActor"], '$path.representativeActor'), '$path.representativeActor'),
-      actionHints: List<IntersectionActionHint>.unmodifiable(_requiredList(map["actionHints"], '$path.actionHints').asMap().entries.map((entry) => IntersectionActionHint.fromWire(_requiredObject(entry.value, '$path.actionHints' + '[${entry.key}]'), '$path.actionHints' + '[${entry.key}]'))),
-      countTarget: map["countTarget"] == null ? null : IntersectionTarget.fromWire(_requiredObject(map["countTarget"], '$path.countTarget'), '$path.countTarget'),
-      evidenceSnapshotId: _requiredString(map["evidenceSnapshotId"], '$path.evidenceSnapshotId'),
-      countObjectKind: _requiredString(map["countObjectKind"], '$path.countObjectKind'),
-      propagationPath: map["propagationPath"] == null ? null : IntersectionPropagationPath.fromWire(_requiredObject(map["propagationPath"], '$path.propagationPath'), '$path.propagationPath'),
+      primarySpans: List<IntersectionTextSpan>.unmodifiable(
+        _requiredList(
+          map["primarySpans"],
+          '$path.primarySpans',
+        ).asMap().entries.map(
+          (entry) => IntersectionTextSpan.fromWire(
+            _requiredObject(
+              entry.value,
+              '$path.primarySpans' + '[${entry.key}]',
+            ),
+            '$path.primarySpans' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      sampleVisuals: List<IntersectionVisual>.unmodifiable(
+        _requiredList(
+          map["sampleVisuals"],
+          '$path.sampleVisuals',
+        ).asMap().entries.map(
+          (entry) => IntersectionVisual.fromWire(
+            _requiredObject(
+              entry.value,
+              '$path.sampleVisuals' + '[${entry.key}]',
+            ),
+            '$path.sampleVisuals' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      representativeActor: map["representativeActor"] == null
+          ? null
+          : IntersectionRepresentativeActor.fromWire(
+              _requiredObject(
+                map["representativeActor"],
+                '$path.representativeActor',
+              ),
+              '$path.representativeActor',
+            ),
+      actionHints: List<IntersectionActionHint>.unmodifiable(
+        _requiredList(
+          map["actionHints"],
+          '$path.actionHints',
+        ).asMap().entries.map(
+          (entry) => IntersectionActionHint.fromWire(
+            _requiredObject(
+              entry.value,
+              '$path.actionHints' + '[${entry.key}]',
+            ),
+            '$path.actionHints' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      countTarget: map["countTarget"] == null
+          ? null
+          : IntersectionTarget.fromWire(
+              _requiredObject(map["countTarget"], '$path.countTarget'),
+              '$path.countTarget',
+            ),
+      evidenceSnapshotId: _requiredString(
+        map["evidenceSnapshotId"],
+        '$path.evidenceSnapshotId',
+      ),
+      countObjectKind: _requiredString(
+        map["countObjectKind"],
+        '$path.countObjectKind',
+      ),
+      propagationPath: map["propagationPath"] == null
+          ? null
+          : IntersectionPropagationPath.fromWire(
+              _requiredObject(map["propagationPath"], '$path.propagationPath'),
+              '$path.propagationPath',
+            ),
       iconKey: _requiredString(map["iconKey"], '$path.iconKey'),
       freshAt: _requiredTimestamp(map["freshAt"], '$path.freshAt'),
       timeBucket: _requiredString(map["timeBucket"], '$path.timeBucket'),
-      lifecycleState: _requiredString(map["lifecycleState"], '$path.lifecycleState'),
-      previousStrength: _requiredDouble(map["previousStrength"], '$path.previousStrength'),
-      strengthDelta: _requiredDouble(map["strengthDelta"], '$path.strengthDelta'),
+      lifecycleState: _requiredString(
+        map["lifecycleState"],
+        '$path.lifecycleState',
+      ),
+      previousStrength: _requiredDouble(
+        map["previousStrength"],
+        '$path.previousStrength',
+      ),
+      strengthDelta: _requiredDouble(
+        map["strengthDelta"],
+        '$path.strengthDelta',
+      ),
     );
   }
 
@@ -827,10 +1039,17 @@ final class AuthorImpactItem {
     "primaryText": primaryText,
     "subtitleText": subtitleText,
     "impactId": impactId,
-    "primarySpans": primarySpans.map((value) => value.toWire()).toList(growable: false),
-    "sampleVisuals": sampleVisuals.map((value) => value.toWire()).toList(growable: false),
-    if (representativeActor != null) "representativeActor": representativeActor!.toWire(),
-    "actionHints": actionHints.map((value) => value.toWire()).toList(growable: false),
+    "primarySpans": primarySpans
+        .map((value) => value.toWire())
+        .toList(growable: false),
+    "sampleVisuals": sampleVisuals
+        .map((value) => value.toWire())
+        .toList(growable: false),
+    if (representativeActor != null)
+      "representativeActor": representativeActor!.toWire(),
+    "actionHints": actionHints
+        .map((value) => value.toWire())
+        .toList(growable: false),
     if (countTarget != null) "countTarget": countTarget!.toWire(),
     "evidenceSnapshotId": evidenceSnapshotId,
     "countObjectKind": countObjectKind,
@@ -855,12 +1074,26 @@ final class AuthorImpactSummary {
   final int total;
   final List<AuthorImpactItem> items;
 
-  factory AuthorImpactSummary.fromWire(Map<String, Object?> map, [String path = "AuthorImpactSummary"]) {
-    _rejectUnknownFields(map, const <String>{"authorId", "total", "items"}, path);
+  factory AuthorImpactSummary.fromWire(
+    Map<String, Object?> map, [
+    String path = "AuthorImpactSummary",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "authorId",
+      "total",
+      "items",
+    }, path);
     return AuthorImpactSummary(
       authorId: _requiredString(map["authorId"], '$path.authorId'),
       total: _requiredInt(map["total"], '$path.total'),
-      items: List<AuthorImpactItem>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => AuthorImpactItem.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
+      items: List<AuthorImpactItem>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => AuthorImpactItem.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
     );
   }
 
@@ -882,11 +1115,27 @@ final class AuthorPostPageSlice {
   final String? nextCursor;
   final bool hasMore;
 
-  factory AuthorPostPageSlice.fromWire(Map<String, Object?> map, [String path = "AuthorPostPageSlice"]) {
-    _rejectUnknownFields(map, const <String>{"items", "nextCursor", "hasMore"}, path);
+  factory AuthorPostPageSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "AuthorPostPageSlice",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "items",
+      "nextCursor",
+      "hasMore",
+    }, path);
     return AuthorPostPageSlice(
-      items: List<ContentPostProjection>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => ContentPostProjection.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
-      nextCursor: map["nextCursor"] == null ? null : _requiredString(map["nextCursor"], '$path.nextCursor'),
+      items: List<ContentPostProjection>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => ContentPostProjection.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      nextCursor: map["nextCursor"] == null
+          ? null
+          : _requiredString(map["nextCursor"], '$path.nextCursor'),
       hasMore: _requiredBool(map["hasMore"], '$path.hasMore'),
     );
   }
@@ -915,14 +1164,30 @@ final class CommentAttachmentSlice {
   final int? height;
   final bool available;
 
-  factory CommentAttachmentSlice.fromWire(Map<String, Object?> map, [String path = "CommentAttachmentSlice"]) {
-    _rejectUnknownFields(map, const <String>{"mediaId", "mediaType", "url", "width", "height", "available"}, path);
+  factory CommentAttachmentSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "CommentAttachmentSlice",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "mediaId",
+      "mediaType",
+      "url",
+      "width",
+      "height",
+      "available",
+    }, path);
     return CommentAttachmentSlice(
       mediaId: _requiredString(map["mediaId"], '$path.mediaId'),
-      mediaType: map["mediaType"] == null ? null : _requiredString(map["mediaType"], '$path.mediaType'),
+      mediaType: map["mediaType"] == null
+          ? null
+          : _requiredString(map["mediaType"], '$path.mediaType'),
       url: map["url"] == null ? null : _requiredUri(map["url"], '$path.url'),
-      width: map["width"] == null ? null : _requiredPositiveInt(map["width"], '$path.width'),
-      height: map["height"] == null ? null : _requiredPositiveInt(map["height"], '$path.height'),
+      width: map["width"] == null
+          ? null
+          : _requiredPositiveInt(map["width"], '$path.width'),
+      height: map["height"] == null
+          ? null
+          : _requiredPositiveInt(map["height"], '$path.height'),
       available: _requiredBool(map["available"], '$path.available'),
     );
   }
@@ -950,8 +1215,16 @@ final class CommentCommandResult {
   final CommentStatus status;
   final bool replayed;
 
-  factory CommentCommandResult.fromWire(Map<String, Object?> map, [String path = "CommentCommandResult"]) {
-    _rejectUnknownFields(map, const <String>{"id", "version", "status", "replayed"}, path);
+  factory CommentCommandResult.fromWire(
+    Map<String, Object?> map, [
+    String path = "CommentCommandResult",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "id",
+      "version",
+      "status",
+      "replayed",
+    }, path);
     return CommentCommandResult(
       id: _requiredString(map["id"], '$path.id'),
       version: _requiredPositiveInt(map["version"], '$path.version'),
@@ -1047,41 +1320,173 @@ final class CommentListItem {
   final bool canReport;
   final bool canPin;
 
-  factory CommentListItem.fromWire(Map<String, Object?> map, [String path = "CommentListItem"]) {
-    _rejectUnknownFields(map, const <String>{"id", "version", "postId", "authorId", "authorDisplayNameSnapshot", "authorAvatarUrlSnapshot", "personaContextVersion", "content", "replyToCommentId", "replyToUserId", "parentCommentId", "attachmentMediaIds", "attachments", "mentions", "assistantMentioned", "assistantReplySource", "assistantCorrectionStatus", "authorIpLocation", "status", "isPinned", "pinnedAt", "createdAt", "updatedAt", "deletedAt", "replyCount", "replyPreview", "replyNextCursor", "likeCount", "dislikeCount", "viewerReaction", "authorLiked", "viewerRelation", "isAuthor", "canDelete", "canReply", "canReport", "canPin"}, path);
+  factory CommentListItem.fromWire(
+    Map<String, Object?> map, [
+    String path = "CommentListItem",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "id",
+      "version",
+      "postId",
+      "authorId",
+      "authorDisplayNameSnapshot",
+      "authorAvatarUrlSnapshot",
+      "personaContextVersion",
+      "content",
+      "replyToCommentId",
+      "replyToUserId",
+      "parentCommentId",
+      "attachmentMediaIds",
+      "attachments",
+      "mentions",
+      "assistantMentioned",
+      "assistantReplySource",
+      "assistantCorrectionStatus",
+      "authorIpLocation",
+      "status",
+      "isPinned",
+      "pinnedAt",
+      "createdAt",
+      "updatedAt",
+      "deletedAt",
+      "replyCount",
+      "replyPreview",
+      "replyNextCursor",
+      "likeCount",
+      "dislikeCount",
+      "viewerReaction",
+      "authorLiked",
+      "viewerRelation",
+      "isAuthor",
+      "canDelete",
+      "canReply",
+      "canReport",
+      "canPin",
+    }, path);
     return CommentListItem(
       id: _requiredString(map["id"], '$path.id'),
       version: _requiredPositiveInt(map["version"], '$path.version'),
       postId: _requiredString(map["postId"], '$path.postId'),
       authorId: _requiredString(map["authorId"], '$path.authorId'),
-      authorDisplayNameSnapshot: map["authorDisplayNameSnapshot"] == null ? null : _requiredString(map["authorDisplayNameSnapshot"], '$path.authorDisplayNameSnapshot'),
-      authorAvatarUrlSnapshot: map["authorAvatarUrlSnapshot"] == null ? null : _requiredUri(map["authorAvatarUrlSnapshot"], '$path.authorAvatarUrlSnapshot'),
-      personaContextVersion: map["personaContextVersion"] == null ? null : _requiredPositiveInt(map["personaContextVersion"], '$path.personaContextVersion'),
+      authorDisplayNameSnapshot: map["authorDisplayNameSnapshot"] == null
+          ? null
+          : _requiredString(
+              map["authorDisplayNameSnapshot"],
+              '$path.authorDisplayNameSnapshot',
+            ),
+      authorAvatarUrlSnapshot: map["authorAvatarUrlSnapshot"] == null
+          ? null
+          : _requiredUri(
+              map["authorAvatarUrlSnapshot"],
+              '$path.authorAvatarUrlSnapshot',
+            ),
+      personaContextVersion: map["personaContextVersion"] == null
+          ? null
+          : _requiredPositiveInt(
+              map["personaContextVersion"],
+              '$path.personaContextVersion',
+            ),
       content: _requiredString(map["content"], '$path.content'),
-      replyToCommentId: map["replyToCommentId"] == null ? null : _requiredString(map["replyToCommentId"], '$path.replyToCommentId'),
-      replyToUserId: map["replyToUserId"] == null ? null : _requiredString(map["replyToUserId"], '$path.replyToUserId'),
-      parentCommentId: map["parentCommentId"] == null ? null : _requiredString(map["parentCommentId"], '$path.parentCommentId'),
-      attachmentMediaIds: List<String>.unmodifiable(_requiredList(map["attachmentMediaIds"], '$path.attachmentMediaIds').asMap().entries.map((entry) => _requiredString(entry.value, '$path.attachmentMediaIds' + '[${entry.key}]'))),
-      attachments: List<CommentAttachmentSlice>.unmodifiable(_requiredList(map["attachments"], '$path.attachments').asMap().entries.map((entry) => CommentAttachmentSlice.fromWire(_requiredObject(entry.value, '$path.attachments' + '[${entry.key}]'), '$path.attachments' + '[${entry.key}]'))),
-      mentions: List<CommentMention>.unmodifiable(_requiredList(map["mentions"], '$path.mentions').asMap().entries.map((entry) => CommentMention.fromWire(_requiredObject(entry.value, '$path.mentions' + '[${entry.key}]'), '$path.mentions' + '[${entry.key}]'))),
-      assistantMentioned: _requiredBool(map["assistantMentioned"], '$path.assistantMentioned'),
-      assistantReplySource: map["assistantReplySource"] == null ? null : _requiredString(map["assistantReplySource"], '$path.assistantReplySource'),
-      assistantCorrectionStatus: map["assistantCorrectionStatus"] == null ? null : _requiredString(map["assistantCorrectionStatus"], '$path.assistantCorrectionStatus'),
-      authorIpLocation: map["authorIpLocation"] == null ? null : _requiredString(map["authorIpLocation"], '$path.authorIpLocation'),
+      replyToCommentId: map["replyToCommentId"] == null
+          ? null
+          : _requiredString(map["replyToCommentId"], '$path.replyToCommentId'),
+      replyToUserId: map["replyToUserId"] == null
+          ? null
+          : _requiredString(map["replyToUserId"], '$path.replyToUserId'),
+      parentCommentId: map["parentCommentId"] == null
+          ? null
+          : _requiredString(map["parentCommentId"], '$path.parentCommentId'),
+      attachmentMediaIds: List<String>.unmodifiable(
+        _requiredList(
+          map["attachmentMediaIds"],
+          '$path.attachmentMediaIds',
+        ).asMap().entries.map(
+          (entry) => _requiredString(
+            entry.value,
+            '$path.attachmentMediaIds' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      attachments: List<CommentAttachmentSlice>.unmodifiable(
+        _requiredList(
+          map["attachments"],
+          '$path.attachments',
+        ).asMap().entries.map(
+          (entry) => CommentAttachmentSlice.fromWire(
+            _requiredObject(
+              entry.value,
+              '$path.attachments' + '[${entry.key}]',
+            ),
+            '$path.attachments' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      mentions: List<CommentMention>.unmodifiable(
+        _requiredList(map["mentions"], '$path.mentions').asMap().entries.map(
+          (entry) => CommentMention.fromWire(
+            _requiredObject(entry.value, '$path.mentions' + '[${entry.key}]'),
+            '$path.mentions' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      assistantMentioned: _requiredBool(
+        map["assistantMentioned"],
+        '$path.assistantMentioned',
+      ),
+      assistantReplySource: map["assistantReplySource"] == null
+          ? null
+          : _requiredString(
+              map["assistantReplySource"],
+              '$path.assistantReplySource',
+            ),
+      assistantCorrectionStatus: map["assistantCorrectionStatus"] == null
+          ? null
+          : _requiredString(
+              map["assistantCorrectionStatus"],
+              '$path.assistantCorrectionStatus',
+            ),
+      authorIpLocation: map["authorIpLocation"] == null
+          ? null
+          : _requiredString(map["authorIpLocation"], '$path.authorIpLocation'),
       status: CommentStatus.fromWire(map["status"], '$path.status'),
       isPinned: _requiredBool(map["isPinned"], '$path.isPinned'),
-      pinnedAt: map["pinnedAt"] == null ? null : _requiredTimestamp(map["pinnedAt"], '$path.pinnedAt'),
+      pinnedAt: map["pinnedAt"] == null
+          ? null
+          : _requiredTimestamp(map["pinnedAt"], '$path.pinnedAt'),
       createdAt: _requiredTimestamp(map["createdAt"], '$path.createdAt'),
       updatedAt: _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
-      deletedAt: map["deletedAt"] == null ? null : _requiredTimestamp(map["deletedAt"], '$path.deletedAt'),
+      deletedAt: map["deletedAt"] == null
+          ? null
+          : _requiredTimestamp(map["deletedAt"], '$path.deletedAt'),
       replyCount: _requiredInt(map["replyCount"], '$path.replyCount'),
-      replyPreview: List<CommentListItem>.unmodifiable(_requiredList(map["replyPreview"], '$path.replyPreview').asMap().entries.map((entry) => CommentListItem.fromWire(_requiredObject(entry.value, '$path.replyPreview' + '[${entry.key}]'), '$path.replyPreview' + '[${entry.key}]'))),
-      replyNextCursor: map["replyNextCursor"] == null ? null : _requiredString(map["replyNextCursor"], '$path.replyNextCursor'),
+      replyPreview: List<CommentListItem>.unmodifiable(
+        _requiredList(
+          map["replyPreview"],
+          '$path.replyPreview',
+        ).asMap().entries.map(
+          (entry) => CommentListItem.fromWire(
+            _requiredObject(
+              entry.value,
+              '$path.replyPreview' + '[${entry.key}]',
+            ),
+            '$path.replyPreview' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      replyNextCursor: map["replyNextCursor"] == null
+          ? null
+          : _requiredString(map["replyNextCursor"], '$path.replyNextCursor'),
       likeCount: _requiredInt(map["likeCount"], '$path.likeCount'),
       dislikeCount: _requiredInt(map["dislikeCount"], '$path.dislikeCount'),
-      viewerReaction: CommentReactionType.fromWire(map["viewerReaction"], '$path.viewerReaction'),
+      viewerReaction: CommentReactionType.fromWire(
+        map["viewerReaction"],
+        '$path.viewerReaction',
+      ),
       authorLiked: _requiredBool(map["authorLiked"], '$path.authorLiked'),
-      viewerRelation: CommentViewerRelation.fromWire(map["viewerRelation"], '$path.viewerRelation'),
+      viewerRelation: CommentViewerRelation.fromWire(
+        map["viewerRelation"],
+        '$path.viewerRelation',
+      ),
       isAuthor: _requiredBool(map["isAuthor"], '$path.isAuthor'),
       canDelete: _requiredBool(map["canDelete"], '$path.canDelete'),
       canReply: _requiredBool(map["canReply"], '$path.canReply'),
@@ -1095,19 +1500,28 @@ final class CommentListItem {
     "version": version,
     "postId": postId,
     "authorId": authorId,
-    if (authorDisplayNameSnapshot != null) "authorDisplayNameSnapshot": authorDisplayNameSnapshot!,
-    if (authorAvatarUrlSnapshot != null) "authorAvatarUrlSnapshot": authorAvatarUrlSnapshot!.toString(),
-    if (personaContextVersion != null) "personaContextVersion": personaContextVersion!,
+    if (authorDisplayNameSnapshot != null)
+      "authorDisplayNameSnapshot": authorDisplayNameSnapshot!,
+    if (authorAvatarUrlSnapshot != null)
+      "authorAvatarUrlSnapshot": authorAvatarUrlSnapshot!.toString(),
+    if (personaContextVersion != null)
+      "personaContextVersion": personaContextVersion!,
     "content": content,
     if (replyToCommentId != null) "replyToCommentId": replyToCommentId!,
     if (replyToUserId != null) "replyToUserId": replyToUserId!,
     if (parentCommentId != null) "parentCommentId": parentCommentId!,
-    "attachmentMediaIds": attachmentMediaIds.map((value) => value).toList(growable: false),
-    "attachments": attachments.map((value) => value.toWire()).toList(growable: false),
+    "attachmentMediaIds": attachmentMediaIds
+        .map((value) => value)
+        .toList(growable: false),
+    "attachments": attachments
+        .map((value) => value.toWire())
+        .toList(growable: false),
     "mentions": mentions.map((value) => value.toWire()).toList(growable: false),
     "assistantMentioned": assistantMentioned,
-    if (assistantReplySource != null) "assistantReplySource": assistantReplySource!,
-    if (assistantCorrectionStatus != null) "assistantCorrectionStatus": assistantCorrectionStatus!,
+    if (assistantReplySource != null)
+      "assistantReplySource": assistantReplySource!,
+    if (assistantCorrectionStatus != null)
+      "assistantCorrectionStatus": assistantCorrectionStatus!,
     if (authorIpLocation != null) "authorIpLocation": authorIpLocation!,
     "status": status.wireName,
     "isPinned": isPinned,
@@ -1116,7 +1530,9 @@ final class CommentListItem {
     "updatedAt": updatedAt.toUtc().toIso8601String(),
     if (deletedAt != null) "deletedAt": deletedAt!.toUtc().toIso8601String(),
     "replyCount": replyCount,
-    "replyPreview": replyPreview.map((value) => value.toWire()).toList(growable: false),
+    "replyPreview": replyPreview
+        .map((value) => value.toWire())
+        .toList(growable: false),
     if (replyNextCursor != null) "replyNextCursor": replyNextCursor!,
     "likeCount": likeCount,
     "dislikeCount": dislikeCount,
@@ -1142,12 +1558,21 @@ final class CommentMention {
   final String subjectId;
   final String? displayName;
 
-  factory CommentMention.fromWire(Map<String, Object?> map, [String path = "CommentMention"]) {
-    _rejectUnknownFields(map, const <String>{"subjectType", "subjectId", "displayName"}, path);
+  factory CommentMention.fromWire(
+    Map<String, Object?> map, [
+    String path = "CommentMention",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "subjectType",
+      "subjectId",
+      "displayName",
+    }, path);
     return CommentMention(
       subjectType: _requiredString(map["subjectType"], '$path.subjectType'),
       subjectId: _requiredString(map["subjectId"], '$path.subjectId'),
-      displayName: map["displayName"] == null ? null : _requiredString(map["displayName"], '$path.displayName'),
+      displayName: map["displayName"] == null
+          ? null
+          : _requiredString(map["displayName"], '$path.displayName'),
     );
   }
 
@@ -1169,11 +1594,27 @@ final class CommentPageSlice {
   final String? nextCursor;
   final int total;
 
-  factory CommentPageSlice.fromWire(Map<String, Object?> map, [String path = "CommentPageSlice"]) {
-    _rejectUnknownFields(map, const <String>{"items", "nextCursor", "total"}, path);
+  factory CommentPageSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "CommentPageSlice",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "items",
+      "nextCursor",
+      "total",
+    }, path);
     return CommentPageSlice(
-      items: List<CommentListItem>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => CommentListItem.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
-      nextCursor: map["nextCursor"] == null ? null : _requiredString(map["nextCursor"], '$path.nextCursor'),
+      items: List<CommentListItem>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => CommentListItem.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      nextCursor: map["nextCursor"] == null
+          ? null
+          : _requiredString(map["nextCursor"], '$path.nextCursor'),
       total: _requiredInt(map["total"], '$path.total'),
     );
   }
@@ -1202,15 +1643,64 @@ final class ContentAppConfig {
   final ContentAppConfigComment? comment;
   final ContentAppConfigIntersection? intersection;
 
-  factory ContentAppConfig.fromWire(Map<String, Object?> map, [String path = "ContentAppConfig"]) {
-    _rejectUnknownFields(map, const <String>{"feature_flags", "gray_release", "client_state_sync", "home_channels", "comment", "intersection"}, path);
+  factory ContentAppConfig.fromWire(
+    Map<String, Object?> map, [
+    String path = "ContentAppConfig",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "feature_flags",
+      "gray_release",
+      "client_state_sync",
+      "home_channels",
+      "comment",
+      "intersection",
+    }, path);
     return ContentAppConfig(
-      featureFlags: ContentAppConfigFeatureFlags.fromWire(_requiredObject(map["feature_flags"], '$path.feature_flags'), '$path.feature_flags'),
-      grayRelease: ContentAppConfigGrayRelease.fromWire(_requiredObject(map["gray_release"], '$path.gray_release'), '$path.gray_release'),
-      clientStateSync: map["client_state_sync"] == null ? null : ContentAppConfigClientStateSync.fromWire(_requiredObject(map["client_state_sync"], '$path.client_state_sync'), '$path.client_state_sync'),
-      homeChannels: map["home_channels"] == null ? null : List<ContentAppConfigHomeChannel>.unmodifiable(_requiredList(map["home_channels"], '$path.home_channels').asMap().entries.map((entry) => ContentAppConfigHomeChannel.fromWire(_requiredObject(entry.value, '$path.home_channels' + '[${entry.key}]'), '$path.home_channels' + '[${entry.key}]'))),
-      comment: map["comment"] == null ? null : ContentAppConfigComment.fromWire(_requiredObject(map["comment"], '$path.comment'), '$path.comment'),
-      intersection: map["intersection"] == null ? null : ContentAppConfigIntersection.fromWire(_requiredObject(map["intersection"], '$path.intersection'), '$path.intersection'),
+      featureFlags: ContentAppConfigFeatureFlags.fromWire(
+        _requiredObject(map["feature_flags"], '$path.feature_flags'),
+        '$path.feature_flags',
+      ),
+      grayRelease: ContentAppConfigGrayRelease.fromWire(
+        _requiredObject(map["gray_release"], '$path.gray_release'),
+        '$path.gray_release',
+      ),
+      clientStateSync: map["client_state_sync"] == null
+          ? null
+          : ContentAppConfigClientStateSync.fromWire(
+              _requiredObject(
+                map["client_state_sync"],
+                '$path.client_state_sync',
+              ),
+              '$path.client_state_sync',
+            ),
+      homeChannels: map["home_channels"] == null
+          ? null
+          : List<ContentAppConfigHomeChannel>.unmodifiable(
+              _requiredList(
+                map["home_channels"],
+                '$path.home_channels',
+              ).asMap().entries.map(
+                (entry) => ContentAppConfigHomeChannel.fromWire(
+                  _requiredObject(
+                    entry.value,
+                    '$path.home_channels' + '[${entry.key}]',
+                  ),
+                  '$path.home_channels' + '[${entry.key}]',
+                ),
+              ),
+            ),
+      comment: map["comment"] == null
+          ? null
+          : ContentAppConfigComment.fromWire(
+              _requiredObject(map["comment"], '$path.comment'),
+              '$path.comment',
+            ),
+      intersection: map["intersection"] == null
+          ? null
+          : ContentAppConfigIntersection.fromWire(
+              _requiredObject(map["intersection"], '$path.intersection'),
+              '$path.intersection',
+            ),
     );
   }
 
@@ -1218,7 +1708,10 @@ final class ContentAppConfig {
     "feature_flags": featureFlags.toWire(),
     "gray_release": grayRelease.toWire(),
     if (clientStateSync != null) "client_state_sync": clientStateSync!.toWire(),
-    if (homeChannels != null) "home_channels": homeChannels!.map((value) => value.toWire()).toList(growable: false),
+    if (homeChannels != null)
+      "home_channels": homeChannels!
+          .map((value) => value.toWire())
+          .toList(growable: false),
     if (comment != null) "comment": comment!.toWire(),
     if (intersection != null) "intersection": intersection!.toWire(),
   };
@@ -1233,11 +1726,19 @@ final class ContentAppConfigCanaryStage {
   final String stage;
   final int rolloutPercent;
 
-  factory ContentAppConfigCanaryStage.fromWire(Map<String, Object?> map, [String path = "ContentAppConfigCanaryStage"]) {
+  factory ContentAppConfigCanaryStage.fromWire(
+    Map<String, Object?> map, [
+    String path = "ContentAppConfigCanaryStage",
+  ]) {
     _rejectUnknownFields(map, const <String>{"stage", "rolloutPercent"}, path);
     return ContentAppConfigCanaryStage(
       stage: _requiredString(map["stage"], '$path.stage'),
-      rolloutPercent: _requiredBoundedInt(map["rolloutPercent"], '$path.rolloutPercent', min: 0, max: 100),
+      rolloutPercent: _requiredBoundedInt(
+        map["rolloutPercent"],
+        '$path.rolloutPercent',
+        min: 0,
+        max: 100,
+      ),
     );
   }
 
@@ -1264,15 +1765,52 @@ final class ContentAppConfigClientStateSync {
   final bool? flushOnForegroundResume;
   final bool? flushOnNetworkRecovered;
 
-  factory ContentAppConfigClientStateSync.fromWire(Map<String, Object?> map, [String path = "ContentAppConfigClientStateSync"]) {
-    _rejectUnknownFields(map, const <String>{"flush_delay_sec", "retry_delay_sec", "max_batch_size", "max_pending_age_sec", "flush_on_foreground_resume", "flush_on_network_recovered"}, path);
+  factory ContentAppConfigClientStateSync.fromWire(
+    Map<String, Object?> map, [
+    String path = "ContentAppConfigClientStateSync",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "flush_delay_sec",
+      "retry_delay_sec",
+      "max_batch_size",
+      "max_pending_age_sec",
+      "flush_on_foreground_resume",
+      "flush_on_network_recovered",
+    }, path);
     return ContentAppConfigClientStateSync(
-      flushDelaySec: map["flush_delay_sec"] == null ? null : _requiredPositiveInt(map["flush_delay_sec"], '$path.flush_delay_sec'),
-      retryDelaySec: map["retry_delay_sec"] == null ? null : _requiredPositiveInt(map["retry_delay_sec"], '$path.retry_delay_sec'),
-      maxBatchSize: map["max_batch_size"] == null ? null : _requiredPositiveInt(map["max_batch_size"], '$path.max_batch_size'),
-      maxPendingAgeSec: map["max_pending_age_sec"] == null ? null : _requiredPositiveInt(map["max_pending_age_sec"], '$path.max_pending_age_sec'),
-      flushOnForegroundResume: map["flush_on_foreground_resume"] == null ? null : _requiredBool(map["flush_on_foreground_resume"], '$path.flush_on_foreground_resume'),
-      flushOnNetworkRecovered: map["flush_on_network_recovered"] == null ? null : _requiredBool(map["flush_on_network_recovered"], '$path.flush_on_network_recovered'),
+      flushDelaySec: map["flush_delay_sec"] == null
+          ? null
+          : _requiredPositiveInt(
+              map["flush_delay_sec"],
+              '$path.flush_delay_sec',
+            ),
+      retryDelaySec: map["retry_delay_sec"] == null
+          ? null
+          : _requiredPositiveInt(
+              map["retry_delay_sec"],
+              '$path.retry_delay_sec',
+            ),
+      maxBatchSize: map["max_batch_size"] == null
+          ? null
+          : _requiredPositiveInt(map["max_batch_size"], '$path.max_batch_size'),
+      maxPendingAgeSec: map["max_pending_age_sec"] == null
+          ? null
+          : _requiredPositiveInt(
+              map["max_pending_age_sec"],
+              '$path.max_pending_age_sec',
+            ),
+      flushOnForegroundResume: map["flush_on_foreground_resume"] == null
+          ? null
+          : _requiredBool(
+              map["flush_on_foreground_resume"],
+              '$path.flush_on_foreground_resume',
+            ),
+      flushOnNetworkRecovered: map["flush_on_network_recovered"] == null
+          ? null
+          : _requiredBool(
+              map["flush_on_network_recovered"],
+              '$path.flush_on_network_recovered',
+            ),
     );
   }
 
@@ -1281,8 +1819,10 @@ final class ContentAppConfigClientStateSync {
     if (retryDelaySec != null) "retry_delay_sec": retryDelaySec!,
     if (maxBatchSize != null) "max_batch_size": maxBatchSize!,
     if (maxPendingAgeSec != null) "max_pending_age_sec": maxPendingAgeSec!,
-    if (flushOnForegroundResume != null) "flush_on_foreground_resume": flushOnForegroundResume!,
-    if (flushOnNetworkRecovered != null) "flush_on_network_recovered": flushOnNetworkRecovered!,
+    if (flushOnForegroundResume != null)
+      "flush_on_foreground_resume": flushOnForegroundResume!,
+    if (flushOnNetworkRecovered != null)
+      "flush_on_network_recovered": flushOnNetworkRecovered!,
   };
 }
 
@@ -1305,24 +1845,66 @@ final class ContentAppConfigComment {
   final ContentAppConfigCommentAttachment? attachment;
   final bool? enabled;
 
-  factory ContentAppConfigComment.fromWire(Map<String, Object?> map, [String path = "ContentAppConfigComment"]) {
-    _rejectUnknownFields(map, const <String>{"max_length", "reply_preview_count", "reply_first_expand_page_size", "reply_expand_page_size", "fold_line_count", "attachment", "enabled"}, path);
+  factory ContentAppConfigComment.fromWire(
+    Map<String, Object?> map, [
+    String path = "ContentAppConfigComment",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "max_length",
+      "reply_preview_count",
+      "reply_first_expand_page_size",
+      "reply_expand_page_size",
+      "fold_line_count",
+      "attachment",
+      "enabled",
+    }, path);
     return ContentAppConfigComment(
-      maxLength: map["max_length"] == null ? null : _requiredPositiveInt(map["max_length"], '$path.max_length'),
-      replyPreviewCount: map["reply_preview_count"] == null ? null : _requiredPositiveInt(map["reply_preview_count"], '$path.reply_preview_count'),
-      replyFirstExpandPageSize: map["reply_first_expand_page_size"] == null ? null : _requiredPositiveInt(map["reply_first_expand_page_size"], '$path.reply_first_expand_page_size'),
-      replyExpandPageSize: map["reply_expand_page_size"] == null ? null : _requiredPositiveInt(map["reply_expand_page_size"], '$path.reply_expand_page_size'),
-      foldLineCount: map["fold_line_count"] == null ? null : _requiredPositiveInt(map["fold_line_count"], '$path.fold_line_count'),
-      attachment: map["attachment"] == null ? null : ContentAppConfigCommentAttachment.fromWire(_requiredObject(map["attachment"], '$path.attachment'), '$path.attachment'),
-      enabled: map["enabled"] == null ? null : _requiredBool(map["enabled"], '$path.enabled'),
+      maxLength: map["max_length"] == null
+          ? null
+          : _requiredPositiveInt(map["max_length"], '$path.max_length'),
+      replyPreviewCount: map["reply_preview_count"] == null
+          ? null
+          : _requiredPositiveInt(
+              map["reply_preview_count"],
+              '$path.reply_preview_count',
+            ),
+      replyFirstExpandPageSize: map["reply_first_expand_page_size"] == null
+          ? null
+          : _requiredPositiveInt(
+              map["reply_first_expand_page_size"],
+              '$path.reply_first_expand_page_size',
+            ),
+      replyExpandPageSize: map["reply_expand_page_size"] == null
+          ? null
+          : _requiredPositiveInt(
+              map["reply_expand_page_size"],
+              '$path.reply_expand_page_size',
+            ),
+      foldLineCount: map["fold_line_count"] == null
+          ? null
+          : _requiredPositiveInt(
+              map["fold_line_count"],
+              '$path.fold_line_count',
+            ),
+      attachment: map["attachment"] == null
+          ? null
+          : ContentAppConfigCommentAttachment.fromWire(
+              _requiredObject(map["attachment"], '$path.attachment'),
+              '$path.attachment',
+            ),
+      enabled: map["enabled"] == null
+          ? null
+          : _requiredBool(map["enabled"], '$path.enabled'),
     );
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
     if (maxLength != null) "max_length": maxLength!,
     if (replyPreviewCount != null) "reply_preview_count": replyPreviewCount!,
-    if (replyFirstExpandPageSize != null) "reply_first_expand_page_size": replyFirstExpandPageSize!,
-    if (replyExpandPageSize != null) "reply_expand_page_size": replyExpandPageSize!,
+    if (replyFirstExpandPageSize != null)
+      "reply_first_expand_page_size": replyFirstExpandPageSize!,
+    if (replyExpandPageSize != null)
+      "reply_expand_page_size": replyExpandPageSize!,
     if (foldLineCount != null) "fold_line_count": foldLineCount!,
     if (attachment != null) "attachment": attachment!.toWire(),
     if (enabled != null) "enabled": enabled!,
@@ -1330,16 +1912,19 @@ final class ContentAppConfigComment {
 }
 
 final class ContentAppConfigCommentAttachment {
-  const ContentAppConfigCommentAttachment({
-    this.maxImages,
-  });
+  const ContentAppConfigCommentAttachment({this.maxImages});
 
   final int? maxImages;
 
-  factory ContentAppConfigCommentAttachment.fromWire(Map<String, Object?> map, [String path = "ContentAppConfigCommentAttachment"]) {
+  factory ContentAppConfigCommentAttachment.fromWire(
+    Map<String, Object?> map, [
+    String path = "ContentAppConfigCommentAttachment",
+  ]) {
     _rejectUnknownFields(map, const <String>{"max_images"}, path);
     return ContentAppConfigCommentAttachment(
-      maxImages: map["max_images"] == null ? null : _requiredPositiveInt(map["max_images"], '$path.max_images'),
+      maxImages: map["max_images"] == null
+          ? null
+          : _requiredPositiveInt(map["max_images"], '$path.max_images'),
     );
   }
 
@@ -1381,40 +1966,140 @@ final class ContentAppConfigFeatureFlags {
   final bool? enableShareToCircle;
   final bool? showViewCount;
 
-  factory ContentAppConfigFeatureFlags.fromWire(Map<String, Object?> map, [String path = "ContentAppConfigFeatureFlags"]) {
-    _rejectUnknownFields(map, const <String>{"enable_create_action_entry", "enable_unified_create_editor", "enable_identity_based_surfaces", "enable_identity_share_template", "enable_article_distribution_profiles", "enable_article_book_reader", "enable_article_page_curl", "enable_shared_video_timeline", "enable_video_timeline_preview", "enable_hls_cmaf_abr", "enable_assistant_content_identity_index", "enable_helper_read", "enable_share_to_circle", "show_view_count"}, path);
+  factory ContentAppConfigFeatureFlags.fromWire(
+    Map<String, Object?> map, [
+    String path = "ContentAppConfigFeatureFlags",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "enable_create_action_entry",
+      "enable_unified_create_editor",
+      "enable_identity_based_surfaces",
+      "enable_identity_share_template",
+      "enable_article_distribution_profiles",
+      "enable_article_book_reader",
+      "enable_article_page_curl",
+      "enable_shared_video_timeline",
+      "enable_video_timeline_preview",
+      "enable_hls_cmaf_abr",
+      "enable_assistant_content_identity_index",
+      "enable_helper_read",
+      "enable_share_to_circle",
+      "show_view_count",
+    }, path);
     return ContentAppConfigFeatureFlags(
-      enableCreateActionEntry: map["enable_create_action_entry"] == null ? null : _requiredBool(map["enable_create_action_entry"], '$path.enable_create_action_entry'),
-      enableUnifiedCreateEditor: map["enable_unified_create_editor"] == null ? null : _requiredBool(map["enable_unified_create_editor"], '$path.enable_unified_create_editor'),
-      enableIdentityBasedSurfaces: map["enable_identity_based_surfaces"] == null ? null : _requiredBool(map["enable_identity_based_surfaces"], '$path.enable_identity_based_surfaces'),
-      enableIdentityShareTemplate: map["enable_identity_share_template"] == null ? null : _requiredBool(map["enable_identity_share_template"], '$path.enable_identity_share_template'),
-      enableArticleDistributionProfiles: map["enable_article_distribution_profiles"] == null ? null : _requiredBool(map["enable_article_distribution_profiles"], '$path.enable_article_distribution_profiles'),
-      enableArticleBookReader: map["enable_article_book_reader"] == null ? null : _requiredBool(map["enable_article_book_reader"], '$path.enable_article_book_reader'),
-      enableArticlePageCurl: map["enable_article_page_curl"] == null ? null : _requiredBool(map["enable_article_page_curl"], '$path.enable_article_page_curl'),
-      enableSharedVideoTimeline: map["enable_shared_video_timeline"] == null ? null : _requiredBool(map["enable_shared_video_timeline"], '$path.enable_shared_video_timeline'),
-      enableVideoTimelinePreview: map["enable_video_timeline_preview"] == null ? null : _requiredBool(map["enable_video_timeline_preview"], '$path.enable_video_timeline_preview'),
-      enableHlsCmafAbr: map["enable_hls_cmaf_abr"] == null ? null : _requiredBool(map["enable_hls_cmaf_abr"], '$path.enable_hls_cmaf_abr'),
-      enableAssistantContentIdentityIndex: map["enable_assistant_content_identity_index"] == null ? null : _requiredBool(map["enable_assistant_content_identity_index"], '$path.enable_assistant_content_identity_index'),
-      enableHelperRead: map["enable_helper_read"] == null ? null : _requiredBool(map["enable_helper_read"], '$path.enable_helper_read'),
-      enableShareToCircle: map["enable_share_to_circle"] == null ? null : _requiredBool(map["enable_share_to_circle"], '$path.enable_share_to_circle'),
-      showViewCount: map["show_view_count"] == null ? null : _requiredBool(map["show_view_count"], '$path.show_view_count'),
+      enableCreateActionEntry: map["enable_create_action_entry"] == null
+          ? null
+          : _requiredBool(
+              map["enable_create_action_entry"],
+              '$path.enable_create_action_entry',
+            ),
+      enableUnifiedCreateEditor: map["enable_unified_create_editor"] == null
+          ? null
+          : _requiredBool(
+              map["enable_unified_create_editor"],
+              '$path.enable_unified_create_editor',
+            ),
+      enableIdentityBasedSurfaces: map["enable_identity_based_surfaces"] == null
+          ? null
+          : _requiredBool(
+              map["enable_identity_based_surfaces"],
+              '$path.enable_identity_based_surfaces',
+            ),
+      enableIdentityShareTemplate: map["enable_identity_share_template"] == null
+          ? null
+          : _requiredBool(
+              map["enable_identity_share_template"],
+              '$path.enable_identity_share_template',
+            ),
+      enableArticleDistributionProfiles:
+          map["enable_article_distribution_profiles"] == null
+          ? null
+          : _requiredBool(
+              map["enable_article_distribution_profiles"],
+              '$path.enable_article_distribution_profiles',
+            ),
+      enableArticleBookReader: map["enable_article_book_reader"] == null
+          ? null
+          : _requiredBool(
+              map["enable_article_book_reader"],
+              '$path.enable_article_book_reader',
+            ),
+      enableArticlePageCurl: map["enable_article_page_curl"] == null
+          ? null
+          : _requiredBool(
+              map["enable_article_page_curl"],
+              '$path.enable_article_page_curl',
+            ),
+      enableSharedVideoTimeline: map["enable_shared_video_timeline"] == null
+          ? null
+          : _requiredBool(
+              map["enable_shared_video_timeline"],
+              '$path.enable_shared_video_timeline',
+            ),
+      enableVideoTimelinePreview: map["enable_video_timeline_preview"] == null
+          ? null
+          : _requiredBool(
+              map["enable_video_timeline_preview"],
+              '$path.enable_video_timeline_preview',
+            ),
+      enableHlsCmafAbr: map["enable_hls_cmaf_abr"] == null
+          ? null
+          : _requiredBool(
+              map["enable_hls_cmaf_abr"],
+              '$path.enable_hls_cmaf_abr',
+            ),
+      enableAssistantContentIdentityIndex:
+          map["enable_assistant_content_identity_index"] == null
+          ? null
+          : _requiredBool(
+              map["enable_assistant_content_identity_index"],
+              '$path.enable_assistant_content_identity_index',
+            ),
+      enableHelperRead: map["enable_helper_read"] == null
+          ? null
+          : _requiredBool(
+              map["enable_helper_read"],
+              '$path.enable_helper_read',
+            ),
+      enableShareToCircle: map["enable_share_to_circle"] == null
+          ? null
+          : _requiredBool(
+              map["enable_share_to_circle"],
+              '$path.enable_share_to_circle',
+            ),
+      showViewCount: map["show_view_count"] == null
+          ? null
+          : _requiredBool(map["show_view_count"], '$path.show_view_count'),
     );
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
-    if (enableCreateActionEntry != null) "enable_create_action_entry": enableCreateActionEntry!,
-    if (enableUnifiedCreateEditor != null) "enable_unified_create_editor": enableUnifiedCreateEditor!,
-    if (enableIdentityBasedSurfaces != null) "enable_identity_based_surfaces": enableIdentityBasedSurfaces!,
-    if (enableIdentityShareTemplate != null) "enable_identity_share_template": enableIdentityShareTemplate!,
-    if (enableArticleDistributionProfiles != null) "enable_article_distribution_profiles": enableArticleDistributionProfiles!,
-    if (enableArticleBookReader != null) "enable_article_book_reader": enableArticleBookReader!,
-    if (enableArticlePageCurl != null) "enable_article_page_curl": enableArticlePageCurl!,
-    if (enableSharedVideoTimeline != null) "enable_shared_video_timeline": enableSharedVideoTimeline!,
-    if (enableVideoTimelinePreview != null) "enable_video_timeline_preview": enableVideoTimelinePreview!,
+    if (enableCreateActionEntry != null)
+      "enable_create_action_entry": enableCreateActionEntry!,
+    if (enableUnifiedCreateEditor != null)
+      "enable_unified_create_editor": enableUnifiedCreateEditor!,
+    if (enableIdentityBasedSurfaces != null)
+      "enable_identity_based_surfaces": enableIdentityBasedSurfaces!,
+    if (enableIdentityShareTemplate != null)
+      "enable_identity_share_template": enableIdentityShareTemplate!,
+    if (enableArticleDistributionProfiles != null)
+      "enable_article_distribution_profiles":
+          enableArticleDistributionProfiles!,
+    if (enableArticleBookReader != null)
+      "enable_article_book_reader": enableArticleBookReader!,
+    if (enableArticlePageCurl != null)
+      "enable_article_page_curl": enableArticlePageCurl!,
+    if (enableSharedVideoTimeline != null)
+      "enable_shared_video_timeline": enableSharedVideoTimeline!,
+    if (enableVideoTimelinePreview != null)
+      "enable_video_timeline_preview": enableVideoTimelinePreview!,
     if (enableHlsCmafAbr != null) "enable_hls_cmaf_abr": enableHlsCmafAbr!,
-    if (enableAssistantContentIdentityIndex != null) "enable_assistant_content_identity_index": enableAssistantContentIdentityIndex!,
+    if (enableAssistantContentIdentityIndex != null)
+      "enable_assistant_content_identity_index":
+          enableAssistantContentIdentityIndex!,
     if (enableHelperRead != null) "enable_helper_read": enableHelperRead!,
-    if (enableShareToCircle != null) "enable_share_to_circle": enableShareToCircle!,
+    if (enableShareToCircle != null)
+      "enable_share_to_circle": enableShareToCircle!,
     if (showViewCount != null) "show_view_count": showViewCount!,
   };
 }
@@ -1430,19 +2115,47 @@ final class ContentAppConfigGrayRelease {
   final String currentStage;
   final List<ContentAppConfigCanaryStage> canaryMatrix;
 
-  factory ContentAppConfigGrayRelease.fromWire(Map<String, Object?> map, [String path = "ContentAppConfigGrayRelease"]) {
-    _rejectUnknownFields(map, const <String>{"experiment_bucket", "current_stage", "canary_matrix"}, path);
+  factory ContentAppConfigGrayRelease.fromWire(
+    Map<String, Object?> map, [
+    String path = "ContentAppConfigGrayRelease",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "experiment_bucket",
+      "current_stage",
+      "canary_matrix",
+    }, path);
     return ContentAppConfigGrayRelease(
-      experimentBucket: _requiredString(map["experiment_bucket"], '$path.experiment_bucket'),
-      currentStage: _requiredString(map["current_stage"], '$path.current_stage'),
-      canaryMatrix: List<ContentAppConfigCanaryStage>.unmodifiable(_requiredList(map["canary_matrix"], '$path.canary_matrix').asMap().entries.map((entry) => ContentAppConfigCanaryStage.fromWire(_requiredObject(entry.value, '$path.canary_matrix' + '[${entry.key}]'), '$path.canary_matrix' + '[${entry.key}]'))),
+      experimentBucket: _requiredString(
+        map["experiment_bucket"],
+        '$path.experiment_bucket',
+      ),
+      currentStage: _requiredString(
+        map["current_stage"],
+        '$path.current_stage',
+      ),
+      canaryMatrix: List<ContentAppConfigCanaryStage>.unmodifiable(
+        _requiredList(
+          map["canary_matrix"],
+          '$path.canary_matrix',
+        ).asMap().entries.map(
+          (entry) => ContentAppConfigCanaryStage.fromWire(
+            _requiredObject(
+              entry.value,
+              '$path.canary_matrix' + '[${entry.key}]',
+            ),
+            '$path.canary_matrix' + '[${entry.key}]',
+          ),
+        ),
+      ),
     );
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
     "experiment_bucket": experimentBucket,
     "current_stage": currentStage,
-    "canary_matrix": canaryMatrix.map((value) => value.toWire()).toList(growable: false),
+    "canary_matrix": canaryMatrix
+        .map((value) => value.toWire())
+        .toList(growable: false),
   };
 }
 
@@ -1473,20 +2186,64 @@ final class ContentAppConfigHomeChannel {
   final String? moodCopyKey;
   final int? order;
 
-  factory ContentAppConfigHomeChannel.fromWire(Map<String, Object?> map, [String path = "ContentAppConfigHomeChannel"]) {
-    _rejectUnknownFields(map, const <String>{"id", "label_key", "template", "layout_template", "phone_columns", "supports_full_span_modules", "intersection_module_policy", "content_card_policy", "feed_query", "mood_copy_key", "order"}, path);
+  factory ContentAppConfigHomeChannel.fromWire(
+    Map<String, Object?> map, [
+    String path = "ContentAppConfigHomeChannel",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "id",
+      "label_key",
+      "template",
+      "layout_template",
+      "phone_columns",
+      "supports_full_span_modules",
+      "intersection_module_policy",
+      "content_card_policy",
+      "feed_query",
+      "mood_copy_key",
+      "order",
+    }, path);
     return ContentAppConfigHomeChannel(
       id: _requiredString(map["id"], '$path.id'),
-      labelKey: map["label_key"] == null ? null : _requiredString(map["label_key"], '$path.label_key'),
-      template: map["template"] == null ? null : _requiredString(map["template"], '$path.template'),
-      layoutTemplate: map["layout_template"] == null ? null : _requiredString(map["layout_template"], '$path.layout_template'),
-      phoneColumns: map["phone_columns"] == null ? null : _requiredInt(map["phone_columns"], '$path.phone_columns'),
-      supportsFullSpanModules: map["supports_full_span_modules"] == null ? null : _requiredBool(map["supports_full_span_modules"], '$path.supports_full_span_modules'),
-      intersectionModulePolicy: map["intersection_module_policy"] == null ? null : _requiredString(map["intersection_module_policy"], '$path.intersection_module_policy'),
-      contentCardPolicy: map["content_card_policy"] == null ? null : _requiredString(map["content_card_policy"], '$path.content_card_policy'),
-      feedQuery: map["feed_query"] == null ? null : _requiredObject(map["feed_query"], '$path.feed_query'),
-      moodCopyKey: map["mood_copy_key"] == null ? null : _requiredString(map["mood_copy_key"], '$path.mood_copy_key'),
-      order: map["order"] == null ? null : _requiredInt(map["order"], '$path.order'),
+      labelKey: map["label_key"] == null
+          ? null
+          : _requiredString(map["label_key"], '$path.label_key'),
+      template: map["template"] == null
+          ? null
+          : _requiredString(map["template"], '$path.template'),
+      layoutTemplate: map["layout_template"] == null
+          ? null
+          : _requiredString(map["layout_template"], '$path.layout_template'),
+      phoneColumns: map["phone_columns"] == null
+          ? null
+          : _requiredInt(map["phone_columns"], '$path.phone_columns'),
+      supportsFullSpanModules: map["supports_full_span_modules"] == null
+          ? null
+          : _requiredBool(
+              map["supports_full_span_modules"],
+              '$path.supports_full_span_modules',
+            ),
+      intersectionModulePolicy: map["intersection_module_policy"] == null
+          ? null
+          : _requiredString(
+              map["intersection_module_policy"],
+              '$path.intersection_module_policy',
+            ),
+      contentCardPolicy: map["content_card_policy"] == null
+          ? null
+          : _requiredString(
+              map["content_card_policy"],
+              '$path.content_card_policy',
+            ),
+      feedQuery: map["feed_query"] == null
+          ? null
+          : _requiredObject(map["feed_query"], '$path.feed_query'),
+      moodCopyKey: map["mood_copy_key"] == null
+          ? null
+          : _requiredString(map["mood_copy_key"], '$path.mood_copy_key'),
+      order: map["order"] == null
+          ? null
+          : _requiredInt(map["order"], '$path.order'),
     );
   }
 
@@ -1496,8 +2253,10 @@ final class ContentAppConfigHomeChannel {
     if (template != null) "template": template!,
     if (layoutTemplate != null) "layout_template": layoutTemplate!,
     if (phoneColumns != null) "phone_columns": phoneColumns!,
-    if (supportsFullSpanModules != null) "supports_full_span_modules": supportsFullSpanModules!,
-    if (intersectionModulePolicy != null) "intersection_module_policy": intersectionModulePolicy!,
+    if (supportsFullSpanModules != null)
+      "supports_full_span_modules": supportsFullSpanModules!,
+    if (intersectionModulePolicy != null)
+      "intersection_module_policy": intersectionModulePolicy!,
     if (contentCardPolicy != null) "content_card_policy": contentCardPolicy!,
     if (feedQuery != null) "feed_query": feedQuery!,
     if (moodCopyKey != null) "mood_copy_key": moodCopyKey!,
@@ -1514,11 +2273,27 @@ final class ContentAppConfigIntersection {
   final int? inlineExpandCount;
   final int? maxCandidateWindow;
 
-  factory ContentAppConfigIntersection.fromWire(Map<String, Object?> map, [String path = "ContentAppConfigIntersection"]) {
-    _rejectUnknownFields(map, const <String>{"inline_expand_count", "max_candidate_window"}, path);
+  factory ContentAppConfigIntersection.fromWire(
+    Map<String, Object?> map, [
+    String path = "ContentAppConfigIntersection",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "inline_expand_count",
+      "max_candidate_window",
+    }, path);
     return ContentAppConfigIntersection(
-      inlineExpandCount: map["inline_expand_count"] == null ? null : _requiredPositiveInt(map["inline_expand_count"], '$path.inline_expand_count'),
-      maxCandidateWindow: map["max_candidate_window"] == null ? null : _requiredPositiveInt(map["max_candidate_window"], '$path.max_candidate_window'),
+      inlineExpandCount: map["inline_expand_count"] == null
+          ? null
+          : _requiredPositiveInt(
+              map["inline_expand_count"],
+              '$path.inline_expand_count',
+            ),
+      maxCandidateWindow: map["max_candidate_window"] == null
+          ? null
+          : _requiredPositiveInt(
+              map["max_candidate_window"],
+              '$path.max_candidate_window',
+            ),
     );
   }
 
@@ -1537,8 +2312,14 @@ final class ContentBehaviorReportReceipt {
   final int acceptedCount;
   final int replayedCount;
 
-  factory ContentBehaviorReportReceipt.fromWire(Map<String, Object?> map, [String path = "ContentBehaviorReportReceipt"]) {
-    _rejectUnknownFields(map, const <String>{"acceptedCount", "replayedCount"}, path);
+  factory ContentBehaviorReportReceipt.fromWire(
+    Map<String, Object?> map, [
+    String path = "ContentBehaviorReportReceipt",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "acceptedCount",
+      "replayedCount",
+    }, path);
     return ContentBehaviorReportReceipt(
       acceptedCount: _requiredInt(map["acceptedCount"], '$path.acceptedCount'),
       replayedCount: _requiredInt(map["replayedCount"], '$path.replayedCount'),
@@ -1570,8 +2351,19 @@ final class ContentCommentReactionCommandResult {
   final int likeCount;
   final int dislikeCount;
 
-  factory ContentCommentReactionCommandResult.fromWire(Map<String, Object?> map, [String path = "ContentCommentReactionCommandResult"]) {
-    _rejectUnknownFields(map, const <String>{"reactionId", "version", "reaction", "changed", "replayed", "likeCount", "dislikeCount"}, path);
+  factory ContentCommentReactionCommandResult.fromWire(
+    Map<String, Object?> map, [
+    String path = "ContentCommentReactionCommandResult",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "reactionId",
+      "version",
+      "reaction",
+      "changed",
+      "replayed",
+      "likeCount",
+      "dislikeCount",
+    }, path);
     return ContentCommentReactionCommandResult(
       reactionId: _requiredString(map["reactionId"], '$path.reactionId'),
       version: _requiredPositiveInt(map["version"], '$path.version'),
@@ -1621,20 +2413,78 @@ final class ContentDiscoveryFeedPageSlice {
   final String? releaseId;
   final String? manifestDigest;
 
-  factory ContentDiscoveryFeedPageSlice.fromWire(Map<String, Object?> map, [String path = "ContentDiscoveryFeedPageSlice"]) {
-    _rejectUnknownFields(map, const <String>{"items", "outcome", "emptyReason", "nextCursor", "previousCursor", "paginationExpiresAt", "feedRequestId", "policyDigest", "objectCards", "releaseId", "manifestDigest"}, path);
+  factory ContentDiscoveryFeedPageSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "ContentDiscoveryFeedPageSlice",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "items",
+      "outcome",
+      "emptyReason",
+      "nextCursor",
+      "previousCursor",
+      "paginationExpiresAt",
+      "feedRequestId",
+      "policyDigest",
+      "objectCards",
+      "releaseId",
+      "manifestDigest",
+    }, path);
     return ContentDiscoveryFeedPageSlice(
-      items: List<ContentPostProjection>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => ContentPostProjection.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
+      items: List<ContentPostProjection>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => ContentPostProjection.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
       outcome: ContentFeedOutcome.fromWire(map["outcome"], '$path.outcome'),
-      emptyReason: map["emptyReason"] == null ? null : ContentFeedEmptyReason.fromWire(map["emptyReason"], '$path.emptyReason'),
-      nextCursor: map["nextCursor"] == null ? null : _requiredString(map["nextCursor"], '$path.nextCursor'),
-      previousCursor: map["previousCursor"] == null ? null : _requiredString(map["previousCursor"], '$path.previousCursor'),
-      paginationExpiresAt: map["paginationExpiresAt"] == null ? null : _requiredTimestamp(map["paginationExpiresAt"], '$path.paginationExpiresAt'),
-      feedRequestId: _requiredString(map["feedRequestId"], '$path.feedRequestId'),
-      policyDigest: map["policyDigest"] == null ? null : _requiredString(map["policyDigest"], '$path.policyDigest'),
-      objectCards: List<FeedObjectCard>.unmodifiable(_requiredList(map["objectCards"], '$path.objectCards').asMap().entries.map((entry) => FeedObjectCard.fromWire(_requiredObject(entry.value, '$path.objectCards' + '[${entry.key}]'), '$path.objectCards' + '[${entry.key}]'))),
-      releaseId: map["releaseId"] == null ? null : _requiredString(map["releaseId"], '$path.releaseId'),
-      manifestDigest: map["manifestDigest"] == null ? null : _requiredString(map["manifestDigest"], '$path.manifestDigest'),
+      emptyReason: map["emptyReason"] == null
+          ? null
+          : ContentFeedEmptyReason.fromWire(
+              map["emptyReason"],
+              '$path.emptyReason',
+            ),
+      nextCursor: map["nextCursor"] == null
+          ? null
+          : _requiredString(map["nextCursor"], '$path.nextCursor'),
+      previousCursor: map["previousCursor"] == null
+          ? null
+          : _requiredString(map["previousCursor"], '$path.previousCursor'),
+      paginationExpiresAt: map["paginationExpiresAt"] == null
+          ? null
+          : _requiredTimestamp(
+              map["paginationExpiresAt"],
+              '$path.paginationExpiresAt',
+            ),
+      feedRequestId: _requiredString(
+        map["feedRequestId"],
+        '$path.feedRequestId',
+      ),
+      policyDigest: map["policyDigest"] == null
+          ? null
+          : _requiredString(map["policyDigest"], '$path.policyDigest'),
+      objectCards: List<FeedObjectCard>.unmodifiable(
+        _requiredList(
+          map["objectCards"],
+          '$path.objectCards',
+        ).asMap().entries.map(
+          (entry) => FeedObjectCard.fromWire(
+            _requiredObject(
+              entry.value,
+              '$path.objectCards' + '[${entry.key}]',
+            ),
+            '$path.objectCards' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      releaseId: map["releaseId"] == null
+          ? null
+          : _requiredString(map["releaseId"], '$path.releaseId'),
+      manifestDigest: map["manifestDigest"] == null
+          ? null
+          : _requiredString(map["manifestDigest"], '$path.manifestDigest'),
     );
   }
 
@@ -1644,10 +2494,13 @@ final class ContentDiscoveryFeedPageSlice {
     if (emptyReason != null) "emptyReason": emptyReason!.wireName,
     if (nextCursor != null) "nextCursor": nextCursor!,
     if (previousCursor != null) "previousCursor": previousCursor!,
-    if (paginationExpiresAt != null) "paginationExpiresAt": paginationExpiresAt!.toUtc().toIso8601String(),
+    if (paginationExpiresAt != null)
+      "paginationExpiresAt": paginationExpiresAt!.toUtc().toIso8601String(),
     "feedRequestId": feedRequestId,
     if (policyDigest != null) "policyDigest": policyDigest!,
-    "objectCards": objectCards.map((value) => value.toWire()).toList(growable: false),
+    "objectCards": objectCards
+        .map((value) => value.toWire())
+        .toList(growable: false),
     if (releaseId != null) "releaseId": releaseId!,
     if (manifestDigest != null) "manifestDigest": manifestDigest!,
   };
@@ -1666,13 +2519,26 @@ final class ContentFootprintEntry {
   final DateTime occurredAt;
   final ContentPostProjection? post;
 
-  factory ContentFootprintEntry.fromWire(Map<String, Object?> map, [String path = "ContentFootprintEntry"]) {
-    _rejectUnknownFields(map, const <String>{"postId", "action", "occurredAt", "post"}, path);
+  factory ContentFootprintEntry.fromWire(
+    Map<String, Object?> map, [
+    String path = "ContentFootprintEntry",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "postId",
+      "action",
+      "occurredAt",
+      "post",
+    }, path);
     return ContentFootprintEntry(
       postId: _requiredString(map["postId"], '$path.postId'),
       action: _requiredString(map["action"], '$path.action'),
       occurredAt: _requiredTimestamp(map["occurredAt"], '$path.occurredAt'),
-      post: map["post"] == null ? null : ContentPostProjection.fromWire(_requiredObject(map["post"], '$path.post'), '$path.post'),
+      post: map["post"] == null
+          ? null
+          : ContentPostProjection.fromWire(
+              _requiredObject(map["post"], '$path.post'),
+              '$path.post',
+            ),
     );
   }
 
@@ -1685,19 +2551,28 @@ final class ContentFootprintEntry {
 }
 
 final class ContentFootprintPageSlice {
-  const ContentFootprintPageSlice({
-    required this.items,
-    this.nextCursor,
-  });
+  const ContentFootprintPageSlice({required this.items, this.nextCursor});
 
   final List<ContentFootprintEntry> items;
   final String? nextCursor;
 
-  factory ContentFootprintPageSlice.fromWire(Map<String, Object?> map, [String path = "ContentFootprintPageSlice"]) {
+  factory ContentFootprintPageSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "ContentFootprintPageSlice",
+  ]) {
     _rejectUnknownFields(map, const <String>{"items", "nextCursor"}, path);
     return ContentFootprintPageSlice(
-      items: List<ContentFootprintEntry>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => ContentFootprintEntry.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
-      nextCursor: map["nextCursor"] == null ? null : _requiredString(map["nextCursor"], '$path.nextCursor'),
+      items: List<ContentFootprintEntry>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => ContentFootprintEntry.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      nextCursor: map["nextCursor"] == null
+          ? null
+          : _requiredString(map["nextCursor"], '$path.nextCursor'),
     );
   }
 
@@ -1716,6 +2591,8 @@ final class ContentPostDetailSlice {
     this.authorId,
     this.authorDisplayName,
     this.authorAvatarUrl,
+    this.authorAvatarAssetId,
+    this.authorAvatarAccessMode,
     this.title,
     this.body,
     this.summary,
@@ -1771,6 +2648,8 @@ final class ContentPostDetailSlice {
   final String? authorId;
   final String? authorDisplayName;
   final String? authorAvatarUrl;
+  final String? authorAvatarAssetId;
+  final MediaDeliveryAccessMode? authorAvatarAccessMode;
   final String? title;
   final String? body;
   final String? summary;
@@ -1818,62 +2697,346 @@ final class ContentPostDetailSlice {
   final DateTime updatedAt;
   final DateTime? publishedAt;
 
-  factory ContentPostDetailSlice.fromWire(Map<String, Object?> map, [String path = "ContentPostDetailSlice"]) {
-    _rejectUnknownFields(map, const <String>{"postId", "contentType", "contentIdentity", "assistantUsePolicy", "authorId", "authorDisplayName", "authorAvatarUrl", "title", "body", "summary", "tagRefs", "entityRefs", "semanticMentions", "mediaAssetIds", "mediaUrls", "mediaItems", "coverUrl", "thumbnailUrl", "videoUrl", "sourceAttribution", "width", "height", "durationMs", "articleMarkdown", "markdownDialect", "articleMarkdownDigest", "articleAssetManifest", "articleRenderProfile", "contentVertical", "entityMentions", "articleTemplate", "articleFontPreset", "coverStrategy", "coverFrameTimeMs", "location", "locationName", "geoTagRef", "visitedAt", "primaryHomepageId", "canonicalEntityId", "primaryHomepageType", "primaryHomepageSnapshot", "gatheringRef", "status", "visibility", "likeCount", "commentCount", "shareCount", "viewCount", "viewerLiked", "createdAt", "updatedAt", "publishedAt"}, path);
+  factory ContentPostDetailSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "ContentPostDetailSlice",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "postId",
+      "contentType",
+      "contentIdentity",
+      "assistantUsePolicy",
+      "authorId",
+      "authorDisplayName",
+      "authorAvatarUrl",
+      "authorAvatarAssetId",
+      "authorAvatarAccessMode",
+      "title",
+      "body",
+      "summary",
+      "tagRefs",
+      "entityRefs",
+      "semanticMentions",
+      "mediaAssetIds",
+      "mediaUrls",
+      "mediaItems",
+      "coverUrl",
+      "thumbnailUrl",
+      "videoUrl",
+      "sourceAttribution",
+      "width",
+      "height",
+      "durationMs",
+      "articleMarkdown",
+      "markdownDialect",
+      "articleMarkdownDigest",
+      "articleAssetManifest",
+      "articleRenderProfile",
+      "contentVertical",
+      "entityMentions",
+      "articleTemplate",
+      "articleFontPreset",
+      "coverStrategy",
+      "coverFrameTimeMs",
+      "location",
+      "locationName",
+      "geoTagRef",
+      "visitedAt",
+      "primaryHomepageId",
+      "canonicalEntityId",
+      "primaryHomepageType",
+      "primaryHomepageSnapshot",
+      "gatheringRef",
+      "status",
+      "visibility",
+      "likeCount",
+      "commentCount",
+      "shareCount",
+      "viewCount",
+      "viewerLiked",
+      "createdAt",
+      "updatedAt",
+      "publishedAt",
+    }, path);
     return ContentPostDetailSlice(
       postId: _requiredString(map["postId"], '$path.postId'),
       contentType: _requiredString(map["contentType"], '$path.contentType'),
-      contentIdentity: map["contentIdentity"] == null ? null : _requiredString(map["contentIdentity"], '$path.contentIdentity'),
-      assistantUsePolicy: map["assistantUsePolicy"] == null ? null : AssistantUsePolicy.fromWire(map["assistantUsePolicy"], '$path.assistantUsePolicy'),
-      authorId: map["authorId"] == null ? null : _requiredString(map["authorId"], '$path.authorId'),
-      authorDisplayName: map["authorDisplayName"] == null ? null : _requiredString(map["authorDisplayName"], '$path.authorDisplayName'),
-      authorAvatarUrl: map["authorAvatarUrl"] == null ? null : _requiredString(map["authorAvatarUrl"], '$path.authorAvatarUrl'),
-      title: map["title"] == null ? null : _requiredString(map["title"], '$path.title'),
-      body: map["body"] == null ? null : _requiredString(map["body"], '$path.body'),
-      summary: map["summary"] == null ? null : _requiredString(map["summary"], '$path.summary'),
-      tagRefs: map["tagRefs"] == null ? null : List<String>.unmodifiable(_requiredList(map["tagRefs"], '$path.tagRefs').asMap().entries.map((entry) => _requiredString(entry.value, '$path.tagRefs' + '[${entry.key}]'))),
-      entityRefs: map["entityRefs"] == null ? null : List<String>.unmodifiable(_requiredList(map["entityRefs"], '$path.entityRefs').asMap().entries.map((entry) => _requiredString(entry.value, '$path.entityRefs' + '[${entry.key}]'))),
-      semanticMentions: map["semanticMentions"] == null ? null : List<PostSemanticMention>.unmodifiable(_requiredList(map["semanticMentions"], '$path.semanticMentions').asMap().entries.map((entry) => PostSemanticMention.fromWire(_requiredObject(entry.value, '$path.semanticMentions' + '[${entry.key}]'), '$path.semanticMentions' + '[${entry.key}]'))),
-      mediaAssetIds: map["mediaAssetIds"] == null ? null : List<String>.unmodifiable(_requiredList(map["mediaAssetIds"], '$path.mediaAssetIds').asMap().entries.map((entry) => _requiredString(entry.value, '$path.mediaAssetIds' + '[${entry.key}]'))),
-      mediaUrls: map["mediaUrls"] == null ? null : List<String>.unmodifiable(_requiredList(map["mediaUrls"], '$path.mediaUrls').asMap().entries.map((entry) => _requiredString(entry.value, '$path.mediaUrls' + '[${entry.key}]'))),
-      mediaItems: map["mediaItems"] == null ? null : List<PostMediaItem>.unmodifiable(_requiredList(map["mediaItems"], '$path.mediaItems').asMap().entries.map((entry) => PostMediaItem.fromWire(_requiredObject(entry.value, '$path.mediaItems' + '[${entry.key}]'), '$path.mediaItems' + '[${entry.key}]'))),
-      coverUrl: map["coverUrl"] == null ? null : _requiredString(map["coverUrl"], '$path.coverUrl'),
-      thumbnailUrl: map["thumbnailUrl"] == null ? null : _requiredString(map["thumbnailUrl"], '$path.thumbnailUrl'),
-      videoUrl: map["videoUrl"] == null ? null : _requiredString(map["videoUrl"], '$path.videoUrl'),
-      sourceAttribution: map["sourceAttribution"] == null ? null : SourceAttribution.fromWire(_requiredObject(map["sourceAttribution"], '$path.sourceAttribution'), '$path.sourceAttribution'),
-      width: map["width"] == null ? null : _requiredInt(map["width"], '$path.width'),
-      height: map["height"] == null ? null : _requiredInt(map["height"], '$path.height'),
-      durationMs: map["durationMs"] == null ? null : _requiredInt(map["durationMs"], '$path.durationMs'),
-      articleMarkdown: map["articleMarkdown"] == null ? null : _requiredString(map["articleMarkdown"], '$path.articleMarkdown'),
-      markdownDialect: map["markdownDialect"] == null ? null : _requiredString(map["markdownDialect"], '$path.markdownDialect'),
-      articleMarkdownDigest: map["articleMarkdownDigest"] == null ? null : _requiredString(map["articleMarkdownDigest"], '$path.articleMarkdownDigest'),
-      articleAssetManifest: map["articleAssetManifest"] == null ? null : PostArticleAssetManifest.fromWire(_requiredObject(map["articleAssetManifest"], '$path.articleAssetManifest'), '$path.articleAssetManifest'),
-      articleRenderProfile: map["articleRenderProfile"] == null ? null : PostArticleRenderProfile.fromWire(_requiredObject(map["articleRenderProfile"], '$path.articleRenderProfile'), '$path.articleRenderProfile'),
-      contentVertical: map["contentVertical"] == null ? null : _requiredString(map["contentVertical"], '$path.contentVertical'),
-      entityMentions: map["entityMentions"] == null ? null : List<PostEntityMention>.unmodifiable(_requiredList(map["entityMentions"], '$path.entityMentions').asMap().entries.map((entry) => PostEntityMention.fromWire(_requiredObject(entry.value, '$path.entityMentions' + '[${entry.key}]'), '$path.entityMentions' + '[${entry.key}]'))),
-      articleTemplate: map["articleTemplate"] == null ? null : _requiredString(map["articleTemplate"], '$path.articleTemplate'),
-      articleFontPreset: map["articleFontPreset"] == null ? null : _requiredString(map["articleFontPreset"], '$path.articleFontPreset'),
-      coverStrategy: map["coverStrategy"] == null ? null : _requiredString(map["coverStrategy"], '$path.coverStrategy'),
-      coverFrameTimeMs: map["coverFrameTimeMs"] == null ? null : _requiredInt(map["coverFrameTimeMs"], '$path.coverFrameTimeMs'),
-      location: map["location"] == null ? null : GeoPoint.fromWire(_requiredObject(map["location"], '$path.location'), '$path.location'),
-      locationName: map["locationName"] == null ? null : _requiredString(map["locationName"], '$path.locationName'),
-      geoTagRef: map["geoTagRef"] == null ? null : _requiredString(map["geoTagRef"], '$path.geoTagRef'),
-      visitedAt: map["visitedAt"] == null ? null : _requiredTimestamp(map["visitedAt"], '$path.visitedAt'),
-      primaryHomepageId: map["primaryHomepageId"] == null ? null : _requiredString(map["primaryHomepageId"], '$path.primaryHomepageId'),
-      canonicalEntityId: map["canonicalEntityId"] == null ? null : _requiredString(map["canonicalEntityId"], '$path.canonicalEntityId'),
-      primaryHomepageType: map["primaryHomepageType"] == null ? null : _requiredString(map["primaryHomepageType"], '$path.primaryHomepageType'),
-      primaryHomepageSnapshot: map["primaryHomepageSnapshot"] == null ? null : PostHomepageSnapshot.fromWire(_requiredObject(map["primaryHomepageSnapshot"], '$path.primaryHomepageSnapshot'), '$path.primaryHomepageSnapshot'),
-      gatheringRef: map["gatheringRef"] == null ? null : _requiredString(map["gatheringRef"], '$path.gatheringRef'),
+      contentIdentity: map["contentIdentity"] == null
+          ? null
+          : _requiredString(map["contentIdentity"], '$path.contentIdentity'),
+      assistantUsePolicy: map["assistantUsePolicy"] == null
+          ? null
+          : AssistantUsePolicy.fromWire(
+              map["assistantUsePolicy"],
+              '$path.assistantUsePolicy',
+            ),
+      authorId: map["authorId"] == null
+          ? null
+          : _requiredString(map["authorId"], '$path.authorId'),
+      authorDisplayName: map["authorDisplayName"] == null
+          ? null
+          : _requiredString(
+              map["authorDisplayName"],
+              '$path.authorDisplayName',
+            ),
+      authorAvatarUrl: map["authorAvatarUrl"] == null
+          ? null
+          : _requiredString(map["authorAvatarUrl"], '$path.authorAvatarUrl'),
+      authorAvatarAssetId: map["authorAvatarAssetId"] == null
+          ? null
+          : _requiredString(
+              map["authorAvatarAssetId"],
+              '$path.authorAvatarAssetId',
+            ),
+      authorAvatarAccessMode: map["authorAvatarAccessMode"] == null
+          ? null
+          : MediaDeliveryAccessMode.fromWire(
+              map["authorAvatarAccessMode"],
+              '$path.authorAvatarAccessMode',
+            ),
+      title: map["title"] == null
+          ? null
+          : _requiredString(map["title"], '$path.title'),
+      body: map["body"] == null
+          ? null
+          : _requiredString(map["body"], '$path.body'),
+      summary: map["summary"] == null
+          ? null
+          : _requiredString(map["summary"], '$path.summary'),
+      tagRefs: map["tagRefs"] == null
+          ? null
+          : List<String>.unmodifiable(
+              _requiredList(
+                map["tagRefs"],
+                '$path.tagRefs',
+              ).asMap().entries.map(
+                (entry) => _requiredString(
+                  entry.value,
+                  '$path.tagRefs' + '[${entry.key}]',
+                ),
+              ),
+            ),
+      entityRefs: map["entityRefs"] == null
+          ? null
+          : List<String>.unmodifiable(
+              _requiredList(
+                map["entityRefs"],
+                '$path.entityRefs',
+              ).asMap().entries.map(
+                (entry) => _requiredString(
+                  entry.value,
+                  '$path.entityRefs' + '[${entry.key}]',
+                ),
+              ),
+            ),
+      semanticMentions: map["semanticMentions"] == null
+          ? null
+          : List<PostSemanticMention>.unmodifiable(
+              _requiredList(
+                map["semanticMentions"],
+                '$path.semanticMentions',
+              ).asMap().entries.map(
+                (entry) => PostSemanticMention.fromWire(
+                  _requiredObject(
+                    entry.value,
+                    '$path.semanticMentions' + '[${entry.key}]',
+                  ),
+                  '$path.semanticMentions' + '[${entry.key}]',
+                ),
+              ),
+            ),
+      mediaAssetIds: map["mediaAssetIds"] == null
+          ? null
+          : List<String>.unmodifiable(
+              _requiredList(
+                map["mediaAssetIds"],
+                '$path.mediaAssetIds',
+              ).asMap().entries.map(
+                (entry) => _requiredString(
+                  entry.value,
+                  '$path.mediaAssetIds' + '[${entry.key}]',
+                ),
+              ),
+            ),
+      mediaUrls: map["mediaUrls"] == null
+          ? null
+          : List<String>.unmodifiable(
+              _requiredList(
+                map["mediaUrls"],
+                '$path.mediaUrls',
+              ).asMap().entries.map(
+                (entry) => _requiredString(
+                  entry.value,
+                  '$path.mediaUrls' + '[${entry.key}]',
+                ),
+              ),
+            ),
+      mediaItems: map["mediaItems"] == null
+          ? null
+          : List<PostMediaItem>.unmodifiable(
+              _requiredList(
+                map["mediaItems"],
+                '$path.mediaItems',
+              ).asMap().entries.map(
+                (entry) => PostMediaItem.fromWire(
+                  _requiredObject(
+                    entry.value,
+                    '$path.mediaItems' + '[${entry.key}]',
+                  ),
+                  '$path.mediaItems' + '[${entry.key}]',
+                ),
+              ),
+            ),
+      coverUrl: map["coverUrl"] == null
+          ? null
+          : _requiredString(map["coverUrl"], '$path.coverUrl'),
+      thumbnailUrl: map["thumbnailUrl"] == null
+          ? null
+          : _requiredString(map["thumbnailUrl"], '$path.thumbnailUrl'),
+      videoUrl: map["videoUrl"] == null
+          ? null
+          : _requiredString(map["videoUrl"], '$path.videoUrl'),
+      sourceAttribution: map["sourceAttribution"] == null
+          ? null
+          : SourceAttribution.fromWire(
+              _requiredObject(
+                map["sourceAttribution"],
+                '$path.sourceAttribution',
+              ),
+              '$path.sourceAttribution',
+            ),
+      width: map["width"] == null
+          ? null
+          : _requiredInt(map["width"], '$path.width'),
+      height: map["height"] == null
+          ? null
+          : _requiredInt(map["height"], '$path.height'),
+      durationMs: map["durationMs"] == null
+          ? null
+          : _requiredInt(map["durationMs"], '$path.durationMs'),
+      articleMarkdown: map["articleMarkdown"] == null
+          ? null
+          : _requiredString(map["articleMarkdown"], '$path.articleMarkdown'),
+      markdownDialect: map["markdownDialect"] == null
+          ? null
+          : _requiredString(map["markdownDialect"], '$path.markdownDialect'),
+      articleMarkdownDigest: map["articleMarkdownDigest"] == null
+          ? null
+          : _requiredString(
+              map["articleMarkdownDigest"],
+              '$path.articleMarkdownDigest',
+            ),
+      articleAssetManifest: map["articleAssetManifest"] == null
+          ? null
+          : PostArticleAssetManifest.fromWire(
+              _requiredObject(
+                map["articleAssetManifest"],
+                '$path.articleAssetManifest',
+              ),
+              '$path.articleAssetManifest',
+            ),
+      articleRenderProfile: map["articleRenderProfile"] == null
+          ? null
+          : PostArticleRenderProfile.fromWire(
+              _requiredObject(
+                map["articleRenderProfile"],
+                '$path.articleRenderProfile',
+              ),
+              '$path.articleRenderProfile',
+            ),
+      contentVertical: map["contentVertical"] == null
+          ? null
+          : _requiredString(map["contentVertical"], '$path.contentVertical'),
+      entityMentions: map["entityMentions"] == null
+          ? null
+          : List<PostEntityMention>.unmodifiable(
+              _requiredList(
+                map["entityMentions"],
+                '$path.entityMentions',
+              ).asMap().entries.map(
+                (entry) => PostEntityMention.fromWire(
+                  _requiredObject(
+                    entry.value,
+                    '$path.entityMentions' + '[${entry.key}]',
+                  ),
+                  '$path.entityMentions' + '[${entry.key}]',
+                ),
+              ),
+            ),
+      articleTemplate: map["articleTemplate"] == null
+          ? null
+          : _requiredString(map["articleTemplate"], '$path.articleTemplate'),
+      articleFontPreset: map["articleFontPreset"] == null
+          ? null
+          : _requiredString(
+              map["articleFontPreset"],
+              '$path.articleFontPreset',
+            ),
+      coverStrategy: map["coverStrategy"] == null
+          ? null
+          : _requiredString(map["coverStrategy"], '$path.coverStrategy'),
+      coverFrameTimeMs: map["coverFrameTimeMs"] == null
+          ? null
+          : _requiredInt(map["coverFrameTimeMs"], '$path.coverFrameTimeMs'),
+      location: map["location"] == null
+          ? null
+          : GeoPoint.fromWire(
+              _requiredObject(map["location"], '$path.location'),
+              '$path.location',
+            ),
+      locationName: map["locationName"] == null
+          ? null
+          : _requiredString(map["locationName"], '$path.locationName'),
+      geoTagRef: map["geoTagRef"] == null
+          ? null
+          : _requiredString(map["geoTagRef"], '$path.geoTagRef'),
+      visitedAt: map["visitedAt"] == null
+          ? null
+          : _requiredTimestamp(map["visitedAt"], '$path.visitedAt'),
+      primaryHomepageId: map["primaryHomepageId"] == null
+          ? null
+          : _requiredString(
+              map["primaryHomepageId"],
+              '$path.primaryHomepageId',
+            ),
+      canonicalEntityId: map["canonicalEntityId"] == null
+          ? null
+          : _requiredString(
+              map["canonicalEntityId"],
+              '$path.canonicalEntityId',
+            ),
+      primaryHomepageType: map["primaryHomepageType"] == null
+          ? null
+          : _requiredString(
+              map["primaryHomepageType"],
+              '$path.primaryHomepageType',
+            ),
+      primaryHomepageSnapshot: map["primaryHomepageSnapshot"] == null
+          ? null
+          : PostHomepageSnapshot.fromWire(
+              _requiredObject(
+                map["primaryHomepageSnapshot"],
+                '$path.primaryHomepageSnapshot',
+              ),
+              '$path.primaryHomepageSnapshot',
+            ),
+      gatheringRef: map["gatheringRef"] == null
+          ? null
+          : _requiredString(map["gatheringRef"], '$path.gatheringRef'),
       status: _requiredString(map["status"], '$path.status'),
       visibility: _requiredString(map["visibility"], '$path.visibility'),
       likeCount: _requiredInt(map["likeCount"], '$path.likeCount'),
       commentCount: _requiredInt(map["commentCount"], '$path.commentCount'),
       shareCount: _requiredInt(map["shareCount"], '$path.shareCount'),
       viewCount: _requiredInt(map["viewCount"], '$path.viewCount'),
-      viewerLiked: map["viewerLiked"] == null ? null : _requiredBool(map["viewerLiked"], '$path.viewerLiked'),
+      viewerLiked: map["viewerLiked"] == null
+          ? null
+          : _requiredBool(map["viewerLiked"], '$path.viewerLiked'),
       createdAt: _requiredTimestamp(map["createdAt"], '$path.createdAt'),
       updatedAt: _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
-      publishedAt: map["publishedAt"] == null ? null : _requiredTimestamp(map["publishedAt"], '$path.publishedAt'),
+      publishedAt: map["publishedAt"] == null
+          ? null
+          : _requiredTimestamp(map["publishedAt"], '$path.publishedAt'),
     );
   }
 
@@ -1881,33 +3044,57 @@ final class ContentPostDetailSlice {
     "postId": postId,
     "contentType": contentType,
     if (contentIdentity != null) "contentIdentity": contentIdentity!,
-    if (assistantUsePolicy != null) "assistantUsePolicy": assistantUsePolicy!.wireName,
+    if (assistantUsePolicy != null)
+      "assistantUsePolicy": assistantUsePolicy!.wireName,
     if (authorId != null) "authorId": authorId!,
     if (authorDisplayName != null) "authorDisplayName": authorDisplayName!,
     if (authorAvatarUrl != null) "authorAvatarUrl": authorAvatarUrl!,
+    if (authorAvatarAssetId != null)
+      "authorAvatarAssetId": authorAvatarAssetId!,
+    if (authorAvatarAccessMode != null)
+      "authorAvatarAccessMode": authorAvatarAccessMode!.wireName,
     if (title != null) "title": title!,
     if (body != null) "body": body!,
     if (summary != null) "summary": summary!,
-    if (tagRefs != null) "tagRefs": tagRefs!.map((value) => value).toList(growable: false),
-    if (entityRefs != null) "entityRefs": entityRefs!.map((value) => value).toList(growable: false),
-    if (semanticMentions != null) "semanticMentions": semanticMentions!.map((value) => value.toWire()).toList(growable: false),
-    if (mediaAssetIds != null) "mediaAssetIds": mediaAssetIds!.map((value) => value).toList(growable: false),
-    if (mediaUrls != null) "mediaUrls": mediaUrls!.map((value) => value).toList(growable: false),
-    if (mediaItems != null) "mediaItems": mediaItems!.map((value) => value.toWire()).toList(growable: false),
+    if (tagRefs != null)
+      "tagRefs": tagRefs!.map((value) => value).toList(growable: false),
+    if (entityRefs != null)
+      "entityRefs": entityRefs!.map((value) => value).toList(growable: false),
+    if (semanticMentions != null)
+      "semanticMentions": semanticMentions!
+          .map((value) => value.toWire())
+          .toList(growable: false),
+    if (mediaAssetIds != null)
+      "mediaAssetIds": mediaAssetIds!
+          .map((value) => value)
+          .toList(growable: false),
+    if (mediaUrls != null)
+      "mediaUrls": mediaUrls!.map((value) => value).toList(growable: false),
+    if (mediaItems != null)
+      "mediaItems": mediaItems!
+          .map((value) => value.toWire())
+          .toList(growable: false),
     if (coverUrl != null) "coverUrl": coverUrl!,
     if (thumbnailUrl != null) "thumbnailUrl": thumbnailUrl!,
     if (videoUrl != null) "videoUrl": videoUrl!,
-    if (sourceAttribution != null) "sourceAttribution": sourceAttribution!.toWire(),
+    if (sourceAttribution != null)
+      "sourceAttribution": sourceAttribution!.toWire(),
     if (width != null) "width": width!,
     if (height != null) "height": height!,
     if (durationMs != null) "durationMs": durationMs!,
     if (articleMarkdown != null) "articleMarkdown": articleMarkdown!,
     if (markdownDialect != null) "markdownDialect": markdownDialect!,
-    if (articleMarkdownDigest != null) "articleMarkdownDigest": articleMarkdownDigest!,
-    if (articleAssetManifest != null) "articleAssetManifest": articleAssetManifest!.toWire(),
-    if (articleRenderProfile != null) "articleRenderProfile": articleRenderProfile!.toWire(),
+    if (articleMarkdownDigest != null)
+      "articleMarkdownDigest": articleMarkdownDigest!,
+    if (articleAssetManifest != null)
+      "articleAssetManifest": articleAssetManifest!.toWire(),
+    if (articleRenderProfile != null)
+      "articleRenderProfile": articleRenderProfile!.toWire(),
     if (contentVertical != null) "contentVertical": contentVertical!,
-    if (entityMentions != null) "entityMentions": entityMentions!.map((value) => value.toWire()).toList(growable: false),
+    if (entityMentions != null)
+      "entityMentions": entityMentions!
+          .map((value) => value.toWire())
+          .toList(growable: false),
     if (articleTemplate != null) "articleTemplate": articleTemplate!,
     if (articleFontPreset != null) "articleFontPreset": articleFontPreset!,
     if (coverStrategy != null) "coverStrategy": coverStrategy!,
@@ -1918,8 +3105,10 @@ final class ContentPostDetailSlice {
     if (visitedAt != null) "visitedAt": visitedAt!.toUtc().toIso8601String(),
     if (primaryHomepageId != null) "primaryHomepageId": primaryHomepageId!,
     if (canonicalEntityId != null) "canonicalEntityId": canonicalEntityId!,
-    if (primaryHomepageType != null) "primaryHomepageType": primaryHomepageType!,
-    if (primaryHomepageSnapshot != null) "primaryHomepageSnapshot": primaryHomepageSnapshot!.toWire(),
+    if (primaryHomepageType != null)
+      "primaryHomepageType": primaryHomepageType!,
+    if (primaryHomepageSnapshot != null)
+      "primaryHomepageSnapshot": primaryHomepageSnapshot!.toWire(),
     if (gatheringRef != null) "gatheringRef": gatheringRef!,
     "status": status,
     "visibility": visibility,
@@ -1930,7 +3119,8 @@ final class ContentPostDetailSlice {
     if (viewerLiked != null) "viewerLiked": viewerLiked!,
     "createdAt": createdAt.toUtc().toIso8601String(),
     "updatedAt": updatedAt.toUtc().toIso8601String(),
-    if (publishedAt != null) "publishedAt": publishedAt!.toUtc().toIso8601String(),
+    if (publishedAt != null)
+      "publishedAt": publishedAt!.toUtc().toIso8601String(),
   };
 }
 
@@ -1943,6 +3133,8 @@ final class ContentPostProjection {
     this.authorId,
     this.authorDisplayName,
     this.authorAvatarUrl,
+    this.authorAvatarAssetId,
+    this.authorAvatarAccessMode,
     this.authorBackgroundUrl,
     this.authorRoleLabel,
     this.authorIdentityTags,
@@ -1957,6 +3149,7 @@ final class ContentPostProjection {
     this.videoUrl,
     this.mediaAssetId,
     this.mediaAssetVersion,
+    this.mediaItems,
     this.hlsCmafMasterManifestUrl,
     this.hlsCmafDescriptorVersion,
     this.thumbnailUrl,
@@ -1986,6 +3179,8 @@ final class ContentPostProjection {
   final String? authorId;
   final String? authorDisplayName;
   final String? authorAvatarUrl;
+  final String? authorAvatarAssetId;
+  final MediaDeliveryAccessMode? authorAvatarAccessMode;
   final String? authorBackgroundUrl;
   final String? authorRoleLabel;
   final List<String>? authorIdentityTags;
@@ -2000,6 +3195,7 @@ final class ContentPostProjection {
   final String? videoUrl;
   final String? mediaAssetId;
   final int? mediaAssetVersion;
+  final List<PostMediaItem>? mediaItems;
   final String? hlsCmafMasterManifestUrl;
   final int? hlsCmafDescriptorVersion;
   final String? thumbnailUrl;
@@ -2021,50 +3217,255 @@ final class ContentPostProjection {
   final String? supplySource;
   final List<IntersectionReason>? intersectionReasons;
 
-  factory ContentPostProjection.fromWire(Map<String, Object?> map, [String path = "ContentPostProjection"]) {
-    _rejectUnknownFields(map, const <String>{"postId", "contentType", "contentIdentity", "assistantUsePolicy", "authorId", "authorDisplayName", "authorAvatarUrl", "authorBackgroundUrl", "authorRoleLabel", "authorIdentityTags", "authorVerified", "title", "body", "summary", "coverUrl", "articleTemplate", "articleFontPreset", "mediaUrls", "videoUrl", "mediaAssetId", "mediaAssetVersion", "hlsCmafMasterManifestUrl", "hlsCmafDescriptorVersion", "thumbnailUrl", "width", "height", "durationMs", "likeCount", "commentCount", "shareCount", "viewerLiked", "primaryHomepageId", "primaryHomepageType", "gatheringRef", "createdAt", "updatedAt", "publishedAt", "contentVertical", "recallPath", "supplySource", "intersectionReasons"}, path);
+  factory ContentPostProjection.fromWire(
+    Map<String, Object?> map, [
+    String path = "ContentPostProjection",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "postId",
+      "contentType",
+      "contentIdentity",
+      "assistantUsePolicy",
+      "authorId",
+      "authorDisplayName",
+      "authorAvatarUrl",
+      "authorAvatarAssetId",
+      "authorAvatarAccessMode",
+      "authorBackgroundUrl",
+      "authorRoleLabel",
+      "authorIdentityTags",
+      "authorVerified",
+      "title",
+      "body",
+      "summary",
+      "coverUrl",
+      "articleTemplate",
+      "articleFontPreset",
+      "mediaUrls",
+      "videoUrl",
+      "mediaAssetId",
+      "mediaAssetVersion",
+      "mediaItems",
+      "hlsCmafMasterManifestUrl",
+      "hlsCmafDescriptorVersion",
+      "thumbnailUrl",
+      "width",
+      "height",
+      "durationMs",
+      "likeCount",
+      "commentCount",
+      "shareCount",
+      "viewerLiked",
+      "primaryHomepageId",
+      "primaryHomepageType",
+      "gatheringRef",
+      "createdAt",
+      "updatedAt",
+      "publishedAt",
+      "contentVertical",
+      "recallPath",
+      "supplySource",
+      "intersectionReasons",
+    }, path);
     return ContentPostProjection(
       postId: _requiredString(map["postId"], '$path.postId'),
       contentType: _requiredString(map["contentType"], '$path.contentType'),
-      contentIdentity: map["contentIdentity"] == null ? null : _requiredString(map["contentIdentity"], '$path.contentIdentity'),
-      assistantUsePolicy: map["assistantUsePolicy"] == null ? null : AssistantUsePolicy.fromWire(map["assistantUsePolicy"], '$path.assistantUsePolicy'),
-      authorId: map["authorId"] == null ? null : _requiredString(map["authorId"], '$path.authorId'),
-      authorDisplayName: map["authorDisplayName"] == null ? null : _requiredString(map["authorDisplayName"], '$path.authorDisplayName'),
-      authorAvatarUrl: map["authorAvatarUrl"] == null ? null : _requiredString(map["authorAvatarUrl"], '$path.authorAvatarUrl'),
-      authorBackgroundUrl: map["authorBackgroundUrl"] == null ? null : _requiredString(map["authorBackgroundUrl"], '$path.authorBackgroundUrl'),
-      authorRoleLabel: map["authorRoleLabel"] == null ? null : _requiredString(map["authorRoleLabel"], '$path.authorRoleLabel'),
-      authorIdentityTags: map["authorIdentityTags"] == null ? null : List<String>.unmodifiable(_requiredList(map["authorIdentityTags"], '$path.authorIdentityTags').asMap().entries.map((entry) => _requiredString(entry.value, '$path.authorIdentityTags' + '[${entry.key}]'))),
-      authorVerified: map["authorVerified"] == null ? null : _requiredBool(map["authorVerified"], '$path.authorVerified'),
-      title: map["title"] == null ? null : _requiredString(map["title"], '$path.title'),
-      body: map["body"] == null ? null : _requiredString(map["body"], '$path.body'),
-      summary: map["summary"] == null ? null : _requiredString(map["summary"], '$path.summary'),
-      coverUrl: map["coverUrl"] == null ? null : _requiredString(map["coverUrl"], '$path.coverUrl'),
-      articleTemplate: map["articleTemplate"] == null ? null : _requiredString(map["articleTemplate"], '$path.articleTemplate'),
-      articleFontPreset: map["articleFontPreset"] == null ? null : _requiredString(map["articleFontPreset"], '$path.articleFontPreset'),
-      mediaUrls: map["mediaUrls"] == null ? null : List<String>.unmodifiable(_requiredList(map["mediaUrls"], '$path.mediaUrls').asMap().entries.map((entry) => _requiredString(entry.value, '$path.mediaUrls' + '[${entry.key}]'))),
-      videoUrl: map["videoUrl"] == null ? null : _requiredString(map["videoUrl"], '$path.videoUrl'),
-      mediaAssetId: map["mediaAssetId"] == null ? null : _requiredString(map["mediaAssetId"], '$path.mediaAssetId'),
-      mediaAssetVersion: map["mediaAssetVersion"] == null ? null : _requiredInt(map["mediaAssetVersion"], '$path.mediaAssetVersion'),
-      hlsCmafMasterManifestUrl: map["hlsCmafMasterManifestUrl"] == null ? null : _requiredString(map["hlsCmafMasterManifestUrl"], '$path.hlsCmafMasterManifestUrl'),
-      hlsCmafDescriptorVersion: map["hlsCmafDescriptorVersion"] == null ? null : _requiredInt(map["hlsCmafDescriptorVersion"], '$path.hlsCmafDescriptorVersion'),
-      thumbnailUrl: map["thumbnailUrl"] == null ? null : _requiredString(map["thumbnailUrl"], '$path.thumbnailUrl'),
-      width: map["width"] == null ? null : _requiredInt(map["width"], '$path.width'),
-      height: map["height"] == null ? null : _requiredInt(map["height"], '$path.height'),
-      durationMs: map["durationMs"] == null ? null : _requiredInt(map["durationMs"], '$path.durationMs'),
+      contentIdentity: map["contentIdentity"] == null
+          ? null
+          : _requiredString(map["contentIdentity"], '$path.contentIdentity'),
+      assistantUsePolicy: map["assistantUsePolicy"] == null
+          ? null
+          : AssistantUsePolicy.fromWire(
+              map["assistantUsePolicy"],
+              '$path.assistantUsePolicy',
+            ),
+      authorId: map["authorId"] == null
+          ? null
+          : _requiredString(map["authorId"], '$path.authorId'),
+      authorDisplayName: map["authorDisplayName"] == null
+          ? null
+          : _requiredString(
+              map["authorDisplayName"],
+              '$path.authorDisplayName',
+            ),
+      authorAvatarUrl: map["authorAvatarUrl"] == null
+          ? null
+          : _requiredString(map["authorAvatarUrl"], '$path.authorAvatarUrl'),
+      authorAvatarAssetId: map["authorAvatarAssetId"] == null
+          ? null
+          : _requiredString(
+              map["authorAvatarAssetId"],
+              '$path.authorAvatarAssetId',
+            ),
+      authorAvatarAccessMode: map["authorAvatarAccessMode"] == null
+          ? null
+          : MediaDeliveryAccessMode.fromWire(
+              map["authorAvatarAccessMode"],
+              '$path.authorAvatarAccessMode',
+            ),
+      authorBackgroundUrl: map["authorBackgroundUrl"] == null
+          ? null
+          : _requiredString(
+              map["authorBackgroundUrl"],
+              '$path.authorBackgroundUrl',
+            ),
+      authorRoleLabel: map["authorRoleLabel"] == null
+          ? null
+          : _requiredString(map["authorRoleLabel"], '$path.authorRoleLabel'),
+      authorIdentityTags: map["authorIdentityTags"] == null
+          ? null
+          : List<String>.unmodifiable(
+              _requiredList(
+                map["authorIdentityTags"],
+                '$path.authorIdentityTags',
+              ).asMap().entries.map(
+                (entry) => _requiredString(
+                  entry.value,
+                  '$path.authorIdentityTags' + '[${entry.key}]',
+                ),
+              ),
+            ),
+      authorVerified: map["authorVerified"] == null
+          ? null
+          : _requiredBool(map["authorVerified"], '$path.authorVerified'),
+      title: map["title"] == null
+          ? null
+          : _requiredString(map["title"], '$path.title'),
+      body: map["body"] == null
+          ? null
+          : _requiredString(map["body"], '$path.body'),
+      summary: map["summary"] == null
+          ? null
+          : _requiredString(map["summary"], '$path.summary'),
+      coverUrl: map["coverUrl"] == null
+          ? null
+          : _requiredString(map["coverUrl"], '$path.coverUrl'),
+      articleTemplate: map["articleTemplate"] == null
+          ? null
+          : _requiredString(map["articleTemplate"], '$path.articleTemplate'),
+      articleFontPreset: map["articleFontPreset"] == null
+          ? null
+          : _requiredString(
+              map["articleFontPreset"],
+              '$path.articleFontPreset',
+            ),
+      mediaUrls: map["mediaUrls"] == null
+          ? null
+          : List<String>.unmodifiable(
+              _requiredList(
+                map["mediaUrls"],
+                '$path.mediaUrls',
+              ).asMap().entries.map(
+                (entry) => _requiredString(
+                  entry.value,
+                  '$path.mediaUrls' + '[${entry.key}]',
+                ),
+              ),
+            ),
+      videoUrl: map["videoUrl"] == null
+          ? null
+          : _requiredString(map["videoUrl"], '$path.videoUrl'),
+      mediaAssetId: map["mediaAssetId"] == null
+          ? null
+          : _requiredString(map["mediaAssetId"], '$path.mediaAssetId'),
+      mediaAssetVersion: map["mediaAssetVersion"] == null
+          ? null
+          : _requiredInt(map["mediaAssetVersion"], '$path.mediaAssetVersion'),
+      mediaItems: map["mediaItems"] == null
+          ? null
+          : List<PostMediaItem>.unmodifiable(
+              _requiredList(
+                map["mediaItems"],
+                '$path.mediaItems',
+              ).asMap().entries.map(
+                (entry) => PostMediaItem.fromWire(
+                  _requiredObject(
+                    entry.value,
+                    '$path.mediaItems' + '[${entry.key}]',
+                  ),
+                  '$path.mediaItems' + '[${entry.key}]',
+                ),
+              ),
+            ),
+      hlsCmafMasterManifestUrl: map["hlsCmafMasterManifestUrl"] == null
+          ? null
+          : _requiredString(
+              map["hlsCmafMasterManifestUrl"],
+              '$path.hlsCmafMasterManifestUrl',
+            ),
+      hlsCmafDescriptorVersion: map["hlsCmafDescriptorVersion"] == null
+          ? null
+          : _requiredInt(
+              map["hlsCmafDescriptorVersion"],
+              '$path.hlsCmafDescriptorVersion',
+            ),
+      thumbnailUrl: map["thumbnailUrl"] == null
+          ? null
+          : _requiredString(map["thumbnailUrl"], '$path.thumbnailUrl'),
+      width: map["width"] == null
+          ? null
+          : _requiredInt(map["width"], '$path.width'),
+      height: map["height"] == null
+          ? null
+          : _requiredInt(map["height"], '$path.height'),
+      durationMs: map["durationMs"] == null
+          ? null
+          : _requiredInt(map["durationMs"], '$path.durationMs'),
       likeCount: _requiredInt(map["likeCount"], '$path.likeCount'),
       commentCount: _requiredInt(map["commentCount"], '$path.commentCount'),
       shareCount: _requiredInt(map["shareCount"], '$path.shareCount'),
-      viewerLiked: map["viewerLiked"] == null ? null : _requiredBool(map["viewerLiked"], '$path.viewerLiked'),
-      primaryHomepageId: map["primaryHomepageId"] == null ? null : _requiredString(map["primaryHomepageId"], '$path.primaryHomepageId'),
-      primaryHomepageType: map["primaryHomepageType"] == null ? null : _requiredString(map["primaryHomepageType"], '$path.primaryHomepageType'),
-      gatheringRef: map["gatheringRef"] == null ? null : _requiredString(map["gatheringRef"], '$path.gatheringRef'),
-      createdAt: map["createdAt"] == null ? null : _requiredTimestamp(map["createdAt"], '$path.createdAt'),
-      updatedAt: map["updatedAt"] == null ? null : _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
-      publishedAt: map["publishedAt"] == null ? null : _requiredTimestamp(map["publishedAt"], '$path.publishedAt'),
-      contentVertical: map["contentVertical"] == null ? null : _requiredString(map["contentVertical"], '$path.contentVertical'),
-      recallPath: map["recallPath"] == null ? null : _requiredString(map["recallPath"], '$path.recallPath'),
-      supplySource: map["supplySource"] == null ? null : _requiredString(map["supplySource"], '$path.supplySource'),
-      intersectionReasons: map["intersectionReasons"] == null ? null : List<IntersectionReason>.unmodifiable(_requiredList(map["intersectionReasons"], '$path.intersectionReasons').asMap().entries.map((entry) => IntersectionReason.fromWire(_requiredObject(entry.value, '$path.intersectionReasons' + '[${entry.key}]'), '$path.intersectionReasons' + '[${entry.key}]'))),
+      viewerLiked: map["viewerLiked"] == null
+          ? null
+          : _requiredBool(map["viewerLiked"], '$path.viewerLiked'),
+      primaryHomepageId: map["primaryHomepageId"] == null
+          ? null
+          : _requiredString(
+              map["primaryHomepageId"],
+              '$path.primaryHomepageId',
+            ),
+      primaryHomepageType: map["primaryHomepageType"] == null
+          ? null
+          : _requiredString(
+              map["primaryHomepageType"],
+              '$path.primaryHomepageType',
+            ),
+      gatheringRef: map["gatheringRef"] == null
+          ? null
+          : _requiredString(map["gatheringRef"], '$path.gatheringRef'),
+      createdAt: map["createdAt"] == null
+          ? null
+          : _requiredTimestamp(map["createdAt"], '$path.createdAt'),
+      updatedAt: map["updatedAt"] == null
+          ? null
+          : _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
+      publishedAt: map["publishedAt"] == null
+          ? null
+          : _requiredTimestamp(map["publishedAt"], '$path.publishedAt'),
+      contentVertical: map["contentVertical"] == null
+          ? null
+          : _requiredString(map["contentVertical"], '$path.contentVertical'),
+      recallPath: map["recallPath"] == null
+          ? null
+          : _requiredString(map["recallPath"], '$path.recallPath'),
+      supplySource: map["supplySource"] == null
+          ? null
+          : _requiredString(map["supplySource"], '$path.supplySource'),
+      intersectionReasons: map["intersectionReasons"] == null
+          ? null
+          : List<IntersectionReason>.unmodifiable(
+              _requiredList(
+                map["intersectionReasons"],
+                '$path.intersectionReasons',
+              ).asMap().entries.map(
+                (entry) => IntersectionReason.fromWire(
+                  _requiredObject(
+                    entry.value,
+                    '$path.intersectionReasons' + '[${entry.key}]',
+                  ),
+                  '$path.intersectionReasons' + '[${entry.key}]',
+                ),
+              ),
+            ),
     );
   }
 
@@ -2072,13 +3473,22 @@ final class ContentPostProjection {
     "postId": postId,
     "contentType": contentType,
     if (contentIdentity != null) "contentIdentity": contentIdentity!,
-    if (assistantUsePolicy != null) "assistantUsePolicy": assistantUsePolicy!.wireName,
+    if (assistantUsePolicy != null)
+      "assistantUsePolicy": assistantUsePolicy!.wireName,
     if (authorId != null) "authorId": authorId!,
     if (authorDisplayName != null) "authorDisplayName": authorDisplayName!,
     if (authorAvatarUrl != null) "authorAvatarUrl": authorAvatarUrl!,
-    if (authorBackgroundUrl != null) "authorBackgroundUrl": authorBackgroundUrl!,
+    if (authorAvatarAssetId != null)
+      "authorAvatarAssetId": authorAvatarAssetId!,
+    if (authorAvatarAccessMode != null)
+      "authorAvatarAccessMode": authorAvatarAccessMode!.wireName,
+    if (authorBackgroundUrl != null)
+      "authorBackgroundUrl": authorBackgroundUrl!,
     if (authorRoleLabel != null) "authorRoleLabel": authorRoleLabel!,
-    if (authorIdentityTags != null) "authorIdentityTags": authorIdentityTags!.map((value) => value).toList(growable: false),
+    if (authorIdentityTags != null)
+      "authorIdentityTags": authorIdentityTags!
+          .map((value) => value)
+          .toList(growable: false),
     if (authorVerified != null) "authorVerified": authorVerified!,
     if (title != null) "title": title!,
     if (body != null) "body": body!,
@@ -2086,12 +3496,19 @@ final class ContentPostProjection {
     if (coverUrl != null) "coverUrl": coverUrl!,
     if (articleTemplate != null) "articleTemplate": articleTemplate!,
     if (articleFontPreset != null) "articleFontPreset": articleFontPreset!,
-    if (mediaUrls != null) "mediaUrls": mediaUrls!.map((value) => value).toList(growable: false),
+    if (mediaUrls != null)
+      "mediaUrls": mediaUrls!.map((value) => value).toList(growable: false),
     if (videoUrl != null) "videoUrl": videoUrl!,
     if (mediaAssetId != null) "mediaAssetId": mediaAssetId!,
     if (mediaAssetVersion != null) "mediaAssetVersion": mediaAssetVersion!,
-    if (hlsCmafMasterManifestUrl != null) "hlsCmafMasterManifestUrl": hlsCmafMasterManifestUrl!,
-    if (hlsCmafDescriptorVersion != null) "hlsCmafDescriptorVersion": hlsCmafDescriptorVersion!,
+    if (mediaItems != null)
+      "mediaItems": mediaItems!
+          .map((value) => value.toWire())
+          .toList(growable: false),
+    if (hlsCmafMasterManifestUrl != null)
+      "hlsCmafMasterManifestUrl": hlsCmafMasterManifestUrl!,
+    if (hlsCmafDescriptorVersion != null)
+      "hlsCmafDescriptorVersion": hlsCmafDescriptorVersion!,
     if (thumbnailUrl != null) "thumbnailUrl": thumbnailUrl!,
     if (width != null) "width": width!,
     if (height != null) "height": height!,
@@ -2101,15 +3518,20 @@ final class ContentPostProjection {
     "shareCount": shareCount,
     if (viewerLiked != null) "viewerLiked": viewerLiked!,
     if (primaryHomepageId != null) "primaryHomepageId": primaryHomepageId!,
-    if (primaryHomepageType != null) "primaryHomepageType": primaryHomepageType!,
+    if (primaryHomepageType != null)
+      "primaryHomepageType": primaryHomepageType!,
     if (gatheringRef != null) "gatheringRef": gatheringRef!,
     if (createdAt != null) "createdAt": createdAt!.toUtc().toIso8601String(),
     if (updatedAt != null) "updatedAt": updatedAt!.toUtc().toIso8601String(),
-    if (publishedAt != null) "publishedAt": publishedAt!.toUtc().toIso8601String(),
+    if (publishedAt != null)
+      "publishedAt": publishedAt!.toUtc().toIso8601String(),
     if (contentVertical != null) "contentVertical": contentVertical!,
     if (recallPath != null) "recallPath": recallPath!,
     if (supplySource != null) "supplySource": supplySource!,
-    if (intersectionReasons != null) "intersectionReasons": intersectionReasons!.map((value) => value.toWire()).toList(growable: false),
+    if (intersectionReasons != null)
+      "intersectionReasons": intersectionReasons!
+          .map((value) => value.toWire())
+          .toList(growable: false),
   };
 }
 
@@ -2130,8 +3552,18 @@ final class ContentReactionCommandResult {
   final bool changed;
   final bool replayed;
 
-  factory ContentReactionCommandResult.fromWire(Map<String, Object?> map, [String path = "ContentReactionCommandResult"]) {
-    _rejectUnknownFields(map, const <String>{"reactionId", "postId", "version", "liked", "changed", "replayed"}, path);
+  factory ContentReactionCommandResult.fromWire(
+    Map<String, Object?> map, [
+    String path = "ContentReactionCommandResult",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "reactionId",
+      "postId",
+      "version",
+      "liked",
+      "changed",
+      "replayed",
+    }, path);
     return ContentReactionCommandResult(
       reactionId: _requiredString(map["reactionId"], '$path.reactionId'),
       postId: _requiredString(map["postId"], '$path.postId'),
@@ -2167,14 +3599,25 @@ final class ContentReactionStateSlice {
   final int version;
   final DateTime? updatedAt;
 
-  factory ContentReactionStateSlice.fromWire(Map<String, Object?> map, [String path = "ContentReactionStateSlice"]) {
-    _rejectUnknownFields(map, const <String>{"found", "postId", "liked", "version", "updatedAt"}, path);
+  factory ContentReactionStateSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "ContentReactionStateSlice",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "found",
+      "postId",
+      "liked",
+      "version",
+      "updatedAt",
+    }, path);
     return ContentReactionStateSlice(
       found: _requiredBool(map["found"], '$path.found'),
       postId: _requiredString(map["postId"], '$path.postId'),
       liked: _requiredBool(map["liked"], '$path.liked'),
       version: _requiredInt(map["version"], '$path.version'),
-      updatedAt: map["updatedAt"] == null ? null : _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
+      updatedAt: map["updatedAt"] == null
+          ? null
+          : _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
     );
   }
 
@@ -2198,8 +3641,15 @@ final class EntityWishlistState {
   final String objectKind;
   final bool wishlisted;
 
-  factory EntityWishlistState.fromWire(Map<String, Object?> map, [String path = "EntityWishlistState"]) {
-    _rejectUnknownFields(map, const <String>{"objectId", "objectKind", "wishlisted"}, path);
+  factory EntityWishlistState.fromWire(
+    Map<String, Object?> map, [
+    String path = "EntityWishlistState",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "objectId",
+      "objectKind",
+      "wishlisted",
+    }, path);
     return EntityWishlistState(
       objectId: _requiredString(map["objectId"], '$path.objectId'),
       objectKind: _requiredString(map["objectKind"], '$path.objectKind'),
@@ -2237,17 +3687,43 @@ final class FeedObjectCard {
   final String? recallPath;
   final int anchorIndex;
 
-  factory FeedObjectCard.fromWire(Map<String, Object?> map, [String path = "FeedObjectCard"]) {
-    _rejectUnknownFields(map, const <String>{"objectKind", "objectId", "title", "subtitle", "coverUrl", "tagRefs", "reasonText", "recallPath", "anchorIndex"}, path);
+  factory FeedObjectCard.fromWire(
+    Map<String, Object?> map, [
+    String path = "FeedObjectCard",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "objectKind",
+      "objectId",
+      "title",
+      "subtitle",
+      "coverUrl",
+      "tagRefs",
+      "reasonText",
+      "recallPath",
+      "anchorIndex",
+    }, path);
     return FeedObjectCard(
       objectKind: _requiredString(map["objectKind"], '$path.objectKind'),
       objectId: _requiredString(map["objectId"], '$path.objectId'),
       title: _requiredString(map["title"], '$path.title'),
-      subtitle: map["subtitle"] == null ? null : _requiredString(map["subtitle"], '$path.subtitle'),
-      coverUrl: map["coverUrl"] == null ? null : _requiredString(map["coverUrl"], '$path.coverUrl'),
-      tagRefs: List<String>.unmodifiable(_requiredList(map["tagRefs"], '$path.tagRefs').asMap().entries.map((entry) => _requiredString(entry.value, '$path.tagRefs' + '[${entry.key}]'))),
-      reasonText: map["reasonText"] == null ? null : _requiredString(map["reasonText"], '$path.reasonText'),
-      recallPath: map["recallPath"] == null ? null : _requiredString(map["recallPath"], '$path.recallPath'),
+      subtitle: map["subtitle"] == null
+          ? null
+          : _requiredString(map["subtitle"], '$path.subtitle'),
+      coverUrl: map["coverUrl"] == null
+          ? null
+          : _requiredString(map["coverUrl"], '$path.coverUrl'),
+      tagRefs: List<String>.unmodifiable(
+        _requiredList(map["tagRefs"], '$path.tagRefs').asMap().entries.map(
+          (entry) =>
+              _requiredString(entry.value, '$path.tagRefs' + '[${entry.key}]'),
+        ),
+      ),
+      reasonText: map["reasonText"] == null
+          ? null
+          : _requiredString(map["reasonText"], '$path.reasonText'),
+      recallPath: map["recallPath"] == null
+          ? null
+          : _requiredString(map["recallPath"], '$path.recallPath'),
       anchorIndex: _requiredInt(map["anchorIndex"], '$path.anchorIndex'),
     );
   }
@@ -2300,8 +3776,27 @@ final class FilterAdjustmentValues {
   final double grain;
   final double fade;
 
-  factory FilterAdjustmentValues.fromWire(Map<String, Object?> map, [String path = "FilterAdjustmentValues"]) {
-    _rejectUnknownFields(map, const <String>{"lightSense", "brightness", "exposure", "contrast", "saturation", "vibrance", "texture", "sharpen", "structure", "highlight", "shadow", "temperature", "tint", "grain", "fade"}, path);
+  factory FilterAdjustmentValues.fromWire(
+    Map<String, Object?> map, [
+    String path = "FilterAdjustmentValues",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "lightSense",
+      "brightness",
+      "exposure",
+      "contrast",
+      "saturation",
+      "vibrance",
+      "texture",
+      "sharpen",
+      "structure",
+      "highlight",
+      "shadow",
+      "temperature",
+      "tint",
+      "grain",
+      "fade",
+    }, path);
     return FilterAdjustmentValues(
       lightSense: _requiredDouble(map["lightSense"], '$path.lightSense'),
       brightness: _requiredDouble(map["brightness"], '$path.brightness'),
@@ -2365,19 +3860,68 @@ final class FilterCatalogSlice {
   final DateTime importedAt;
   final DateTime? activatedAt;
 
-  factory FilterCatalogSlice.fromWire(Map<String, Object?> map, [String path = "FilterCatalogSlice"]) {
-    _rejectUnknownFields(map, const <String>{"releaseId", "canonicalDigest", "status", "categoryCount", "presetCount", "categories", "presets", "recommendedFallbackPresetIds", "importedAt", "activatedAt"}, path);
+  factory FilterCatalogSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "FilterCatalogSlice",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "releaseId",
+      "canonicalDigest",
+      "status",
+      "categoryCount",
+      "presetCount",
+      "categories",
+      "presets",
+      "recommendedFallbackPresetIds",
+      "importedAt",
+      "activatedAt",
+    }, path);
     return FilterCatalogSlice(
       releaseId: _requiredString(map["releaseId"], '$path.releaseId'),
-      canonicalDigest: _requiredString(map["canonicalDigest"], '$path.canonicalDigest'),
-      status: FilterCatalogReleaseStatus.fromWire(map["status"], '$path.status'),
+      canonicalDigest: _requiredString(
+        map["canonicalDigest"],
+        '$path.canonicalDigest',
+      ),
+      status: FilterCatalogReleaseStatus.fromWire(
+        map["status"],
+        '$path.status',
+      ),
       categoryCount: _requiredInt(map["categoryCount"], '$path.categoryCount'),
       presetCount: _requiredInt(map["presetCount"], '$path.presetCount'),
-      categories: List<FilterCategoryDefinition>.unmodifiable(_requiredList(map["categories"], '$path.categories').asMap().entries.map((entry) => FilterCategoryDefinition.fromWire(_requiredObject(entry.value, '$path.categories' + '[${entry.key}]'), '$path.categories' + '[${entry.key}]'))),
-      presets: List<FilterPresetDefinition>.unmodifiable(_requiredList(map["presets"], '$path.presets').asMap().entries.map((entry) => FilterPresetDefinition.fromWire(_requiredObject(entry.value, '$path.presets' + '[${entry.key}]'), '$path.presets' + '[${entry.key}]'))),
-      recommendedFallbackPresetIds: List<String>.unmodifiable(_requiredList(map["recommendedFallbackPresetIds"], '$path.recommendedFallbackPresetIds').asMap().entries.map((entry) => _requiredString(entry.value, '$path.recommendedFallbackPresetIds' + '[${entry.key}]'))),
+      categories: List<FilterCategoryDefinition>.unmodifiable(
+        _requiredList(
+          map["categories"],
+          '$path.categories',
+        ).asMap().entries.map(
+          (entry) => FilterCategoryDefinition.fromWire(
+            _requiredObject(entry.value, '$path.categories' + '[${entry.key}]'),
+            '$path.categories' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      presets: List<FilterPresetDefinition>.unmodifiable(
+        _requiredList(map["presets"], '$path.presets').asMap().entries.map(
+          (entry) => FilterPresetDefinition.fromWire(
+            _requiredObject(entry.value, '$path.presets' + '[${entry.key}]'),
+            '$path.presets' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      recommendedFallbackPresetIds: List<String>.unmodifiable(
+        _requiredList(
+          map["recommendedFallbackPresetIds"],
+          '$path.recommendedFallbackPresetIds',
+        ).asMap().entries.map(
+          (entry) => _requiredString(
+            entry.value,
+            '$path.recommendedFallbackPresetIds' + '[${entry.key}]',
+          ),
+        ),
+      ),
       importedAt: _requiredTimestamp(map["importedAt"], '$path.importedAt'),
-      activatedAt: map["activatedAt"] == null ? null : _requiredTimestamp(map["activatedAt"], '$path.activatedAt'),
+      activatedAt: map["activatedAt"] == null
+          ? null
+          : _requiredTimestamp(map["activatedAt"], '$path.activatedAt'),
     );
   }
 
@@ -2387,11 +3931,16 @@ final class FilterCatalogSlice {
     "status": status.wireName,
     "categoryCount": categoryCount,
     "presetCount": presetCount,
-    "categories": categories.map((value) => value.toWire()).toList(growable: false),
+    "categories": categories
+        .map((value) => value.toWire())
+        .toList(growable: false),
     "presets": presets.map((value) => value.toWire()).toList(growable: false),
-    "recommendedFallbackPresetIds": recommendedFallbackPresetIds.map((value) => value).toList(growable: false),
+    "recommendedFallbackPresetIds": recommendedFallbackPresetIds
+        .map((value) => value)
+        .toList(growable: false),
     "importedAt": importedAt.toUtc().toIso8601String(),
-    if (activatedAt != null) "activatedAt": activatedAt!.toUtc().toIso8601String(),
+    if (activatedAt != null)
+      "activatedAt": activatedAt!.toUtc().toIso8601String(),
   };
 }
 
@@ -2410,12 +3959,26 @@ final class FilterCategoryDefinition {
   final int sort;
   final bool enabled;
 
-  factory FilterCategoryDefinition.fromWire(Map<String, Object?> map, [String path = "FilterCategoryDefinition"]) {
-    _rejectUnknownFields(map, const <String>{"categoryId", "displayNameZhHans", "displayNameEn", "sort", "enabled"}, path);
+  factory FilterCategoryDefinition.fromWire(
+    Map<String, Object?> map, [
+    String path = "FilterCategoryDefinition",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "categoryId",
+      "displayNameZhHans",
+      "displayNameEn",
+      "sort",
+      "enabled",
+    }, path);
     return FilterCategoryDefinition(
       categoryId: _requiredString(map["categoryId"], '$path.categoryId'),
-      displayNameZhHans: _requiredString(map["displayNameZhHans"], '$path.displayNameZhHans'),
-      displayNameEn: map["displayNameEn"] == null ? null : _requiredString(map["displayNameEn"], '$path.displayNameEn'),
+      displayNameZhHans: _requiredString(
+        map["displayNameZhHans"],
+        '$path.displayNameZhHans',
+      ),
+      displayNameEn: map["displayNameEn"] == null
+          ? null
+          : _requiredString(map["displayNameEn"], '$path.displayNameEn'),
       sort: _requiredInt(map["sort"], '$path.sort'),
       enabled: _requiredBool(map["enabled"], '$path.enabled'),
     );
@@ -2451,17 +4014,40 @@ final class FilterPresetDefinition {
   final double defaultStrength;
   final FilterAdjustmentValues adjustments;
 
-  factory FilterPresetDefinition.fromWire(Map<String, Object?> map, [String path = "FilterPresetDefinition"]) {
-    _rejectUnknownFields(map, const <String>{"presetId", "categoryId", "displayNameZhHans", "displayNameEn", "sort", "enabled", "defaultStrength", "adjustments"}, path);
+  factory FilterPresetDefinition.fromWire(
+    Map<String, Object?> map, [
+    String path = "FilterPresetDefinition",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "presetId",
+      "categoryId",
+      "displayNameZhHans",
+      "displayNameEn",
+      "sort",
+      "enabled",
+      "defaultStrength",
+      "adjustments",
+    }, path);
     return FilterPresetDefinition(
       presetId: _requiredString(map["presetId"], '$path.presetId'),
       categoryId: _requiredString(map["categoryId"], '$path.categoryId'),
-      displayNameZhHans: _requiredString(map["displayNameZhHans"], '$path.displayNameZhHans'),
-      displayNameEn: map["displayNameEn"] == null ? null : _requiredString(map["displayNameEn"], '$path.displayNameEn'),
+      displayNameZhHans: _requiredString(
+        map["displayNameZhHans"],
+        '$path.displayNameZhHans',
+      ),
+      displayNameEn: map["displayNameEn"] == null
+          ? null
+          : _requiredString(map["displayNameEn"], '$path.displayNameEn'),
       sort: _requiredInt(map["sort"], '$path.sort'),
       enabled: _requiredBool(map["enabled"], '$path.enabled'),
-      defaultStrength: _requiredDouble(map["defaultStrength"], '$path.defaultStrength'),
-      adjustments: FilterAdjustmentValues.fromWire(_requiredObject(map["adjustments"], '$path.adjustments'), '$path.adjustments'),
+      defaultStrength: _requiredDouble(
+        map["defaultStrength"],
+        '$path.defaultStrength',
+      ),
+      adjustments: FilterAdjustmentValues.fromWire(
+        _requiredObject(map["adjustments"], '$path.adjustments'),
+        '$path.adjustments',
+      ),
     );
   }
 
@@ -2488,11 +4074,27 @@ final class GatheringPostPageSlice {
   final String? nextCursor;
   final bool hasMore;
 
-  factory GatheringPostPageSlice.fromWire(Map<String, Object?> map, [String path = "GatheringPostPageSlice"]) {
-    _rejectUnknownFields(map, const <String>{"items", "nextCursor", "hasMore"}, path);
+  factory GatheringPostPageSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "GatheringPostPageSlice",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "items",
+      "nextCursor",
+      "hasMore",
+    }, path);
     return GatheringPostPageSlice(
-      items: List<ContentPostProjection>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => ContentPostProjection.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
-      nextCursor: map["nextCursor"] == null ? null : _requiredString(map["nextCursor"], '$path.nextCursor'),
+      items: List<ContentPostProjection>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => ContentPostProjection.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      nextCursor: map["nextCursor"] == null
+          ? null
+          : _requiredString(map["nextCursor"], '$path.nextCursor'),
       hasMore: _requiredBool(map["hasMore"], '$path.hasMore'),
     );
   }
@@ -2519,14 +4121,32 @@ final class GatheringSocialProofSummary {
   final int formedCount;
   final int experiencedCount;
 
-  factory GatheringSocialProofSummary.fromWire(Map<String, Object?> map, [String path = "GatheringSocialProofSummary"]) {
-    _rejectUnknownFields(map, const <String>{"anchorKind", "objectId", "publishedCount", "formedCount", "experiencedCount"}, path);
+  factory GatheringSocialProofSummary.fromWire(
+    Map<String, Object?> map, [
+    String path = "GatheringSocialProofSummary",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "anchorKind",
+      "objectId",
+      "publishedCount",
+      "formedCount",
+      "experiencedCount",
+    }, path);
     return GatheringSocialProofSummary(
-      anchorKind: _requiredNonBlankString(map["anchorKind"], '$path.anchorKind'),
+      anchorKind: _requiredNonBlankString(
+        map["anchorKind"],
+        '$path.anchorKind',
+      ),
       objectId: _requiredNonBlankString(map["objectId"], '$path.objectId'),
-      publishedCount: _requiredInt(map["publishedCount"], '$path.publishedCount'),
+      publishedCount: _requiredInt(
+        map["publishedCount"],
+        '$path.publishedCount',
+      ),
       formedCount: _requiredInt(map["formedCount"], '$path.formedCount'),
-      experiencedCount: _requiredInt(map["experiencedCount"], '$path.experiencedCount'),
+      experiencedCount: _requiredInt(
+        map["experiencedCount"],
+        '$path.experiencedCount',
+      ),
     );
   }
 
@@ -2540,15 +4160,15 @@ final class GatheringSocialProofSummary {
 }
 
 final class GeoPoint {
-  const GeoPoint({
-    required this.latitude,
-    required this.longitude,
-  });
+  const GeoPoint({required this.latitude, required this.longitude});
 
   final double latitude;
   final double longitude;
 
-  factory GeoPoint.fromWire(Map<String, Object?> map, [String path = "GeoPoint"]) {
+  factory GeoPoint.fromWire(
+    Map<String, Object?> map, [
+    String path = "GeoPoint",
+  ]) {
     _rejectUnknownFields(map, const <String>{"latitude", "longitude"}, path);
     return GeoPoint(
       latitude: _requiredDouble(map["latitude"], '$path.latitude'),
@@ -2575,12 +4195,31 @@ final class IntersectionReasonPageSlice {
   final String? nextCursor;
   final bool hasMore;
 
-  factory IntersectionReasonPageSlice.fromWire(Map<String, Object?> map, [String path = "IntersectionReasonPageSlice"]) {
-    _rejectUnknownFields(map, const <String>{"items", "dimension", "nextCursor", "hasMore"}, path);
+  factory IntersectionReasonPageSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "IntersectionReasonPageSlice",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "items",
+      "dimension",
+      "nextCursor",
+      "hasMore",
+    }, path);
     return IntersectionReasonPageSlice(
-      items: List<IntersectionReason>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => IntersectionReason.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
-      dimension: map["dimension"] == null ? null : _requiredString(map["dimension"], '$path.dimension'),
-      nextCursor: map["nextCursor"] == null ? null : _requiredString(map["nextCursor"], '$path.nextCursor'),
+      items: List<IntersectionReason>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => IntersectionReason.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      dimension: map["dimension"] == null
+          ? null
+          : _requiredString(map["dimension"], '$path.dimension'),
+      nextCursor: map["nextCursor"] == null
+          ? null
+          : _requiredString(map["nextCursor"], '$path.nextCursor'),
       hasMore: _requiredBool(map["hasMore"], '$path.hasMore'),
     );
   }
@@ -2602,10 +4241,23 @@ final class MarkIntersectionsVisitedAck {
   final List<String> dimensions;
   final String status;
 
-  factory MarkIntersectionsVisitedAck.fromWire(Map<String, Object?> map, [String path = "MarkIntersectionsVisitedAck"]) {
+  factory MarkIntersectionsVisitedAck.fromWire(
+    Map<String, Object?> map, [
+    String path = "MarkIntersectionsVisitedAck",
+  ]) {
     _rejectUnknownFields(map, const <String>{"dimensions", "status"}, path);
     return MarkIntersectionsVisitedAck(
-      dimensions: List<String>.unmodifiable(_requiredList(map["dimensions"], '$path.dimensions').asMap().entries.map((entry) => _requiredString(entry.value, '$path.dimensions' + '[${entry.key}]'))),
+      dimensions: List<String>.unmodifiable(
+        _requiredList(
+          map["dimensions"],
+          '$path.dimensions',
+        ).asMap().entries.map(
+          (entry) => _requiredString(
+            entry.value,
+            '$path.dimensions' + '[${entry.key}]',
+          ),
+        ),
+      ),
       status: _requiredString(map["status"], '$path.status'),
     );
   }
@@ -2627,8 +4279,15 @@ final class MediaAssetDiscardResult {
   final MediaAssetDiscardStatus status;
   final bool replayed;
 
-  factory MediaAssetDiscardResult.fromWire(Map<String, Object?> map, [String path = "MediaAssetDiscardResult"]) {
-    _rejectUnknownFields(map, const <String>{"mediaId", "status", "replayed"}, path);
+  factory MediaAssetDiscardResult.fromWire(
+    Map<String, Object?> map, [
+    String path = "MediaAssetDiscardResult",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "mediaId",
+      "status",
+      "replayed",
+    }, path);
     return MediaAssetDiscardResult(
       mediaId: _requiredString(map["mediaId"], '$path.mediaId'),
       status: MediaAssetDiscardStatus.fromWire(map["status"], '$path.status'),
@@ -2678,8 +4337,27 @@ final class MediaAssetSlice {
   final int? imageDerivativePolicyVersion;
   final Uri cdnUrl;
 
-  factory MediaAssetSlice.fromWire(Map<String, Object?> map, [String path = "MediaAssetSlice"]) {
-    _rejectUnknownFields(map, const <String>{"assetId", "version", "mediaType", "mimeType", "fileSize", "status", "accessPolicy", "imageWidth", "imageHeight", "imageDeliveryMimeType", "imageDominantColor", "imageLqip", "imageContentProfile", "imageDerivativePolicyVersion", "cdnUrl"}, path);
+  factory MediaAssetSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "MediaAssetSlice",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "assetId",
+      "version",
+      "mediaType",
+      "mimeType",
+      "fileSize",
+      "status",
+      "accessPolicy",
+      "imageWidth",
+      "imageHeight",
+      "imageDeliveryMimeType",
+      "imageDominantColor",
+      "imageLqip",
+      "imageContentProfile",
+      "imageDerivativePolicyVersion",
+      "cdnUrl",
+    }, path);
     return MediaAssetSlice(
       assetId: _requiredString(map["assetId"], '$path.assetId'),
       version: _requiredPositiveInt(map["version"], '$path.version'),
@@ -2687,14 +4365,43 @@ final class MediaAssetSlice {
       mimeType: _requiredString(map["mimeType"], '$path.mimeType'),
       fileSize: _requiredPositiveInt(map["fileSize"], '$path.fileSize'),
       status: MediaAssetStatus.fromWire(map["status"], '$path.status'),
-      accessPolicy: MediaAssetAccessPolicy.fromWire(map["accessPolicy"], '$path.accessPolicy'),
-      imageWidth: map["imageWidth"] == null ? null : _requiredPositiveInt(map["imageWidth"], '$path.imageWidth'),
-      imageHeight: map["imageHeight"] == null ? null : _requiredPositiveInt(map["imageHeight"], '$path.imageHeight'),
-      imageDeliveryMimeType: map["imageDeliveryMimeType"] == null ? null : _requiredString(map["imageDeliveryMimeType"], '$path.imageDeliveryMimeType'),
-      imageDominantColor: map["imageDominantColor"] == null ? null : _requiredString(map["imageDominantColor"], '$path.imageDominantColor'),
-      imageLqip: map["imageLqip"] == null ? null : _requiredString(map["imageLqip"], '$path.imageLqip'),
-      imageContentProfile: map["imageContentProfile"] == null ? null : _requiredString(map["imageContentProfile"], '$path.imageContentProfile'),
-      imageDerivativePolicyVersion: map["imageDerivativePolicyVersion"] == null ? null : _requiredPositiveInt(map["imageDerivativePolicyVersion"], '$path.imageDerivativePolicyVersion'),
+      accessPolicy: MediaAssetAccessPolicy.fromWire(
+        map["accessPolicy"],
+        '$path.accessPolicy',
+      ),
+      imageWidth: map["imageWidth"] == null
+          ? null
+          : _requiredPositiveInt(map["imageWidth"], '$path.imageWidth'),
+      imageHeight: map["imageHeight"] == null
+          ? null
+          : _requiredPositiveInt(map["imageHeight"], '$path.imageHeight'),
+      imageDeliveryMimeType: map["imageDeliveryMimeType"] == null
+          ? null
+          : _requiredString(
+              map["imageDeliveryMimeType"],
+              '$path.imageDeliveryMimeType',
+            ),
+      imageDominantColor: map["imageDominantColor"] == null
+          ? null
+          : _requiredString(
+              map["imageDominantColor"],
+              '$path.imageDominantColor',
+            ),
+      imageLqip: map["imageLqip"] == null
+          ? null
+          : _requiredString(map["imageLqip"], '$path.imageLqip'),
+      imageContentProfile: map["imageContentProfile"] == null
+          ? null
+          : _requiredString(
+              map["imageContentProfile"],
+              '$path.imageContentProfile',
+            ),
+      imageDerivativePolicyVersion: map["imageDerivativePolicyVersion"] == null
+          ? null
+          : _requiredPositiveInt(
+              map["imageDerivativePolicyVersion"],
+              '$path.imageDerivativePolicyVersion',
+            ),
       cdnUrl: _requiredUri(map["cdnUrl"], '$path.cdnUrl'),
     );
   }
@@ -2709,11 +4416,14 @@ final class MediaAssetSlice {
     "accessPolicy": accessPolicy.wireName,
     if (imageWidth != null) "imageWidth": imageWidth!,
     if (imageHeight != null) "imageHeight": imageHeight!,
-    if (imageDeliveryMimeType != null) "imageDeliveryMimeType": imageDeliveryMimeType!,
+    if (imageDeliveryMimeType != null)
+      "imageDeliveryMimeType": imageDeliveryMimeType!,
     if (imageDominantColor != null) "imageDominantColor": imageDominantColor!,
     if (imageLqip != null) "imageLqip": imageLqip!,
-    if (imageContentProfile != null) "imageContentProfile": imageContentProfile!,
-    if (imageDerivativePolicyVersion != null) "imageDerivativePolicyVersion": imageDerivativePolicyVersion!,
+    if (imageContentProfile != null)
+      "imageContentProfile": imageContentProfile!,
+    if (imageDerivativePolicyVersion != null)
+      "imageDerivativePolicyVersion": imageDerivativePolicyVersion!,
     "cdnUrl": cdnUrl.toString(),
   };
 }
@@ -2735,13 +4445,34 @@ final class MediaCoverSelectionResult {
   final Uri thumbnailUrl;
   final Uri coverUrl;
 
-  factory MediaCoverSelectionResult.fromWire(Map<String, Object?> map, [String path = "MediaCoverSelectionResult"]) {
-    _rejectUnknownFields(map, const <String>{"mediaId", "coverStrategy", "manualCoverAssetId", "coverFrameTimeMs", "thumbnailUrl", "coverUrl"}, path);
+  factory MediaCoverSelectionResult.fromWire(
+    Map<String, Object?> map, [
+    String path = "MediaCoverSelectionResult",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "mediaId",
+      "coverStrategy",
+      "manualCoverAssetId",
+      "coverFrameTimeMs",
+      "thumbnailUrl",
+      "coverUrl",
+    }, path);
     return MediaCoverSelectionResult(
       mediaId: _requiredString(map["mediaId"], '$path.mediaId'),
-      coverStrategy: MediaCoverStrategy.fromWire(map["coverStrategy"], '$path.coverStrategy'),
-      manualCoverAssetId: map["manualCoverAssetId"] == null ? null : _requiredString(map["manualCoverAssetId"], '$path.manualCoverAssetId'),
-      coverFrameTimeMs: _requiredInt(map["coverFrameTimeMs"], '$path.coverFrameTimeMs'),
+      coverStrategy: MediaCoverStrategy.fromWire(
+        map["coverStrategy"],
+        '$path.coverStrategy',
+      ),
+      manualCoverAssetId: map["manualCoverAssetId"] == null
+          ? null
+          : _requiredString(
+              map["manualCoverAssetId"],
+              '$path.manualCoverAssetId',
+            ),
+      coverFrameTimeMs: _requiredInt(
+        map["coverFrameTimeMs"],
+        '$path.coverFrameTimeMs',
+      ),
       thumbnailUrl: _requiredUri(map["thumbnailUrl"], '$path.thumbnailUrl'),
       coverUrl: _requiredUri(map["coverUrl"], '$path.coverUrl'),
     );
@@ -2778,8 +4509,20 @@ final class MediaOriginalAccessGrant {
   final int ttlSeconds;
   final String auditId;
 
-  factory MediaOriginalAccessGrant.fromWire(Map<String, Object?> map, [String path = "MediaOriginalAccessGrant"]) {
-    _rejectUnknownFields(map, const <String>{"mediaId", "status", "originalUrl", "format", "sizeBytes", "expiresAt", "ttlSeconds", "auditId"}, path);
+  factory MediaOriginalAccessGrant.fromWire(
+    Map<String, Object?> map, [
+    String path = "MediaOriginalAccessGrant",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "mediaId",
+      "status",
+      "originalUrl",
+      "format",
+      "sizeBytes",
+      "expiresAt",
+      "ttlSeconds",
+      "auditId",
+    }, path);
     return MediaOriginalAccessGrant(
       mediaId: _requiredString(map["mediaId"], '$path.mediaId'),
       status: _requiredString(map["status"], '$path.status'),
@@ -2823,14 +4566,34 @@ final class MediaUploadSessionCommandResult {
   final DateTime expiresAt;
   final bool replayed;
 
-  factory MediaUploadSessionCommandResult.fromWire(Map<String, Object?> map, [String path = "MediaUploadSessionCommandResult"]) {
-    _rejectUnknownFields(map, const <String>{"sessionId", "assetId", "assetProcessingStatus", "status", "uploadUrl", "expiresAt", "replayed"}, path);
+  factory MediaUploadSessionCommandResult.fromWire(
+    Map<String, Object?> map, [
+    String path = "MediaUploadSessionCommandResult",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "sessionId",
+      "assetId",
+      "assetProcessingStatus",
+      "status",
+      "uploadUrl",
+      "expiresAt",
+      "replayed",
+    }, path);
     return MediaUploadSessionCommandResult(
       sessionId: _requiredString(map["sessionId"], '$path.sessionId'),
-      assetId: map["assetId"] == null ? null : _requiredString(map["assetId"], '$path.assetId'),
-      assetProcessingStatus: map["assetProcessingStatus"] == null ? null : MediaAssetStatus.fromWire(map["assetProcessingStatus"], '$path.assetProcessingStatus'),
+      assetId: map["assetId"] == null
+          ? null
+          : _requiredString(map["assetId"], '$path.assetId'),
+      assetProcessingStatus: map["assetProcessingStatus"] == null
+          ? null
+          : MediaAssetStatus.fromWire(
+              map["assetProcessingStatus"],
+              '$path.assetProcessingStatus',
+            ),
       status: MediaUploadSessionStatus.fromWire(map["status"], '$path.status'),
-      uploadUrl: map["uploadUrl"] == null ? null : _requiredUri(map["uploadUrl"], '$path.uploadUrl'),
+      uploadUrl: map["uploadUrl"] == null
+          ? null
+          : _requiredUri(map["uploadUrl"], '$path.uploadUrl'),
       expiresAt: _requiredTimestamp(map["expiresAt"], '$path.expiresAt'),
       replayed: _requiredBool(map["replayed"], '$path.replayed'),
     );
@@ -2839,7 +4602,8 @@ final class MediaUploadSessionCommandResult {
   Map<String, Object?> toWire() => <String, Object?>{
     "sessionId": sessionId,
     if (assetId != null) "assetId": assetId!,
-    if (assetProcessingStatus != null) "assetProcessingStatus": assetProcessingStatus!.wireName,
+    if (assetProcessingStatus != null)
+      "assetProcessingStatus": assetProcessingStatus!.wireName,
     "status": status.wireName,
     if (uploadUrl != null) "uploadUrl": uploadUrl!.toString(),
     "expiresAt": expiresAt.toUtc().toIso8601String(),
@@ -2872,12 +4636,28 @@ final class MediaUploadSessionSlice {
   final DateTime updatedAt;
   final DateTime expiresAt;
 
-  factory MediaUploadSessionSlice.fromWire(Map<String, Object?> map, [String path = "MediaUploadSessionSlice"]) {
-    _rejectUnknownFields(map, const <String>{"sessionId", "version", "assetId", "mediaType", "mimeType", "fileSize", "status", "createdAt", "updatedAt", "expiresAt"}, path);
+  factory MediaUploadSessionSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "MediaUploadSessionSlice",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "sessionId",
+      "version",
+      "assetId",
+      "mediaType",
+      "mimeType",
+      "fileSize",
+      "status",
+      "createdAt",
+      "updatedAt",
+      "expiresAt",
+    }, path);
     return MediaUploadSessionSlice(
       sessionId: _requiredString(map["sessionId"], '$path.sessionId'),
       version: _requiredPositiveInt(map["version"], '$path.version'),
-      assetId: map["assetId"] == null ? null : _requiredString(map["assetId"], '$path.assetId'),
+      assetId: map["assetId"] == null
+          ? null
+          : _requiredString(map["assetId"], '$path.assetId'),
       mediaType: MediaType.fromWire(map["mediaType"], '$path.mediaType'),
       mimeType: _requiredString(map["mimeType"], '$path.mimeType'),
       fileSize: _requiredPositiveInt(map["fileSize"], '$path.fileSize'),
@@ -2925,18 +4705,38 @@ final class MyReportItemSlice {
   final DateTime updatedAt;
   final DateTime? resolvedAt;
 
-  factory MyReportItemSlice.fromWire(Map<String, Object?> map, [String path = "MyReportItemSlice"]) {
-    _rejectUnknownFields(map, const <String>{"id", "targetType", "targetId", "reason", "description", "status", "createdAt", "updatedAt", "resolvedAt"}, path);
+  factory MyReportItemSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "MyReportItemSlice",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "id",
+      "targetType",
+      "targetId",
+      "reason",
+      "description",
+      "status",
+      "createdAt",
+      "updatedAt",
+      "resolvedAt",
+    }, path);
     return MyReportItemSlice(
       id: _requiredString(map["id"], '$path.id'),
-      targetType: ReportTargetType.fromWire(map["targetType"], '$path.targetType'),
+      targetType: ReportTargetType.fromWire(
+        map["targetType"],
+        '$path.targetType',
+      ),
       targetId: _requiredString(map["targetId"], '$path.targetId'),
       reason: ReportReason.fromWire(map["reason"], '$path.reason'),
-      description: map["description"] == null ? null : _requiredString(map["description"], '$path.description'),
+      description: map["description"] == null
+          ? null
+          : _requiredString(map["description"], '$path.description'),
       status: ReportStatus.fromWire(map["status"], '$path.status'),
       createdAt: _requiredTimestamp(map["createdAt"], '$path.createdAt'),
       updatedAt: _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
-      resolvedAt: map["resolvedAt"] == null ? null : _requiredTimestamp(map["resolvedAt"], '$path.resolvedAt'),
+      resolvedAt: map["resolvedAt"] == null
+          ? null
+          : _requiredTimestamp(map["resolvedAt"], '$path.resolvedAt'),
     );
   }
 
@@ -2954,19 +4754,28 @@ final class MyReportItemSlice {
 }
 
 final class MyReportPageSlice {
-  const MyReportPageSlice({
-    required this.items,
-    this.nextCursor,
-  });
+  const MyReportPageSlice({required this.items, this.nextCursor});
 
   final List<MyReportItemSlice> items;
   final String? nextCursor;
 
-  factory MyReportPageSlice.fromWire(Map<String, Object?> map, [String path = "MyReportPageSlice"]) {
+  factory MyReportPageSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "MyReportPageSlice",
+  ]) {
     _rejectUnknownFields(map, const <String>{"items", "nextCursor"}, path);
     return MyReportPageSlice(
-      items: List<MyReportItemSlice>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => MyReportItemSlice.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
-      nextCursor: map["nextCursor"] == null ? null : _requiredString(map["nextCursor"], '$path.nextCursor'),
+      items: List<MyReportItemSlice>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => MyReportItemSlice.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      nextCursor: map["nextCursor"] == null
+          ? null
+          : _requiredString(map["nextCursor"], '$path.nextCursor'),
     );
   }
 
@@ -2987,10 +4796,24 @@ final class ObjectIntersectionReasonSlice {
   final String objectId;
   final String objectType;
 
-  factory ObjectIntersectionReasonSlice.fromWire(Map<String, Object?> map, [String path = "ObjectIntersectionReasonSlice"]) {
-    _rejectUnknownFields(map, const <String>{"items", "objectId", "objectType"}, path);
+  factory ObjectIntersectionReasonSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "ObjectIntersectionReasonSlice",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "items",
+      "objectId",
+      "objectType",
+    }, path);
     return ObjectIntersectionReasonSlice(
-      items: List<IntersectionReason>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => IntersectionReason.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
+      items: List<IntersectionReason>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => IntersectionReason.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
       objectId: _requiredString(map["objectId"], '$path.objectId'),
       objectType: _requiredString(map["objectType"], '$path.objectType'),
     );
@@ -3020,8 +4843,18 @@ final class OutboundShareFactResult {
   final DateTime occurredAt;
   final bool replayed;
 
-  factory OutboundShareFactResult.fromWire(Map<String, Object?> map, [String path = "OutboundShareFactResult"]) {
-    _rejectUnknownFields(map, const <String>{"eventId", "postId", "channel", "referralId", "occurredAt", "replayed"}, path);
+  factory OutboundShareFactResult.fromWire(
+    Map<String, Object?> map, [
+    String path = "OutboundShareFactResult",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "eventId",
+      "postId",
+      "channel",
+      "referralId",
+      "occurredAt",
+      "replayed",
+    }, path);
     return OutboundShareFactResult(
       eventId: _requiredString(map["eventId"], '$path.eventId'),
       postId: _requiredString(map["postId"], '$path.postId'),
@@ -3046,6 +4879,7 @@ final class PostArticleAsset {
   const PostArticleAsset({
     required this.assetId,
     this.kind,
+    this.accessMode,
     this.publicSliceKey,
     this.sha256,
     this.mimeType,
@@ -3065,6 +4899,7 @@ final class PostArticleAsset {
 
   final String assetId;
   final String? kind;
+  final MediaDeliveryAccessMode? accessMode;
   final String? publicSliceKey;
   final String? sha256;
   final String? mimeType;
@@ -3081,36 +4916,104 @@ final class PostArticleAsset {
   final int? coverFrameTimeMs;
   final String? sourceCollectionId;
 
-  factory PostArticleAsset.fromWire(Map<String, Object?> map, [String path = "PostArticleAsset"]) {
-    _rejectUnknownFields(map, const <String>{"assetId", "kind", "publicSliceKey", "sha256", "mimeType", "sourceOriginalSha256", "caption", "role", "layout", "width", "height", "durationMs", "thumbnailUrl", "coverUrl", "coverStrategy", "coverFrameTimeMs", "sourceCollectionId"}, path);
+  factory PostArticleAsset.fromWire(
+    Map<String, Object?> map, [
+    String path = "PostArticleAsset",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "assetId",
+      "kind",
+      "accessMode",
+      "publicSliceKey",
+      "sha256",
+      "mimeType",
+      "sourceOriginalSha256",
+      "caption",
+      "role",
+      "layout",
+      "width",
+      "height",
+      "durationMs",
+      "thumbnailUrl",
+      "coverUrl",
+      "coverStrategy",
+      "coverFrameTimeMs",
+      "sourceCollectionId",
+    }, path);
     return PostArticleAsset(
       assetId: _requiredString(map["assetId"], '$path.assetId'),
-      kind: map["kind"] == null ? null : _requiredString(map["kind"], '$path.kind'),
-      publicSliceKey: map["publicSliceKey"] == null ? null : _requiredString(map["publicSliceKey"], '$path.publicSliceKey'),
-      sha256: map["sha256"] == null ? null : _requiredString(map["sha256"], '$path.sha256'),
-      mimeType: map["mimeType"] == null ? null : _requiredString(map["mimeType"], '$path.mimeType'),
-      sourceOriginalSha256: map["sourceOriginalSha256"] == null ? null : _requiredString(map["sourceOriginalSha256"], '$path.sourceOriginalSha256'),
-      caption: map["caption"] == null ? null : _requiredString(map["caption"], '$path.caption'),
-      role: map["role"] == null ? null : _requiredString(map["role"], '$path.role'),
-      layout: map["layout"] == null ? null : _requiredString(map["layout"], '$path.layout'),
-      width: map["width"] == null ? null : _requiredInt(map["width"], '$path.width'),
-      height: map["height"] == null ? null : _requiredInt(map["height"], '$path.height'),
-      durationMs: map["durationMs"] == null ? null : _requiredInt(map["durationMs"], '$path.durationMs'),
-      thumbnailUrl: map["thumbnailUrl"] == null ? null : _requiredString(map["thumbnailUrl"], '$path.thumbnailUrl'),
-      coverUrl: map["coverUrl"] == null ? null : _requiredString(map["coverUrl"], '$path.coverUrl'),
-      coverStrategy: map["coverStrategy"] == null ? null : _requiredString(map["coverStrategy"], '$path.coverStrategy'),
-      coverFrameTimeMs: map["coverFrameTimeMs"] == null ? null : _requiredInt(map["coverFrameTimeMs"], '$path.coverFrameTimeMs'),
-      sourceCollectionId: map["sourceCollectionId"] == null ? null : _requiredString(map["sourceCollectionId"], '$path.sourceCollectionId'),
+      kind: map["kind"] == null
+          ? null
+          : _requiredString(map["kind"], '$path.kind'),
+      accessMode: map["accessMode"] == null
+          ? null
+          : MediaDeliveryAccessMode.fromWire(
+              map["accessMode"],
+              '$path.accessMode',
+            ),
+      publicSliceKey: map["publicSliceKey"] == null
+          ? null
+          : _requiredString(map["publicSliceKey"], '$path.publicSliceKey'),
+      sha256: map["sha256"] == null
+          ? null
+          : _requiredString(map["sha256"], '$path.sha256'),
+      mimeType: map["mimeType"] == null
+          ? null
+          : _requiredString(map["mimeType"], '$path.mimeType'),
+      sourceOriginalSha256: map["sourceOriginalSha256"] == null
+          ? null
+          : _requiredString(
+              map["sourceOriginalSha256"],
+              '$path.sourceOriginalSha256',
+            ),
+      caption: map["caption"] == null
+          ? null
+          : _requiredString(map["caption"], '$path.caption'),
+      role: map["role"] == null
+          ? null
+          : _requiredString(map["role"], '$path.role'),
+      layout: map["layout"] == null
+          ? null
+          : _requiredString(map["layout"], '$path.layout'),
+      width: map["width"] == null
+          ? null
+          : _requiredInt(map["width"], '$path.width'),
+      height: map["height"] == null
+          ? null
+          : _requiredInt(map["height"], '$path.height'),
+      durationMs: map["durationMs"] == null
+          ? null
+          : _requiredInt(map["durationMs"], '$path.durationMs'),
+      thumbnailUrl: map["thumbnailUrl"] == null
+          ? null
+          : _requiredString(map["thumbnailUrl"], '$path.thumbnailUrl'),
+      coverUrl: map["coverUrl"] == null
+          ? null
+          : _requiredString(map["coverUrl"], '$path.coverUrl'),
+      coverStrategy: map["coverStrategy"] == null
+          ? null
+          : _requiredString(map["coverStrategy"], '$path.coverStrategy'),
+      coverFrameTimeMs: map["coverFrameTimeMs"] == null
+          ? null
+          : _requiredInt(map["coverFrameTimeMs"], '$path.coverFrameTimeMs'),
+      sourceCollectionId: map["sourceCollectionId"] == null
+          ? null
+          : _requiredString(
+              map["sourceCollectionId"],
+              '$path.sourceCollectionId',
+            ),
     );
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
     "assetId": assetId,
     if (kind != null) "kind": kind!,
+    if (accessMode != null) "accessMode": accessMode!.wireName,
     if (publicSliceKey != null) "publicSliceKey": publicSliceKey!,
     if (sha256 != null) "sha256": sha256!,
     if (mimeType != null) "mimeType": mimeType!,
-    if (sourceOriginalSha256 != null) "sourceOriginalSha256": sourceOriginalSha256!,
+    if (sourceOriginalSha256 != null)
+      "sourceOriginalSha256": sourceOriginalSha256!,
     if (caption != null) "caption": caption!,
     if (role != null) "role": role!,
     if (layout != null) "layout": layout!,
@@ -3146,17 +5049,52 @@ final class PostArticleAssetManifest {
   final String documentVersionSha256;
   final List<PostArticleAsset> assets;
 
-  factory PostArticleAssetManifest.fromWire(Map<String, Object?> map, [String path = "PostArticleAssetManifest"]) {
-    _rejectUnknownFields(map, const <String>{"schema", "markdownVersion", "markdownDialect", "articleMarkdownDigest", "documentSha256", "assetManifestSha256", "documentVersionSha256", "assets"}, path);
+  factory PostArticleAssetManifest.fromWire(
+    Map<String, Object?> map, [
+    String path = "PostArticleAssetManifest",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "schema",
+      "markdownVersion",
+      "markdownDialect",
+      "articleMarkdownDigest",
+      "documentSha256",
+      "assetManifestSha256",
+      "documentVersionSha256",
+      "assets",
+    }, path);
     return PostArticleAssetManifest(
       schema: _requiredString(map["schema"], '$path.schema'),
-      markdownVersion: map["markdownVersion"] == null ? null : _requiredString(map["markdownVersion"], '$path.markdownVersion'),
-      markdownDialect: map["markdownDialect"] == null ? null : _requiredString(map["markdownDialect"], '$path.markdownDialect'),
-      articleMarkdownDigest: _requiredString(map["articleMarkdownDigest"], '$path.articleMarkdownDigest'),
-      documentSha256: _requiredString(map["documentSha256"], '$path.documentSha256'),
-      assetManifestSha256: _requiredString(map["assetManifestSha256"], '$path.assetManifestSha256'),
-      documentVersionSha256: _requiredString(map["documentVersionSha256"], '$path.documentVersionSha256'),
-      assets: List<PostArticleAsset>.unmodifiable(_requiredList(map["assets"], '$path.assets').asMap().entries.map((entry) => PostArticleAsset.fromWire(_requiredObject(entry.value, '$path.assets' + '[${entry.key}]'), '$path.assets' + '[${entry.key}]'))),
+      markdownVersion: map["markdownVersion"] == null
+          ? null
+          : _requiredString(map["markdownVersion"], '$path.markdownVersion'),
+      markdownDialect: map["markdownDialect"] == null
+          ? null
+          : _requiredString(map["markdownDialect"], '$path.markdownDialect'),
+      articleMarkdownDigest: _requiredString(
+        map["articleMarkdownDigest"],
+        '$path.articleMarkdownDigest',
+      ),
+      documentSha256: _requiredString(
+        map["documentSha256"],
+        '$path.documentSha256',
+      ),
+      assetManifestSha256: _requiredString(
+        map["assetManifestSha256"],
+        '$path.assetManifestSha256',
+      ),
+      documentVersionSha256: _requiredString(
+        map["documentVersionSha256"],
+        '$path.documentVersionSha256',
+      ),
+      assets: List<PostArticleAsset>.unmodifiable(
+        _requiredList(map["assets"], '$path.assets').asMap().entries.map(
+          (entry) => PostArticleAsset.fromWire(
+            _requiredObject(entry.value, '$path.assets' + '[${entry.key}]'),
+            '$path.assets' + '[${entry.key}]',
+          ),
+        ),
+      ),
     );
   }
 
@@ -3173,19 +5111,26 @@ final class PostArticleAssetManifest {
 }
 
 final class PostArticleLayoutPolicy {
-  const PostArticleLayoutPolicy({
-    this.wrapDowngrade,
-    this.galleryDowngrade,
-  });
+  const PostArticleLayoutPolicy({this.wrapDowngrade, this.galleryDowngrade});
 
   final String? wrapDowngrade;
   final String? galleryDowngrade;
 
-  factory PostArticleLayoutPolicy.fromWire(Map<String, Object?> map, [String path = "PostArticleLayoutPolicy"]) {
-    _rejectUnknownFields(map, const <String>{"wrapDowngrade", "galleryDowngrade"}, path);
+  factory PostArticleLayoutPolicy.fromWire(
+    Map<String, Object?> map, [
+    String path = "PostArticleLayoutPolicy",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "wrapDowngrade",
+      "galleryDowngrade",
+    }, path);
     return PostArticleLayoutPolicy(
-      wrapDowngrade: map["wrapDowngrade"] == null ? null : _requiredString(map["wrapDowngrade"], '$path.wrapDowngrade'),
-      galleryDowngrade: map["galleryDowngrade"] == null ? null : _requiredString(map["galleryDowngrade"], '$path.galleryDowngrade'),
+      wrapDowngrade: map["wrapDowngrade"] == null
+          ? null
+          : _requiredString(map["wrapDowngrade"], '$path.wrapDowngrade'),
+      galleryDowngrade: map["galleryDowngrade"] == null
+          ? null
+          : _requiredString(map["galleryDowngrade"], '$path.galleryDowngrade'),
     );
   }
 
@@ -3218,18 +5163,52 @@ final class PostArticleRenderProfile {
   final int? height;
   final int? durationMs;
 
-  factory PostArticleRenderProfile.fromWire(Map<String, Object?> map, [String path = "PostArticleRenderProfile"]) {
-    _rejectUnknownFields(map, const <String>{"template", "fontPreset", "paperThemeMode", "paperTexture", "contentVertical", "layoutPolicy", "width", "height", "durationMs"}, path);
+  factory PostArticleRenderProfile.fromWire(
+    Map<String, Object?> map, [
+    String path = "PostArticleRenderProfile",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "template",
+      "fontPreset",
+      "paperThemeMode",
+      "paperTexture",
+      "contentVertical",
+      "layoutPolicy",
+      "width",
+      "height",
+      "durationMs",
+    }, path);
     return PostArticleRenderProfile(
-      template: map["template"] == null ? null : _requiredString(map["template"], '$path.template'),
-      fontPreset: map["fontPreset"] == null ? null : _requiredString(map["fontPreset"], '$path.fontPreset'),
-      paperThemeMode: map["paperThemeMode"] == null ? null : _requiredString(map["paperThemeMode"], '$path.paperThemeMode'),
-      paperTexture: map["paperTexture"] == null ? null : _requiredString(map["paperTexture"], '$path.paperTexture'),
-      contentVertical: map["contentVertical"] == null ? null : _requiredString(map["contentVertical"], '$path.contentVertical'),
-      layoutPolicy: map["layoutPolicy"] == null ? null : PostArticleLayoutPolicy.fromWire(_requiredObject(map["layoutPolicy"], '$path.layoutPolicy'), '$path.layoutPolicy'),
-      width: map["width"] == null ? null : _requiredInt(map["width"], '$path.width'),
-      height: map["height"] == null ? null : _requiredInt(map["height"], '$path.height'),
-      durationMs: map["durationMs"] == null ? null : _requiredInt(map["durationMs"], '$path.durationMs'),
+      template: map["template"] == null
+          ? null
+          : _requiredString(map["template"], '$path.template'),
+      fontPreset: map["fontPreset"] == null
+          ? null
+          : _requiredString(map["fontPreset"], '$path.fontPreset'),
+      paperThemeMode: map["paperThemeMode"] == null
+          ? null
+          : _requiredString(map["paperThemeMode"], '$path.paperThemeMode'),
+      paperTexture: map["paperTexture"] == null
+          ? null
+          : _requiredString(map["paperTexture"], '$path.paperTexture'),
+      contentVertical: map["contentVertical"] == null
+          ? null
+          : _requiredString(map["contentVertical"], '$path.contentVertical'),
+      layoutPolicy: map["layoutPolicy"] == null
+          ? null
+          : PostArticleLayoutPolicy.fromWire(
+              _requiredObject(map["layoutPolicy"], '$path.layoutPolicy'),
+              '$path.layoutPolicy',
+            ),
+      width: map["width"] == null
+          ? null
+          : _requiredInt(map["width"], '$path.width'),
+      height: map["height"] == null
+          ? null
+          : _requiredInt(map["height"], '$path.height'),
+      durationMs: map["durationMs"] == null
+          ? null
+          : _requiredInt(map["durationMs"], '$path.durationMs'),
     );
   }
 
@@ -3257,8 +5236,15 @@ final class PostDeletionReceipt {
   final PostStatus status;
   final bool replayed;
 
-  factory PostDeletionReceipt.fromWire(Map<String, Object?> map, [String path = "PostDeletionReceipt"]) {
-    _rejectUnknownFields(map, const <String>{"postId", "status", "replayed"}, path);
+  factory PostDeletionReceipt.fromWire(
+    Map<String, Object?> map, [
+    String path = "PostDeletionReceipt",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "postId",
+      "status",
+      "replayed",
+    }, path);
     return PostDeletionReceipt(
       postId: _requiredNonBlankString(map["postId"], '$path.postId'),
       status: PostStatus.fromWire(map["status"], '$path.status'),
@@ -3290,8 +5276,18 @@ final class PostEntityMention {
   final int rangeStart;
   final int rangeEnd;
 
-  factory PostEntityMention.fromWire(Map<String, Object?> map, [String path = "PostEntityMention"]) {
-    _rejectUnknownFields(map, const <String>{"subjectType", "subjectId", "homepageId", "displayName", "rangeStart", "rangeEnd"}, path);
+  factory PostEntityMention.fromWire(
+    Map<String, Object?> map, [
+    String path = "PostEntityMention",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "subjectType",
+      "subjectId",
+      "homepageId",
+      "displayName",
+      "rangeStart",
+      "rangeEnd",
+    }, path);
     return PostEntityMention(
       subjectType: _requiredString(map["subjectType"], '$path.subjectType'),
       subjectId: _requiredString(map["subjectId"], '$path.subjectId'),
@@ -3331,16 +5327,44 @@ final class PostHomepageSnapshot {
   final int? height;
   final int? durationMs;
 
-  factory PostHomepageSnapshot.fromWire(Map<String, Object?> map, [String path = "PostHomepageSnapshot"]) {
-    _rejectUnknownFields(map, const <String>{"canonicalEntityId", "title", "subtitle", "coverUrl", "width", "height", "durationMs"}, path);
+  factory PostHomepageSnapshot.fromWire(
+    Map<String, Object?> map, [
+    String path = "PostHomepageSnapshot",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "canonicalEntityId",
+      "title",
+      "subtitle",
+      "coverUrl",
+      "width",
+      "height",
+      "durationMs",
+    }, path);
     return PostHomepageSnapshot(
-      canonicalEntityId: map["canonicalEntityId"] == null ? null : _requiredString(map["canonicalEntityId"], '$path.canonicalEntityId'),
-      title: map["title"] == null ? null : _requiredString(map["title"], '$path.title'),
-      subtitle: map["subtitle"] == null ? null : _requiredString(map["subtitle"], '$path.subtitle'),
-      coverUrl: map["coverUrl"] == null ? null : _requiredString(map["coverUrl"], '$path.coverUrl'),
-      width: map["width"] == null ? null : _requiredInt(map["width"], '$path.width'),
-      height: map["height"] == null ? null : _requiredInt(map["height"], '$path.height'),
-      durationMs: map["durationMs"] == null ? null : _requiredInt(map["durationMs"], '$path.durationMs'),
+      canonicalEntityId: map["canonicalEntityId"] == null
+          ? null
+          : _requiredString(
+              map["canonicalEntityId"],
+              '$path.canonicalEntityId',
+            ),
+      title: map["title"] == null
+          ? null
+          : _requiredString(map["title"], '$path.title'),
+      subtitle: map["subtitle"] == null
+          ? null
+          : _requiredString(map["subtitle"], '$path.subtitle'),
+      coverUrl: map["coverUrl"] == null
+          ? null
+          : _requiredString(map["coverUrl"], '$path.coverUrl'),
+      width: map["width"] == null
+          ? null
+          : _requiredInt(map["width"], '$path.width'),
+      height: map["height"] == null
+          ? null
+          : _requiredInt(map["height"], '$path.height'),
+      durationMs: map["durationMs"] == null
+          ? null
+          : _requiredInt(map["durationMs"], '$path.durationMs'),
     );
   }
 
@@ -3360,8 +5384,10 @@ final class PostMediaItem {
     required this.kind,
     this.mediaAssetId,
     this.mediaAssetVersion,
+    this.accessMode,
     required this.url,
     this.coverUrl,
+    this.coverAssetId,
     this.thumbnailUrl,
     this.durationMs,
     this.width,
@@ -3378,8 +5404,10 @@ final class PostMediaItem {
   final String kind;
   final String? mediaAssetId;
   final int? mediaAssetVersion;
+  final MediaDeliveryAccessMode? accessMode;
   final String url;
   final String? coverUrl;
+  final String? coverAssetId;
   final String? thumbnailUrl;
   final int? durationMs;
   final int? width;
@@ -3392,25 +5420,96 @@ final class PostMediaItem {
   final String? coverStrategy;
   final int? coverFrameTimeMs;
 
-  factory PostMediaItem.fromWire(Map<String, Object?> map, [String path = "PostMediaItem"]) {
-    _rejectUnknownFields(map, const <String>{"kind", "mediaAssetId", "mediaAssetVersion", "url", "coverUrl", "thumbnailUrl", "durationMs", "width", "height", "previewTrackManifestUrl", "previewTrackVersion", "hlsCmafMasterManifestUrl", "hlsCmafDescriptorVersion", "title", "coverStrategy", "coverFrameTimeMs"}, path);
+  factory PostMediaItem.fromWire(
+    Map<String, Object?> map, [
+    String path = "PostMediaItem",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "kind",
+      "mediaAssetId",
+      "mediaAssetVersion",
+      "accessMode",
+      "url",
+      "coverUrl",
+      "coverAssetId",
+      "thumbnailUrl",
+      "durationMs",
+      "width",
+      "height",
+      "previewTrackManifestUrl",
+      "previewTrackVersion",
+      "hlsCmafMasterManifestUrl",
+      "hlsCmafDescriptorVersion",
+      "title",
+      "coverStrategy",
+      "coverFrameTimeMs",
+    }, path);
     return PostMediaItem(
       kind: _requiredString(map["kind"], '$path.kind'),
-      mediaAssetId: map["mediaAssetId"] == null ? null : _requiredString(map["mediaAssetId"], '$path.mediaAssetId'),
-      mediaAssetVersion: map["mediaAssetVersion"] == null ? null : _requiredInt(map["mediaAssetVersion"], '$path.mediaAssetVersion'),
+      mediaAssetId: map["mediaAssetId"] == null
+          ? null
+          : _requiredString(map["mediaAssetId"], '$path.mediaAssetId'),
+      mediaAssetVersion: map["mediaAssetVersion"] == null
+          ? null
+          : _requiredInt(map["mediaAssetVersion"], '$path.mediaAssetVersion'),
+      accessMode: map["accessMode"] == null
+          ? null
+          : MediaDeliveryAccessMode.fromWire(
+              map["accessMode"],
+              '$path.accessMode',
+            ),
       url: _requiredString(map["url"], '$path.url'),
-      coverUrl: map["coverUrl"] == null ? null : _requiredString(map["coverUrl"], '$path.coverUrl'),
-      thumbnailUrl: map["thumbnailUrl"] == null ? null : _requiredString(map["thumbnailUrl"], '$path.thumbnailUrl'),
-      durationMs: map["durationMs"] == null ? null : _requiredInt(map["durationMs"], '$path.durationMs'),
-      width: map["width"] == null ? null : _requiredInt(map["width"], '$path.width'),
-      height: map["height"] == null ? null : _requiredInt(map["height"], '$path.height'),
-      previewTrackManifestUrl: map["previewTrackManifestUrl"] == null ? null : _requiredString(map["previewTrackManifestUrl"], '$path.previewTrackManifestUrl'),
-      previewTrackVersion: map["previewTrackVersion"] == null ? null : _requiredInt(map["previewTrackVersion"], '$path.previewTrackVersion'),
-      hlsCmafMasterManifestUrl: map["hlsCmafMasterManifestUrl"] == null ? null : _requiredString(map["hlsCmafMasterManifestUrl"], '$path.hlsCmafMasterManifestUrl'),
-      hlsCmafDescriptorVersion: map["hlsCmafDescriptorVersion"] == null ? null : _requiredInt(map["hlsCmafDescriptorVersion"], '$path.hlsCmafDescriptorVersion'),
-      title: map["title"] == null ? null : _requiredString(map["title"], '$path.title'),
-      coverStrategy: map["coverStrategy"] == null ? null : _requiredString(map["coverStrategy"], '$path.coverStrategy'),
-      coverFrameTimeMs: map["coverFrameTimeMs"] == null ? null : _requiredInt(map["coverFrameTimeMs"], '$path.coverFrameTimeMs'),
+      coverUrl: map["coverUrl"] == null
+          ? null
+          : _requiredString(map["coverUrl"], '$path.coverUrl'),
+      coverAssetId: map["coverAssetId"] == null
+          ? null
+          : _requiredString(map["coverAssetId"], '$path.coverAssetId'),
+      thumbnailUrl: map["thumbnailUrl"] == null
+          ? null
+          : _requiredString(map["thumbnailUrl"], '$path.thumbnailUrl'),
+      durationMs: map["durationMs"] == null
+          ? null
+          : _requiredInt(map["durationMs"], '$path.durationMs'),
+      width: map["width"] == null
+          ? null
+          : _requiredInt(map["width"], '$path.width'),
+      height: map["height"] == null
+          ? null
+          : _requiredInt(map["height"], '$path.height'),
+      previewTrackManifestUrl: map["previewTrackManifestUrl"] == null
+          ? null
+          : _requiredString(
+              map["previewTrackManifestUrl"],
+              '$path.previewTrackManifestUrl',
+            ),
+      previewTrackVersion: map["previewTrackVersion"] == null
+          ? null
+          : _requiredInt(
+              map["previewTrackVersion"],
+              '$path.previewTrackVersion',
+            ),
+      hlsCmafMasterManifestUrl: map["hlsCmafMasterManifestUrl"] == null
+          ? null
+          : _requiredString(
+              map["hlsCmafMasterManifestUrl"],
+              '$path.hlsCmafMasterManifestUrl',
+            ),
+      hlsCmafDescriptorVersion: map["hlsCmafDescriptorVersion"] == null
+          ? null
+          : _requiredInt(
+              map["hlsCmafDescriptorVersion"],
+              '$path.hlsCmafDescriptorVersion',
+            ),
+      title: map["title"] == null
+          ? null
+          : _requiredString(map["title"], '$path.title'),
+      coverStrategy: map["coverStrategy"] == null
+          ? null
+          : _requiredString(map["coverStrategy"], '$path.coverStrategy'),
+      coverFrameTimeMs: map["coverFrameTimeMs"] == null
+          ? null
+          : _requiredInt(map["coverFrameTimeMs"], '$path.coverFrameTimeMs'),
     );
   }
 
@@ -3418,16 +5517,22 @@ final class PostMediaItem {
     "kind": kind,
     if (mediaAssetId != null) "mediaAssetId": mediaAssetId!,
     if (mediaAssetVersion != null) "mediaAssetVersion": mediaAssetVersion!,
+    if (accessMode != null) "accessMode": accessMode!.wireName,
     "url": url,
     if (coverUrl != null) "coverUrl": coverUrl!,
+    if (coverAssetId != null) "coverAssetId": coverAssetId!,
     if (thumbnailUrl != null) "thumbnailUrl": thumbnailUrl!,
     if (durationMs != null) "durationMs": durationMs!,
     if (width != null) "width": width!,
     if (height != null) "height": height!,
-    if (previewTrackManifestUrl != null) "previewTrackManifestUrl": previewTrackManifestUrl!,
-    if (previewTrackVersion != null) "previewTrackVersion": previewTrackVersion!,
-    if (hlsCmafMasterManifestUrl != null) "hlsCmafMasterManifestUrl": hlsCmafMasterManifestUrl!,
-    if (hlsCmafDescriptorVersion != null) "hlsCmafDescriptorVersion": hlsCmafDescriptorVersion!,
+    if (previewTrackManifestUrl != null)
+      "previewTrackManifestUrl": previewTrackManifestUrl!,
+    if (previewTrackVersion != null)
+      "previewTrackVersion": previewTrackVersion!,
+    if (hlsCmafMasterManifestUrl != null)
+      "hlsCmafMasterManifestUrl": hlsCmafMasterManifestUrl!,
+    if (hlsCmafDescriptorVersion != null)
+      "hlsCmafDescriptorVersion": hlsCmafDescriptorVersion!,
     if (title != null) "title": title!,
     if (coverStrategy != null) "coverStrategy": coverStrategy!,
     if (coverFrameTimeMs != null) "coverFrameTimeMs": coverFrameTimeMs!,
@@ -3451,14 +5556,30 @@ final class PostPublicationReceipt {
   final int committedVersion;
   final DateTime acceptedAt;
 
-  factory PostPublicationReceipt.fromWire(Map<String, Object?> map, [String path = "PostPublicationReceipt"]) {
-    _rejectUnknownFields(map, const <String>{"publishIntentId", "localDraftId", "postId", "state", "committedVersion", "acceptedAt"}, path);
+  factory PostPublicationReceipt.fromWire(
+    Map<String, Object?> map, [
+    String path = "PostPublicationReceipt",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "publishIntentId",
+      "localDraftId",
+      "postId",
+      "state",
+      "committedVersion",
+      "acceptedAt",
+    }, path);
     return PostPublicationReceipt(
-      publishIntentId: _requiredString(map["publishIntentId"], '$path.publishIntentId'),
+      publishIntentId: _requiredString(
+        map["publishIntentId"],
+        '$path.publishIntentId',
+      ),
       localDraftId: _requiredString(map["localDraftId"], '$path.localDraftId'),
       postId: _requiredString(map["postId"], '$path.postId'),
       state: _requiredString(map["state"], '$path.state'),
-      committedVersion: _requiredInt(map["committedVersion"], '$path.committedVersion'),
+      committedVersion: _requiredInt(
+        map["committedVersion"],
+        '$path.committedVersion',
+      ),
       acceptedAt: _requiredTimestamp(map["acceptedAt"], '$path.acceptedAt'),
     );
   }
@@ -3496,18 +5617,39 @@ final class PostSemanticMention {
   final String? candidateId;
   final String? targetRef;
 
-  factory PostSemanticMention.fromWire(Map<String, Object?> map, [String path = "PostSemanticMention"]) {
-    _rejectUnknownFields(map, const <String>{"mentionId", "kind", "surface", "location", "rangeStart", "rangeEnd", "status", "candidateId", "targetRef"}, path);
+  factory PostSemanticMention.fromWire(
+    Map<String, Object?> map, [
+    String path = "PostSemanticMention",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "mentionId",
+      "kind",
+      "surface",
+      "location",
+      "rangeStart",
+      "rangeEnd",
+      "status",
+      "candidateId",
+      "targetRef",
+    }, path);
     return PostSemanticMention(
       mentionId: _requiredString(map["mentionId"], '$path.mentionId'),
       kind: _requiredString(map["kind"], '$path.kind'),
       surface: _requiredString(map["surface"], '$path.surface'),
       location: _requiredString(map["location"], '$path.location'),
-      rangeStart: map["rangeStart"] == null ? null : _requiredInt(map["rangeStart"], '$path.rangeStart'),
-      rangeEnd: map["rangeEnd"] == null ? null : _requiredInt(map["rangeEnd"], '$path.rangeEnd'),
+      rangeStart: map["rangeStart"] == null
+          ? null
+          : _requiredInt(map["rangeStart"], '$path.rangeStart'),
+      rangeEnd: map["rangeEnd"] == null
+          ? null
+          : _requiredInt(map["rangeEnd"], '$path.rangeEnd'),
       status: _requiredString(map["status"], '$path.status'),
-      candidateId: map["candidateId"] == null ? null : _requiredString(map["candidateId"], '$path.candidateId'),
-      targetRef: map["targetRef"] == null ? null : _requiredString(map["targetRef"], '$path.targetRef'),
+      candidateId: map["candidateId"] == null
+          ? null
+          : _requiredString(map["candidateId"], '$path.candidateId'),
+      targetRef: map["targetRef"] == null
+          ? null
+          : _requiredString(map["targetRef"], '$path.targetRef'),
     );
   }
 
@@ -3535,11 +5677,27 @@ final class ProfileInteractionActivityPageSlice {
   final String? nextCursor;
   final bool hasMore;
 
-  factory ProfileInteractionActivityPageSlice.fromWire(Map<String, Object?> map, [String path = "ProfileInteractionActivityPageSlice"]) {
-    _rejectUnknownFields(map, const <String>{"items", "nextCursor", "hasMore"}, path);
+  factory ProfileInteractionActivityPageSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "ProfileInteractionActivityPageSlice",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "items",
+      "nextCursor",
+      "hasMore",
+    }, path);
     return ProfileInteractionActivityPageSlice(
-      items: List<ProfileInteractionActivityView>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => ProfileInteractionActivityView.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
-      nextCursor: map["nextCursor"] == null ? null : _requiredString(map["nextCursor"], '$path.nextCursor'),
+      items: List<ProfileInteractionActivityView>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => ProfileInteractionActivityView.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      nextCursor: map["nextCursor"] == null
+          ? null
+          : _requiredString(map["nextCursor"], '$path.nextCursor'),
       hasMore: _requiredBool(map["hasMore"], '$path.hasMore'),
     );
   }
@@ -3590,6 +5748,8 @@ final class ProfileInteractionActivityView {
     this.contextText,
     required this.previewMediaKind,
     this.previewImageUrl,
+    this.previewImageAssetId,
+    this.previewImageAccessMode,
     this.previewText,
     required this.previewUnavailable,
     this.previewObjectId,
@@ -3642,6 +5802,8 @@ final class ProfileInteractionActivityView {
   final String? contextText;
   final String previewMediaKind;
   final String? previewImageUrl;
+  final String? previewImageAssetId;
+  final MediaDeliveryAccessMode? previewImageAccessMode;
   final String? previewText;
   final bool previewUnavailable;
   final String? previewObjectId;
@@ -3656,59 +5818,252 @@ final class ProfileInteractionActivityView {
   final DateTime? seenAt;
   final DateTime? readAt;
 
-  factory ProfileInteractionActivityView.fromWire(Map<String, Object?> map, [String path = "ProfileInteractionActivityView"]) {
-    _rejectUnknownFields(map, const <String>{"ownerPersonaId", "activityId", "activityType", "direction", "sourceType", "sourceEventId", "sourceVersion", "viewerReactionVersion", "targetVersion", "active", "commentKind", "commentId", "parentCommentId", "viewerReaction", "actorPersonaId", "actorDisplayName", "actorAvatarUrl", "actorAvatarVersion", "counterpartPersonaId", "counterpartDisplayName", "counterpartAvatarUrl", "targetPersonaId", "targetContentId", "targetContentType", "targetContentSummary", "targetKind", "targetAvailability", "targetReplyCount", "displayPersonaId", "displayName", "displayAvatarUrl", "displayAvatarVersion", "displayUserRouteId", "primaryText", "contextText", "previewMediaKind", "previewImageUrl", "previewText", "previewUnavailable", "previewObjectId", "previewRouteId", "outboundShareEventId", "shareText", "impactPrimaryText", "impactDeepLink", "filterKeys", "createdAt", "occurredAt", "seenAt", "readAt"}, path);
+  factory ProfileInteractionActivityView.fromWire(
+    Map<String, Object?> map, [
+    String path = "ProfileInteractionActivityView",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "ownerPersonaId",
+      "activityId",
+      "activityType",
+      "direction",
+      "sourceType",
+      "sourceEventId",
+      "sourceVersion",
+      "viewerReactionVersion",
+      "targetVersion",
+      "active",
+      "commentKind",
+      "commentId",
+      "parentCommentId",
+      "viewerReaction",
+      "actorPersonaId",
+      "actorDisplayName",
+      "actorAvatarUrl",
+      "actorAvatarVersion",
+      "counterpartPersonaId",
+      "counterpartDisplayName",
+      "counterpartAvatarUrl",
+      "targetPersonaId",
+      "targetContentId",
+      "targetContentType",
+      "targetContentSummary",
+      "targetKind",
+      "targetAvailability",
+      "targetReplyCount",
+      "displayPersonaId",
+      "displayName",
+      "displayAvatarUrl",
+      "displayAvatarVersion",
+      "displayUserRouteId",
+      "primaryText",
+      "contextText",
+      "previewMediaKind",
+      "previewImageUrl",
+      "previewImageAssetId",
+      "previewImageAccessMode",
+      "previewText",
+      "previewUnavailable",
+      "previewObjectId",
+      "previewRouteId",
+      "outboundShareEventId",
+      "shareText",
+      "impactPrimaryText",
+      "impactDeepLink",
+      "filterKeys",
+      "createdAt",
+      "occurredAt",
+      "seenAt",
+      "readAt",
+    }, path);
     return ProfileInteractionActivityView(
-      ownerPersonaId: _requiredString(map["ownerPersonaId"], '$path.ownerPersonaId'),
+      ownerPersonaId: _requiredString(
+        map["ownerPersonaId"],
+        '$path.ownerPersonaId',
+      ),
       activityId: _requiredString(map["activityId"], '$path.activityId'),
-      activityType: InteractionActivityType.fromWire(map["activityType"], '$path.activityType'),
-      direction: InteractionDirection.fromWire(map["direction"], '$path.direction'),
+      activityType: InteractionActivityType.fromWire(
+        map["activityType"],
+        '$path.activityType',
+      ),
+      direction: InteractionDirection.fromWire(
+        map["direction"],
+        '$path.direction',
+      ),
       sourceType: _requiredString(map["sourceType"], '$path.sourceType'),
-      sourceEventId: _requiredString(map["sourceEventId"], '$path.sourceEventId'),
+      sourceEventId: _requiredString(
+        map["sourceEventId"],
+        '$path.sourceEventId',
+      ),
       sourceVersion: _requiredInt(map["sourceVersion"], '$path.sourceVersion'),
-      viewerReactionVersion: _requiredInt(map["viewerReactionVersion"], '$path.viewerReactionVersion'),
+      viewerReactionVersion: _requiredInt(
+        map["viewerReactionVersion"],
+        '$path.viewerReactionVersion',
+      ),
       targetVersion: _requiredInt(map["targetVersion"], '$path.targetVersion'),
       active: _requiredBool(map["active"], '$path.active'),
       commentKind: _requiredString(map["commentKind"], '$path.commentKind'),
-      commentId: map["commentId"] == null ? null : _requiredString(map["commentId"], '$path.commentId'),
-      parentCommentId: map["parentCommentId"] == null ? null : _requiredString(map["parentCommentId"], '$path.parentCommentId'),
-      viewerReaction: CommentReactionType.fromWire(map["viewerReaction"], '$path.viewerReaction'),
-      actorPersonaId: _requiredString(map["actorPersonaId"], '$path.actorPersonaId'),
-      actorDisplayName: _requiredString(map["actorDisplayName"], '$path.actorDisplayName'),
-      actorAvatarUrl: map["actorAvatarUrl"] == null ? null : _requiredString(map["actorAvatarUrl"], '$path.actorAvatarUrl'),
-      actorAvatarVersion: _requiredInt(map["actorAvatarVersion"], '$path.actorAvatarVersion'),
-      counterpartPersonaId: map["counterpartPersonaId"] == null ? null : _requiredString(map["counterpartPersonaId"], '$path.counterpartPersonaId'),
-      counterpartDisplayName: map["counterpartDisplayName"] == null ? null : _requiredString(map["counterpartDisplayName"], '$path.counterpartDisplayName'),
-      counterpartAvatarUrl: map["counterpartAvatarUrl"] == null ? null : _requiredString(map["counterpartAvatarUrl"], '$path.counterpartAvatarUrl'),
-      targetPersonaId: _requiredString(map["targetPersonaId"], '$path.targetPersonaId'),
-      targetContentId: _requiredString(map["targetContentId"], '$path.targetContentId'),
-      targetContentType: ContentType.fromWire(map["targetContentType"], '$path.targetContentType'),
-      targetContentSummary: map["targetContentSummary"] == null ? null : _requiredString(map["targetContentSummary"], '$path.targetContentSummary'),
+      commentId: map["commentId"] == null
+          ? null
+          : _requiredString(map["commentId"], '$path.commentId'),
+      parentCommentId: map["parentCommentId"] == null
+          ? null
+          : _requiredString(map["parentCommentId"], '$path.parentCommentId'),
+      viewerReaction: CommentReactionType.fromWire(
+        map["viewerReaction"],
+        '$path.viewerReaction',
+      ),
+      actorPersonaId: _requiredString(
+        map["actorPersonaId"],
+        '$path.actorPersonaId',
+      ),
+      actorDisplayName: _requiredString(
+        map["actorDisplayName"],
+        '$path.actorDisplayName',
+      ),
+      actorAvatarUrl: map["actorAvatarUrl"] == null
+          ? null
+          : _requiredString(map["actorAvatarUrl"], '$path.actorAvatarUrl'),
+      actorAvatarVersion: _requiredInt(
+        map["actorAvatarVersion"],
+        '$path.actorAvatarVersion',
+      ),
+      counterpartPersonaId: map["counterpartPersonaId"] == null
+          ? null
+          : _requiredString(
+              map["counterpartPersonaId"],
+              '$path.counterpartPersonaId',
+            ),
+      counterpartDisplayName: map["counterpartDisplayName"] == null
+          ? null
+          : _requiredString(
+              map["counterpartDisplayName"],
+              '$path.counterpartDisplayName',
+            ),
+      counterpartAvatarUrl: map["counterpartAvatarUrl"] == null
+          ? null
+          : _requiredString(
+              map["counterpartAvatarUrl"],
+              '$path.counterpartAvatarUrl',
+            ),
+      targetPersonaId: _requiredString(
+        map["targetPersonaId"],
+        '$path.targetPersonaId',
+      ),
+      targetContentId: _requiredString(
+        map["targetContentId"],
+        '$path.targetContentId',
+      ),
+      targetContentType: ContentType.fromWire(
+        map["targetContentType"],
+        '$path.targetContentType',
+      ),
+      targetContentSummary: map["targetContentSummary"] == null
+          ? null
+          : _requiredString(
+              map["targetContentSummary"],
+              '$path.targetContentSummary',
+            ),
       targetKind: _requiredString(map["targetKind"], '$path.targetKind'),
-      targetAvailability: _requiredString(map["targetAvailability"], '$path.targetAvailability'),
-      targetReplyCount: _requiredInt(map["targetReplyCount"], '$path.targetReplyCount'),
-      displayPersonaId: _requiredString(map["displayPersonaId"], '$path.displayPersonaId'),
+      targetAvailability: _requiredString(
+        map["targetAvailability"],
+        '$path.targetAvailability',
+      ),
+      targetReplyCount: _requiredInt(
+        map["targetReplyCount"],
+        '$path.targetReplyCount',
+      ),
+      displayPersonaId: _requiredString(
+        map["displayPersonaId"],
+        '$path.displayPersonaId',
+      ),
       displayName: _requiredString(map["displayName"], '$path.displayName'),
-      displayAvatarUrl: map["displayAvatarUrl"] == null ? null : _requiredString(map["displayAvatarUrl"], '$path.displayAvatarUrl'),
-      displayAvatarVersion: _requiredInt(map["displayAvatarVersion"], '$path.displayAvatarVersion'),
-      displayUserRouteId: map["displayUserRouteId"] == null ? null : _requiredString(map["displayUserRouteId"], '$path.displayUserRouteId'),
+      displayAvatarUrl: map["displayAvatarUrl"] == null
+          ? null
+          : _requiredString(map["displayAvatarUrl"], '$path.displayAvatarUrl'),
+      displayAvatarVersion: _requiredInt(
+        map["displayAvatarVersion"],
+        '$path.displayAvatarVersion',
+      ),
+      displayUserRouteId: map["displayUserRouteId"] == null
+          ? null
+          : _requiredString(
+              map["displayUserRouteId"],
+              '$path.displayUserRouteId',
+            ),
       primaryText: _requiredString(map["primaryText"], '$path.primaryText'),
-      contextText: map["contextText"] == null ? null : _requiredString(map["contextText"], '$path.contextText'),
-      previewMediaKind: _requiredString(map["previewMediaKind"], '$path.previewMediaKind'),
-      previewImageUrl: map["previewImageUrl"] == null ? null : _requiredString(map["previewImageUrl"], '$path.previewImageUrl'),
-      previewText: map["previewText"] == null ? null : _requiredString(map["previewText"], '$path.previewText'),
-      previewUnavailable: _requiredBool(map["previewUnavailable"], '$path.previewUnavailable'),
-      previewObjectId: map["previewObjectId"] == null ? null : _requiredString(map["previewObjectId"], '$path.previewObjectId'),
-      previewRouteId: map["previewRouteId"] == null ? null : _requiredString(map["previewRouteId"], '$path.previewRouteId'),
-      outboundShareEventId: map["outboundShareEventId"] == null ? null : _requiredString(map["outboundShareEventId"], '$path.outboundShareEventId'),
-      shareText: map["shareText"] == null ? null : _requiredString(map["shareText"], '$path.shareText'),
-      impactPrimaryText: map["impactPrimaryText"] == null ? null : _requiredString(map["impactPrimaryText"], '$path.impactPrimaryText'),
-      impactDeepLink: map["impactDeepLink"] == null ? null : _requiredString(map["impactDeepLink"], '$path.impactDeepLink'),
-      filterKeys: List<String>.unmodifiable(_requiredList(map["filterKeys"], '$path.filterKeys').asMap().entries.map((entry) => _requiredString(entry.value, '$path.filterKeys' + '[${entry.key}]'))),
+      contextText: map["contextText"] == null
+          ? null
+          : _requiredString(map["contextText"], '$path.contextText'),
+      previewMediaKind: _requiredString(
+        map["previewMediaKind"],
+        '$path.previewMediaKind',
+      ),
+      previewImageUrl: map["previewImageUrl"] == null
+          ? null
+          : _requiredString(map["previewImageUrl"], '$path.previewImageUrl'),
+      previewImageAssetId: map["previewImageAssetId"] == null
+          ? null
+          : _requiredString(
+              map["previewImageAssetId"],
+              '$path.previewImageAssetId',
+            ),
+      previewImageAccessMode: map["previewImageAccessMode"] == null
+          ? null
+          : MediaDeliveryAccessMode.fromWire(
+              map["previewImageAccessMode"],
+              '$path.previewImageAccessMode',
+            ),
+      previewText: map["previewText"] == null
+          ? null
+          : _requiredString(map["previewText"], '$path.previewText'),
+      previewUnavailable: _requiredBool(
+        map["previewUnavailable"],
+        '$path.previewUnavailable',
+      ),
+      previewObjectId: map["previewObjectId"] == null
+          ? null
+          : _requiredString(map["previewObjectId"], '$path.previewObjectId'),
+      previewRouteId: map["previewRouteId"] == null
+          ? null
+          : _requiredString(map["previewRouteId"], '$path.previewRouteId'),
+      outboundShareEventId: map["outboundShareEventId"] == null
+          ? null
+          : _requiredString(
+              map["outboundShareEventId"],
+              '$path.outboundShareEventId',
+            ),
+      shareText: map["shareText"] == null
+          ? null
+          : _requiredString(map["shareText"], '$path.shareText'),
+      impactPrimaryText: map["impactPrimaryText"] == null
+          ? null
+          : _requiredString(
+              map["impactPrimaryText"],
+              '$path.impactPrimaryText',
+            ),
+      impactDeepLink: map["impactDeepLink"] == null
+          ? null
+          : _requiredString(map["impactDeepLink"], '$path.impactDeepLink'),
+      filterKeys: List<String>.unmodifiable(
+        _requiredList(
+          map["filterKeys"],
+          '$path.filterKeys',
+        ).asMap().entries.map(
+          (entry) => _requiredString(
+            entry.value,
+            '$path.filterKeys' + '[${entry.key}]',
+          ),
+        ),
+      ),
       createdAt: _requiredTimestamp(map["createdAt"], '$path.createdAt'),
       occurredAt: _requiredTimestamp(map["occurredAt"], '$path.occurredAt'),
-      seenAt: map["seenAt"] == null ? null : _requiredTimestamp(map["seenAt"], '$path.seenAt'),
-      readAt: map["readAt"] == null ? null : _requiredTimestamp(map["readAt"], '$path.readAt'),
+      seenAt: map["seenAt"] == null
+          ? null
+          : _requiredTimestamp(map["seenAt"], '$path.seenAt'),
+      readAt: map["readAt"] == null
+          ? null
+          : _requiredTimestamp(map["readAt"], '$path.readAt'),
     );
   }
 
@@ -3731,13 +6086,17 @@ final class ProfileInteractionActivityView {
     "actorDisplayName": actorDisplayName,
     if (actorAvatarUrl != null) "actorAvatarUrl": actorAvatarUrl!,
     "actorAvatarVersion": actorAvatarVersion,
-    if (counterpartPersonaId != null) "counterpartPersonaId": counterpartPersonaId!,
-    if (counterpartDisplayName != null) "counterpartDisplayName": counterpartDisplayName!,
-    if (counterpartAvatarUrl != null) "counterpartAvatarUrl": counterpartAvatarUrl!,
+    if (counterpartPersonaId != null)
+      "counterpartPersonaId": counterpartPersonaId!,
+    if (counterpartDisplayName != null)
+      "counterpartDisplayName": counterpartDisplayName!,
+    if (counterpartAvatarUrl != null)
+      "counterpartAvatarUrl": counterpartAvatarUrl!,
     "targetPersonaId": targetPersonaId,
     "targetContentId": targetContentId,
     "targetContentType": targetContentType.wireName,
-    if (targetContentSummary != null) "targetContentSummary": targetContentSummary!,
+    if (targetContentSummary != null)
+      "targetContentSummary": targetContentSummary!,
     "targetKind": targetKind,
     "targetAvailability": targetAvailability,
     "targetReplyCount": targetReplyCount,
@@ -3750,11 +6109,16 @@ final class ProfileInteractionActivityView {
     if (contextText != null) "contextText": contextText!,
     "previewMediaKind": previewMediaKind,
     if (previewImageUrl != null) "previewImageUrl": previewImageUrl!,
+    if (previewImageAssetId != null)
+      "previewImageAssetId": previewImageAssetId!,
+    if (previewImageAccessMode != null)
+      "previewImageAccessMode": previewImageAccessMode!.wireName,
     if (previewText != null) "previewText": previewText!,
     "previewUnavailable": previewUnavailable,
     if (previewObjectId != null) "previewObjectId": previewObjectId!,
     if (previewRouteId != null) "previewRouteId": previewRouteId!,
-    if (outboundShareEventId != null) "outboundShareEventId": outboundShareEventId!,
+    if (outboundShareEventId != null)
+      "outboundShareEventId": outboundShareEventId!,
     if (shareText != null) "shareText": shareText!,
     if (impactPrimaryText != null) "impactPrimaryText": impactPrimaryText!,
     if (impactDeepLink != null) "impactDeepLink": impactDeepLink!,
@@ -3781,8 +6145,17 @@ final class ProfileInteractionReadFactAck {
   final DateTime occurredAt;
   final bool replayed;
 
-  factory ProfileInteractionReadFactAck.fromWire(Map<String, Object?> map, [String path = "ProfileInteractionReadFactAck"]) {
-    _rejectUnknownFields(map, const <String>{"factId", "activityId", "state", "occurredAt", "replayed"}, path);
+  factory ProfileInteractionReadFactAck.fromWire(
+    Map<String, Object?> map, [
+    String path = "ProfileInteractionReadFactAck",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "factId",
+      "activityId",
+      "state",
+      "occurredAt",
+      "replayed",
+    }, path);
     return ProfileInteractionReadFactAck(
       factId: _requiredString(map["factId"], '$path.factId'),
       activityId: _requiredString(map["activityId"], '$path.activityId'),
@@ -3812,11 +6185,27 @@ final class ReceivedCommentPageSlice {
   final String? nextCursor;
   final int total;
 
-  factory ReceivedCommentPageSlice.fromWire(Map<String, Object?> map, [String path = "ReceivedCommentPageSlice"]) {
-    _rejectUnknownFields(map, const <String>{"items", "nextCursor", "total"}, path);
+  factory ReceivedCommentPageSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "ReceivedCommentPageSlice",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "items",
+      "nextCursor",
+      "total",
+    }, path);
     return ReceivedCommentPageSlice(
-      items: List<CommentListItem>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => CommentListItem.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
-      nextCursor: map["nextCursor"] == null ? null : _requiredString(map["nextCursor"], '$path.nextCursor'),
+      items: List<CommentListItem>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => CommentListItem.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      nextCursor: map["nextCursor"] == null
+          ? null
+          : _requiredString(map["nextCursor"], '$path.nextCursor'),
       total: _requiredInt(map["total"], '$path.total'),
     );
   }
@@ -3839,11 +6228,27 @@ final class ReplyPageSlice {
   final String? nextCursor;
   final int total;
 
-  factory ReplyPageSlice.fromWire(Map<String, Object?> map, [String path = "ReplyPageSlice"]) {
-    _rejectUnknownFields(map, const <String>{"items", "nextCursor", "total"}, path);
+  factory ReplyPageSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "ReplyPageSlice",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "items",
+      "nextCursor",
+      "total",
+    }, path);
     return ReplyPageSlice(
-      items: List<CommentListItem>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => CommentListItem.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
-      nextCursor: map["nextCursor"] == null ? null : _requiredString(map["nextCursor"], '$path.nextCursor'),
+      items: List<CommentListItem>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => CommentListItem.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      nextCursor: map["nextCursor"] == null
+          ? null
+          : _requiredString(map["nextCursor"], '$path.nextCursor'),
       total: _requiredInt(map["total"], '$path.total'),
     );
   }
@@ -3868,8 +6273,16 @@ final class ReportCommandResult {
   final ReportStatus status;
   final bool replayed;
 
-  factory ReportCommandResult.fromWire(Map<String, Object?> map, [String path = "ReportCommandResult"]) {
-    _rejectUnknownFields(map, const <String>{"id", "version", "status", "replayed"}, path);
+  factory ReportCommandResult.fromWire(
+    Map<String, Object?> map, [
+    String path = "ReportCommandResult",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "id",
+      "version",
+      "status",
+      "replayed",
+    }, path);
     return ReportCommandResult(
       id: _requiredString(map["id"], '$path.id'),
       version: _requiredPositiveInt(map["version"], '$path.version'),
@@ -3913,20 +6326,81 @@ final class ResearchReleaseReadbackView {
   final bool publicCdnDetected;
   final bool anonymousMediaUrlDetected;
 
-  factory ResearchReleaseReadbackView.fromWire(Map<String, Object?> map, [String path = "ResearchReleaseReadbackView"]) {
-    _rejectUnknownFields(map, const <String>{"releaseId", "manifestDigest", "subjectHash", "attestationIdHash", "signatureVerified", "researchBadgeVisible", "postIds", "entityRefs", "mediaAssetIds", "publicCdnDetected", "anonymousMediaUrlDetected"}, path);
+  factory ResearchReleaseReadbackView.fromWire(
+    Map<String, Object?> map, [
+    String path = "ResearchReleaseReadbackView",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "releaseId",
+      "manifestDigest",
+      "subjectHash",
+      "attestationIdHash",
+      "signatureVerified",
+      "researchBadgeVisible",
+      "postIds",
+      "entityRefs",
+      "mediaAssetIds",
+      "publicCdnDetected",
+      "anonymousMediaUrlDetected",
+    }, path);
     return ResearchReleaseReadbackView(
       releaseId: _requiredNonBlankString(map["releaseId"], '$path.releaseId'),
-      manifestDigest: _requiredNonBlankString(map["manifestDigest"], '$path.manifestDigest'),
-      subjectHash: _requiredNonBlankString(map["subjectHash"], '$path.subjectHash'),
-      attestationIdHash: _requiredNonBlankString(map["attestationIdHash"], '$path.attestationIdHash'),
-      signatureVerified: _requiredBool(map["signatureVerified"], '$path.signatureVerified'),
-      researchBadgeVisible: _requiredBool(map["researchBadgeVisible"], '$path.researchBadgeVisible'),
-      postIds: List<String>.unmodifiable(_requiredList(map["postIds"], '$path.postIds').asMap().entries.map((entry) => _requiredString(entry.value, '$path.postIds' + '[${entry.key}]'))),
-      entityRefs: List<String>.unmodifiable(_requiredList(map["entityRefs"], '$path.entityRefs').asMap().entries.map((entry) => _requiredString(entry.value, '$path.entityRefs' + '[${entry.key}]'))),
-      mediaAssetIds: List<String>.unmodifiable(_requiredList(map["mediaAssetIds"], '$path.mediaAssetIds').asMap().entries.map((entry) => _requiredString(entry.value, '$path.mediaAssetIds' + '[${entry.key}]'))),
-      publicCdnDetected: _requiredBool(map["publicCdnDetected"], '$path.publicCdnDetected'),
-      anonymousMediaUrlDetected: _requiredBool(map["anonymousMediaUrlDetected"], '$path.anonymousMediaUrlDetected'),
+      manifestDigest: _requiredNonBlankString(
+        map["manifestDigest"],
+        '$path.manifestDigest',
+      ),
+      subjectHash: _requiredNonBlankString(
+        map["subjectHash"],
+        '$path.subjectHash',
+      ),
+      attestationIdHash: _requiredNonBlankString(
+        map["attestationIdHash"],
+        '$path.attestationIdHash',
+      ),
+      signatureVerified: _requiredBool(
+        map["signatureVerified"],
+        '$path.signatureVerified',
+      ),
+      researchBadgeVisible: _requiredBool(
+        map["researchBadgeVisible"],
+        '$path.researchBadgeVisible',
+      ),
+      postIds: List<String>.unmodifiable(
+        _requiredList(map["postIds"], '$path.postIds').asMap().entries.map(
+          (entry) =>
+              _requiredString(entry.value, '$path.postIds' + '[${entry.key}]'),
+        ),
+      ),
+      entityRefs: List<String>.unmodifiable(
+        _requiredList(
+          map["entityRefs"],
+          '$path.entityRefs',
+        ).asMap().entries.map(
+          (entry) => _requiredString(
+            entry.value,
+            '$path.entityRefs' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      mediaAssetIds: List<String>.unmodifiable(
+        _requiredList(
+          map["mediaAssetIds"],
+          '$path.mediaAssetIds',
+        ).asMap().entries.map(
+          (entry) => _requiredString(
+            entry.value,
+            '$path.mediaAssetIds' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      publicCdnDetected: _requiredBool(
+        map["publicCdnDetected"],
+        '$path.publicCdnDetected',
+      ),
+      anonymousMediaUrlDetected: _requiredBool(
+        map["anonymousMediaUrlDetected"],
+        '$path.anonymousMediaUrlDetected',
+      ),
     );
   }
 
@@ -3939,7 +6413,9 @@ final class ResearchReleaseReadbackView {
     "researchBadgeVisible": researchBadgeVisible,
     "postIds": postIds.map((value) => value).toList(growable: false),
     "entityRefs": entityRefs.map((value) => value).toList(growable: false),
-    "mediaAssetIds": mediaAssetIds.map((value) => value).toList(growable: false),
+    "mediaAssetIds": mediaAssetIds
+        .map((value) => value)
+        .toList(growable: false),
     "publicCdnDetected": publicCdnDetected,
     "anonymousMediaUrlDetected": anonymousMediaUrlDetected,
   };
@@ -3990,29 +6466,105 @@ final class SourceAttribution {
   final DateTime collectedAt;
   final String takedownPolicy;
 
-  factory SourceAttribution.fromWire(Map<String, Object?> map, [String path = "SourceAttribution"]) {
-    _rejectUnknownFields(map, const <String>{"isOriginal", "originalCreatorId", "originalCreatorName", "originalCreatorProfileUrl", "platform", "sourcePostUrl", "originalAssetUrl", "attributionText", "rightsBasis", "commercialAuthorizationStatus", "publicationAdmission", "authorizationProofUrl", "termsUrl", "riskAcceptanceId", "watermarkStatus", "audioRightsStatus", "modelReleaseStatus", "propertyReleaseStatus", "collectedAt", "takedownPolicy"}, path);
+  factory SourceAttribution.fromWire(
+    Map<String, Object?> map, [
+    String path = "SourceAttribution",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "isOriginal",
+      "originalCreatorId",
+      "originalCreatorName",
+      "originalCreatorProfileUrl",
+      "platform",
+      "sourcePostUrl",
+      "originalAssetUrl",
+      "attributionText",
+      "rightsBasis",
+      "commercialAuthorizationStatus",
+      "publicationAdmission",
+      "authorizationProofUrl",
+      "termsUrl",
+      "riskAcceptanceId",
+      "watermarkStatus",
+      "audioRightsStatus",
+      "modelReleaseStatus",
+      "propertyReleaseStatus",
+      "collectedAt",
+      "takedownPolicy",
+    }, path);
     return SourceAttribution(
       isOriginal: _requiredBool(map["isOriginal"], '$path.isOriginal'),
-      originalCreatorId: map["originalCreatorId"] == null ? null : _requiredString(map["originalCreatorId"], '$path.originalCreatorId'),
-      originalCreatorName: _requiredString(map["originalCreatorName"], '$path.originalCreatorName'),
-      originalCreatorProfileUrl: map["originalCreatorProfileUrl"] == null ? null : _requiredString(map["originalCreatorProfileUrl"], '$path.originalCreatorProfileUrl'),
+      originalCreatorId: map["originalCreatorId"] == null
+          ? null
+          : _requiredString(
+              map["originalCreatorId"],
+              '$path.originalCreatorId',
+            ),
+      originalCreatorName: _requiredString(
+        map["originalCreatorName"],
+        '$path.originalCreatorName',
+      ),
+      originalCreatorProfileUrl: map["originalCreatorProfileUrl"] == null
+          ? null
+          : _requiredString(
+              map["originalCreatorProfileUrl"],
+              '$path.originalCreatorProfileUrl',
+            ),
       platform: _requiredString(map["platform"], '$path.platform'),
-      sourcePostUrl: _requiredString(map["sourcePostUrl"], '$path.sourcePostUrl'),
-      originalAssetUrl: _requiredString(map["originalAssetUrl"], '$path.originalAssetUrl'),
-      attributionText: _requiredString(map["attributionText"], '$path.attributionText'),
+      sourcePostUrl: _requiredString(
+        map["sourcePostUrl"],
+        '$path.sourcePostUrl',
+      ),
+      originalAssetUrl: _requiredString(
+        map["originalAssetUrl"],
+        '$path.originalAssetUrl',
+      ),
+      attributionText: _requiredString(
+        map["attributionText"],
+        '$path.attributionText',
+      ),
       rightsBasis: _requiredString(map["rightsBasis"], '$path.rightsBasis'),
-      commercialAuthorizationStatus: _requiredString(map["commercialAuthorizationStatus"], '$path.commercialAuthorizationStatus'),
-      publicationAdmission: _requiredString(map["publicationAdmission"], '$path.publicationAdmission'),
-      authorizationProofUrl: map["authorizationProofUrl"] == null ? null : _requiredString(map["authorizationProofUrl"], '$path.authorizationProofUrl'),
-      termsUrl: map["termsUrl"] == null ? null : _requiredString(map["termsUrl"], '$path.termsUrl'),
-      riskAcceptanceId: map["riskAcceptanceId"] == null ? null : _requiredString(map["riskAcceptanceId"], '$path.riskAcceptanceId'),
-      watermarkStatus: _requiredString(map["watermarkStatus"], '$path.watermarkStatus'),
-      audioRightsStatus: _requiredString(map["audioRightsStatus"], '$path.audioRightsStatus'),
-      modelReleaseStatus: _requiredString(map["modelReleaseStatus"], '$path.modelReleaseStatus'),
-      propertyReleaseStatus: _requiredString(map["propertyReleaseStatus"], '$path.propertyReleaseStatus'),
+      commercialAuthorizationStatus: _requiredString(
+        map["commercialAuthorizationStatus"],
+        '$path.commercialAuthorizationStatus',
+      ),
+      publicationAdmission: _requiredString(
+        map["publicationAdmission"],
+        '$path.publicationAdmission',
+      ),
+      authorizationProofUrl: map["authorizationProofUrl"] == null
+          ? null
+          : _requiredString(
+              map["authorizationProofUrl"],
+              '$path.authorizationProofUrl',
+            ),
+      termsUrl: map["termsUrl"] == null
+          ? null
+          : _requiredString(map["termsUrl"], '$path.termsUrl'),
+      riskAcceptanceId: map["riskAcceptanceId"] == null
+          ? null
+          : _requiredString(map["riskAcceptanceId"], '$path.riskAcceptanceId'),
+      watermarkStatus: _requiredString(
+        map["watermarkStatus"],
+        '$path.watermarkStatus',
+      ),
+      audioRightsStatus: _requiredString(
+        map["audioRightsStatus"],
+        '$path.audioRightsStatus',
+      ),
+      modelReleaseStatus: _requiredString(
+        map["modelReleaseStatus"],
+        '$path.modelReleaseStatus',
+      ),
+      propertyReleaseStatus: _requiredString(
+        map["propertyReleaseStatus"],
+        '$path.propertyReleaseStatus',
+      ),
       collectedAt: _requiredTimestamp(map["collectedAt"], '$path.collectedAt'),
-      takedownPolicy: _requiredString(map["takedownPolicy"], '$path.takedownPolicy'),
+      takedownPolicy: _requiredString(
+        map["takedownPolicy"],
+        '$path.takedownPolicy',
+      ),
     );
   }
 
@@ -4020,7 +6572,8 @@ final class SourceAttribution {
     "isOriginal": isOriginal,
     if (originalCreatorId != null) "originalCreatorId": originalCreatorId!,
     "originalCreatorName": originalCreatorName,
-    if (originalCreatorProfileUrl != null) "originalCreatorProfileUrl": originalCreatorProfileUrl!,
+    if (originalCreatorProfileUrl != null)
+      "originalCreatorProfileUrl": originalCreatorProfileUrl!,
     "platform": platform,
     "sourcePostUrl": sourcePostUrl,
     "originalAssetUrl": originalAssetUrl,
@@ -4028,7 +6581,8 @@ final class SourceAttribution {
     "rightsBasis": rightsBasis,
     "commercialAuthorizationStatus": commercialAuthorizationStatus,
     "publicationAdmission": publicationAdmission,
-    if (authorizationProofUrl != null) "authorizationProofUrl": authorizationProofUrl!,
+    if (authorizationProofUrl != null)
+      "authorizationProofUrl": authorizationProofUrl!,
     if (termsUrl != null) "termsUrl": termsUrl!,
     if (riskAcceptanceId != null) "riskAcceptanceId": riskAcceptanceId!,
     "watermarkStatus": watermarkStatus,
@@ -4041,118 +6595,244 @@ final class SourceAttribution {
 }
 
 AppConfigSlice decodeAppConfigSlice(Object? response) =>
-    AppConfigSlice.fromWire(_requiredObject(response, "AppConfigSlice"), "AppConfigSlice");
+    AppConfigSlice.fromWire(
+      _requiredObject(response, "AppConfigSlice"),
+      "AppConfigSlice",
+    );
 
 AuthorCommentPageSlice decodeAuthorCommentPageSlice(Object? response) =>
-    AuthorCommentPageSlice.fromWire(_requiredObject(response, "AuthorCommentPageSlice"), "AuthorCommentPageSlice");
+    AuthorCommentPageSlice.fromWire(
+      _requiredObject(response, "AuthorCommentPageSlice"),
+      "AuthorCommentPageSlice",
+    );
 
 AuthorImpactEvidencePage decodeAuthorImpactEvidencePage(Object? response) =>
-    AuthorImpactEvidencePage.fromWire(_requiredObject(response, "AuthorImpactEvidencePage"), "AuthorImpactEvidencePage");
+    AuthorImpactEvidencePage.fromWire(
+      _requiredObject(response, "AuthorImpactEvidencePage"),
+      "AuthorImpactEvidencePage",
+    );
 
 AuthorImpactSummary decodeAuthorImpactSummary(Object? response) =>
-    AuthorImpactSummary.fromWire(_requiredObject(response, "AuthorImpactSummary"), "AuthorImpactSummary");
+    AuthorImpactSummary.fromWire(
+      _requiredObject(response, "AuthorImpactSummary"),
+      "AuthorImpactSummary",
+    );
 
 AuthorPostPageSlice decodeAuthorPostPageSlice(Object? response) =>
-    AuthorPostPageSlice.fromWire(_requiredObject(response, "AuthorPostPageSlice"), "AuthorPostPageSlice");
+    AuthorPostPageSlice.fromWire(
+      _requiredObject(response, "AuthorPostPageSlice"),
+      "AuthorPostPageSlice",
+    );
 
 CommentCommandResult decodeCommentCommandResult(Object? response) =>
-    CommentCommandResult.fromWire(_requiredObject(response, "CommentCommandResult"), "CommentCommandResult");
+    CommentCommandResult.fromWire(
+      _requiredObject(response, "CommentCommandResult"),
+      "CommentCommandResult",
+    );
 
 CommentPageSlice decodeCommentPageSlice(Object? response) =>
-    CommentPageSlice.fromWire(_requiredObject(response, "CommentPageSlice"), "CommentPageSlice");
+    CommentPageSlice.fromWire(
+      _requiredObject(response, "CommentPageSlice"),
+      "CommentPageSlice",
+    );
 
-ContentBehaviorReportReceipt decodeContentBehaviorReportReceipt(Object? response) =>
-    ContentBehaviorReportReceipt.fromWire(_requiredObject(response, "ContentBehaviorReportReceipt"), "ContentBehaviorReportReceipt");
+ContentBehaviorReportReceipt decodeContentBehaviorReportReceipt(
+  Object? response,
+) => ContentBehaviorReportReceipt.fromWire(
+  _requiredObject(response, "ContentBehaviorReportReceipt"),
+  "ContentBehaviorReportReceipt",
+);
 
-ContentCommentReactionCommandResult decodeContentCommentReactionCommandResult(Object? response) =>
-    ContentCommentReactionCommandResult.fromWire(_requiredObject(response, "ContentCommentReactionCommandResult"), "ContentCommentReactionCommandResult");
+ContentCommentReactionCommandResult decodeContentCommentReactionCommandResult(
+  Object? response,
+) => ContentCommentReactionCommandResult.fromWire(
+  _requiredObject(response, "ContentCommentReactionCommandResult"),
+  "ContentCommentReactionCommandResult",
+);
 
-ContentDiscoveryFeedPageSlice decodeContentDiscoveryFeedPageSlice(Object? response) =>
-    ContentDiscoveryFeedPageSlice.fromWire(_requiredObject(response, "ContentDiscoveryFeedPageSlice"), "ContentDiscoveryFeedPageSlice");
+ContentDiscoveryFeedPageSlice decodeContentDiscoveryFeedPageSlice(
+  Object? response,
+) => ContentDiscoveryFeedPageSlice.fromWire(
+  _requiredObject(response, "ContentDiscoveryFeedPageSlice"),
+  "ContentDiscoveryFeedPageSlice",
+);
 
 ContentFootprintPageSlice decodeContentFootprintPageSlice(Object? response) =>
-    ContentFootprintPageSlice.fromWire(_requiredObject(response, "ContentFootprintPageSlice"), "ContentFootprintPageSlice");
+    ContentFootprintPageSlice.fromWire(
+      _requiredObject(response, "ContentFootprintPageSlice"),
+      "ContentFootprintPageSlice",
+    );
 
 ContentPostDetailSlice decodeContentPostDetailSlice(Object? response) =>
-    ContentPostDetailSlice.fromWire(_requiredObject(response, "ContentPostDetailSlice"), "ContentPostDetailSlice");
+    ContentPostDetailSlice.fromWire(
+      _requiredObject(response, "ContentPostDetailSlice"),
+      "ContentPostDetailSlice",
+    );
 
-ContentReactionCommandResult decodeContentReactionCommandResult(Object? response) =>
-    ContentReactionCommandResult.fromWire(_requiredObject(response, "ContentReactionCommandResult"), "ContentReactionCommandResult");
+ContentReactionCommandResult decodeContentReactionCommandResult(
+  Object? response,
+) => ContentReactionCommandResult.fromWire(
+  _requiredObject(response, "ContentReactionCommandResult"),
+  "ContentReactionCommandResult",
+);
 
 ContentReactionStateSlice decodeContentReactionStateSlice(Object? response) =>
-    ContentReactionStateSlice.fromWire(_requiredObject(response, "ContentReactionStateSlice"), "ContentReactionStateSlice");
+    ContentReactionStateSlice.fromWire(
+      _requiredObject(response, "ContentReactionStateSlice"),
+      "ContentReactionStateSlice",
+    );
 
 EntityWishlistState decodeEntityWishlistState(Object? response) =>
-    EntityWishlistState.fromWire(_requiredObject(response, "EntityWishlistState"), "EntityWishlistState");
+    EntityWishlistState.fromWire(
+      _requiredObject(response, "EntityWishlistState"),
+      "EntityWishlistState",
+    );
 
 FilterCatalogSlice decodeFilterCatalogSlice(Object? response) =>
-    FilterCatalogSlice.fromWire(_requiredObject(response, "FilterCatalogSlice"), "FilterCatalogSlice");
+    FilterCatalogSlice.fromWire(
+      _requiredObject(response, "FilterCatalogSlice"),
+      "FilterCatalogSlice",
+    );
 
 GatheringPostPageSlice decodeGatheringPostPageSlice(Object? response) =>
-    GatheringPostPageSlice.fromWire(_requiredObject(response, "GatheringPostPageSlice"), "GatheringPostPageSlice");
+    GatheringPostPageSlice.fromWire(
+      _requiredObject(response, "GatheringPostPageSlice"),
+      "GatheringPostPageSlice",
+    );
 
-GatheringSocialProofSummary decodeGatheringSocialProofSummary(Object? response) =>
-    GatheringSocialProofSummary.fromWire(_requiredObject(response, "GatheringSocialProofSummary"), "GatheringSocialProofSummary");
+GatheringSocialProofSummary decodeGatheringSocialProofSummary(
+  Object? response,
+) => GatheringSocialProofSummary.fromWire(
+  _requiredObject(response, "GatheringSocialProofSummary"),
+  "GatheringSocialProofSummary",
+);
 
 IntersectionInboxSummary decodeIntersectionInboxSummary(Object? response) =>
-    IntersectionInboxSummary.fromWire(_requiredObject(response, "IntersectionInboxSummary"), "IntersectionInboxSummary");
+    IntersectionInboxSummary.fromWire(
+      _requiredObject(response, "IntersectionInboxSummary"),
+      "IntersectionInboxSummary",
+    );
 
-IntersectionReasonPageSlice decodeIntersectionReasonPageSlice(Object? response) =>
-    IntersectionReasonPageSlice.fromWire(_requiredObject(response, "IntersectionReasonPageSlice"), "IntersectionReasonPageSlice");
+IntersectionReasonPageSlice decodeIntersectionReasonPageSlice(
+  Object? response,
+) => IntersectionReasonPageSlice.fromWire(
+  _requiredObject(response, "IntersectionReasonPageSlice"),
+  "IntersectionReasonPageSlice",
+);
 
-MarkIntersectionsVisitedAck decodeMarkIntersectionsVisitedAck(Object? response) =>
-    MarkIntersectionsVisitedAck.fromWire(_requiredObject(response, "MarkIntersectionsVisitedAck"), "MarkIntersectionsVisitedAck");
+MarkIntersectionsVisitedAck decodeMarkIntersectionsVisitedAck(
+  Object? response,
+) => MarkIntersectionsVisitedAck.fromWire(
+  _requiredObject(response, "MarkIntersectionsVisitedAck"),
+  "MarkIntersectionsVisitedAck",
+);
 
 MediaAssetDiscardResult decodeMediaAssetDiscardResult(Object? response) =>
-    MediaAssetDiscardResult.fromWire(_requiredObject(response, "MediaAssetDiscardResult"), "MediaAssetDiscardResult");
+    MediaAssetDiscardResult.fromWire(
+      _requiredObject(response, "MediaAssetDiscardResult"),
+      "MediaAssetDiscardResult",
+    );
 
 MediaAssetSlice decodeMediaAssetSlice(Object? response) =>
-    MediaAssetSlice.fromWire(_requiredObject(response, "MediaAssetSlice"), "MediaAssetSlice");
+    MediaAssetSlice.fromWire(
+      _requiredObject(response, "MediaAssetSlice"),
+      "MediaAssetSlice",
+    );
 
 MediaCoverSelectionResult decodeMediaCoverSelectionResult(Object? response) =>
-    MediaCoverSelectionResult.fromWire(_requiredObject(response, "MediaCoverSelectionResult"), "MediaCoverSelectionResult");
+    MediaCoverSelectionResult.fromWire(
+      _requiredObject(response, "MediaCoverSelectionResult"),
+      "MediaCoverSelectionResult",
+    );
 
 MediaOriginalAccessGrant decodeMediaOriginalAccessGrant(Object? response) =>
-    MediaOriginalAccessGrant.fromWire(_requiredObject(response, "MediaOriginalAccessGrant"), "MediaOriginalAccessGrant");
+    MediaOriginalAccessGrant.fromWire(
+      _requiredObject(response, "MediaOriginalAccessGrant"),
+      "MediaOriginalAccessGrant",
+    );
 
-MediaUploadSessionCommandResult decodeMediaUploadSessionCommandResult(Object? response) =>
-    MediaUploadSessionCommandResult.fromWire(_requiredObject(response, "MediaUploadSessionCommandResult"), "MediaUploadSessionCommandResult");
+MediaUploadSessionCommandResult decodeMediaUploadSessionCommandResult(
+  Object? response,
+) => MediaUploadSessionCommandResult.fromWire(
+  _requiredObject(response, "MediaUploadSessionCommandResult"),
+  "MediaUploadSessionCommandResult",
+);
 
 MediaUploadSessionSlice decodeMediaUploadSessionSlice(Object? response) =>
-    MediaUploadSessionSlice.fromWire(_requiredObject(response, "MediaUploadSessionSlice"), "MediaUploadSessionSlice");
+    MediaUploadSessionSlice.fromWire(
+      _requiredObject(response, "MediaUploadSessionSlice"),
+      "MediaUploadSessionSlice",
+    );
 
 MyReportPageSlice decodeMyReportPageSlice(Object? response) =>
-    MyReportPageSlice.fromWire(_requiredObject(response, "MyReportPageSlice"), "MyReportPageSlice");
+    MyReportPageSlice.fromWire(
+      _requiredObject(response, "MyReportPageSlice"),
+      "MyReportPageSlice",
+    );
 
-ObjectIntersectionReasonSlice decodeObjectIntersectionReasonSlice(Object? response) =>
-    ObjectIntersectionReasonSlice.fromWire(_requiredObject(response, "ObjectIntersectionReasonSlice"), "ObjectIntersectionReasonSlice");
+ObjectIntersectionReasonSlice decodeObjectIntersectionReasonSlice(
+  Object? response,
+) => ObjectIntersectionReasonSlice.fromWire(
+  _requiredObject(response, "ObjectIntersectionReasonSlice"),
+  "ObjectIntersectionReasonSlice",
+);
 
 OutboundShareFactResult decodeOutboundShareFactResult(Object? response) =>
-    OutboundShareFactResult.fromWire(_requiredObject(response, "OutboundShareFactResult"), "OutboundShareFactResult");
+    OutboundShareFactResult.fromWire(
+      _requiredObject(response, "OutboundShareFactResult"),
+      "OutboundShareFactResult",
+    );
 
 PostDeletionReceipt decodePostDeletionReceipt(Object? response) =>
-    PostDeletionReceipt.fromWire(_requiredObject(response, "PostDeletionReceipt"), "PostDeletionReceipt");
+    PostDeletionReceipt.fromWire(
+      _requiredObject(response, "PostDeletionReceipt"),
+      "PostDeletionReceipt",
+    );
 
 PostPublicationReceipt decodePostPublicationReceipt(Object? response) =>
-    PostPublicationReceipt.fromWire(_requiredObject(response, "PostPublicationReceipt"), "PostPublicationReceipt");
+    PostPublicationReceipt.fromWire(
+      _requiredObject(response, "PostPublicationReceipt"),
+      "PostPublicationReceipt",
+    );
 
-ProfileInteractionActivityPageSlice decodeProfileInteractionActivityPageSlice(Object? response) =>
-    ProfileInteractionActivityPageSlice.fromWire(_requiredObject(response, "ProfileInteractionActivityPageSlice"), "ProfileInteractionActivityPageSlice");
+ProfileInteractionActivityPageSlice decodeProfileInteractionActivityPageSlice(
+  Object? response,
+) => ProfileInteractionActivityPageSlice.fromWire(
+  _requiredObject(response, "ProfileInteractionActivityPageSlice"),
+  "ProfileInteractionActivityPageSlice",
+);
 
-ProfileInteractionReadFactAck decodeProfileInteractionReadFactAck(Object? response) =>
-    ProfileInteractionReadFactAck.fromWire(_requiredObject(response, "ProfileInteractionReadFactAck"), "ProfileInteractionReadFactAck");
+ProfileInteractionReadFactAck decodeProfileInteractionReadFactAck(
+  Object? response,
+) => ProfileInteractionReadFactAck.fromWire(
+  _requiredObject(response, "ProfileInteractionReadFactAck"),
+  "ProfileInteractionReadFactAck",
+);
 
 ReceivedCommentPageSlice decodeReceivedCommentPageSlice(Object? response) =>
-    ReceivedCommentPageSlice.fromWire(_requiredObject(response, "ReceivedCommentPageSlice"), "ReceivedCommentPageSlice");
+    ReceivedCommentPageSlice.fromWire(
+      _requiredObject(response, "ReceivedCommentPageSlice"),
+      "ReceivedCommentPageSlice",
+    );
 
 ReplyPageSlice decodeReplyPageSlice(Object? response) =>
-    ReplyPageSlice.fromWire(_requiredObject(response, "ReplyPageSlice"), "ReplyPageSlice");
+    ReplyPageSlice.fromWire(
+      _requiredObject(response, "ReplyPageSlice"),
+      "ReplyPageSlice",
+    );
 
 ReportCommandResult decodeReportCommandResult(Object? response) =>
-    ReportCommandResult.fromWire(_requiredObject(response, "ReportCommandResult"), "ReportCommandResult");
+    ReportCommandResult.fromWire(
+      _requiredObject(response, "ReportCommandResult"),
+      "ReportCommandResult",
+    );
 
-ResearchReleaseReadbackView decodeResearchReleaseReadbackView(Object? response) =>
-    ResearchReleaseReadbackView.fromWire(_requiredObject(response, "ResearchReleaseReadbackView"), "ResearchReleaseReadbackView");
+ResearchReleaseReadbackView decodeResearchReleaseReadbackView(
+  Object? response,
+) => ResearchReleaseReadbackView.fromWire(
+  _requiredObject(response, "ResearchReleaseReadbackView"),
+  "ResearchReleaseReadbackView",
+);
 
 Map<String, Object?> _requiredObject(Object? value, String path) {
   if (value is! Map<Object?, Object?>) {
@@ -4177,7 +6857,9 @@ void _rejectUnknownFields(
   final unknown = value.keys.where((key) => !allowed.contains(key)).toList()
     ..sort();
   if (unknown.isNotEmpty) {
-    throw FormatException('$path contains unknown fields: ${unknown.join(', ')}');
+    throw FormatException(
+      '$path contains unknown fields: ${unknown.join(', ')}',
+    );
   }
 }
 
@@ -4225,12 +6907,7 @@ int _requiredPositiveInt(Object? value, String path) {
   return result;
 }
 
-int _requiredBoundedInt(
-  Object? value,
-  String path, {
-  int? min,
-  int? max,
-}) {
+int _requiredBoundedInt(Object? value, String path, {int? min, int? max}) {
   final result = _requiredInt(value, path);
   if (min != null && result < min) {
     throw FormatException('$path must be at least $min');

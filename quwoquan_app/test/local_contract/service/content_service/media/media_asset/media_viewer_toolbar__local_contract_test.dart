@@ -1,9 +1,12 @@
 // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md#gwt-001
+// spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-018
+// spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-018.t2
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/layout/app_scaffold.dart';
 import 'package:quwoquan_app/design_system/semantics/navigation_semantic_constants.dart';
+import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/media_viewer_toolbar.dart';
 
 BoxDecoration _circleDecorationWithin(WidgetTester tester, Finder ancestor) {
@@ -30,8 +33,14 @@ BoxDecoration _circleDecorationWithin(WidgetTester tester, Finder ancestor) {
   };
 }
 
+Icon _iconWithin(WidgetTester tester, Finder ancestor) {
+  return tester.widget<Icon>(
+    find.descendant(of: ancestor, matching: find.byType(Icon)),
+  );
+}
+
 void main() {
-  testWidgets('ImmersiveToolbarIconButton 默认渲染半透明暗色圆形背板', (tester) async {
+  testWidgets('ImmersiveToolbarIconButton 无暗底填充，白图标携带语义投影', (tester) async {
     await tester.pumpWidget(
       CupertinoApp(
         home: Center(
@@ -47,24 +56,54 @@ void main() {
       tester,
       find.byType(ImmersiveToolbarIconButton),
     );
-    // 白色图标叠在浅色媒体或加载失败退化背景上时，暗底保证返回出路永远可见。
+    // 沉浸导航钮不再用暗色圆底（REQ-019）；浅色媒体上的可见性由投影承接。
     expect(
       decoration.color,
       AppNavigationSemanticConstants.chromeActionBackground(
         surface: AppChromeSurface.immersive,
       ),
     );
-    expect(decoration.color, AppColors.overlayLight);
-    final icon = tester.widget<Icon>(
-      find.descendant(
-        of: find.byType(ImmersiveToolbarIconButton),
-        matching: find.byType(Icon),
+    expect(decoration.color, AppColors.transparent);
+    final icon = _iconWithin(tester, find.byType(ImmersiveToolbarIconButton));
+    expect(icon.color, AppColors.white);
+    expect(
+      icon.shadows,
+      AppNavigationSemanticConstants.chromeActionIconShadows(
+        surface: AppChromeSurface.immersive,
       ),
     );
-    expect(icon.color, AppColors.white);
+    expect(icon.shadows, isNotEmpty, reason: '白色图标失去暗底后必须有投影保证返回出路可见。');
   });
 
-  testWidgets('MediaViewerTopBar 返回按钮携带暗底背板', (tester) async {
+  testWidgets('ImmersiveToolbarIconButton 保持 44pt 最小触控热区', (tester) async {
+    await tester.pumpWidget(
+      CupertinoApp(
+        home: Center(
+          child: ImmersiveToolbarIconButton(
+            icon: CupertinoIcons.back,
+            onPressed: () {},
+          ),
+        ),
+      ),
+    );
+
+    final button = tester.widget<CupertinoButton>(
+      find.descendant(
+        of: find.byType(ImmersiveToolbarIconButton),
+        matching: find.byType(CupertinoButton),
+      ),
+    );
+    expect(
+      button.minimumSize!.width,
+      greaterThanOrEqualTo(AppSpacing.minInteractiveSize),
+    );
+    expect(
+      button.minimumSize!.height,
+      greaterThanOrEqualTo(AppSpacing.minInteractiveSize),
+    );
+  });
+
+  testWidgets('MediaViewerTopBar 返回按钮无暗底且带投影', (tester) async {
     await tester.pumpWidget(
       CupertinoApp(
         home: MediaViewerTopBar(
@@ -84,10 +123,11 @@ void main() {
         )
         .first;
     final decoration = _circleDecorationWithin(tester, backButton);
-    expect(decoration.color, AppColors.overlayLight);
+    expect(decoration.color, AppColors.transparent);
+    expect(_iconWithin(tester, backButton).shadows, isNotEmpty);
   });
 
-  testWidgets('AppNavigationBarIconButton immersive 表面渲染暗底与白色图标', (tester) async {
+  testWidgets('AppNavigationBarIconButton immersive 表面透明底、白图标带投影', (tester) async {
     await tester.pumpWidget(
       CupertinoApp(
         home: Center(
@@ -104,17 +144,18 @@ void main() {
       tester,
       find.byType(AppNavigationBarIconButton),
     );
-    expect(decoration.color, AppColors.overlayLight);
-    final icon = tester.widget<Icon>(
-      find.descendant(
-        of: find.byType(AppNavigationBarIconButton),
-        matching: find.byType(Icon),
+    expect(decoration.color, AppColors.transparent);
+    final icon = _iconWithin(tester, find.byType(AppNavigationBarIconButton));
+    expect(icon.color, AppColors.white);
+    expect(
+      icon.shadows,
+      AppNavigationSemanticConstants.chromeActionIconShadows(
+        surface: AppChromeSurface.immersive,
       ),
     );
-    expect(icon.color, AppColors.white);
   });
 
-  testWidgets('AppNavigationBarIconButton standard 表面保持透明背景', (tester) async {
+  testWidgets('AppNavigationBarIconButton standard 表面透明背景且无投影', (tester) async {
     await tester.pumpWidget(
       CupertinoApp(
         home: Center(
@@ -131,5 +172,7 @@ void main() {
       find.byType(AppNavigationBarIconButton),
     );
     expect(decoration.color, AppColors.transparent);
+    final icon = _iconWithin(tester, find.byType(AppNavigationBarIconButton));
+    expect(icon.shadows, anyOf(isNull, isEmpty));
   });
 }

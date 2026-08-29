@@ -38,22 +38,25 @@ def _receipt_chain_precondition(execution_id: str) -> None:
         )
 
 
-def _post_targets(execution_id: str) -> list[tuple[dict[str, Any], str, Path]]:
-    """返回 (target, post_ref, object_dir)；post_ref 为 posts/ 下相对路径。"""
+def _frozen_carrier(execution_id: str) -> str:
+    """The one carrier this execution froze, which decides the whole publish shape."""
     from content.execution.spec_contract import ExecutionSpec
     from content.execution.store import load_spec
-    from content.execution.workspace import load_frozen_target_set
-    from core.paths import execution_root
 
     spec = ExecutionSpec.from_mapping(load_spec(execution_id))
     carriers = [carrier.value for carrier in spec.content.carriers]
-    if carriers == ["homepage"]:
-        raise ReceiptPublishError(
-            "homepage carrier publish is not wired into the receipt protocol yet"
-        )
     if len(carriers) != 1:
         raise ReceiptPublishError("execution must freeze exactly one content carrier")
-    carrier = carriers[0]
+    return carriers[0]
+
+
+def _post_targets(
+    execution_id: str, *, carrier: str
+) -> list[tuple[dict[str, Any], str, Path]]:
+    """返回 (target, post_ref, object_dir)；post_ref 为 posts/ 下相对路径。"""
+    from content.execution.workspace import load_frozen_target_set
+    from core.paths import execution_root
+
     root = execution_root(execution_id)
     rows: list[tuple[dict[str, Any], str, Path]] = []
     for target in load_frozen_target_set(execution_id)["targets"]:
@@ -88,7 +91,10 @@ def publish_receipt_execution(
         raise ReceiptPublishError(
             "execution layout is not publishable:\n  - " + "\n  - ".join(layout_issues)
         )
-    targets = _post_targets(execution_id)
+    carrier = _frozen_carrier(execution_id)
+    if carrier == "homepage":
+        return _publish_homepage_execution(execution_id, apply=apply)
+    targets = _post_targets(execution_id, carrier=carrier)
     results: list[dict[str, Any]] = []
     promoted_refs: list[str] = []
     for target, post_ref, object_dir in targets:
@@ -157,6 +163,120 @@ def publish_receipt_execution(
                 )
             )
         write_publish_ref(execution_id, post_refs=promoted_refs)
+    return outcome
+
+
+def _homepage_targets(execution_id: str) -> list[tuple[str, Path]]:
+    """返回 (canonical_ref, object_dir)；canonical_ref 为 domain/type/name。
+
+    homepage 的对象身份是实体路径本身，没有 publishAngle/publishTitle/seq 这组
+    发表坐标可冻结，因此目标集来自 execution 工作包里实际存在的实体对象，而不是
+    frozen target set 的投影。
+    """
+    from core.entity_object import collect_execution_entity_objects
+
+    try:
+        rows = collect_execution_entity_objects(
+            execution_id, enforce_type_consistency=True
+        )
+    except ValueError as exc:
+        raise ReceiptPublishError(f"execution entity objects conflict: {exc}") from exc
+    if not rows:
+        raise ReceiptPublishError("homepage execution carries no entity object")
+    targets: list[tuple[str, Path]] = []
+    for row in rows:
+        canonical_ref = str(row["entityRel"]).removeprefix("entities/").strip("/")
+        if len(canonical_ref.split("/")) < 3:
+            raise ReceiptPublishError(
+                f"entity object ref must be domain/type/name: {row['entityRel']}"
+            )
+        targets.append((canonical_ref, Path(row["entityDir"])))
+    return targets
+
+
+def _publish_homepage_execution(
+    execution_id: str, *, apply: bool
+) -> dict[str, Any]:
+    """Publish one homepage execution's entity objects through the receipt chain.
+
+    A homepage object is an entity page, not a post: it has no publish coordinates
+    and its canonical home is `entities/`, so it needs its own target discovery and
+    its own transaction. What it must not have is its own admission judgment — the
+    5.review attestation that qualifies a post is the same one that qualifies an
+    entity, and the entity transaction reads that same document.
+    """
+    from content.execution.closure.pool_delivery import write_pool_delivery_intent
+    from content.execution.controller.publish import publish_homepage_object
+    from content.execution.workspace import write_publish_ref
+
+    results: list[dict[str, Any]] = []
+    promoted_refs: list[str] = []
+    for canonical_ref, object_dir in _homepage_targets(execution_id):
+        entity_ref = f"/entity/{canonical_ref}"
+        row: dict[str, Any] = {"entityRef": entity_ref, "status": "planned"}
+        attestation_path = object_dir / "5.review/attestation.json"
+        attestation = (
+            read_json(attestation_path) if attestation_path.is_file() else None
+        )
+        if (
+            not isinstance(attestation, dict)
+            or attestation.get("decision") != "approved"
+        ):
+            row.update(status="excluded", reason="attestation is not approved")
+            results.append(row)
+            continue
+        if not apply:
+            for required in ("_entity.json", "manifest.json", "page.md"):
+                if not (object_dir / required).is_file():
+                    row.update(
+                        status="blocked",
+                        reason=f"entity object lacks frozen input: {required}",
+                    )
+                    break
+            results.append(row)
+            continue
+        try:
+            intent, _path = write_pool_delivery_intent(
+                execution_id,
+                carrier="homepage",
+                object_ref=entity_ref,
+                content_object_dir=f"entities/{canonical_ref}",
+            )
+            promotion = publish_homepage_object(
+                execution_id,
+                entity_ref,
+                pool_delivery_intent=intent,
+            )
+        except (OSError, RuntimeError, ValueError) as exc:
+            row.update(status="blocked", reason=str(exc))
+            results.append(row)
+            continue
+        row.update(
+            status="promoted",
+            transactionId=promotion["transactionId"],
+            canonicalObjectRef=promotion["canonicalObjectRef"],
+        )
+        promoted_refs.append(entity_ref)
+        results.append(row)
+    outcome = {
+        "executionId": execution_id,
+        "mode": "apply" if apply else "plan",
+        "carrier": "homepage",
+        "objects": results,
+        "promoted": len(promoted_refs),
+        "blocked": sum(1 for row in results if row["status"] == "blocked"),
+        "excluded": sum(1 for row in results if row["status"] == "excluded"),
+    }
+    if apply:
+        if not promoted_refs:
+            raise ReceiptPublishError(
+                "receipt publish promoted zero objects: "
+                + "; ".join(
+                    f"{row['entityRef']}: {row.get('reason', row['status'])}"
+                    for row in results
+                )
+            )
+        write_publish_ref(execution_id, entity_refs=promoted_refs)
     return outcome
 
 

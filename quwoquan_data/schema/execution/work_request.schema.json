@@ -66,6 +66,7 @@
       "additionalProperties": {"$ref": "#/$defs/dependencyRef"}
     },
     "dependencySetDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "acquisitionRootRef": {"type": "string", "minLength": 1},
     "sourcePool": {
       "type": "object",
       "required": ["poolId", "targetScale", "planRef", "planDigest", "evidenceRootRef"],

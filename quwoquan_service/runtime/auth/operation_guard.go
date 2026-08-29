@@ -225,23 +225,10 @@ func requireGeneratedOperationAuthorization(
 func EnforceRuntimeOperationContract(
 	descriptors []OperationSecurityDescriptor,
 ) func(http.Handler) http.Handler {
-	compiled := mustCompileOperationDescriptors(descriptors)
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			descriptor, ok := matchOperation(compiled, r.Method, r.URL.Path)
-			if !ok {
-				next.ServeHTTP(w, r)
-				return
-			}
-			authorizeGeneratedOperation(
-				w,
-				r,
-				descriptor,
-				runtimeOperationBoundary,
-				next,
-			)
-		})
-	}
+	return enforceGeneratedOperationAuthorization(
+		descriptors,
+		runtimeOperationBoundary,
+	)
 }
 
 // RequireGeneratedOperationAuthorizationForRoute applies the generated
@@ -281,6 +268,16 @@ func RequireGeneratedOperationAuthorizationForRoute(
 func EnforceGeneratedOperationAuthorization(
 	descriptors []OperationSecurityDescriptor,
 ) func(http.Handler) http.Handler {
+	return enforceGeneratedOperationAuthorization(
+		descriptors,
+		publicOperationBoundary,
+	)
+}
+
+func enforceGeneratedOperationAuthorization(
+	descriptors []OperationSecurityDescriptor,
+	boundary operationBoundary,
+) func(http.Handler) http.Handler {
 	compiled := mustCompileOperationDescriptors(descriptors)
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -293,7 +290,7 @@ func EnforceGeneratedOperationAuthorization(
 				w,
 				r,
 				descriptor,
-				publicOperationBoundary,
+				boundary,
 				next,
 			)
 		})
@@ -426,8 +423,30 @@ func authorizeGeneratedOperation(
 		)
 		return
 	}
+	principal, hasPrincipal := PrincipalFromContext(r.Context())
+	// DEC-032：research principal 必须先收敛到具名能力闭集；只有闭集中的
+	// research-only operation 可穿过 public commercial gate，其余 blocked
+	// operation 对所有调用者继续 fail closed。
+	if researchRoleDeniesOperation(
+		principal,
+		hasPrincipal,
+		descriptor.OperationSecurityDescriptor,
+	) {
+		writeOperationGuardError(
+			w,
+			r,
+			"forbidden",
+			"research capability surface denies this operation",
+		)
+		return
+	}
 	if boundary == publicOperationBoundary &&
-		descriptor.CommercialStatus != "ready" {
+		descriptor.CommercialStatus != "ready" &&
+		!researchRoleAllowsNamedOperation(
+			principal,
+			hasPrincipal,
+			descriptor.OperationSecurityDescriptor,
+		) {
 		writeOperationGuardError(
 			w,
 			r,
@@ -436,7 +455,6 @@ func authorizeGeneratedOperation(
 		)
 		return
 	}
-	principal, hasPrincipal := PrincipalFromContext(r.Context())
 	if descriptor.AuthMode == "required" && !hasPrincipal {
 		writeOperationGuardError(
 			w,

@@ -9,6 +9,7 @@ import tempfile
 from pathlib import Path
 from urllib.parse import quote, unquote, urlparse
 
+from quwoquan_ops.cli.commands.package_app_artifact_helpers import artifact_digest
 from quwoquan_ops.cli.lib.app_launch_manifest_contract import (
     load_launch_manifest_contract,
     runtime_config_package_digest,
@@ -63,9 +64,8 @@ def package_web_official_release(
         if result.returncode != 0:
             detail = (result.stderr or result.stdout).strip()
             raise WebOfficialReleaseError(f"flutter build web failed: {detail}")
-        _verify_web_build(build_root)
-        _verify_runtime_config_is_external(build_root)
-        digest = _tree_sha256(build_root)
+        validate_web_official_artifact(build_root)
+        digest = web_official_content_digest(build_root)
         release_id = digest[:20]
         release_root = package_root / release_id
         if release_root.exists():
@@ -226,6 +226,23 @@ def _verify_runtime_config_is_external(build_root: Path) -> None:
         )
 
 
+def validate_web_official_artifact(existing_dir: Path) -> None:
+    """Validate one existing immutable Web directory before release minting."""
+
+    if existing_dir.is_symlink() or not existing_dir.is_dir():
+        raise WebOfficialReleaseError(
+            "Web official artifact must be an existing regular directory"
+        )
+    _verify_web_build(existing_dir)
+    _verify_runtime_config_is_external(existing_dir)
+
+
+def web_official_content_digest(existing_dir: Path) -> str:
+    """Return the canonical unprefixed content identity used by Web deploy."""
+
+    return artifact_digest(existing_dir).removeprefix("sha256:")
+
+
 def materialize_web_runtime_config(
     *,
     hosting_root: Path,
@@ -349,12 +366,6 @@ def _verify_font_manifest(build_root: Path) -> None:
 
 
 def _tree_sha256(root: Path) -> str:
-    digest = hashlib.sha256()
-    for path in sorted(item for item in root.rglob("*") if item.is_file()):
-        relative = path.relative_to(root).as_posix().encode("utf-8")
-        digest.update(len(relative).to_bytes(4, "big"))
-        digest.update(relative)
-        with path.open("rb") as stream:
-            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-                digest.update(chunk)
-    return digest.hexdigest()
+    """Compatibility projection of the canonical Web content identity."""
+
+    return web_official_content_digest(root)

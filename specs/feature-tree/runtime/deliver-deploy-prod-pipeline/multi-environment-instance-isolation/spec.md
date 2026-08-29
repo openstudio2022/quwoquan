@@ -133,3 +133,25 @@
 - 准出影响：`block`
 - 影响或价值：尚缺 Alpha/Beta/Gamma live matrix 与 Simulator/Emulator 默认系统信任证据。
 - 完成判定：`GWT-001/GWT-002` 对应行为满足，且真实三环境与设备测试 `spec_ref` 有效。
+
+<a id="open-002"></a>
+### OPEN-002 prod 平面发布口与 local canonical block 的主机隔离前提未裁决
+
+- 类型：`external_blocker`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：`quwoquan_ops/cli/prod/render_prod_plane_stack.py` 的 `_prod_plane_admin_publish`
+  断言 prod 平面 admin 主机端口（12019/22019/32019）不得落进任何 local port profile 的
+  canonical block，理由是「落进去会让 local teardown 把 prod 端口误认成目标 runtime 自有」。
+  但同一渲染器的 `render_prod_plane_stack_lib/runtime_outputs.py` 往同一份 prod `stack.env`
+  写 `LOCAL_GAMMA_HTTP_PORT=19000`、`CHAT=19200`、`POSTGRES/MONGO/REDIS=19400/19410/19420`，
+  全部正是 gamma-local 的 canonical block；`constants.py` 的 `EXTERNAL_*_PORT` 同为 194xx。
+  若该理由成立，同文件约 20 个端口都在制造同一危害；若不成立（prod 与 local 不共享主机），
+  admin 那条断言的理由本身不成立。二者只能取一，且该断言当前只覆盖 admin 一个端口，
+  `80:80`、`443:443`、`39000:80`、`29000:80` 均无同样判据。
+- 完成判定：`GWT-001` 的「三个 target 的端口、资源名、部署/缓存/数据路径互不相同」一条
+  扩展到覆盖 prod 平面与 local target 之间的主机端口隔离。
+  前置事实由 environment topology 裁定：`prod-hosted` 声明为 `ssh-hosted`、`prod-sim`
+  声明为 `backend=local`，需先定 `render_prod_plane_stack` 服务其中哪一个。
+  据此把 block 检查扩展到本平面全部 published host port，或删除只覆盖 admin 的那条断言并
+  改为记录隔离前提；两种取法都必须有绑定 `GWT-001` 的 `local_contract` 判否用例。

@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:quwoquan_app/runtime/di/media_delivery_composition.dart';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -23,6 +25,8 @@ import 'package:quwoquan_app/service/circle_service/circle_management/circle/app
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/public/homepage_route_models.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/domain/homepage_tab.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/presentation/homepage_type_labels.dart';
+import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart'
+    show MediaDeliveryKind;
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/homepage_introduction_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 

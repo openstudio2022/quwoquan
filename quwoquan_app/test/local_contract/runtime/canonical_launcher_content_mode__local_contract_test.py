@@ -7,11 +7,11 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
-
 
 APP_DIR = Path(__file__).resolve().parents[3]
 REPO_ROOT = APP_DIR.parent
@@ -119,11 +119,106 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
     def test_launcher_has_explicit_content_live_default_and_ui_only_mode(self) -> None:
         source = LAUNCHER.read_text(encoding="utf-8")
 
-        self.assertIn('RUN_MODE="content-live"', source)
+        self.assertIn('RUN_MODE="${QWQ_RUN_MODE:-content-live}"', source)
         self.assertIn('--mode content-live|ui-only', source)
         self.assertIn('content-live|ui-only)', source)
         self.assertIn('export QWQ_APP_RUN_MODE="$RUN_MODE"', source)
-        self.assertIn('"nonPromotable": run_mode == "ui-only"', source)
+        self.assertIn('"nonPromotable": True', source)
+
+    def test_projected_run_sh_skips_source_facade_when_resolving_real_flutter(
+        self,
+    ) -> None:
+        payload = {
+            "purpose": "runtime",
+            "status": "passed",
+            "contentLive": "not_evaluated",
+            "nonPromotable": True,
+            "firstBlocker": "",
+            "warnings": [],
+        }
+        temporary, app, environment = self._workspace(preflight=payload)
+        with temporary:
+            root = Path(temporary.name)
+            (root / ".git").mkdir()
+            (app / ".flutter-version").write_text("3.47.0\n", encoding="utf-8")
+            facade_source = APP_DIR / "scripts/tools/flutter_facade"
+            facade_copy = app / "scripts/tools/flutter_facade"
+            shutil.copytree(facade_source, facade_copy)
+
+            real_flutter = root / "bin/flutter"
+            real_flutter.write_text(
+                "#!/usr/bin/env bash\n"
+                "set -euo pipefail\n"
+                "if [[ \"$*\" == \"--version --machine\" ]]; then\n"
+                "  printf '%s' '{\"frameworkVersion\":\"3.47.0\","
+                "\"frameworkRevision\":\"fixture-revision\"}'\n"
+                "fi\n",
+                encoding="utf-8",
+            )
+            real_flutter.chmod(0o755)
+
+            projected_root = root / "projected"
+            projected_app = projected_root / "quwoquan_app"
+            projected_app.mkdir(parents=True)
+            (projected_app / ".flutter-version").write_text(
+                "3.47.0\n",
+                encoding="utf-8",
+            )
+            shutil.copytree(
+                facade_source,
+                projected_app / "scripts/tools/flutter_facade",
+            )
+            projected_capture = root / "projected-real-flutter.txt"
+            projected_launcher = projected_app / "run.sh"
+            projected_launcher.write_text(
+                "#!/usr/bin/env bash\n"
+                "set -euo pipefail\n"
+                "PYTHONDONTWRITEBYTECODE=1 python3 "
+                '"$(cd "$(dirname "$0")" && pwd)/scripts/tools/'
+                'flutter_facade/resolve_real_flutter.py" '
+                f"> {projected_capture!s}\n",
+                encoding="utf-8",
+            )
+            projected_launcher.chmod(0o755)
+            capsule_manifest = root / "source-capsule.json"
+            capsule_manifest.write_text("{}\n", encoding="utf-8")
+            projection_builder = (
+                app / "scripts/device/prepare_workspace_launch_projection.py"
+            )
+            projection_builder.write_text(
+                "#!/usr/bin/env python3\n"
+                "import json\n"
+                f"print(json.dumps({{"
+                f"'projectionRoot': {str(projected_root)!r}, "
+                f"'sourceCapsuleManifest': {str(capsule_manifest)!r}, "
+                "'sourceRevision': 'fixture-revision', "
+                "'sourceCapsuleDigest': 'sha256:' + '1' * 64}))\n",
+                encoding="utf-8",
+            )
+            projection_builder.chmod(0o755)
+
+            environment.pop("QWQ_REAL_FLUTTER", None)
+            environment["PATH"] = os.pathsep.join(
+                (
+                    str(facade_copy / "bin"),
+                    str(real_flutter.parent),
+                    environment["PATH"],
+                )
+            )
+            result = subprocess.run(
+                ["bash", "run.sh", "--mode", "ui-only", "-d", "device"],
+                cwd=app,
+                env=environment,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(
+                projected_capture.read_text(encoding="utf-8").strip(),
+                str(real_flutter.resolve()),
+            )
 
     def test_content_live_uses_formal_delivery_verification_before_flutter(self) -> None:
         source = LAUNCHER.read_text(encoding="utf-8")
@@ -134,9 +229,9 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
         self.assertLess(app_preflight, delivery)
         self.assertLess(delivery, canonical_executor)
         self.assertIn('--kind content-delivery --profile integration', source)
-        self.assertIn('payload.get("contentLive") != "passed"', source)
         self.assertIn('"reason": first_blocker', source)
         self.assertIn('"recoveryCommand": recovery_command', source)
+        self.assertIn('record_prelaunch_warning "$CONTENT_DELIVERY_WARNING"', source)
 
     def test_target_is_canonical_and_ensure_runtime_only_delegates_dev_session(
         self,
@@ -157,7 +252,7 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
         source = LAUNCHER.read_text(encoding="utf-8")
 
         strict_preflight = source.index('app-debug-preflight --purpose "$PREFLIGHT_PURPOSE"')
-        self.assertLess(strict_preflight, source.index("flutter pub get --offline"))
+        self.assertLess(strict_preflight, source.index("prepare_flutter_dependencies.py"))
         self.assertLess(strict_preflight, source.index("find_device"))
         # purpose 映射不得在 launcher 内联复制，只能取自 canonical handoff 模块。
         self.assertNotIn("PREFLIGHT_PURPOSE=content_live", source)
@@ -176,6 +271,7 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
             "purpose": "content_live",
             "status": "passed",
             "contentLive": "passed",
+            "nonPromotable": True,
             "contentBindingState": "bound",
             "target": "alpha-local",
             "releaseId": "research-alpha",
@@ -281,13 +377,13 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
             self.assertEqual(len(calls.strip().splitlines()), 1, calls)
             self.assertIn("--purpose runtime", calls)
 
-    def test_content_live_transport_failures_are_hard_blockers(self) -> None:
+    def test_content_live_transport_failures_are_test_live_warnings(self) -> None:
         source = LAUNCHER.read_text(encoding="utf-8")
 
-        self.assertIn('content-live transport preparation failed', source)
-        self.assertIn('content-live requires target-bound device trust', source)
-        self.assertIn('content-live requires complete Android reverse ports', source)
-        self.assertIn('content-live requires a runtime consumer lease', source)
+        self.assertIn('Android transport preparation is unavailable', source)
+        self.assertIn('target-bound transport trust is unavailable', source)
+        self.assertIn('Android reverse ports are unavailable', source)
+        self.assertIn('runtime consumer lease is unavailable', source)
 
     def test_content_live_preflight_block_stops_before_flutter(self) -> None:
         temporary, app, environment = self._workspace(
@@ -321,6 +417,7 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
                 "purpose": "content_live",
                 "status": "passed",
                 "contentLive": "passed",
+                "nonPromotable": True,
                 "contentBindingState": "bound",
                 "releaseId": "research-alpha",
                 "manifestDigest": "sha256:" + "1" * 64,
@@ -346,18 +443,16 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
                 (app.parent / "find_device.log").read_text(encoding="utf-8"),
                 "called\n",
             )
-            self.assertEqual(
-                (app.parent / "flutter.log").read_text(encoding="utf-8"),
-                "pub get --offline --enforce-lockfile\n",
-            )
+            self.assertFalse((app.parent / "flutter.log").exists())
 
-    def test_delivery_block_emits_one_formal_recovery_and_stops_flutter(self) -> None:
+    def test_delivery_block_emits_one_warning_and_continues_to_device(self) -> None:
         digest = "sha256:" + "1" * 64
         temporary, app, environment = self._workspace(
             preflight={
                 "purpose": "content_live",
                 "status": "passed",
                 "contentLive": "passed",
+                "nonPromotable": True,
                 "contentBindingState": "bound",
                 "releaseId": "research-alpha",
                 "manifestDigest": digest,
@@ -380,14 +475,14 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
                 text=True,
             )
             self.assertEqual(result.returncode, 2, result.stderr)
-            blocker = json.loads(result.stderr.strip().splitlines()[-1])
-            self.assertEqual(blocker["contentLive"], "gate_block")
-            self.assertEqual(blocker["reason"], "release readiness is unreadable")
-            self.assertEqual(
-                blocker["recoveryCommand"],
-                "python3 quwoquan_data/scripts/cli.py release supply-chain-drill "
-                "--release-id research-alpha --env alpha --profile delivery",
+            self.assertIn('"contentLive": "warning"', result.stderr)
+            self.assertIn('"reason": "release readiness is unreadable"', result.stderr)
+            self.assertIn(
+                "release supply-chain-drill --release-id research-alpha "
+                "--env alpha --profile delivery",
+                result.stderr,
             )
+            self.assertTrue((app.parent / "find_device.log").exists())
             self.assertFalse((app.parent / "flutter.log").exists())
 
     def test_ui_only_requires_non_promotable_runtime_preflight(self) -> None:
@@ -419,10 +514,7 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
                 (app.parent / "find_device.log").read_text(encoding="utf-8"),
                 "called\n",
             )
-            self.assertEqual(
-                (app.parent / "flutter.log").read_text(encoding="utf-8"),
-                "pub get --offline --enforce-lockfile\n",
-            )
+            self.assertFalse((app.parent / "flutter.log").exists())
 
     def test_launcher_remains_valid_bash(self) -> None:
         result = subprocess.run(

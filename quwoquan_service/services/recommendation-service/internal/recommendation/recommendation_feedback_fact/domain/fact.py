@@ -11,6 +11,7 @@ class RecommendationFeedbackFact:
     source_event_id: str
     exposure_id: str
     feed_request_id: str
+    experiment_bucket: str
     subject_id: str
     persona_id: str | None
     target_type: str
@@ -26,6 +27,7 @@ class RecommendationFeedbackFact:
             self.source_event_id,
             self.exposure_id,
             self.feed_request_id,
+            self.experiment_bucket,
             self.subject_id,
             self.target_type,
             self.target_id,
@@ -33,6 +35,8 @@ class RecommendationFeedbackFact:
         )
         if not all(value.strip() for value in required):
             raise ValueError("recommendation feedback fact is incomplete")
+        if self.experiment_bucket not in {"model", "rule"}:
+            raise ValueError("recommendation feedback experimentBucket is invalid")
         if self.occurred_at.tzinfo is None or self.recorded_at.tzinfo is None:
             raise ValueError("recommendation feedback timestamps must be timezone-aware")
         if self.occurred_at > self.recorded_at:

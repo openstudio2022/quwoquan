@@ -497,6 +497,34 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
         self.assertEqual(handoff.conversation_id, "conversation-a")
         self.assertEqual(handoff.message_ids, ("message-a", "message-b"))
 
+    def test_typed_conversation_wrapper_and_dart_consumer_are_isomorphic(self) -> None:
+        wrapper_source = Path(smoke_wrapper.__file__).read_text(encoding="utf-8")
+        support_source = (
+            ROOT
+            / "quwoquan_app/test/support/runtime/patrol_acceptance_session.dart"
+        ).read_text(encoding="utf-8")
+        target_source = (
+            ROOT / "quwoquan_app" / smoke.MESSAGE_HOME_TARGET
+        ).read_text(
+            encoding="utf-8"
+        )
+
+        method = "installPatrolTestDataConversationForRunner"
+        self.assertIn(method, wrapper_source)
+        self.assertIn(method, support_source)
+        for field, dart_type in (
+            ("conversationId", "String"),
+            ("initialMessageIds", "List<String>"),
+        ):
+            self.assertIn(f"{field}:", wrapper_source)
+            self.assertIn(f"required {dart_type} {field}", support_source)
+        self.assertLess(
+            wrapper_source.index("installPatrolAcceptanceSessionForRunner"),
+            wrapper_source.index(method),
+        )
+        self.assertIn("requirePatrolTestDataConversationForRunner", target_source)
+        self.assertIn("initialMessageIds", target_source)
+
     def test_typed_actor_generated_artifact_cleanup_is_exact_and_converges(
         self,
     ) -> None:

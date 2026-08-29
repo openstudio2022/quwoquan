@@ -109,6 +109,7 @@ extension _SearchNetworkResultsPageStateViewHelpers
           targetType: _IntersectionTargetType.post,
           targetId: item.postId,
           coverUrl: item.coverUrl ?? '',
+          coverBinding: card.coverBinding,
           categoryLabel: isVideo
               ? SearchText.searchCategoryVideo
               : (isArticle

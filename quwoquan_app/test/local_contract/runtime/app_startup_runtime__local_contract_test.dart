@@ -170,7 +170,11 @@ void main() {
       ),
     );
     expect(started['runtimeEnv'], summary['runtimeEnv']);
-    expect(started['launchMode'], summary['launchMode']);
+    expect(started['launchProvenance'], summary['launchProvenance']);
+    expect(
+      started['runtimeConfigSupplyMode'],
+      summary['runtimeConfigSupplyMode'],
+    );
     expect(started['configurationState'], summary['configurationState']);
     // 已水合的 package 没有缺失键，两侧都会缺席该字段；归一比较保证事件与
     // summary 同源，而不是让其中一侧的缺席被当成空串差异。

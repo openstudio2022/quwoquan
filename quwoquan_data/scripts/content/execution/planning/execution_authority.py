@@ -80,6 +80,8 @@ def load_bounded_authority_policy(
         "maxTotalObjects",
         "objectWallClockSeconds",
         "completionGraceSeconds",
+        "sourceDiscoveryHeartbeatIntervalSeconds",
+        "sourceDiscoveryHeartbeatStaleAfterSeconds",
     ):
         value = policy.get(field)
         if isinstance(value, bool) or not isinstance(value, int) or value < 1:
@@ -88,6 +90,15 @@ def load_bounded_authority_policy(
                 f"{field} must be a positive integer"
             )
         values[field] = value
+    if (
+        values["sourceDiscoveryHeartbeatStaleAfterSeconds"]
+        <= values["sourceDiscoveryHeartbeatIntervalSeconds"]
+    ):
+        raise ExecutionAuthorityError(
+            "GATE_BLOCK DATA.EXECUTION.AUTHORITY_POLICY_INVALID: "
+            "sourceDiscoveryHeartbeatStaleAfterSeconds must exceed "
+            "sourceDiscoveryHeartbeatIntervalSeconds"
+        )
     if values["maxTotalObjects"] > 10:
         raise ExecutionAuthorityError(
             "GATE_BLOCK DATA.EXECUTION.AUTHORITY_POLICY_INVALID: "
@@ -129,6 +140,12 @@ def build_bounded_execution_authority(
         "maxWorkers": 1,
         "objectWallClockSeconds": policy["objectWallClockSeconds"],
         "completionGraceSeconds": policy["completionGraceSeconds"],
+        "sourceDiscoveryHeartbeatIntervalSeconds": policy[
+            "sourceDiscoveryHeartbeatIntervalSeconds"
+        ],
+        "sourceDiscoveryHeartbeatStaleAfterSeconds": policy[
+            "sourceDiscoveryHeartbeatStaleAfterSeconds"
+        ],
     }
 
 
@@ -190,6 +207,14 @@ def capacity_binding_from_authority(
                 ),
                 "completionGraceSeconds": int(
                     authority["completionGraceSeconds"]
+                ),
+            },
+            "frozenLiveness": {
+                "sourceDiscoveryHeartbeatIntervalSeconds": int(
+                    authority["sourceDiscoveryHeartbeatIntervalSeconds"]
+                ),
+                "sourceDiscoveryHeartbeatStaleAfterSeconds": int(
+                    authority["sourceDiscoveryHeartbeatStaleAfterSeconds"]
                 ),
             },
         }

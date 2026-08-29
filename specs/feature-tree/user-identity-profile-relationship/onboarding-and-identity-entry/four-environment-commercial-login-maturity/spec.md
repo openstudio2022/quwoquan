@@ -70,7 +70,7 @@
 ### REQ-006 社交 metadata/codegen/错误码契约一致
 
 - LoginWithAlipay / LoginWithQq 为 public operation 且 request/response 由 metadata 生成。
-- CredentialType 枚举包含 alipay/qq。
+- CredentialType 的闭集只引用 canonical metadata；支付宝与 QQ 通过所属 credential binding 契约映射到 federated slot，不在本规格复制或扩展枚举值。
 - USER.AUTH 社交错误码生成 Dart/Go 常量。
 - 端侧 RemoteAuthRepository 消费生成的 path/pageId，不硬编码。
 - Apple 与 Passkey 不在 public operation、RemoteAuthRepository 或用户服务公开登录路由中； `POST /auth/login/apple` 和 `POST /auth/login/passkey` 必须返回 404。
@@ -94,8 +94,8 @@
 <a id="req-009"></a>
 ### REQ-009 四环境端到端与商用纯净证据
 
-- alpha/beta/gamma App 使用同一 Remote user-service composition，并分别通过 target-scoped `ext.sms.local_capture` 的正式 OTP challenge 创建 canonical UserAccount；四环境 App package graph 均不可达固定码实现或端侧登录 mock。
-- alpha/beta/gamma 的 SMS Workload Binding 固定为 `ext.sms.local_capture`，prod 固定为正式 Provider Workload；环境在 package/build 阶段绑定，运行时变量只能校验制品身份，不能切换 Provider 或回退本地认证实现。
+- alpha/beta/gamma 复用同一 nonprod AppArtifact 与第一方 Remote user-service composition，由 target-scoped 已签名 runtime package 选择目标环境，并分别通过 `ext.sms.local_capture` 的正式随机 OTP challenge 创建 canonical UserAccount；App package graph 不可达固定码实现、端侧登录 mock 或 Provider 凭据。
+- alpha/beta/gamma 的 SMS Workload artifact/binding 固定为 `ext.sms.local_capture`，prod 固定为正式 Provider Workload；第一方 Service 与 Provider Workload 各自按候选打包，App 不因 nonprod target 重编。运行时只激活并校验已签名绑定，不能切换 Provider 或回退本地认证实现。
 - prod 微信、支付宝、QQ 与三网本机号认证均有真实成功证据，且无放通、无验证码回传、无 mock 数据源。
 - 社交首登资料同步真机可见。
 - 配置纯度门禁阻断已退休认证旁路。
@@ -143,20 +143,10 @@
 
 ## 4. 契约引用
 
-- canonical：`quwoquan_service/services/user-service/environments/gamma/config.yaml`
-- canonical：`quwoquan_service/services/user-service/environments/prod/config.yaml`
-- canonical：`quwoquan_service/scripts/user-service/verify_login_dependency_config.py`
-- canonical：`quwoquan_service/services/user-service/tests/local_contract/account/authentication_challenge/command_facade__local_contract_test.go`
-- canonical：`quwoquan_service/services/user-service/tests/api_integration/account/user_account/helpers__support__api_integration_test.go`
-- canonical：`quwoquan_service/services/integration-service/tests/api_integration/external_integration/external_interaction/external_interaction_mongo_provider__reliability__api_integration_test.go`
-- canonical：`quwoquan_service/services/user-service/contracts/account/account_session/operations.yaml`
-- canonical：`quwoquan_service/services/user-service/contracts/account/account_session/errors.yaml`
-- canonical：`quwoquan_service/services/user-service/contracts/account/authentication_challenge/operations.yaml`
-- canonical：`quwoquan_service/services/user-service/contracts/account/credential_binding/operations.yaml`
-- canonical：`quwoquan_service/services/user-service/contracts/account/credential_binding/errors.yaml`
-- canonical：`quwoquan_service/services/user-service/contracts/account/user_account/fields.yaml`
-- canonical：`quwoquan_service/services/user-service/tests/api_integration/account/user_account/auth_contract__api_integration_test.go`
-- canonical：`quwoquan_app/test/local_contract/service/user_service/account/account_session/login_page_widget__local_contract_test.dart`
+- canonical contracts：`quwoquan_service/services/user-service/contracts/account/account_session/operations.yaml` 与 `errors.yaml`，`authentication_challenge/operations.yaml`，`credential_binding/fields.yaml`、`operations.yaml` 与 `errors.yaml`，`user_account/fields.yaml`，以及它们引用的跨服务 metadata。
+- 派生客户端：只接受上述 contracts/codegen 生成并登记 freshness 的 Dart/Go operation、path、类型与错误码；生成物不是可编辑真相源。
+- 手写消费者与环境装配：`quwoquan_service/services/user-service/environments/gamma/config.yaml`、`prod/config.yaml`、`quwoquan_service/scripts/user-service/verify_login_dependency_config.py`、App `RemoteAuthRepository` / `NativeAuthBridge` / `LoginPage`；它们只能消费 canonical 值并接受门禁校验。
+- 测试与回执证据：user-service local/API tests、integration-service Provider reliability tests、App local/user_acceptance tests，以及逐环境 Provider binding、真实账号和设备 CaseResult；测试文件与历史回执都不拥有契约事实。
 
 ## 5. 验收场景
 
@@ -178,7 +168,7 @@
 <a id="gwt-009"></a>
 ### GWT-009 四环境端到端与商用纯净证据
 
-- GIVEN alpha、beta、gamma 与 prod 已分别构建环境专属 App、第一方 Service 和 Provider Workload artifact。
+- GIVEN alpha、beta、gamma 复用同一 nonprod AppArtifact 并分别激活 target-scoped runtime package，prod 使用独立 Release AppArtifact；第一方 Service 与 Provider Workload 均来自同一候选的目标环境 artifact/binding。
 - WHEN 验证 alpha/beta/gamma local-capture 随机 OTP 的受保护一次性读取、prod 正式 Provider、首登资料同步和失败恢复。
 - THEN local-capture workload、凭据、路由、捕获存储与 Adapter package 不进入 Prod App、第一方 Service、Provider Workload、SBOM 和部署图。
 - AND 三测试环境 Green 可由替代边界 E2E 提升，但真实 Provider 集成与 Prod readiness 只由 Prod 正式 Provider Workload 回执和可复验真机证据提升。
@@ -234,6 +224,6 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：尚缺四环境环境专属 Service/Provider Workload 制品、capability-scoped readiness 与同一候选下的真实登录执行证据；当前静态 Binding 和 harness 存在不能证明端云登录可用或 Prod 物理纯净。
-- 目标：alpha App 通过 Remote user-service 与受管非生产 Provider 的正式 OTP challenge 创建 canonical UserAccount；四环境 App、第一方 Service 与 Provider Workload package graph 不可达固定码、端侧登录 mock 或错误环境 Adapter。
-- 完成判定：`GWT-009` 对应行为满足且真实测试 `spec_ref` 有效。
+- 影响或价值：尚缺同一候选下 Android 物理设备与 iPhone 的真实账号登录证据。Alpha/Beta/Gamma 未交付逐环境 `local_capture` 随机 OTP、杀进程 session/Persona 恢复与失败回路 physical ResultBundle，Prod 未交付正式 SMS/社交/本机号 Provider、物理纯度和授权 canary 证据；静态 Binding、局部 API、simulator protected harness 与登录 UI 测试不能替代这些结果。
+- 目标：Alpha/Beta/Gamma 复用同一 nonprod AppArtifact，通过各 target 的 Remote user-service 与受管 Provider 正式 OTP challenge 在 Android 物理设备和 iPhone 创建或复用 canonical UserAccount；Prod 使用独立 Release AppArtifact 与正式 Provider。App、第一方 Service 与 Provider Workload package graph 均不可达固定码、端侧登录 mock 或错误环境 Adapter。
+- 完成判定：`GWT-009` 的全部结果子句逐项成立，并由同一 source/candidate/package 的 Android 物理设备与 iPhone ResultBundle 绑定真实 account/session/persona 及目标 Provider receipt。Alpha/Beta/Gamma 结果标记 `nonPromotable=true`，Prod 只由正式 Provider 回执、双端真实账号回读与独立 rollout 授权关闭；Simulator/Emulator 结果只作诊断子集，不能关闭本 OPEN。

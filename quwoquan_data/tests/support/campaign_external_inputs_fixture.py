@@ -184,6 +184,7 @@ def _acquisition(tmp_path: Path) -> tuple[Path, list[dict[str, object]]]:
                     "propertyReleaseStatus": "not_required",
                     "collectedAt": "2026-08-05T00:00:00Z",
                     "takedownPolicy": "quwoquan_standard_notice_and_takedown",
+                    "derivedModifications": [],
                 },
             }
         ],

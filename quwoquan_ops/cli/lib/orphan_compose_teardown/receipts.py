@@ -6,13 +6,14 @@
 from __future__ import annotations
 
 import json
-import os
 import stat
 from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ..data_execution_fleet import project_canonical_runtime_owned_ports
+from ..port_manifest import load_port_manifest
 from .attestation import exact_removal_commands
 from .constants import (
     CONSUMPTION_SCHEMA,
@@ -20,30 +21,21 @@ from .constants import (
     JOURNAL_SCHEMA,
     STEP_SCHEMA,
     OrphanComposeTeardownError,
+    _atomic_write_create_once,
     _canonical_bytes,
     _digest,
+    _normalize_published_endpoints,
     _utc_text,
+    declared_port_profile,
 )
 
 
 def _write_create_once(path: Path, payload: Mapping[str, Any], *, label: str) -> Path:
-    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
-    try:
-        descriptor = os.open(path, flags, 0o600)
-    except OSError as exc:
-        raise OrphanComposeTeardownError(
-            f"orphan Compose {label} already exists or path is unsafe"
-        ) from exc
-    try:
-        with os.fdopen(descriptor, "wb") as handle:
-            descriptor = -1
-            handle.write(_canonical_bytes(payload) + b"\n")
-            handle.flush()
-            os.fsync(handle.fileno())
-    finally:
-        if descriptor >= 0:
-            os.close(descriptor)
-    return path
+    return _atomic_write_create_once(
+        path,
+        _canonical_bytes(payload) + b"\n",
+        label=label,
+    )
 
 
 def write_execution_journal_create_once(
@@ -234,11 +226,11 @@ def load_partial_consumption_for_convergence(
     return value
 
 
-def validate_execution_evidence_for_convergence(
+def _validated_execution_commands(
     attestation_path: Path,
     *,
     attestation: Mapping[str, Any],
-) -> None:
+) -> list[list[str]]:
     expected_commands = exact_removal_commands(attestation)
     journal_path = attestation_path.with_name(
         "orphaned-compose-teardown-journal.json"
@@ -275,42 +267,171 @@ def validate_execution_evidence_for_convergence(
         raise OrphanComposeTeardownError(
             "orphan Compose convergence journal does not cover every exact resource"
         )
-    for index, command in enumerate(expected_commands, start=1):
-        step_path = attestation_path.with_name(
-            f"orphaned-compose-teardown-step-{index:03d}.json"
+    return expected_commands
+
+
+def _validate_execution_step(
+    attestation_path: Path,
+    *,
+    attestation: Mapping[str, Any],
+    index: int,
+    command: Sequence[str],
+    required: bool,
+) -> bool:
+    step_path = attestation_path.with_name(
+        f"orphaned-compose-teardown-step-{index:03d}.json"
+    )
+    try:
+        step_info = step_path.lstat()
+    except FileNotFoundError:
+        if required:
+            raise OrphanComposeTeardownError(
+                f"orphan Compose convergence step {index} is missing"
+            )
+        return False
+    try:
+        if not stat.S_ISREG(step_info.st_mode) or step_path.is_symlink():
+            raise OSError("not a regular no-follow file")
+        step = json.loads(step_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise OrphanComposeTeardownError(
+            f"orphan Compose convergence step {index} is unreadable"
+        ) from exc
+    if not isinstance(step, dict) or step.get("schema") != STEP_SCHEMA:
+        raise OrphanComposeTeardownError(
+            f"orphan Compose convergence step {index} schema mismatch"
         )
-        try:
-            step_info = step_path.lstat()
-            if not stat.S_ISREG(step_info.st_mode) or step_path.is_symlink():
-                raise OSError("not a regular no-follow file")
-            step = json.loads(step_path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-            raise OrphanComposeTeardownError(
-                f"orphan Compose convergence step {index} is unreadable"
-            ) from exc
-        if not isinstance(step, dict) or step.get("schema") != STEP_SCHEMA:
-            raise OrphanComposeTeardownError(
-                f"orphan Compose convergence step {index} schema mismatch"
+    unsigned_step = dict(step)
+    step_digest = unsigned_step.pop("stepDigest", None)
+    if step_digest != _digest(unsigned_step):
+        raise OrphanComposeTeardownError(
+            f"orphan Compose convergence step {index} digest mismatch"
+        )
+    if (
+        step.get("target") != attestation.get("target")
+        or step.get("project") != attestation.get("project")
+        or step.get("attestationDigest") != attestation.get("attestationDigest")
+        or step.get("index") != index
+        or step.get("argv") != list(command)
+        or step.get("resourceId") != command[-1]
+        or step.get("status") != "removed"
+    ):
+        raise OrphanComposeTeardownError(
+            f"orphan Compose convergence step {index} identity mismatch"
+        )
+    return True
+
+
+def validate_execution_journal_for_recovery(
+    attestation_path: Path,
+    *,
+    attestation: Mapping[str, Any],
+) -> list[list[str]]:
+    commands = _validated_execution_commands(
+        attestation_path,
+        attestation=attestation,
+    )
+    for index, command in enumerate(commands, start=1):
+        _validate_execution_step(
+            attestation_path,
+            attestation=attestation,
+            index=index,
+            command=command,
+            required=False,
+        )
+    return commands
+
+
+def complete_execution_step_receipts(
+    attestation_path: Path,
+    *,
+    attestation: Mapping[str, Any],
+    step_writer: Callable[..., Path] = write_step_receipt_create_once,
+) -> None:
+    commands = validate_execution_journal_for_recovery(
+        attestation_path,
+        attestation=attestation,
+    )
+    for index, command in enumerate(commands, start=1):
+        exists = _validate_execution_step(
+            attestation_path,
+            attestation=attestation,
+            index=index,
+            command=command,
+            required=False,
+        )
+        if not exists:
+            step_writer(
+                attestation_path,
+                attestation=attestation,
+                index=index,
+                command=command,
             )
-        unsigned_step = dict(step)
-        step_digest = unsigned_step.pop("stepDigest", None)
-        if step_digest != _digest(unsigned_step):
-            raise OrphanComposeTeardownError(
-                f"orphan Compose convergence step {index} digest mismatch"
+    validate_execution_evidence_for_convergence(
+        attestation_path,
+        attestation=attestation,
+    )
+
+
+def validate_execution_evidence_for_convergence(
+    attestation_path: Path,
+    *,
+    attestation: Mapping[str, Any],
+) -> None:
+    commands = _validated_execution_commands(
+        attestation_path,
+        attestation=attestation,
+    )
+    for index, command in enumerate(commands, start=1):
+        _validate_execution_step(
+            attestation_path,
+            attestation=attestation,
+            index=index,
+            command=command,
+            required=True,
+        )
+
+
+def required_released_endpoints(
+    attestation: Mapping[str, Any],
+) -> list[dict[str, object]]:
+    """teardown 后必须实测已释放的 endpoint 全集，transport-exact 到 protocol。
+
+    收敛边界是目标 runtime 自有的 published endpoint：只取 attested 清单会漏掉「属该
+    target 但这次 project 没发布」的 canonical role，那种残留同样说明目标 runtime 没停
+    干净；旧栈的非 canonical 端口只在 attested 里有，两者取并集才闭合。Data fleet 自有
+    role 由投影排除——它是长驻栈，不该被要求释放。
+
+    判否与回执共用本函数：收敛回执若只记 attested 子集，字段名承诺的范围就大于内容，
+    读回执的人会以为并集里那部分也被证过。
+    """
+    expected = attestation.get("snapshot")
+    if not isinstance(expected, Mapping):
+        raise OrphanComposeTeardownError(
+            "orphan Compose attestation snapshot is missing"
+        )
+    attested_endpoints = _normalize_published_endpoints(
+        expected.get("publishedEndpoints")
+    )
+    try:
+        runtime_owned = project_canonical_runtime_owned_ports(
+            port_profile=declared_port_profile(str(expected.get("target") or "")),
+            manifest=load_port_manifest(),
+        )
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        raise OrphanComposeTeardownError(
+            f"orphan Compose post-teardown port ownership is unresolvable: {exc}"
+        ) from exc
+    required: dict[tuple[str, int, str], dict[str, object]] = {}
+    for endpoint in (*runtime_owned, *attested_endpoints):
+        required[
+            (
+                str(endpoint["role"]),
+                int(endpoint["hostPort"]),
+                str(endpoint["protocol"]),
             )
-        if (
-            step.get("target") != attestation.get("target")
-            or step.get("project") != attestation.get("project")
-            or step.get("attestationDigest")
-            != attestation.get("attestationDigest")
-            or step.get("index") != index
-            or step.get("argv") != command
-            or step.get("resourceId") != command[-1]
-            or step.get("status") != "removed"
-        ):
-            raise OrphanComposeTeardownError(
-                f"orphan Compose convergence step {index} identity mismatch"
-            )
+        ] = dict(endpoint)
+    return [required[key] for key in sorted(required)]
 
 
 def write_convergence_create_once(
@@ -330,11 +451,7 @@ def write_convergence_create_once(
         "verifiedAt": _utc_text(datetime.now(timezone.utc)),
         "status": "passed",
         "currentSnapshotDigest": _digest(current_snapshot),
-        "verifiedReleasedPorts": list(
-            (attestation.get("snapshot") or {}).get(
-                "projectPublishedHostPorts", []
-            )
-        ),
+        "verifiedReleasedEndpoints": required_released_endpoints(attestation),
         "preservedVolumeNames": [
             str(item.get("name") or "")
             for item in current_snapshot.get("volumes", [])
@@ -348,7 +465,7 @@ def assert_post_teardown_state(
     attestation: Mapping[str, Any],
     current_snapshot: Mapping[str, Any],
     *,
-    port_probe: Callable[[int], bool],
+    port_probe: Callable[[Mapping[str, object]], bool],
 ) -> None:
     """Prove that only attested containers/networks were removed.
 
@@ -387,22 +504,19 @@ def assert_post_teardown_state(
         raise OrphanComposeTeardownError(
             "orphan Compose post-teardown target identity changed"
         )
-    if any(bool(item.get("open")) for item in current_ports if isinstance(item, Mapping)):
-        raise OrphanComposeTeardownError(
-            "canonical target ports remain occupied after orphan Compose teardown"
-        )
-    project_ports = expected.get("projectPublishedHostPorts")
-    if not isinstance(project_ports, list) or any(
-        isinstance(item, bool) or not isinstance(item, int) for item in project_ports
-    ):
-        raise OrphanComposeTeardownError(
-            "attested project published port inventory is invalid"
-        )
-    still_open = [item for item in project_ports if port_probe(item)]
+    # 收敛边界与收敛回执共用 `required_released_endpoints`，两处不各算一份并集。
+    still_open = [
+        endpoint
+        for endpoint in required_released_endpoints(attestation)
+        if port_probe(endpoint)
+    ]
     if still_open:
         raise OrphanComposeTeardownError(
-            "attested project TCP ports remain occupied after teardown: "
-            + ", ".join(str(item) for item in still_open)
+            "target runtime published endpoints remain occupied after teardown: "
+            + ", ".join(
+                f"{item['role']}:{item['hostPort']}/{item['protocol']}"
+                for item in still_open
+            )
         )
     if current_snapshot.get("containers") or current_snapshot.get("networks"):
         raise OrphanComposeTeardownError(

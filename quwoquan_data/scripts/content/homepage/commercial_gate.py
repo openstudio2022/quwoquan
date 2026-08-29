@@ -85,7 +85,11 @@ INFOBOX_FIELD_MARKERS: tuple[str, ...] = (
 
 _EMPTY_REFERENCE_HEADINGS = ("参考资料", "参考来源", "参考文献", "外部链接")
 
-# factual_reference_only 抄写硬门：5-gram 字符重合率上限。
+# 逐字重合度的度量粒度（字符 n-gram 长度）。它是量纲而不是阈值：判否线由 vertical
+# content supply policy 声明，粒度必须全仓一致，否则同一份正文在整篇口径与段落口径
+# 下得到互不可比的两个数。
+SOURCE_FIDELITY_NGRAM_CHARS = 5
+# factual_reference_only 抄写硬门：字符 n-gram 重合率上限。
 FACTUAL_REFERENCE_MAX_FIDELITY = 0.55
 # factual_reference_only 压缩硬门：len(page)/len(source) 上限（按 source 长度分档）。
 FACTUAL_COMPRESSION_TIERS: tuple[tuple[int, float], ...] = (
@@ -239,7 +243,7 @@ def draft_placeholder_issues(
     return issues
 
 
-def _char_ngrams(text: str, n: int = 5) -> set[str]:
+def _char_ngrams(text: str, n: int = SOURCE_FIDELITY_NGRAM_CHARS) -> set[str]:
     compact = _compact(text)
     return {compact[i : i + n] for i in range(max(0, len(compact) - n + 1))}
 

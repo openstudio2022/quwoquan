@@ -21,10 +21,15 @@ from content.release.canonical.garbage_collection_inventory import (
     register_capsule_inventory,
 )
 from content.release.canonical.garbage_collection_reference_scan import (
+    GOVERNED_EVIDENCE_OUTPUT_ROOTS,
     collect_absent_execution_proofs as _collect_absent_execution_proofs,
     scan_tree as _scan_tree,
     scan_value as _scan_value,
     typed_gc_error as _typed,
+)
+from content.release.canonical.garbage_collection_tombstone import (
+    ExecutionTombstone,
+    load_execution_tombstones,
 )
 from content.release.canonical.media_retention_policy import (
     MediaRetentionDecision,
@@ -33,7 +38,6 @@ from content.release.canonical.media_retention_policy import (
 )
 from content.release.canonical.object_transaction_contract import _read_json, _safe_rel
 from core.content_library import MEDIA_KIND, library_cas_path
-from core.paths import RESEARCH_SCALE_PROMOTIONS_OUTPUT_REF
 from core.release_layout import MEDIA_DIR, release_holdings
 from core.schema import assert_valid
 
@@ -104,6 +108,12 @@ class ReferenceGraph:
     # a global fact about the pipeline, not a property of whichever document
     # happens to mention the id, so it is collected once and shared.
     absent_execution_proofs: set[str] = field(default_factory=set)
+    # Tombstones prove the opposite fact: the execution did materialize and was
+    # then released by the collector. Keeping the two sets apart is what makes
+    # "never existed" and "existed and was reclaimed" separately readable.
+    reclaimed_execution_tombstones: dict[str, ExecutionTombstone] = field(
+        default_factory=dict
+    )
     # Media bodies are owned once by the content library, so reachability of a
     # body is a property of its digest rather than of any one path that
     # references it. Retention reads this to decide per body, never per path.
@@ -111,6 +121,7 @@ class ReferenceGraph:
         default_factory=lambda: defaultdict(set)
     )
     _validated_capsules: set[str] = field(default_factory=set)
+    _registered_tombstones: set[str] = field(default_factory=set)
 
     def node(self, ref: str, kind: str) -> None:
         current = self.nodes.get(ref)
@@ -163,6 +174,32 @@ class ReferenceGraph:
             self.protected_artifact_reasons[ref].add(protect_reason or relation)
         return ref
 
+    def reclaimed_execution(self, execution_id: str) -> ExecutionTombstone | None:
+        """Return the tombstone that gives one absent execution a terminal state."""
+
+        tombstone = self.reclaimed_execution_tombstones.get(execution_id)
+        if tombstone is None:
+            return None
+        if execution_id in self.absent_execution_proofs:
+            # A reconciliation receipt says the execution never materialized while
+            # a tombstone says it materialized and was then released. Picking
+            # either one would erase a recorded observation, so both stay and the
+            # contradiction is what gets reported.
+            raise _typed(
+                "EXECUTION_ABSENCE_CONTRADICTION",
+                "execution has both a never-materialized proof and a tombstone: "
+                f"{execution_id}",
+            )
+        if execution_id not in self._registered_tombstones:
+            self.artifact(
+                tombstone.path,
+                kind="execution_tombstone",
+                source=f"data/tasks/{execution_id}",
+                relation="execution_reclaim_tombstone",
+            )
+            self._registered_tombstones.add(execution_id)
+        return tombstone
+
     def execution(
         self,
         execution_id: str,
@@ -175,9 +212,17 @@ class ReferenceGraph:
         if not text:
             raise _typed("REFERENCE_INVALID", "execution reference is empty")
         target = f"data/tasks/{text}"
-        self.node(target, "execution" if text in self.tasks else "absent_execution")
+        if text in self.tasks:
+            kind = "execution"
+        elif text in self.reclaimed_execution_tombstones:
+            kind = "reclaimed_execution"
+        else:
+            kind = "absent_execution"
+        self.node(target, kind)
         self.edge(source, target, relation)
         if text not in self.tasks:
+            if self.reclaimed_execution(text) is not None:
+                return
             if not known_absent and text not in self.absent_execution_proofs:
                 raise _typed(
                     "REFERENCE_MISSING",
@@ -344,6 +389,18 @@ def build_reference_graph(
     graph.absent_execution_proofs.update(
         _collect_absent_execution_proofs(output_root.resolve())
     )
+    # Loaded rather than scanned: a tombstone is the collector's own conclusion
+    # about an execution, so letting the scanner walk it would turn that
+    # conclusion back into a live reference that protects what it just released.
+    graph.reclaimed_execution_tombstones.update(
+        load_execution_tombstones(output_root.resolve())
+    )
+    revived = sorted(set(tasks) & set(graph.reclaimed_execution_tombstones))
+    if revived:
+        raise _typed(
+            "RECLAIMED_EXECUTION_REVIVED",
+            f"tombstoned executions are on disk again: {revived}",
+        )
     for execution_id, root in tasks.items():
         graph.artifact(root, kind="execution")
         _scan_tree(graph, root, kind="execution_evidence")
@@ -351,22 +408,7 @@ def build_reference_graph(
     _scan_tree(graph, publish_root, kind="canonical_publish_evidence")
     _scan_tree(graph, release_root, kind="immutable_release_evidence")
     _register_release_holdings(graph, release_root)
-    for relative, kind in (
-        (RESEARCH_SCALE_PROMOTIONS_OUTPUT_REF, "promotion_evidence"),
-        ("env", "activation_readiness_evidence"),
-        (
-            "data/local/workspace/content-campaign-submissions",
-            "campaign_reconciliation_evidence",
-        ),
-        ("data/local/release-identity-recoveries", "identity_recovery_evidence"),
-        (
-            "data/local/workspace/release-identity-incidents",
-            "identity_incident_evidence",
-        ),
-        ("data/local/reviewed-closure-adoptions", "adoption_evidence"),
-        ("data/local/cache/protected-quarantines", "quarantine_receipt_evidence"),
-        ("data/local/workspace/object-transactions", "transaction_evidence"),
-    ):
+    for relative, kind in GOVERNED_EVIDENCE_OUTPUT_ROOTS:
         _scan_tree(graph, output_root / relative, kind=kind)
     register_acquisition_inventory(graph, scan_value=_scan_value)
     register_capsule_inventory(graph)
@@ -406,4 +448,8 @@ def reclaimable_media_entries(
     )
 
 
-__all__ = ["ReferenceGraph", "build_reference_graph", "reclaimable_media_entries"]
+__all__ = [
+    "ReferenceGraph",
+    "build_reference_graph",
+    "reclaimable_media_entries",
+]

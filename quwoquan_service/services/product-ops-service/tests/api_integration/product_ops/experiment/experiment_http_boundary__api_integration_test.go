@@ -21,6 +21,7 @@ import (
 )
 
 // spec_ref: specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/spec.md#sit-001
+// spec_ref: specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/spec.md#sit-001.t3
 // readiness_case: create-experiment-api
 // readiness_case: list-experiments-api
 // readiness_case: update-experiment-rollout-api

@@ -1,5 +1,6 @@
 # spec_ref: specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/spec.md#gwt-002
 # spec_ref: specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/spec.md#gwt-004
+# spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-003
 
 import json
 import signal
@@ -10,10 +11,13 @@ from datetime import datetime
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-
 APP_DIR = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(APP_DIR / "scripts/device"))
 
+from hot_restart_resident_observation import (
+    cold_startup_terminal_observed,
+    flutter_resident_ready_for_hot_restart,
+)
 from verify_flutter_run_defines import validate_flutter_run_defines
 from verify_ios_hot_restart import (
     _attempt_evidence_issues,
@@ -21,10 +25,7 @@ from verify_ios_hot_restart import (
     _runtime_identity_issues,
     _stop_original_process_group,
     _terminate_stale_device_runtime,
-    cold_startup_terminal_observed,
-    flutter_resident_ready_for_hot_restart,
 )
-
 
 PREFLIGHT = APP_DIR / "scripts/device/verify_flutter_run_defines.py"
 LAUNCHER = APP_DIR / "run.sh"
@@ -50,8 +51,10 @@ class IosHotRestartLauncherContractTest(unittest.TestCase):
         self,
     ) -> None:
         attempt = {
-            "launchMode": "direct_flutter_run",
+            "launchProvenance": "workspace_flutter_run",
+            "runtimeConfigSupplyMode": "external_runtime_package",
             "bootstrapFailure": False,
+            "terminalSurface": "router_shell",
             "canonicalTerminal": "routerShell",
             "configurationState": "complete",
             "missingDefineKeys": "",
@@ -63,7 +66,7 @@ class IosHotRestartLauncherContractTest(unittest.TestCase):
         default_issues = _attempt_evidence_issues(
             "cold",
             attempt,
-            expected_launch_surface="direct_flutter_run",
+            expected_launch_provenance="workspace_flutter_run",
             is_cold=True,
         )
         self.assertEqual(
@@ -77,11 +80,40 @@ class IosHotRestartLauncherContractTest(unittest.TestCase):
             _attempt_evidence_issues(
                 "cold",
                 attempt,
-                expected_launch_surface="direct_flutter_run",
+                expected_launch_provenance="workspace_flutter_run",
                 is_cold=True,
                 max_cold_native_safe_terminal_ms=12000,
             ),
             [],
+        )
+
+        embedded_package = {
+            **attempt,
+            "runtimeConfigSupplyMode": "embedded_runtime_package",
+        }
+        self.assertIn(
+            "cold: runtimeConfigSupplyMode is 'embedded_runtime_package', "
+            "expected 'external_runtime_package'",
+            _attempt_evidence_issues(
+                "cold",
+                embedded_package,
+                expected_launch_provenance="workspace_flutter_run",
+                is_cold=True,
+                max_cold_native_safe_terminal_ms=12000,
+            ),
+        )
+
+        recovery_surface = {**attempt, "terminalSurface": "safe_recovery"}
+        self.assertIn(
+            "cold: startup safe-terminal surface is 'safe_recovery', "
+            "expected 'router_shell'",
+            _attempt_evidence_issues(
+                "cold",
+                recovery_surface,
+                expected_launch_provenance="workspace_flutter_run",
+                is_cold=True,
+                max_cold_native_safe_terminal_ms=12000,
+            ),
         )
 
         cold_reported_slow = {**attempt, "reportedSafeTerminalMs": 6210}
@@ -90,7 +122,7 @@ class IosHotRestartLauncherContractTest(unittest.TestCase):
             _attempt_evidence_issues(
                 "cold",
                 cold_reported_slow,
-                expected_launch_surface="direct_flutter_run",
+                expected_launch_provenance="workspace_flutter_run",
                 is_cold=True,
                 max_cold_native_safe_terminal_ms=12000,
             ),
@@ -104,7 +136,7 @@ class IosHotRestartLauncherContractTest(unittest.TestCase):
         hot_issues = _attempt_evidence_issues(
             "hot_restart_1",
             hot_slow,
-            expected_launch_surface="direct_flutter_run",
+            expected_launch_provenance="workspace_flutter_run",
             is_cold=False,
             max_cold_native_safe_terminal_ms=12000,
         )
@@ -150,15 +182,26 @@ class IosHotRestartLauncherContractTest(unittest.TestCase):
         self.assertIn("before flutter build/run", result.stderr)
         self.assertIn("run.sh", result.stderr)
 
-    def test_canonical_launcher_preflights_and_marks_compile_time_launch_mode(self) -> None:
+    def test_canonical_launcher_exports_single_track_launch_identity(self) -> None:
         source = LAUNCHER.read_text(encoding="utf-8")
-        self.assertIn("--launch-mode canonical_launcher", source)
+        self.assertIn('--launch-provenance "$LAUNCH_PROVENANCE"', source)
+        self.assertIn(
+            "canonical_launcher|workspace_flutter_run|workspace_ide_debug",
+            source,
+        )
         # runtime config 走签名 package 的安装后激活，不进编译期 define；构建输入的
         # 所有权也整体归 canonical executor，因此 launcher 既不写 dart define，
         # 也不自持第二处 define 校验。
         self.assertNotIn("--dart-define", source)
         self.assertNotIn("verify_flutter_run_defines.py", source)
-        self.assertIn('export QWQ_APP_LAUNCH_MODE="$LAUNCH_MODE"', source)
+        self.assertIn(
+            'export QWQ_APP_LAUNCH_PROVENANCE="$LAUNCH_PROVENANCE"',
+            source,
+        )
+        self.assertIn(
+            'export QWQ_RUNTIME_CONFIG_SUPPLY_MODE="$RUNTIME_CONFIG_SUPPLY_MODE"',
+            source,
+        )
         self.assertNotIn('stackctl.py" up', source)
         self.assertIn(
             'app-debug-preflight --purpose "$PREFLIGHT_PURPOSE"',
@@ -168,19 +211,36 @@ class IosHotRestartLauncherContractTest(unittest.TestCase):
             '--target "$QWQ_LAUNCH_TARGET" --runtime-mode test_live',
             source,
         )
+        # workspace surface（IDE Flutter Debug / 字面 flutter run）没有命令行
+        # --mode 通道；mode 与环境同构，经 QWQ_RUN_MODE 环境变量选择，默认
+        # content-live，非法值走同一 GATE_BLOCK 校验。
+        self.assertIn('RUN_MODE="${QWQ_RUN_MODE:-content-live}"', source)
 
     def test_hot_restart_smoke_covers_both_surfaces_and_three_restarts(self) -> None:
         source = HOT_RESTART.read_text(encoding="utf-8")
         self.assertIn('APP_DIR / "run.sh"', source)
-        self.assertIn(
-            '["flutter", "run", "--flavor", args.env, "-d", args.device_id]',
-            source,
-        )
-        self.assertIn('"direct_flutter_run"', source)
+        # workspace surface 模拟工作区 facade 终端：facade bin 前置 PATH，
+        # mode 经 QWQ_RUN_MODE 透传给同一 canonical 执行体。
+        self.assertIn('environment["QWQ_RUN_MODE"] = args.run_mode', source)
+        self.assertIn("scripts/tools/flutter_facade/bin", source)
+        # workspace surface 走字面 flutter run（工作区 facade 归一化）；环境仅由
+        # QWQ_ENVIRONMENT 表达，不再携带 --flavor 等启动配置参数。
+        self.assertIn('["flutter", "run", "-d", args.device_id]', source)
+        self.assertNotIn('"--flavor"', source)
+        self.assertIn('"workspace_flutter_run"', source)
+        self.assertIn('"--launch-provenance"', source)
         self.assertIn('environment["QWQ_ENVIRONMENT"] = args.env', source)
+        # resident 会话是 flutter attach --machine（daemon 协议）：hot restart
+        # 走 app.restart JSON-RPC；交互式 R 键仅作为非 daemon 会话的后备。
+        self.assertIn('"method": "app.restart"', source)
+        self.assertIn("daemon_resident_app_id", source)
         self.assertIn('os.write(master_fd, b"R")', source)
+        # runtime identity 的真相源是安装后激活写入的 active receipt。
+        self.assertIn("runtime-config-active-receipt.json", source)
         self.assertIn('default=3', source)
-        self.assertIn('range(args.hot_restart_count)', source)
+        self.assertIn('range(1, restart_count + 1)', source)
+        self.assertIn("_publish_canonical_launch_terminal(", source)
+        self.assertIn("QWQ_APP_STARTUP_TERMINAL_RECEIPT", source)
         self.assertIn('_terminate_stale_device_runtime(', source)
         self.assertNotIn('["ps", "-axo", "pid=,command="]', source)
         self.assertNotIn('is_workspace_frontend_server', source)
@@ -277,6 +337,12 @@ class IosHotRestartLauncherContractTest(unittest.TestCase):
                 b"Flutter run key commands.\nR Hot restart.\n"
             )
         )
+        # daemon 协议（flutter attach --machine）以 app.started 为就绪信号。
+        self.assertTrue(
+            flutter_resident_ready_for_hot_restart(
+                b'[{"event":"app.started","params":{"appId":"x"}}]\n'
+            )
+        )
 
     def test_preflight_json_is_typed_and_contains_no_endpoint_values(self) -> None:
         result = subprocess.run(
@@ -325,10 +391,10 @@ class IosHotRestartLauncherContractTest(unittest.TestCase):
     def test_hot_restart_probe_ignores_baseline_attempts(self) -> None:
         raw = """
 2026-07-19 14:00:00.000 Df Runner[1] QWQStartup ios_did_finish_launching
-QWQStartup ios_dart_startup_attempt attemptId=old_attempt launchMode=canonical_launcher hotRestart=false configurationState=complete
-QWQStartup ios_startup_safe_terminal reportedElapsedMs=1200 receivedMs=1300 attemptId=old_attempt
-QWQStartup ios_dart_startup_attempt attemptId=new_attempt launchMode=canonical_launcher hotRestart=false configurationState=complete
-QWQStartup ios_startup_safe_terminal reportedElapsedMs=1400 receivedMs=1500 attemptId=new_attempt
+QWQStartup ios_dart_startup_attempt attemptId=old_attempt launchProvenance=canonical_launcher runtimeConfigSupplyMode=external_runtime_package hotRestart=false configurationState=complete
+QWQStartup ios_startup_safe_terminal surface=router_shell reportedElapsedMs=1200 receivedMs=1300 attemptId=old_attempt
+QWQStartup ios_dart_startup_attempt attemptId=new_attempt launchProvenance=canonical_launcher runtimeConfigSupplyMode=external_runtime_package hotRestart=false configurationState=complete
+QWQStartup ios_startup_safe_terminal surface=router_shell reportedElapsedMs=1400 receivedMs=1500 attemptId=new_attempt
 """
         self.assertTrue(cold_startup_terminal_observed(raw))
         self.assertTrue(

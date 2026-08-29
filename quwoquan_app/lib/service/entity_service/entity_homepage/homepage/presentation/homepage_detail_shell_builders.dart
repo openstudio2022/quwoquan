@@ -64,15 +64,45 @@ extension _HomepageBuilders on _HomepageDetailShellState {
     return '';
   }
 
-  Widget? _buildIdentityMedia(BuildContext context, String? coverUrl) {
-    final source = (coverUrl ?? '').trim();
+  /// hero 封面的 typed 交付绑定（DEC-033）。
+  ///
+  /// 候选链只决定「用哪个 URL」；交付形态一律取自投影声明：只有胜出 URL 正是
+  /// detail 的封面且 detail 给出了 coverAssetId/coverAccessMode 时才是私有绑定。
+  /// 其余来源（reference/bundle/summary/contentPreview）尚未在契约里携带交付
+  /// 声明，按公开绑定处理，不从 URL 形态反推。
+  MediaDeliveryBinding _resolvedHeroBinding() {
+    final source = _resolvedHeroImageUrl();
     if (source.isEmpty) {
+      return const MediaDeliveryBinding.absent();
+    }
+    final detail = widget.detail;
+    final detailCover = (detail?.coverUrl ?? '').trim();
+    if (detail != null && detailCover.isNotEmpty && detailCover == source) {
+      return MediaDeliveryBinding(
+        assetId: detail.coverAssetId?.trim() ?? '',
+        accessMode: detail.coverAccessMode,
+        publicUrl: source,
+      );
+    }
+    return MediaDeliveryBinding(
+      assetId: '',
+      accessMode: null,
+      publicUrl: source,
+    );
+  }
+
+  Widget? _buildIdentityMedia(BuildContext context, String? coverUrl) {
+    final binding = _resolvedHeroBinding();
+    if (!binding.hasRenderableSource) {
       return null;
     }
-    return AppMediaImage(
+    return mediaDeliveryImage(
       key: const ValueKey<String>('homepage-identity-media'),
-      imageSource: source,
+      binding: binding,
+      kind: MediaDeliveryKind.image,
       fit: BoxFit.cover,
+      publicBuilder: (context, publicUrl) =>
+          AppMediaImage(imageSource: publicUrl, fit: BoxFit.cover),
     );
   }
 
@@ -198,7 +228,7 @@ extension _HomepageBuilders on _HomepageDetailShellState {
   }
 
   Widget _buildCompactToolbarAvatar(BuildContext context) {
-    final coverUrl = _resolvedHeroImageUrl();
+    final binding = _resolvedHeroBinding();
     final fallback = DecoratedBox(
       decoration: BoxDecoration(color: AppColors.iosSecondaryFill(context)),
       child: Center(
@@ -214,20 +244,26 @@ extension _HomepageBuilders on _HomepageDetailShellState {
       child: SizedBox(
         width: AppSpacing.avatarUserSm,
         height: AppSpacing.avatarUserSm,
-        child: coverUrl.isEmpty
-            ? fallback
-            : AppMediaImage(
-                imageSource: coverUrl,
-                fit: BoxFit.cover,
-                placeholder: fallback,
-                errorWidget: fallback,
-              ),
+        child: mediaDeliveryImage(
+          binding: binding,
+          kind: MediaDeliveryKind.image,
+          fit: BoxFit.cover,
+          placeholder: fallback,
+          errorWidget: fallback,
+          absentWidget: fallback,
+          publicBuilder: (context, publicUrl) => AppMediaImage(
+            imageSource: publicUrl,
+            fit: BoxFit.cover,
+            placeholder: fallback,
+            errorWidget: fallback,
+          ),
+        ),
       ),
     );
   }
 
   Widget _buildBackgroundLayer(BuildContext context) {
-    final coverUrl = _resolvedHeroImageUrl();
+    final binding = _resolvedHeroBinding();
     final pageBackground = AppColors.iosPageBackground(context);
     final fallback = DecoratedBox(
       decoration: BoxDecoration(
@@ -246,16 +282,21 @@ extension _HomepageBuilders on _HomepageDetailShellState {
     return Stack(
       fit: StackFit.expand,
       children: <Widget>[
-        if (coverUrl.isEmpty)
-          fallback
-        else
-          AppMediaImage(
-            key: const ValueKey<String>('homepage-background-media'),
-            imageSource: coverUrl,
+        mediaDeliveryImage(
+          key: const ValueKey<String>('homepage-background-media'),
+          binding: binding,
+          kind: MediaDeliveryKind.image,
+          fit: BoxFit.cover,
+          placeholder: fallback,
+          errorWidget: fallback,
+          absentWidget: fallback,
+          publicBuilder: (context, publicUrl) => AppMediaImage(
+            imageSource: publicUrl,
             fit: BoxFit.cover,
             placeholder: fallback,
             errorWidget: fallback,
           ),
+        ),
         DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(

@@ -105,6 +105,8 @@ def _write_build_input(
             "artifactDigest": None,
             "environmentArtifacts": environment_artifacts,
             "applicationPackages": {},
+            "publicWeb": None,
+            "androidOfficialRelease": None,
             "opsPortal": None,
             "contractGraphDigest": None,
             "requiredEvidence": {
@@ -144,6 +146,8 @@ def _write_build_input(
                     f"applicationPackages.{build_product_id}"
                     for build_product_id in finalizer.APPLICATION_PACKAGES
                 ),
+                "publicWeb",
+                "androidOfficialRelease",
                 "opsPortal",
                 "contractGraphDigest",
                 "providerEvidence",

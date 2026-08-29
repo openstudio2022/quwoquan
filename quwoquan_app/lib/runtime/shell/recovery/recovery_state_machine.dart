@@ -5,15 +5,19 @@ import 'package:quwoquan_app/runtime/transport/links/trusted_endpoint_policy.dar
 enum RecoveryPhase {
   startupChecking,
   startupUpdateRequired,
+  startupWebOnly,
   startupLatest,
   startupVersionUnavailable,
   runtimeUnavailable,
   runtimeReentering,
   runtimeVersionChecking,
   runtimeUpdateRequired,
+  runtimeWebOnly,
   runtimeLatest,
   runtimeVersionUnavailable,
 }
+
+enum RecoveryWebTargetSource { none, confirmedRecoveryUrl, nativePublicWebUrl }
 
 @immutable
 class RecoverySnapshot {
@@ -36,6 +40,12 @@ class RecoverySnapshot {
       phase == RecoveryPhase.startupUpdateRequired ||
       phase == RecoveryPhase.runtimeUpdateRequired;
   bool get requiresUpdate => updateState == RecoveryUpdateState.required;
+  bool get isWebOnly =>
+      phase == RecoveryPhase.startupWebOnly ||
+      phase == RecoveryPhase.runtimeWebOnly;
+  bool get isVersionUnavailable =>
+      phase == RecoveryPhase.startupVersionUnavailable ||
+      phase == RecoveryPhase.runtimeVersionUnavailable;
   bool get showsWebSecondary =>
       phase == RecoveryPhase.startupChecking ||
       phase == RecoveryPhase.startupUpdateRequired ||
@@ -43,25 +53,54 @@ class RecoverySnapshot {
       phase == RecoveryPhase.runtimeReentering ||
       phase == RecoveryPhase.runtimeVersionChecking ||
       phase == RecoveryPhase.runtimeUpdateRequired;
+
+  RecoveryWebTargetSource get webTargetSource {
+    if (recoveryUrl.trim().isNotEmpty) {
+      return RecoveryWebTargetSource.confirmedRecoveryUrl;
+    }
+    return switch (phase) {
+      RecoveryPhase.startupChecking ||
+      RecoveryPhase.startupVersionUnavailable ||
+      RecoveryPhase.runtimeUnavailable ||
+      RecoveryPhase.runtimeReentering ||
+      RecoveryPhase.runtimeVersionChecking ||
+      RecoveryPhase.runtimeVersionUnavailable =>
+        RecoveryWebTargetSource.nativePublicWebUrl,
+      _ => RecoveryWebTargetSource.none,
+    };
+  }
 }
 
 final class RecoveryStateMachine {
   RecoveryStateMachine({RecoverySnapshot? initial})
-    : _snapshot = initial ?? const RecoverySnapshot.startupChecking();
+    : _snapshot = initial ?? const RecoverySnapshot.startupChecking(),
+      _terminalVersionConfirmed = _isConfirmedVersionPhase(
+        (initial ?? const RecoverySnapshot.startupChecking()).phase,
+      );
 
   RecoverySnapshot _snapshot;
-  bool _terminalVersionConfirmed = false;
+  bool _terminalVersionConfirmed;
   bool _runtimeReentryAttempted = false;
 
   RecoverySnapshot get snapshot => _snapshot;
 
+  static bool _isConfirmedVersionPhase(RecoveryPhase phase) =>
+      phase == RecoveryPhase.startupUpdateRequired ||
+      phase == RecoveryPhase.startupWebOnly ||
+      phase == RecoveryPhase.startupLatest ||
+      phase == RecoveryPhase.runtimeUpdateRequired ||
+      phase == RecoveryPhase.runtimeWebOnly ||
+      phase == RecoveryPhase.runtimeLatest;
+
   bool confirmVersion({
+    required RecoveryVersionPlatform platform,
     required int currentBuild,
     required int latestBuild,
     required int minimumSupportedBuild,
     required RecoveryUpdateState updateState,
+    required RecoveryVersionChannel updateChannel,
     bool requiredUpdateOnly = false,
-    required String updateUrl,
+    required String? updateUrl,
     required String recoveryUrl,
     required Iterable<String> trustedBaseUrls,
   }) {
@@ -72,6 +111,17 @@ final class RecoveryStateMachine {
       _ => RecoveryUpdateState.none,
     };
     final hasUpdate = updateState != RecoveryUpdateState.none;
+    final normalizedUpdateUrl = updateUrl?.trim();
+    final normalizedRecoveryUrl = recoveryUrl.trim();
+    final canonicalUpdateChannel = hasCanonicalRecoveryVersionTarget(
+      platform: platform,
+      channel: updateChannel,
+      updateUrl: normalizedUpdateUrl,
+    );
+    final trustedUpdateTarget =
+        updateChannel != RecoveryVersionChannel.nativeUpdate ||
+        (normalizedUpdateUrl != null &&
+            isTrustedHttpsUrl(normalizedUpdateUrl, trustedBaseUrls));
     if (_terminalVersionConfirmed ||
         currentBuild <= 0 ||
         latestBuild <= 0 ||
@@ -79,28 +129,39 @@ final class RecoveryStateMachine {
         minimumSupportedBuild > latestBuild ||
         updateState != expectedUpdateState ||
         (requiredUpdateOnly && updateState != RecoveryUpdateState.required) ||
-        !isTrustedHttpsUrl(recoveryUrl, trustedBaseUrls) ||
-        (hasUpdate && !isTrustedHttpsUrl(updateUrl, trustedBaseUrls))) {
+        !canonicalUpdateChannel ||
+        !trustedUpdateTarget ||
+        !isTrustedHttpsUrl(normalizedRecoveryUrl, trustedBaseUrls)) {
       return false;
     }
     final runtimeContext =
         _snapshot.phase == RecoveryPhase.runtimeVersionChecking ||
         _snapshot.phase == RecoveryPhase.runtimeVersionUnavailable;
     _terminalVersionConfirmed = true;
+    if (hasUpdate && updateChannel == RecoveryVersionChannel.webOnly) {
+      _snapshot = RecoverySnapshot(
+        phase: runtimeContext
+            ? RecoveryPhase.runtimeWebOnly
+            : RecoveryPhase.startupWebOnly,
+        updateState: updateState,
+        recoveryUrl: normalizedRecoveryUrl,
+      );
+      return true;
+    }
     _snapshot = hasUpdate
         ? RecoverySnapshot(
             phase: runtimeContext
                 ? RecoveryPhase.runtimeUpdateRequired
                 : RecoveryPhase.startupUpdateRequired,
             updateState: updateState,
-            updateUrl: updateUrl,
-            recoveryUrl: recoveryUrl,
+            updateUrl: normalizedUpdateUrl!,
+            recoveryUrl: normalizedRecoveryUrl,
           )
         : RecoverySnapshot(
             phase: runtimeContext
                 ? RecoveryPhase.runtimeLatest
                 : RecoveryPhase.startupLatest,
-            recoveryUrl: recoveryUrl,
+            recoveryUrl: normalizedRecoveryUrl,
           );
     return true;
   }
@@ -132,9 +193,7 @@ final class RecoveryStateMachine {
         );
         return true;
       default:
-        _terminalVersionConfirmed =
-            _snapshot.phase == RecoveryPhase.startupLatest ||
-            _snapshot.phase == RecoveryPhase.runtimeLatest;
+        _terminalVersionConfirmed = _isConfirmedVersionPhase(_snapshot.phase);
         return false;
     }
   }

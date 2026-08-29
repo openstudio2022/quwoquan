@@ -54,29 +54,29 @@ class AssistantSkillManifestWire {
   final List<String> examples;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'skillId': skillId,
-        'displayName': displayName,
-        'description': description,
-        'domainId': domainId,
-        'problemClass': problemClass.wireName,
-        'tagRefs': tagRefs,
-        'executionTarget': executionTarget,
-        'routingHints': routingHints,
-        'routingFallback': routingFallback,
-        'catalogProfileRef': catalogProfileRef,
-        'activationProfileRef': activationProfileRef,
-        'inputProfileRef': inputProfileRef,
-        'contextProfileRef': contextProfileRef,
-        'capabilityProfileRef': capabilityProfileRef,
-        'orchestrationProfileRef': orchestrationProfileRef,
-        'triggerProfileRef': triggerProfileRef,
-        'memoryProfileRef': memoryProfileRef,
-        'presentationProfileRef': presentationProfileRef,
-        'evaluationProfileRef': evaluationProfileRef,
-        'replayAssetRef': replayAssetRef,
-        'promptAssets': promptAssets,
-        'examples': examples,
-      };
+    'skillId': skillId,
+    'displayName': displayName,
+    'description': description,
+    'domainId': domainId,
+    'problemClass': problemClass.wireName,
+    'tagRefs': tagRefs,
+    'executionTarget': executionTarget,
+    'routingHints': routingHints,
+    'routingFallback': routingFallback,
+    'catalogProfileRef': catalogProfileRef,
+    'activationProfileRef': activationProfileRef,
+    'inputProfileRef': inputProfileRef,
+    'contextProfileRef': contextProfileRef,
+    'capabilityProfileRef': capabilityProfileRef,
+    'orchestrationProfileRef': orchestrationProfileRef,
+    'triggerProfileRef': triggerProfileRef,
+    'memoryProfileRef': memoryProfileRef,
+    'presentationProfileRef': presentationProfileRef,
+    'evaluationProfileRef': evaluationProfileRef,
+    'replayAssetRef': replayAssetRef,
+    'promptAssets': promptAssets,
+    'examples': examples,
+  };
 
   factory AssistantSkillManifestWire.fromJson(Map<String, dynamic> json) {
     const allowedFields = <String>{
@@ -107,94 +107,195 @@ class AssistantSkillManifestWire {
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('AssistantSkillManifestWire response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'AssistantSkillManifestWire response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (!json.containsKey('skillId') || json['skillId'] == null || (json['skillId'] is! String)) {
-      throw const FormatException('AssistantSkillManifestWire field skillId has an invalid wire value');
+    if (!json.containsKey('skillId') ||
+        json['skillId'] == null ||
+        (json['skillId'] is! String)) {
+      throw const FormatException(
+        'AssistantSkillManifestWire field skillId has an invalid wire value',
+      );
     }
-    if (!json.containsKey('displayName') || json['displayName'] == null || (json['displayName'] is! String)) {
-      throw const FormatException('AssistantSkillManifestWire field displayName has an invalid wire value');
+    if (!json.containsKey('displayName') ||
+        json['displayName'] == null ||
+        (json['displayName'] is! String)) {
+      throw const FormatException(
+        'AssistantSkillManifestWire field displayName has an invalid wire value',
+      );
     }
-    if (json.containsKey('description') && json['description'] != null && (json['description'] is! String)) {
-      throw const FormatException('AssistantSkillManifestWire field description has an invalid wire value');
+    if (json.containsKey('description') &&
+        json['description'] != null &&
+        (json['description'] is! String)) {
+      throw const FormatException(
+        'AssistantSkillManifestWire field description has an invalid wire value',
+      );
     }
-    if (!json.containsKey('domainId') || json['domainId'] == null || (json['domainId'] is! String)) {
-      throw const FormatException('AssistantSkillManifestWire field domainId has an invalid wire value');
+    if (!json.containsKey('domainId') ||
+        json['domainId'] == null ||
+        (json['domainId'] is! String)) {
+      throw const FormatException(
+        'AssistantSkillManifestWire field domainId has an invalid wire value',
+      );
     }
-    if (json.containsKey('problemClass') && json['problemClass'] != null && (json['problemClass'] is! String)) {
-      throw const FormatException('AssistantSkillManifestWire field problemClass has an invalid wire value');
+    if (json.containsKey('problemClass') &&
+        json['problemClass'] != null &&
+        (json['problemClass'] is! String)) {
+      throw const FormatException(
+        'AssistantSkillManifestWire field problemClass has an invalid wire value',
+      );
     }
-    if (json.containsKey('tagRefs') && json['tagRefs'] != null && (json['tagRefs'] is! List || (json['tagRefs'] as List).any((item) => item is! String))) {
-      throw const FormatException('AssistantSkillManifestWire field tagRefs has an invalid wire value');
+    if (json.containsKey('tagRefs') &&
+        json['tagRefs'] != null &&
+        (json['tagRefs'] is! List ||
+            (json['tagRefs'] as List).any((item) => item is! String))) {
+      throw const FormatException(
+        'AssistantSkillManifestWire field tagRefs has an invalid wire value',
+      );
     }
-    if (json.containsKey('executionTarget') && json['executionTarget'] != null && (json['executionTarget'] is! String)) {
-      throw const FormatException('AssistantSkillManifestWire field executionTarget has an invalid wire value');
+    if (json.containsKey('executionTarget') &&
+        json['executionTarget'] != null &&
+        (json['executionTarget'] is! String)) {
+      throw const FormatException(
+        'AssistantSkillManifestWire field executionTarget has an invalid wire value',
+      );
     }
-    if (json.containsKey('routingHints') && json['routingHints'] != null && (json['routingHints'] is! List || (json['routingHints'] as List).any((item) => item is! String))) {
-      throw const FormatException('AssistantSkillManifestWire field routingHints has an invalid wire value');
+    if (json.containsKey('routingHints') &&
+        json['routingHints'] != null &&
+        (json['routingHints'] is! List ||
+            (json['routingHints'] as List).any((item) => item is! String))) {
+      throw const FormatException(
+        'AssistantSkillManifestWire field routingHints has an invalid wire value',
+      );
     }
-    if (json.containsKey('routingFallback') && json['routingFallback'] != null && (json['routingFallback'] is! bool)) {
-      throw const FormatException('AssistantSkillManifestWire field routingFallback has an invalid wire value');
+    if (json.containsKey('routingFallback') &&
+        json['routingFallback'] != null &&
+        (json['routingFallback'] is! bool)) {
+      throw const FormatException(
+        'AssistantSkillManifestWire field routingFallback has an invalid wire value',
+      );
     }
-    if (!json.containsKey('catalogProfileRef') || json['catalogProfileRef'] == null || (json['catalogProfileRef'] is! String)) {
-      throw const FormatException('AssistantSkillManifestWire field catalogProfileRef has an invalid wire value');
+    if (!json.containsKey('catalogProfileRef') ||
+        json['catalogProfileRef'] == null ||
+        (json['catalogProfileRef'] is! String)) {
+      throw const FormatException(
+        'AssistantSkillManifestWire field catalogProfileRef has an invalid wire value',
+      );
     }
-    if (!json.containsKey('activationProfileRef') || json['activationProfileRef'] == null || (json['activationProfileRef'] is! String)) {
-      throw const FormatException('AssistantSkillManifestWire field activationProfileRef has an invalid wire value');
+    if (!json.containsKey('activationProfileRef') ||
+        json['activationProfileRef'] == null ||
+        (json['activationProfileRef'] is! String)) {
+      throw const FormatException(
+        'AssistantSkillManifestWire field activationProfileRef has an invalid wire value',
+      );
     }
-    if (!json.containsKey('inputProfileRef') || json['inputProfileRef'] == null || (json['inputProfileRef'] is! String)) {
-      throw const FormatException('AssistantSkillManifestWire field inputProfileRef has an invalid wire value');
+    if (!json.containsKey('inputProfileRef') ||
+        json['inputProfileRef'] == null ||
+        (json['inputProfileRef'] is! String)) {
+      throw const FormatException(
+        'AssistantSkillManifestWire field inputProfileRef has an invalid wire value',
+      );
     }
-    if (!json.containsKey('contextProfileRef') || json['contextProfileRef'] == null || (json['contextProfileRef'] is! String)) {
-      throw const FormatException('AssistantSkillManifestWire field contextProfileRef has an invalid wire value');
+    if (!json.containsKey('contextProfileRef') ||
+        json['contextProfileRef'] == null ||
+        (json['contextProfileRef'] is! String)) {
+      throw const FormatException(
+        'AssistantSkillManifestWire field contextProfileRef has an invalid wire value',
+      );
     }
-    if (!json.containsKey('capabilityProfileRef') || json['capabilityProfileRef'] == null || (json['capabilityProfileRef'] is! String)) {
-      throw const FormatException('AssistantSkillManifestWire field capabilityProfileRef has an invalid wire value');
+    if (!json.containsKey('capabilityProfileRef') ||
+        json['capabilityProfileRef'] == null ||
+        (json['capabilityProfileRef'] is! String)) {
+      throw const FormatException(
+        'AssistantSkillManifestWire field capabilityProfileRef has an invalid wire value',
+      );
     }
-    if (!json.containsKey('orchestrationProfileRef') || json['orchestrationProfileRef'] == null || (json['orchestrationProfileRef'] is! String)) {
-      throw const FormatException('AssistantSkillManifestWire field orchestrationProfileRef has an invalid wire value');
+    if (!json.containsKey('orchestrationProfileRef') ||
+        json['orchestrationProfileRef'] == null ||
+        (json['orchestrationProfileRef'] is! String)) {
+      throw const FormatException(
+        'AssistantSkillManifestWire field orchestrationProfileRef has an invalid wire value',
+      );
     }
-    if (!json.containsKey('triggerProfileRef') || json['triggerProfileRef'] == null || (json['triggerProfileRef'] is! String)) {
-      throw const FormatException('AssistantSkillManifestWire field triggerProfileRef has an invalid wire value');
+    if (!json.containsKey('triggerProfileRef') ||
+        json['triggerProfileRef'] == null ||
+        (json['triggerProfileRef'] is! String)) {
+      throw const FormatException(
+        'AssistantSkillManifestWire field triggerProfileRef has an invalid wire value',
+      );
     }
-    if (!json.containsKey('memoryProfileRef') || json['memoryProfileRef'] == null || (json['memoryProfileRef'] is! String)) {
-      throw const FormatException('AssistantSkillManifestWire field memoryProfileRef has an invalid wire value');
+    if (!json.containsKey('memoryProfileRef') ||
+        json['memoryProfileRef'] == null ||
+        (json['memoryProfileRef'] is! String)) {
+      throw const FormatException(
+        'AssistantSkillManifestWire field memoryProfileRef has an invalid wire value',
+      );
     }
-    if (!json.containsKey('presentationProfileRef') || json['presentationProfileRef'] == null || (json['presentationProfileRef'] is! String)) {
-      throw const FormatException('AssistantSkillManifestWire field presentationProfileRef has an invalid wire value');
+    if (!json.containsKey('presentationProfileRef') ||
+        json['presentationProfileRef'] == null ||
+        (json['presentationProfileRef'] is! String)) {
+      throw const FormatException(
+        'AssistantSkillManifestWire field presentationProfileRef has an invalid wire value',
+      );
     }
-    if (!json.containsKey('evaluationProfileRef') || json['evaluationProfileRef'] == null || (json['evaluationProfileRef'] is! String)) {
-      throw const FormatException('AssistantSkillManifestWire field evaluationProfileRef has an invalid wire value');
+    if (!json.containsKey('evaluationProfileRef') ||
+        json['evaluationProfileRef'] == null ||
+        (json['evaluationProfileRef'] is! String)) {
+      throw const FormatException(
+        'AssistantSkillManifestWire field evaluationProfileRef has an invalid wire value',
+      );
     }
-    if (!json.containsKey('replayAssetRef') || json['replayAssetRef'] == null || (json['replayAssetRef'] is! String)) {
-      throw const FormatException('AssistantSkillManifestWire field replayAssetRef has an invalid wire value');
+    if (!json.containsKey('replayAssetRef') ||
+        json['replayAssetRef'] == null ||
+        (json['replayAssetRef'] is! String)) {
+      throw const FormatException(
+        'AssistantSkillManifestWire field replayAssetRef has an invalid wire value',
+      );
     }
-    if (json.containsKey('promptAssets') && json['promptAssets'] != null && (json['promptAssets'] is! List || (json['promptAssets'] as List).any((item) => item is! String))) {
-      throw const FormatException('AssistantSkillManifestWire field promptAssets has an invalid wire value');
+    if (json.containsKey('promptAssets') &&
+        json['promptAssets'] != null &&
+        (json['promptAssets'] is! List ||
+            (json['promptAssets'] as List).any((item) => item is! String))) {
+      throw const FormatException(
+        'AssistantSkillManifestWire field promptAssets has an invalid wire value',
+      );
     }
-    if (json.containsKey('examples') && json['examples'] != null && (json['examples'] is! List || (json['examples'] as List).any((item) => item is! String))) {
-      throw const FormatException('AssistantSkillManifestWire field examples has an invalid wire value');
+    if (json.containsKey('examples') &&
+        json['examples'] != null &&
+        (json['examples'] is! List ||
+            (json['examples'] as List).any((item) => item is! String))) {
+      throw const FormatException(
+        'AssistantSkillManifestWire field examples has an invalid wire value',
+      );
     }
     return AssistantSkillManifestWire(
       skillId: (json['skillId'] as String?)?.trim() ?? "",
       displayName: (json['displayName'] as String?)?.trim() ?? "",
       description: (json['description'] as String?)?.trim() ?? "",
       domainId: (json['domainId'] as String?)?.trim() ?? "",
-      problemClass: parseProblemClassStrict((json['problemClass'] as String?)?.trim() ?? "general"),
+      problemClass: parseProblemClassStrict(
+        (json['problemClass'] as String?)?.trim() ?? "general",
+      ),
       tagRefs: _assistantStringList(json['tagRefs']),
       executionTarget: (json['executionTarget'] as String?)?.trim() ?? "cloud",
       routingHints: _assistantStringList(json['routingHints']),
       routingFallback: json['routingFallback'] == true,
       catalogProfileRef: (json['catalogProfileRef'] as String?)?.trim() ?? "",
-      activationProfileRef: (json['activationProfileRef'] as String?)?.trim() ?? "",
+      activationProfileRef:
+          (json['activationProfileRef'] as String?)?.trim() ?? "",
       inputProfileRef: (json['inputProfileRef'] as String?)?.trim() ?? "",
       contextProfileRef: (json['contextProfileRef'] as String?)?.trim() ?? "",
-      capabilityProfileRef: (json['capabilityProfileRef'] as String?)?.trim() ?? "",
-      orchestrationProfileRef: (json['orchestrationProfileRef'] as String?)?.trim() ?? "",
+      capabilityProfileRef:
+          (json['capabilityProfileRef'] as String?)?.trim() ?? "",
+      orchestrationProfileRef:
+          (json['orchestrationProfileRef'] as String?)?.trim() ?? "",
       triggerProfileRef: (json['triggerProfileRef'] as String?)?.trim() ?? "",
       memoryProfileRef: (json['memoryProfileRef'] as String?)?.trim() ?? "",
-      presentationProfileRef: (json['presentationProfileRef'] as String?)?.trim() ?? "",
-      evaluationProfileRef: (json['evaluationProfileRef'] as String?)?.trim() ?? "",
+      presentationProfileRef:
+          (json['presentationProfileRef'] as String?)?.trim() ?? "",
+      evaluationProfileRef:
+          (json['evaluationProfileRef'] as String?)?.trim() ?? "",
       replayAssetRef: (json['replayAssetRef'] as String?)?.trim() ?? "",
       promptAssets: _assistantStringList(json['promptAssets']),
       examples: _assistantStringList(json['examples']),
@@ -203,7 +304,10 @@ class AssistantSkillManifestWire {
 
   static List<String> _assistantStringList(Object? value) {
     if (value is List) {
-      return value.map((item) => item.toString().trim()).where((item) => item.isNotEmpty).toList(growable: false);
+      return value
+          .map((item) => item.toString().trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
     }
     return const <String>[];
   }

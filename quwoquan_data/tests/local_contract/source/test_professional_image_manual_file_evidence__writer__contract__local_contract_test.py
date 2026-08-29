@@ -99,6 +99,7 @@ def _attribution() -> dict[str, object]:
         "propertyReleaseStatus": "not_required",
         "collectedAt": OBSERVED_AT,
         "takedownPolicy": "quwoquan_standard_notice_and_takedown",
+        "derivedModifications": [],
     }
 
 

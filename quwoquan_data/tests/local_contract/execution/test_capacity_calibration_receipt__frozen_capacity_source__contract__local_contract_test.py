@@ -34,6 +34,10 @@ FROZEN_CAPACITY_FIELDS = (
     "objectWallClockSeconds",
     "completionGraceSeconds",
 )
+FROZEN_LIVENESS_FIELDS = (
+    "sourceDiscoveryHeartbeatIntervalSeconds",
+    "sourceDiscoveryHeartbeatStaleAfterSeconds",
+)
 RECEIPT_BINDING_FIELDS = (
     "calibrationId",
     "calibrationReceiptRef",
@@ -52,6 +56,14 @@ def _frozen_capacity() -> dict[str, int]:
     }
 
 
+def _frozen_liveness() -> dict[str, int]:
+    """阶段存活阈值与容量数值同源冻结，但各有自己的取值，不互相挪用。"""
+    return {
+        "sourceDiscoveryHeartbeatIntervalSeconds": 30,
+        "sourceDiscoveryHeartbeatStaleAfterSeconds": 90,
+    }
+
+
 def _applicability() -> dict[str, str]:
     return {"hostClass": "local-apple-silicon", "providerTier": "cursor-grok-standard"}
 
@@ -65,6 +77,7 @@ def _receipt(**overrides: Any) -> dict[str, Any]:
         "soakEvidenceDigest": "sha256:" + "d" * 64,
         "applicability": _applicability(),
         "frozenCapacity": _frozen_capacity(),
+        "frozenLiveness": _frozen_liveness(),
         "calibratedAt": "2026-08-16T00:00:00Z",
         "receiptDigest": "sha256:" + "e" * 64,
     }
@@ -86,6 +99,7 @@ def _binding(**overrides: Any) -> dict[str, Any]:
         "calibrationReceiptDigest": "sha256:" + "e" * 64,
         "applicability": _applicability(),
         "frozenCapacity": _frozen_capacity(),
+        "frozenLiveness": _frozen_liveness(),
         "frozenAtEpochSeconds": 1_786_000_000,
         "waveCount": 23,
         "fleetBatchDeadlineEpochSeconds": 1_786_021_000,
@@ -135,6 +149,37 @@ def test_frozen_values_declare_no_default_constant(field: str) -> None:
     assert declaration["minimum"] >= 1
 
 
+@pytest.mark.parametrize("field", FROZEN_LIVENESS_FIELDS)
+def test_receipt_without_any_frozen_liveness_value_fails_closed(field: str) -> None:
+    """存活阈值缺任一项即 fail closed，不得由容量数值或默认常量补齐。"""
+    receipt = _receipt()
+    del receipt["frozenLiveness"][field]
+
+    with pytest.raises(ValueError, match=field):
+        assert_valid(receipt, "execution", RECEIPT_SCHEMA)
+
+
+@pytest.mark.parametrize("field", FROZEN_LIVENESS_FIELDS)
+def test_frozen_liveness_values_declare_no_default_constant(field: str) -> None:
+    """契约本身不提供存活阈值取值：缺 receipt 时没有可落的默认常量。"""
+    schema = load_schema("execution", RECEIPT_SCHEMA)
+    declaration = schema["properties"]["frozenLiveness"]["properties"][field]
+
+    assert "default" not in declaration
+    assert "const" not in declaration
+    assert declaration["minimum"] >= 1
+
+
+def test_frozen_liveness_is_a_separate_value_object_from_frozen_capacity() -> None:
+    """存活阈值与容量数值是两组取值：字段集不重叠，也不互相引用。"""
+    schema = load_schema("execution", RECEIPT_SCHEMA)
+    capacity_fields = set(schema["properties"]["frozenCapacity"]["properties"])
+    liveness_fields = set(schema["properties"]["frozenLiveness"]["properties"])
+
+    assert capacity_fields.isdisjoint(liveness_fields)
+    assert liveness_fields == set(FROZEN_LIVENESS_FIELDS)
+
+
 def test_binding_frozen_values_are_the_same_definition_as_the_receipt() -> None:
     """DEC-006：冻结后的执行策略数值与 receipt 内容逐字段相等。
 
@@ -145,6 +190,10 @@ def test_binding_frozen_values_are_the_same_definition_as_the_receipt() -> None:
     assert (
         schema["$defs"]["executionPolicyBinding"]["properties"]["frozenCapacity"]
         == schema["properties"]["frozenCapacity"]
+    )
+    assert (
+        schema["$defs"]["executionPolicyBinding"]["properties"]["frozenLiveness"]
+        == schema["properties"]["frozenLiveness"]
     )
     assert (
         schema["$defs"]["executionPolicyBinding"]["properties"]["applicability"]

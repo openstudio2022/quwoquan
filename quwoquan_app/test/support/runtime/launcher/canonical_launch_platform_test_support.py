@@ -6,7 +6,6 @@ import tempfile
 from pathlib import Path
 from unittest import mock
 
-
 APP_DIR = Path(__file__).resolve().parents[4]
 ROOT = APP_DIR.parent
 for import_root in (ROOT, APP_DIR / "scripts/device"):
@@ -15,10 +14,26 @@ for import_root in (ROOT, APP_DIR / "scripts/device"):
 
 import run_app_instance as executor
 import supervise_app_launch as supervisor
+
 from quwoquan_ops.cli.lib.app_launch_attempt import read_app_launch_attempt
 
-
 SUPERVISOR = APP_DIR / "scripts/device/supervise_app_launch.py"
+SUPERVISOR_IDENTITY_ARGUMENTS = (
+    "--build-profile",
+    "nonprod",
+    "--launch-provenance",
+    "canonical_launcher",
+    "--runtime-config-supply-mode",
+    "external_runtime_package",
+    "--runtime-config-trust-envelope-digest",
+    "sha256:" + "a" * 64,
+    "--runtime-config-package-digest",
+    "sha256:" + "b" * 64,
+    "--flutter-version",
+    "3.35.0",
+    "--command-resolution-digest",
+    "sha256:" + "c" * 64,
+)
 
 
 class CanonicalLaunchPlatformContractMixin:
@@ -48,16 +63,17 @@ class CanonicalLaunchPlatformContractMixin:
         ):
             with self.subTest(invalid_listing=listing), mock.patch.object(
                 driver, "_devicectl", return_value=listing
+            ), self.assertRaisesRegex(
+                executor.CanonicalExecutorError,
+                "iPhone runtime receipt listing",
             ):
-                with self.assertRaisesRegex(
-                    executor.CanonicalExecutorError,
-                    "iPhone runtime receipt listing",
-                ):
-                    driver.read_runtime_file(executor.ACTIVE_RECEIPT_FILE_NAME)
+                driver.read_runtime_file(executor.ACTIVE_RECEIPT_FILE_NAME)
 
     def test_supervisor_never_infers_install_phases_from_device_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             receipt = Path(temporary) / "attempt.json"
+            artifact = Path(temporary) / "app-nonprod-debug.apk"
+            artifact.write_bytes(b"canonical debug apk")
             child = (
                 "print('QWQ_APP_LAUNCH_PHASE status=compiled', flush=True)\n"
                 "raise SystemExit(2)"
@@ -75,6 +91,7 @@ class CanonicalLaunchPlatformContractMixin:
                     "alpha-local",
                     "--platform",
                     "android",
+                    *SUPERVISOR_IDENTITY_ARGUMENTS,
                     "--build-mode",
                     "debug",
                     "--run-mode",
@@ -83,6 +100,8 @@ class CanonicalLaunchPlatformContractMixin:
                     "device-1",
                     "--application-id",
                     "com.leadwise.quwoquan.nonprod.debug",
+                    "--artifact-path",
+                    str(artifact),
                     "--",
                     sys.executable,
                     "-c",
@@ -101,6 +120,8 @@ class CanonicalLaunchPlatformContractMixin:
     def test_supervisor_maps_configuring_failure_without_inventing_configured(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             receipt = Path(temporary) / "attempt.json"
+            artifact = Path(temporary) / "app-nonprod-debug.apk"
+            artifact.write_bytes(b"canonical debug apk")
             child = (
                 "for phase in ('compiled','installing','installed','configuring'): "
                 "print(f'QWQ_APP_LAUNCH_PHASE status={phase}', flush=True)\n"
@@ -118,12 +139,17 @@ class CanonicalLaunchPlatformContractMixin:
                     "alpha-local",
                     "--platform",
                     "android",
+                    *SUPERVISOR_IDENTITY_ARGUMENTS,
                     "--build-mode",
                     "debug",
                     "--run-mode",
                     "ui-only",
                     "--device",
                     "device-1",
+                    "--application-id",
+                    "com.leadwise.quwoquan.nonprod.debug",
+                    "--artifact-path",
+                    str(artifact),
                     "--",
                     sys.executable,
                     "-c",
@@ -223,7 +249,18 @@ class CanonicalLaunchPlatformContractMixin:
             application_id=application_id,
             entrypoint="lib/main_prod.dart",
         )
-        with mock.patch.object(executor, "_run_checked") as run_checked:
+        with mock.patch.object(
+            executor, "_run_checked"
+        ) as run_checked, mock.patch.object(
+            executor.ios_vm_service,
+            "launch_selected_simulator_application",
+            return_value=executor.ios_vm_service.IOSSimulatorLaunch(
+                device_id="SIM-1",
+                application_id=application_id,
+                process_id=82001,
+                log_start="2026-08-29 08:00:00.000000+0800",
+            ),
+        ) as launch:
             simulator.install()
             simulator.launch_activation(digest)
             simulator.launch_application()
@@ -251,17 +288,11 @@ class CanonicalLaunchPlatformContractMixin:
                         digest,
                     ]
                 ),
-                mock.call(
-                    [
-                        "xcrun",
-                        "simctl",
-                        "launch",
-                        "--terminate-running-process",
-                        "SIM-1",
-                        application_id,
-                    ]
-                ),
             ],
+        )
+        launch.assert_called_once_with(
+            "SIM-1",
+            application_id,
         )
 
         iphone = executor.IOSPhysicalPlatformDriver(

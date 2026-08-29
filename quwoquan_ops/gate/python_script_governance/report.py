@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Sequence
 
 from .bootstrap import DEFAULT_ROOT
+from .bytecode_guard import bytecode_guard_issues
 from .constants import PYTHON_LINE_BUDGET_ENFORCEMENT, SCOPES
 from .hygiene import naming_issues, source_hygiene_issues, tool_owner_issues
 from .inventory import enumerate_scripts, python_file_records
@@ -51,6 +52,7 @@ def derive_report(root: Path, scopes: Sequence[str]) -> dict[str, object]:
     )
 
     issues: list[Issue] = source_hygiene_issues(normalized_root, scopes)
+    issues.extend(bytecode_guard_issues(normalized_root, scopes))
     warnings: list[Warning] = []
     for scope, scripts in scripts_by_scope.items():
         issues.extend(naming_issues(normalized_root, scripts))

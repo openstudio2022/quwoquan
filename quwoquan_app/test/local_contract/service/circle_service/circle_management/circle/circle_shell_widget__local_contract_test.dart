@@ -4,6 +4,12 @@
 // spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/circle-homepage-intersection-redesign/spec.md#gwt-001.t1
 // spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/circle-homepage-intersection-redesign/spec.md#gwt-001.t2
 // spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/circle-homepage-intersection-redesign/spec.md#gwt-001.t3
+// spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/model-attribute-semantics/spec.md#gwt-002.t1
+// spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/model-attribute-semantics/spec.md#gwt-002.t2
+// spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/model-attribute-semantics/spec.md#gwt-002.t3
+// spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/model-attribute-semantics/spec.md#gwt-002.t4
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -268,6 +274,7 @@ Future<void> _pumpShell(
   String circleId = 'fixture_circle_photo',
   UiErrorAppearanceMode sourceAppearanceMode = UiErrorAppearanceMode.inherit,
   List<Override> overrides = const <Override>[],
+  bool settle = true,
 }) async {
   // 对象主页改版后圈子壳层内容更长，默认 800x600 视口会触发 NestedScrollView
   // 的 pinned tab/吸顶层覆盖，导致动作栏命中测试失败。这里放大视口让壳层完整内联展示。
@@ -283,7 +290,13 @@ Future<void> _pumpShell(
       overrides: overrides,
     ),
   );
-  await tester.pumpAndSettle();
+  if (settle) {
+    await tester.pumpAndSettle();
+  } else {
+    // 加载态持有持续动画，pumpAndSettle 永不收敛；只推进到 provider 首个
+    // microtask 生效后的帧，观察详情尚未到达时的渲染。
+    await tester.pump();
+  }
   await tester.pump(const Duration(milliseconds: 350));
 }
 
@@ -758,6 +771,89 @@ void main() {
       expect(errorState.semantic.appearanceMode, UiErrorAppearanceMode.dark);
     });
   });
+
+  // 圈子详情是可访问性判定的宿主对象。对象缺席时页面既不能替它选一个可见性
+  // 取值，也不能把缺席渲染成权限拦截——那张门卡没有任何动作，用户会卡死在
+  // 「这是私密圈子」上。
+  group('CircleShell - 宿主对象缺席语义', () {
+    testWidgets('详情仍在加载时渲染加载态而不是权限拦截', (tester) async {
+      await _pumpShell(
+        tester,
+        circleQuery: _PendingCircleQuery(),
+        overrides: <Override>[
+          resolvedOwnerUserIdProvider.overrideWithValue(''),
+        ],
+        settle: false,
+      );
+
+      expect(
+        find.byKey(const ValueKey<String>('circle-shell-loading')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('circle-shell-gate-content')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('circle-shell-gate-discussion')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('详情缺席的终态带可点恢复动作', (tester) async {
+      await _pumpShell(tester, circleQuery: _ErrorCircleQuery());
+
+      expect(
+        find.byKey(const ValueKey<String>('circle-shell-gate-content')),
+        findsNothing,
+      );
+      final errorState = tester.widget<AppPageErrorState>(
+        find.byType(AppPageErrorState),
+      );
+      final semantic = errorState.semantic;
+      final hasRecoveryAction =
+          semantic.primaryAction != null || semantic.secondaryAction != null;
+      expect(
+        hasRecoveryAction,
+        isTrue,
+        reason: '详情缺席终态必须给出重试或安全返回，不能只呈现一段文字',
+      );
+      expect(errorState.onRecovery, isNotNull);
+    });
+
+    testWidgets('详情在场时才按声明的可见性产出拦截结论', (tester) async {
+      // 与上面两个用例构成对比：同一个游客身份下，详情在场时读声明的 private
+      // 产出拦截，详情缺席时不产出任何可访问性结论而是落加载态或终态。
+      await _pumpShell(
+        tester,
+        circleQuery: _PrivateVisitorCircleQuery(),
+        overrides: <Override>[
+          resolvedOwnerUserIdProvider.overrideWithValue(''),
+        ],
+      );
+      expect(
+        find.byKey(const ValueKey<String>('circle-shell-gate-content')),
+        findsOneWidget,
+        reason: '声明为 private 且非成员时按声明取值拦截',
+      );
+      expect(
+        find.byKey(const ValueKey<String>('circle-shell-loading')),
+        findsNothing,
+      );
+      expect(find.byType(AppPageErrorState), findsNothing);
+    });
+  });
+}
+
+/// _PendingCircleQuery 让详情查询停在未完成状态，对应首帧与加载过程中每一处
+/// 提前返回后的形态：详情缺席且尚未置失败对象。
+class _PendingCircleQuery extends CircleQueryReaderTestDouble {
+  @override
+  Future<Circle> get(CircleDetailQuery query) => Completer<Circle>().future;
+
+  @override
+  Future<CircleStatsWire> stats(CircleStatsQuery query) =>
+      Completer<CircleStatsWire>().future;
 }
 
 class _PrivateVisitorCircleQuery extends CircleQueryReaderTestDouble {

@@ -6,6 +6,8 @@ import urllib.parse
 from collections.abc import Mapping
 from typing import Any
 
+from core.source_attribution import derived_modifications_value
+
 _ALLOWED_LICENSES = frozenset({"by", "by-sa", "cc0", "pdm"})
 _UUID = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
@@ -115,6 +117,8 @@ def openverse_source_attribution(
         "propertyReleaseStatus": "unverified",
         "collectedAt": str(observed_at),
         "takedownPolicy": "quwoquan_standard_notice_and_takedown",
+        # 采集把 Openverse 原图逐字节存入 CAS，没有任何衍生修改。
+        "derivedModifications": derived_modifications_value(),
     }
 
 

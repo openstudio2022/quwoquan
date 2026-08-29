@@ -2,38 +2,16 @@
 
 from __future__ import annotations
 
-import argparse
-import fcntl
 import hashlib
 import json
 import os
-import socket
 import stat
-from collections.abc import Iterator, Mapping
-from contextlib import contextmanager
-from datetime import datetime, timezone
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from core import paths
 from core.io import read_json
-from core.schema import assert_valid
-from core.source_digest import (
-    SourceDefinitionSnapshot,
-    SourceDigest,
-    SourceDigestError,
-    current_source_definition_snapshot,
-    current_source_digest,
-)
 
-from content.execution.identity import validate_execution_id
-from content.execution.terminal_state_integrity import verify_terminal_state_integrity
-
-_REASONS = frozenset({"source_drift", "missing_canonical_input"})
-_ERROR_CODES = {
-    "source_drift": "DATA.EXECUTION.SOURCE_DRIFT_SUPERSEDED",
-    "missing_canonical_input": "DATA.EXECUTION.MISSING_CANONICAL_INPUT_SUPERSEDED",
-}
 _ANCHOR_REFS = {
     "executionManifest": "execution_manifest.json",
     "request": "0.plan/request.json",
@@ -41,34 +19,6 @@ _ANCHOR_REFS = {
     "executionState": "_shared/execution_state.json",
     "controllerLease": "_shared/controller_lease.json",
 }
-_PRE_CONTROLLER_REQUIRED_FILES = frozenset(
-    {
-        "0.plan/execution_spec.yaml",
-        "0.plan/queue_backend_envelope.json",
-        "0.plan/request.json",
-        "0.plan/target_set.json",
-        "_shared/catalog.ndjson",
-        "_shared/execution_progress.json",
-        "_shared/target_selection.json",
-        "evidence/model_readiness.json",
-        "evidence/runtime_preflight.json",
-        "execution_manifest.json",
-        "sources/qualification/request.json",
-    }
-)
-_PRE_CONTROLLER_OPTIONAL_FILES = frozenset({"_shared/execution_state.lock"})
-_PRE_CONTROLLER_IDENTITY_FILES = frozenset(
-    {
-        "0.plan/queue_backend_envelope.json",
-        "0.plan/target_set.json",
-        "_shared/execution_progress.json",
-        "_shared/target_selection.json",
-        "evidence/model_readiness.json",
-        "execution_manifest.json",
-        "sources/qualification/request.json",
-    }
-)
-_SUPERSESSION_ELIGIBLE_STATE_STATUSES = {"manual_required", "stopped_at_until"}
 _LIVENESS_PROBE = "pid_pgid_only_no_argv"
 
 

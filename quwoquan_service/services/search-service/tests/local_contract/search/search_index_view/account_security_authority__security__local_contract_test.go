@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/spec.md#sit-003
+// spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-storage-topology-and-elasticity/spec.md#gwt-002
 package local_contract
 
 import (
@@ -6,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -243,10 +245,12 @@ func TestSearchAccountSecurityAuthorityFailsClosedDuringConstructionAndHealth(t 
 
 	authority := newSearchAccountSecurityAuthority(t, server.URL, accessConfig)
 	checker := rthealth.NewChecker()
-	checker.Register("account-security-authority", authority.CheckAccountSecurityAuthority)
+	// 检查名与 servicekit 注册的名字保持一致：它是 /readyz 的可观测键，也是
+	// observability/slo 里 runtime_health_check_status 的 check 标签值。
+	checker.Register(searchAuthorityHealthCheckName, authority.CheckAccountSecurityAuthority)
 	result := checker.Check(context.Background())
 	if result.Status != "degraded" ||
-		result.Checks["account-security-authority"] == "ok" {
+		result.Checks[searchAuthorityHealthCheckName] == "ok" {
 		t.Fatalf("readiness result=%+v, want degraded authority dependency", result)
 	}
 
@@ -270,9 +274,11 @@ func TestSearchAccountSecurityAuthorityConfigurationIsExplicitInEveryEnvironment
 		key, _ := definition["key"].(string)
 		definitions[key] = definition
 	}
+	// 键名跟随 servicekit.BaseConfig 的 user_account_security_authority 标准段：
+	// 配置快照的路径就是 Go 侧读取的路径，不存在第二套映射。
 	for _, key := range []string{
-		"sys.search-service.accountSecurityAuthority.baseUrl",
-		"sys.search-service.accountSecurityAuthority.timeoutMs",
+		"sys.search-service.user_account_security_authority.base_url",
+		"sys.search-service.user_account_security_authority.timeout_ms",
 	} {
 		definition, exists := definitions[key]
 		if !exists {
@@ -282,8 +288,18 @@ func TestSearchAccountSecurityAuthorityConfigurationIsExplicitInEveryEnvironment
 			t.Fatalf("authority setting %q must not have a fallback default", key)
 		}
 	}
-	if definitions["sys.search-service.accountSecurityAuthority.timeoutMs"]["type"] != "int" {
+	if definitions["sys.search-service.user_account_security_authority.timeout_ms"]["type"] != "int" {
 		t.Fatal("authority timeout must be an integer config value")
+	}
+	esTimeoutDefinition, exists := definitions["sys.search-service.es.requestTimeoutMs"]
+	if !exists {
+		t.Fatal("Elasticsearch request timeout must be registered in config/schema.yaml")
+	}
+	if got := esTimeoutDefinition["default"]; got != 800 {
+		t.Fatalf("Elasticsearch request timeout default=%#v, want=800ms", got)
+	}
+	if _, retired := definitions["sys.search-service.accountSecurityAuthority.baseUrl"]; retired {
+		t.Fatal("retired accountSecurityAuthority keys must not coexist with the standard section")
 	}
 
 	wantBaseURLs := map[string]string{
@@ -302,16 +318,40 @@ func TestSearchAccountSecurityAuthorityConfigurationIsExplicitInEveryEnvironment
 				filepath.Join(root, "environments", environment, "config.yaml"),
 				&environmentConfig,
 			)
-			if got := environmentConfig.Overrides["sys.search-service.accountSecurityAuthority.baseUrl"]; got != wantBaseURL {
+			if got := environmentConfig.Overrides["sys.search-service.user_account_security_authority.base_url"]; got != wantBaseURL {
 				t.Fatalf("base URL=%#v, want=%q", got, wantBaseURL)
 			}
-			if got := environmentConfig.Overrides["sys.search-service.accountSecurityAuthority.timeoutMs"]; got != 300 {
+			if got := environmentConfig.Overrides["sys.search-service.user_account_security_authority.timeout_ms"]; got != 300 {
 				t.Fatalf("timeout=%#v, want=300ms", got)
 			}
-			if environment != "prod" {
-				if got := environmentConfig.Overrides["sys.search-service.es.requestTimeoutMs"]; got != 5000 {
-					t.Fatalf("Elasticsearch request timeout=%#v, want=5000ms", got)
-				}
+			if got, overridden := environmentConfig.Overrides["sys.search-service.es.requestTimeoutMs"]; overridden {
+				t.Fatalf(
+					"Elasticsearch request timeout must use canonical 800ms default, got overlay=%#v",
+					got,
+				)
+			}
+
+			repositoryRoot := filepath.Dir(filepath.Dir(filepath.Dir(root)))
+			renderedPath := filepath.Join(t.TempDir(), "search-service.yaml")
+			command := exec.Command(
+				"python3",
+				filepath.Join(repositoryRoot, "quwoquan_ops", "cli", "render_runtime_config.py"),
+				"--env", environment,
+				"--workload", "search-service",
+				"--output", renderedPath,
+			)
+			command.Env = append(os.Environ(), "PYTHONDONTWRITEBYTECODE=1")
+			if combined, err := command.CombinedOutput(); err != nil {
+				t.Fatalf("render %s Search config: %v\n%s", environment, err, combined)
+			}
+			var effectiveConfig struct {
+				ES struct {
+					RequestTimeoutMs int `yaml:"requestTimeoutMs"`
+				} `yaml:"es"`
+			}
+			readSearchAuthorityYAML(t, renderedPath, &effectiveConfig)
+			if got := effectiveConfig.ES.RequestTimeoutMs; got != 800 {
+				t.Fatalf("rendered Elasticsearch request timeout=%dms, want=800ms", got)
 			}
 		})
 	}
@@ -319,27 +359,37 @@ func TestSearchAccountSecurityAuthorityConfigurationIsExplicitInEveryEnvironment
 
 func TestSearchAPIWiresAccountSecurityAuthorityAndNoPIISLO(t *testing.T) {
 	root := searchServiceRoot(t)
-	mainSource, err := os.ReadFile(filepath.Join(root, "cmd", "api", "main.go"))
+	bootstrapSource, err := os.ReadFile(filepath.Join(root, "cmd", "api", "bootstrap.go"))
 	if err != nil {
 		t.Fatalf("read API composition: %v", err)
 	}
-	source := string(mainSource)
+	runtimeConfigSource, err := os.ReadFile(filepath.Join(root, "cmd", "api", "runtime_config.go"))
+	if err != nil {
+		t.Fatalf("read API runtime config: %v", err)
+	}
+	// 去空白后比对：断言的是装配契约，不是 gofmt 对对齐与换行的选择。
+	source := stripSearchProbeWhitespace(
+		string(bootstrapSource) + "\n" + string(runtimeConfigSource),
+	)
+	// authority 客户端、凭据与 readiness 检查由 servicekit 统一装配；服务侧的
+	// 责任是声明最小 scope 并从 BaseConfig 标准段拿地址/超时，而不是自建第二套
+	// authority 客户端。
 	for _, required := range []string{
-		"rtauth.NewHS256ServiceAuthorizationProvider(",
-		`"user.account.security.read"`,
-		"rtauth.NewHTTPAccountSecurityAuthority(",
-		"BaseURL:     cfg.AccountSecurityAuthority.BaseURL",
-		"Timeout:     accountSecurityAuthorityTimeout",
-		`readiness.Register("account-security-authority"`,
-		"return accountSecurityAuthority.CheckAccountSecurityAuthority(hctx)",
-		"AccountSecurityAuthority: accountSecurityAuthority",
+		"servicekit.Bootstrap(serviceName",
+		"AuthorityScopes:[]string{\"user.account.security.read\"}",
+		"servicekit.BaseConfig`yaml:\",inline\"`",
 	} {
 		if !strings.Contains(source, required) {
 			t.Fatalf("search API composition is missing %q", required)
 		}
 	}
-	if strings.Contains(source, "SEARCH_ACCOUNT_SECURITY_AUTHORITY") {
-		t.Fatal("account security authority must not use an environment fallback")
+	for _, forbidden := range []string{
+		"SEARCH_ACCOUNT_SECURITY_AUTHORITY",
+		"rtauth.NewHTTPAccountSecurityAuthority(",
+	} {
+		if strings.Contains(source, forbidden) {
+			t.Fatalf("account security authority must stay servicekit-owned, found %q", forbidden)
+		}
 	}
 
 	var sloEvidence struct {
@@ -348,6 +398,10 @@ func TestSearchAPIWiresAccountSecurityAuthorityAndNoPIISLO(t *testing.T) {
 			PermittedLabels  []string `yaml:"permitted_labels"`
 			ProhibitedLabels []string `yaml:"prohibited_labels"`
 		} `yaml:"privacy"`
+		SLIs []struct {
+			ID  string `yaml:"id"`
+			SLI string `yaml:"sli"`
+		} `yaml:"slis"`
 	}
 	readSearchAuthorityYAML(
 		t,
@@ -366,7 +420,24 @@ func TestSearchAPIWiresAccountSecurityAuthorityAndNoPIISLO(t *testing.T) {
 		"account_id,persona_id,token,authorization,request_path" {
 		t.Fatalf("authority SLO PII exclusions drift: %#v", sloEvidence.Privacy.ProhibitedLabels)
 	}
+	// readiness SLI 的 check 标签必须等于 servicekit 注册的检查名；写错不会报错，
+	// 只会让这条 SLI 永远匹配空序列。
+	readinessSLI := ""
+	for _, sli := range sloEvidence.SLIs {
+		if sli.ID == "account_security_authority_readiness" {
+			readinessSLI = sli.SLI
+		}
+	}
+	wantReadinessSLI := `runtime_health_check_status{check="` +
+		searchAuthorityHealthCheckName + `"}`
+	if readinessSLI != wantReadinessSLI {
+		t.Fatalf("authority readiness SLI=%q, want=%q", readinessSLI, wantReadinessSLI)
+	}
 }
+
+// searchAuthorityHealthCheckName 是 servicekit 为账号安全 authority 注册的健康
+// 检查名，同时是 /readyz 与 runtime_health_check_status 的 check 标签值。
+const searchAuthorityHealthCheckName = "account_security_authority"
 
 func searchAuthorityAccessTokenConfig() rtauth.TokenConfig {
 	return rtauth.TokenConfig{
@@ -505,7 +576,7 @@ func searchServiceRoot(t *testing.T) string {
 		t.Fatal("locate search authority contract test")
 	}
 	root := filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "..", ".."))
-	if _, err := os.Stat(filepath.Join(root, "cmd", "api", "main.go")); err != nil {
+	if _, err := os.Stat(filepath.Join(root, "cmd", "api", "bootstrap.go")); err != nil {
 		t.Fatalf("resolve search-service root: %v", err)
 	}
 	return root

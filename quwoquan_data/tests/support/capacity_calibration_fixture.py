@@ -39,6 +39,12 @@ def synthetic_capacity_source_binding(
             "objectWallClockSeconds": 900,
             "completionGraceSeconds": 300,
         },
+        # 存活阈值与容量上限分块：这里的取值同样只用于控制逻辑断言，
+        # 不代表任何主机上实测的心跳写入开销或单实体耗时分布。
+        "frozenLiveness": {
+            "sourceDiscoveryHeartbeatIntervalSeconds": 5,
+            "sourceDiscoveryHeartbeatStaleAfterSeconds": 15,
+        },
     }
 
 
@@ -87,6 +93,7 @@ def write_synthetic_capacity_receipt(
 
     source = synthetic_capacity_source_binding(provider_tier=provider_tier)
     decision = dict(source["frozenCapacity"])
+    liveness = dict(source["frozenLiveness"])
     evidence_stable = {
         "schema": "quwoquan_data.governed_capacity_calibration_evidence",
         "calibrationId": source["calibrationId"],
@@ -139,11 +146,20 @@ def write_synthetic_capacity_receipt(
                 "maxSeconds": 1.0,
             }
         ],
+        "heartbeatWriteObservations": [
+            {"sampleCount": 1, "p95Seconds": 0.01, "maxSeconds": 0.01}
+        ],
         "decision": {
             **decision,
             "rule": (
                 "zero-provider-failure-candidate+observed-fleet-peak+"
                 "minute-ceiling"
+            ),
+            **liveness,
+            "missedHeartbeatTolerance": 3,
+            "livenessRule": (
+                "heartbeat-write-cost-ceiling+object-duration-detection-floor+"
+                "declared-missed-beat-tolerance"
             ),
         },
         "recordedAt": "2026-08-16T00:00:00Z",
@@ -165,6 +181,7 @@ def write_synthetic_capacity_receipt(
             "providerTier": provider_tier,
         },
         "frozenCapacity": decision,
+        "frozenLiveness": liveness,
         "calibratedAt": "2026-08-16T00:00:00Z",
     }
     receipt["receiptDigest"] = _digest_document(receipt)

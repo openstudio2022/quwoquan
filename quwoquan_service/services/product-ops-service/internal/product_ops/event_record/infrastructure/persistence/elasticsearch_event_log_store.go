@@ -889,6 +889,7 @@ func elasticsearchDynamicTemplates() []any {
 func ElasticsearchRawNumericExtensionFields() []string {
 	return []string{
 		"durationMs",
+		"candidatesTried",
 		"httpStatus",
 		"tClickToFirstFrameMs",
 		"tFirstFrameToShellMs",
@@ -935,6 +936,7 @@ func elasticsearchRawIndexDefinition() map[string]any {
 		"decoderFallbackEnabled",
 		"durationMismatch",
 		"mediaConnected",
+		"retryable",
 	} {
 		properties[field] = map[string]any{"type": "boolean"}
 	}

@@ -67,6 +67,9 @@ from content.post.article.entity_composition import (  # noqa: E402
 from content.post.article.entity_review import review_entity_draft  # noqa: E402
 from content.post.materialize_apply import materialize_posts  # noqa: E402
 from content.post.handler import PostStageRequest, handle_post  # noqa: E402
+from support.article_source_registry_fixture import (  # noqa: E402
+    article_registry_write_kwargs,
+)
 from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
 def _faithful_entity_draft(title: str, byline: str) -> str:
     """模拟会话模型"轻改底稿"：保留 _BASE_PARAS 骨架（高留存率），按 brief.structure
@@ -135,11 +138,15 @@ _BASE_PARAS = [
     "临走在文创区我也没急着离开，慢慢翻看那些以面具和神树为灵感的小物，算是给这趟安静的看展之旅留一个温和的收尾。",
 ]
 
+# 底稿来源页：attribution 的 sourcePostUrl 与 source.md frontmatter 的 url 必须
+# 同源，compose 期会比对两者，漂移即判来源被换过。
+BASE_SOURCE_URL = "https://travel.qunar.com/youji/sanxingdui"
+
 SOURCE_TEXT = (
     "---\n"
-    "url: https://example.com/sanxingdui\n"
-    "platform: curated\n"
-    "license: internal-curated\n"
+    f"url: {BASE_SOURCE_URL}\n"
+    "platform: qunar\n"
+    "license: factual-reference-only\n"
     "allowedUse: internal_reference\n"
     "title: sample\n"
     "entity: 三星堆博物馆\n"
@@ -149,24 +156,6 @@ SOURCE_TEXT = (
     + "\n\n".join(_BASE_PARAS)
     + "\n"
 )
-
-SOURCE_ATTRIBUTION = {
-    "isOriginal": False,
-    "originalCreatorName": "内部整理",
-    "platform": "curated",
-    "sourcePostUrl": "https://example.com/sanxingdui",
-    "originalAssetUrl": "https://example.com/sanxingdui/cover.jpg",
-    "attributionText": "内部整理 / curated",
-    "rightsBasis": "internal curated licensed adaptation",
-    "commercialAuthorizationStatus": "unverified",
-    "publicationAdmission": "research_release",
-    "watermarkStatus": "absent",
-    "audioRightsStatus": "no_audio",
-    "modelReleaseStatus": "not_required",
-    "propertyReleaseStatus": "not_required",
-    "collectedAt": "2026-08-05T00:00:00Z",
-    "takedownPolicy": "remove on substantiated request",
-}
 
 # 第 6 段（不足）的轻改版本：成品对底稿做去语病/语气适配的"轻改"，使留存率落在
 # [55%,99.5%]（既非脱稿从零另写，也非整篇零加工逐字照搬）。其余段落保留底稿骨架。
@@ -251,19 +240,18 @@ def _seed_sources() -> str:
             "score": 8,
             "reasons": ["length_ok", "scene_rich"],
             "excerpt": f"{ENTITY} 真正影响体验的是参观时间和停留展厅的取舍。",
-            "url": "https://example.com/sanxingdui",
+            "url": BASE_SOURCE_URL,
         },
-        platform="curated",
-        source_category="internal-curated",
-        source_use_mode="licensed_adaptation",
-        research_lane="article",
-        url="https://example.com/sanxingdui",
         title="sample",
         target_ref=f"/entity/地点/博物馆/{ENTITY}",
         relevance=f"{ENTITY} 的参观与展陈体验",
-        # 内部整理来源没有站点注册表条目，只能自带 attribution：文章车道的可交付
-        # 来源单元要么显式携带 attribution，要么由注册表解析，二者缺一即 fail-closed。
-        source={"sourceAttribution": SOURCE_ATTRIBUTION},
+        # 文章车道的可交付来源单元必须由注册表解析出身份与 attribution：内部整理
+        # 来源没有注册表条目，写盘期即 fail-closed，因此底稿来源走登记站点。
+        **article_registry_write_kwargs(
+            url=BASE_SOURCE_URL,
+            platform="qunar",
+            publish_media_mode="illustrated",
+        ),
         images=[{"sourcePath": str(path), "caption": f"{ENTITY} 图{k}", "relevance": f"{ENTITY} 图{k}"} for k, path in enumerate(image_paths)],
     )
     return str(base_manifest["sourceRef"])
@@ -441,12 +429,13 @@ def test_compose_brief_persists_reassigned_base_source_ref():
         source_md="# 三星堆博物馆\n\n这是一条可写底稿，保留现场叙事。",
         clean_md="# 三星堆博物馆\n\n这是一条可写底稿，保留现场叙事。",
         quality={"sourceId": "museum_story", "quality": "A-story", "score": 8},
-        platform="curated",
-        source_category="travelogue",
-        research_lane="article",
-        url="https://example.com/story",
         title="museum story",
         target_ref=f"/entity/地点/博物馆/{ENTITY}",
+        **article_registry_write_kwargs(
+            url="https://travel.qunar.com/youji/sanxingdui-story",
+            platform="qunar",
+            publish_media_mode="illustrated",
+        ),
         images=[
             {
                 "sourcePath": str(image_path),
@@ -491,15 +480,14 @@ def test_entity_article_blocks_cross_source_visual_support_when_base_image_missi
         source_md="三星堆博物馆的参观时间、推荐动线和停留展厅信息都可核验，但该底稿无可发布图片。",
         clean_md="三星堆博物馆的参观时间、推荐动线和停留展厅信息都可核验，但该底稿无可发布图片。",
         quality={"sourceId": "no_image_base_for_fallback", "quality": "A-story", "score": 8},
-        platform="curated",
-        source_category="travelogue",
-        source_role="base",
-        research_lane="article",
-        url="https://example.com/no-image-base",
         title="no image base",
         target_ref=f"/entity/地点/博物馆/{ENTITY}",
         relevance=f"{ENTITY} 的无图底稿",
         images=[],
+        **article_registry_write_kwargs(
+            url="https://travel.qunar.com/youji/sanxingdui-no-image-base",
+            platform="qunar",
+        ),
     )
     image_root = Path(tempfile.mkdtemp(prefix="entity_visual_support_"))
     image_path = image_root / f"{ENTITY}_visual_support.jpg"
@@ -511,14 +499,15 @@ def test_entity_article_blocks_cross_source_visual_support_when_base_image_missi
         source_md="三星堆博物馆开放授权视觉支持素材。",
         clean_md="三星堆博物馆开放授权视觉支持素材。",
         quality={"sourceId": "article_visual_support_for_fallback", "quality": "A-image", "score": 7},
-        platform="curated",
-        source_category="vertical_professional",
-        source_role="supporting",
-        research_lane="article",
-        url="https://example.com/visual-support",
         title="visual support",
         target_ref=f"/entity/地点/博物馆/{ENTITY}",
         relevance=f"{ENTITY} 的可发布视觉支持",
+        **article_registry_write_kwargs(
+            url="https://travel.qunar.com/youji/sanxingdui-visual-support",
+            platform="qunar",
+            source_role="supporting",
+            publish_media_mode="illustrated",
+        ),
         images=[
             {
                 "sourcePath": str(image_path),

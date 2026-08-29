@@ -43,7 +43,6 @@ _SCHEMA_FILES = {
     "5.review/evidence_index.json": ArtifactSchema("content", "evidence_index"),
 }
 
-_FORBIDDEN_STAGE_DIRS = {"1.download", "2.quality", "3.compose", "4.draft", "5.review"}
 _IDENTITY_FIELDS = ("executionId",)
 _COMPOSE_HOMEPAGE_REL = "3.compose/entity_page_input.json"
 _COMPOSE_PACK_REL = "3.compose/writing_pack.json"
@@ -71,7 +70,7 @@ def _boundary_issues(root: Path, *, root_kind: str) -> list[str]:
         return []
     issues: list[str] = []
     for path in root.rglob("*"):
-        if path.is_dir() and path.name in _FORBIDDEN_STAGE_DIRS:
+        if path.is_dir() and path.name in STAGES:
             issues.append(f"{root_kind}: process stage directory forbidden: {path}")
         if path.is_file() and path.name in PROCESS_ARTIFACT_NAMES:
             issues.append(f"{root_kind}: process artifact forbidden: {path}")

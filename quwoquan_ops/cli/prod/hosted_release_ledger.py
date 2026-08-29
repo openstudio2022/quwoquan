@@ -20,6 +20,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True
+
 if __package__:
     from quwoquan_ops.cli.prod.hosted_release_ledger_lib import *  # noqa: F401,F403
     from quwoquan_ops.cli.prod.hosted_release_ledger_lib import (  # noqa: F401

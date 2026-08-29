@@ -54,6 +54,7 @@ SOURCE_ATTRIBUTION = {
     "propertyReleaseStatus": "not_required",
     "collectedAt": "2026-06-13T00:00:00Z",
     "takedownPolicy": "quwoquan_standard_notice_and_takedown",
+    "derivedModifications": [],
 }
 
 

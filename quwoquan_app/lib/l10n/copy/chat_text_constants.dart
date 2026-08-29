@@ -421,6 +421,7 @@ abstract final class ChatText {
   static const String boardPlanNotConfigured = '未创建协作计划';
   static const String boardPlanPermissionDenied = '暂无查看计划权限';
   static const String boardPlanUnavailable = '计划暂时无法加载';
+  static const String boardPlanVersionUnsupported = '当前版本暂不支持此协作计划，请更新后重试';
   static const String boardPlanPlaceItem = '地点安排';
   static const String boardPlanRouteItem = '路线安排';
   static const String boardPlanChecklistItem = '清单';

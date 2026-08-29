@@ -15,6 +15,8 @@ import json
 import sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True
+
 _SCRIPTS_ROOT = next(
     parent
     for parent in Path(__file__).resolve().parents
@@ -100,13 +102,19 @@ def collect_issues(root: Path) -> list[str]:
             )
 
     launcher = sources[app / "run.sh"]
+    # 单轨检查只看行为行：注释里的提及不构成第二条 flavor 选择轨。
+    launcher_behavior = "\n".join(
+        line
+        for line in launcher.splitlines()
+        if not line.lstrip().startswith("#")
+    )
     executor_path = app / "scripts/device/run_app_instance.py"
     executor = sources[executor_path]
-    if str(executor_path.relative_to(app)) not in launcher:
+    if str(executor_path.relative_to(app)) not in launcher_behavior:
         issues.append("run.sh must delegate buildProfile selection to canonical executor")
-    if "flutter run" in launcher or "--flavor" in launcher:
+    if "flutter run" in launcher_behavior or "--flavor" in launcher_behavior:
         issues.append("run.sh must not own a second Flutter buildProfile selection")
-    if '--flavor "$QWQ_APP_RUNTIME_ENV"' in launcher:
+    if '--flavor "$QWQ_APP_RUNTIME_ENV"' in launcher_behavior:
         issues.append("run.sh must not select flavor from the runtime environment")
     if _executor_nonprod_build_drivers(executor) != {
         "AndroidPlatformDriver",
@@ -122,6 +130,17 @@ def collect_issues(root: Path) -> list[str]:
         issues.append(
             "run_app_instance.sh must delegate non-Prod flavor selection to run.sh"
         )
+
+    matrix = sources[app / "scripts/device/build_startup_environment_matrix.py"]
+    if "--flavor" in matrix:
+        if '"--flavor", str(handoff["environment"])' in matrix:
+            issues.append(
+                "startup matrix must not select flavor from the runtime environment"
+            )
+        if '"--flavor", str(handoff["buildProfile"])' not in matrix:
+            issues.append(
+                "startup matrix must select flavor from the handoff buildProfile"
+            )
 
     schemes = app / "ios/Runner.xcodeproj/xcshareddata/xcschemes"
     if (schemes / "Runner.xcscheme").exists():

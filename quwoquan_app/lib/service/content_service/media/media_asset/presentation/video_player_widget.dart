@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:quwoquan_app/runtime/transport/media/signed_video_delivery.dart';
+export 'package:quwoquan_app/runtime/transport/media/signed_video_delivery.dart';
 import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';
@@ -21,6 +23,7 @@ import 'package:quwoquan_app/runtime/config/app_video_runtime_budget.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_load_failure_cache.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/media_playback_failure.dart';
+import 'package:quwoquan_app/runtime/transport/media/media_delivery_binding.dart';
 import 'package:quwoquan_app/runtime/platform/platform_target.dart';
 import 'package:quwoquan_app/runtime/platform/platform_providers.dart'
     show platformCapabilitiesProvider;
@@ -112,22 +115,40 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
   VideoPlaybackSession get _playbackSession =>
       widget.playbackSession ?? _ownedPlaybackSession;
 
-  List<MediaDeliveryReference> _deliveryCandidatesFor(
+  List<_PlaybackCandidate> _deliveryCandidatesFor(
     VideoPlayerWidget value, {
     bool? featureEnabled,
   }) {
+    final signed = value.signedDelivery;
+    if (signed != null) {
+      // 私有短签单候选：HLS/CMAF 增强链假定公开 slice，私有路不参与候选升级。
+      return <_PlaybackCandidate>[
+        _PlaybackCandidate(
+          url: signed.deliveryUri.toString(),
+          cacheIdentity: signed.cacheIdentity,
+        ),
+      ];
+    }
     return AdaptiveVideoDeliverySet(
-      progressive: value.deliveryReference,
+      progressive: value.deliveryReference!,
       adaptive: value.adaptiveDeliveryReference,
       adaptiveDescriptorVersion: value.adaptiveDescriptorVersion,
-    ).candidates(
-      featureEnabled:
-          featureEnabled ??
-          ref.read(
-            contentFeatureFlagProvider(hlsCmafAdaptivePlaybackFeatureFlag),
+    )
+        .candidates(
+          featureEnabled:
+              featureEnabled ??
+              ref.read(
+                contentFeatureFlagProvider(hlsCmafAdaptivePlaybackFeatureFlag),
+              ),
+          capabilities: ref.read(platformCapabilitiesProvider),
+        )
+        .map(
+          (reference) => _PlaybackCandidate(
+            url: reference.url,
+            cacheIdentity: reference.cacheIdentity,
           ),
-      capabilities: ref.read(platformCapabilitiesProvider),
-    );
+        )
+        .toList(growable: false);
   }
 
   String _deliveryCandidateIdentity(
@@ -138,7 +159,7 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
       .join(' -> ');
 
   String _playbackCandidateIdentity(
-    MediaDeliveryReference candidate,
+    _PlaybackCandidate candidate,
     VideoPlayerWidget value,
   ) {
     final viewType =
@@ -500,7 +521,7 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
       return;
     }
     MediaLoadFailureCache.instance.clearIdentity(
-      widget.deliveryReference.cacheIdentity,
+      widget.playbackCacheIdentity,
     );
     _forceProgressiveForCurrentDelivery = false;
     _pendingSourceSwitchPosition = null;
@@ -523,7 +544,7 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
     _beginInitializationWait(generation);
     _qoeReportedForController = false;
     final cachedFailure = MediaLoadFailureCache.instance.activeFailure(
-      widget.deliveryReference.cacheIdentity,
+      widget.playbackCacheIdentity,
     );
     if (cachedFailure != null) {
       if (mounted && generation == _videoInitGeneration) {
@@ -533,7 +554,7 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
       }
       return;
     }
-    final candidates = <String>[widget.deliveryReference.url];
+    final candidates = <String>[widget.playbackUrl];
     if (candidates.isEmpty) {
       if (mounted && generation == _videoInitGeneration) {
         _reportPlaybackFailure(

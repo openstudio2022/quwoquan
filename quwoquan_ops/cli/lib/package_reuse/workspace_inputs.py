@@ -14,6 +14,10 @@ from pathlib import Path
 
 import quwoquan_ops.cli.lib.package_reuse as _pkg
 
+from .dependency_bundle_capsule import (
+    dependency_bundle_digest_entries,
+    load_managed_dependency_snapshots,
+)
 from .input_capsule import (
     _baseline_id,
     _digest_record,
@@ -21,6 +25,7 @@ from .input_capsule import (
     _normalized_input_roots,
     _path_entry,
 )
+from .pub_cache_capsule import dependency_required
 
 
 def deployment_input_roots(
@@ -52,17 +57,39 @@ def deployment_input_roots(
         "quwoquan_service/contracts/metadata",
         "quwoquan_service/tools/codegen_graphql_read_registry",
         "quwoquan_service/scripts/runtime/packaging",
+        # The same immutable input capsule is the source of truth for App UAT.
+        # Capture the complete Flutter/native tree instead of rebuilding an
+        # active candidate from mutable workspace bytes.
+        "quwoquan_app",
         "quwoquan_app/configs/default/app_runtime.yaml",
         f"quwoquan_app/configs/{env_name}/app_runtime.yaml",
         "quwoquan_app/config/schema.yaml",
         "quwoquan_app/scripts/env/build_app_env_package.sh",
         "quwoquan_app/scripts/env/print_app_env_dart_defines.py",
         "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh",
+        # run.sh and both platform launch verifiers import stackctl's command
+        # graph at runtime, so the full CLI package is part of the launch input
+        # closure.  Narrow file-by-file declarations cannot prove that graph.
+        "quwoquan_ops/cli",
+        "quwoquan_ops/ci",
+        "quwoquan_ops/environments",
+        "quwoquan_ops/external",
+        "quwoquan_ops/gate",
+        "quwoquan_ops/migrations",
+        "quwoquan_ops/observability",
+        "quwoquan_ops/policies",
         "quwoquan_ops/cli/stackctl.py",
         "quwoquan_ops/cli/legal_static.py",
         "quwoquan_ops/cli/print_local_port_profile.py",
         "quwoquan_ops/cli/render_runtime_config.py",
         "quwoquan_ops/cli/lib",
+        # Runtime rendering reads both cross-service default layers. Keep the
+        # exact files in the capsule even when the environment-specific layer
+        # does not exist yet, so a newly-authored untracked layer participates
+        # in the start/end currentness check instead of disappearing from the
+        # packaged repository.
+        "quwoquan_ops/environments/config-defaults.yaml",
+        f"quwoquan_ops/environments/{env_name}/config-defaults.yaml",
         "quwoquan_ops/environments/domain_governance.yaml",
         "quwoquan_ops/environments/local_env_port_manifest.yaml",
         "quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml",
@@ -102,6 +129,11 @@ def deployment_input_digest(
                 raise TimeoutError("deployment input currentness check timed out")
             kind, content = _path_entry(path)
             yield logical_path, kind, content
+        if dependency_required(_pkg.ROOT, _normalized_roots):
+            if deadline is not None and time.monotonic() >= deadline:
+                raise TimeoutError("deployment input currentness check timed out")
+            snapshots = load_managed_dependency_snapshots(repo_root=_pkg.ROOT)
+            yield from dependency_bundle_digest_entries(snapshots)
 
     return _digest_record(entries())
 

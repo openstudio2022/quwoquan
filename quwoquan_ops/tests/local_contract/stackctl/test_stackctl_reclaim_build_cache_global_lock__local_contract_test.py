@@ -16,7 +16,6 @@ from unittest import mock
 
 from quwoquan_ops.cli import stackctl
 
-
 LOCAL_TARGETS = ("alpha-local", "beta-local", "gamma-local")
 
 
@@ -151,9 +150,11 @@ class StackctlReclaimBuildCacheGlobalLockContractTest(unittest.TestCase):
                     lock_path=lock_path,
                 )
                 try:
-                    with self.assertRaisesRegex(RuntimeError, "already running"):
-                        with stackctl._global_local_build_cache_lock():
-                            self.fail("exclusive GC lock must not enter")
+                    with (
+                        self.assertRaisesRegex(RuntimeError, "already running"),
+                        stackctl._global_local_build_cache_lock(),
+                    ):
+                        self.fail("exclusive GC lock must not enter")
                 finally:
                     shared.close()
 
@@ -261,16 +262,42 @@ class StackctlReclaimBuildCacheGlobalLockContractTest(unittest.TestCase):
         self,
     ) -> None:
         audit = _runtime_audit(status="running")
-        with (
-            tempfile.TemporaryDirectory() as temporary_dir,
-            self._repair_context(Path(temporary_dir)),
-            mock.patch.object(stackctl, "_local_build_cache_runtime_audit", return_value=audit),
-            mock.patch.object(stackctl, "run", side_effect=_docker_results()) as run,
-        ):
-            payload = stackctl.command_repair(_repair_args(confirmed=True))
-            report = json.loads((Path(temporary_dir) / "report.json").read_text())
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            temporary_root = Path(temporary_dir)
+            lock_path = temporary_root / "local-runtime.lock"
+            with (
+                self._repair_context(temporary_root),
+                mock.patch.object(
+                    stackctl,
+                    "local_runtime_operation_lock_path",
+                    return_value=lock_path,
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_local_build_cache_runtime_audit",
+                    return_value=audit,
+                ),
+                mock.patch.object(stackctl, "run", side_effect=_docker_results()) as run,
+            ):
+                payload = stackctl.command_repair(_repair_args(confirmed=True))
+                report = json.loads((temporary_root / "report.json").read_text())
 
         self.assertEqual(payload["exitCode"], 0)
+        self.assertEqual(
+            set(report["globalLock"]),
+            {"path", "mode", "scope", "owner", "affectedTargets"},
+        )
+        self.assertEqual(report["globalLock"]["path"], str(lock_path))
+        self.assertEqual(report["globalLock"]["mode"], "exclusive")
+        self.assertEqual(report["globalLock"]["scope"], "global-local-build-cache")
+        self.assertRegex(
+            report["globalLock"]["owner"],
+            r"^pid=\d+ scope=global-local-build-cache mode=exclusive startedAt=",
+        )
+        self.assertEqual(
+            report["globalLock"]["affectedTargets"],
+            list(stackctl.LOCAL_BUILD_CACHE_TARGETS),
+        )
         self.assertTrue(report["confirmation"])
         self.assertEqual(report["resourceScope"], "docker_daemon_global")
         self.assertFalse(report["targetScoped"])
@@ -383,13 +410,15 @@ class StackctlReclaimBuildCacheGlobalLockContractTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary_dir:
             lease_dir = Path(temporary_dir)
             (lease_dir / "broken.json").write_text("{", encoding="utf-8")
-            with mock.patch.object(
-                stackctl,
-                "consumer_lease_dir",
-                return_value=lease_dir,
+            with (
+                mock.patch.object(
+                    stackctl,
+                    "consumer_lease_dir",
+                    return_value=lease_dir,
+                ),
+                self.assertRaisesRegex(ValueError, "lease receipt is unreadable"),
             ):
-                with self.assertRaisesRegex(ValueError, "lease receipt is unreadable"):
-                    stackctl._local_build_cache_runtime_audit()
+                stackctl._local_build_cache_runtime_audit()
 
     def test_unreadable_runtime_audit_fails_before_docker_prune(self) -> None:
         with (

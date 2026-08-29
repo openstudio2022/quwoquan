@@ -6,7 +6,7 @@ overrides:
   sys.rtc-service.redis.general.addr: ''
   sys.rtc-service.redis.realtime.addr: ''
 secretRefs:
-  sys.rtc-service.mongodb.uri: MONGO_URI
+  sys.rtc-service.mongodb.uri: RTC_MONGO_URI
 externalBindings:
   rtc.room.transport:
     state: enabled

@@ -95,6 +95,7 @@ type Post struct {
 type PostArticleAsset struct {
 	AssetId              string `json:"assetId" bson:"assetId"`
 	Kind                 string `json:"kind" bson:"kind"`
+	AccessMode           string `json:"accessMode" bson:"accessMode"`
 	PublicSliceKey       string `json:"publicSliceKey" bson:"publicSliceKey"`
 	Sha256               string `json:"sha256" bson:"sha256"`
 	MimeType             string `json:"mimeType" bson:"mimeType"`
@@ -195,8 +196,10 @@ type PostMediaItem struct {
 	Kind                     string `json:"kind" bson:"kind"`
 	MediaAssetId             string `json:"mediaAssetId" bson:"mediaAssetId"`
 	MediaAssetVersion        int64  `json:"mediaAssetVersion" bson:"mediaAssetVersion"`
+	AccessMode               string `json:"accessMode" bson:"accessMode"`
 	Url                      string `json:"url" bson:"url"`
 	CoverUrl                 string `json:"coverUrl" bson:"coverUrl"`
+	CoverAssetId             string `json:"coverAssetId" bson:"coverAssetId"`
 	ThumbnailUrl             string `json:"thumbnailUrl" bson:"thumbnailUrl"`
 	DurationMs               int64  `json:"durationMs" bson:"durationMs"`
 	Width                    int64  `json:"width" bson:"width"`

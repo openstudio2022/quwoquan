@@ -1,6 +1,6 @@
 {
   "candidateDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-  "schemaDigest": "sha256:3f27453d29439add5e71c39d1bdd28549c4c6f69a613836c1654414ac4739b9a",
+  "schemaDigest": "sha256:d3cd68a273c1b06e834df380bbca5384d3701df5c58d43dcbbfd5ef017fc9efe",
   "entries": [
     {
       "sha256Hash": "111b715594655786eba342c5cbebe7ea1338a9cf016ed0f35f54096802583478",
@@ -207,7 +207,7 @@
       }
     },
     {
-      "sha256Hash": "3525412614f94647191c1fead96cc6da3bdc452bf0bec9edd92af4793aed3110",
+      "sha256Hash": "3a73f535735fcbb64f7de0db524e9dab2ca1f41d7f1fec91c68053dfde5bc80f",
       "operationName": "ContentPostDetailBase",
       "operationType": "query",
       "canonicalOperationId": "content.post.GetPost",
@@ -220,11 +220,11 @@
         "ownershipPolicy": "visibility_filtered"
       },
       "costModelVersion": "graphql-cost-v1",
-      "costPlanDigest": "sha256:210167013a58adcbb05fef1d102e3dc4f0f58b33640ce3d940a7f8186724c56d",
+      "costPlanDigest": "sha256:65c81b877d39b7217bae75dc0bd8c4c5e3ded413e32137fbc13dfd9e3cb1095d",
       "cost": {
         "depth": 3,
         "topLevelFields": 1,
-        "complexity": 58,
+        "complexity": 60,
         "variablesMaxBytes": 1024,
         "pageSizeMax": 1,
         "maxOwnerCalls": 1,
@@ -233,7 +233,7 @@
         "sloRef": "slo:gateway.graphql_read.detail"
       },
       "costPlan": {
-        "baseComplexity": 58,
+        "baseComplexity": 60,
         "listMultipliers": [],
         "maxOwnerCalls": 1,
         "maxBatchKeys": 1,
@@ -252,6 +252,8 @@
         ],
         "selectedFields": [
           "assistantUsePolicy",
+          "authorAvatarAccessMode",
+          "authorAvatarAssetId",
           "authorAvatarUrl",
           "authorDisplayName",
           "authorId",

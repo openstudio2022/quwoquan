@@ -1,4 +1,16 @@
-# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-019
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-019.t1
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-019.t4
+"""GWT-019：真实 bootstrap 进程只推进 measurement 状态机。
+
+`t1` 的「不创建 WorkRequest、content execution、author/reviewer、pool-delivery、
+canonical object、release 或环境成功事实」与 `t4` 的「零 capacity receipt 可见、
+既有内容状态不变」由本文件以真实 CLI 子进程证明：四次命令跑完后 publish 树、
+release 树与环境树都不存在，capacity receipt 也不出现。
+
+真实 M100 measurement soak 与 100 次 Provider probe 属于
+[`OPEN-006`](../../../../specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#open-006)
+的外部资源缺口，本文件不以受控输入替代它。
+"""
 from __future__ import annotations
 
 import json

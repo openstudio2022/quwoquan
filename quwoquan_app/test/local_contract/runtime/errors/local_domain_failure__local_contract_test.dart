@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/errors/domain_error_code.dart';
+import 'package:quwoquan_app/runtime/errors/generated/circle/gathering_plan_errors.g.dart';
 import 'package:quwoquan_app/runtime/errors/generated/ops/ops_event_record_errors.g.dart';
 import 'package:quwoquan_app/runtime/errors/generated/rtc/rtc_errors.g.dart';
 import 'package:quwoquan_app/runtime/errors/generated/search/search_errors.g.dart';
@@ -29,6 +30,24 @@ void main() {
     expect(exception.code, 'RTC.USER.blocked');
     expect(exception.statusCode, RtcErrorCode.blocked.httpStatus);
     expect(exception.domainErrorCode, isNotNull);
+    expect(exception.runtimeFailure, isNotNull);
+  });
+
+  test('GatheringPlan 对象错误已注册为 App 可消费 typed code', () {
+    final declared = DomainErrorCodeRegistry.fromCode(
+      GatheringPlanErrorCode.gatheringPlanNotFound.code,
+    );
+
+    expect(declared, isNotNull);
+    expect(declared!.domain, 'circle');
+    expect(declared.value, GatheringPlanErrorCode.gatheringPlanNotFound);
+    expect(
+      declared.defaultMessage,
+      GatheringPlanErrorCode.gatheringPlanNotFound.defaultMessage,
+    );
+
+    final exception = localDomainCloudException(declared.code);
+    expect(exception.domainErrorCode?.value, declared.value);
     expect(exception.runtimeFailure, isNotNull);
   });
 
@@ -101,11 +120,7 @@ void main() {
     expect(local.semantic.title, remote.semantic.title);
     expect(local.semantic.recoveryAction, remote.semantic.recoveryAction);
     expect(local.semantic.failureKind, remote.semantic.failureKind);
-    expect(
-      local.telemetrySourceCode,
-      code,
-      reason: '本地判定的失败也必须能在埋点里按错误码聚合',
-    );
+    expect(local.telemetrySourceCode, code, reason: '本地判定的失败也必须能在埋点里按错误码聚合');
     expect(local.telemetryFailureKind, remote.telemetryFailureKind);
   });
 }

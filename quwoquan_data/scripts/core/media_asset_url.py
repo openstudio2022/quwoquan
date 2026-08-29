@@ -318,14 +318,21 @@ def build_release_media_manifest(
     publish_root: Path | None = None,
     object_root: Path | None = None,
     source_owner: str = "qwq_data",
+    release_class: str = "commercial",
 ) -> dict[str, Any]:
-    """Build the public MediaAsset closure for one immutable release.
+    """Build the MediaAsset closure for one immutable release.
 
     A release is an object closure, not a snapshot of the whole canonical media
     library. Canonical objects name their bodies by digest and the content
-    library owns those bodies, so packaging resolves them there; private CAS keys
-    are read only while packaging and are deliberately absent from the contract.
+    library owns those bodies, so packaging resolves them there. Delivery form
+    follows the release class (DEC-031): commercial assets derive an anonymous
+    ``publicSliceKey`` while research assets keep the CAS ``privateObjectKey``
+    that the delivery signer already accepts, so research media never gains an
+    anonymous delivery identity.
     """
+    if release_class not in {"research", "commercial"}:
+        raise ValueError(f"invalid release class: {release_class!r}")
+    private_delivery = release_class == "research"
     canonical = publish_root or PUBLISH_ROOT
     objects = object_root or canonical
     assets: dict[str, dict[str, Any]] = {}
@@ -382,15 +389,22 @@ def build_release_media_manifest(
                     metadata=metadata,
                 )
                 content_type = _asset_content_type(object_key, metadata)
-                public_slice_key = build_public_media_slice_key(
-                    asset_id=asset_id,
-                    kind=asset_kind,
-                    version=1,
-                    content_type=content_type,
-                )
-                if not public_slice_key:
-                    issues.append(f"public slice unresolved: {kind}/{ref}:{asset_id}")
-                    continue
+                if private_delivery:
+                    delivery_field = "privateObjectKey"
+                    delivery_key = object_key
+                else:
+                    delivery_field = "publicSliceKey"
+                    delivery_key = build_public_media_slice_key(
+                        asset_id=asset_id,
+                        kind=asset_kind,
+                        version=1,
+                        content_type=content_type,
+                    )
+                    if not delivery_key:
+                        issues.append(
+                            f"public slice unresolved: {kind}/{ref}:{asset_id}"
+                        )
+                        continue
                 owner_ref = f"{kind}/{ref.removeprefix(f'{kind}/')}"
                 rights_refs, rights_issues = _rights_snapshot_refs(
                     object_kind=kind,
@@ -405,7 +419,7 @@ def build_release_media_manifest(
                     "kind": asset_kind,
                     "version": 1,
                     "contentType": content_type,
-                    "publicSliceKey": public_slice_key,
+                    delivery_field: delivery_key,
                     "sha256": actual,
                     "bytes": physical.stat().st_size,
                     "ownerRefs": [owner_ref],
@@ -417,7 +431,7 @@ def build_release_media_manifest(
                         "kind",
                         "version",
                         "contentType",
-                        "publicSliceKey",
+                        delivery_field,
                         "sha256",
                         "bytes",
                     )
@@ -429,15 +443,18 @@ def build_release_media_manifest(
                         {*old["rightsSnapshotRefs"], *rights_refs}
                     )
                     continue
-                other_asset_id = slice_owners.get(public_slice_key)
-                if other_asset_id is not None and other_asset_id != asset_id:
-                    issues.append(
-                        f"public slice collision: {public_slice_key}:"
-                        f"{other_asset_id},{asset_id}"
-                    )
-                    continue
+                # CAS keys are content-addressed, so distinct assets may share
+                # one private body; only derived public slices must be unique.
+                if not private_delivery:
+                    other_asset_id = slice_owners.get(delivery_key)
+                    if other_asset_id is not None and other_asset_id != asset_id:
+                        issues.append(
+                            f"public slice collision: {delivery_key}:"
+                            f"{other_asset_id},{asset_id}"
+                        )
+                        continue
+                    slice_owners[delivery_key] = asset_id
                 assets[asset_id] = normalized
-                slice_owners[public_slice_key] = asset_id
     manifest = {
         "schema": "quwoquan_data.release_media_manifest",
         "releaseId": release_id,
@@ -455,22 +472,47 @@ def build_release_media_manifest(
     return manifest
 
 
+def release_media_delivery_key(row: Mapping[str, Any]) -> str:
+    """Return the validated delivery key of one release media manifest row.
+
+    Every asset carries exactly one delivery identity (DEC-031): a derived
+    ``publicSliceKey`` for commercial delivery or the CAS ``privateObjectKey``
+    for research delivery.
+    """
+    public_slice_key = str(row.get("publicSliceKey") or "")
+    private_object_key = str(row.get("privateObjectKey") or "")
+    if public_slice_key and private_object_key:
+        raise ValueError(
+            "release media asset declares both public and private delivery: "
+            f"{public_slice_key} / {private_object_key}"
+        )
+    if public_slice_key:
+        if not is_public_media_slice_key(public_slice_key):
+            raise ValueError(
+                f"invalid release media publicSliceKey: {public_slice_key}"
+            )
+        return public_slice_key
+    if not is_cas_media_object_key(private_object_key):
+        raise ValueError(
+            f"invalid release media privateObjectKey: {private_object_key}"
+        )
+    return private_object_key
+
+
 def copy_release_media_objects(
     *,
     manifest: Mapping[str, Any],
     release_root: Path,
 ) -> None:
-    """Materialize library-held bodies at public slice paths in the release."""
+    """Materialize library-held bodies at their delivery paths in the release."""
     assets = manifest.get("assets")
     if not isinstance(assets, list):
         raise TypeError("release media manifest assets must be an array")
     for index, row in enumerate(assets):
         if not isinstance(row, Mapping):
             raise TypeError(f"release media manifest assets[{index}] must be an object")
-        public_slice_key = str(row.get("publicSliceKey") or "")
+        delivery_key = release_media_delivery_key(row)
         expected = str(row.get("sha256") or "")
-        if not is_public_media_slice_key(public_slice_key):
-            raise ValueError(f"invalid release media publicSliceKey: {public_slice_key}")
         try:
             source = resolve_media_holding(expected)
         except (MediaHoldingError, ValueError) as exc:
@@ -479,7 +521,7 @@ def copy_release_media_objects(
             ) from exc
         if sha256_file(source) != expected:
             raise ValueError(f"release media source is missing or corrupt: {expected}")
-        target = payload_file(release_root, public_slice_key)
+        target = payload_file(release_root, delivery_key)
         if target.is_file():
             if sha256_file(target) != expected:
                 raise FileExistsError(f"immutable release media conflict: {target}")
@@ -490,7 +532,7 @@ def copy_release_media_objects(
         if sha256_file(temporary) != expected:
             temporary.unlink(missing_ok=True)
             raise ValueError(
-                f"release media post-copy hash mismatch: {public_slice_key}"
+                f"release media post-copy hash mismatch: {delivery_key}"
             )
         temporary.replace(target)
 
@@ -504,6 +546,7 @@ def materialize_release_media(
     publish_root: Path | None = None,
     release_root: Path | None = None,
     source_owner: str = "qwq_data",
+    release_class: str = "commercial",
 ) -> dict[str, Any]:
     """Freeze the exact canonical CAS closure into one release payload."""
     release = (release_root or RELEASE_ROOT) / release_id
@@ -514,6 +557,7 @@ def materialize_release_media(
         creator_refs=creator_refs,
         publish_root=publish_root,
         source_owner=source_owner,
+        release_class=release_class,
     )
     if manifest["issues"]:
         return manifest

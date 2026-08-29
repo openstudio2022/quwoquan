@@ -20,16 +20,16 @@ ROOT = Path(__file__).resolve().parents[4]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from quwoquan_ops.cli.lib import flutter_android_device_proxy as flutter_proxy
 from quwoquan_ops.cli.smoke import run_environment_patrol_smoke as smoke
 
 # 入口拆为薄壳 + environment_patrol_smoke 子包后，mock.patch.object 必须打在
 # 被测函数实际读取全局名的实现模块上，而不是入口 re-export 的绑定上。
 from quwoquan_ops.cli.smoke.environment_patrol_smoke import (
     device_runtime as smoke_device_runtime,
-    devices as smoke_devices,
-    execution as smoke_execution,
 )
-from quwoquan_ops.cli.lib import flutter_android_device_proxy as flutter_proxy
+from quwoquan_ops.cli.smoke.environment_patrol_smoke import devices as smoke_devices
+from quwoquan_ops.cli.smoke.environment_patrol_smoke import execution as smoke_execution
 from quwoquan_ops.tests.support.environment_patrol_smoke_test_support import (
     EnvironmentPatrolSmokeCaseBase,
 )
@@ -83,7 +83,9 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
                 dart_define_file=Path("/tmp/patrol-secrets.json"),
             )
 
-    @mock.patch.object(smoke_devices, "resolve_android_debug_bridge", return_value="/sdk/adb")
+    @mock.patch.object(
+        smoke_devices, "resolve_android_debug_bridge", return_value="/sdk/adb"
+    )
     @mock.patch.object(smoke.subprocess, "run")
     def test_explicit_android_device_discovery_uses_adb_without_flutter_lock(
         self,
@@ -111,7 +113,9 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
         )
 
     @mock.patch.object(smoke.shutil, "which", return_value="/sdk/flutter")
-    @mock.patch.object(smoke_device_runtime, "resolve_android_debug_bridge", return_value="/sdk/adb")
+    @mock.patch.object(
+        smoke_device_runtime, "resolve_android_debug_bridge", return_value="/sdk/adb"
+    )
     def test_android_patrol_uses_adb_inventory_for_flutter_device_discovery(
         self,
         _resolve_adb: mock.Mock,
@@ -138,6 +142,73 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
             str(smoke.ANDROID_DEVICE_PROXY),
             env[smoke.PATROL_FLUTTER_COMMAND_ENV],
         )
+
+    @mock.patch.object(
+        smoke_device_runtime.shutil, "which", return_value="/sdk/flutter"
+    )
+    def test_ios_patrol_uses_flutter_proxy_for_no_pub_builds(
+        self,
+        _which: mock.Mock,
+    ) -> None:
+        args = self._args()
+        device = {
+            "id": "SIMULATOR-UDID",
+            "name": "iPhone",
+            "targetPlatform": "ios",
+            "emulator": True,
+        }
+
+        with mock.patch.dict(os.environ, {}, clear=True):
+            env = smoke._device_command_env(args, device)
+
+        self.assertEqual(env["QWQ_IOS_SIMULATOR_UDID"], "SIMULATOR-UDID")
+        self.assertEqual(env[flutter_proxy.REAL_FLUTTER_ENV], "/sdk/flutter")
+        self.assertIn(
+            str(smoke.ANDROID_DEVICE_PROXY),
+            env[smoke.PATROL_FLUTTER_COMMAND_ENV],
+        )
+        self.assertNotIn(flutter_proxy.ANDROID_DEVICE_INVENTORY_ENV, env)
+
+    def test_patrol_device_env_requires_a_strict_boolean_emulator_field(self) -> None:
+        args = self._args()
+        for value in (None, 0, "false"):
+            device = {
+                "id": "emulator-5554",
+                "name": "Pixel",
+                "targetPlatform": "android-arm64",
+            }
+            if value is not None:
+                device["emulator"] = value
+            with (
+                self.subTest(value=value),
+                self.assertRaisesRegex(
+                    RuntimeError,
+                    "emulator field must be an explicit boolean",
+                ),
+            ):
+                smoke._device_command_env(args, device)
+
+    @mock.patch.object(smoke.shutil, "which", return_value="/sdk/flutter")
+    @mock.patch.object(
+        smoke_device_runtime, "resolve_android_debug_bridge", return_value="/sdk/adb"
+    )
+    def test_physical_android_inventory_preserves_false_emulator_identity(
+        self,
+        _resolve_adb: mock.Mock,
+        _which: mock.Mock,
+    ) -> None:
+        env = smoke._device_command_env(
+            self._args(),
+            {
+                "id": "physical-android",
+                "name": "Pixel",
+                "targetPlatform": "android-arm64",
+                "emulator": False,
+            },
+        )
+
+        inventory = json.loads(env[flutter_proxy.ANDROID_DEVICE_INVENTORY_ENV])
+        self.assertIs(inventory[0]["emulator"], False)
 
     @mock.patch.object(smoke_device_runtime, "acquire_consumer_lease")
     def test_android_patrol_acquires_consumer_lease_for_reversed_ports(
@@ -222,11 +293,14 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
             }
         ]
         with tempfile.SpooledTemporaryFile(mode="w+") as stdout:
-            with mock.patch.dict(
-                os.environ,
-                {flutter_proxy.ANDROID_DEVICE_INVENTORY_ENV: json.dumps(inventory)},
-                clear=False,
-            ), mock.patch.object(flutter_proxy.sys, "stdout", stdout):
+            with (
+                mock.patch.dict(
+                    os.environ,
+                    {flutter_proxy.ANDROID_DEVICE_INVENTORY_ENV: json.dumps(inventory)},
+                    clear=False,
+                ),
+                mock.patch.object(flutter_proxy.sys, "stdout", stdout),
+            ):
                 self.assertEqual(flutter_proxy.main(["devices", "--machine"]), 0)
             stdout.seek(0)
             self.assertEqual(json.load(stdout), inventory)
@@ -239,8 +313,25 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
         run: mock.Mock,
     ) -> None:
         run.return_value = subprocess.CompletedProcess([], 0, "javac 17.0.12\n", "")
+        inventory = json.dumps(
+            [
+                {
+                    "id": "emulator-5554",
+                    "name": "Pixel",
+                    "targetPlatform": "android-arm64",
+                    "emulator": True,
+                }
+            ]
+        )
         with tempfile.SpooledTemporaryFile(mode="w+") as stdout:
-            with mock.patch.object(flutter_proxy.sys, "stdout", stdout):
+            with (
+                mock.patch.dict(
+                    os.environ,
+                    {flutter_proxy.ANDROID_DEVICE_INVENTORY_ENV: inventory},
+                    clear=False,
+                ),
+                mock.patch.object(flutter_proxy.sys, "stdout", stdout),
+            ):
                 self.assertEqual(flutter_proxy.main(["doctor", "--verbose"]), 0)
             stdout.seek(0)
             self.assertIn("Java version 17.0.12", stdout.read())
@@ -251,7 +342,54 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
             check=False,
         )
 
-    @mock.patch.object(smoke_execution, "_terminate_process_group", return_value="stopped")
+    @mock.patch.object(flutter_proxy.os, "execv")
+    def test_flutter_proxy_adds_no_pub_only_to_patrol_ios_and_apk_builds(
+        self,
+        execv: mock.Mock,
+    ) -> None:
+        real_flutter = "/sdk/flutter"
+        cases = (
+            (
+                ["build", "apk", "--debug"],
+                [real_flutter, "build", "apk", "--no-pub", "--debug"],
+            ),
+            (
+                ["build", "ios", "--simulator"],
+                [real_flutter, "build", "ios", "--no-pub", "--simulator"],
+            ),
+            (
+                ["test", "--target", "test/canonical.dart"],
+                [real_flutter, "test", "--target", "test/canonical.dart"],
+            ),
+            (
+                ["build", "web", "--release"],
+                [real_flutter, "build", "web", "--release"],
+            ),
+            (
+                ["test", "--name", "build", "ios"],
+                [real_flutter, "test", "--name", "build", "ios"],
+            ),
+            (
+                ["build", "apk", "--no-pub", "--debug"],
+                [real_flutter, "build", "apk", "--no-pub", "--debug"],
+            ),
+        )
+        for args, expected in cases:
+            with (
+                self.subTest(args=args),
+                mock.patch.dict(
+                    os.environ,
+                    {flutter_proxy.REAL_FLUTTER_ENV: real_flutter},
+                    clear=True,
+                ),
+            ):
+                execv.reset_mock()
+                self.assertEqual(flutter_proxy.main(args), 127)
+                execv.assert_called_once_with(real_flutter, expected)
+
+    @mock.patch.object(
+        smoke_execution, "_terminate_process_group", return_value="stopped"
+    )
     @mock.patch.object(smoke.subprocess, "Popen")
     def test_run_command_cleans_process_group_on_interrupt(
         self,
@@ -267,7 +405,9 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
 
         terminate.assert_called_once_with(process)
 
-    def test_patrol_test_execution_prefers_xctest_over_zero_patrol_summary(self) -> None:
+    def test_patrol_test_execution_prefers_xctest_over_zero_patrol_summary(
+        self,
+    ) -> None:
         summary = smoke.patrol_test_execution_summary(
             "Executed 1 test, with 0 failures (0 unexpected)\n"
             "📝 Total: 0\n❌ Failed: 0\n"
@@ -287,8 +427,7 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
         self,
     ) -> None:
         passed = smoke.patrol_test_execution_summary(
-            "📝 Total: 2\n✅ Successful: 2\n❌ Failed: 0\n"
-            "⏩ Skipped: 0\n"
+            "📝 Total: 2\n✅ Successful: 2\n❌ Failed: 0\n⏩ Skipped: 0\n"
         )
         self.assertEqual(
             passed,
@@ -460,9 +599,7 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
         run: mock.Mock,
     ) -> None:
         run.return_value = subprocess.CompletedProcess([], 0, "", "")
-        args = self._args(
-            release_uat_cases="/tmp/homepage_verification_cases.json"
-        )
+        args = self._args(release_uat_cases="/tmp/homepage_verification_cases.json")
         device = {
             "id": "ios-release-uat",
             "targetPlatform": "ios",
@@ -501,7 +638,9 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
         )
         run.assert_not_called()
 
-    @mock.patch.object(smoke_device_runtime, "resolve_android_debug_bridge", return_value="/sdk/adb")
+    @mock.patch.object(
+        smoke_device_runtime, "resolve_android_debug_bridge", return_value="/sdk/adb"
+    )
     @mock.patch.object(smoke.subprocess, "run")
     def test_release_bound_android_uat_treats_uninstalled_app_as_reset(
         self,
@@ -509,9 +648,7 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
         _resolve_adb: mock.Mock,
     ) -> None:
         run.return_value = subprocess.CompletedProcess([], 1, "", "")
-        args = self._args(
-            release_uat_cases="/tmp/homepage_verification_cases.json"
-        )
+        args = self._args(release_uat_cases="/tmp/homepage_verification_cases.json")
         device = {
             "id": "emulator-5554",
             "targetPlatform": "android-arm64",

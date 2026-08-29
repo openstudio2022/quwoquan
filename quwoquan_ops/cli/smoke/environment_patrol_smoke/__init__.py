@@ -12,6 +12,7 @@ re-export）；本包按职责切分：
 - ``execution``：命令运行、进程组终止与执行摘要归因。
 - ``devices``：iOS/Android 设备发现与 dry-run。
 - ``wrapper``：Patrol target wrapper、secret define 与 patrol_command 组装。
+- ``artifact_binding``：真实 test-host 构建/安装读回与聚合 comparison 投影。
 - ``entry``：CLI main 与报告落盘。
 """
 from __future__ import annotations
@@ -194,5 +195,26 @@ from .wrapper import (  # noqa: E402,F401
     _purge_typed_actor_credential_artifacts,
     _stream_contains_any,
     patrol_command,
+)
+from .artifact_binding import (  # noqa: E402,F401
+    APP_PAGE_ARTIFACT_BINDING_BLOCKER,
+    CANONICAL_COMPARISON_KEYS,
+    TESTED_APP_ARTIFACT_BINDING_PROVENANCE,
+    TESTED_APP_ARTIFACT_BINDING_SCHEMA,
+    TESTED_APP_ARTIFACT_BINDING_SET_SCHEMA,
+    TestedAppArtifactBindingError,
+    artifact_payload_digest,
+    build_tested_app_artifact_binding,
+    collect_tested_app_artifact_binding,
+    host_source_identity,
+    tested_app_artifact_comparison,
+    tested_app_build_artifact_path,
+    validate_tested_app_artifact_binding,
+)
+from .artifact_binding_report import (  # noqa: E402,F401
+    attach_tested_app_artifact_binding,
+    new_tested_app_artifact_binding_set,
+    settle_tested_app_artifact_binding_report,
+    unavailable_tested_app_artifact_binding,
 )
 from .entry import main, write_report  # noqa: E402,F401

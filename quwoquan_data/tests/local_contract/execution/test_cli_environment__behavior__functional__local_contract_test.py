@@ -79,6 +79,8 @@ def test_cli_exposes_only_durable_task_facades():
         "prepare-video-manual-input",
         "acquire-videos",
         "rebind-video-acquisition-manifest",
+        "bind-sourced-video-unit",
+        "bind-sourced-image-unit",
         "review-asset",
         "review-image-supported-api-input",
         "author-image-supported-api-input",
@@ -88,6 +90,10 @@ def test_cli_exposes_only_durable_task_facades():
         "reconcile-failed-campaign",
         "reconcile-submissions",
         "runtime-evidence",
+        "freeze-homepage-media",
+        "stage-record",
+        "lane-claim",
+        "fleet-status",
     ]
 
     runtime_evidence = subprocess.run(

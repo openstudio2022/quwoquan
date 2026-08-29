@@ -18,6 +18,8 @@ import json
 import sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True
+
 _BOOTSTRAP = next(
     path
     for path in Path(__file__).resolve().parents

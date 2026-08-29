@@ -67,6 +67,7 @@ class ExecutionPolicy:
                 "calibrationReceiptDigest",
                 "applicability",
                 "frozenCapacity",
+                "frozenLiveness",
             )
             if (value := self.capacity_calibration.get(key)) is not None
         }
@@ -116,6 +117,22 @@ class ExecutionPolicy:
     @property
     def fleet_batch_deadline_epoch_seconds(self) -> int:
         return int(self.capacity_calibration["fleetBatchDeadlineEpochSeconds"])
+
+    @property
+    def source_discovery_heartbeat_interval_seconds(self) -> int:
+        return int(
+            self.capacity_calibration["frozenLiveness"][
+                "sourceDiscoveryHeartbeatIntervalSeconds"
+            ]
+        )
+
+    @property
+    def source_discovery_heartbeat_stale_after_seconds(self) -> int:
+        return int(
+            self.capacity_calibration["frozenLiveness"][
+                "sourceDiscoveryHeartbeatStaleAfterSeconds"
+            ]
+        )
 
     @classmethod
     def from_mapping(cls, payload: Mapping[str, Any]) -> "ExecutionPolicy":

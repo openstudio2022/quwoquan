@@ -13,20 +13,22 @@ import re
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from core.control_types import ExecutionStateStatus
+from core.control_types import RECEIPT_STAGE_SEQUENCE, ExecutionStateStatus
 from core.paths import DATA_EXECUTIONS_ROOT, execution_root, is_execution_id
 from core.schema import assert_valid
 
 RECEIPT_SCHEMA = "quwoquan_data.stage_receipt"
-RECEIPT_STAGES: tuple[str, ...] = (
-    "0.plan", "sources", "1.download", "2.quality", "3.compose",
-    "4.draft", "5.review", "publish", "release", "ship",
+RECEIPT_STAGES: tuple[str, ...] = tuple(
+    stage.value for stage in RECEIPT_STAGE_SEQUENCE
 )
 RECEIPT_NEXT_VALUES: tuple[str, ...] = (*RECEIPT_STAGES, "END")
 OPEN_ITEM_DISPOSITIONS: tuple[str, ...] = (
     "return_to_stage", "gate_block", "out_of_scope",
 )
 DEFAULT_CLAIM_TTL_MINUTES = 45
+# 驱动杀死一轮之后、claim 过 TTL 之前必须留出的余量：这段余量是给运营者接手用的，
+# 不是给在飞会话续命用的。
+CLAIM_TTL_SAFETY_MARGIN_MINUTES = 5
 _RECEIPT_NAME_RE = re.compile(r"^(\d{3})-(.+)\.json$")
 
 
@@ -231,6 +233,42 @@ def acquire_lane_claim(
     )
     os.replace(tmp, path)
     return {"acquired": True, "reason": "", "claim": claim}
+
+
+def round_timeout_admission(
+    execution_id: str, *, round_timeout_seconds: int
+) -> dict:
+    """判驱动的单轮 hard timeout 是否短于执行者 claim 的存活窗口。
+
+    驱动杀掉一轮宿主会话后，该会话的心跳随之停止；只有在 claim 仍未过 TTL 时，
+    这段空窗才不会被别的 lane 当成死 lane 接手。若单轮超时反而长于 TTL，在飞的
+    会话还活着、claim 已过期，两个写者会同时认为自己持有 lane。因此两者的关系
+    必须在驱动启动时判定，而不是靠默认值恰好成立。
+    """
+    if round_timeout_seconds <= 0:
+        return {
+            "admitted": False,
+            "ttlMinutes": 0,
+            "reason": "round timeout must be a positive number of seconds",
+        }
+    claim = check_lane_claim(execution_id)["claim"]
+    ttl_minutes = (
+        int(claim["ttlMinutes"])
+        if isinstance(claim, dict)
+        else DEFAULT_CLAIM_TTL_MINUTES
+    )
+    budget = ttl_minutes * 60 - CLAIM_TTL_SAFETY_MARGIN_MINUTES * 60
+    if round_timeout_seconds > budget:
+        return {
+            "admitted": False,
+            "ttlMinutes": ttl_minutes,
+            "reason": (
+                f"round timeout {round_timeout_seconds}s leaves no margin under "
+                f"claim TTL {ttl_minutes}m; must be at most {budget}s "
+                f"(TTL minus {CLAIM_TTL_SAFETY_MARGIN_MINUTES}m safety margin)"
+            ),
+        }
+    return {"admitted": True, "ttlMinutes": ttl_minutes, "reason": ""}
 
 
 def check_lane_claim(execution_id: str) -> dict:

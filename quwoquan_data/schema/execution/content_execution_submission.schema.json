@@ -89,6 +89,7 @@
       ]
     },
     "scaleSourcePool": {"$ref": "scale_source_pool_binding.schema.json"},
+    "acquisitionRootRef": {"type": "string", "minLength": 1},
     "sourcePoolEvidenceRootRef": {"type": "string", "minLength": 1},
     "sourcePoolSelection": {"$ref": "scale_source_pool_selection.schema.json"},
     "topic": { "type": ["string", "null"] },

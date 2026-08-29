@@ -52,7 +52,13 @@ def _blocked(
     }
 
 
-def _runtime_residue(target: str, compose_project: str) -> list[str]:
+def _runtime_residue(
+    target: str,
+    compose_project: str,
+    *,
+    topology: dict[str, Any],
+    manifest: dict[str, Any],
+) -> list[str]:
     """Return live evidence that the described runtime is not fully gone."""
     import quwoquan_ops.cli.stackctl as _stackctl
 
@@ -80,15 +86,27 @@ def _runtime_residue(target: str, compose_project: str) -> list[str]:
             f"Compose project {compose_project} still owns networks: "
             + ",".join(networks)
         )
+    canonical_endpoints = _stackctl.project_canonical_runtime_owned_ports(
+        port_profile=target,
+        manifest=manifest,
+    )
     occupied = [
         item
-        for item in _stackctl._canonical_port_occupancy_report(target)["ports"]
+        for item in _stackctl._runtime_owned_port_occupancy_report(
+            target,
+            published_ports=canonical_endpoints,
+            topology=topology,
+            manifest=manifest,
+        )["publishedEndpoints"]
         if item["open"]
     ]
     if occupied:
         residue.append(
-            "canonical target ports remain occupied: "
-            + ", ".join(f"{item['name']}:{item['port']}" for item in occupied)
+            "runtime-owned target endpoints remain occupied: "
+            + ", ".join(
+                f"{item['role']}:{item['hostPort']}/{item['protocol']}"
+                for item in occupied
+            )
         )
     return residue
 
@@ -139,8 +157,15 @@ def repair_stale_test_live_receipt(
 
     compose_project = f"quwoquan_{environment}_test_live"
     try:
-        residue = _runtime_residue(target, compose_project)
-    except (OSError, ValueError) as exc:
+        topology = _stackctl.load_environment_topology()
+        port_manifest = _stackctl.load_port_manifest()
+        residue = _runtime_residue(
+            target,
+            compose_project,
+            topology=topology,
+            manifest=port_manifest,
+        )
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
         summary = f"test-live runtime residue probe failed for {target}"
         return _blocked(
             report_dir=report_dir,

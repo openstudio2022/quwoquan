@@ -690,7 +690,7 @@ func (s *MessageService) ensureMessageAllowed(ctx context.Context, req SendMessa
 	if err != nil {
 		return err
 	}
-	if conv.Status != "" && conv.Status != "active" {
+	if conv.Status != conversationmodel.ConversationStatusActive {
 		return chatBlocked("conversation is not active")
 	}
 	if effectiveConversationAccessMode(conv) == ConversationAccessModeReadOnly {

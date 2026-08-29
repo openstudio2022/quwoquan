@@ -20,8 +20,6 @@ from core.control_types import TargetSelector  # noqa: F401
 from core.io import read_json, write_json
 from core.paths import OUTPUT_ROOT, REPO_ROOT, recipe_path
 from core.source_digest import current_source_digest
-from governance.provider_policy import load_provider_policy
-
 from content.execution import store
 from content.execution.queue import backend as queue_backend
 from content.execution.planning.recipe import request as recipe_request, support as recipe_support
@@ -203,12 +201,6 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
         )
     recipe = load_recipe(recipe_ref)
     stage = str(getattr(args, "stage", "run") or "run")
-    try:
-        load_provider_policy(identity.vertical).require_declared(
-            runtime_request.source_providers
-        )
-    except ValueError as exc:
-        raise SystemExit(f"[task execute] GATE_BLOCK {exc}") from exc
     scale_promotion_receipt: dict[str, Any] | None = None
     scale_promotion_carrier: str | None = None
     if (

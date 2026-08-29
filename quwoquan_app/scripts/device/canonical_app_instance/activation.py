@@ -20,6 +20,12 @@ from quwoquan_ops.cli.lib.app_launch_manifest_contract import (
     runtime_config_activation_request_digest,
     validate_runtime_config_activation_receipt,
 )
+from quwoquan_ops.cli.lib.generated.app_launch_contract import (
+    LAUNCH_PROVENANCES,
+    RUNTIME_CONFIG_ACTIVATION_RECEIPT_REQUIRED_FIELDS,
+    RUNTIME_CONFIG_ACTIVATION_RECEIPT_STATUSES,
+    RUNTIME_CONFIG_SUPPLY_MODES,
+)
 
 # typed 失败定义在叶子模块，launcher 参数预检无需引入本模块的契约依赖链。
 from .arguments import CanonicalExecutorError
@@ -28,25 +34,10 @@ from .arguments import CanonicalExecutorError
 REQUEST_FILE_NAME = "runtime-config-activation-request.json"
 RECEIPT_FILE_NAME = "runtime-config-activation-receipt.json"
 ACTIVE_RECEIPT_FILE_NAME = "runtime-config-active-receipt.json"
+ACTIVE_PACKAGE_FILE_NAME = "runtime-config-package.json"
 MAXIMUM_RUNTIME_DOCUMENT_BYTES = 1024 * 1024
 DIGEST_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
-RECEIPT_FIELDS = frozenset(
-    {
-        "schema",
-        "status",
-        "requestDigest",
-        "environment",
-        "buildProfile",
-        "target",
-        "packageDigest",
-        "trustEnvelopeDigest",
-        "effectiveLaunchManifestDigest",
-        "previousActiveDigest",
-        "activePackageDigest",
-        "errorCode",
-        "validationIssues",
-    }
-)
+RECEIPT_FIELDS = frozenset(RUNTIME_CONFIG_ACTIVATION_RECEIPT_REQUIRED_FIELDS)
 
 FORBIDDEN_COMPILE_ENVIRONMENT_KEYS = frozenset(
     {
@@ -54,7 +45,8 @@ FORBIDDEN_COMPILE_ENVIRONMENT_KEYS = frozenset(
         "QWQ_ENVIRONMENT",
         "QWQ_APP_RUNTIME_ENV",
         "QWQ_APP_RUN_MODE",
-        "QWQ_APP_LAUNCH_MODE",
+        "QWQ_APP_LAUNCH_PROVENANCE",
+        "QWQ_RUNTIME_CONFIG_SUPPLY_MODE",
         "QWQ_APP_LAUNCH_POLICY",
         "QWQ_LAUNCH_TARGET",
         "QWQ_LAUNCH_HANDOFF_JSON",
@@ -63,6 +55,9 @@ FORBIDDEN_COMPILE_ENVIRONMENT_KEYS = frozenset(
         "QWQ_RUNTIME_CONFIG_TRUST_ENVELOPE_DIGEST",
         "QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST",
         "QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST",
+        "QWQ_APP_RECOVERY_BASE_URL",
+        "QWQ_APP_PUBLIC_WEB_URL",
+        "QWQ_APP_DOWNLOAD_BASE_URL",
         "QWQ_APP_RUNTIME_CONFIG_PACKAGE_PATH",
         "QWQ_IOS_RUNTIME_CONFIG_PACKAGE_PATH",
         "QWQ_APP_RUNTIME_CONFIG_TRUST_PATH",
@@ -129,38 +124,11 @@ class CanonicalLaunchExecutor:
         self._emit_phase("installed")
         self._emit_phase("configuring")
 
-        expected_active_digest = self._read_expected_active_digest()
-        request = build_runtime_config_activation_request(
-            self.handoff,
-            expected_active_digest=expected_active_digest,
+        activate_runtime_config(
+            handoff=self.handoff,
+            platform_driver=self.platform_driver,
+            activation_timeout_seconds=self.activation_timeout_seconds,
         )
-        request_digest = runtime_config_activation_request_digest(request)
-        self.platform_driver.write_activation_request(canonical_json_bytes(request))
-        self.platform_driver.launch_activation(request_digest)
-        activated_receipt = self._wait_for_current_activation_receipt(
-            request,
-            request_digest,
-        )
-        active_receipt_payload = self.platform_driver.read_runtime_file(
-            ACTIVE_RECEIPT_FILE_NAME
-        )
-        if active_receipt_payload is None:
-            raise CanonicalExecutorError(
-                "native activation committed no active activation receipt"
-            )
-        active_receipt = decode_activation_receipt(
-            active_receipt_payload,
-            label="active activation receipt",
-        )
-        active_issues = validate_runtime_config_activation_receipt(
-            active_receipt,
-            request,
-        )
-        if active_issues or active_receipt != activated_receipt:
-            details = "; ".join(active_issues) or "active receipt differs from launch receipt"
-            raise CanonicalExecutorError(
-                f"native active activation receipt is inconsistent: {details}"
-            )
         self._emit_phase("configured")
 
         self._emit_phase("launching")
@@ -179,56 +147,110 @@ class CanonicalLaunchExecutor:
             on_attached=mark_attached,
         )
 
-    def _read_expected_active_digest(self) -> str:
-        payload = self.platform_driver.read_runtime_file(ACTIVE_RECEIPT_FILE_NAME)
-        if payload is None:
-            return ""
-        receipt = decode_activation_receipt(
-            payload,
-            label="active activation receipt",
-        )
-        if receipt["status"] != "activated":
-            raise CanonicalExecutorError(
-                "active activation receipt does not record activated status"
-            )
-        return str(receipt["activePackageDigest"])
-
-    def _wait_for_current_activation_receipt(
-        self,
-        request: dict[str, object],
-        request_digest: str,
-    ) -> dict[str, object]:
-        deadline = time.monotonic() + self.activation_timeout_seconds
-        while time.monotonic() < deadline:
-            payload = self.platform_driver.read_runtime_file(RECEIPT_FILE_NAME)
-            if payload is None:
-                time.sleep(0.1)
-                continue
-            receipt = decode_activation_receipt(
-                payload,
-                label="activation receipt",
-            )
-            if receipt["requestDigest"] != request_digest:
-                time.sleep(0.1)
-                continue
-            issues = validate_runtime_config_activation_receipt(receipt, request)
-            if issues:
-                raise CanonicalExecutorError(
-                    "native activation receipt failed validation: " + "; ".join(issues)
-                )
-            if receipt["status"] != "activated":
-                error_code = str(receipt.get("errorCode") or "unknown")
-                raise CanonicalExecutorError(
-                    f"native runtime configuration activation failed: {error_code}"
-                )
-            return receipt
-        raise CanonicalExecutorError(
-            "native activation receipt was not bound to the current request "
-            f"within {self.activation_timeout_seconds:g}s"
-        )
-
     def _emit_phase(self, phase: str) -> None:
         self.emit(f"QWQ_APP_LAUNCH_PHASE status={phase}")
+
+
+def _expected_active_digest(platform_driver: PlatformDriver) -> str:
+    payload = platform_driver.read_runtime_file(ACTIVE_RECEIPT_FILE_NAME)
+    if payload is None:
+        return ""
+    receipt = decode_activation_receipt(
+        payload,
+        label="active activation receipt",
+    )
+    if receipt["status"] != "activated":
+        raise CanonicalExecutorError(
+            "active activation receipt does not record activated status"
+        )
+    return str(receipt["activePackageDigest"])
+
+
+def _wait_for_current_activation_receipt(
+    platform_driver: PlatformDriver,
+    request: dict[str, object],
+    request_digest: str,
+    activation_timeout_seconds: float,
+) -> dict[str, object]:
+    deadline = time.monotonic() + activation_timeout_seconds
+    while time.monotonic() < deadline:
+        payload = platform_driver.read_runtime_file(RECEIPT_FILE_NAME)
+        if payload is None:
+            time.sleep(0.1)
+            continue
+        receipt = decode_activation_receipt(
+            payload,
+            label="activation receipt",
+        )
+        if receipt["requestDigest"] != request_digest:
+            time.sleep(0.1)
+            continue
+        issues = validate_runtime_config_activation_receipt(receipt, request)
+        if issues:
+            raise CanonicalExecutorError(
+                "native activation receipt failed validation: " + "; ".join(issues)
+            )
+        if receipt["status"] != "activated":
+            error_code = str(receipt.get("errorCode") or "unknown")
+            raise CanonicalExecutorError(
+                f"native runtime configuration activation failed: {error_code}"
+            )
+        return receipt
+    raise CanonicalExecutorError(
+        "native activation receipt was not bound to the current request "
+        f"within {activation_timeout_seconds:g}s"
+    )
+
+
+def activate_runtime_config(
+    *,
+    handoff: dict[str, object],
+    platform_driver: PlatformDriver,
+    activation_timeout_seconds: float,
+) -> dict[str, object]:
+    """在一个已安装的 App 上激活 handoff 携带的 runtime config package。
+
+    生产 canonical launcher 与 Patrol UAT 宿主编排调用同一份：宿主的激活语义、CAS 判否与
+    回执一致性检查因此与生产同源，而不是各自实现一遍。App 必须已安装；本函数不做 build 与
+    install，也不启动 Flutter，只负责「投递请求 → 专用冷启动 → 回执落地并自洽」。
+    """
+
+    request = build_runtime_config_activation_request(
+        handoff,
+        expected_active_digest=_expected_active_digest(platform_driver),
+    )
+    request_digest = runtime_config_activation_request_digest(request)
+    platform_driver.write_activation_request(canonical_json_bytes(request))
+    platform_driver.launch_activation(request_digest)
+    activated_receipt = _wait_for_current_activation_receipt(
+        platform_driver,
+        request,
+        request_digest,
+        activation_timeout_seconds,
+    )
+    active_receipt_payload = platform_driver.read_runtime_file(
+        ACTIVE_RECEIPT_FILE_NAME
+    )
+    if active_receipt_payload is None:
+        raise CanonicalExecutorError(
+            "native activation committed no active activation receipt"
+        )
+    active_receipt = decode_activation_receipt(
+        active_receipt_payload,
+        label="active activation receipt",
+    )
+    active_issues = validate_runtime_config_activation_receipt(
+        active_receipt,
+        request,
+    )
+    if active_issues or active_receipt != activated_receipt:
+        details = (
+            "; ".join(active_issues) or "active receipt differs from launch receipt"
+        )
+        raise CanonicalExecutorError(
+            f"native active activation receipt is inconsistent: {details}"
+        )
+    return active_receipt
 
 
 def canonical_json_bytes(document: object) -> bytes:
@@ -257,7 +279,7 @@ def decode_activation_receipt(
         raise CanonicalExecutorError(f"{label} is not canonical JSON")
     if (
         decoded.get("schema") != "app-runtime-config-activation-receipt"
-        or decoded.get("status") not in {"activated", "failed"}
+        or decoded.get("status") not in RUNTIME_CONFIG_ACTIVATION_RECEIPT_STATUSES
     ):
         raise CanonicalExecutorError(f"{label} identity is invalid")
     digest_fields = (
@@ -280,7 +302,14 @@ def decode_activation_receipt(
         isinstance(item, str) and item for item in decoded["validationIssues"]
     ):
         raise CanonicalExecutorError(f"{label} validationIssues is invalid")
-    for field in ("environment", "buildProfile", "target", "errorCode"):
+    for field in (
+        "environment",
+        "buildProfile",
+        "target",
+        "launchProvenance",
+        "runtimeConfigSupplyMode",
+        "errorCode",
+    ):
         if not isinstance(decoded.get(field), str):
             raise CanonicalExecutorError(f"{label} {field} is invalid")
     if decoded["status"] == "activated":
@@ -288,6 +317,8 @@ def decode_activation_receipt(
             not decoded["environment"]
             or not decoded["buildProfile"]
             or not decoded["target"]
+            or decoded["launchProvenance"] not in LAUNCH_PROVENANCES
+            or decoded["runtimeConfigSupplyMode"] not in RUNTIME_CONFIG_SUPPLY_MODES
             or decoded["activePackageDigest"] != decoded["packageDigest"]
             or decoded["errorCode"] != ""
             or decoded["validationIssues"] != []

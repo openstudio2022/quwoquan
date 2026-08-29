@@ -15,14 +15,22 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from quwoquan_ops.cli.lib.app_identity import (
+    build_profile_for_environment,
+    launch_policy_for_build_profile,
+)
 from quwoquan_ops.cli.lib.environment_topology import ENVIRONMENTS, load_environment_topology
 from quwoquan_ops.cli.lib.common import load_json_yaml
 from quwoquan_ops.cli.lib.media_delivery_manifest import load_media_delivery_manifest
 from quwoquan_ops.cli.lib.output_paths import DEFAULT_DEPLOY_TARGET_BY_ENV
+import media_delivery_consumer_sweep  # noqa: E402
+import media_delivery_typed_binding_lock  # noqa: E402
 
 
 MEDIA_ROOT = (
@@ -578,8 +586,17 @@ def _validate_consumer_boundary(issues: list[str]) -> None:
         issues.append("VideoPlayerWidget 仍接收 raw videoUrl/videoUrlCandidates")
     if "resolveContentVideoUrlCandidates" in text:
         issues.append("VideoPlayerWidget 不得解析业务媒体引用")
-    if "final MediaDeliveryReference deliveryReference;" not in text:
-        issues.append("VideoPlayerWidget 必须接收 MediaDeliveryReference")
+    # 取址只允许两种 typed 形态且互斥：公开 canonical 交付引用，或已由
+    # SignedMediaDeliveryCoordinator 校验过的私有短签交付。私有资产没有公开
+    # canonical path，把公开引用设成必填等于逼消费面伪造一条公开地址。
+    if "final MediaDeliveryReference? deliveryReference;" not in text:
+        issues.append(
+            "VideoPlayerWidget 必须接收可缺席的 MediaDeliveryReference（私有路由短签交付承担取址）"
+        )
+    if "final SignedVideoDelivery? signedDelivery;" not in text:
+        issues.append("VideoPlayerWidget 必须接收 SignedVideoDelivery 私有短签交付")
+    if "(deliveryReference == null) != (signedDelivery == null)" not in text:
+        issues.append("VideoPlayerWidget 必须断言公开引用与私有短签交付恰有一个在场")
 
     resolver = (
         ROOT
@@ -605,11 +622,14 @@ def _validate_consumer_boundary(issues: list[str]) -> None:
 def _validate_runtime_config_authority_parity(
     issues: list[str],
     environments: tuple[str, ...] = tuple(ENVIRONMENTS),
-    *,
-    launch_policy: str = "prod_release",
 ) -> None:
     topology = load_environment_topology()
     for env_name in environments:
+        # launchPolicy 由 app_artifact_manifest 的信任域契约单点派生
+        # （nonprod→test_live、prod→prod_release），解析器会校验二者匹配。
+        launch_policy = launch_policy_for_build_profile(
+            build_profile_for_environment(env_name)
+        )
         config_path = APP_RUNTIME_CONFIG_DIR / env_name / "app_runtime.yaml"
         if not config_path.is_file():
             issues.append(f"{env_name}: 缺少 App runtime config: {config_path.relative_to(ROOT)}")
@@ -661,10 +681,17 @@ def _validate_runtime_config_authority_parity(
             issues.append(f"{env_name}: 无法执行 App Dart define 解析器: {exc}")
             continue
         if result.returncode != 0:
-            issues.append(
-                f"{env_name}: App Dart define 解析失败: "
-                f"{(result.stderr or result.stdout).strip()}"
-            )
+            detail = (result.stderr or result.stdout).strip()
+            # 不传 --component-environment 时本 gate 处于 release 全量模式，会要求
+            # 各环境的不可变打包产物。开发机上没有 Prod 包是常态，报「解析失败」
+            # 会被读成媒体契约违规；这里把模式差异说清楚，指向源码模式的调用。
+            if "run stackctl package first" in detail:
+                detail += (
+                    "；这是 release 全量模式的前提产物，本地/源码校验请按 "
+                    "gate_repo.sh 的形态传 --component-environment alpha "
+                    "--component-environment beta --component-environment gamma"
+                )
+            issues.append(f"{env_name}: App Dart define 解析失败: {detail}")
             continue
         try:
             package = json.loads(result.stdout)
@@ -878,7 +905,10 @@ def main() -> int:
         default=[],
         help=(
             "validate a non-production source component against canonical test_live "
-            "topology without reading a packaged runtime; repeat for each environment"
+            "topology without reading a packaged runtime; repeat for each environment. "
+            "Local and CI source verification must pass this flag (see gate_repo.sh); "
+            "omitting it selects release-full mode, which requires immutable packaged "
+            "runtimes for every environment including Prod"
         ),
     )
     args = parser.parse_args()
@@ -887,7 +917,6 @@ def main() -> int:
         component_environments
         or ((args.env,) if args.env else tuple(ENVIRONMENTS))
     )
-    launch_policy = "test_live" if component_environments else "prod_release"
     issues: list[str] = []
     _validate_topology_urls(issues)
     _validate_playback_canary_topology(issues)
@@ -896,10 +925,11 @@ def main() -> int:
     _scan_forbidden_paths(issues)
     _validate_fixture_media_fields(issues)
     _validate_consumer_boundary(issues)
+    media_delivery_typed_binding_lock.validate(issues)
+    media_delivery_consumer_sweep.validate(issues)
     _validate_runtime_config_authority_parity(
         issues,
         selected_environments,
-        launch_policy=launch_policy,
     )
     _validate_video_playback_patrol_contract(issues)
     _validate_avatar_media_patrol_contract(issues)

@@ -33,7 +33,6 @@ from quwoquan_ops.cli.lib.local_runtime_capacity import (
     CONTAINER_STORE_SCOPE,
     HOST_SCOPE,
     CapacityPolicy,
-    CapacityProbe,
     CapacityReport,
     CapacityThresholds,
     ContainerStoreProbeSpec,
@@ -356,7 +355,7 @@ class RequiredContainerLivenessLocalContractTest(unittest.TestCase):
     def test_running_receipt_with_dead_dependency_is_not_available(self) -> None:
         startup = {
             "status": "running",
-            "composeProject": "quwoquan_gamma_release_current_1",
+            "composeProject": "quwoquan_gamma_release_7002_1",
         }
         runner = _docker_liveness_runner(
             [
@@ -681,15 +680,17 @@ class CapacityPreflightWiringLocalContractTest(unittest.TestCase):
         self.assertEqual(report["capacity"], self.insufficient["evidence"])
 
 
-class AppPreflightRuntimeBlockingLocalContractTest(unittest.TestCase):
-    """DOM-003.t4/t5：App preflight 在编译安装前对底座断裂硬阻断。
+class AppPreflightTestLiveAvailabilityWarningLocalContractTest(unittest.TestCase):
+    """DOM-003.t4/t5：`test_live` 保留可用性诊断但继续启动。
 
-    这里刻意选 `test_live` + `purpose=runtime`（最宽松的档）：身份类问题在这
-    一档只进 warnings，因此 details 里出现的只能是容量与依赖判定本身。
+    必需容器或容量水位不可用时，只有 mutable `test_live` 将该事实写入
+    warnings 并继续后续真实编译、安装与启动；typed blocker 仍保留在可回读
+    的 liveness/capacity evidence 中，不得写成 App launch `firstBlocker`。
     """
 
     _PROVIDER_DIGEST = "sha256:" + "3" * 64
     _CONFIGURATION_DIGEST = "sha256:" + "1" * 64
+    _OBSERVABILITY_LOG_SINK_DIGEST = "sha256:" + "2" * 64
 
     def _preflight(
         self,
@@ -707,6 +708,7 @@ class AppPreflightRuntimeBlockingLocalContractTest(unittest.TestCase):
             "attemptId": "attempt-alpha-availability",
             "composeProject": "quwoquan_alpha_test_live_1",
             "configurationDigest": self._CONFIGURATION_DIGEST,
+            "observabilityLogSinkDigest": self._OBSERVABILITY_LOG_SINK_DIGEST,
             "providerRuntimeDigest": self._PROVIDER_DIGEST,
         }
         with tempfile.TemporaryDirectory() as temp:
@@ -808,7 +810,7 @@ class AppPreflightRuntimeBlockingLocalContractTest(unittest.TestCase):
             "evidence": {"status": "passed", "blocker": "", "probes": []},
         }
 
-    def test_dead_dependency_blocks_preflight_in_the_most_lenient_mode(self) -> None:
+    def test_dead_dependency_becomes_warning_in_test_live_mode(self) -> None:
         result = self._preflight(
             containers=[
                 {
@@ -820,15 +822,18 @@ class AppPreflightRuntimeBlockingLocalContractTest(unittest.TestCase):
             ],
             capacity=self._sufficient_capacity,
         )
-        self.assertEqual(result["exitCode"], 2)
-        self.assertEqual(result["status"], "gate_block")
-        self.assertEqual(result["firstBlocker"], RUNTIME_DEPENDENCY_BLOCKER)
+        self.assertEqual(result["exitCode"], 0)
+        self.assertEqual(result["status"], "warning")
+        self.assertEqual(result["firstBlocker"], "")
+        self.assertEqual(result["details"], [])
         liveness = result["runtimeContainerLiveness"]
         self.assertEqual(liveness["status"], "unavailable")
+        self.assertEqual(liveness["blocker"], RUNTIME_DEPENDENCY_BLOCKER)
         self.assertIn(liveness["status"], RUNTIME_HEALTH_STATUSES)
-        self.assertIn("mongodb", " ".join(result["details"]))
+        self.assertIn("readiness.service:", " ".join(result["warnings"]))
+        self.assertIn("mongodb", " ".join(result["warnings"]))
 
-    def test_insufficient_capacity_blocks_preflight_and_outranks_other_findings(
+    def test_insufficient_capacity_is_recorded_alongside_other_warnings(
         self,
     ) -> None:
         insufficient = {
@@ -850,10 +855,18 @@ class AppPreflightRuntimeBlockingLocalContractTest(unittest.TestCase):
             ],
             capacity=insufficient,
         )
-        self.assertEqual(result["exitCode"], 2)
-        # 容量是依赖退出的上游成因，首因必须报容量而不是它的级联。
-        self.assertEqual(result["firstBlocker"], CAPACITY_BLOCKER)
+        self.assertEqual(result["exitCode"], 0)
+        self.assertEqual(result["status"], "warning")
+        self.assertEqual(result["firstBlocker"], "")
+        self.assertEqual(result["details"], [])
         self.assertEqual(result["capacity"], insufficient["evidence"])
+        self.assertEqual(
+            result["runtimeContainerLiveness"]["blocker"],
+            RUNTIME_DEPENDENCY_BLOCKER,
+        )
+        warning_text = " ".join(result["warnings"])
+        self.assertIn("readiness.service:", warning_text)
+        self.assertIn(f"readiness.capacity: {CAPACITY_BLOCKER}", warning_text)
 
     def test_healthy_runtime_leaves_preflight_unblocked_by_availability_evidence(
         self,
@@ -877,15 +890,18 @@ class AppPreflightRuntimeBlockingLocalContractTest(unittest.TestCase):
             expect_login_journey=True,
             one_shot_services=("mongo-init",),
         )
+        self.assertEqual(result["exitCode"], 0)
+        self.assertEqual(result["status"], "passed")
         self.assertEqual(result["details"], [])
+        self.assertEqual(result["warnings"], [])
         self.assertEqual(result["firstBlocker"], "")
         self.assertEqual(result["runtimeContainerLiveness"]["status"], "healthy")
 
-    def test_gracefully_stopped_dependency_still_blocks_preflight(self) -> None:
-        """退出码 0 的长驻服务不得让 preflight 放行 App 安装。
+    def test_gracefully_stopped_dependency_still_warns_in_test_live(self) -> None:
+        """退出码 0 的长驻服务仍必须被判定为不可用。
 
         这是本机制最容易漏掉的一档：`docker stop` 与 init job 完成在退出码上
-        同形，一旦按退出码判身份，preflight 就会在数据库已经停掉的环境上放行。
+        同形，一旦按退出码判身份，test_live 就会丢失应有的启动 warning。
         """
         result = self._preflight(
             containers=[
@@ -905,10 +921,15 @@ class AppPreflightRuntimeBlockingLocalContractTest(unittest.TestCase):
             capacity=self._sufficient_capacity,
             one_shot_services=("mongo-init",),
         )
-        self.assertEqual(result["exitCode"], 2)
-        self.assertEqual(result["firstBlocker"], RUNTIME_DEPENDENCY_BLOCKER)
-        self.assertEqual(result["runtimeContainerLiveness"]["status"], "degraded")
-        self.assertIn("mongodb", " ".join(result["details"]))
+        self.assertEqual(result["exitCode"], 0)
+        self.assertEqual(result["status"], "warning")
+        self.assertEqual(result["firstBlocker"], "")
+        self.assertEqual(result["details"], [])
+        liveness = result["runtimeContainerLiveness"]
+        self.assertEqual(liveness["status"], "degraded")
+        self.assertEqual(liveness["blocker"], RUNTIME_DEPENDENCY_BLOCKER)
+        self.assertIn("readiness.service:", " ".join(result["warnings"]))
+        self.assertIn("mongodb", " ".join(result["warnings"]))
 
 
 if __name__ == "__main__":

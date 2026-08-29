@@ -28,19 +28,26 @@ class _KeywordSuggestionRow extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppSpacing.smallBorderRadius),
           child: SizedBox.square(
             dimension: AppSpacing.avatarUserMd,
-            child: coverUrl.isEmpty
-                ? Icon(CupertinoIcons.map_fill, color: secondary)
-                : AppCachedNetworkImage(
-                    imageUrl: coverUrl,
-                    fit: BoxFit.cover,
-                    width: AppSpacing.avatarUserMd,
-                    height: AppSpacing.avatarUserMd,
-                    cdnPreset: CdnImagePreset.cover,
-                    errorWidget: Icon(
-                      CupertinoIcons.map_fill,
-                      color: secondary,
-                    ),
-                  ),
+            child: mediaDeliveryImage(
+              binding: MediaDeliveryBinding(
+                assetId: network.coverAssetId?.trim() ?? '',
+                accessMode: network.coverAccessMode,
+                publicUrl: coverUrl,
+              ),
+              kind: MediaDeliveryKind.image,
+              width: AppSpacing.avatarUserMd,
+              height: AppSpacing.avatarUserMd,
+              fit: BoxFit.cover,
+              absentWidget: Icon(CupertinoIcons.map_fill, color: secondary),
+              publicBuilder: (context, publicUrl) => AppCachedNetworkImage(
+                imageUrl: publicUrl,
+                fit: BoxFit.cover,
+                width: AppSpacing.avatarUserMd,
+                height: AppSpacing.avatarUserMd,
+                cdnPreset: CdnImagePreset.cover,
+                errorWidget: Icon(CupertinoIcons.map_fill, color: secondary),
+              ),
+            ),
           ),
         ),
         title: _highlightedText(

@@ -1857,6 +1857,27 @@ types:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+      - name: avatarAssetId
+        source: avatarAssetId
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 头像的媒体资产标识（DEC-033）；signed_grant 交付时 App 以此换取短签，禁止以 personaId 冒充媒体资产标识
+      - name: avatarAccessMode
+        source: avatarAccessMode
+        type: enum
+        enum_ref: MediaDeliveryAccessMode
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 头像交付访问模式；null 只允许出现在存量 public 交付，signed_grant 必须显式在场
       - name: backgroundUrl
         source: backgroundUrl
         type: string

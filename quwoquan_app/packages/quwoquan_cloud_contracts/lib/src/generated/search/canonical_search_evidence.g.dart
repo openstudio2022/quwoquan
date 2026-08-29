@@ -5,10 +5,7 @@ class CanonicalSearchEvidence {
   final String field;
   final String snippet;
 
-  CanonicalSearchEvidence({
-    required this.field,
-    required this.snippet,
-  });
+  CanonicalSearchEvidence({required this.field, required this.snippet});
 
   factory CanonicalSearchEvidence.fromMap(Map<String, dynamic> m) {
     _validateCanonicalSearchEvidenceWire(m);
@@ -19,16 +16,10 @@ class CanonicalSearchEvidence {
   }
 
   Map<String, dynamic> toMap() {
-    return <String, dynamic>{
-      'field': field,
-      'snippet': snippet,
-    };
+    return <String, dynamic>{'field': field, 'snippet': snippet};
   }
 
-  CanonicalSearchEvidence copyWith({
-    String? field,
-    String? snippet,
-  }) {
+  CanonicalSearchEvidence copyWith({String? field, String? snippet}) {
     return CanonicalSearchEvidence(
       field: field ?? this.field,
       snippet: snippet ?? this.snippet,
@@ -37,18 +28,27 @@ class CanonicalSearchEvidence {
 }
 
 void _validateCanonicalSearchEvidenceWire(Map<String, dynamic> m) {
-  const allowed = <String>{
-    'field',
-    'snippet',
-  };
-  final unknown = m.keys.where((key) => !allowed.contains(key)).toList(growable: false);
+  const allowed = <String>{'field', 'snippet'};
+  final unknown = m.keys
+      .where((key) => !allowed.contains(key))
+      .toList(growable: false);
   if (unknown.isNotEmpty) {
-    throw FormatException('CanonicalSearchEvidence contains unknown fields: ${unknown.join(',')}');
+    throw FormatException(
+      'CanonicalSearchEvidence contains unknown fields: ${unknown.join(',')}',
+    );
   }
-  if (!m.containsKey('field') || m['field'] == null || (m['field'] is! String)) {
-    throw FormatException('CanonicalSearchEvidence.field has an invalid wire value');
+  if (!m.containsKey('field') ||
+      m['field'] == null ||
+      (m['field'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchEvidence.field has an invalid wire value',
+    );
   }
-  if (!m.containsKey('snippet') || m['snippet'] == null || (m['snippet'] is! String)) {
-    throw FormatException('CanonicalSearchEvidence.snippet has an invalid wire value');
+  if (!m.containsKey('snippet') ||
+      m['snippet'] == null ||
+      (m['snippet'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchEvidence.snippet has an invalid wire value',
+    );
   }
 }

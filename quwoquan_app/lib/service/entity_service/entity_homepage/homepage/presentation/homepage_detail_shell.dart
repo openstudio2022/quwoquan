@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/runtime/di/media_delivery_composition.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
@@ -34,6 +35,8 @@ import 'package:quwoquan_app/design_system/feedback/app_empty_state.dart';
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
 import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
 import 'package:quwoquan_app/design_system/media/app_media_image.dart';
+import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart'
+    show MediaDeliveryKind;
 import 'package:quwoquan_app/design_system/object_page/profile_ios_components.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/application/public/circle_detail_page_route_extra.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/domain/homepage_tab.dart';

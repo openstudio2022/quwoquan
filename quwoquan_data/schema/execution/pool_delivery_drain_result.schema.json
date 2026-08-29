@@ -58,20 +58,7 @@
       "uniqueItems": true,
       "items": {"type": "string", "minLength": 1}
     },
-    "nextAction": {
-      "enum": [
-        "supply_input",
-        "retry_source_discovery",
-        "expand_scope",
-        "change_source_strategy",
-        "acquire_or_retry",
-        "repair_evidence",
-        "repair_identity",
-        "select_new_identity",
-        "resume_delivery",
-        "none"
-      ]
-    },
+    "nextAction": {"$ref": "recovery_next_action.schema.json"},
     "reentryRef": {"$ref": "#/$defs/reentryRef"}
   },
   "allOf": [
@@ -146,19 +133,9 @@
           "uniqueItems": true,
           "items": {"type": "string", "minLength": 1}
         },
-        "nextAction": {
-          "enum": [
-            "supply_input",
-            "retry_source_discovery",
-            "expand_scope",
-            "change_source_strategy",
-            "acquire_or_retry",
-            "repair_evidence",
-            "repair_identity",
-            "select_new_identity",
-            "resume_delivery",
-            "none"
-          ]
+        "nextAction": {"$ref": "recovery_next_action.schema.json"},
+        "reentryRef": {
+          "oneOf": [{"$ref": "#/$defs/reentryRef"}, {"type": "null"}]
         }
       },
       "allOf": [
@@ -171,13 +148,15 @@
             "properties": {
               "canonicalObject": {"$ref": "#/$defs/canonicalObject"},
               "issueCodes": {"maxItems": 0},
-              "nextAction": {"const": "none"}
+              "nextAction": {"const": "none"},
+              "reentryRef": {"type": "null"}
             }
           },
           "else": {
             "properties": {
               "canonicalObject": {"type": "null"},
-              "nextAction": {"not": {"const": "none"}}
+              "nextAction": {"not": {"const": "none"}},
+              "reentryRef": {"$ref": "#/$defs/reentryRef"}
             }
           }
         }
@@ -188,8 +167,7 @@
       "additionalProperties": false,
       "required": [
         "transactionId", "applyReportRef", "canonicalObjectRef",
-        "canonicalObjectSha256", "objectClosureDigest", "admissionResult",
-        "poolRecord"
+        "canonicalObjectSha256", "objectClosureDigest", "admissionResult"
       ],
       "properties": {
         "transactionId": {"type": "string", "minLength": 1},

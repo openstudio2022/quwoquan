@@ -1,11 +1,12 @@
-"""Load one governed capacity calibration receipt and freeze it into a policy.
+"""Freeze one proven capacity calibration receipt into an execution policy.
 
 `DEC-006` makes a create-once receipt the only legal source of the two
 concurrency ceilings, the per-object wall clock and the completion grace. This
-module is the read side of that decision: it verifies a receipt against its own
-digest, refuses a receipt whose applicability does not cover the requesting
-host and Provider tier, and projects the immutable `executionPolicy` binding
-that carries the values plus their provenance.
+module is the projection side of that decision: it refuses a receipt whose
+applicability does not cover the requesting host and Provider tier, and
+projects the immutable `executionPolicy` binding that carries the values plus
+their provenance. Proving the receipt itself belongs to
+`capacity_calibration_receipt`.
 
 Runtime never re-reads the receipt. Once `freeze_capacity_calibration_binding`
 returns, the binding alone decides the ceilings and the absolute batch
@@ -14,8 +15,6 @@ already running.
 """
 from __future__ import annotations
 
-import hashlib
-import json
 import math
 import platform
 import re
@@ -23,8 +22,14 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from core import paths
-from core.schema import assert_valid, load_schema, validate_strict
+from core.schema import load_schema, validate_strict
+
+from content.execution.planning.capacity_calibration_receipt import (
+    CapacityCalibrationError,
+    load_capacity_calibration_receipt,
+    resolve_capacity_calibration_ref,
+    safe_calibration_ref,
+)
 
 RECEIPT_SCHEMA_ID = "quwoquan_data.governed_capacity_calibration_receipt"
 _DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -34,186 +39,36 @@ _FROZEN_CAPACITY_FIELDS = (
     "objectWallClockSeconds",
     "completionGraceSeconds",
 )
+# 存活阈值与容量上限分块冻结：两块各有自己的观测基础，任一块缺失都不得由另一块补齐。
+_FROZEN_LIVENESS_FIELDS = (
+    "sourceDiscoveryHeartbeatIntervalSeconds",
+    "sourceDiscoveryHeartbeatStaleAfterSeconds",
+)
 
 
-class CapacityCalibrationError(RuntimeError):
-    """A calibration receipt is absent, digest-drifted, or out of scope."""
-
-
-def _file_digest(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return "sha256:" + digest.hexdigest()
-
-
-def _canonical_digest(payload: Mapping[str, Any], *, excluded: str) -> str:
-    document = {
-        key: value for key, value in payload.items() if key != excluded
-    }
-    encoded = json.dumps(
-        document,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    return "sha256:" + hashlib.sha256(encoded).hexdigest()
-
-
-def _safe_relative_ref(ref: str) -> str:
-    candidate = str(ref or "").strip()
-    path = Path(candidate)
-    if not candidate or path.is_absolute() or ".." in path.parts:
-        raise CapacityCalibrationError(
-            "calibration receipt reference must be a safe relative path"
-        )
-    return path.as_posix()
-
-
-def resolve_capacity_calibration_ref(
-    ref: str,
+def _frozen_liveness_values(
+    payload: Mapping[str, Any],
     *,
-    owner_root: Path | None = None,
-) -> Path:
-    normalized = _safe_relative_ref(ref)
-    allowed_prefixes = (
-        "data/",
-        "quwoquan_data/control_plane/_shared/capacity_calibration/",
-    )
-    if not normalized.startswith(allowed_prefixes):
-        raise CapacityCalibrationError(
-            "calibration receipt reference has no governed owner"
-        )
-    root = (
-        owner_root
-        if owner_root is not None
-        else paths.REPO_ROOT
-        if normalized.startswith("quwoquan_data/")
-        else paths.OUTPUT_ROOT
-    )
-    path = (root / normalized).resolve()
-    try:
-        path.relative_to(root.resolve())
-    except ValueError as exc:
-        raise CapacityCalibrationError(
-            "calibration receipt reference escapes its owner root"
-        ) from exc
-    return path
-
-
-def _assert_calibration_evidence_closure(
-    receipt: Mapping[str, Any],
-    *,
-    owner_root: Path | None = None,
-) -> None:
-    evidence_ref = str(receipt.get("soakEvidenceRef") or "").strip()
-    evidence_path = resolve_capacity_calibration_ref(
-        evidence_ref,
-        owner_root=owner_root,
-    )
-    if evidence_path.is_symlink() or not evidence_path.is_file():
-        raise CapacityCalibrationError(
-            "capacity calibration evidence is missing"
-        )
-    try:
-        evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
-        assert_valid(
-            evidence,
-            "execution",
-            "governed_capacity_calibration_evidence",
-            label="governed capacity calibration evidence",
-        )
-    except (OSError, TypeError, ValueError) as exc:
-        raise CapacityCalibrationError(str(exc)) from exc
-    expected_digest = _canonical_digest(evidence, excluded="evidenceDigest")
+    label: str,
+) -> dict[str, int]:
+    """Read the frozen liveness block, which never falls back to capacity values."""
+    block = payload.get("frozenLiveness")
+    if not isinstance(block, Mapping):
+        raise CapacityCalibrationError(f"{label} frozenLiveness is missing")
+    values: dict[str, int] = {}
+    for field in _FROZEN_LIVENESS_FIELDS:
+        value = block.get(field)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            raise CapacityCalibrationError(f"{label} frozenLiveness.{field} is invalid")
+        values[field] = value
     if (
-        evidence.get("evidenceDigest") != expected_digest
-        or receipt.get("soakEvidenceDigest") != expected_digest
+        values["sourceDiscoveryHeartbeatStaleAfterSeconds"]
+        <= values["sourceDiscoveryHeartbeatIntervalSeconds"]
     ):
         raise CapacityCalibrationError(
-            "capacity calibration evidence digest drifted"
+            f"{label} frozenLiveness staleAfter must exceed the heartbeat interval"
         )
-    bindings: list[tuple[str, str]] = []
-    for row in evidence.get("providerCandidates") or []:
-        bindings.extend(
-            (
-                (str(row.get("reportRef") or ""), str(row.get("reportDigest") or "")),
-                (
-                    str(row.get("resourceSamplesRef") or ""),
-                    str(row.get("resourceSamplesDigest") or ""),
-                ),
-            )
-        )
-    for row in evidence.get("fleetObservations") or []:
-        bindings.append(
-            (str(row.get("reportRef") or ""), str(row.get("reportDigest") or ""))
-        )
-    for row in evidence.get("objectTimingObservations") or []:
-        bindings.append(
-            (str(row.get("stateRef") or ""), str(row.get("stateDigest") or ""))
-        )
-    for ref, digest in bindings:
-        bound_path = resolve_capacity_calibration_ref(
-            ref,
-            owner_root=owner_root,
-        )
-        if (
-            bound_path.is_symlink()
-            or not bound_path.is_file()
-            or _file_digest(bound_path) != digest
-        ):
-            raise CapacityCalibrationError(
-                f"capacity calibration evidence binding drifted: {ref}"
-            )
-
-
-def load_capacity_calibration_receipt(
-    path: Path,
-    *,
-    verify_evidence: bool = True,
-    evidence_owner_root: Path | None = None,
-) -> dict[str, Any]:
-    """Read and self-verify one create-once calibration receipt.
-
-    Fails closed on the two provenance failures `DEC-006` names: an absent
-    receipt, and receipt bytes that disagree with the digest they carry.
-    """
-    receipt_path = Path(path)
-    if receipt_path.is_symlink() or not receipt_path.is_file():
-        raise CapacityCalibrationError(
-            f"calibration receipt is missing: {receipt_path}"
-        )
-    try:
-        payload = json.loads(receipt_path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        raise CapacityCalibrationError(
-            f"calibration receipt is unreadable: {receipt_path}"
-        ) from exc
-    if not isinstance(payload, dict):
-        raise CapacityCalibrationError(
-            f"calibration receipt must be one JSON object: {receipt_path}"
-        )
-    try:
-        assert_valid(
-            payload,
-            "execution",
-            "governed_capacity_calibration_receipt",
-            label="governed capacity calibration receipt",
-        )
-    except (FileNotFoundError, TypeError, ValueError) as exc:
-        raise CapacityCalibrationError(str(exc)) from exc
-    actual = _canonical_digest(payload, excluded="receiptDigest")
-    if payload.get("receiptDigest") != actual:
-        raise CapacityCalibrationError(
-            "calibration receipt digest drifted from its own bytes"
-        )
-    if verify_evidence:
-        _assert_calibration_evidence_closure(
-            payload,
-            owner_root=evidence_owner_root,
-        )
-    return payload
+    return values
 
 
 def current_host_class() -> str:
@@ -316,7 +171,7 @@ def bind_capacity_calibration_source(
     provider_tier: str,
 ) -> dict[str, Any]:
     """Load one receipt and freeze only the facts known before target selection."""
-    normalized_ref = _safe_relative_ref(receipt_ref)
+    normalized_ref = safe_calibration_ref(receipt_ref)
     resolved_path = receipt_path.expanduser().resolve()
     owner_root = resolved_path
     for _part in Path(normalized_ref).parts:
@@ -356,6 +211,10 @@ def bind_capacity_calibration_source(
             "providerTier": str(receipt["applicability"]["providerTier"]).strip(),
         },
         "frozenCapacity": values,
+        "frozenLiveness": _frozen_liveness_values(
+            receipt,
+            label="calibration receipt",
+        ),
     }
     assert_capacity_source_binding(binding)
     return binding
@@ -421,13 +280,17 @@ def freeze_capacity_calibration_binding(
         raise CapacityCalibrationError("calibration receipt calibrationId is missing")
     return {
         "calibrationId": calibration_id,
-        "calibrationReceiptRef": _safe_relative_ref(receipt_ref),
+        "calibrationReceiptRef": safe_calibration_ref(receipt_ref),
         "calibrationReceiptDigest": receipt_digest,
         "applicability": {
             "hostClass": str(receipt["applicability"]["hostClass"]).strip(),
             "providerTier": str(receipt["applicability"]["providerTier"]).strip(),
         },
         "frozenCapacity": dict(values),
+        "frozenLiveness": _frozen_liveness_values(
+            receipt,
+            label="calibration receipt",
+        ),
         "frozenAtEpochSeconds": frozen_at_epoch_seconds,
         "waveCount": wave_count,
         "fleetBatchDeadlineEpochSeconds": deadline,
@@ -442,7 +305,7 @@ def freeze_capacity_source_binding(
 ) -> dict[str, Any]:
     """Complete a pre-selection receipt binding at the execution freeze instant."""
     calibration_id = str(source_binding.get("calibrationId") or "").strip()
-    receipt_ref = _safe_relative_ref(
+    receipt_ref = safe_calibration_ref(
         str(source_binding.get("calibrationReceiptRef") or "")
     )
     receipt_digest = str(
@@ -487,6 +350,10 @@ def freeze_capacity_source_binding(
         "calibrationReceiptDigest": receipt_digest,
         "applicability": dict(applicability),
         "frozenCapacity": values,
+        "frozenLiveness": _frozen_liveness_values(
+            source_binding,
+            label="capacity calibration source binding",
+        ),
         "frozenAtEpochSeconds": frozen_at_epoch_seconds,
         "waveCount": wave_count,
         "fleetBatchDeadlineEpochSeconds": (

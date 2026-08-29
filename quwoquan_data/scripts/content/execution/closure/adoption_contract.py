@@ -203,8 +203,18 @@ def _media_assets(
             raise _typed(
                 "RIGHTS_CLOSURE_DRIFT", f"media asset {index} rights closure drifted"
             )
+        # Exactly one delivery identity per asset (DEC-031): a derived public
+        # slice for commercial delivery or the CAS key for research delivery.
+        delivery_field = (
+            "privateObjectKey" if "privateObjectKey" in row else "publicSliceKey"
+        )
+        if "publicSliceKey" in row and "privateObjectKey" in row:
+            raise _typed(
+                "MEDIA_CLOSURE_DRIFT",
+                f"media asset {index} declares both delivery identities",
+            )
         public_slice = _safe_ref(
-            row.get("publicSliceKey"), label=f"mediaAssets[{index}].publicSliceKey"
+            row.get(delivery_field), label=f"mediaAssets[{index}].{delivery_field}"
         )
         media_path = release_root / "payload" / public_slice
         if media_path.is_symlink() or not media_path.is_file():
@@ -217,7 +227,7 @@ def _media_assets(
             "contentType": str(row.get("contentType") or ""),
             "bytes": int(row.get("bytes") or 0),
             "sha256": str(row.get("sha256") or ""),
-            "publicSliceKey": public_slice.as_posix(),
+            delivery_field: public_slice.as_posix(),
             "version": int(row.get("version") or 0),
             "ownerRefs": list(owner_refs),
             "rightsSnapshotRefs": list(snapshot_refs),

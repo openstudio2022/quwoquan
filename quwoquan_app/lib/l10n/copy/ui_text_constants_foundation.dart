@@ -74,7 +74,6 @@ abstract final class FoundationText {
   static const String loginOtpReadinessChecking = '正在准备…';
   static const String loginOtpReadinessRetry = '重试';
   static const String loginOtpDeliveryQueued = '验证码发送中，请稍候';
-  static const String loginOtpDeliverySent = '验证码已发送，请查看短信';
   static const String loginOtpDeliveryConfirming = '验证码发送中，请稍候';
   static const String loginOtpDeliveryUnknown = '请输入短信中的 6 位验证码';
   static const String loginOtpDeliveryFailedCountdown = '验证码发送失败，请在 %d 秒后重新获取';
@@ -89,7 +88,8 @@ abstract final class FoundationText {
   static const String loginSocialAuthorizingAlipay = '正在前往支付宝';
   static const String loginSocialAuthorizingSubtitle = '请在%s完成授权';
   static const String loginSocialAuthorizationFailed = '授权未完成';
-  static const String loginSocialAuthorizationFailedSubtitle = '请重试';
+  static const String loginSocialAuthorizationFailedSubtitle =
+      '你可以重新授权，或返回选择其他登录方式';
   static const String loginSocialAuthorizationRetry = '重新授权';
   static const String loginSocialAuthorizationCancel = '取消';
   static const String loginBindPhoneTitle = '绑定手机号';

@@ -158,6 +158,10 @@ types:
       - {name: title, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
       - {name: summary, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
       - {name: coverUrl, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      # 封面的配对媒体资产标识与交付访问模式（DEC-033）：research 相位的
+      # coverUrl 是相对私有 CAS 引用，App 必须按 coverAssetId 换短签。
+      - {name: coverAssetId, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: coverAccessMode, type: enum, enum_ref: MediaDeliveryAccessMode, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
       - {name: authorId, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
       - {name: authorDisplayName, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
       - {name: authorAvatarUrl, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
@@ -215,6 +219,9 @@ types:
       - {name: snippet, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
       - {name: action, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
       - {name: thumbnailUrl, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
+      # 缩略的配对媒体资产标识与交付访问模式（DEC-033），与 thumbnailUrl 同源。
+      - {name: thumbnailAssetId, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: thumbnailAccessMode, type: enum, enum_ref: MediaDeliveryAccessMode, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
       - {name: rankPosition, type: int, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, description: 服务端最终排序位置（0 起）；端侧只读消费，不得客户端重排}
       - {name: matchedTerms, type: '[]string', constraints: [NOT_NULL], classification: PUBLIC, log_policy: metadata_only, api_exposure: read, ops_exposure: read, description: 命中的归一化查询词，用于端侧高亮}
       - {name: rankReasons, type: '[]CanonicalSearchRankReason', constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}

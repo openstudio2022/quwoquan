@@ -75,6 +75,8 @@ void main() {
       );
       expect(requestedHeaders.containsKey('X-Client-Route-Id'), isFalse);
       expect(result.latestBuild, 18201);
+      expect(result.platform, RecoveryVersionPlatform.android);
+      expect(result.updateChannel, RecoveryVersionChannel.nativeUpdate);
     },
   );
 
@@ -102,56 +104,197 @@ void main() {
       ),
     );
 
-    expect(facts.platform, 'android');
+    expect(facts.platform, AppReleaseRecoveryPlatform.android);
     expect(facts.minimumSupportedVersion, '1.8.0');
     expect(facts.minimumSupportedBuild, 18000);
     expect(facts.updateState, AppReleaseUpdateState.available);
+    expect(facts.updateChannel, AppReleaseRecoveryChannel.nativeUpdate);
   });
 
-  test('version client rejects non-https origin and expanded response', () async {
-    final client = RecoveryVersionClient(
-      gateway: _httpGateway(
+  test(
+    'public iOS recovery preserves nullable native update channel',
+    () async {
+      final reader = _remoteReader(
         MockClient(
           (_) async => http.Response(
-            '{"platform":"android",'
+            '{"platform":"ios",'
             '"latestVersion":"1.8.2","latestBuild":"18201",'
             '"minimumSupportedVersion":"1.8.0",'
             '"minimumSupportedBuild":"18000",'
             '"updateState":"available",'
-            '"updateUrl":"https://cdn.quwoquan.com/download/android/latest.json",'
-            '"recoveryUrl":"https://quwoquan.com/",'
-            '"diagnosticId":"forbidden"}',
+            '"updateUrl":null,'
+            '"recoveryUrl":"https://quwoquan.com/ios"}',
             200,
           ),
         ),
+      );
+
+      final facts = await reader.read(
+        const AppReleaseRecoveryQuery(
+          platform: 'ios',
+          appVersion: '1.8.1',
+          buildNumber: 18100,
+        ),
+      );
+
+      expect(facts.updateState, AppReleaseUpdateState.available);
+      expect(facts.platform, AppReleaseRecoveryPlatform.ios);
+      expect(facts.updateChannel, AppReleaseRecoveryChannel.webOnly);
+      expect(facts.updateUrl, isNull);
+      expect(facts.recoveryUrl, 'https://quwoquan.com/ios');
+    },
+  );
+
+  test('Android and Web reject a missing native update channel', () async {
+    for (final platform in <String>['android', 'web']) {
+      final reader = _remoteReader(
+        MockClient(
+          (_) async => http.Response(
+            '{"platform":"$platform",'
+            '"latestVersion":"1.8.2","latestBuild":"18201",'
+            '"minimumSupportedVersion":"1.8.0",'
+            '"minimumSupportedBuild":"18000",'
+            '"updateState":"available",'
+            '"updateUrl":null,'
+            '"recoveryUrl":"https://quwoquan.com/"}',
+            200,
+          ),
+        ),
+      );
+
+      await expectLater(
+        reader.read(
+          AppReleaseRecoveryQuery(
+            platform: platform,
+            appVersion: '1.8.1',
+            buildNumber: 18100,
+          ),
+        ),
+        throwsFormatException,
+      );
+    }
+  });
+
+  test('public iOS rejects a native update channel', () async {
+    final reader = _remoteReader(
+      MockClient(
+        (_) async => http.Response(
+          '{"platform":"ios",'
+          '"latestVersion":"1.8.2","latestBuild":"18201",'
+          '"minimumSupportedVersion":"1.8.0",'
+          '"minimumSupportedBuild":"18000",'
+          '"updateState":"available",'
+          '"updateUrl":"https://cdn.quwoquan.com/download/ios",'
+          '"recoveryUrl":"https://quwoquan.com/ios"}',
+          200,
+        ),
       ),
     );
-    expect(
-      () => _binding(baseUrl: 'http://api.quwoquan.com'),
+
+    await expectLater(
+      reader.read(
+        const AppReleaseRecoveryQuery(
+          platform: 'ios',
+          appVersion: '1.8.1',
+          buildNumber: 18100,
+        ),
+      ),
       throwsFormatException,
     );
-    await expectLater(
-      client.fetch(
-        binding: _binding(),
-        platform: 'android',
-        appVersion: '1.8.1',
-        buildNumber: 18100,
-      ),
-      throwsA(
-        isA<CloudException>()
-            .having(
-              (error) => error.type,
-              'type',
-              CloudErrorType.invalidResponse,
-            )
-            .having(
-              (error) => error.sourceOperationId,
-              'sourceOperationId',
-              AppCloudOperationIds.opsAppReleaseGetAppRecoveryVersion,
-            ),
-      ),
-    );
   });
+
+  test(
+    'version client rejects platform or channel discriminator loss',
+    () async {
+      for (final response in <RecoveryVersionResponse>[
+        const RecoveryVersionResponse(
+          platform: RecoveryVersionPlatform.ios,
+          latestVersion: '1.8.2',
+          latestBuild: 18201,
+          minimumSupportedVersion: '1.8.0',
+          minimumSupportedBuild: 18000,
+          updateState: RecoveryUpdateState.available,
+          updateChannel: RecoveryVersionChannel.webOnly,
+          updateUrl: null,
+          recoveryUrl: 'https://quwoquan.com/ios',
+        ),
+        const RecoveryVersionResponse(
+          platform: RecoveryVersionPlatform.android,
+          latestVersion: '1.8.2',
+          latestBuild: 18201,
+          minimumSupportedVersion: '1.8.0',
+          minimumSupportedBuild: 18000,
+          updateState: RecoveryUpdateState.available,
+          updateChannel: RecoveryVersionChannel.nativeUpdate,
+          updateUrl: null,
+          recoveryUrl: 'https://quwoquan.com/',
+        ),
+      ]) {
+        final client = RecoveryVersionClient(
+          gateway: RecoveryOperationGateway(
+            operations: _StaticVersionOperations(response),
+          ),
+        );
+        await expectLater(
+          client.fetch(
+            binding: _binding(),
+            platform: 'android',
+            appVersion: '1.8.1',
+            buildNumber: 18100,
+          ),
+          throwsFormatException,
+        );
+      }
+    },
+  );
+
+  test(
+    'version client rejects non-https origin and expanded response',
+    () async {
+      final client = RecoveryVersionClient(
+        gateway: _httpGateway(
+          MockClient(
+            (_) async => http.Response(
+              '{"platform":"android",'
+              '"latestVersion":"1.8.2","latestBuild":"18201",'
+              '"minimumSupportedVersion":"1.8.0",'
+              '"minimumSupportedBuild":"18000",'
+              '"updateState":"available",'
+              '"updateUrl":"https://cdn.quwoquan.com/download/android/latest.json",'
+              '"recoveryUrl":"https://quwoquan.com/",'
+              '"diagnosticId":"forbidden"}',
+              200,
+            ),
+          ),
+        ),
+      );
+      expect(
+        () => _binding(baseUrl: 'http://api.quwoquan.com'),
+        throwsFormatException,
+      );
+      await expectLater(
+        client.fetch(
+          binding: _binding(),
+          platform: 'android',
+          appVersion: '1.8.1',
+          buildNumber: 18100,
+        ),
+        throwsA(
+          isA<CloudException>()
+              .having(
+                (error) => error.type,
+                'type',
+                CloudErrorType.invalidResponse,
+              )
+              .having(
+                (error) => error.sourceOperationId,
+                'sourceOperationId',
+                AppCloudOperationIds.opsAppReleaseGetAppRecoveryVersion,
+              ),
+        ),
+      );
+    },
+  );
 
   test('version client fails closed on non-2xx and malformed JSON', () async {
     for (final response in <http.Response>[
@@ -269,6 +412,11 @@ final class _VersionOperations implements RecoveryRuntimeOperations {
       ),
     );
     return RecoveryVersionResponse(
+      platform: switch (facts.platform) {
+        AppReleaseRecoveryPlatform.android => RecoveryVersionPlatform.android,
+        AppReleaseRecoveryPlatform.ios => RecoveryVersionPlatform.ios,
+        AppReleaseRecoveryPlatform.web => RecoveryVersionPlatform.web,
+      },
       latestVersion: facts.latestVersion,
       latestBuild: facts.latestBuild,
       minimumSupportedVersion: facts.minimumSupportedVersion,
@@ -278,7 +426,12 @@ final class _VersionOperations implements RecoveryRuntimeOperations {
         AppReleaseUpdateState.available => RecoveryUpdateState.available,
         AppReleaseUpdateState.required => RecoveryUpdateState.required,
       },
-      updateUrl: facts.updateUrl ?? '',
+      updateChannel: switch (facts.updateChannel) {
+        AppReleaseRecoveryChannel.nativeUpdate =>
+          RecoveryVersionChannel.nativeUpdate,
+        AppReleaseRecoveryChannel.webOnly => RecoveryVersionChannel.webOnly,
+      },
+      updateUrl: facts.updateUrl,
       recoveryUrl: facts.recoveryUrl,
     );
   }
@@ -286,6 +439,21 @@ final class _VersionOperations implements RecoveryRuntimeOperations {
   @override
   Future<void> reportFailure(RecoveryFailurePayload payload) =>
       throw UnsupportedError('not used by version contract');
+}
+
+final class _StaticVersionOperations implements RecoveryRuntimeOperations {
+  const _StaticVersionOperations(this.version);
+
+  final RecoveryVersionResponse version;
+
+  @override
+  Future<RecoveryVersionResponse> getVersion(
+    RecoveryVersionRequest request,
+  ) async => version;
+
+  @override
+  Future<void> reportFailure(RecoveryFailurePayload payload) =>
+      throw UnsupportedError('not used by version discriminator test');
 }
 
 RecoveryRuntimeBinding _binding({

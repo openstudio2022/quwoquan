@@ -131,8 +131,8 @@
 - PublicProvider 的本地 TLS conformance 只证明 Nominatim/OSRM compatible wire，不构成真实公网或 Prod probe。
 - Open-Meteo 继续复用 Assistant owner 的 canonical `assistant.weather.forecast` binding，不在 Integration 复制 Adapter。
 - `location.poi.search` 与 `location.route.read` 的**真实公网 Provider**（`ext.map.nominatim` / `ext.route.osrm`）在四环境保持未绑定。绑定真实 endpoint 前必须由人工确认自托管/商用 endpoint、Nominatim 使用政策与可识别 User-Agent/联系策略、OSRM 容量与限流政策，并生成绑定 active candidate/config digest 的 Remote receipt。
-- Alpha 已将 `location.poi.search` 绑定到受管非生产协议替身 `ext.map.nominatim.protocol_substitute`（endpoint 为 `local_topology:provider-protocol-substitute` 的 `/nominatim` 协议兼容面），其三层自描述 conformance source 已登记且 `sourceCoverageIssues=[]`；UAT 层复用发布选点页真实 journey（`SearchLocations` 公开路径经 `LocationPoiSearchPort`）。替身启用不豁免上一条真实 Provider 政策。
-- `location.route.read` 四环境保持 `not_required`：App 当前无路线消费页面，`user_acceptance` 层无法提供真实 user journey，三层 source 无法闭环；替身 `/osrm` 协议兼容面与 `ext.route.osrm.protocol_substitute` adapter 契约已就绪，待 App 路线消费点落地后再启用并补齐三层 source。Beta/Gamma/Prod 的 POI 亦为 `not_required`。
+- `location.poi.search` 四环境保持 `not_required`：nonprod 三环境必须与 Prod 共享同一 binding 档（[云侧信任域裁决 DEC-005](../../deliver-deploy-prod-pipeline/design.md#dec-005)），因此不允许只在 Alpha 单独启用替身。受管非生产协议替身 `ext.map.nominatim.protocol_substitute`（`local_topology:provider-protocol-substitute` 的 `/nominatim` 协议兼容面）与其三层自描述 conformance source 已就绪，UAT 层可复用发布选点页真实 journey（`SearchLocations` 公开路径经 `LocationPoiSearchPort`），待四环境同步声明后翻牌。替身启用不豁免上一条真实 Provider 政策。
+- `location.route.read` 四环境保持 `not_required`：App 当前无路线消费页面，`user_acceptance` 层无法提供真实 user journey，三层 source 无法闭环；替身 `/osrm` 协议兼容面与 `ext.route.osrm.protocol_substitute` adapter 契约已就绪，待 App 路线消费点落地后再启用并补齐三层 source。
 - Open-Meteo 的真实 Remote receipt 同样由其 owner 环境人工政策确认后生成，禁止把公共 demo endpoint 或本地 conformance 结果写成 `passed`。
 - 完成判定：`GWT-002` 对应行为满足；每个实际 Capability/Adapter/layer 都有自描述原生 harness，14 个 Capability 在同一候选版本完成 Alpha/Beta/Gamma 九格 evidence 与 Prod Remote receipt，并通过 `--require-ready gamma` 与 `--require-ready prod`。
 - 依赖：不可变候选镜像 digest、CI attestation key、Alpha/Beta/Gamma 受管非生产 Provider 材料、Prod 生产厂商材料、受控测试数据与 cleanup/observability 回执，以及 Prod health/switch/rollback 回执。

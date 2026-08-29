@@ -461,7 +461,8 @@ if [[ -z "${LOCAL_GAMMA_HTTP_PORT:-}" \
    || -z "${LOCAL_GAMMA_POSTGRES_PORT:-}" \
    || -z "${LOCAL_GAMMA_MONGO_PORT:-}" \
    || -z "${LOCAL_GAMMA_REDIS_PORT:-}" \
-   || -z "${LOCAL_GAMMA_ES_PORT:-}" ]]; then
+   || -z "${LOCAL_GAMMA_ES_PORT:-}" \
+   || -z "${LOCAL_GAMMA_ADMIN_PORT:-}" ]]; then
   eval "$(python3 "$ROOT/quwoquan_ops/cli/print_local_port_profile.py" --profile "$QWQ_LOCAL_RELEASE_TARGET" --format shell-defaults)"
 fi
 # docker compose 只读取导出的环境变量；这里把 canonical local-gamma 端口全部导出，
@@ -489,7 +490,8 @@ export \
   LOCAL_GAMMA_MONGO_PORT \
   LOCAL_GAMMA_MONGO_CACHE_SIZE_GB \
   LOCAL_GAMMA_REDIS_PORT \
-  LOCAL_GAMMA_ES_PORT
+  LOCAL_GAMMA_ES_PORT \
+  LOCAL_GAMMA_ADMIN_PORT
 
 export_service_compose_environment() {
   local source_name target_name
@@ -2037,10 +2039,10 @@ if [[ "$podman_compose" == "1" ]]; then
 
   podman run --pull=never --name quwoquan_service_platform-ops-service_1 -d \
     --net "$network_name" --network-alias platform-ops-service \
-    -e SERVICE_NAME=platform-ops-service -e APP_ENV=gamma-integration \
+    -e SERVICE_NAME=platform-ops-service -e APP_ENV="$LOCAL_GAMMA_APP_ENV" \
     -e CONFIG_ROOT=/etc/qwq-config -e CONFIG_VERSION="$CONFIG_VERSION" \
     -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" -e PLATFORM_OPS_SERVICE_ADDR=:18088 \
-    -e POSTGRES_DSN='postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable' \
+    -e PLATFORM_OPS_POSTGRES_DSN='postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable' \
     -e AUTH_JWT_SECRET="${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}" \
     -e AUTH_JWT_ISSUER="${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}" \
     -e AUTH_JWT_AUDIENCE="${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}" \
@@ -2059,8 +2061,8 @@ if [[ "$podman_compose" == "1" ]]; then
     -e SERVICE_NAME=content-service -e APP_ENV="$LOCAL_GAMMA_APP_ENV" \
     -e CONFIG_ROOT=/etc/qwq-config -e CONFIG_VERSION="$CONFIG_VERSION" \
     -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" \
-    -e MONGO_URI=mongodb://mongodb:27017 \
-    -e REPORT_DATABASE_URL='postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable' \
+    -e CONTENT_MONGO_URI=mongodb://mongodb:27017 \
+    -e CONTENT_POSTGRES_REPORT_DSN='postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable' \
     -e CONTENT_REDIS_REC_ADDR=redis:6379 -e CONTENT_REDIS_GENERAL_ADDR=redis:6379 -e CONTENT_REDIS_REALTIME_ADDR=redis:6379 \
     -e CONTENT_OSS_ENDPOINT \
     -e CONTENT_OSS_ACCESS_KEY_ID \
@@ -2068,7 +2070,7 @@ if [[ "$podman_compose" == "1" ]]; then
     -e CONTENT_EMBEDDING_ENDPOINT \
     -e CONTENT_EMBEDDING_API_KEY \
     -e SEARCH_ES_ENABLED=true -e SEARCH_ES_ENDPOINTS=http://elasticsearch:9200 \
-    -e REC_MODEL_SERVICE_ENABLED=true -e REC_MODEL_SERVICE_URL=http://recommendation-service:8000 \
+    -e CONTENT_REC_MODEL_SERVICE_ENABLED=true -e CONTENT_REC_MODEL_SERVICE_URL=http://recommendation-service:8000 \
     -v "${LOCAL_GAMMA_CONFIG_ROOT}:/etc/qwq-config:ro" \
     -p "${LOCAL_GAMMA_CONTENT_PORT:-19220}:18080" \
     --healthcheck-command "wget -qO- http://127.0.0.1:18080/healthz >/dev/null 2>&1" \
@@ -2081,7 +2083,7 @@ if [[ "$podman_compose" == "1" ]]; then
     -e SERVICE_NAME=chat-service -e MODULE_PACKAGE=chat-service -e APP_ENV="$LOCAL_GAMMA_APP_ENV" \
     -e CONFIG_ROOT=/etc/qwq-config -e CONFIG_VERSION="$CONFIG_VERSION" \
     -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" -e CHAT_SERVICE_ADDR=:18081 \
-    -e MONGO_URI=mongodb://mongodb:27017 -e MONGO_DATABASE=quwoquan_chat \
+    -e CHAT_MONGO_URI=mongodb://mongodb:27017 -e CHAT_MONGO_DATABASE=quwoquan_chat \
     -e CHAT_REDIS_REALTIME_ADDR=redis:6379 -e CHAT_REDIS_GENERAL_ADDR=redis:6379 \
     -e CHAT_REDIS_RELIABLE_TASK_ADDR=redis:6379 \
     -e RELIABLE_TASK_READY_INDEX_ENABLED=true \
@@ -2104,10 +2106,10 @@ if [[ "$podman_compose" == "1" ]]; then
     -e SERVICE_NAME=user-service -e APP_ENV="$LOCAL_GAMMA_APP_ENV" \
     -e CONFIG_ROOT=/etc/qwq-config -e CONFIG_VERSION="$CONFIG_VERSION" \
     -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" -e USER_SERVICE_ADDR=:18081 \
-    -e POSTGRES_DSN='postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable' \
-    -e MONGODB_URI=mongodb://mongodb:27017 -e MONGODB_DATABASE=quwoquan_user \
+    -e USER_POSTGRES_DSN='postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable' \
+    -e USER_MONGO_URI=mongodb://mongodb:27017 -e USER_MONGO_DATABASE=quwoquan_user \
     -e TAG_MONGO_URI=mongodb://mongodb:27017 -e TAG_MONGO_DATABASE=quwoquan_tag \
-    -e REDIS_ADDR=redis:6379 \
+    -e USER_REDIS_GENERAL_ADDR=redis:6379 \
     -e USER_CARRIER_ONE_TAP_SUBSTITUTE_ENDPOINT \
     -e USER_FEDERATED_IDENTITY_SUBSTITUTE_ENDPOINT \
     -e ALIYUN_DYPNS_ENDPOINT \
@@ -2212,7 +2214,7 @@ if [[ "$podman_compose" == "1" ]]; then
       -e CONFIG_ROOT=/etc/qwq-config -e CONFIG_VERSION="$CONFIG_VERSION" \
       -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" -e ASSISTANT_SERVICE_ADDR=:18087 \
       -e MONGODB_URI=mongodb://mongodb:27017 -e MONGODB_DATABASE=quwoquan_assistant \
-      -e REDIS_GENERAL_ADDR=redis:6379 -e REDIS_REC_ADDR=redis:6379 \
+      -e ASSISTANT_REDIS_GENERAL_ADDR=redis:6379 -e ASSISTANT_REDIS_REC_ADDR=redis:6379 \
       -e ASSISTANT_MODEL_COMPLETION_URL \
       -e ASSISTANT_MODEL_API_KEY \
       -e ASSISTANT_PUBLIC_SEARCH_URL \
@@ -2262,6 +2264,7 @@ if [[ "$podman_compose" == "1" ]]; then
     -e SEARCH_ES_ENABLED=true -e SEARCH_ES_ENDPOINTS=http://elasticsearch:9200 \
     -e SEARCH_MONGO_URI=mongodb://mongodb:27017 -e SEARCH_MONGO_DATABASE=quwoquan_search \
     -e SEARCH_REDIS_GENERAL_MODE=standalone -e SEARCH_REDIS_GENERAL_ADDR=redis:6379 \
+    -e SEARCH_REDIS_REC_MODE=standalone -e SEARCH_REDIS_REC_ADDR=redis:6379 \
     -v "${LOCAL_GAMMA_CONFIG_ROOT}:/etc/qwq-config:ro" \
     -p "${LOCAL_GAMMA_SEARCH_PORT:-19280}:18095" \
     --healthcheck-command "wget -qO- http://127.0.0.1:18095/healthz >/dev/null 2>&1" \
@@ -2275,7 +2278,7 @@ if [[ "$podman_compose" == "1" ]]; then
     -e CONFIG_ROOT=/etc/qwq-config -e CONFIG_VERSION="$CONFIG_VERSION" \
     -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" \
     -e ENTITY_MONGO_URI=mongodb://mongodb:27017 -e ENTITY_MONGO_DATABASE=quwoquan_entity \
-    -e ENTITY_REDIS_ADDR=redis:6379 \
+    -e ENTITY_REDIS_GENERAL_ADDR=redis:6379 \
     -e AUTH_JWT_SECRET="${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}" \
     -e AUTH_JWT_ISSUER="${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}" \
     -e AUTH_JWT_AUDIENCE="${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}" \
@@ -2294,7 +2297,7 @@ if [[ "$podman_compose" == "1" ]]; then
     -e CONFIG_ROOT=/etc/qwq-config -e CONFIG_VERSION="$CONFIG_VERSION" \
     -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" -e CIRCLE_SERVICE_ADDR=:18082 \
     -e CIRCLE_MONGO_URI=mongodb://mongodb:27017 -e CIRCLE_MONGO_DATABASE=quwoquan_circle \
-    -e CIRCLE_REDIS_ADDR=redis:6379 \
+    -e CIRCLE_REDIS_GENERAL_ADDR=redis:6379 \
     -e SEARCH_ES_ENABLED=true -e SEARCH_ES_ENDPOINTS=http://elasticsearch:9200 \
     -v "${LOCAL_GAMMA_CONFIG_ROOT}:/etc/qwq-config:ro" \
     -p "${LOCAL_GAMMA_CIRCLE_PORT:-19300}:18082" \
@@ -2319,11 +2322,11 @@ if [[ "$podman_compose" == "1" ]]; then
     -v "${LOCAL_GAMMA_LEGAL_STATIC_ROOT}:/srv/legal:ro" \
     -v "${LOCAL_GAMMA_CADDY_DATA_VOLUME}:/data" \
     -v "${LOCAL_GAMMA_CADDY_CONFIG_VOLUME}:/config" \
-    -p "${LOCAL_GAMMA_HTTP_PORT:-19000}:${LOCAL_GAMMA_HTTP_PORT:-19000}" \
-    -p "${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}:${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}" \
-    -p "${LOCAL_GAMMA_MEDIA_EDGE_PORT:-19100}:${LOCAL_GAMMA_MEDIA_EDGE_PORT:-19100}" \
-    -p "${LOCAL_GAMMA_ADMIN_PORT:-2019}:2019" \
-    --healthcheck-command "wget --no-check-certificate -qO- https://${QWQ_PUBLIC_API_HOST}:${LOCAL_GAMMA_HTTP_PORT:-19000}/healthz >/dev/null 2>&1" \
+    -p "${LOCAL_GAMMA_HTTP_PORT:?LOCAL_GAMMA_HTTP_PORT is required}:${LOCAL_GAMMA_HTTP_PORT}" \
+    -p "${LOCAL_GAMMA_PRODUCT_OPS_PORT:?LOCAL_GAMMA_PRODUCT_OPS_PORT is required}:${LOCAL_GAMMA_PRODUCT_OPS_PORT}" \
+    -p "${LOCAL_GAMMA_MEDIA_EDGE_PORT:?LOCAL_GAMMA_MEDIA_EDGE_PORT is required}:${LOCAL_GAMMA_MEDIA_EDGE_PORT}" \
+    -p "127.0.0.1:${LOCAL_GAMMA_ADMIN_PORT:?LOCAL_GAMMA_ADMIN_PORT is required}:2019" \
+    --healthcheck-command "wget --no-check-certificate -qO- https://${QWQ_PUBLIC_API_HOST}:${LOCAL_GAMMA_HTTP_PORT}/healthz >/dev/null 2>&1" \
     --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 5s --healthcheck-retries 10 \
     "$LOCAL_GAMMA_CADDY_IMAGE" >/dev/null
   wait_healthy quwoquan_service_gamma-proxy_1
@@ -2471,29 +2474,31 @@ else
     fi
   }
   bootstrap_experiment_policy_owner() {
-    # Gamma 冷启动 policy 死锁：candidate 投影拓扑中 product-ops 依赖
-    # service-core healthy，service-core 依赖 recommendation healthy，而
-    # recommendation 的 full runtime 又硬性要求 Product Ops 已激活
-    # rec_model_vs_rule；首次全栈 up 必死。因此全栈 up 前先起最小基础设施
-    # 与 policy owner，经 Product Ops 公开 command 在 loopback published port
-    # 激活 canonical 政策（与 up 之后的 activation 同 idempotency 身份，
-    # 暖启动是纯 reuse），再进行全栈 up。与 test_live 的 policy owner
-    # bootstrap 同构；禁止直写 Mongo/Redis、禁止 fixture。
+    # Gamma 冷启动存在两段 readiness 环：service-core 内 Search 等待
+    # ExperimentPolicyActivated；Product Ops 又通过 AccountSecurityAuthority
+    # 等待 service-core 内 UserAccount。UserAccount 已声明精确内部
+    # pre-admission 健康面，因此全栈 up 前先起基础设施和 service-core 进程。
+    # service-core 容器 healthcheck 仅探 /healthz，可安全证明全部 module 已完成
+    # Build/Bind/Start；不能等待的是会拉起依赖图的 Compose aggregate readiness。
+    # 随后再起 Product Ops，经原公开 command 激活策略，最后进行 full up。
+    # 禁止放宽 Product Ops 公共 admission、直写 Mongo/Redis 或注入 fixture。
     local bootstrap_services=""
     local bootstrap_service=""
     local cid=""
     local state=""
     local deadline=0
     bootstrap_services="$("${compose_cmd[@]}" config --services 2>/dev/null || true)"
-    if [[ -z "$bootstrap_services" ]] \
-      || ! grep -qx "product-ops-service" <<<"$bootstrap_services"; then
-      echo "[local-gamma] FAIL: policy owner bootstrap requires product-ops-service in the compose topology" >&2
-      return 1
-    fi
-    # product-ops 启动即 fail-fast 的网络依赖闭包：Postgres/Redis/Mongo(+init)
+    for bootstrap_service in service-core product-ops-service; do
+      if [[ -z "$bootstrap_services" ]] \
+        || ! grep -qx "$bootstrap_service" <<<"$bootstrap_services"; then
+        echo "[local-gamma] FAIL: policy owner bootstrap requires $bootstrap_service in the compose topology" >&2
+        return 1
+      fi
+    done
+    # product-ops 构造期 fail-fast 的网络依赖闭包：Postgres/Redis/Mongo(+init)
     # 与 Elasticsearch（telemetry ILM/index 初始化重试耗尽后 exit 1）。
-    # AccountSecurityAuthority 只影响 healthz、OTel/Prometheus/app-release
-    # 均为降级路径，不进入最小集。
+    # AccountSecurityAuthority 属于 readiness；它的 owner service-core 在基础
+    # 设施健康后单独拉起，不能误归为降级路径。
     local -a bootstrap_infra=()
     for bootstrap_service in mongodb mongo-init postgres redis elasticsearch; do
       if grep -qx "$bootstrap_service" <<<"$bootstrap_services"; then
@@ -2550,9 +2555,47 @@ else
         sleep 2
       done
     done
-    # --no-deps：候选拓扑把 product-ops 的启动依赖投影为 service-core healthy，
-    # 该依赖正是 bootstrap 要打破的死锁环。operator 凭据的公开 command 请求
-    # 不经过 AccountSecurityAuthority，healthz unhealthy 不阻塞策略激活。
+    # --no-deps 绕过会拉起 Recommendation/Search 的 Compose dependency graph；
+    # 随后等待的 container health 只探 /healthz（shallow liveness），不等待
+    # aggregate /readyz 或尚未激活的实验策略。这样既破环，也不会把 module
+    # 构造失败误记为 Product Ops admission 的短暂竞态。
+    echo "[local-gamma] policy owner bootstrap: starting service-core authority owner (--no-deps)"
+    if ! "${compose_cmd[@]}" up -d --no-build --no-deps service-core; then
+      echo "[local-gamma] FAIL: policy owner bootstrap could not start service-core authority owner" >&2
+      return 1
+    fi
+    deadline=$((SECONDS + 180))
+    while true; do
+      # `compose ps -q` only returns running containers.  A constructor crash
+      # therefore used to erase the container from this probe and turn an
+      # immediate typed exit into a three-minute `state=missing` timeout.
+      # Include stopped containers so the first runtime failure is preserved.
+      cid="$("${compose_cmd[@]}" ps -a -q service-core 2>/dev/null | head -n 1)"
+      if [[ -z "$cid" ]]; then
+        echo "[local-gamma] FAIL: service-core container is missing during policy owner bootstrap" >&2
+        "${compose_cmd[@]}" logs --tail 80 service-core >&2 || true
+        return 1
+      fi
+      state="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing-healthcheck{{end}} {{.State.Status}}' "$cid" 2>/dev/null || true)"
+      if [[ "$state" == "healthy running" ]]; then
+        break
+      fi
+      if [[ "$state" == *" exited" || "$state" == *" dead" ]]; then
+        echo "[local-gamma] FAIL: service-core exited before shallow health during policy owner bootstrap (state=${state:-missing})" >&2
+        "${compose_cmd[@]}" logs --tail 80 service-core >&2 || true
+        return 1
+      fi
+      if (( SECONDS >= deadline )); then
+        echo "[local-gamma] FAIL: service-core did not reach shallow health during policy owner bootstrap (state=${state:-missing})" >&2
+        "${compose_cmd[@]}" logs --tail 80 service-core >&2 || true
+        return 1
+      fi
+      sleep 2
+    done
+    # --no-deps：candidate 拓扑把 product-ops 依赖投影为 service-core healthy，
+    # 但 bootstrap 此时只需已完成 Build/Bind/Start 的 UserAccount 内部健康面。operator 凭据的公开
+    # command 不经过 AccountSecurityAuthority，但仍完整经过验签、scope、
+    # idempotency 与 owner handler。
     echo "[local-gamma] policy owner bootstrap: starting product-ops-service (--no-deps)"
     if ! "${compose_cmd[@]}" up -d --no-build --no-deps product-ops-service; then
       echo "[local-gamma] FAIL: policy owner bootstrap could not start product-ops-service" >&2
@@ -2645,7 +2688,10 @@ gamma_platform_ops_ready() {
   if [[ "$WORKLOAD" == "content-release" || "$WORKLOAD" == "content-commercial" ]]; then
     return 0
   fi
-  curl -fsS "http://127.0.0.1:${LOCAL_GAMMA_PLATFORM_OPS_SERVICE_PORT:-19260}/healthz" >/dev/null 2>&1
+  # 环境编排的「就绪等待」取深层 /readyz：容器 healthcheck 只回答浅层存活
+  # （避免 depends_on 级联阻塞），用它当就绪门会让 Postgres/Redis/事实树未连上
+  # 时后续 UAT 步骤照样开跑。
+  curl -fsS "http://127.0.0.1:${LOCAL_GAMMA_PLATFORM_OPS_SERVICE_PORT:-19260}/readyz" >/dev/null 2>&1
 }
 
 gamma_full_workload_dependencies_ready() {

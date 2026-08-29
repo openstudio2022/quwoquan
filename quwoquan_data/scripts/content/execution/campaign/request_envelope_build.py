@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from core import paths
+from core.dependency_ref import canonical_dependency_ref
 from core.schema import assert_valid
 from core.source_digest import (
     current_execution_bundle_identity,
@@ -33,6 +34,7 @@ from content.execution.campaign.retry_submission import (
 from content.execution.campaign.scale import CampaignScaleError, resolve_campaign_scale
 from content.execution.campaign.source_pool_binding import bind_scale_source_pool
 from content.execution.controller.execute.pre_acquisition_handoff import (
+    carrier_source_providers,
     freeze_carrier_pre_acquisition_inputs,
     load_pre_acquisition_handoff,
 )
@@ -69,7 +71,6 @@ def build_envelope(
     quota: int | None = None,
     carrier: str,
     target_names: Iterable[str] | None = None,
-    source_providers: Iterable[str] | None = None,
     family_ref: str | None = None,
     repo_root: Path | None = None,
     day: str | None = None,
@@ -203,6 +204,9 @@ def build_envelope(
     except SystemExit as exc:
         raise CampaignScaleError(str(exc)) from exc
     stamp = day or datetime.now(timezone.utc).strftime("%Y%m%d")
+    resolved_acquisition_root = (
+        acquisition_root or paths.SOURCE_ACQUISITION_ROOT
+    ).resolve()
     (
         frozen_external_refs,
         bound_handoff,
@@ -210,9 +214,7 @@ def build_envelope(
     ) = freeze_carrier_pre_acquisition_inputs(
         carrier,
         external_input_refs,
-        acquisition_root=(
-            acquisition_root or paths.SOURCE_ACQUISITION_ROOT
-        ).resolve(),
+        acquisition_root=resolved_acquisition_root,
         handoff_ref=pre_acquisition_handoff,
         scale=resolved.scale,
         run_date=stamp,
@@ -345,9 +347,7 @@ def build_envelope(
         )
     # targetNames is a unique-entity candidate scope. It may be smaller than
     # the requested object quota when several assets map to one entity.
-    providers = sorted(
-        {str(item).strip() for item in (source_providers or []) if str(item).strip()}
-    )
+    providers = carrier_source_providers(handoff_document, carrier)
     topic_value = str(topic).strip() if topic is not None and str(topic).strip() else None
     source_pool_binding = None
     source_pool_evidence_ref = None
@@ -425,6 +425,11 @@ def build_envelope(
         "allowedStage": "submit-only",
         "operatorPrompt": execution_policy["operatorPrompt"]["text"],
     }
+    if frozen_external_refs:
+        # 每条 externalInputRef 的 manifest/receipt/blobRef 都是「基准根 + 相对路径」，
+        # 基准根不进 envelope 就等于把解析结果交给消费方的默认值：编译期与执行期
+        # 各自算出不同的绝对路径，冻结产物自身不可判定。
+        stable["acquisitionRootRef"] = canonical_dependency_ref(resolved_acquisition_root)
     if promotion_reference is not None:
         stable["researchScalePromotion"] = promotion_reference
     if semantic_preflight_binding is not None:

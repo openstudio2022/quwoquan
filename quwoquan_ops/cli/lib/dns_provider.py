@@ -109,6 +109,10 @@ class DnsProvider:
     def list_records(self, *, name: str, record_type: str) -> list[dict[str, Any]]:
         raise NotImplementedError
 
+    def list_zone_records(self) -> list[dict[str, Any]]:
+        """列举 zone 内全部记录，供计划面之外的入口审计。"""
+        raise NotImplementedError
+
     def create_record(self, record: dict[str, Any]) -> str:
         raise NotImplementedError
 
@@ -258,6 +262,24 @@ class AliyunDnsProvider(DnsProvider):
         )
         rows = ((document.get("DomainRecords") or {}).get("Record")) or []
         return [self._neutral(row) for row in rows if isinstance(row, dict)]
+
+    def list_zone_records(self) -> list[dict[str, Any]]:
+        page_size = 100
+        records: list[dict[str, Any]] = []
+        page = 1
+        while True:
+            document = self._call(
+                "DescribeDomainRecords",
+                DomainName=self._zone,
+                PageNumber=str(page),
+                PageSize=str(page_size),
+            )
+            rows = ((document.get("DomainRecords") or {}).get("Record")) or []
+            records.extend(self._neutral(row) for row in rows if isinstance(row, dict))
+            total = int(document.get("TotalCount") or 0)
+            if not rows or page * page_size >= total:
+                return records
+            page += 1
 
     def _arguments(self, record: dict[str, Any]) -> dict[str, str]:
         record_type = str(record["type"]).upper()

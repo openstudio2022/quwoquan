@@ -74,8 +74,6 @@
 	<true/>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchTransitionScreen</string>
-	<key>UIMainStoryboardFile</key>
-	<string>Main</string>
 	<key>UIStatusBarStyle</key>
 	<string>UIStatusBarStyleLightContent</string>
 	<key>UISupportedInterfaceOrientations</key>

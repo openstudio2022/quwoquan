@@ -56,8 +56,16 @@ class _CircleEditSettingsPageState
       text: (circle?.tags ?? const <String>[]).join(' '),
     );
     _activeTab = widget.initialTab;
-    _visibility = circle?.visibility ?? CircleVisibility.public;
-    _joinPolicy = circle?.joinPolicy ?? CircleJoinPolicy.open;
+    if (circle == null) {
+      // 创建模式没有宿主对象，这两个取值是新圈子的写侧默认值，声明位唯一在此，
+      // 保存时一次性物化为显式取值。编辑模式的宿主由构造器类型保证在场，
+      // 因此不存在「读到缺席就替它选一个可见性」的分支。
+      _visibility = CircleVisibility.public;
+      _joinPolicy = CircleJoinPolicy.open;
+    } else {
+      _visibility = circle.visibility;
+      _joinPolicy = circle.joinPolicy;
+    }
     _categoryId =
         circle?.category ?? (_isCreateMode ? _categoryIds.first : null);
     _autoSyncChat = circle?.autoSyncChat ?? true;

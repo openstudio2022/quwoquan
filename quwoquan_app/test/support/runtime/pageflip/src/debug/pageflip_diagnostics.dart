@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+
 import 'pageflip_diagnostics_shared.dart';
+
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/layout/app_scaffold.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
@@ -72,6 +74,7 @@ class _PageflipDiagnosticsAppState extends State<PageflipDiagnosticsApp> {
                             template: kPageflipDiagnosticsTemplate,
                             fontPreset: kPageflipDiagnosticsFontPreset,
                             metrics: metrics,
+                            enablePageCurl: true,
                             pagePadding: pagePadding,
                             initialPage: 2,
                             coverUrl: '',

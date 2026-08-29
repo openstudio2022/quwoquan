@@ -22,6 +22,9 @@ if str(ROOT) not in sys.path:
 
 from quwoquan_ops.cli import stackctl
 from quwoquan_ops.cli.lib.content_release_readiness import VerificationProfile
+from quwoquan_ops.cli.lib.provider_runtime_composition import (
+    compile_provider_runtime_composition,
+)
 from quwoquan_ops.tests.support.environment_patrol_smoke_test_support import (
     EnvironmentPatrolSmokeCaseBase,
 )
@@ -630,6 +633,44 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
         self.assertIn("content-service", roles)
         self.assertIn("notification-service", roles)
         self.assertNotIn("fixture-gateway", roles)
+
+    def test_two_running_startup_receipts_on_one_target_fail_closed(self) -> None:
+        """release 栈与 test-live 栈同时 running 时不能任取其一，只能判否。"""
+        target_name = "beta-local"
+        environment_name = "beta"
+        composition = compile_provider_runtime_composition(
+            environment=environment_name,
+            target=target_name,
+        )
+        running = {
+            "schema": "stackctl-local-startup-attempt",
+            "attemptId": f"attempt-{target_name}",
+            "env": environment_name,
+            "target": target_name,
+            "status": "running",
+            "workload": "full",
+            "providerRuntimeDigest": composition["runtimeCompositionDigest"],
+        }
+
+        with (
+            mock.patch.object(
+                stackctl,
+                "_active_provider_runtime",
+                return_value={"composition": composition},
+            ),
+            mock.patch.object(
+                stackctl,
+                "load_startup_attempt",
+                return_value=running,
+            ),
+            mock.patch.object(
+                stackctl,
+                "load_test_live_startup_attempt",
+                return_value=dict(running, attemptId="attempt-test-live"),
+            ),
+            self.assertRaisesRegex(RuntimeError, "at the same time"),
+        ):
+            stackctl._expected_local_roles(target_name)
 
     def test_beta_content_release_readiness_excludes_full_workload_planes(self) -> None:
         roles = set(

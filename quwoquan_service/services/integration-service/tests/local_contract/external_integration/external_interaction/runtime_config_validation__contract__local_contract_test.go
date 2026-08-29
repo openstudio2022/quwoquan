@@ -6,17 +6,31 @@ import (
 	"testing"
 
 	"quwoquan_service/runtime/reliabletask"
+	"quwoquan_service/runtime/servicekit"
 	integrationconfig "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/runtimeconfig"
 )
+
+// integrationEnvPrefix 是服务名派生的 env 键前缀，测试与启动共用同一来源。
+var integrationEnvPrefix = servicekit.DefaultEnvPrefix("integration-service")
+
+func applyIntegrationEnvOverrides(t *testing.T) integrationconfig.Config {
+	t.Helper()
+	cfg := integrationconfig.Config{}
+	if err := servicekit.ApplyEnvOverrides(integrationEnvPrefix, &cfg); err != nil {
+		t.Fatalf("apply env overrides: %v", err)
+	}
+	return cfg
+}
 
 // validatableExternalInteractionConfig 只填满 Validate 在 SMS provider 之前
 // 就会拦下的必填项，让每个子用例只改一个字段，失败原因唯一可归因。
 func validatableExternalInteractionConfig() integrationconfig.Config {
-	cfg := integrationconfig.Config{Environment: "gamma"}
+	cfg := integrationconfig.Config{}
+	cfg.Environment = "gamma"
 	cfg.MongoDB.URI = "mongodb://127.0.0.1:27017"
 	cfg.MongoDB.Database = "quwoquan_integration"
-	cfg.AccountSecurityAuthority.BaseURL = "http://user-service:18081"
-	cfg.AccountSecurityAuthority.TimeoutMs = 300
+	cfg.UserAccountSecurityAuthority.BaseURL = "http://user-service:18081"
+	cfg.UserAccountSecurityAuthority.TimeoutMs = 300
 	return cfg
 }
 
@@ -359,7 +373,7 @@ func TestValidateResultRelayRedisRequiresDurableTransportOutsideAlpha(t *testing
 }
 
 // 环境覆盖是渲染后配置的唯一合法改写入口：Mongo 定位、监听地址、默认坐标
-// 都要被真正写回 Config，服务专用键必须能覆盖通用键。
+// 都要被真正写回 Config，且键集单轨——无前缀的共享键不再参与覆盖。
 func TestApplyEnvOverridesRewritesCanonicalRuntimeTargets(t *testing.T) {
 	t.Setenv("MONGO_URI", "mongodb://shared:27017")
 	t.Setenv("MONGO_DATABASE", "shared_db")
@@ -369,10 +383,7 @@ func TestApplyEnvOverridesRewritesCanonicalRuntimeTargets(t *testing.T) {
 	t.Setenv("INTEGRATION_LOCATION_DEFAULT_LATITUDE", "31.2304")
 	t.Setenv("INTEGRATION_LOCATION_DEFAULT_LONGITUDE", "121.4737")
 
-	cfg := integrationconfig.Config{}
-	if err := integrationconfig.ApplyEnvOverrides(&cfg); err != nil {
-		t.Fatalf("apply canonical overrides: %v", err)
-	}
+	cfg := applyIntegrationEnvOverrides(t)
 	if cfg.MongoDB.URI != "mongodb://integration:27017" ||
 		cfg.MongoDB.Database != "integration_db" {
 		t.Fatalf("service scoped Mongo override must win: %#v", cfg.MongoDB)
@@ -396,8 +407,8 @@ func TestApplyEnvOverridesRejectsNonNumericCoordinates(t *testing.T) {
 		t.Run(key, func(t *testing.T) {
 			t.Setenv(key, "not-a-number")
 			cfg := integrationconfig.Config{}
-			err := integrationconfig.ApplyEnvOverrides(&cfg)
-			if err == nil || !strings.Contains(err.Error(), key+" must be numeric") {
+			err := servicekit.ApplyEnvOverrides(integrationEnvPrefix, &cfg)
+			if err == nil || !strings.Contains(err.Error(), "env "+key+" must be numeric") {
 				t.Fatalf("want %s numeric guard, got %v", key, err)
 			}
 		})
@@ -415,10 +426,7 @@ func TestApplyEnvOverridesMaterializesRedisScenesPerPrefix(t *testing.T) {
 	t.Setenv("INTEGRATION_REDIS_REC_MODE", "standalone")
 	t.Setenv("INTEGRATION_REDIS_REC_ADDR", "redis-rec:6379")
 
-	cfg := integrationconfig.Config{}
-	if err := integrationconfig.ApplyEnvOverrides(&cfg); err != nil {
-		t.Fatalf("apply redis scene overrides: %v", err)
-	}
+	cfg := applyIntegrationEnvOverrides(t)
 	if cfg.Redis.General.Mode != "cluster" ||
 		strings.Join(cfg.Redis.General.Addrs, "|") != "redis-0:6379|redis-1:6379" {
 		t.Fatalf("general cluster addrs drift: %#v", cfg.Redis.General)
@@ -440,29 +448,37 @@ func TestApplyEnvOverridesRejectsMalformedRedisSceneValues(t *testing.T) {
 		wantErr string
 	}{
 		{
-			key:     "INTEGRATION_REDIS_GENERAL_DB",
-			value:   "-1",
-			wantErr: "INTEGRATION_REDIS_GENERAL_DB must be a non-negative integer",
-		},
-		{
 			key:     "INTEGRATION_REDIS_GENERAL_TLS",
 			value:   "yes-please",
-			wantErr: "INTEGRATION_REDIS_GENERAL_TLS must be boolean",
+			wantErr: "env INTEGRATION_REDIS_GENERAL_TLS: must be a boolean literal",
 		},
 		{
 			key:     "INTEGRATION_REDIS_REC_DB",
 			value:   "not-an-int",
-			wantErr: "INTEGRATION_REDIS_REC_DB must be a non-negative integer",
+			wantErr: "env INTEGRATION_REDIS_REC_DB must be an integer",
 		},
 	} {
 		t.Run(testCase.key+"="+testCase.value, func(t *testing.T) {
 			t.Setenv(testCase.key, testCase.value)
 			cfg := integrationconfig.Config{}
-			err := integrationconfig.ApplyEnvOverrides(&cfg)
+			err := servicekit.ApplyEnvOverrides(integrationEnvPrefix, &cfg)
 			if err == nil || !strings.Contains(err.Error(), testCase.wantErr) {
 				t.Fatalf("want %q, got %v", testCase.wantErr, err)
 			}
 		})
+	}
+}
+
+// 负数逻辑库编号在装配 scene 路由时阻断：静默取 0 会把本 scene 的读写落到
+// 另一个 db。
+func TestRedisSceneRouterRejectsNegativeLogicalDatabase(t *testing.T) {
+	t.Setenv("INTEGRATION_REDIS_GENERAL_DB", "-1")
+	cfg := applyIntegrationEnvOverrides(t)
+	_, _, err := servicekit.NewRedisRouter(
+		map[string]servicekit.RedisSceneConfig{"general": cfg.Redis.General},
+	)
+	if err == nil || !strings.Contains(err.Error(), "db must be a non-negative integer") {
+		t.Fatalf("negative logical database must fail closed: %v", err)
 	}
 }
 
@@ -479,7 +495,7 @@ func TestLoadFailsClosedOnEnvironmentIdentity(t *testing.T) {
 		t.Setenv("SERVICE_NAME", "")
 		t.Setenv("APP_ENV", "staging")
 		t.Setenv("CONFIG_ROOT", configRoot)
-		if _, err := integrationconfig.Load(); err == nil ||
+		if _, err := servicekit.ResolveIdentity("integration-service"); err == nil ||
 			!strings.Contains(err.Error(), "APP_ENV must be one of alpha|beta|gamma|prod") {
 			t.Fatalf("unknown APP_ENV must fail closed: %v", err)
 		}
@@ -489,7 +505,7 @@ func TestLoadFailsClosedOnEnvironmentIdentity(t *testing.T) {
 		t.Setenv("APP_ENV", "gamma")
 		t.Setenv("CONFIG_ROOT", configRoot)
 		t.Setenv("CONFIG_VERSION", "")
-		if _, err := integrationconfig.Load(); err == nil ||
+		if _, err := servicekit.ResolveIdentity("integration-service"); err == nil ||
 			!strings.Contains(err.Error(), "CONFIG_VERSION is required when APP_ENV=gamma") {
 			t.Fatalf("gamma without CONFIG_VERSION must fail closed: %v", err)
 		}
@@ -498,7 +514,12 @@ func TestLoadFailsClosedOnEnvironmentIdentity(t *testing.T) {
 		t.Setenv("SERVICE_NAME", "")
 		t.Setenv("APP_ENV", "beta")
 		t.Setenv("CONFIG_ROOT", filepath.Join(configRoot, "absent"))
-		if _, err := integrationconfig.Load(); err == nil ||
+		identity, err := servicekit.ResolveIdentity("integration-service")
+		if err != nil {
+			t.Fatalf("resolve runtime identity: %v", err)
+		}
+		cfg := integrationconfig.Config{}
+		if _, err := servicekit.LoadYAMLConfigRaw(identity, &cfg); err == nil ||
 			!strings.Contains(err.Error(), "generated runtime config") {
 			t.Fatalf("absent rendered snapshot must fail closed: %v", err)
 		}
@@ -513,8 +534,17 @@ func TestLoadFailsClosedOnEnvironmentIdentity(t *testing.T) {
 		t.Setenv("SERVICE_NAME", "")
 		t.Setenv("APP_ENV", "beta")
 		t.Setenv("CONFIG_ROOT", retiredRoot)
-		if _, err := integrationconfig.Load(); err == nil ||
-			!strings.Contains(err.Error(), "read generated runtime config") {
+		identity, err := servicekit.ResolveIdentity("integration-service")
+		if err != nil {
+			t.Fatalf("resolve runtime identity: %v", err)
+		}
+		cfg := integrationconfig.Config{}
+		raw, err := servicekit.LoadYAMLConfigRaw(identity, &cfg)
+		if err != nil {
+			t.Fatalf("load rendered snapshot: %v", err)
+		}
+		if err := integrationconfig.SnapshotGuard(raw); err == nil ||
+			!strings.Contains(err.Error(), "generated external provider binding") {
 			t.Fatalf("retired snapshot key must fail closed: %v", err)
 		}
 	})
@@ -527,34 +557,46 @@ func TestLoadDefaultsToAlphaWithoutConfigVersion(t *testing.T) {
 	writeRuntimeConfigFile(
 		t,
 		filepath.Join(configRoot, "integration-service.yaml"),
-		"service:\n  name: integration-service\nmongodb:\n  uri: mongodb://mongodb:27017\n  database: quwoquan_integration\n",
+		"mongodb:\n  uri: mongodb://mongodb:27017\n  database: quwoquan_integration\n",
 	)
 	t.Setenv("SERVICE_NAME", "")
 	t.Setenv("APP_ENV", "")
 	t.Setenv("CONFIG_VERSION", "")
 	t.Setenv("CONFIG_ROOT", configRoot)
 
-	cfg, err := integrationconfig.Load()
-	if err != nil {
-		t.Fatalf("load alpha default snapshot: %v", err)
-	}
+	cfg := loadIntegrationSnapshot(t)
 	if cfg.Environment != "alpha" || cfg.MongoDB.Database != "quwoquan_integration" {
 		t.Fatalf("alpha default snapshot drift: %#v", cfg)
 	}
 }
 
-// MergeFile 是唯一的渲染产物读取点：文件不可读或结构与 Config 不符都必须
+// 快照加载是唯一的渲染产物读取点：文件不可读或结构与 Config 不符都必须
 // 报错，不能把半份配置合进内存后继续启动。
-func TestMergeFileFailsClosedOnUnreadableOrMistypedSnapshot(t *testing.T) {
-	absent := filepath.Join(t.TempDir(), "absent.yaml")
-	if err := integrationconfig.MergeFile(&integrationconfig.Config{}, absent); err == nil ||
-		!strings.Contains(err.Error(), "absent.yaml") {
+func TestSnapshotLoadFailsClosedOnUnreadableOrMistypedSnapshot(t *testing.T) {
+	t.Setenv("SERVICE_NAME", "")
+	t.Setenv("APP_ENV", "beta")
+	t.Setenv("CONFIG_VERSION", "")
+
+	t.Setenv("CONFIG_ROOT", t.TempDir())
+	identity, err := servicekit.ResolveIdentity("integration-service")
+	if err != nil {
+		t.Fatalf("resolve runtime identity: %v", err)
+	}
+	cfg := integrationconfig.Config{}
+	if _, err := servicekit.LoadYAMLConfigRaw(identity, &cfg); err == nil ||
+		!strings.Contains(err.Error(), "integration-service.yaml") {
 		t.Fatalf("unreadable snapshot must fail closed: %v", err)
 	}
 
-	mistyped := filepath.Join(t.TempDir(), "mistyped.yaml")
-	writeRuntimeConfigFile(t, mistyped, "service:\n  name:\n    - not-a-string\n")
-	err := integrationconfig.MergeFile(&integrationconfig.Config{}, mistyped)
+	mistypedRoot := t.TempDir()
+	mistyped := filepath.Join(mistypedRoot, "integration-service.yaml")
+	writeRuntimeConfigFile(t, mistyped, "mongodb:\n  database:\n    - not-a-string\n")
+	t.Setenv("CONFIG_ROOT", mistypedRoot)
+	identity, err = servicekit.ResolveIdentity("integration-service")
+	if err != nil {
+		t.Fatalf("resolve runtime identity: %v", err)
+	}
+	_, err = servicekit.LoadYAMLConfigRaw(identity, &cfg)
 	if err == nil || !strings.Contains(err.Error(), "parse "+mistyped) {
 		t.Fatalf("mistyped snapshot must fail closed: %v", err)
 	}

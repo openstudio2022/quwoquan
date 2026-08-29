@@ -76,6 +76,8 @@ Future<Map<String, Object?>> _signedPackage({
     'runtimeConfigTrustEnvelopeDigest':
         'sha256:${crypto.sha256.convert(utf8.encode(canonicalJsonEncode(trustDocument)))}',
     'effectiveLaunchManifestDigest': 'sha256:${'c' * 64}',
+    'launchProvenance': 'canonical_launcher',
+    'runtimeConfigSupplyMode': 'external_runtime_package',
   };
 }
 
@@ -468,6 +470,11 @@ void main() {
       CloudRuntimeConfig.runtimeConfigTrustEnvelopeDigest,
       trustEnvelope['runtimeConfigTrustEnvelopeDigest'],
     );
+    expect(CloudRuntimeConfig.launchProvenance, 'canonical_launcher');
+    expect(
+      CloudRuntimeConfig.runtimeConfigSupplyMode,
+      'external_runtime_package',
+    );
   });
 
   test('移动端 verified package/trust digest 漂移时 fail closed', () async {
@@ -481,6 +488,38 @@ void main() {
           ? 'not-a-digest'
           : 'sha256:${'f' * 64}';
 
+      await expectLater(
+        CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
+          bridge: NativeRuntimeConfigBridge(
+            client: _EnvelopeClient(trustEnvelope),
+            maxAttempts: 1,
+          ),
+          resolver: _resolver(),
+        ),
+        throwsA(
+          isA<CloudRuntimeConfigurationException>()
+              .having(
+                (error) => error.reason,
+                'reason',
+                'runtime-verified-identity-invalid',
+              )
+              .having(
+                (error) => error.invalidKeys,
+                'invalidKeys',
+                contains(field),
+              ),
+        ),
+      );
+    }
+  });
+
+  test('移动端 provenance 与 supply mode 只接受生成契约闭集', () async {
+    for (final field in <String>[
+      'launchProvenance',
+      'runtimeConfigSupplyMode',
+    ]) {
+      final trustEnvelope = await _signedPackage();
+      trustEnvelope[field] = 'legacy_unknown_value';
       await expectLater(
         CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
           bridge: NativeRuntimeConfigBridge(

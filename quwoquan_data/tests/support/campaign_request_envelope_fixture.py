@@ -86,6 +86,10 @@ def _patch_envelope_deps(monkeypatch) -> None:
         "handoffId": "local-contract",
         "handoffRevision": 1,
         "handoffDigest": "sha256:" + "9" * 64,
+        "sourceSelection": {
+            carrier: {"mode": "site_primary", "providers": ["wikipedia"]}
+            for carrier in ("homepage", "article", "image", "video")
+        },
     }
     fixture_handoff_binding = {
         "handoffId": "local-contract",

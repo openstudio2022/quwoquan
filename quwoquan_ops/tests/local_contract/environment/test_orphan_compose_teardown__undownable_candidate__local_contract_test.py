@@ -20,10 +20,12 @@ import pytest
 from quwoquan_ops.cli import stackctl
 from quwoquan_ops.cli.lib import orphan_compose_teardown as contract
 from quwoquan_ops.tests.support.orphan_compose_teardown_test_support import (
+    PROJECT,
     install_stackctl_fakes,
     multi_sample,
     post_sample,
     repair_args,
+    write_completed_partial_consumption,
 )
 
 
@@ -194,11 +196,13 @@ def test_teardown_of_an_unusable_candidate_retires_the_running_receipt(
     """拆掉残留后回执必须转 stopped，否则下一次 up 仍被失效凭据挡住。"""
 
     report_dir = install_stackctl_fakes(monkeypatch, tmp_path)
+    exact_project = "quwoquan_alpha_release_78142_3"
     running = {
         "env": "alpha",
         "target": "alpha-local",
         "status": "running",
         "attemptId": "attempt-frozen",
+        "composeProject": exact_project,
         "candidateDigest": "sha256:" + "a" * 64,
     }
     monkeypatch.setattr(stackctl, "load_startup_attempt", lambda _target: running)
@@ -208,15 +212,30 @@ def test_teardown_of_an_unusable_candidate_retires_the_running_receipt(
         lambda _target, _startup: "candidate is no longer present",
     )
     transitions: list[dict[str, object]] = []
-    monkeypatch.setattr(
-        stackctl,
-        "transition_startup_attempt",
-        lambda **kwargs: transitions.append(kwargs),
-    )
-    snapshot = multi_sample()
+    stopped = {
+        **running,
+        "status": "stopped",
+        "failure": (
+            "reclaimed by governed orphan Compose teardown; candidate-bound "
+            "down was structurally impossible for this receipt"
+        ),
+    }
+
+    def transition(**kwargs: object) -> dict[str, object]:
+        transitions.append(kwargs)
+        return stopped
+
+    monkeypatch.setattr(stackctl, "transition_startup_attempt", transition)
+    snapshot = multi_sample(project=exact_project)
     post_snapshot = post_sample(snapshot)
     samples = iter((snapshot, snapshot, post_snapshot))
-    monkeypatch.setattr(contract, "sample_snapshot", lambda **_kwargs: next(samples))
+    sampled_projects: list[str] = []
+
+    def sample_exact_project(**kwargs: object) -> dict[str, object]:
+        sampled_projects.append(str(kwargs.get("project") or ""))
+        return next(samples)
+
+    monkeypatch.setattr(contract, "sample_snapshot", sample_exact_project)
     monkeypatch.setattr(
         stackctl,
         "run",
@@ -239,6 +258,14 @@ def test_teardown_of_an_unusable_candidate_retires_the_running_receipt(
     )
 
     assert consumed["exitCode"] == 0
+    assert sampled_projects == [exact_project, exact_project, exact_project]
+    attestation = contract.load_attestation(
+        path,
+        allowed_root=tmp_path,
+        expected_target="alpha-local",
+        allow_expired=True,
+    )
+    assert attestation["project"] == exact_project
     assert transitions == [
         {
             "env": "alpha",
@@ -256,20 +283,538 @@ def test_teardown_of_an_unusable_candidate_retires_the_running_receipt(
             encoding="utf-8"
         )
     )
-    assert payload["preservedVolumeNames"] == ["quwoquan_alpha_release_mongo-data"]
+    assert payload["preservedVolumeNames"] == [f"{exact_project}_mongo-data"]
+    report = json.loads((report_dir / "report.json").read_text(encoding="utf-8"))
+    assert report["startupAttempt"] == stopped
+
+
+def test_empty_undownable_project_is_attested_then_retires_receipt_without_removal(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    report_dir = install_stackctl_fakes(monkeypatch, tmp_path)
+    running = {
+        "env": "alpha",
+        "target": "alpha-local",
+        "status": "partial",
+        "attemptId": "attempt-empty",
+        "composeProject": "quwoquan_alpha_release",
+        "candidateDigest": "sha256:" + "a" * 64,
+    }
+    stopped = {**running, "status": "stopped"}
+    monkeypatch.setattr(stackctl, "load_startup_attempt", lambda _target: running)
+    monkeypatch.setattr(
+        stackctl,
+        "_normal_down_structurally_impossible",
+        lambda _target, _startup: "candidate is no longer present",
+    )
+    monkeypatch.setattr(
+        stackctl,
+        "transition_startup_attempt",
+        lambda **_kwargs: stopped,
+    )
+    empty_snapshot = post_sample(multi_sample())
+    samples: list[bool] = []
+
+    def sample_empty(**kwargs: object) -> dict[str, object]:
+        samples.append(bool(kwargs.get("require_removable", True)))
+        return empty_snapshot
+
+    monkeypatch.setattr(contract, "sample_snapshot", sample_empty)
+    commands: list[list[str]] = []
+    monkeypatch.setattr(stackctl, "run", lambda argv: commands.append(argv))
+    path = tmp_path / "orphaned-compose-teardown-attestation.json"
+    args = repair_args(path, confirm=False)
+
+    planned = stackctl._repair_orphaned_compose(
+        args,
+        environment="alpha",
+        report_dir=report_dir,
+    )
+    assert planned["exitCode"] == 0
+
+    args.confirm_orphaned_compose_teardown = True
+    consumed = stackctl._repair_orphaned_compose(
+        args,
+        environment="alpha",
+        report_dir=report_dir,
+    )
+
+    assert consumed["exitCode"] == 0
+    assert samples == [False, False, False]
+    assert commands == []
+    report = json.loads((report_dir / "report.json").read_text(encoding="utf-8"))
+    assert report["startupAttempt"] == stopped
+    consumption = json.loads(
+        path.with_name("orphaned-compose-teardown-consumption.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert consumption["status"] == "passed"
+    assert consumption["removedContainerIds"] == []
+    assert consumption["removedNetworkIds"] == []
+    assert consumption["preservedVolumeNames"] == [
+        "quwoquan_alpha_release_mongo-data"
+    ]
+
+
+def test_receipt_transition_failure_does_not_publish_passed_consumption(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    report_dir = install_stackctl_fakes(monkeypatch, tmp_path)
+    running = {
+        "env": "alpha",
+        "target": "alpha-local",
+        "status": "running",
+        "attemptId": "attempt-frozen",
+        "composeProject": "quwoquan_alpha_release",
+        "candidateDigest": "sha256:" + "a" * 64,
+    }
+    monkeypatch.setattr(stackctl, "load_startup_attempt", lambda _target: running)
+    monkeypatch.setattr(
+        stackctl,
+        "_normal_down_structurally_impossible",
+        lambda _target, _startup: "candidate is no longer present",
+    )
+    monkeypatch.setattr(
+        stackctl,
+        "transition_startup_attempt",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("startup receipt transition failed")
+        ),
+    )
+    snapshot = multi_sample()
+    samples = iter((snapshot, snapshot, post_sample(snapshot)))
+    monkeypatch.setattr(contract, "sample_snapshot", lambda **_kwargs: next(samples))
+    monkeypatch.setattr(
+        stackctl,
+        "run",
+        lambda argv: CompletedProcess(argv, 0, "removed", ""),
+    )
+    path = tmp_path / "orphaned-compose-teardown-attestation.json"
+
+    planned = stackctl._repair_orphaned_compose(
+        repair_args(path, confirm=False),
+        environment="alpha",
+        report_dir=report_dir,
+    )
+    assert planned["exitCode"] == 0
+
+    failed = stackctl._repair_orphaned_compose(
+        repair_args(path, confirm=True),
+        environment="alpha",
+        report_dir=report_dir,
+    )
+
+    assert failed["exitCode"] == 2
+    consumption = json.loads(
+        path.with_name("orphaned-compose-teardown-consumption.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert consumption["status"] == "partial_failure"
+    # 销毁已证完整、只有 startup receipt 迁移失败：removalOutcome 必须保留
+    # complete_terminal_fact_pending，不得把假的 partial_failure 刻进 create-once 回执。
+    assert consumption["removalOutcome"] == "complete_terminal_fact_pending"
+    assert consumption["removedContainerIds"]
+    assert not path.with_name("orphaned-compose-teardown-convergence.json").exists()
+    report = json.loads((report_dir / "report.json").read_text(encoding="utf-8"))
+    assert report["status"] == "gate_block"
+
+
+def test_audit_convergence_transition_failure_does_not_publish_passed_fact(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    report_dir = install_stackctl_fakes(monkeypatch, tmp_path)
+    running = {
+        "env": "alpha",
+        "target": "alpha-local",
+        "status": "partial",
+        "attemptId": "attempt-frozen",
+        "composeProject": "quwoquan_alpha_release",
+        "candidateDigest": "sha256:" + "a" * 64,
+    }
+    monkeypatch.setattr(stackctl, "load_startup_attempt", lambda _target: running)
+    monkeypatch.setattr(
+        stackctl,
+        "_normal_down_structurally_impossible",
+        lambda _target, _startup: "candidate is no longer present",
+    )
+    monkeypatch.setattr(
+        stackctl,
+        "transition_startup_attempt",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("startup receipt transition failed")
+        ),
+    )
+    snapshot = multi_sample()
+    path = tmp_path / "orphaned-compose-teardown-attestation.json"
+    write_completed_partial_consumption(path, snapshot)
+    monkeypatch.setattr(
+        contract,
+        "sample_snapshot",
+        lambda **_kwargs: post_sample(snapshot),
+    )
+
+    failed = stackctl._repair_orphaned_compose(
+        repair_args(path, confirm=True),
+        environment="alpha",
+        report_dir=report_dir,
+    )
+
+    assert failed["exitCode"] == 2
+    consumption = json.loads(
+        path.with_name("orphaned-compose-teardown-consumption.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert consumption["status"] == "partial_failure"
+    assert not path.with_name("orphaned-compose-teardown-convergence.json").exists()
+    report = json.loads((report_dir / "report.json").read_text(encoding="utf-8"))
+    assert report["status"] == "gate_block"
+
+
+def test_step_receipt_write_failure_retries_from_post_state_without_replaying_docker(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    report_dir = install_stackctl_fakes(monkeypatch, tmp_path)
+    snapshot = multi_sample()
+    samples = iter(
+        (
+            snapshot,
+            snapshot,
+            post_sample(snapshot),
+            post_sample(snapshot),
+        )
+    )
+    monkeypatch.setattr(contract, "sample_snapshot", lambda **_kwargs: next(samples))
+    docker_commands: list[list[str]] = []
+
+    def remove(argv: list[str]) -> CompletedProcess[str]:
+        docker_commands.append(argv)
+        return CompletedProcess(argv, 0, "removed", "")
+
+    monkeypatch.setattr(stackctl, "run", remove)
+    real_writer = contract.write_step_receipt_create_once
+    first_step_attempts = 0
+
+    def fail_first_step_twice(*args: object, **kwargs: object) -> Path:
+        nonlocal first_step_attempts
+        if kwargs.get("index") == 1:
+            first_step_attempts += 1
+            if first_step_attempts <= 2:
+                raise OSError("step receipt store unavailable")
+        return real_writer(*args, **kwargs)
+
+    monkeypatch.setattr(contract, "write_step_receipt_create_once", fail_first_step_twice)
+    path = tmp_path / "orphaned-compose-teardown-attestation.json"
+    assert stackctl._repair_orphaned_compose(
+        repair_args(path, confirm=False),
+        environment="alpha",
+        report_dir=report_dir,
+    )["exitCode"] == 0
+
+    failed = stackctl._repair_orphaned_compose(
+        repair_args(path, confirm=True),
+        environment="alpha",
+        report_dir=report_dir,
+    )
+    commands_after_failure = list(docker_commands)
+
+    assert failed["exitCode"] == 2
+    assert not path.with_name("orphaned-compose-teardown-consumption.json").exists()
+    failed_report = json.loads((report_dir / "report.json").read_text(encoding="utf-8"))
+    assert failed_report["destructiveRepairPerformed"] is True
+    assert failed_report["destructiveRepairOutcome"] == "complete_step_fact_pending"
+    assert failed_report["consumption"] == ""
+
+    recovered = stackctl._repair_orphaned_compose(
+        repair_args(path, confirm=True),
+        environment="alpha",
+        report_dir=report_dir,
+    )
+
+    assert recovered["exitCode"] == 0
+    assert docker_commands == commands_after_failure
+    assert path.with_name("orphaned-compose-teardown-step-001.json").is_file()
+    consumption = json.loads(
+        path.with_name("orphaned-compose-teardown-consumption.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert consumption["status"] == "passed"
+    assert consumption["failedCommand"] == []
+
+
+def test_terminal_consumption_write_failure_retries_from_complete_execution_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    report_dir = install_stackctl_fakes(monkeypatch, tmp_path)
+    running = {
+        "env": "alpha",
+        "target": "alpha-local",
+        "status": "running",
+        "attemptId": "attempt-terminal-writer",
+        "composeProject": PROJECT,
+        "candidateDigest": "sha256:" + "a" * 64,
+    }
+    startup_state: dict[str, dict[str, object]] = {"value": running}
+    monkeypatch.setattr(
+        stackctl,
+        "load_startup_attempt",
+        lambda _target: startup_state["value"],
+    )
+    monkeypatch.setattr(
+        stackctl,
+        "_normal_down_structurally_impossible",
+        lambda _target, _startup: "candidate is no longer present",
+    )
+
+    def transition(**_kwargs: object) -> dict[str, object]:
+        stopped = {**running, "status": "stopped"}
+        startup_state["value"] = stopped
+        return stopped
+
+    monkeypatch.setattr(stackctl, "transition_startup_attempt", transition)
+    snapshot = multi_sample()
+    samples = iter(
+        (
+            snapshot,
+            snapshot,
+            post_sample(snapshot),
+            post_sample(snapshot),
+            post_sample(snapshot),
+        )
+    )
+    monkeypatch.setattr(contract, "sample_snapshot", lambda **_kwargs: next(samples))
+    docker_commands: list[list[str]] = []
+
+    def remove(argv: list[str]) -> CompletedProcess[str]:
+        docker_commands.append(argv)
+        return CompletedProcess(argv, 0, "removed", "")
+
+    monkeypatch.setattr(stackctl, "run", remove)
+    real_writer = contract.write_consumption_create_once
+    write_attempts = 0
+
+    def fail_terminal_and_partial(*args: object, **kwargs: object) -> Path:
+        nonlocal write_attempts
+        write_attempts += 1
+        if write_attempts <= 3:
+            raise OSError("consumption store unavailable")
+        return real_writer(*args, **kwargs)
+
+    monkeypatch.setattr(contract, "write_consumption_create_once", fail_terminal_and_partial)
+    path = tmp_path / "orphaned-compose-teardown-attestation.json"
+    assert stackctl._repair_orphaned_compose(
+        repair_args(path, confirm=False),
+        environment="alpha",
+        report_dir=report_dir,
+    )["exitCode"] == 0
+
+    failed = stackctl._repair_orphaned_compose(
+        repair_args(path, confirm=True),
+        environment="alpha",
+        report_dir=report_dir,
+    )
+    commands_after_failure = list(docker_commands)
+
+    assert failed["exitCode"] == 2
+    assert startup_state["value"]["status"] == "stopped"
+    assert not path.with_name("orphaned-compose-teardown-consumption.json").exists()
+    assert path.with_name("orphaned-compose-teardown-journal.json").is_file()
+
+    retry_failed = stackctl._repair_orphaned_compose(
+        repair_args(path, confirm=True),
+        environment="alpha",
+        report_dir=report_dir,
+    )
+
+    assert retry_failed["exitCode"] == 2
+    assert docker_commands == commands_after_failure
+    assert not path.with_name("orphaned-compose-teardown-consumption.json").exists()
+    retry_report = json.loads((report_dir / "report.json").read_text(encoding="utf-8"))
+    assert retry_report["destructiveRepairPerformed"] is True
+    assert retry_report["destructiveRepairOutcome"] == "complete_terminal_fact_pending"
+    assert retry_report["consumption"] == ""
+
+    recovered = stackctl._repair_orphaned_compose(
+        repair_args(path, confirm=True),
+        environment="alpha",
+        report_dir=report_dir,
+    )
+
+    assert recovered["exitCode"] == 0
+    assert docker_commands == commands_after_failure
+    assert any("no Docker removal command was replayed" in item for item in recovered["details"])
+    consumption = json.loads(
+        path.with_name("orphaned-compose-teardown-consumption.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert consumption["status"] == "passed"
+    assert consumption["removalOutcome"] == "complete"
+
+
+def test_terminal_convergence_write_failure_retries_without_success_fact(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    report_dir = install_stackctl_fakes(monkeypatch, tmp_path)
+    snapshot = multi_sample()
+    path = tmp_path / "orphaned-compose-teardown-attestation.json"
+    write_completed_partial_consumption(path, snapshot)
+    monkeypatch.setattr(
+        contract,
+        "sample_snapshot",
+        lambda **_kwargs: post_sample(snapshot),
+    )
+    real_writer = contract.write_convergence_create_once
+    write_attempts = 0
+
+    def fail_once(*args: object, **kwargs: object) -> Path:
+        nonlocal write_attempts
+        write_attempts += 1
+        if write_attempts == 1:
+            raise OSError("convergence store unavailable")
+        return real_writer(*args, **kwargs)
+
+    monkeypatch.setattr(contract, "write_convergence_create_once", fail_once)
+
+    failed = stackctl._repair_orphaned_compose(
+        repair_args(path, confirm=True),
+        environment="alpha",
+        report_dir=report_dir,
+    )
+
+    assert failed["exitCode"] == 2
+    assert not path.with_name("orphaned-compose-teardown-convergence.json").exists()
+    assert json.loads(
+        path.with_name("orphaned-compose-teardown-consumption.json").read_text(
+            encoding="utf-8"
+        )
+    )["status"] == "partial_failure"
+
+    recovered = stackctl._repair_orphaned_compose(
+        repair_args(path, confirm=True),
+        environment="alpha",
+        report_dir=report_dir,
+    )
+
+    assert recovered["exitCode"] == 0
+    assert json.loads(
+        path.with_name("orphaned-compose-teardown-convergence.json").read_text(
+            encoding="utf-8"
+        )
+    )["status"] == "passed"
+
+
+def test_passed_consumption_is_not_downgraded_when_report_publication_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    report_dir = install_stackctl_fakes(monkeypatch, tmp_path)
+    snapshot = multi_sample()
+    samples = iter((snapshot, snapshot, post_sample(snapshot)))
+    monkeypatch.setattr(contract, "sample_snapshot", lambda **_kwargs: next(samples))
+    monkeypatch.setattr(
+        stackctl,
+        "run",
+        lambda argv: CompletedProcess(argv, 0, "removed", ""),
+    )
+    path = tmp_path / "orphaned-compose-teardown-attestation.json"
+    planned = stackctl._repair_orphaned_compose(
+        repair_args(path, confirm=False),
+        environment="alpha",
+        report_dir=report_dir,
+    )
+    assert planned["exitCode"] == 0
+    monkeypatch.setattr(
+        stackctl,
+        "write_json",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            OSError("report sink unavailable")
+        ),
+    )
+
+    committed = stackctl._repair_orphaned_compose(
+        repair_args(path, confirm=True),
+        environment="alpha",
+        report_dir=report_dir,
+    )
+
+    assert committed["exitCode"] == 0
+    assert any("report publication failed" in item for item in committed["details"])
+    consumption = json.loads(
+        path.with_name("orphaned-compose-teardown-consumption.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert consumption["status"] == "passed"
+    assert consumption["removalOutcome"] == "complete"
+
+
+def test_passed_convergence_is_not_downgraded_when_summary_publication_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    report_dir = install_stackctl_fakes(monkeypatch, tmp_path)
+    snapshot = multi_sample()
+    path = tmp_path / "orphaned-compose-teardown-attestation.json"
+    write_completed_partial_consumption(path, snapshot)
+    monkeypatch.setattr(contract, "sample_snapshot", lambda **_kwargs: post_sample(snapshot))
+    monkeypatch.setattr(
+        stackctl,
+        "_write_summary_bundle",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            OSError("summary sink unavailable")
+        ),
+    )
+
+    committed = stackctl._repair_orphaned_compose(
+        repair_args(path, confirm=True),
+        environment="alpha",
+        report_dir=report_dir,
+    )
+
+    assert committed["exitCode"] == 0
+    assert any("report publication failed" in item for item in committed["details"])
+    convergence = json.loads(
+        path.with_name("orphaned-compose-teardown-convergence.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert convergence["status"] == "passed"
+    consumption = json.loads(
+        path.with_name("orphaned-compose-teardown-consumption.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert consumption["status"] == "partial_failure"
 
 
 def test_reclaimed_receipt_is_retired_so_later_up_is_not_blocked(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     transitions: list[dict[str, object]] = []
-    monkeypatch.setattr(
-        stackctl,
-        "transition_startup_attempt",
-        lambda **kwargs: transitions.append(kwargs),
-    )
+    stopped = {
+        "env": "alpha",
+        "target": "alpha-local",
+        "status": "stopped",
+        "attemptId": "attempt-1",
+    }
 
-    detail = stackctl._close_orphan_reclaimed_startup_receipt(
+    def transition(**kwargs: object) -> dict[str, object]:
+        transitions.append(kwargs)
+        return stopped
+
+    monkeypatch.setattr(stackctl, "transition_startup_attempt", transition)
+
+    canonical, detail = stackctl._close_orphan_reclaimed_startup_receipt(
         "alpha-local",
         {
             "env": "alpha",
@@ -278,6 +823,7 @@ def test_reclaimed_receipt_is_retired_so_later_up_is_not_blocked(
         },
     )
 
+    assert canonical == stopped
     assert "attempt-1" in detail
     assert transitions == [
         {
@@ -293,11 +839,13 @@ def test_reclaimed_receipt_is_retired_so_later_up_is_not_blocked(
     ]
 
     transitions.clear()
-    assert (
-        stackctl._close_orphan_reclaimed_startup_receipt(
-            "alpha-local",
-            {"env": "alpha", "status": "stopped", "attemptId": "attempt-1"},
-        )
-        == ""
-    )
+    already_stopped = {
+        "env": "alpha",
+        "status": "stopped",
+        "attemptId": "attempt-1",
+    }
+    assert stackctl._close_orphan_reclaimed_startup_receipt(
+        "alpha-local",
+        already_stopped,
+    ) == (already_stopped, "")
     assert transitions == []

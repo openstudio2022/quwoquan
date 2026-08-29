@@ -65,3 +65,12 @@
 - 准出影响：`track`
 - 影响或价值：尚缺少能够证明“go-integration（与 Go 业务服务集成）”已满足当前规格的真实测试证据。
 - 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-002"></a>
+### OPEN-002 prod 环境的模型服务上游地址缺注入轨
+
+- 类型：`external_blocker`
+- 优先级：`P1`
+- 准出影响：`block`
+- 影响或价值：content-service 的 `prod` 配置快照把 `sys.content-service.rec_model_service.url` 写成未展开字面量 `${REC_MODEL_SERVICE_URL}`，而仓库内没有任何 prod 注入点提供该 env；`rec_model_service.enabled` 在 schema 默认为 `true`，Go 侧「url 为空则不装配」的判据对非空字面量不成立。结果是 prod 会以该字面量为 base URL 装配模型客户端，每次打分调用都失败后走 CascadeScorer 回退——回退路径本身符合 REQ-002，但失败被表达为无效 URL 而非「模型服务未部署」，容量与降级 SLI 因此把一个配置缺陷长期计入模型服务不可用率。`gamma` 指向 `http://recommendation-service:8000`，`prod` 平面的第一方服务集合（`quwoquan_ops/cli/prod/render_prod_plane_stack_lib/constants.py`）不含 `recommendation-service`，仓库内无法判定 prod 是否部署该服务，因此本项需要部署事实输入才能关闭：若 prod 不部署则应显式 `enabled: false`，若部署则应填真实 origin。content 侧已把该键纳入未展开占位符 fail-closed 校验，prod 启动会在此项关闭前显式失败而不是带着假地址运行。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效，且 `prod` 配置快照中该键为真实 origin 或 `enabled: false`。

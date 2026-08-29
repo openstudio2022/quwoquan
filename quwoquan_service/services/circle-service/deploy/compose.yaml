@@ -19,7 +19,7 @@ services:
       CIRCLE_SERVICE_ADDR: ":18082"
       CIRCLE_MONGO_URI: mongodb://mongodb:27017
       CIRCLE_MONGO_DATABASE: quwoquan_circle
-      CIRCLE_REDIS_ADDR: redis:6379
+      CIRCLE_REDIS_GENERAL_ADDR: redis:6379
       CONTENT_SERVICE_BASE_URL: http://content-service:18080
       CHAT_SERVICE_BASE_URL: http://chat-service:18081
       USER_SERVICE_BASE_URL: http://user-service:18081

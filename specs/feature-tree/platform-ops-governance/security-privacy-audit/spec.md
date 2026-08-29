@@ -74,7 +74,8 @@
 - THEN stable URL 与 manifest currentVersion 一致，版本 URL 不可变，prod 发布前先完成 gamma legal-static 探测。
 - THEN alpha / flutter run Remote public plane 可直接访问 `/legal/user-agreement`、`/legal/privacy-policy`、`/legal/permissions`、`/legal/third-party-sdk-list`，不得回退 fixture/mock API 路由。
 - THEN 协议 URL 不可达或返回非成功状态时，App 展示原生错误态、提供重试和返回，不暴露 raw HTTP/WebView 错误页，且不阻断登录协议勾选与验证码登录流程。
-- THEN 对外分发的 web/android 描述文件必须绑定到 release 已登记的同一 build product，产物内容摘要与描述文件本身被篡改时分发都失败关闭。
+- THEN 对外分发的 web/android 描述文件必须由 release manifest 顶层 `publicWeb`、`androidOfficialRelease` canonical path + SHA-256 descriptor 绑定到候选 exact bytes；部署前校验字段闭集、source identity 与候选 `artifactManifest` 完全一致，任一漂移必须在首个分发写入前失败关闭。
+- THEN `applicationPackages.*.packageDigest` 只校验候选 payload tree；`contentSHA256` / `apkSHA256` 只与已验证候选 application package evidence 的 `artifactManifest.artifactDigest` 比较，禁止把两类摘要直接互比或互相替代。
 
 ## 8. 开放事项
 
@@ -98,12 +99,3 @@
 - 正式 AAB/IPA 签名与商店材料完整
 - 测试账号可走通 AppRoot UAT。
 - 依赖：法务、设计、运营、渠道账号与签名 secrets。
-
-<a id="open-003"></a>
-### OPEN-003 对外分发描述文件缺少文件级完整性锚点
-
-- 类型：`risk`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：ReleaseEvidence 迁到 canonical build product 编址后，`applicationPackages` 登记的是产品通用包，对外分发的 web/android 描述文件改由 `publicWeb`、`androidOfficialRelease` 两个 descriptor 承载，而这两项不在 release manifest 的顶层字段闭集内。`deploy_official_distribution` 只拿得到 release manifest，因此现在只能绑定产物内容摘要（`contentSHA256`/`apkSHA256`）与 `buildProductId`。后果是篡改描述文件中不进产物摘要的字段——例如把 `apkUrl` 指向另一台主机——不会被这一层发现，只剩 `apkHostAllowlist` 兜底。
-- 完成判定：`SIT-001` 的对外分发完整性子句满足——分发描述文件的文件级摘要在 release manifest 内可达，且有负例证明仅篡改下载地址即失败关闭。

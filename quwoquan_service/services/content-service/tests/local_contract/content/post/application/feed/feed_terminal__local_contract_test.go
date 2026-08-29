@@ -47,6 +47,7 @@ type terminalActiveSupplyReader struct {
 	calls             int
 	releaseID         string
 	manifestDigest    string
+	releaseClass      string
 	zeroPlayableVideo bool
 }
 
@@ -73,6 +74,7 @@ func (r *terminalActiveSupplyReader) ActiveSupplySnapshot(context.Context) (Acti
 		Status:          "active",
 		ActiveReleaseID: releaseID,
 		ManifestDigest:  manifestDigest,
+		ReleaseClass:    r.releaseClass,
 		ReadbackStatus:  "passed",
 		Posts:           1,
 		PlayableVideos:  playableVideos,

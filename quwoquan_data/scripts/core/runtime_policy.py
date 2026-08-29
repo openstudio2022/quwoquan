@@ -92,6 +92,7 @@ class RuntimePolicy:
     process_termination_timeout_seconds: int
     agent_future_poll_timeout_seconds: int
     api_request_timeout_seconds: int
+    research_credential_issuance_timeout_seconds: int
     direct_fetch_timeout_seconds: int
     source_fetch_timeout_seconds: int
     source_video_read_timeout_seconds: int
@@ -394,6 +395,7 @@ def load_runtime_policy(profile_id: str) -> RuntimePolicy:
         process_termination_timeout_seconds=_positive_int(budgets.get("processTerminationTimeoutSeconds"), label="budgets.processTerminationTimeoutSeconds"),
         agent_future_poll_timeout_seconds=_positive_int(budgets.get("agentFuturePollTimeoutSeconds"), label="budgets.agentFuturePollTimeoutSeconds"),
         api_request_timeout_seconds=_positive_int(budgets.get("apiRequestTimeoutSeconds"), label="budgets.apiRequestTimeoutSeconds"),
+        research_credential_issuance_timeout_seconds=_positive_int(budgets.get("researchCredentialIssuanceTimeoutSeconds"), label="budgets.researchCredentialIssuanceTimeoutSeconds"),
         direct_fetch_timeout_seconds=_positive_int(budgets.get("directFetchTimeoutSeconds"), label="budgets.directFetchTimeoutSeconds"),
         source_fetch_timeout_seconds=_positive_int(budgets.get("sourceFetchTimeoutSeconds"), label="budgets.sourceFetchTimeoutSeconds"),
         source_video_read_timeout_seconds=_positive_int(

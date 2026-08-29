@@ -10,14 +10,30 @@ enum EntityErrorCode {
   versionConflict('ENTITY.USER.version_conflict', '内容已变更，请刷新后重试', 409),
   idempotencyConflict('ENTITY.USER.idempotency_conflict', '请求重复提交，请稍后重试', 409),
   internalError('ENTITY.SYSTEM.internal_error', '共享主页暂时不可用，请稍后再试', 500),
-  claimMaterialMissing('ENTITY.USER.claim_material_missing', '认领材料不完整，请补充后重试', 400),
+  claimMaterialMissing(
+    'ENTITY.USER.claim_material_missing',
+    '认领材料不完整，请补充后重试',
+    400,
+  ),
   alreadyClaimed('ENTITY.USER.already_claimed', '该主页已被认领', 409),
   claimNotFound('ENTITY.USER.claim_not_found', '认领申请不存在', 404),
-  duplicatePendingClaim('ENTITY.USER.duplicate_pending_claim', '你已提交过认领申请，请等待审核', 409),
-  invalidClaimMaterialUrl('ENTITY.USER.invalid_claim_material_url', '认领材料链接必须是安全的 HTTPS 地址', 400),
+  duplicatePendingClaim(
+    'ENTITY.USER.duplicate_pending_claim',
+    '你已提交过认领申请，请等待审核',
+    409,
+  ),
+  invalidClaimMaterialUrl(
+    'ENTITY.USER.invalid_claim_material_url',
+    '认领材料链接必须是安全的 HTTPS 地址',
+    400,
+  ),
   reviewNotFound('ENTITY.USER.review_not_found', '评价不存在或已删除', 404),
   statusReportNotFound('ENTITY.USER.status_report_not_found', '上报记录不存在', 404),
-  invalidStatusReportEvidenceUrl('ENTITY.USER.invalid_status_report_evidence_url', '上报证据链接必须是安全的 HTTPS 地址', 400),
+  invalidStatusReportEvidenceUrl(
+    'ENTITY.USER.invalid_status_report_evidence_url',
+    '上报证据链接必须是安全的 HTTPS 地址',
+    400,
+  ),
   unknown('', '主页服务异常，请稍后重试', 500);
 
   final String code;
@@ -60,19 +76,25 @@ class EntityErrorMessages {
   static const Map<EntityErrorCode, String> en = <EntityErrorCode, String>{
     EntityErrorCode.invalidArgument: 'Request parameters are invalid',
     EntityErrorCode.homepageNotFound: 'Homepage not found or offline',
-    EntityErrorCode.homepageOffline: 'Homepage is offline and kept for history only',
+    EntityErrorCode.homepageOffline:
+        'Homepage is offline and kept for history only',
     EntityErrorCode.invalidHomepageType: 'Unsupported homepage type',
     EntityErrorCode.permissionDenied: 'You are not allowed to do this',
     EntityErrorCode.versionConflict: 'Content changed, refresh and retry',
-    EntityErrorCode.idempotencyConflict: 'Duplicate request, please retry later',
-    EntityErrorCode.internalError: 'Homepage service is temporarily unavailable',
+    EntityErrorCode.idempotencyConflict:
+        'Duplicate request, please retry later',
+    EntityErrorCode.internalError:
+        'Homepage service is temporarily unavailable',
     EntityErrorCode.claimMaterialMissing: 'Claim materials are incomplete',
     EntityErrorCode.alreadyClaimed: 'Homepage has already been claimed',
     EntityErrorCode.claimNotFound: 'Claim request not found',
-    EntityErrorCode.duplicatePendingClaim: 'You already have a pending claim request',
-    EntityErrorCode.invalidClaimMaterialUrl: 'Claim material links must use secure HTTPS URLs',
+    EntityErrorCode.duplicatePendingClaim:
+        'You already have a pending claim request',
+    EntityErrorCode.invalidClaimMaterialUrl:
+        'Claim material links must use secure HTTPS URLs',
     EntityErrorCode.reviewNotFound: 'Review not found or deleted',
     EntityErrorCode.statusReportNotFound: 'Status report not found',
-    EntityErrorCode.invalidStatusReportEvidenceUrl: 'Status report evidence links must use secure HTTPS URLs',
+    EntityErrorCode.invalidStatusReportEvidenceUrl:
+        'Status report evidence links must use secure HTTPS URLs',
   };
 }

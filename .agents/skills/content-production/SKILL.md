@@ -7,112 +7,80 @@ metadata:
 
 # content-production
 
-从可复用输入到 execution 工作包、immutable release、环境导入与 App UAT 的
-内容生产主线。五段执行契约见根 `AGENTS.md`。
+## 触发与输入
 
-## 触发
+在按区域生成主页、内容生产、复核或恢复 execution、重试实体任务、生成
+immutable release、导入环境或数据发布时使用。
 
-- 自然语言：按区域生成主页、跑内容任务、内容生产、生产内容并导入环境、
-  复核 execution、恢复内容任务、重试实体任务、immutable release、数据发布。
-- 由模型按 `description` 自动匹配，用户是否输入斜杠命令都不改变本契约。
+开始前取得：
 
-## 输入
+- 区域、载体、生成家族等可复用运行输入；用
+  `python3 quwoquan_data/scripts/cli.py verify runtime-input-ownership` 确认归属。
+- 来源素材与 execution id；用 `verify source-digest --execution-id <id>` 冻结 CAS 摘要。
+- 续跑时已有 receipt 链与 `execution_state.json`，二者只读消费；仅此场景读取
+  [recovery.md](references/recovery.md)。
 
-- 可复用运行输入（区域、载体、生成家族），归属由 `verify runtime-input-ownership` 判定。
-- 来源素材及其 CAS 摘要，由 `verify source-digest --execution-id` 冻结。
-- 续跑或跨宿主接手时，既有 receipt 链与 `execution_state.json` 只读消费，
-  断点判定见 [references/recovery.md](references/recovery.md)。
-
-## 边界宣言（详见 [references/boundary.md](references/boundary.md)）
-
-- **宿主 agent 是唯一执行主体**：调研、创作、评审、推进决策、读校验报错自修产物。
-- **skill 只写契约**：阶段序、产物位置/结构、完成判据绑定、恢复语义；零代码。
-- **脚本只做检查与确定性 IO**：verify 门禁、下载/CAS、publish/release/ship
-  原子操作、receipt 记录；永不驱动或等待 agent。
-
-## 角色
-
-主会话扮演 **content producer**（内容生产宿主）：按阶段契约调研、创作、评审、
-推进决策，并读校验报错自修产物。阶段角色人设（独立会话派发）见
-[references/roles/](references/roles/)。
+宿主 Agent 是调研、创作、决策和修正产物的唯一执行主体；脚本只做确定性 IO、
+verify、原子 publish/release/ship 与 receipt 记录，不驱动或等待 Agent。工作包布局需要
+定位时读取 [execution-layout.md](references/execution-layout.md)，不预载全部阶段文档。
 
 ## 执行
 
-自由度：低（阶段序、产物位置与完成判据固定，创作内容自由）。
+所有子命令以 `python3 quwoquan_data/scripts/cli.py` 为入口，按下列分支进入同一阶段链：
 
-### 主线阶段
+1. 新任务先运行 `task preflight --json`，然后从 `0.plan` 开始。
+2. 续跑或跨宿主接手按 [recovery.md](references/recovery.md) 的 receipt 判定表定位唯一断点。
+3. loop、并发或 fleet 才读取 [orchestration.md](references/orchestration.md)；正式并发只使用
+   `fleet_dispatcher + loop_driver`，并遵守 single-writer claim。
 
-每阶段按四段生命周期执行（[references/handoff-protocol.md](references/handoff-protocol.md)），
-收尾以 `task stage-record` 落 receipt。验收命令简写 `verify … ` =
-`python3 quwoquan_data/scripts/cli.py verify …`，退出码 0 为过。
+只在进入某阶段时读取对应契约，并按顺序推进：
 
-| 阶段 | 产物根 | 契约 | 完成判据 |
-| --- | --- | --- | --- |
-| `0.plan` | `0.plan/` + manifest | [0.plan.md](references/stage-contracts/0.plan.md) | `verify runtime-input-ownership` + `verify content-execution-layout` |
-| `sources` | `sources/` | [sources.md](references/stage-contracts/sources.md) | `verify source-digest --execution-id` |
-| `1.download` | 对象 `1.download/` + CAS | [1.download.md](references/stage-contracts/1.download.md) | 按 lane 绑定（见契约 POST 栏） |
-| `2.quality` | 对象 `2.quality/` | [2.quality.md](references/stage-contracts/2.quality.md) | `verify stage-artifacts --execution-id` |
-| `3.compose` | 对象 `3.compose/` | [3.compose.md](references/stage-contracts/3.compose.md) | `verify stage-artifacts --execution-id` |
-| `4.draft` | 对象 `4.draft/` | [4.draft.md](references/stage-contracts/4.draft.md) | 按 lane 绑定（见契约 POST 栏） |
-| `5.review` | 对象 `5.review/` | [5.review.md](references/stage-contracts/5.review.md) | `verify rubric --file --generation-family` |
-| `publish` | `quwoquan_data/publish/` | [publish.md](references/stage-contracts/publish.md) | `verify publish-purity` + `verify publish-closure` |
-| `release` | `.qwq_output/data/releases/<rid>/` | [release.md](references/stage-contracts/release.md) | `verify release-integrity --release` + `verify media-release-contract` |
-| `ship` | 环境 run + UAT 证据 | [ship.md](references/stage-contracts/ship.md) | `verify release-lifecycle` + `stackctl verify --env gamma` |
+| 阶段 | 按需契约 | 完成证据 |
+| --- | --- | --- |
+| `0.plan` | [0.plan.md](references/stage-contracts/0.plan.md) | `verify runtime-input-ownership`、`verify content-execution-layout` |
+| `sources` | [sources.md](references/stage-contracts/sources.md) | `verify source-digest --execution-id <id>` |
+| `1.download` | [1.download.md](references/stage-contracts/1.download.md) | 契约中当前 lane 的命名证据 |
+| `2.quality` | [2.quality.md](references/stage-contracts/2.quality.md) | `verify stage-artifacts --execution-id <id>` |
+| `3.compose` | [3.compose.md](references/stage-contracts/3.compose.md) | `verify stage-artifacts --execution-id <id>` |
+| `4.draft` | [4.draft.md](references/stage-contracts/4.draft.md) | 契约中当前 lane 的命名证据 |
+| `5.review` | [5.review.md](references/stage-contracts/5.review.md) | `verify rubric --file <path> --generation-family <family>` |
+| `publish` | [publish.md](references/stage-contracts/publish.md) | `verify publish-purity`、`verify publish-closure` |
+| `release` | [release.md](references/stage-contracts/release.md) | `verify release-integrity --release <path>`、`verify media-release-contract` |
+| `ship` | [ship.md](references/stage-contracts/ship.md) | `verify release-lifecycle`、`stackctl verify --env gamma`、App UAT |
 
-角色人设（独立会话派发）见 [references/roles/](references/roles/)；
-载体差异判据（article/homepage/image/video）见
-[references/carriers/](references/carriers/)。
+每阶段只由 `task stage-record` 创建一次 receipt。载体差异仅在处理对应载体时读取
+[carriers/](references/carriers/)；阶段失败才读取 [self-repair.md](references/self-repair.md)，
+修复产物后重跑同一命名证据，不跳阶段。
 
-### 入口三分支
+## 完成证据
 
-1. **新任务**：`python3 quwoquan_data/scripts/cli.py task preflight --json` →
-   读 [0.plan.md](references/stage-contracts/0.plan.md) 开始。
-2. **续跑 / 跨宿主接手**：读 [references/recovery.md](references/recovery.md)
-   判定表，从 receipt 链定位断点。
-3. **loop / 并发 / fleet 运行**：读 [references/orchestration.md](references/orchestration.md)
-   （运行档位 A/B/D、single-writer claim、模型策略；正式并发唯一实现是
-   fleet_dispatcher + loop_driver，宿主命令经 `HOST_CMD` 参数注入，零宿主分叉）。
+完成必须同时绑定同一 execution 的 receipt 链、immutable release、环境 import/readback
+和 App UAT，不以某个上游 PASS 代替下游闭环。报告至少引用：
 
-工作包布局与命名约束见 [references/execution-layout.md](references/execution-layout.md)；
-验收失败的自修循环见 [references/self-repair.md](references/self-repair.md)。
+- `.qwq_output/data/tasks/<executionId>/_shared/receipts/`
+- `.qwq_output/data/releases/<releaseId>/`
+- `.qwq_output/env/<env>/runs/data-release/<releaseId>/<runId>/`
 
-## 交付件
-
-**immutable release 与环境导入证据**：release 目录、环境 run 与 App UAT 收据，
-经由 receipt 链绑定到 execution。
-
-送审前自检：
-
-- 每个已推进阶段都有 create-once receipt，且 `execution_state` 与 receipt 链一致；
-- release 通过 `verify release-integrity --release` 与 `verify media-release-contract`；
-- 环境侧通过 `verify release-lifecycle` 与 `stackctl verify --env gamma`。
-
-## 凭证与安全
-
-- 凭证只来自仓外 `0600` 的 `~/.config/quwoquan/cursor_api_key`；
-  任何输出不得包含 key、片段或指纹。
-
-## 内置评审
-
-- publish 前 POST 调 `review`（workflow=`content-production`，segment=POST，
-  deliverable=`content-release`），角色 data-quality + data-legal——板外复核，
-  独立于 `5.review` 执行角色的自查。
+publish/release 的 POST Review 先由主会话按 Review registry 解析并执行一次去重的命名
+evidence，再调用 `review`（workflow=`content-production`、segment=`POST`、
+deliverable=`content-release`）。主审是 `data-quality`；命中内容发布 profile 时至多增加
+一个 `data-legal` 专审。Reviewer 只裁决已有证据，不自行运行 gate。required evidence 或
+required Reviewer 未完成即返回 typed `GATE_BLOCK`。
 
 ## 失败与停止
 
-- [MUST NOT] 手改 verify/schema/门禁参数；[MUST NOT] 手写 receipt 或
-  `execution_state.json`；[MUST NOT] 补写缺失的 source、rights、review 或
-  release 证据。
-- 失败必须保留明确的阶段与原因，不得把未过的门禁包装为通过。
-- 证据缺失一律带 `executionId` 返回 `GATE_BLOCK`，由 recovery 判定表决定回到哪个阶段。
+- 禁止手改 verify/schema/门禁参数，禁止手写 receipt 或 `execution_state.json`。
+- 禁止补造 source、rights、review、release、import/readback 或 UAT 证据；缺失时携带
+  `executionId` 和首个失败阶段返回 `GATE_BLOCK`。
+- receipt 链、source digest、release identity 或环境读回不一致时停止，由 recovery 判定表
+  决定返回阶段；不得从后续阶段反向修饰旧证据。
+- 凭证只从仓外 `0600` 的 `~/.config/quwoquan/cursor_api_key` 读取；任何输出不得包含
+  key、片段或指纹。
 
-## HANDOFF
+## 条件性交接
 
-- **完成判据**：见 [completion-criteria](../review/references/completion-criteria.md) 本工作流段；证据链条目带命令+退出码+时间戳+SHA，下游过期即复跑。
-- **产出物**：release 与 UAT 证据（receipt 链 + 环境 run 路径），报告给用户。
-- **未决项去向**：blocked receipt 的 `openItems` 已落 `return_to_stage` /
-  `gate_block` / `out_of_scope` 三者之一；恢复入口 [recovery.md](references/recovery.md)。
-- **唯一合法下游**：App 侧问题交接 `dev`；其余报告给用户结束。
-- **证据链**：`.qwq_output/data/tasks/<executionId>/_shared/receipts/`、
-  `.qwq_output/data/releases/<releaseId>/`、
-  `.qwq_output/env/<env>/runs/data-release/<releaseId>/<runId>/`。
+仅在跨会话未完成、环境/发布、多人并行、外部阻断或证据需要后续复用时持久化交接。
+交接只记录 execution/release/run identity、当前阶段、首个 typed blocker、receipt 与证据
+路径、唯一恢复入口；不得复制阶段规范或另建状态台账。App 代码缺陷可交给 `dev`，其他
+阻断按 [recovery.md](references/recovery.md) 回到唯一阶段。普通且已闭环的内容检查只向用户
+交付产物、实际验证和未决项。

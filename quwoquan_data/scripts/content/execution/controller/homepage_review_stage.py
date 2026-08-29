@@ -39,6 +39,46 @@ from content.homepage.homepage_review import (
 from content.source.source_unit import resolve_entity_object_dir
 
 
+def write_homepage_independent_review_repairs(ctx: ExecutionContext) -> None:
+    """Turn failed independent reviews into object-bound author retry input."""
+    from content.execution.controller.homepage_author_finalization import (
+        _write_homepage_repair_report,
+    )
+    from content.homepage.homepage_review import _entity_draft_dir
+
+    for target in ctx.spec.scope.coverage_targets:
+        domain, entity_type = require_domain_etype(
+            target.entity_type,
+            context=target.name,
+        )
+        draft_dir = _entity_draft_dir(
+            ctx.execution_id,
+            domain,
+            entity_type,
+            target.name,
+        )
+        result_path = draft_dir.parent / "5.review" / "reviewer_result.json"
+        if not result_path.is_file():
+            continue
+        result = read_json(result_path)
+        if not isinstance(result, Mapping) or result.get("verdict") != "failed":
+            continue
+        issues = tuple(
+            str(item).strip()
+            for item in (result.get("issues") or [])
+            if str(item).strip()
+        )
+        if not issues:
+            continue
+        _write_homepage_repair_report(
+            ctx,
+            object_dir=draft_dir.parent,
+            ref=entity_ref(domain, entity_type, target.name),
+            materialization_messages=issues,
+            repair_strategy="local_edit",
+        )
+
+
 def _valid_payload(payload: Any, *, execution_id: str, object_ref: str) -> bool:
     if not isinstance(payload, dict):
         return False

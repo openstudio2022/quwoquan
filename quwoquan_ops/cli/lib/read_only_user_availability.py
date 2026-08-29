@@ -10,7 +10,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-
 SCHEMA = "stackctl.read_only_user_availability"
 LAYERS = (
     "build_ready",
@@ -79,6 +78,7 @@ def read_only_user_availability_report(target_name: str) -> dict[str, Any]:
         mode=selected_mode,
         target_name=target_name,
         environment=environment,
+        candidate_baseline=str(candidate.get("baselineId") or ""),
     )
     if not runtime_ready:
         issues["runtime_full_ready"].append(
@@ -125,6 +125,7 @@ def read_only_user_availability_report(target_name: str) -> dict[str, Any]:
     distribution = _distribution_report(target_name)
     content_live = _content_live_report(
         target_name=target_name,
+        candidate=candidate,
         startup=startup,
         content=content,
         leases=leases,
@@ -216,7 +217,11 @@ def validate_read_only_user_availability_report(payload: object) -> dict[str, An
     if set(payload) != required or payload.get("schema") != SCHEMA:
         raise ValueError("read-only availability report fields mismatch")
     layers = payload.get("userAvailability")
-    names = [item.get("name") for item in layers if isinstance(item, Mapping)] if isinstance(layers, list) else []
+    names = (
+        [item.get("name") for item in layers if isinstance(item, Mapping)]
+        if isinstance(layers, list)
+        else []
+    )
     if names != list(LAYERS):
         raise ValueError("read-only availability layer order mismatch")
     for layer in layers:
@@ -247,7 +252,9 @@ def validate_read_only_user_availability_report(payload: object) -> dict[str, An
             raise ValueError("read-only availability metric shape mismatch")
         if metric["name"] == "stackctl_user_availability":
             if set(labels) != {"target", "layer", "status"}:
-                raise ValueError("user availability metric labels are not low-cardinality")
+                raise ValueError(
+                    "user availability metric labels are not low-cardinality"
+                )
         elif metric["name"] == "stackctl_first_blocker":
             if set(labels) != {"target", "status", "firstBlockerClass"}:
                 raise ValueError("first blocker metric labels are not low-cardinality")
@@ -267,12 +274,17 @@ def _candidate_report(target_name: str) -> dict[str, Any]:
         return {"status": "missing", "issues": ["active candidate is absent"]}
     manifest = candidate.get("manifest")
     manifest = manifest if isinstance(manifest, Mapping) else {}
+    environment_artifact = manifest.get("environmentArtifact")
+    environment_artifact = (
+        environment_artifact if isinstance(environment_artifact, Mapping) else {}
+    )
     return {
         "status": "validated",
         "baselineId": str(candidate.get("baselineId") or ""),
         "candidateDir": str(candidate.get("candidateDir") or ""),
         "packageDigest": str(manifest.get("packageDigest") or ""),
         "sourceRevision": str(manifest.get("sourceRevision") or ""),
+        "releaseTrainId": str(environment_artifact.get("releaseTrainId") or ""),
         "providerRuntime": manifest.get("providerRuntime", {}),
         "issues": [],
     }
@@ -315,7 +327,6 @@ def _select_runtime(
 def _runtime_liveness_report(startup: Mapping[str, Any]) -> dict[str, Any]:
     """复验 running receipt 所声明 runtime 的容器现况（只读）。"""
     import quwoquan_ops.cli.stackctl as _stackctl
-
     from quwoquan_ops.cli.lib.runtime_container_liveness import (
         ComposeProjectAbsent,
         verify_running_receipt_liveness,
@@ -375,15 +386,23 @@ def _startup_identity_ready(
     mode: str,
     target_name: str,
     environment: str,
+    candidate_baseline: str = "",
 ) -> bool:
     environment_field = "env" if mode == "immutable_candidate" else "environment"
-    return (
+    identity_ready = (
         startup.get("status") == "running"
         and startup.get("target") == target_name
         and startup.get(environment_field) == environment
         and startup.get("workload") == "full"
         and bool(str(startup.get("attemptId") or "").strip())
     )
+    if mode == "immutable_candidate":
+        return (
+            identity_ready
+            and bool(candidate_baseline)
+            and startup.get("candidateDigest") == candidate_baseline
+        )
+    return identity_ready
 
 
 def _provider_report(
@@ -401,7 +420,11 @@ def _provider_report(
     try:
         if mode == "immutable_candidate" and candidate.get("status") == "validated":
             provider_runtime = candidate.get("providerRuntime")
-            raw = provider_runtime.get("composition") if isinstance(provider_runtime, Mapping) else None
+            raw = (
+                provider_runtime.get("composition")
+                if isinstance(provider_runtime, Mapping)
+                else None
+            )
             composition = _stackctl.validate_provider_runtime_composition(
                 raw,
                 expected_environment=environment,
@@ -452,13 +475,15 @@ def _content_report(
             binding = _stackctl.load_test_live_content_binding(target_name) or {}
             if not binding:
                 raise ValueError("test-live content binding is absent")
-            _, readiness, readiness_path, _ = _stackctl._resolve_test_live_app_content_evidence(
-                target_name,
-                binding,
+            _, readiness, readiness_path, _ = (
+                _stackctl._resolve_test_live_app_content_evidence(
+                    target_name,
+                    binding,
+                )
             )
         else:
-            _, readiness, readiness_path, _ = _stackctl._resolve_active_app_content_evidence(
-                target_name
+            _, readiness, readiness_path, _ = (
+                _stackctl._resolve_active_app_content_evidence(target_name)
             )
     except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
         issues.append(f"content release evidence is unavailable: {exc}")
@@ -476,25 +501,24 @@ def _content_report(
     readiness_digest = ""
     if readiness_path is not None:
         try:
-            readiness_digest = "sha256:" + hashlib.sha256(
-                readiness_path.read_bytes()
-            ).hexdigest()
+            readiness_digest = (
+                "sha256:" + hashlib.sha256(readiness_path.read_bytes()).hexdigest()
+            )
         except OSError as exc:
             issues.append(f"readiness receipt bytes are unreadable: {exc}")
-    generation_match = (
-        bool(readiness)
-        and (
-            mode != "test_live"
-            or (
-                binding.get("startupAttemptId") == startup.get("attemptId")
-                and binding.get("readinessReceiptDigest") == readiness_digest
-            )
+    generation_match = bool(readiness) and (
+        mode != "test_live"
+        or (
+            binding.get("startupAttemptId") == startup.get("attemptId")
+            and binding.get("readinessReceiptDigest") == readiness_digest
         )
     )
     if readiness and not generation_match:
         issues.append("content readiness belongs to another runtime generation")
     return {
-        "releaseActive": generation_match and bool(release_id) and bool(manifest_digest),
+        "releaseActive": generation_match
+        and bool(release_id)
+        and bool(manifest_digest),
         "exactQueriesReady": generation_match and exact_queries_ready,
         "releaseId": release_id,
         "manifestDigest": manifest_digest,
@@ -538,7 +562,7 @@ def _consumer_lease_report(
     for lease in leases:
         state = str(lease.get("state") or "")
         generation_match = (
-            state in {"active", "build_grace"}
+            state in {"active", "build_grace", "released"}
             and bool(release_id)
             and lease.get("releaseId") == release_id
             and lease.get("manifestDigest") == manifest_digest
@@ -556,7 +580,9 @@ def _consumer_lease_report(
         ready = ready or generation_match
     issues = []
     if leases and not ready:
-        issues.append("consumer lease is stale or belongs to another release generation")
+        issues.append(
+            "consumer lease is stale or belongs to another release generation"
+        )
     if not leases:
         issues.append("no consumer lease receipt exists")
     return {"ready": ready, "leases": summaries, "issues": issues}
@@ -652,6 +678,7 @@ def _distribution_report(target_name: str) -> dict[str, Any]:
 def _content_live_report(
     *,
     target_name: str,
+    candidate: Mapping[str, Any],
     startup: Mapping[str, Any],
     content: Mapping[str, Any],
     leases: Mapping[str, Any],
@@ -660,23 +687,36 @@ def _content_live_report(
     import quwoquan_ops.cli.stackctl as _stackctl
 
     environment = (
-        target_name.removesuffix("-local")
-        if target_name.endswith("-local")
-        else "prod"
+        target_name.removesuffix("-local") if target_name.endswith("-local") else "prod"
     )
     release_id = str(content.get("releaseId") or "")
     manifest_digest = str(content.get("manifestDigest") or "")
     readiness_digest = str(content.get("readinessReceiptDigest") or "")
+    package_baseline = str(candidate.get("baselineId") or "")
+    release_train_id = str(candidate.get("releaseTrainId") or "")
+    startup_candidate_digest = str(startup.get("candidateDigest") or "")
     expected_lease_ids = {
         str(item.get("leaseId") or "")
         for item in leases.get("leases", [])
         if isinstance(item, Mapping) and item.get("generationMatch") is True
     }
     matches: list[dict[str, Any]] = []
-    root = _stackctl.env_runs_root(environment)
-    paths = sorted(root.rglob("report.json"), reverse=True) if root.is_dir() else []
+    # 一次 App 内容 UAT 可同时绑定多个 target，聚合回执因此落在 repo 级 runs 根而不是
+    # 任一单环境根。只扫环境根会让 content_live 层永远读不到回执，于是两处都扫：target
+    # 归属仍由回执内 runtimeBindings 与 startupAttemptId 判定，放宽的只是查找范围。
+    # 跨根之后路径序不再等价于时间序，改按修改时间取最新优先。
+    candidates: list[tuple[float, Path]] = []
+    for root in (_stackctl.env_runs_root(environment), _stackctl.repo_runs_root()):
+        if not root.is_dir():
+            continue
+        for path in root.rglob("report.json"):
+            try:
+                candidates.append((path.stat().st_mtime, path))
+            except OSError:
+                continue
+    candidates.sort(key=lambda item: item[0], reverse=True)
     startup_started_at = _timestamp(str(startup.get("startedAt") or ""))
-    for path in paths:
+    for modified_at, path in candidates:
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError):
@@ -692,7 +732,8 @@ def _content_live_report(
             if isinstance(runtime_bindings, Mapping)
             else None
         )
-        report_time = datetime.fromtimestamp(path.stat().st_mtime, timezone.utc)
+        package_baselines = payload.get("packageBaselines")
+        report_time = datetime.fromtimestamp(modified_at, timezone.utc)
         not_older_than_startup = (
             startup_started_at is not None and report_time >= startup_started_at
         )
@@ -705,6 +746,13 @@ def _content_live_report(
             and expected_lease_ids.issubset(set(payload.get("consumerLeaseIds") or []))
             and isinstance(runtime_binding, Mapping)
             and runtime_binding.get("startupAttemptId") == startup.get("attemptId")
+            and bool(package_baseline)
+            and bool(release_train_id)
+            and startup_candidate_digest == package_baseline
+            and payload.get("releaseTrainId") == release_train_id
+            and isinstance(package_baselines, Mapping)
+            and package_baselines.get(target_name) == package_baseline
+            and runtime_binding.get("candidateDigest") == startup_candidate_digest
             and not_older_than_startup
         )
         matches.append(
@@ -712,6 +760,10 @@ def _content_live_report(
                 "reportRef": _stackctl.relpath(path),
                 "status": str(payload.get("status") or ""),
                 "generationMatch": generation_match,
+                "targetPackageBaseline": str(package_baselines.get(target_name) or "")
+                if isinstance(package_baselines, Mapping)
+                else "",
+                "startupCandidateDigest": startup_candidate_digest,
                 "receiptAgeSeconds": max(
                     0,
                     int((observed_at - report_time).total_seconds()),

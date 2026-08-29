@@ -79,3 +79,73 @@ func TestValidateEventRecordFieldsRejectsFlattenedExtensionAsRootState(t *testin
 		t.Fatal("flattened event extension must not become EventRecord root state")
 	}
 }
+
+func TestEventCatalogGeneratesConditionalResultRetention(t *testing.T) {
+	catalog := eventCatalogFile{
+		CommonFields:      strings.Split("logType,eventType,sessionId,pageName,occurredAt,deviceManufacturer,deviceModel,appVersion,networkClass", ","),
+		ContextExtensions: []string{"devicePlatform"},
+		ExtensionFields: map[string]eventExtensionDef{
+			"devicePlatform": {Type: "string"},
+			"result":         {Type: "string"},
+		},
+		Events: []eventCatalogEntry{{
+			EventType:          "media_load_state",
+			LogType:            "event",
+			RequiredExtensions: []string{"result"},
+			NormalSampleRate:   0.1,
+			SlowThresholdMS:    3000,
+			AlwaysKeepResults:  []string{"failure", "timeout", "retry", "absent"},
+			InternalPriority:   "normal",
+		}},
+	}
+	if err := validateEventCatalog(catalog); err != nil {
+		t.Fatalf("validate conditional result retention: %v", err)
+	}
+
+	rendered := renderEventCatalogGo(catalog, appPagesFile{})
+	for _, want := range []string{
+		"AlwaysKeepResults map[string]struct{}",
+		`AlwaysKeepResults:map[string]struct{}{"failure":{},"timeout":{},"retry":{},"absent":{},}`,
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("generated ProductOps event catalog missing %q:\n%s", want, rendered)
+		}
+	}
+}
+
+func TestEventCatalogRejectsInvalidConditionalResultRetention(t *testing.T) {
+	for _, test := range []struct {
+		name           string
+		declareResult  bool
+		retainedValues []string
+	}{
+		{name: "result extension absent", retainedValues: []string{"failure"}},
+		{name: "empty result", declareResult: true, retainedValues: []string{""}},
+		{name: "duplicate result", declareResult: true, retainedValues: []string{"failure", "failure"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			extensions := map[string]eventExtensionDef{
+				"devicePlatform": {Type: "string"},
+				"result":         {Type: "string"},
+			}
+			event := eventCatalogEntry{
+				EventType:         "media_load_state",
+				LogType:           "event",
+				NormalSampleRate:  0.1,
+				AlwaysKeepResults: test.retainedValues,
+			}
+			if test.declareResult {
+				event.RequiredExtensions = []string{"result"}
+			}
+			catalog := eventCatalogFile{
+				CommonFields:      strings.Split("logType,eventType,sessionId,pageName,occurredAt,deviceManufacturer,deviceModel,appVersion,networkClass", ","),
+				ContextExtensions: []string{"devicePlatform"},
+				ExtensionFields:   extensions,
+				Events:            []eventCatalogEntry{event},
+			}
+			if err := validateEventCatalog(catalog); err == nil {
+				t.Fatalf("invalid always_keep_results accepted: %#v", test.retainedValues)
+			}
+		})
+	}
+}

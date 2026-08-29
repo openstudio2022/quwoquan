@@ -18,10 +18,17 @@ func TestContentServicePhysicalTestDirectoryLayout(t *testing.T) {
 			t.Fatalf("retired flat test path must not exist %q: %v", rel, err)
 		}
 	}
+	// `internal/` 零容忍：领域逻辑测试必须按 context/object 归位到 tests/。
+	// `cmd/` 只放行装配期契约的同包白盒取证（`*__local_contract_test.go`）：
+	// `cmd/api` 是 main 包，外部测试包无法 import 它，因此「config struct 与
+	// 渲染快照对齐」「退役 env 键被拒收」「未渲染占位符判否」这类只在装配期
+	// 成立的契约挪到 tests/ 就完全失去证据。其余 11 个服务的 cmd/api 都是这个
+	// 形态，本服务不另立更严的判据。
 	for _, rel := range []string{
 		"quwoquan_service/services/content-service/internal",
 		"quwoquan_service/services/content-service/cmd",
 	} {
+		allowAssemblyWhitebox := strings.HasSuffix(rel, "/cmd")
 		err := filepath.WalkDir(filepath.Join(root, rel), func(
 			path string,
 			entry fs.DirEntry,
@@ -30,9 +37,14 @@ func TestContentServicePhysicalTestDirectoryLayout(t *testing.T) {
 			if walkErr != nil {
 				return walkErr
 			}
-			if !entry.IsDir() && strings.HasSuffix(entry.Name(), "_test.go") {
-				t.Errorf("business test must be under tests/, found %q", path)
+			if entry.IsDir() || !strings.HasSuffix(entry.Name(), "_test.go") {
+				return nil
 			}
+			if allowAssemblyWhitebox &&
+				strings.HasSuffix(entry.Name(), "__local_contract_test.go") {
+				return nil
+			}
+			t.Errorf("business test must be under tests/, found %q", path)
 			return nil
 		})
 		if err != nil {

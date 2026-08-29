@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import os
 import re
@@ -9,14 +10,55 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import context
+import yaml
+
+from ..agent_governance_contract import (
+    contract_schema_version,
+    contract_section,
+    declared_object,
+    validate_feature_context_manifest,
+)
+from . import context, gitio
 from .delta import semantic_anchor_changes
 from .evidence import test_spec_refs
-from . import gitio
 from .nodes import Node, discover_nodes, node_for_spec, parent_chain
-from .ownership import owners_for_path, resolve_target
+from .ownership import TargetResolution, owners_for_path, resolve_target_details
 from .parsing import block_open_items, open_item_details, title
 from .patterns import PATH_RE, VALID_LEVELS
+
+MANIFEST_MAX_BYTES = int(contract_section("feature_context_manifest")["max_bytes"])
+CANONICAL_CONTRACT_PATHS = {
+    "quwoquan_ops/policies/agent_governance_contract.yaml",
+}
+
+
+def _is_canonical_contract_reference(reference: str) -> bool:
+    path = reference.partition("#")[0]
+    return (
+        path.startswith("quwoquan_service/contracts/metadata/")
+        or (
+            path.startswith("quwoquan_service/services/")
+            and "/contracts/" in path
+        )
+        or path in CANONICAL_CONTRACT_PATHS
+    )
+
+
+def _anchor_section(text: str, anchor: str) -> str:
+    """Return one ID heading without absorbing the following non-ID section."""
+
+    match = re.search(
+        rf"^(?P<marks>#{{3,6}})\s+{re.escape(anchor)}\b.*$",
+        text,
+        re.IGNORECASE | re.MULTILINE,
+    )
+    if match is None:
+        return ""
+    level = len(match.group("marks"))
+    following = text[match.end() :]
+    next_heading = re.search(rf"^#{{1,{level}}}\s+", following, re.MULTILINE)
+    end = match.end() + next_heading.start() if next_heading else len(text)
+    return text[match.start() : end].strip()
 
 
 def write_output(name: str, content: str) -> Path:
@@ -26,14 +68,174 @@ def write_output(name: str, content: str) -> Path:
     return path
 
 
-def command_context(args: argparse.Namespace) -> int:
-    nodes = discover_nodes()
-    by_dir = {node.directory.resolve(): node for node in nodes}
+def _relative(path: Path) -> str:
+    return path.resolve().relative_to(context.REPO_ROOT.resolve()).as_posix()
+
+
+def _canonical_contexts(
+    resolution: TargetResolution,
+) -> list[dict[str, str | None]]:
+    """返回直达 canonical 文档及锚点，不展开中间转引文本。"""
+
+    design_owner = resolution.design_ownership
+    contexts: list[dict[str, str | None]] = []
+
+    def append(path: Path, anchor: str | None, kind: str) -> None:
+        entry = declared_object(
+            {"path": _relative(path), "anchor": anchor, "kind": kind},
+            "feature_context_manifest",
+            "context_fields",
+        )
+        if entry not in contexts:
+            contexts.append(entry)
+
+    if design_owner is not None:
+        append(design_owner.l2.design, design_owner.anchor, "decision")
+        for anchor in design_owner.requirement_anchors:
+            append(design_owner.story.spec, anchor, "requirement")
+        for anchor in design_owner.acceptance_anchors:
+            append(design_owner.story.spec, anchor, "acceptance")
+        if not design_owner.requirement_anchors and not design_owner.acceptance_anchors:
+            append(design_owner.story.spec, None, "spec")
+    else:
+        # 没有更精确 DEC 时只加载当前 owner，父链仅作身份与边界
+        # 信息保留在 owner_chain，不再默认展开 AppRoot/L1 全文。
+        append(resolution.node.spec, None, "spec")
+        if resolution.node.design.is_file():
+            append(resolution.node.design, None, "design")
+
+    # 只读取已选 DEC/REQ/GWT 锚点中的 direct contract；Story 其他要求、父层全文
+    # 与集中契约清单都不应扩大本次 feature context。
+    source_segments: list[str] = []
+    if design_owner is not None:
+        design_text = design_owner.l2.design.read_text(encoding="utf-8")
+        story_text = design_owner.story.spec.read_text(encoding="utf-8")
+        selected = (
+            design_owner.anchor,
+            *design_owner.requirement_anchors,
+            *design_owner.acceptance_anchors,
+        )
+        for anchor in selected:
+            section = _anchor_section(design_text, anchor) or _anchor_section(
+                story_text, anchor
+            )
+            if section:
+                source_segments.append(section)
+    else:
+        for path in (resolution.node.spec, resolution.node.design):
+            if path.is_file():
+                source_segments.append(path.read_text(encoding="utf-8"))
+    contract_refs: set[str] = set()
+    for segment in source_segments:
+        contract_refs.update(
+            ref
+            for ref in PATH_RE.findall(segment)
+            if _is_canonical_contract_reference(ref)
+        )
+    for ref in sorted(contract_refs):
+        path, separator, anchor = ref.partition("#")
+        append(context.REPO_ROOT / path, anchor if separator else None, "contract")
+    return contexts
+
+
+def _applicable_agents(target: Path) -> list[str]:
+    """按仓库根到最近子树顺序返回真实存在的 AGENTS.md。"""
+
     try:
-        node = resolve_target(args.target, nodes)
-    except ValueError as error:
-        print(error, file=sys.stderr)
-        return 2
+        target.resolve().relative_to(context.REPO_ROOT.resolve())
+    except ValueError:
+        return []
+    current = target if target.is_dir() else target.parent
+    found: list[Path] = []
+    while True:
+        candidate = current / "AGENTS.md"
+        if candidate.is_file():
+            found.append(candidate)
+        if current.resolve() == context.REPO_ROOT.resolve():
+            break
+        if not current.resolve().is_relative_to(context.REPO_ROOT.resolve()):
+            break
+        current = current.parent
+    return [_relative(path) for path in reversed(found)]
+
+
+def _profiles_for_resolution(resolution: TargetResolution) -> list[str]:
+    """从 Review 的唯一 profile registry 派生，不复制 profile 事实。"""
+
+    registry_path = (
+        context.REPO_ROOT / ".agents/skills/review/references/registry.yaml"
+    )
+    if not registry_path.is_file():
+        return []
+    try:
+        registry = yaml.safe_load(registry_path.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError as error:
+        raise ValueError(f"GATE_BLOCK: Review profile registry 无法解析：{error}") from error
+    candidates: set[str] = set()
+    for path in (resolution.target, resolution.ownership_target):
+        try:
+            candidates.add(_relative(path))
+        except ValueError:
+            continue
+    profiles: list[str] = []
+    for name, config in (registry.get("profiles") or {}).items():
+        patterns = config.get("paths") or []
+        if any(
+            fnmatch.fnmatch(candidate, pattern)
+            for candidate in candidates
+            for pattern in patterns
+        ):
+            profiles.append(str(name))
+    return profiles
+
+
+def _context_manifest(
+    raw_target: str,
+    resolution: TargetResolution,
+    nodes: list[Node],
+) -> dict[str, object]:
+    by_dir = {node.directory.resolve(): node for node in nodes}
+    chain = parent_chain(resolution.node, by_dir)
+    open_items = [
+        declared_object(
+            {
+                "path": str(item["node"]),
+                "id": str(item["id"]),
+                "title": str(item["title"]),
+                "release_impact": str(item["releaseImpact"]),
+            },
+            "feature_context_manifest",
+            "open_item_fields",
+        )
+        for item in open_item_details(resolution.node)
+    ]
+    payload = {
+        "schema_version": contract_schema_version("feature_context_manifest"),
+        "target": raw_target,
+        "resolved_owner": resolution.node.rel,
+        "owner_chain": [
+            declared_object(
+                {"level": item.level, "node_id": item.node_id, "path": item.rel},
+                "feature_context_manifest",
+                "owner_chain_fields",
+            )
+            for item in chain
+        ],
+        "canonical_contexts": _canonical_contexts(resolution),
+        "applicable_agents": _applicable_agents(resolution.target),
+        "profiles": _profiles_for_resolution(resolution),
+        "open_items": open_items,
+    }
+    validate_feature_context_manifest(payload)
+    return payload
+
+
+def _command_expanded_context(
+    args: argparse.Namespace,
+    nodes: list[Node],
+    node: Node,
+) -> int:
+    by_dir = {item.directory.resolve(): item for item in nodes}
     chain = parent_chain(node, by_dir)
     blocks = ["# Feature Context", "", f"- TARGET：`{args.target}`", f"- 归属节点：`{node.rel}`", ""]
     for item in chain:
@@ -85,6 +287,29 @@ def command_context(args: argparse.Namespace) -> int:
             related_changes.append(rel)
     blocks.extend(["## 当前 Git 增量", "", *([f"- `{rel}`" for rel in related_changes] or ["- 无"]), ""])
     output = write_output("context.md", "\n".join(blocks))
+    print(output.relative_to(context.REPO_ROOT))
+    return 0
+
+
+def command_context(args: argparse.Namespace) -> int:
+    nodes = discover_nodes()
+    try:
+        resolution = resolve_target_details(args.target, nodes)
+        output_format = getattr(args, "format", "manifest")
+        if output_format == "expanded":
+            return _command_expanded_context(args, nodes, resolution.node)
+        manifest = _context_manifest(args.target, resolution, nodes)
+        content = json.dumps(manifest, ensure_ascii=False, indent=2)
+        size = len((content.rstrip() + "\n").encode("utf-8"))
+        if size > MANIFEST_MAX_BYTES:
+            raise ValueError(
+                "GATE_BLOCK: feature context manifest 超出 8KiB 预算："
+                f"{size} bytes"
+            )
+    except ValueError as error:
+        print(error, file=sys.stderr)
+        return 2
+    output = write_output("context-manifest.json", content)
     print(output.relative_to(context.REPO_ROOT))
     return 0
 

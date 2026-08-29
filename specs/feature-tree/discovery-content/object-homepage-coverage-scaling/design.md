@@ -480,7 +480,6 @@
 - 被否决方案：让 receipt 协议绕过 delivery intent 直写 canonical——形成第二写路径，违反 `DEC-026`。给 `promote_post_object` 加协议分支参数——双轨语义进核心。物化坐标由命令参数或物化器推导——坐标脱离冻结产物，重跑漂移。
 - 约束与影响：`promote` 的资格判定按协议分家——存量 campaign 用 review closure，receipt 协议用 receipt 链加 attestation；两者共用同一事务核心，核心不感知协议。幂等语义沿用事务核心：已 promote 且 merkle 一致跳过，漂移 typed 失败。
 - 可测试面：local_contract 覆盖资格判定拒绝（无 5.review pass receipt、attestation 非 approved）、坐标缺失 fail closed、物化幂等、错根对象被 layout 门拦截；真实 execution 后缀证据由 `GWT-020.t1..t3` 承载。
-- 关联要求：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `OPEN-011`
 - 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 receipt 协议发布后缀
 - 关联验收：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `GWT-020.t1`、`GWT-020.t2`、`GWT-020.t3`
 
@@ -496,6 +495,130 @@
 - 关联要求：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `REQ-004`
 - 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的规模晋升面
 - 关联验收：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `GWT-020.t5`
+
+<a id="dec-029"></a>
+### DEC-029 页面图片处置在 `1.download` 截面一次冻结，预排版与物化都只消费
+
+- 决策：homepage/image/video lane 的逐图处置（`cover|inline|related|policyExcluded|duplicateAlias` 与 `reason`、`assetId`）由 `1.download` 截面调用唯一决策函数冻结一次，落对象级 create-once 处置证据；`build_prepare` 的 `[[IMG:fig_NN]]` 占位符绑定与 publish 期物化的 `manifest.json` 都只读这份冻结处置，两处均不得再次调用决策函数。重跑同一 `1.download` 必须产出字节一致的处置，漂移为 typed 失败而非覆盖。
+- 决策：`verify homepage-media-completeness` 按可判定时点拆为两条判据。`1.download` 判「决策闭合」：asset funnel 计数闭合、`assets/index.json` 每个下载资产恰有一个合法处置、非发布处置不得指向发布资产。publish 前判「兑现闭合」：`manifest.json` 资产与冻结处置逐条对账、封面唯一且不被正文重复引用、封面与正文/相关图不同视觉主题。后者是对账而非二次决策——manifest 与冻结处置的任何差集直接 fail closed。
+- 理由：决策函数的输入闭包在 `1.download` 完成时全部就绪——`sources/<unit>/meta.json` 的 `imagePlacements`、作为枚举真相的 `assets/index.json`、vertical 的权利与题材政策、来自 base draft 的 `primaryEvidenceRef`；函数签名不含正文，且方向恰恰相反：`build_prepare` 用选择结果把 `[[IMG:fig_NN]]` 占位符插入底稿，创作方只把占位符原样带回，是图片决定正文而不是正文决定图片。原判据把决策类断言与兑现类断言合在一条命令里，而兑现证据只在物化期产生，`1.download` 因此结构上不可能取得 `pass`。
+- 被否决方案：把 `1.download` 判据降级为只验 funnel 与 CAS 引用——判据能过，但 `build_prepare` 与物化期各算一次处置的双算点原样保留，且图片级致命失败继续拖到 publish 才暴露，M100 规模下整批创作成本随之作废。让物化期继续重算并以它为准——两次调用之间没有任何东西保证一致，枚举真相允许受治理评审把已索引字节移出顶层，移出后物化期发布集合小于预排版集合，正文占位符指向一个不在 manifest 里的资产。给处置证据加阶段字段或允许发布类处置先留空 `assetId` 后回填——同一份事实分两次成型即双读，且 `assetId` 的分配输入在该截面已全部就绪，没有推迟的理由。
+- 约束与影响：`assetId` 随处置在 `1.download` 一并分配，物化期只按冻结 id 落字节，不再分配 id；asset registry 的写入随之落在该截面。`policyExcluded` 与 `duplicateAlias` 的 `assetId` 恒为空串，该约束由处置证据 schema 承载，两条判据都不重复声明。
+- 可测试面：local_contract 覆盖决策闭合判据在 `1.download` 可 `pass`、兑现判据对 manifest 与冻结处置的差集 fail closed、同一输入两次调用处置字节一致、已索引字节被移出顶层后物化以 typed 失败收敛而非静默缩集。
+- 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 receipt 协议下载与发布截面
+- 关联验收：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `GWT-001.t2`
+
+<a id="dec-030"></a>
+### DEC-030 campaign 冻结身份在阶段边界降为审计记录，只有 branch 保留为执行前置
+
+- 决策：campaign 冻结身份四项（`gitBranch`、`gitCommitSha`、`sourceDigest`、`executionBundle.digest`）在 review/publish 阶段边界的复核按语义切分——`gitBranch` 保留为执行前置（漂移即抛错，它验证的是环境正确性：campaign 只允许在冻结时的分支上运行，期望值恒定）；`gitCommitSha`、`sourceDigest`、`executionBundle.digest` 三项从执行前置降为审计记录（漂移不再阻断阶段推进，观测值与冻结值、漂移标志写入 campaign report 的 `revisionAudits`，供事后可复现性审计）。冻结时点的全量四项断言（`plan.py` freeze 与 `request_envelope.py::_require_stable_source_inputs`）保留不动——它们防的是冻结过程中输入被改，作用域正确。
+- 理由：digest 与 commit 的正当目的是可复现性审计（记录「这个产物是用哪版代码产的」），不是执行许可（「代码变了你就不许继续」）。已产出的对象不因后续代码变化失效；发布物不可变性由 release 层 payload digest 独立保证。实测 `executionBundle` digest（覆盖 `quwoquan_data/scripts` 全目录 1013 文件 + 3 个 spec）半天漂移三次，`gitCommitSha` 漂移面更宽（全仓任何提交），在多 lane 长时编排下阶段边界断言使 M100 campaign 结构性不可完成——修一个无关 bug 就作废所有在途 lane。
+- trade-off 与补偿：防篡改锚点从事前阻断退为事后追溯。补偿有三——
+  - 观测 digest 逐阶段落 `revisionAudits` 形成可对账链。
+  - lane 跨版本消费中间产物的正确性由各阶段既有 verify 与 schema 校验兜底（对象级 create-once 证据、receipt 链、pool 准入判据均不读全局 digest）。
+  - release 层 payload digest 不变式不受影响。
+- 被否决方案：四项全保留断言——放量结构性不可行（本条的起因）。四项全降审计——`gitBranch` 的期望值恒定不存在「漂移是常态」问题，降掉它只会放过在错误分支跑 campaign 的真实错误。为在途 campaign 提供 digest 白名单或宽限窗——引入第二真相源与运行期裁量，违反契约单轨。
+- 可测试面：local_contract 覆盖三判定——
+  - commit/digest 漂移时阶段边界不抛错，且 `revisionAudits` 记录观测值与 `drifted=true`。
+  - branch 漂移仍抛错。
+  - campaign report schema 强制 `revisionAudits` 字段在场且逐条含冻结值、观测值与漂移标志。
+- 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的规模晋升面（M100 campaign 编排）
+- 关联验收：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `GWT-020.t5`
+
+<a id="dec-031"></a>
+### DEC-031 research release 媒体以 CAS objectKey 私有交付并走短签消费，commercial 保留公开切片
+
+- 决策：媒体交付形态由 `releaseClass` 在 release 构建期分流，只改 research 分支——
+  - release 构建期：`releaseClass=research` 时 `media_manifest.json` 的 assets 条目产 `privateObjectKey`（即 canonical CAS 形态 `media/objects/sha256/{aa}/{bb}/{hex64}{suffix}`），不产 `publicSliceKey`。payload 内媒体字节按该 key 布局。`commercial` 分支的 `publicSliceKey` 形态与既有链路完全不动。
+  - 导入投影：环境导入按 `releaseClass` 分流。research 媒体字节按 `privateObjectKey` 同步到环境 media 根，post 文档的媒体引用字段存该相对 key（非绝对 URL、不含 `media/{kind}/s/` 路径段），使 content-service `DetectPublicCDNMediaBinding` 与 `DetectAnonymousMediaURL` 对 research 对象闭包均返回 `false`。
+  - 消费期：复用 `ReserveOriginalImageAccessGrant` 这一条既有 grant operation，不新增 research 专用 operation 或续签 operation。普通会话保持 ready image、Post 可见性与 `view|save` 原图语义；研究会话只允许 `purpose=view`，可为当前 active Research release 闭包内的 ready `avatar|image|video` 资产签发短时 URL。两种准入在 OriginalAccessQuota application owner 内按已验签 principal 分流，不由 HTTP adapter、App 页面或路径形态猜测。契约现行 `grant_ttl_seconds=300` 与「viewer×asset×purpose×窗口」每资产独立额度保持不变；App 对同一资产单飞并复用未过期 grant，因此浏览负载不需要第二套配额池。
+  - 授权链前提由导入落齐：三个 importer 的 App 可见投影为每条媒体引用显式携带 release authority 的 `assetId` 与共享 `MediaDeliveryAccessMode`；content importer 把全部 release 媒体（含 creator avatar 与 entity homepage introduction assets）幂等投影进 `media_assets` 并绑定 source release identity。普通原图准入继续读取 Post named visibility reader；研究态准入读取 active Research release membership。任一资产身份、release binding、处理终态或访问模式缺失均 fail closed，不从相对路径或 URL 反推。
+- 理由：research activation 判据要求「无公开 CDN 与匿名 URL」「媒体短期签名 URL」「访问审计」三项同时成立，而身份链与短签契约已可用，缺的只是私有引用形态与投影分流。CAS objectKey 已经是 service 侧契约事实——Mongo `media_assets.objectKey` 存的就是它，signer 按它签发——所以复用它不引入新布局，签发链路零改动。canonical 对象本就以 `objectKey`+`sha256` 命名字节，release 只是保留而非派生。
+- 网络层边缘守卫：私有媒体 URL 的签名真伪与绝对到期时间必须在字节交付边缘复算，签发方只生成签名、不能替交付方证明请求有效。验证算法与私有交付前缀由 `quwoquan_service/runtime/media` 的共享私有交付协议单点拥有，gamma Caddy 与 `local_media_origin` 只作为该 verifier 的 adapter，消费同一 secret reference，不复制算法或路径闭集。签名缺失、格式错误、摘要不匹配或 `t` 到期均 403，公开 slice 仍匿名。secret 或 verifier 缺失时私有路径整体 fail closed，不能退回“参数在场即放行”。性能预算：验签为 HMAC-SHA256 纯 CPU 复算、无外部 IO，单请求附加延迟预算 p99 ≤ 1ms；视频 Range 每段复算一次，不缓存放行判定。
+- 边界裁决：App 私有媒体获取、过期重取、稳定缓存身份与各 surface 接入由 [`DEC-033`](#dec-033) 统一约束。现行每资产独立额度结合 App 单飞和未过期 grant 复用足以承载浏览，不新增批量 operation 或浏览级配额池；真实 UAT 若在 grant cache 正常命中时仍出现 429，才通过原 policy owner 的新 calibration 调整数值，不以第二套 rate limit 先行过度设计。
+- 被否决方案：发明与 public 同构的 `media/{kind}/p/asset/...` 私有布局——signer 不认该前缀（需要扩签发契约），静态服务挂整根时该路径照样匿名可达，且与 `media_assets.objectKey` 既有私有引用形成第二套私有布局真相源。统一为 `sliceKey`+`sliceVisibility` 两字段并让 commercial 一起迁移——动了无关轨道，commercial 契约的删改属另一 Story。由环境名、CAS 前缀或 URL query 推断交付形态——环境不决定数据形态，路径识别会把各语言字面量变成新的真相源。新增专用 research 签发 operation、续签 operation、批量 operation 或配额池——既有 grant command 与每资产独立额度已覆盖签发、审计与浏览单飞，新增即第二真相源。只检查 `sign+t` 在场——攻击者可自行拼 query，无法证明请求由签发方授权。
+- 可测试面：按证据层拆分——
+  - local_contract 覆盖交付分流：`releaseClass=research` 的 manifest 产 `privateObjectKey` 且无 `publicSliceKey`，`commercial` 反之，两键同现或同缺即 schema 拒绝。
+  - local_contract 覆盖私有 key 形态：不含 `media/{kind}/s/` 段且非绝对 URL（探针两项判定负例），并通过共享私有交付协议与 release schema 的同源断言。
+  - local_contract 覆盖导入同步器：对 research manifest 按 `privateObjectKey` 同步、对 commercial 按 `publicSliceKey` 同步，形态与 header `releaseClass` 不符即 fail closed。
+  - local_contract 覆盖 grant 准入：research principal 的 `save`、非 active release 资产、无 release membership 与非 ready 资产均拒绝；同资产同幂等键重放不续期，同一未过期 grant 在 App 只换取一次。
+  - verifier 纯函数的签名与到期判定归 local_contract；边缘 adapter 的真实 HTTP 行为（缺签名、伪签名、篡改路径、篡改到期时间与过期签名均 403，合法未过期签名 GET/HEAD/Range 保留 200/206）归 research-isolation-probe 与 api_integration 层锚定，与 [`multi-carrier-release` OPEN-015](./multi-carrier-release/spec.md#open-015) 完成判定对齐。
+- 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 research readiness 与 ship 终态面
+- 关联验收：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `GWT-020.t3`
+
+<a id="dec-032"></a>
+### DEC-032 研究态身份是服务端签发的 principal role，能力面由 operation guard 按 role 闭集收敛
+
+- 决策：研究身份由服务端事实承载，不由客户端自选请求头声明——
+  - 身份签发：user-service 登录与 refresh 的 access token 签发单点在账号命中 research allowlist 时向 token `roles` 附加 `research`。allowlist 与 token 签发均为既有机制，不新增 operation。
+  - 能力面收敛：operation guard 对已验签 principal 含 `research` role 的请求只放行研究能力闭集——ready 读操作（feed、detail、对象主页、公开 profile 及其同类只读投影）、`content.original_access_quota.ReserveOriginalImageAccessGrant`、`content.original_access_quota.GetOriginalImageAccessAudit`、`content.post.GetResearchReleaseReadback`、`user.account_session.IssueWhitelistedResearchSession`、`user.account_session.GetResearchSessionAttestation`；写操作、站外分享、导出与其余操作一律 403 fail closed。闭集常量归 `quwoquan_service/runtime/auth` 单一持有，收敛点在 `authorizeGeneratedOperation` 的边界判定之前，对 public 与 runtime 两种 operation 边界一致生效。
+  - attestation 定位：`X-Research-Identity-Attestation` 只用于 readback 链路把请求精确绑定到已签发 research session，不再作为能力面判定依据；缺失该头不使任何请求脱离 role 收敛。
+  - 匿名与非研究内容面：active release 为 research 时，release 承载内容的读面只对 research principal 在场；匿名与不含 `research` role 的认证请求在内容 query owner 单点收敛为 `no_active_release` 语义的缺席结果，不逐 handler 分散判定。
+  - 正式 runtime 边界：research session 与 readback 操作维持 `CommercialStatus=blocked`，research 验收固定 target-bound mutable test-live（由 `appUatEnvelope.releaseClass` 驱动，不由环境名推断）；正式 candidate 可承载 immutable research release 的数据面，但不得为研究验收整体切换到 runtime operation 边界。四环境正式 activation 残量归 [`multi-carrier-release` OPEN-001](./multi-carrier-release/spec.md#open-001)。
+- 理由：header 由客户端自选携带时，研究账号省略该头即可回到普通能力面，隔离证据是自限性的而非强制；role 进 access token 后能力面判定与请求方意愿无关。runtime operation 边界（mutable test-live）按设计放行 `CommercialStatus=blocked` 的操作，研究态 deny 必须与部署边界无关。研究浏览验收需要 feed、detail、主页等真实读面，四操作白名单撑不起消费闭环，闭集必须显式扩到浏览读面。
+- 被否决方案：保留客户端 header 作为能力面判定——可绕过，隔离不成立。在各业务 handler 内逐个拒绝——能力面散布多服务形成第二真相源且必然漏项。给 `OperationSecurityDescriptor` 增加 research 维度并走 contracts codegen——描述符矩阵为单一身份面扩列，成本与收益不匹配。为研究浏览新增专用读 operation——既有 ready 读操作已覆盖，全部读面复制一遍即第二真相源。
+- 可测试面：local_contract 按身份链覆盖——
+  - allowlist 命中账号登录后 token 含 `research` role。
+  - research principal 访问闭集外操作 403，闭集内读操作与 grant 放行，无 role 请求不受收敛影响。
+  - active research release 下匿名与非研究认证请求的 feed 与 detail 均为 `no_active_release` 缺席语义。
+  - attestation 缺失不使 readback 之外的请求改变能力面。
+- 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 research readiness 面
+- 关联验收：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `GWT-020.t3`
+
+<a id="dec-033"></a>
+### DEC-033 App 私有媒体消费收敛为 typed 交付绑定加单一异步 grant 协调器
+
+- 决策：App 对私有媒体的全部消费行为由一条统一边界承载，页面与设计系统组件不各自实现——
+  - 交付形态显式声明：`quwoquan_service/contracts/metadata/_shared/types.yaml` 新增共享 enum `MediaDeliveryAccessMode`（`public`、`signed_grant`），content post、user persona/creator、entity homepage 三路 App 可见投影为每条媒体引用携带 `accessMode` 与 release authority 的资产标识。App 依 typed 声明分流，禁止从 CAS 前缀、URL 形态或 query 参数推断交付形态——服务端存储布局不进入 App 认知面。
+  - 资产标识契约补齐：feed 投影为逐条媒体（含逐图、video 主媒体与 poster）与作者头像携带资产标识；`PersonaProfileView` 补 `avatarAssetId`；`HomepageIntroduction` 的 cover 补配对资产标识；detail 投影既有 `mediaAssetIds` 与 `mediaItems` 必须被 App 映射保留而非丢弃。禁止以 `postId`、`personaId` 等对象标识冒充媒体资产标识，view mapper 收敛为单一实现。
+  - 双 resolver 边界：既有 `MediaDeliveryResolver` 保持纯同步 public-slice 解析并继续拒绝 CAS 与签名 query；`accessMode=signed_grant` 的引用交由新增的异步私有媒体交付协调器（application 层 typed port）处理——按资产标识调用既有 `ReserveOriginalImageAccessGrant` 客户端，校验响应 `mediaId` 与请求资产标识一致、URL 属注入媒体 origin、签名 query 完整、到期时间与响应 TTL 一致后输出已验证交付引用。签名 URL 不经过 public resolver 与 CDN 变体处理器。
+  - 缓存与在途身份：图片解码缓存、磁盘缓存、视频下载缓存、在途合并与负缓存统一使用稳定资产身份（媒体类别、资产标识、版本、variant），签名 query 不参与任何缓存键；签名 URL 只存在于短期 provider 状态，不写回业务 DTO、持久缓存文档或遥测。
+  - 失败恢复单义：grant 在到期安全窗内先换签再交给网络层；签名字节 GET 首次 401/403 只失效当前资产的当前 grant、重新换取一次并重试一次，再失败即呈现 canonical 失败态停止，禁止循环；404 才进入稳定资产负缓存；登出、persona 切换与 active release 切换时清空 grant 缓存。同一资产并发请求单飞，未过期 grant 复用。
+  - surface 接入：feed 卡片、文章正文与封面、图片与视频沉浸页、各头像 surface、对象主页 hero 与 introduction assets 全部只向统一图片/视频原子传 typed 交付绑定；grant 调用、校验、缓存、刷新与失败恢复只存在于协调器一处。既有「查看原图」手动动作同样委托该协调器，不保留第二套 grant 缓存。
+  - 观测面：私有媒体消费的最小 SLI 为 grant 换取延迟（沿用 operation 契约 `latency_p95_ms=800` 预算）、grant cache 命中率（稳态目标 ≥ 80%，单飞与未过期复用生效的机械结果）与 `original_access_rate_limited` 计数（稳态应为 0，非零即触发 policy owner calibration 复核）；三者全部由既有 `content_media_original_access_request` 指标与 audit 事实派生，不新增指标或可写台账。
+- 理由：私有媒体的授权、时效与缓存语义与公开 slice 结构不同，放宽同步 public resolver 会把「未授权私有引用」与「已授权交付 URL」混为一种状态，且签名 `t`（到期秒）与既有视频帧 `t`（毫秒）语义冲突。资产标识是业务身份、CAS key 是字节身份，多资产可共享同一字节，从路径反推标识不成立，标识必须随 canonical 投影下发。签名随 TTL 轮换，以完整 URL 为缓存键会造成解码缓存失效、磁盘重复下载与在途不合并的缓存风暴。
+- 被否决方案：放宽 `MediaDeliveryResolver` 接受 CAS 与签名 query——混淆授权状态并引入 query 语义冲突。App 判断 CAS 前缀——成为 Go、Python、边缘配置之后的第四份路径字面量。从 CAS 路径反推资产标识、以对象标识冒充资产标识、维护本地路径到标识的字典——字节身份与业务身份混淆。逐页面接入 grant——生命周期语义散布成多份实现。签名 URL 作缓存键并配缓存失效补偿——治理成本高于稳定身份。
+- 可测试面：App local_contract 按消费边界覆盖——
+  - public resolver 继续拒绝 CAS 与签名 URL。
+  - 协调器对空资产标识、响应标识漂移、错误 origin、缺签名与已过期 grant 均 fail closed。
+  - 同资产并发只发起一次换取、安全窗内复用、到期先换签，首次 401/403 单次换签重试且二次失败停止。
+  - 不同签名同资产命中同一缓存键，不同资产或版本不碰撞。
+  - feed、detail、头像、主页投影的资产标识与 accessMode 在场断言，以及上述各 surface 的 Widget 消费断言。
+- 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 App 消费面（OPEN-015）
+- 关联验收：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `GWT-016`、`GWT-020.t3`
+
+<a id="dec-034"></a>
+### DEC-034 isolation runtime proof 的效度域是 release 加策略快照加时效，不绑 verify run
+
+- 决策：ship verify 的 research isolation runtime proof 效度域为 `releaseId + manifestDigest + runtime 策略快照（policyRef + policySha256）+ 24 小时时效上限`，不绑 `verifyRunId`。同一 release 的后续 verify run 复用最近一次未超龄 PASS proof：复用前全量重验（release 身份、digest、策略快照与 PASS 内容闭包），重绑当前 run-id、重算 checksum，并把复用来源 run 标识以 `reusedFromVerifyRunId` 写入证据本体——复用产物与本 run 实测在证据形态上单义可区分。原 proof 文件保持 create-once 字节不变，复用不级联（后续 run 仍锚定原始实测 proof）。
+- 理由：proof 证明的是「该 release 在该环境策略下的隔离行为」，效度随 release 与策略走、不随 verify 编号走；绑 run-id 使每次 verify 重试都作废有效证据，实测一轮收敛耗 9 个 verify run、每次被迫重跑完整 probe，是发布链路重试成本最大的一处。时效上限承接环境运行栈重建的新鲜度风险：策略快照覆盖不了栈重建（down/up 后 runtime.yaml 字节可能不变），24 小时上限保证复用只发生在同一工作窗内，跨日重入强制重新实测。
+- 被否决方案：保持绑 verifyRunId——重试成本结构性不可行（本条起因）。无时效无限复用——栈重建后旧 proof 冒充新观测，新鲜度失守。绑 startup attempt 或 compose digest 世代——需要 probe 侧扩运行时身份字段并动 proof schema 的采集面，成本高于时效上限且世代字段在 prod-hosted 形态下没有稳定对应物；若未来边缘配置纳入受版本控制策略面，应同批进入 proof 绑定。
+- 约束与影响：复用判定失败的候选跳过不修复，全部候选失效时收敛为既有 `DATA.RESEARCH.RUNTIME_PROOF_INCOMPLETE` typed 阻断；发现路径把被跳过候选计数写入阻断诊断。ship 阶段契约的重试 SOP 与本效度域同源，不另设第二套复用条件。
+- 可测试面：local_contract 覆盖复用正例（重绑 run-id、provenance 在场、原 proof 字节不变）、manifest 漂移拒绝、策略快照漂移拒绝、超龄拒绝与无候选 GATE_BLOCK 回退。
+- 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 ship 终态面
+- 关联验收：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `GWT-026`
+
+<a id="dec-035"></a>
+### DEC-035 被引用 execution 的回收终态是不可变墓碑，`release -> tombstone` 是合法解析
+
+- 决策：回收器把「execution 曾物化后被释放」升为一等终态，由 `data/local/workspace/gc/tombstones/<executionId>/tombstone.json` 的 create-once 墓碑承载，引用图把指向它的 `release -> task` 边解析为 `reclaimed_execution` 节点并把墓碑本体登记为受保护证据。回收原因是闭集 `gc_quarantine_reclaim` 与 `reclaimed_before_tombstone_protocol`，闭集外入站取值落显式 `unknown` 成员且不解析任何引用。回收器在隔离 execution 候选的同一次 apply 里写墓碑；协议之前已消失的被引用 execution 由一次性 `release gc backfill-tombstones` 补写，其 `referencedBy` 记录当时的引用点。墓碑只声明缺席，不复制产物、不重建 manifest、不为已消失的字节补摘要。
+- 理由：`OPEN-002` 的两条候选路线都不成立——「报告未解析引用并保守保护」把破损引用当成可接受稳态，等于让引用图的零未解析契约名存实亡；「禁止回收任何被 release 引用的 task」让 task 树随发布数单调增长，与单对象存储预算直接冲突。第三条路线成立的原因是问题被误判了：缺的不是保护规则而是终态记录。release 不可改写、task 不可重建，唯一能同时保住两者的做法是给消失本身一份不可变证据。实测存量 output 下 11 个被 immutable release 引用的 execution 已永久缺席，补写墓碑后 `release gc plan` 在该引用类上不再 `GATE_BLOCK`。
+- 被否决方案：把墓碑写回 `data/tasks/<id>/`——回收器会读到自己的结论并把它当成 execution 复活。复用既有 `absent_execution`——「从未物化」与「曾物化后被回收」是两个不同事实，合并之后「release 引用的 execution 曾经产出过对象」再也读不出来；因此两者同时在场时判否而不是择一。为消失的字节补零摘要——伪造一份从未观测到的字节事实。
+- 约束与影响：墓碑与 reconciliation 缺席证明互斥，同一 execution 上两者并存时以 `DATA.GC.EXECUTION_ABSENCE_CONTRADICTION` 判否。已墓碑的 execution 重新出现在磁盘上以 `DATA.GC.RECLAIMED_EXECUTION_REVIVED` 判否。结论字段（原因、plan/backfill 身份、隔离 ref、字节摘要、引用点）重写同结论幂等、结论不同即判否；观测时刻不属于结论，否则同一次回收的重放会被误判成冲突。回收器自己的 `data/local/workspace/gc/**` 不可成为回收候选。
+- 可测试面：local_contract 覆盖无墓碑时 `release gc plan` 在 release 引用上判否、回填后同一引用解析为 `reclaimed_execution` 且墓碑受保护、回填 create-once 与二次回填零增量、apply 在隔离处写墓碑且重放幂等、复活判否、缺席证明与墓碑并存判否、异结论墓碑判否。
+- 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的回收窗口面
+- 关联验收：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `GWT-007`
+
+<a id="dec-036"></a>
+### DEC-036 回收器的治理证据面按环境显式枚举，运行时包 payload 不参与可达性
+
+- 决策：回收器在 `env/` 下的治理证据根收敛为显式枚举的 `env/alpha`、`env/beta`、`env/gamma`、`env/prod` 四个环境根，`env/repo/` 不在其中；任意证据树内带 `mutable-runtime` 路径段的文件一律不参与可达性扫描。该枚举与排除段各只有一处声明，引用图与墓碑回填从同一处读取。
+- 理由：原实现把整棵 `env/` 当激活证据扫，因此会读到运行时包里的 Flutter 资产清单这类非 object JSON 并直接判否——实测 8137 个 env JSON 中 2652 个属于运行时包 payload，回收器在真实 output 上根本走不到引用判定。`env/repo/` 是仓库本地缓存与会话产物根（`AGENTS.md` 已把缓存重定向到此），其中的 preflight 报告是观测而不是任何对象存活的依据；运行时包 payload 由 release 可重建，同样不可能是可达性真相源。
+- 被否决方案：读不出内容就跳过——把「哪些树算证据」从声明退化成解析结果的副作用，正是显式语义禁止的静默降级。按文件名后缀排除——`.bin.json` 只是当下这一批产物的形态，换个打包器就漏。
+- 约束与影响：只被 `env/repo/` 下 preflight 报告引用的 execution 不再因此受保护；权威保护仍由 canonical publish 与 immutable release 引用承担，且回收只发生在 `succeeded` 终态且无 publish/release 引用的 execution 上。
+- 可测试面：由 `GWT-007` 的回收计划可执行性承接；四环境根与排除段的枚举本身是声明面，漂移由回收器在真实 output 上是否可运行直接暴露。
+- 影响 Story：`multi-carrier-release` 的回收器治理证据面
+- 关联验收：`multi-carrier-release` 的 `GWT-007` 计划可执行性子句
 
 ## 5. 失败与恢复
 

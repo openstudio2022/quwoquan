@@ -59,6 +59,7 @@ import '../../../../../support/service/content_service/content/post/content_post
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
 import 'package:http/testing.dart';
 import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
+import 'package:quwoquan_app/service/content_service/media/original_access_quota/presentation/media_delivery_image.dart';
 
 TextSpan _spanByText(RichText richText, String text) {
   TextSpan? result;
@@ -769,10 +770,10 @@ void main() {
       find.byType(VideoPlayerWidget),
     );
     expect(
-      player.deliveryReference.url,
+      player.deliveryReference!.url,
       'https://cdn.alpha.quwoquan.com:17100/media/video/s/video-primary-0001/post/video-content-0001/v1/source.mp4',
     );
-    expect(player.deliveryReference.url, isNot(contains('https://10.0.2.2')));
+    expect(player.deliveryReference!.url, isNot(contains('https://10.0.2.2')));
   });
 
   testWidgets('首页推荐瀑布流不会把图片 cover 当成视频源初始化', (tester) async {
@@ -1465,7 +1466,9 @@ void main() {
     expect(find.text('+1'), findsOneWidget);
     final moreTile = find.byKey(const ValueKey('home-moment-grid-tile-5'));
     final moreStack = tester.widget<Stack>(moreTile);
-    expect(moreStack.children.first, isA<AppCachedNetworkImage>());
+    // 末格图片经 typed 交付入口出去；公开资产由该入口分流到公开图片原子，
+    // 因此格内仍只有一张图。断言两层，收口后不会退回直连公开原子。
+    expect(moreStack.children.first, isA<MediaDeliveryImage>());
     expect(
       find.descendant(
         of: moreTile,

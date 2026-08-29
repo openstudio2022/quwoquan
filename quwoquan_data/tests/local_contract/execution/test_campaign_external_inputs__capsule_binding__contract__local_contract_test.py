@@ -12,9 +12,13 @@ from content.execution.campaign.external_input_runtime import (
 from content.execution.campaign.external_inputs import (
     CampaignExternalInputError,
     external_inputs_digest,
+    lane_acquisition_root,
     materialize_external_input_bundle,
     payload_digest,
 )
+from content.execution.campaign import plan as campaign_plan
+from content.execution.campaign import source_capsule_store
+from content.execution.campaign.plan import freeze_plan
 from content.execution.campaign.submission import write_submission
 from content.execution.campaign.workspace import (
     CampaignLaneWorkspace,
@@ -23,6 +27,7 @@ from content.execution.campaign.workspace import (
 )
 from content.execution.request import RuntimeExecutionRequest
 from content.source import source_inputs
+from core import paths as core_paths
 from core.control_types import TargetSelector
 from core.io import read_json, write_json
 from support.capacity_calibration_fixture import (
@@ -111,6 +116,8 @@ def _submission(
         "externalInputRefs": refs,
         "externalInputsDigest": external_inputs_digest(refs),
     }
+    if refs:
+        stable["acquisitionRootRef"] = "data/local/workspace/source-acquisition"
     return {
         **stable,
         "requestDigest": payload_digest(stable),
@@ -198,6 +205,12 @@ def _frozen_documents(
             "executionId": EXECUTION_IDS[carrier],
             "externalInputRefs": list(document["externalInputRefs"]),
             "externalInputsDigest": document["externalInputsDigest"],
+            # ref 只带 kind 子根，基准根必须与 ref 同行传到 capsule 物化面。
+            **(
+                {"acquisitionRootRef": document["acquisitionRootRef"]}
+                if document.get("externalInputRefs")
+                else {}
+            ),
         }
         for carrier, document in submissions.items()
     }
@@ -570,3 +583,164 @@ def test_same_execution_cannot_replace_external_inputs_without_new_retry(
             repo_root=tmp_path,
             root=runtime.campaigns_root,
         )
+
+
+def test_frozen_plan_carries_the_acquisition_base_each_lane_ref_resolves_against(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    _governed_acquisition_handoff: None,
+) -> None:
+    """基准根必须随 lane 一路传到 capsule 物化面。
+
+    每条 externalInputRef 只带 kind 子根（`.`/`video`），基准根来自解析方。提交面
+    冻结了基准根却不向 plan 传，物化面就只能取默认采集根——冻结出的 ref 在那里
+    一个字节都指不到，而 compile/submit 两道门都已经放行。
+    """
+    runtime = _runtime(tmp_path)
+    # 冻结面的 main-tree 断言属于 git 事实，与本用例要锁的基准根传递无关。
+    monkeypatch.setattr(
+        campaign_plan, "assert_frozen_main_tree", lambda *_args, **_kwargs: None
+    )
+    # 夹具按 <output>/data/local/... 建采集根；基准根 ref 要落在同一受治理输出根内。
+    monkeypatch.setattr(core_paths, "OUTPUT_ROOT", runtime.output_root)
+    acquisition_root, image_refs = _acquisition(tmp_path)
+    _preflight_path, semantic_preflight_binding = ready_semantic_preflight(
+        "default",
+        output_root=runtime.output_root,
+    )
+    pool_binding, pool_evidence_ref, pool_selections = _scale_source_pool(runtime)
+    submissions = {
+        carrier: _submission(
+            carrier,
+            image_refs if carrier == "image" else [],
+            semantic_preflight_binding=semantic_preflight_binding,
+            scale_source_pool=pool_binding,
+            source_pool_evidence_root_ref=pool_evidence_ref,
+            source_pool_selection=pool_selections[carrier],
+        )
+        for carrier in EXECUTION_IDS
+    }
+    plan, _digest = freeze_plan(runtime, ROOT_ID, submissions)
+
+    image_lane = plan["laneExternalInputs"]["image"]
+    assert image_lane["acquisitionRootRef"] == (
+        submissions["image"]["acquisitionRootRef"]
+    )
+    # 没有外部输入的车道不声明基准根：缺席在这里是「无须解析」，不是「取默认值」。
+    for carrier in EXECUTION_IDS:
+        if carrier != "image":
+            assert "acquisitionRootRef" not in plan["laneExternalInputs"][carrier]
+
+    default_root = tmp_path / "never-used-default"
+    default_root.mkdir()
+    assert lane_acquisition_root(image_lane, default=default_root) != default_root
+    assert lane_acquisition_root(
+        plan["laneExternalInputs"]["homepage"], default=default_root
+    ) == default_root
+    assert acquisition_root.is_dir()
+
+
+def test_capsule_materializes_lane_inputs_from_the_frozen_base_not_the_default_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    _governed_acquisition_handoff: None,
+) -> None:
+    """物化面必须按 lane 冻结的基准根取字节，而不是默认采集根。
+
+    专业图片的产出布局把 manifest/receipt/cas 放在 preparation 目录下，默认采集根
+    里并没有这些相对路径。物化面一旦退回默认根，capsule 里就会缺字节，而 compile
+    与 submit 两道门都已经放行。
+    """
+    runtime = _runtime(tmp_path)
+    acquisition_root, image_refs = _acquisition(tmp_path)
+    default_root = acquisition_root
+    # 把采集面搬到默认根之外的子目录：默认根从此解析不到任何一条 ref。
+    frozen_base = default_root.parent / "source-acquisition-preparations/image-001"
+    frozen_base.parent.mkdir(parents=True, exist_ok=True)
+    acquisition_root.rename(frozen_base)
+    default_root.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(core_paths, "OUTPUT_ROOT", runtime.output_root)
+    monkeypatch.setattr(core_paths, "SOURCE_ACQUISITION_ROOT", default_root)
+    frozen_base_ref = frozen_base.relative_to(runtime.output_root).as_posix()
+
+    lane = {
+        "executionId": EXECUTION_IDS["image"],
+        "externalInputRefs": image_refs,
+        "externalInputsDigest": external_inputs_digest(image_refs),
+        "acquisitionRootRef": frozen_base_ref,
+    }
+    assert lane_acquisition_root(lane, default=default_root) == frozen_base
+
+    destination = tmp_path / "capsule/external-inputs/image"
+    materialize_external_input_bundle(
+        destination,
+        lane["externalInputRefs"],
+        acquisition_root=lane_acquisition_root(lane, default=default_root),
+        carrier="image",
+        source_revision=SOURCE_REVISION,
+        source_digest=SOURCE_DIGEST,
+        entity_catalog_digest=CATALOG_DIGEST,
+        library_root=tmp_path / "content_library",
+    )
+    assert (destination / str(image_refs[0]["manifestRef"])).is_file()
+
+    # 退回默认根即判否：缺字节不能被当作「这条 lane 没有外部输入」。
+    with pytest.raises(CampaignExternalInputError):
+        materialize_external_input_bundle(
+            tmp_path / "capsule-default/external-inputs/image",
+            lane["externalInputRefs"],
+            acquisition_root=default_root,
+            carrier="image",
+            source_revision=SOURCE_REVISION,
+            source_digest=SOURCE_DIGEST,
+            entity_catalog_digest=CATALOG_DIGEST,
+            library_root=tmp_path / "content_library",
+        )
+
+    # 真实冻结入口必须自己从 lane 取基准根，而不是由调用方补参数。
+    lanes = {"image": lane}
+    observed_roots: list[Path] = []
+
+    def _spy(destination, refs, *, acquisition_root, **kwargs):
+        observed_roots.append(acquisition_root)
+        return materialize_external_input_bundle(
+            destination, refs, acquisition_root=acquisition_root, **kwargs
+        )
+
+    monkeypatch.setattr(
+        source_capsule_store, "materialize_external_input_bundle", _spy
+    )
+    monkeypatch.setattr(
+        source_capsule_store,
+        "campaign_snapshot_roots",
+        lambda *_args, **_kwargs: ("quwoquan_data",),
+    )
+    monkeypatch.setattr(
+        source_capsule_store,
+        "materialize_source_snapshot",
+        lambda *_args, **_kwargs: None,
+    )
+    # 后续的 capsule 身份校验需要完整源码树，本用例只裁定基准根的取值来源，
+    # 因此让它在校验处失败，只对已观测到的实参断言。
+    with pytest.raises(Exception):
+        source_capsule_store.prepare_source_capsule(
+            runtime,
+            git_branch="dev1.0",
+            commit_sha="c" * 40,
+            source_revision=SOURCE_REVISION,
+            source_digest=SOURCE_DIGEST,
+            execution_bundle={
+                "algorithm": "sha256",
+                "digest": "sha256:" + "f" * 64,
+                "inputs": ["quwoquan_data/scripts"],
+            },
+            entity_catalog_digest=CATALOG_DIGEST,
+            lane_external_inputs=lanes,
+            external_inputs_digest=payload_digest(
+                {
+                    "schema": "quwoquan_data.campaign_external_input_lanes",
+                    "lanes": lanes,
+                }
+            ),
+        )
+    assert observed_roots == [frozen_base]

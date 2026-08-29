@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"log/slog"
+	"net/http"
 	"strings"
 	"time"
 
@@ -45,6 +46,34 @@ type mediaRuntimeComposition struct {
 	originalAccessAuditQuery   *originalaccessquotaapp.AuditQueryFacade
 	mediaObjectGateway         *mediainfra.ObjectGateway
 	commentServiceCore         *commentapp.CommentService
+	// mediaDeliveryAuthHandler 是边缘 forward_auth 的验签端点（DEC-031）：
+	// 与签发方消费同一 CDNSignKey，在字节交付边缘复算签名真伪与到期。
+	mediaDeliveryAuthHandler http.Handler
+}
+
+// activeResearchReleaseSupplyAdapter 把 content post 的 ActiveSupplySnapshot
+// 缩窄成 grant 分流需要的单一事实（DEC-031）：只有 status=active 且
+// releaseClass=research 的 canonical release 参与 membership 判定。
+type activeResearchReleaseSupplyAdapter struct {
+	reader postports.ActiveSupplyReader
+}
+
+func (adapter activeResearchReleaseSupplyAdapter) ActiveResearchReleaseID(
+	ctx context.Context,
+) (string, bool, error) {
+	if adapter.reader == nil {
+		return "", false, fmt.Errorf("active supply reader is not configured")
+	}
+	snapshot, err := adapter.reader.ActiveSupplySnapshot(ctx)
+	if err != nil {
+		return "", false, err
+	}
+	if strings.TrimSpace(snapshot.Status) != "active" ||
+		strings.TrimSpace(snapshot.ReleaseClass) != "research" ||
+		strings.TrimSpace(snapshot.ActiveReleaseID) == "" {
+		return "", false, nil
+	}
+	return strings.TrimSpace(snapshot.ActiveReleaseID), true, nil
 }
 
 // buildMediaRuntime 装配 OSS、媒体对象 Facade、处理 worker 与评论属地依赖。
@@ -66,28 +95,23 @@ func buildMediaRuntime(
 	postMediaReader postports.MediaReferencedPostReader,
 	viewerBlockReader *accessinfra.PersonaBlockReader,
 	commentViewerRelationships *commentpersistence.CommentViewerRelationshipMongoProjection,
+	activeSupplyReader postports.ActiveSupplyReader,
 ) (mediaRuntimeComposition, func(), error) {
 	ossBinding, err := objectstorage.LoadBinding(appEnv, runtimeconfig.EnvRuntimeConfigProvider{})
 	if err != nil {
 		return mediaRuntimeComposition{}, nil, fmt.Errorf("content-service object storage binding invalid: %w", err)
 	}
 	storageConfig := runtimemedia.ObjectStorageConfig{
-		Endpoint:        contentOSSEndpoint(ossBinding.Endpoint, cfg.OSS.UseSSL),
-		Bucket:          getenvOrDefault("CONTENT_OSS_BUCKET", cfg.OSS.Bucket),
-		Region:          getenvOrDefault("CONTENT_OSS_REGION", cfg.OSS.Region),
-		AccessKeyID:     ossBinding.AccessKeyID,
-		AccessKeySecret: ossBinding.AccessKeySecret,
-		MediaDeliveryBaseURL: getenvOrDefault(
-			"CONTENT_MEDIA_DELIVERY_BASE_URL",
-			cfg.OSS.MediaDeliveryBaseURL,
-		),
-		MediaUploadBaseURL: getenvOrDefault(
-			"CONTENT_MEDIA_UPLOAD_BASE_URL",
-			cfg.OSS.MediaUploadBaseURL,
-		),
-		CDNSignKey: getenvOrDefault("CONTENT_CDN_SIGN_KEY", cfg.OSS.CDNSignKey),
-		PresignTTL: time.Duration(cfg.OSS.PresignTTLMin) * time.Minute,
-		CDNTTL:     time.Duration(cfg.OSS.CDNTTLMin) * time.Minute,
+		Endpoint:             contentOSSEndpoint(ossBinding.Endpoint, cfg.OSS.UseSSL),
+		Bucket:               cfg.OSS.Bucket,
+		Region:               cfg.OSS.Region,
+		AccessKeyID:          ossBinding.AccessKeyID,
+		AccessKeySecret:      ossBinding.AccessKeySecret,
+		MediaDeliveryBaseURL: cfg.OSS.MediaDeliveryBaseURL,
+		MediaUploadBaseURL:   cfg.OSS.MediaUploadBaseURL,
+		CDNSignKey:           cfg.OSS.CDNSignKey,
+		PresignTTL:           time.Duration(cfg.OSS.PresignTTLMin) * time.Minute,
+		CDNTTL:               time.Duration(cfg.OSS.CDNTTLMin) * time.Minute,
 	}
 	if storageConfig.PresignTTL == 0 {
 		storageConfig.PresignTTL = 15 * time.Minute
@@ -151,6 +175,9 @@ func buildMediaRuntime(
 		mediaStore,
 		postapp.NewMediaAssetVisibilityReader(postMediaReader, viewerBlockReader),
 		mediaObjectGateway,
+		originalaccessquotaapp.WithActiveResearchReleaseReader(
+			activeResearchReleaseSupplyAdapter{reader: activeSupplyReader},
+		),
 	)
 	originalAccessAuditQuery := originalaccessquotaapp.NewAuditQueryFacade(
 		originalaccessaudit.NewReader(
@@ -278,5 +305,9 @@ func buildMediaRuntime(
 		originalAccessAuditQuery:   originalAccessAuditQuery,
 		mediaObjectGateway:         mediaObjectGateway,
 		commentServiceCore:         commentServiceCore,
+		mediaDeliveryAuthHandler: runtimemedia.NewPrivateDeliveryAuthHandler(
+			storageConfig.CDNSignKey,
+			nil,
+		),
 	}, closeIPLocationResolver, nil
 }

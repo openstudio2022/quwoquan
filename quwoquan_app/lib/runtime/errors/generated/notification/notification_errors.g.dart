@@ -4,10 +4,26 @@
 enum NotificationErrorCode {
   unauthorized('NOTIFICATION.USER.unauthorized', '请先登录', 401),
   invalidArgument('NOTIFICATION.USER.invalid_argument', '消息参数有误，请检查后重试', 400),
-  appMessageNotFound('NOTIFICATION.USER.app_message_not_found', '消息不存在或已过期', 404),
-  idempotencyConflict('NOTIFICATION.USER.idempotency_conflict', '重复请求与原消息不一致，请刷新后重试', 409),
-  storageReadFailed('NOTIFICATION.SYSTEM.storage_read_failed', '读取消息失败，请稍后重试', 500),
-  storageWriteFailed('NOTIFICATION.SYSTEM.storage_write_failed', '更新消息失败，请稍后重试', 500),
+  appMessageNotFound(
+    'NOTIFICATION.USER.app_message_not_found',
+    '消息不存在或已过期',
+    404,
+  ),
+  idempotencyConflict(
+    'NOTIFICATION.USER.idempotency_conflict',
+    '重复请求与原消息不一致，请刷新后重试',
+    409,
+  ),
+  storageReadFailed(
+    'NOTIFICATION.SYSTEM.storage_read_failed',
+    '读取消息失败，请稍后重试',
+    500,
+  ),
+  storageWriteFailed(
+    'NOTIFICATION.SYSTEM.storage_write_failed',
+    '更新消息失败，请稍后重试',
+    500,
+  ),
   internalError('NOTIFICATION.SYSTEM.internal_error', '通知服务暂时无法完成该操作', 500),
   unknown('', '通知服务异常，请稍后重试', 500);
 
@@ -29,23 +45,28 @@ enum NotificationErrorCode {
 class NotificationErrorMessages {
   const NotificationErrorMessages._();
 
-  static const Map<NotificationErrorCode, String> zh = <NotificationErrorCode, String>{
-    NotificationErrorCode.unauthorized: '请先登录',
-    NotificationErrorCode.invalidArgument: '消息参数有误，请检查后重试',
-    NotificationErrorCode.appMessageNotFound: '消息不存在或已过期',
-    NotificationErrorCode.idempotencyConflict: '重复请求与原消息不一致，请刷新后重试',
-    NotificationErrorCode.storageReadFailed: '读取消息失败，请稍后重试',
-    NotificationErrorCode.storageWriteFailed: '更新消息失败，请稍后重试',
-    NotificationErrorCode.internalError: '通知服务暂时无法完成该操作',
-  };
+  static const Map<NotificationErrorCode, String> zh =
+      <NotificationErrorCode, String>{
+        NotificationErrorCode.unauthorized: '请先登录',
+        NotificationErrorCode.invalidArgument: '消息参数有误，请检查后重试',
+        NotificationErrorCode.appMessageNotFound: '消息不存在或已过期',
+        NotificationErrorCode.idempotencyConflict: '重复请求与原消息不一致，请刷新后重试',
+        NotificationErrorCode.storageReadFailed: '读取消息失败，请稍后重试',
+        NotificationErrorCode.storageWriteFailed: '更新消息失败，请稍后重试',
+        NotificationErrorCode.internalError: '通知服务暂时无法完成该操作',
+      };
 
-  static const Map<NotificationErrorCode, String> en = <NotificationErrorCode, String>{
-    NotificationErrorCode.unauthorized: 'Please sign in',
-    NotificationErrorCode.invalidArgument: 'Invalid app message request',
-    NotificationErrorCode.appMessageNotFound: 'App message not found',
-    NotificationErrorCode.idempotencyConflict: 'Idempotency key conflicts with the existing message',
-    NotificationErrorCode.storageReadFailed: 'Failed to read app messages',
-    NotificationErrorCode.storageWriteFailed: 'Failed to update app message',
-    NotificationErrorCode.internalError: 'Notification service could not complete the operation',
-  };
+  static const Map<NotificationErrorCode, String> en =
+      <NotificationErrorCode, String>{
+        NotificationErrorCode.unauthorized: 'Please sign in',
+        NotificationErrorCode.invalidArgument: 'Invalid app message request',
+        NotificationErrorCode.appMessageNotFound: 'App message not found',
+        NotificationErrorCode.idempotencyConflict:
+            'Idempotency key conflicts with the existing message',
+        NotificationErrorCode.storageReadFailed: 'Failed to read app messages',
+        NotificationErrorCode.storageWriteFailed:
+            'Failed to update app message',
+        NotificationErrorCode.internalError:
+            'Notification service could not complete the operation',
+      };
 }

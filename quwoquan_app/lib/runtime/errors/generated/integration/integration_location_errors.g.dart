@@ -60,23 +60,33 @@ enum IntegrationLocationErrorCode {
 class IntegrationLocationErrorMessages {
   const IntegrationLocationErrorMessages._();
 
-  static const Map<IntegrationLocationErrorCode, String> zh = <IntegrationLocationErrorCode, String>{
+  static const Map<IntegrationLocationErrorCode, String>
+  zh = <IntegrationLocationErrorCode, String>{
     IntegrationLocationErrorCode.invalidArgument: '请求参数无效，请检查后重试',
     IntegrationLocationErrorCode.locationPermissionRequired: '请在设置中为本应用开启定位权限',
     IntegrationLocationErrorCode.upstreamTimeout: '位置服务响应超时，请稍后重试',
     IntegrationLocationErrorCode.locationProviderUnavailable: '位置服务暂不可用，请稍后重试',
     IntegrationLocationErrorCode.locationProviderRateLimited: '位置服务请求繁忙，请稍后重试',
-    IntegrationLocationErrorCode.locationProviderInvalidResponse: '位置服务返回异常，请稍后重试',
+    IntegrationLocationErrorCode.locationProviderInvalidResponse:
+        '位置服务返回异常，请稍后重试',
     IntegrationLocationErrorCode.locationInternalError: '位置服务异常，请稍后重试',
   };
 
-  static const Map<IntegrationLocationErrorCode, String> en = <IntegrationLocationErrorCode, String>{
-    IntegrationLocationErrorCode.invalidArgument: 'Request parameters are invalid',
-    IntegrationLocationErrorCode.locationPermissionRequired: 'Please enable location permission for this app in Settings',
-    IntegrationLocationErrorCode.upstreamTimeout: 'Location upstream timed out, please retry',
-    IntegrationLocationErrorCode.locationProviderUnavailable: 'Location provider is temporarily unavailable, please retry',
-    IntegrationLocationErrorCode.locationProviderRateLimited: 'Location provider is rate limited, please retry later',
-    IntegrationLocationErrorCode.locationProviderInvalidResponse: 'Location provider returned an invalid response',
-    IntegrationLocationErrorCode.locationInternalError: 'Location service internal error',
-  };
+  static const Map<IntegrationLocationErrorCode, String> en =
+      <IntegrationLocationErrorCode, String>{
+        IntegrationLocationErrorCode.invalidArgument:
+            'Request parameters are invalid',
+        IntegrationLocationErrorCode.locationPermissionRequired:
+            'Please enable location permission for this app in Settings',
+        IntegrationLocationErrorCode.upstreamTimeout:
+            'Location upstream timed out, please retry',
+        IntegrationLocationErrorCode.locationProviderUnavailable:
+            'Location provider is temporarily unavailable, please retry',
+        IntegrationLocationErrorCode.locationProviderRateLimited:
+            'Location provider is rate limited, please retry later',
+        IntegrationLocationErrorCode.locationProviderInvalidResponse:
+            'Location provider returned an invalid response',
+        IntegrationLocationErrorCode.locationInternalError:
+            'Location service internal error',
+      };
 }

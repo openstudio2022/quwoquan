@@ -209,6 +209,7 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                         "workload": "full",
                         "configurationDigest": "sha256:" + "1" * 64,
                         "providerRuntimeDigest": provider_runtime_digest,
+                        "observabilityLogSinkDigest": "sha256:" + "7" * 64,
                     },
                 ),
                 patch.object(
@@ -230,6 +231,16 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                     stackctl,
                     "verify_certificate",
                     return_value={"profile": "local-managed", "status": "ready"},
+                ),
+                patch.object(
+                    stackctl,
+                    "local_runtime_capacity_evidence",
+                    return_value={
+                        "issues": [],
+                        "warnings": [],
+                        "blocker": "",
+                        "evidence": {"status": "ready"},
+                    },
                 ),
                 patch.object(stackctl, "fetch_url", side_effect=fetch),
                 patch.object(
@@ -307,6 +318,7 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                     "workload": "full",
                     "configurationDigest": "sha256:" + "1" * 64,
                     "providerRuntimeDigest": provider_runtime_digest,
+                    "observabilityLogSinkDigest": "sha256:" + "7" * 64,
                 },
             ), patch.object(
                 stackctl,
@@ -324,6 +336,15 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                 stackctl,
                 "verify_certificate",
                 return_value={"profile": "local-managed", "status": "ready"},
+            ), patch.object(
+                stackctl,
+                "local_runtime_capacity_evidence",
+                return_value={
+                    "issues": [],
+                    "warnings": [],
+                    "blocker": "",
+                    "evidence": {"status": "ready"},
+                },
             ), patch.object(stackctl, "fetch_url", side_effect=fetch), patch.object(
                 stackctl,
                 "_execute_otp_login_journey",
@@ -359,6 +380,7 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                     "workload": "full",
                     "configurationDigest": "sha256:" + "1" * 64,
                     "providerRuntimeDigest": provider_runtime_digest,
+                    "observabilityLogSinkDigest": "sha256:" + "7" * 64,
                 },
             ), patch.object(
                 stackctl,
@@ -378,6 +400,15 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                 stackctl,
                 "verify_certificate",
                 return_value={"profile": "local-managed", "status": "ready"},
+            ), patch.object(
+                stackctl,
+                "local_runtime_capacity_evidence",
+                return_value={
+                    "issues": [],
+                    "warnings": [],
+                    "blocker": "",
+                    "evidence": {"status": "ready"},
+                },
             ), patch.object(stackctl, "fetch_url", side_effect=fetch), patch.object(
                 stackctl,
                 "_execute_otp_login_journey",
@@ -428,6 +459,7 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                 "candidateDigest": baseline_id,
                 "configurationDigest": configuration_digest,
                 "providerRuntimeDigest": provider_digest,
+                "observabilityLogSinkDigest": "sha256:" + "7" * 64,
             }
             login_receipt = {
                 "schema": "otp-local-capture-live-journey",
@@ -483,6 +515,16 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                     stackctl,
                     "verify_certificate",
                     return_value={"profile": "local-managed", "status": "ready"},
+                ),
+                patch.object(
+                    stackctl,
+                    "local_runtime_capacity_evidence",
+                    return_value={
+                        "issues": [],
+                        "warnings": [],
+                        "blocker": "",
+                        "evidence": {"status": "ready"},
+                    },
                 ),
                 patch.object(stackctl, "fetch_url", side_effect=fetch),
                 patch.object(
@@ -696,8 +738,10 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                         },
                         readiness,
                         readiness_path,
-                        "env/alpha/runs/release-lifecycle-exit/"
-                        "release-a/exit-a/lifecycle-exit.json",
+                        (
+                            "env/alpha/runs/release-lifecycle-exit/"
+                            "release-a/exit-a/lifecycle-exit.json"
+                        ),
                     ),
                 ),
                 patch.object(
@@ -815,4 +859,3 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                 binding["readinessReceiptDigest"],
             )
             mutable_resolver.assert_called_once_with("alpha-local", binding)
-

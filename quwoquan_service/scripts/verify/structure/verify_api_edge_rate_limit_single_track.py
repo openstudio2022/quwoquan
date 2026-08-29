@@ -10,6 +10,8 @@ from pathlib import Path
 import yaml
 
 
+sys.dont_write_bytecode = True
+
 _BOOTSTRAP = next(
     p for p in Path(__file__).resolve().parents if (p / "repository_root.py").is_file()
 )

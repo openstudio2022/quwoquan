@@ -322,6 +322,7 @@ class MongoCandidateRanker:
             ).encode("utf-8")
         ).hexdigest()
         return RankingResult(
+            experiment_bucket=assignment.bucket,
             model_bucket=model_bucket,
             model_channel=model_channel,
             model_release_id=model_release_id,

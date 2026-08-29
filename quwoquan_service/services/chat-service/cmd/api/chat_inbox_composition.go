@@ -159,7 +159,7 @@ func (source chatInboxSnapshotSource) Load(
 	if err != nil {
 		return inboxapp.Item{}, false, err
 	}
-	if conversation.Status != "" && conversation.Status != conversationmodel.ConversationStatusActive {
+	if conversation.Status != conversationmodel.ConversationStatusActive {
 		return inboxapp.Item{}, false, nil
 	}
 	item := inboxItemFromSnapshots(*conversation, *state)

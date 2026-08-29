@@ -66,6 +66,12 @@ def object_image_candidates(object_dir: Path, execution_id: str) -> list[dict[st
                     "researchLane": source_meta.get("researchLane") or "",
                     "sourceCollectionId": asset_meta.get("sourceCollectionId") or "",
                     "creator": asset_meta.get("creator") or asset_meta.get("credit") or "",
+                    # 出处事实的显式声明位随行传递，供准入侧做出处类别裁决。
+                    # 这三个键不与 ``creator`` 归并：归并后「上传者与权利人是否
+                    # 同一主体」就没有两个可比较的载体了。
+                    "credit": asset_meta.get("credit") or "",
+                    "uploader": asset_meta.get("uploader") or "",
+                    "description": asset_meta.get("description") or "",
                     "collectionPageUrl": asset_meta.get("collectionPageUrl") or asset_meta.get("sourceUrl") or "",
                     "license": asset_meta.get("license") or "",
                     "termsUrl": asset_meta.get("termsUrl") or "",

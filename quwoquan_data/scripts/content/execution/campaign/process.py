@@ -318,6 +318,8 @@ def run_lane(
     run_session: CampaignRunSession,
     observer_binary_binding: ReliableTaskObserverBinaryBinding | None,
     fleet_transport_binding: FrozenReliableTaskFleetBinding | None,
+    recover_stage: str | None = None,
+    recovery_reason: str | None = None,
 ) -> tuple[int, str | None]:
     log_path = (
         campaign_root(root_execution_id, root=runtime.campaigns_root)
@@ -377,7 +379,19 @@ def run_lane(
         if fleet_transport_binding.root_execution_id != root_execution_id:
             raise ValueError("campaign fleet transport root execution drift")
         env.update(fleet_transport_binding.environment())
-    command = [sys.executable, "-B", str(cli), *_lane_argv(submission, stage=stage)]
+    # 受审计恢复起点属于本次 lane 调用的事实，必须进到派发给车道进程的 argv；
+    # 停在这里就等于让 5.review 的 fallbackStage 无法回到上游阶段重跑。
+    command = [
+        sys.executable,
+        "-B",
+        str(cli),
+        *_lane_argv(
+            submission,
+            stage=stage,
+            recover_stage=recover_stage,
+            recovery_reason=recovery_reason,
+        ),
+    ]
     execution_id = str(submission["executionId"])
     _verify_workspace_external_inputs(workspace)
     run_session.lane_checkpoint(
@@ -493,6 +507,8 @@ def run_phase(
     fleet_transport_binding: FrozenReliableTaskFleetBinding | None = None,
     carriers: tuple[str, ...] | None = None,
     on_result: PhaseResultCallback | None = None,
+    recover_stage: str | None = None,
+    recovery_reason: str | None = None,
 ) -> dict[str, tuple[int, str | None]]:
     selected = (
         tuple(carrier for carrier in CAMPAIGN_CARRIERS if carrier in submissions)
@@ -523,6 +539,8 @@ def run_phase(
                 run_session=run_session,
                 observer_binary_binding=observer_binary_binding,
                 fleet_transport_binding=fleet_transport_binding,
+                recover_stage=recover_stage,
+                recovery_reason=recovery_reason,
             ): carrier
             for carrier in selected
         }

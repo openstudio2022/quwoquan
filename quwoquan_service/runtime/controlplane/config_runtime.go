@@ -25,7 +25,10 @@ type ResolvedConfigValue struct {
 type ConfigDriftSummary struct {
 	InSyncInstances    int `json:"inSyncInstances"`
 	OutOfSyncInstances int `json:"outOfSyncInstances"`
-	TotalInstances     int `json:"totalInstances"`
+	// StaleInstances 统计上报新鲜度超过失联阈值的实例：它们的 inSync 声明
+	// 已不可信，与 in-sync/out-of-sync 互斥计数。
+	StaleInstances int `json:"staleInstances"`
+	TotalInstances int `json:"totalInstances"`
 }
 
 func EffectiveConfigHash(items []ResolvedConfigValue) string {

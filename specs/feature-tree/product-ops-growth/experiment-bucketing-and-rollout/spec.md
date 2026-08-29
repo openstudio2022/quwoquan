@@ -18,6 +18,7 @@
 - runtime/experiments 统一 hash resolver 与 recommendation/search 复用
 - 推荐曝光/行为和搜索查询事实携带服务端权威 experimentBucket
 - 空环境必须经已授权的公开 command 创建首个策略，禁止数据库 seed、服务私有配置或隐式 fallback
+- 空环境的冷启动闭包必须先拉起 Product Ops 账号安全 authority owner 的内部健康面，再启动 Product Ops 并执行公开 command；不得等待依赖该策略的完整业务栈 ready，也不得把公开策略 command 加入 pre-admission 旁路
 - Alpha/Beta/Gamma 使用 target-scoped 受管非生产 operator port；Prod 只接受正式 OIDC operator
 
 ### Out of Scope
@@ -48,7 +49,9 @@
 - runtime assignment policy 的唯一运行身份由完整策略内容确定性生成 `sha256` 摘要；缺失、禁用或非法策略直接失败，禁止静态版本、not-found 哨兵与隐式 control/50:50 fallback。
 - Product Ops `experimentRevision` 冻结 Experiment 聚合的并发修订号和 immutable assignment fact 历史键；它不是 runtime 策略身份，不得成为第二 resolver 或覆盖内容摘要。
 - 推荐实际曝光/行为、搜索查询事实记录服务端权威 experimentBucket，可用于效果归因。
-- 首个策略和后续 rollout 只经 Product Ops 公开 command、PostgreSQL 聚合与事务 outbox 生效；Search/Recommendation 禁止私有策略 seed。
+- 首个策略和后续 rollout 只经 Product Ops 公开 command、PostgreSQL 聚合与事务 outbox 生效；同一 activation attempt 中 Search 与 Recommendation 分别投影自己对应 policy 的 authoritative revision 后才 ready，且禁止私有策略 seed。
+- 冷启动唯一顺序为 `基础设施 -> service-core authority owner (--no-deps) -> service-core shallow /healthz -> product-ops (--no-deps) -> 公开策略 command -> 完整业务栈`。`service-core` 的容器 healthcheck 只证明进程完成全部 module Build/Bind/Start，不等 aggregate readiness；UserAccount 内部账号安全健康面随后可在整体 admission 前回答 Product Ops readiness，其他业务 operation 仍保持关闭。编排不得以 Compose dependency graph 或 aggregate `/readyz` 等待尚未存在的 Search/Recommendation 策略事实。
+- 策略 command 在连接级失败与 canonical `GATEWAY.MIDDLEWARE.upstream_unavailable` pre-admission 503 上只以同一请求体和同一 `Idempotency-Key` 有界重试；deadline 耗尽必须保留脱敏的 `code/origin/nature/module/kind/reason/recovery` 指纹，其他 HTTP 失败保持 fail-fast。
 - Alpha/Beta/Gamma 的 operator substitute 仅限对应 local target 和短时 scope；Prod、release 与未知环境必须配置真实 OIDC 并 fail-closed。
 - Portal 是否提供入口不改变 Product Ops contract、权限、审计与 production approval 要求。
 - verify_experiment_single_track.py 阻断第二 resolver、私有 runtime config、直接存储 seed 或 assignment write API 回归。
@@ -77,6 +80,8 @@
 - WHEN 参与者发起“experiment bucketing and rollout 能力”对应动作。
 - THEN 推荐 recpolicy 与搜索实验复用 runtime/experiments 的单一 AssignBucket 实现。
 - THEN 推荐实际曝光/行为、搜索查询事实记录服务端权威 experimentBucket，可用于效果归因。
-- THEN 空环境经 Product Ops 公开 command 创建首个策略，事务 outbox 发布唯一 `ExperimentPolicyActivated`，Search/Recommendation 投影同一 revision 后才 ready。
+- THEN 空环境经 Product Ops 公开 command 创建首个策略，事务 outbox 为每个 policy 发布唯一 `ExperimentPolicyActivated`，Search/Recommendation 分别投影同一 activation attempt 中各自 policy 的 authoritative revision 后才 ready。
+- THEN 冷启动以 `--no-deps` 拉起 `service-core` 并等待其 shallow `/healthz`，确认全部 module 已完成 Build/Bind/Start；随后由 UserAccount 内部健康面使 Product Ops 完成 readiness，再经原公开鉴权 command 激活策略并确保不以 Compose dependency graph 或 aggregate `/readyz` 等待尚未存在的策略事实。
+- THEN exact pre-admission 503 仅在 deadline 内以同一幂等身份重试；耗尽时回执保留脱敏 typed failure 指纹，普通 503、其他 4xx/5xx 与非 JSON 响应不被扩大重试。
 - THEN Alpha/Beta/Gamma 只接受 target-scoped 短时非生产 operator；Prod 只接受正式 OIDC operator。
 - THEN verify_experiment_single_track.py 阻断第二 resolver、私有 runtime config、直接存储 seed 或 assignment write API 回归。

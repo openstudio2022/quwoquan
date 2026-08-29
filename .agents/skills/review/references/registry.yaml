@@ -1,40 +1,180 @@
-# review 派发注册表 —— 以工作流名为键的 profile 条件装配
+# Review Board v2 registry.
 #
-# 装配唯一执行体：quwoquan_ops/cli/review_dispatch.py（board 不手工解析本表），
-# 语义由 quwoquan_ops/tests/local_contract/gate/test_review_dispatch__cli__local_contract_test.py 锁住。
-# 解析顺序（执行语义见 ../SKILL.md「执行」段）：
-# 1. profiles：changed_paths 命中 paths、或 deliverable 命中 deliverables，即激活该 profile。
-# 2. workflows.<name>.bindings：逐条求值 when——省略 when 表示恒装配；
-#    when 为 profile 列表时任一命中即装配。同一角色可装配 base 加多个 profile checklist。
-# 3. 选中 bundle 中相同 gate 命令去重、只执行一次，evidence 共享给全部 reviewer。
-# 4. 未匹配 profile 的角色不派发；没有 suppress 机制，也不做无条件角色并集。
-#
-# checklist 路径相对本文件所在的 references/ 目录。
-# workflow 键必须与对应 SKILL.md「内置评审」段声明的 (workflow, segment) 一一对应，
-# 路径存在性、分级与双向可达由 make verify-agent-context-budget 校验。
+# 这里只声明工作流主审、按 profile 选择的唯一专审，以及命名证据。功能事实、
+# 设计约束和命令不得复制进角色；checklist 只能用 `evidence: <id>` 引用本表。
 
-concurrency:
-  # 同时在跑的 reviewer 实例上限，超出按批次串行。角色间无依赖、可完全并行，
-  # 取 4 是因为更高并发对上下文与速率限制不划算。
-  max_parallel: 4
-  # 单角色评审软上限，超时按「该角色未完成」如实上报，不得静默判过。
+schema_version: 2
+
+limits:
+  max_parallel: 2
+  max_role_invocations: 4
   per_role_timeout_minutes: 10
+  reviewer_context_bytes: 24576
 
-# ── profile 派生规则 ────────────────────────────────────────────────
+evidence:
+  feature-tree:
+    command: make verify-feature-tree
+    segment: POST
+    required: true
+    covers: []
+  agent-context-budget:
+    command: make verify-agent-context-budget
+    segment: POST
+    required: true
+    covers: []
+  app-pageflip-back-mainline:
+    command: make verify-app-pageflip-back-mainline
+    segment: POST
+    required: true
+    covers:
+      - pageflip-backward-static
+      - pageflip-backward-tests
+  app-page-object-contract:
+    command: make verify-app-page-object-contract
+    segment: POST
+    required: true
+    covers: []
+  app-mock-isolation:
+    command: make verify-app-mock-isolation
+    segment: POST
+    required: true
+    covers: []
+  service-object-evidence:
+    command: make verify-object-evidence-closure
+    segment: POST
+    required: true
+    covers: []
+  python-script-governance:
+    command: make verify-python-script-governance
+    segment: POST
+    required: true
+    covers: []
+  recommendation-event-contract:
+    command: make verify-behavior-event-type-contract
+    segment: POST
+    required: true
+    covers: []
+  data-static-contract:
+    command: python3 -B quwoquan_data/scripts/cli.py verify all
+    segment: POST
+    required: true
+    covers: []
+  content-publish-purity:
+    command: python3 -B quwoquan_data/scripts/cli.py verify publish-purity
+    segment: POST
+    required: true
+    covers: []
+  environment-release-evidence:
+    command: make verify-environment-stability-final-acceptance
+    segment: POST
+    required: true
+    covers: []
+  observability-catalog:
+    command: make verify-observability-catalog
+    segment: POST
+    required: true
+    covers: []
+
+# profile 顺序是同优先级的稳定 tie-break；priority 越大越优先。只有被选中的
+# specialist checklist 才会贡献 evidence，低优先级 profile 不加载角色或命令。
 profiles:
-  dart-app:
+  pageflip:
     paths:
-      - quwoquan_app/lib/**
-      - quwoquan_app/test/**
+      - quwoquan_app/lib/design_system/pageflip/**
+      - quwoquan_app/lib/service/content_service/content/post/presentation/article_reader/pageflip/**
+      - quwoquan_app/test/**/design_system/pageflip/**
+      - quwoquan_app/test/**/article_reader/pageflip/**
+    specialist:
+      role: ux
+      priority: 120
+      required: false
+      checklists:
+        dev: roles/ux/checklists/dev/pageflip.md
+
+  recommendation:
+    paths:
+      - quwoquan_app/lib/service/recommendation_service/**
+      - quwoquan_service/services/recommendation-service/**
+    specialist:
+      role: recommendation
+      priority: 110
+      required: false
+      checklists:
+        design: roles/recommendation/checklists/design/base.md
+        dev: roles/recommendation/checklists/dev/base.md
+
   flutter-page:
     paths:
       - quwoquan_app/lib/service/**/presentation/**
       - quwoquan_app/lib/design_system/**
     deliverables: [page]
-  go-service:
+    specialist:
+      role: ux
+      priority: 100
+      required: false
+      checklists:
+        prd: roles/ux/checklists/prd/base.md
+        design: roles/ux/checklists/design/base.md
+        dev: roles/ux/checklists/dev/flutter-page.md
+
+  content-release:
+    deliverables: [content-release]
+    specialist:
+      role: data-legal
+      priority: 95
+      required: true
+      checklists:
+        content-production: roles/data-legal/checklists/content-production/base.md
+
+  environment-release:
     paths:
-      - quwoquan_service/services/**
-    deliverables: [contract]
+      - quwoquan_ops/environments/**
+    deliverables: [environment, release-evidence]
+    specialist:
+      role: infra-capacity
+      priority: 90
+      required: false
+      checklists:
+        design: roles/infra-capacity/checklists/design/base.md
+        environment-ops: roles/infra-capacity/checklists/environment-ops/base.md
+
+  gate:
+    paths:
+      - quwoquan_ops/gate/**
+      - .github/workflows/**
+    deliverables: [gate]
+    specialist:
+      role: ops
+      priority: 85
+      required: false
+      checklists:
+        design: roles/ops/checklists/design/gate.md
+        dev: roles/ops/checklists/dev/gate.md
+
+  data-pipeline:
+    paths:
+      - quwoquan_data/**
+    deliverables: [data-release]
+    specialist:
+      role: data-quality
+      priority: 80
+      required: false
+      checklists:
+        design: roles/data-quality/checklists/design/base.md
+        dev: roles/data-quality/checklists/dev/base.md
+
+  observability:
+    paths:
+      - quwoquan_app/lib/runtime/observability/**
+      - quwoquan_ops/observability/**
+    deliverables: [observability]
+    specialist:
+      role: observability
+      priority: 75
+      required: false
+      checklists:
+        dev: roles/observability/checklists/dev/base.md
+
   python-script:
     paths:
       - quwoquan_app/scripts/**
@@ -43,186 +183,118 @@ profiles:
       - quwoquan_ops/cli/**
       - quwoquan_ops/gate/**
       - quwoquan_ops/ci/**
-  data-pipeline:
-    paths:
-      - quwoquan_data/**
-    deliverables: [data-release, content-release]
-  gate:
-    paths:
-      - quwoquan_ops/gate/**
-      - .github/workflows/**
-    deliverables: [gate]
-  environment-release:
-    paths:
-      - quwoquan_ops/environments/**
-    deliverables: [environment, release-evidence]
-  observability:
-    paths:
-      - quwoquan_app/lib/runtime/observability/**
-      - quwoquan_ops/observability/**
-    deliverables: [observability]
-  pageflip:
-    paths:
-      - quwoquan_app/lib/design_system/pageflip/**
-      - quwoquan_app/lib/service/content_service/content/post/presentation/article_reader/pageflip/**
-  recommendation:
-    paths:
-      - quwoquan_app/lib/service/recommendation_service/**
+    specialist:
+      role: ops
+      priority: 70
+      required: false
+      checklists:
+        design: roles/ops/checklists/design/python-script.md
+        dev: roles/ops/checklists/dev/python-script.md
 
-# ── 工作流 → binding ───────────────────────────────────────────────
-# segments 声明该工作流会以哪些 segment 调用 review；PRE 评审 checklist 的 PRE 段，
-# POST 先取证再评审 POST 段。commit 不出现在此表：其 PRE 消费既有 POST 评审结论，
-# POST 由 L0 commit gate 出证，均不派 reviewer。review 自身不嵌套评审。
+  dart-app:
+    paths:
+      - quwoquan_app/lib/**
+      - quwoquan_app/test/**
+    specialist:
+      role: test
+      priority: 60
+      required: false
+      checklists:
+        prd: roles/test/checklists/prd/base.md
+        design: roles/test/checklists/design/base.md
+        dev: roles/test/checklists/dev/app.md
+
+  go-service:
+    paths:
+      - quwoquan_service/services/**
+    deliverables: [contract]
+    specialist:
+      role: test
+      priority: 60
+      required: false
+      checklists:
+        prd: roles/test/checklists/prd/base.md
+        design: roles/test/checklists/design/base.md
+        dev: roles/test/checklists/dev/service.md
+
 workflows:
   explore:
-    segments: [POST]
+    segments: [PRE, POST]
     deliverable: resolve-report
-    bindings:
-      - role: product
-        checklist: roles/product/checklists/explore/base.md
-      - role: architect
-        checklist: roles/architect/checklists/explore/base.md
+    automatic_review: false
 
   prd:
     segments: [PRE, POST]
     deliverable: spec-node
-    bindings:
-      - role: product
-        checklist: roles/product/checklists/prd/base.md
-      - role: user
-        checklist: roles/user/checklists/prd/base.md
-      - role: test
-        checklist: roles/test/checklists/prd/base.md
-      - role: ux
-        checklist: roles/ux/checklists/prd/base.md
-        when: [flutter-page]
+    primary:
+      role: product
+      required: true
+      checklist: roles/product/checklists/prd/base.md
 
   design:
-    segments: [POST]
+    segments: [PRE, POST]
     deliverable: dec
-    bindings:
-      - role: architect
-        checklist: roles/architect/checklists/design/base.md
-      - role: test
-        checklist: roles/test/checklists/design/base.md
-      - role: ops
-        checklist: roles/ops/checklists/design/base.md
-        when: [go-service, environment-release, gate, data-pipeline]
-      - role: infra-capacity
-        checklist: roles/infra-capacity/checklists/design/base.md
-        when: [go-service, environment-release, data-pipeline]
-      - role: ux
-        checklist: roles/ux/checklists/design/base.md
-        when: [flutter-page]
-      - role: growth
-        checklist: roles/growth/checklists/design/base.md
-        when: [observability]
+    primary:
+      role: architect
+      required: true
+      checklist: roles/architect/checklists/design/base.md
 
   dev:
     segments: [PRE, POST]
     deliverable: implementation
-    bindings:
-      - role: developer
-        checklist: roles/developer/checklists/dev/base.md
-      - role: developer
-        checklist: roles/developer/checklists/dev/dart-app.md
-        when: [dart-app]
-      - role: developer
-        checklist: roles/developer/checklists/dev/go-service.md
-        when: [go-service]
-      - role: developer
-        checklist: roles/developer/checklists/dev/python-script.md
-        when: [python-script]
-      - role: architect
-        checklist: roles/architect/checklists/dev/base.md
-      - role: architect
-        checklist: roles/architect/checklists/dev/app-wiring.md
-        when: [dart-app]
-      - role: architect
-        checklist: roles/architect/checklists/dev/go-service.md
-        when: [go-service]
-      - role: test
-        checklist: roles/test/checklists/dev/base.md
-      - role: test
-        checklist: roles/test/checklists/dev/app.md
-        when: [dart-app]
-      - role: test
-        checklist: roles/test/checklists/dev/service.md
-        when: [go-service]
-      - role: test
-        checklist: roles/test/checklists/dev/data.md
-        when: [data-pipeline]
-      - role: product
-        checklist: roles/product/checklists/dev/base.md
-        when: [go-service]
-      - role: ux
-        checklist: roles/ux/checklists/dev/flutter-page.md
-        when: [flutter-page]
-      - role: user
-        checklist: roles/user/checklists/dev/flutter-page.md
-        when: [flutter-page]
-      - role: ops
-        checklist: roles/ops/checklists/dev/base.md
-        when: [gate, environment-release, python-script]
-      - role: ops
-        checklist: roles/ops/checklists/dev/gate.md
-        when: [gate]
-      - role: growth
-        checklist: roles/growth/checklists/dev/base.md
-        when: [observability]
-      - role: observability
-        checklist: roles/observability/checklists/dev/base.md
-        when: [observability]
-      - role: pageflip
-        checklist: roles/pageflip/checklists/dev/base.md
-        when: [pageflip]
-      - role: recommendation
-        checklist: roles/recommendation/checklists/dev/base.md
-        when: [recommendation]
+    primary:
+      role: developer
+      required: true
+      checklist: roles/developer/checklists/dev/base.md
+
+  continue:
+    segments: [PRE, POST]
+    deliverable: resumed-workflow
+    automatic_review: false
 
   plan-next:
-    segments: [POST]
+    segments: [PRE, POST]
     deliverable: round-plan
-    bindings:
-      - role: product
-        checklist: roles/product/checklists/plan-next/base.md
-      - role: architect
-        checklist: roles/architect/checklists/plan-next/base.md
-      - role: user
-        checklist: roles/user/checklists/plan-next/base.md
+    automatic_review: false
+
+  review:
+    segments: [PRE, POST]
+    deliverable: review-plan
+    automatic_review: false
+
+  commit:
+    segments: [PRE, POST]
+    deliverable: reviewed-increment
+    automatic_review: false
 
   environment-ops:
-    segments: [POST]
+    segments: [PRE, POST]
     deliverable: release-evidence
-    bindings:
-      - role: ops
-        checklist: roles/ops/checklists/environment-ops/environment-release.md
-      - role: infra-capacity
-        checklist: roles/infra-capacity/checklists/environment-ops/base.md
+    primary:
+      role: ops
+      required: true
+      checklist: roles/ops/checklists/environment-ops/environment-release.md
 
   content-production:
-    segments: [POST]
+    segments: [PRE, POST]
     deliverable: content-release
-    bindings:
-      - role: data-quality
-        checklist: roles/data-quality/checklists/content-production/base.md
-      - role: data-legal
-        checklist: roles/data-legal/checklists/content-production/base.md
+    primary:
+      role: data-quality
+      required: true
+      checklist: roles/data-quality/checklists/content-production/base.md
 
   incident-inspection:
-    segments: [POST]
+    segments: [PRE, POST]
     deliverable: inspection-report
-    bindings:
-      - role: observability
-        checklist: roles/observability/checklists/incident-inspection/base.md
-      - role: ops
-        checklist: roles/ops/checklists/incident-inspection/base.md
+    primary:
+      role: observability
+      required: true
+      checklist: roles/observability/checklists/incident-inspection/base.md
 
   distill:
-    segments: [POST]
+    segments: [PRE, POST]
     deliverable: rule-candidates
-    bindings:
-      - role: architect
-        checklist: roles/architect/checklists/distill/base.md
-      - role: user
-        checklist: roles/user/checklists/distill/base.md
+    primary:
+      role: architect
+      required: true
+      checklist: roles/architect/checklists/distill/base.md

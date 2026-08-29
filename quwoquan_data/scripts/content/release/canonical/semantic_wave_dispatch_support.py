@@ -16,6 +16,9 @@ from content.execution.planning.retry_unfinished_scope import (
     load_retry_unfinished_scope,
 )
 from content.release.canonical.object_transaction_contract import _read_json
+from content.release.canonical.pool_source_ready_input import (
+    physical_evidence_binding,
+)
 from content.source.research.scale_source_pool import ScaleSourcePoolError
 from core.entity_object import parse_entity_ref
 
@@ -201,15 +204,13 @@ def _source_binding(
             raise _fail(
                 DISPATCH_INVALID, f"wave candidate absent from pool: {candidate_id}"
             )
+        carrier = str(candidate.get("carrier") or "")
         expected = {
             "carrier": candidate.get("carrier"),
             "candidateId": candidate.get("candidateId"),
             "objectRef": str(candidate.get("objectRef") or "").strip("/"),
             "entityRef": candidate.get("entityRef"),
-            "sourceUnitRef": candidate.get("sourceUnitRef"),
-            "sourceReadyEvidenceRootRef": str(
-                candidate.get("sourceReadyEvidenceRootRef") or "."
-            ),
+            **physical_evidence_binding(candidate, carrier=carrier),
         }
         if dict(raw) != expected:
             raise _fail(

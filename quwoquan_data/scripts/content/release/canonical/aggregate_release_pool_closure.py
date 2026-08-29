@@ -229,6 +229,7 @@ def candidate_closure(
         entity_refs=sorted(entity_refs),
         creator_refs=creator_refs,
         publish_root=publish_root,
+        release_class=release_mode,
     )
     if media_manifest["issues"]:
         raise ObjectTransactionError(
@@ -304,6 +305,7 @@ def entity_candidate_closure(
         entity_refs=[entity_ref],
         creator_refs=creator_refs,
         publish_root=publish_root,
+        release_class=release_mode,
     )
     if media_manifest["issues"]:
         raise ObjectTransactionError(
@@ -341,6 +343,7 @@ def media_identity(asset: Mapping[str, object]) -> tuple[object, ...]:
             "version",
             "contentType",
             "publicSliceKey",
+            "privateObjectKey",
             "sha256",
             "bytes",
         )

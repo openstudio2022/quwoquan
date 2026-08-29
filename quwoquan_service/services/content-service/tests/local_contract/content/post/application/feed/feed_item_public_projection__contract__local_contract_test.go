@@ -106,6 +106,8 @@ func TestFeedItemPublicProjectionHasExactCanonicalJSONKeys(t *testing.T) {
 				"mediaUrls", "videoUrl", "mediaAssetId", "mediaAssetVersion",
 				"hlsCmafMasterManifestUrl", "hlsCmafDescriptorVersion", "coverUrl",
 				"thumbnailUrl", "durationMs",
+				// DEC-033：逐媒体交付绑定后，feed 卡 wire 携带 mediaItems。
+				"mediaItems",
 			},
 		},
 	}

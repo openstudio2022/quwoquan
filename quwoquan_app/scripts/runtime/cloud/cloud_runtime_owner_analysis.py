@@ -188,14 +188,18 @@ def _commercially_blocked_methods(source: str) -> frozenset[str]:
     method_by_operation = {
         operation_id: method
         for method, operation_id in re.findall(
-            r'^\s+static const String ([A-Za-z][A-Za-z0-9_]*) = "([^"]+)";',
+            r"^\s+static\s+const\s+String\s+"
+            r'([A-Za-z][A-Za-z0-9_]*)\s*=\s*"([^"]+)"\s*;',
             source,
             re.MULTILINE,
         )
     }
     blocked: set[str] = set()
     for operation_id, body in re.findall(
-        r'^\s+"([^"]+)": CloudOperationContract\((.*?)^\s+\),$',
+        r'^\s+"([^"]+)"[ \t]*:[ \t\r\n]*'
+        r"CloudOperationContract\([ \t\r\n]*"
+        r'(.*?)(?=^\s+"[^"]+"[ \t]*:[ \t\r\n]*'
+        r"CloudOperationContract\(|^};)",
         source,
         re.MULTILINE | re.DOTALL,
     ):

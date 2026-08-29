@@ -288,11 +288,18 @@ type PostSemanticMentionSlice struct {
 
 // PostMediaItemSlice 对齐 Work Browser 的统一媒体序列。
 type PostMediaItemSlice struct {
-	Kind                     string `json:"kind" bson:"kind"`
-	MediaAssetID             string `json:"mediaAssetId,omitempty" bson:"mediaAssetId,omitempty"`
-	MediaAssetVersion        int64  `json:"mediaAssetVersion,omitempty" bson:"mediaAssetVersion,omitempty"`
-	URL                      string `json:"url" bson:"url"`
-	CoverURL                 string `json:"coverUrl,omitempty" bson:"coverUrl,omitempty"`
+	Kind              string `json:"kind" bson:"kind"`
+	MediaAssetID      string `json:"mediaAssetId,omitempty" bson:"mediaAssetId,omitempty"`
+	MediaAssetVersion int64  `json:"mediaAssetVersion,omitempty" bson:"mediaAssetVersion,omitempty"`
+	// AccessMode 交付访问模式（契约 MediaDeliveryAccessMode，NULLABLE）：
+	// signed_grant 时 url/coverUrl 是 release authority 的相对私有引用，App 须以
+	// mediaAssetId 换取短签；缺席（空串省略）表示存量 public 交付。
+	AccessMode string `json:"accessMode,omitempty" bson:"accessMode,omitempty"`
+	URL        string `json:"url" bson:"url"`
+	CoverURL   string `json:"coverUrl,omitempty" bson:"coverUrl,omitempty"`
+	// CoverAssetID video poster（coverUrl）的独立媒体资产标识；signed_grant 下
+	// App 以它换取 poster 短签。
+	CoverAssetID             string `json:"coverAssetId,omitempty" bson:"coverAssetId,omitempty"`
 	DurationMS               int64  `json:"durationMs,omitempty" bson:"durationMs,omitempty"`
 	Width                    int64  `json:"width,omitempty" bson:"width,omitempty"`
 	Height                   int64  `json:"height,omitempty" bson:"height,omitempty"`
@@ -378,6 +385,11 @@ type PostDetailSlice struct {
 	ExperienceClaimMode     string                         `json:"experienceClaimMode,omitempty" bson:"experienceClaimMode,omitempty"`
 	AuthorDisplayName       string                         `json:"authorDisplayNameSnapshot,omitempty" bson:"authorDisplayNameSnapshot,omitempty"`
 	AuthorAvatarURL         string                         `json:"authorAvatarUrlSnapshot,omitempty" bson:"authorAvatarUrlSnapshot,omitempty"`
+	// AuthorAvatarAssetID/AuthorAvatarAccessMode 作者头像的媒体交付绑定
+	// （DEC-033，契约 authorAvatarAssetId/authorAvatarAccessMode 均 NULLABLE）；
+	// 缺席以省略键表达。
+	AuthorAvatarAssetID     string                         `json:"authorAvatarAssetId,omitempty" bson:"authorAvatarAssetId,omitempty"`
+	AuthorAvatarAccessMode  string                         `json:"authorAvatarAccessMode,omitempty" bson:"authorAvatarAccessMode,omitempty"`
 	PersonaContextVersion   int64                          `json:"personaContextVersion,omitempty" bson:"personaContextVersion,omitempty"`
 	ContentType             ContentType                    `json:"contentType" bson:"contentType"`
 	ContentIdentity         ContentIdentity                `json:"contentIdentity,omitempty" bson:"contentIdentity,omitempty"`
@@ -490,10 +502,15 @@ type AuthorPostPageSlice struct {
 // 它不暴露聚合 Version、幂等 receipt、outbox、审核内部字段、设备原始信息或
 // 动态 Map；媒体尺寸在 persistence adapter 内归一为显式数值。
 type PostFeedItemSlice struct {
-	PostID             PostID               `json:"postId" bson:"_id"`
-	AuthorPersonaID    PersonaID            `json:"authorId" bson:"authorId"`
-	AuthorDisplayName  string               `json:"authorDisplayName,omitempty" bson:"authorDisplayNameSnapshot,omitempty"`
-	AuthorAvatarURL    string               `json:"authorAvatarUrl,omitempty" bson:"authorAvatarUrlSnapshot,omitempty"`
+	PostID            PostID    `json:"postId" bson:"_id"`
+	AuthorPersonaID   PersonaID `json:"authorId" bson:"authorId"`
+	AuthorDisplayName string    `json:"authorDisplayName,omitempty" bson:"authorDisplayNameSnapshot,omitempty"`
+	AuthorAvatarURL   string    `json:"authorAvatarUrl,omitempty" bson:"authorAvatarUrlSnapshot,omitempty"`
+	// AuthorAvatarAssetID/AuthorAvatarAccessMode 作者头像的媒体交付绑定
+	// （DEC-033）：signed_grant 时 App 以 avatarAssetId 换取短签；缺席
+	// （空串省略）表示无头像或存量 public 交付，禁止以 authorId 冒充。
+	AuthorAvatarAssetID    string               `json:"authorAvatarAssetId,omitempty" bson:"authorAvatarAssetId,omitempty"`
+	AuthorAvatarAccessMode string               `json:"authorAvatarAccessMode,omitempty" bson:"authorAvatarAccessMode,omitempty"`
 	ContentType        ContentType          `json:"contentType" bson:"contentType"`
 	ContentIdentity    ContentIdentity      `json:"contentIdentity,omitempty" bson:"contentIdentity,omitempty"`
 	AssistantUsePolicy string               `json:"assistantUsePolicy,omitempty" bson:"assistantUsePolicy,omitempty"`

@@ -58,6 +58,7 @@ class RankedRecommendationPage(BaseModel):
     """稳定窗口的一页排序结果。"""
     windowId: str
     scenario: str
+    experimentBucket: str
     modelBucket: str
     modelChannel: str | None = None
     modelReleaseId: str | None = None

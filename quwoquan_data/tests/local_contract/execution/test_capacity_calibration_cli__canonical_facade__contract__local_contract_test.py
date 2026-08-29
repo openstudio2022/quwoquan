@@ -61,6 +61,7 @@ def test_task_help_exposes_capacity_calibration_without_running_probes() -> None
         "--semantic-selection-id",
         "--fleet-report",
         "--execution-state",
+        "--missed-heartbeat-tolerance",
         "--supersedes-calibration-id",
         "--provider-evidence-calibration-id",
     ):
@@ -83,6 +84,8 @@ def test_capacity_calibration_parser_binds_canonical_handler() -> None:
             "fleet-report.json",
             "--execution-state",
             "execution-state.json",
+            "--missed-heartbeat-tolerance",
+            "3",
         ]
     )
 
@@ -120,6 +123,7 @@ def test_capacity_calibration_facade_forwards_governed_inputs_and_prints_receipt
         semantic_selection_id="cursor_grok",
         fleet_report=[str(tmp_path / "fleet-001.json")],
         execution_state=[str(tmp_path / "execution-state-001.json")],
+        missed_heartbeat_tolerance=3,
         supersedes_calibration_id="capacity-calibration-001",
         provider_evidence_calibration_id="provider-probes-001",
     )
@@ -137,6 +141,7 @@ def test_capacity_calibration_facade_forwards_governed_inputs_and_prints_receipt
             CONTROL_PLANE_SHARED_ROOT
             / "capacity_calibration/capacity-calibration-002"
         ),
+        "missed_heartbeat_tolerance": 3,
         "supersedes_calibration_id": "capacity-calibration-001",
         "provider_evidence_dir": (
             CONTROL_PLANE_SHARED_ROOT / "capacity_calibration/provider-probes-001"
@@ -165,6 +170,7 @@ def test_capacity_calibration_facade_fails_with_typed_blocker_and_no_success_out
         semantic_selection_id="cursor_grok",
         fleet_report=[str(tmp_path / "fleet-001.json")],
         execution_state=[str(tmp_path / "execution-state-001.json")],
+        missed_heartbeat_tolerance=3,
         supersedes_calibration_id=None,
         provider_evidence_calibration_id=None,
     )

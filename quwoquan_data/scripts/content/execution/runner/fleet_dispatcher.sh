@@ -21,7 +21,9 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../../../.." && pwd)"
 DRIVER="$SCRIPT_DIR/loop_driver.sh"
-LOG_DIR="${LOG_DIR:-$REPO_ROOT/.qwq_output/data/local/fleet/$(date +%Y%m%dT%H%M%S)}"
+# 落点必须在 core/paths.py 的 DATA_WORKSPACE_ROOT 之内：data/local 只允许 cache/
+# 与 workspace/，直接落 data/local/fleet 会让 verify output-root-isolation 变红。
+LOG_DIR="${LOG_DIR:-$REPO_ROOT/.qwq_output/data/local/workspace/fleet/$(date +%Y%m%dT%H%M%S)}"
 mkdir -p "$LOG_DIR"
 RESULTS="$LOG_DIR/results.tsv"
 : > "$RESULTS"

@@ -107,6 +107,7 @@ def _source_attribution(*, platform: str, source_url: str, asset_url: str) -> di
         "propertyReleaseStatus": "not_required",
         "collectedAt": "2026-08-08T00:00:00Z",
         "takedownPolicy": "remove on substantiated request",
+        "derivedModifications": [],
     }
 
 

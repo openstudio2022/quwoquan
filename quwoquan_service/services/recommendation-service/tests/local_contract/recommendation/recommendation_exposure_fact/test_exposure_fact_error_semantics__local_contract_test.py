@@ -56,6 +56,7 @@ def _fields(*, valid_event_name: bool = True) -> dict[bytes, bytes]:
         "personaId": "persona-viewer",
         "scenario": "content_feed",
         "windowId": "window-001",
+        "experimentBucket": "rule",
         "modelBucket": "rule",
         "rankingSnapshotDigest": "a" * 64,
         "featureSnapshotAt": "2026-07-31T07:59:59Z",

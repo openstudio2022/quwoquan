@@ -18,8 +18,8 @@ services:
       CONFIG_VERSION: "${QWQ_COMPOSE_PRODUCT_OPS_SERVICE_CONFIG_VERSION:?QWQ_COMPOSE_PRODUCT_OPS_SERVICE_CONFIG_VERSION is required}"
       IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:?immutable image version is required}"
       PRODUCT_OPS_SERVICE_ADDR: ":18086"
-      MONGO_URI: mongodb://mongodb:27017
-      POSTGRES_DSN: postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable
+      PRODUCT_OPS_MONGO_URI: mongodb://mongodb:27017
+      PRODUCT_OPS_POSTGRES_DSN: postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable
       PRODUCT_OPS_REDIS_REC_ADDR: redis:6379
       PRODUCT_OPS_REDIS_GENERAL_ADDR: redis:6379
       # 配置热更与 drift ACK 回报的平台控制面地址（config_sync 循环）。
@@ -58,7 +58,7 @@ services:
       # 就绪（或未创建）会让本服务在 DNS 解析处直接退出。
       elasticsearch:
         condition: service_healthy
-      # /healthz 对公开 AccountSecurityAuthority 做 fail-closed 探测；若不把
+      # /readyz 对公开 AccountSecurityAuthority 做 fail-closed 探测；若不把
       # 真实 owner 纳入启动依赖，首次全栈 up 会在 Product Ops unhealthy 上
       # 等待，而 user-service 尚未创建，形成确定的启动顺序死锁。
       user-service:

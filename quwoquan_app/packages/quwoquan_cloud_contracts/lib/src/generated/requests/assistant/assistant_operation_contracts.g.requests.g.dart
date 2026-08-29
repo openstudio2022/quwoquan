@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 05b1683f93feb5234ad8184f318b5d32e9f340e4d7e36d1e833581cfc400702c
+// ContractGraph SHA256: 2ba8995ae51f9f431ebc75e30f64d31285cc4cfb724f0ef1d8473c11011a5469
 
 part of '../../../assistant/assistant_operation_contracts.g.dart';
 
@@ -29,7 +29,6 @@ Map<String, Object?> _generatedRequestObject(Object? value, String path) {
   throw FormatException('$path must be an object');
 }
 
-
 void _generatedRequestRejectUnknownFields(
   Map<String, Object?> map,
   Set<String> allowed,
@@ -42,30 +41,25 @@ void _generatedRequestRejectUnknownFields(
   }
 }
 
-
 String _generatedRequestString(Object? value, String path) {
   if (value is String) return value;
   throw FormatException('$path must be a string');
 }
-
 
 int _generatedRequestInt(Object? value, String path) {
   if (value is int) return value;
   throw FormatException('$path must be an integer');
 }
 
-
 double _generatedRequestDouble(Object? value, String path) {
   if (value is num) return value.toDouble();
   throw FormatException('$path must be a number');
 }
 
-
 bool _generatedRequestBool(Object? value, String path) {
   if (value is bool) return value;
   throw FormatException('$path must be a boolean');
 }
-
 
 DateTime _generatedRequestTimestamp(Object? value, String path) {
   if (value is! String) throw FormatException('$path must be a timestamp');
@@ -74,29 +68,27 @@ DateTime _generatedRequestTimestamp(Object? value, String path) {
   return parsed.toUtc();
 }
 
-
 List<Object?> _generatedRequestList(Object? value, String path) {
   if (value is List) return List<Object?>.from(value);
   throw FormatException('$path must be a list');
 }
 
 final class AssistantAnswerRunIntent {
-  const AssistantAnswerRunIntent({
-    required String text,
-  }) : text = text;
+  const AssistantAnswerRunIntent({required String text}) : text = text;
 
   final String text;
 
-  factory AssistantAnswerRunIntent.fromWire(Map<String, Object?> map, [String path = "AssistantAnswerRunIntent"]) {
+  factory AssistantAnswerRunIntent.fromWire(
+    Map<String, Object?> map, [
+    String path = "AssistantAnswerRunIntent",
+  ]) {
     _generatedRequestRejectUnknownFields(map, const <String>{"text"}, path);
     return AssistantAnswerRunIntent(
       text: _generatedRequestString(map["text"], '$path.text'),
     );
   }
 
-  Map<String, Object?> toWire() => <String, Object?>{
-    "text": this.text,
-  };
+  Map<String, Object?> toWire() => <String, Object?>{"text": this.text};
 }
 
 final class AssistantApproveToolUseRequest {
@@ -121,15 +113,38 @@ final class AssistantApproveToolUseRequest {
   final String? installationId;
   final String? deviceId;
 
-  factory AssistantApproveToolUseRequest.fromWire(Map<String, Object?> map, [String path = "AssistantApproveToolUseRequest"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"runId", "toolInvocationId", "decision", "approvalPermit", "installationId", "deviceId"}, path);
+  factory AssistantApproveToolUseRequest.fromWire(
+    Map<String, Object?> map, [
+    String path = "AssistantApproveToolUseRequest",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "runId",
+      "toolInvocationId",
+      "decision",
+      "approvalPermit",
+      "installationId",
+      "deviceId",
+    }, path);
     return AssistantApproveToolUseRequest(
       runId: _generatedRequestString(map["runId"], '$path.runId'),
-      toolInvocationId: _generatedRequestString(map["toolInvocationId"], '$path.toolInvocationId'),
+      toolInvocationId: _generatedRequestString(
+        map["toolInvocationId"],
+        '$path.toolInvocationId',
+      ),
       decision: _generatedRequestString(map["decision"], '$path.decision'),
-      approvalPermit: _generatedRequestString(map["approvalPermit"], '$path.approvalPermit'),
-      installationId: map["installationId"] == null ? null : _generatedRequestString(map["installationId"], '$path.installationId'),
-      deviceId: map["deviceId"] == null ? null : _generatedRequestString(map["deviceId"], '$path.deviceId'),
+      approvalPermit: _generatedRequestString(
+        map["approvalPermit"],
+        '$path.approvalPermit',
+      ),
+      installationId: map["installationId"] == null
+          ? null
+          : _generatedRequestString(
+              map["installationId"],
+              '$path.installationId',
+            ),
+      deviceId: map["deviceId"] == null
+          ? null
+          : _generatedRequestString(map["deviceId"], '$path.deviceId'),
     );
   }
 
@@ -144,16 +159,23 @@ final class AssistantApproveToolUseRequest {
 }
 
 final class AssistantConsentMatrix {
-  const AssistantConsentMatrix({
-    required bool canReadCurrentPage,
-  }) : canReadCurrentPage = canReadCurrentPage;
+  const AssistantConsentMatrix({required bool canReadCurrentPage})
+    : canReadCurrentPage = canReadCurrentPage;
 
   final bool canReadCurrentPage;
 
-  factory AssistantConsentMatrix.fromWire(Map<String, Object?> map, [String path = "AssistantConsentMatrix"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"canReadCurrentPage"}, path);
+  factory AssistantConsentMatrix.fromWire(
+    Map<String, Object?> map, [
+    String path = "AssistantConsentMatrix",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "canReadCurrentPage",
+    }, path);
     return AssistantConsentMatrix(
-      canReadCurrentPage: _generatedRequestBool(map["canReadCurrentPage"], '$path.canReadCurrentPage'),
+      canReadCurrentPage: _generatedRequestBool(
+        map["canReadCurrentPage"],
+        '$path.canReadCurrentPage',
+      ),
     );
   }
 
@@ -172,11 +194,16 @@ final class AssistantContextSnapshot {
     AssistantConsentMatrix? consentMatrix,
   }) : capturedAt = capturedAt,
        pageType = pageType,
-       pageObjects = pageObjects == null ? null : List.unmodifiable(pageObjects),
-       userActions = userActions == null ? null : List.unmodifiable(userActions),
-       intersectionEvidenceRefs = intersectionEvidenceRefs == null ? null : List.unmodifiable(intersectionEvidenceRefs),
-       consentMatrix = consentMatrix {
-  }
+       pageObjects = pageObjects == null
+           ? null
+           : List.unmodifiable(pageObjects),
+       userActions = userActions == null
+           ? null
+           : List.unmodifiable(userActions),
+       intersectionEvidenceRefs = intersectionEvidenceRefs == null
+           ? null
+           : List.unmodifiable(intersectionEvidenceRefs),
+       consentMatrix = consentMatrix {}
 
   final DateTime? capturedAt;
   final AssistantPageContextType? pageType;
@@ -185,25 +212,116 @@ final class AssistantContextSnapshot {
   final List<AssistantIntersectionEvidenceRef>? intersectionEvidenceRefs;
   final AssistantConsentMatrix? consentMatrix;
 
-  factory AssistantContextSnapshot.fromWire(Map<String, Object?> map, [String path = "AssistantContextSnapshot"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"capturedAt", "pageType", "pageObjects", "userActions", "intersectionEvidenceRefs", "consentMatrix"}, path);
+  factory AssistantContextSnapshot.fromWire(
+    Map<String, Object?> map, [
+    String path = "AssistantContextSnapshot",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "capturedAt",
+      "pageType",
+      "pageObjects",
+      "userActions",
+      "intersectionEvidenceRefs",
+      "consentMatrix",
+    }, path);
     return AssistantContextSnapshot(
-      capturedAt: map["capturedAt"] == null ? null : _generatedRequestTimestamp(map["capturedAt"], '$path.capturedAt'),
-      pageType: map["pageType"] == null ? null : switch (map["pageType"]) { "unknown" => AssistantPageContextType.unknown, "home" => AssistantPageContextType.home, "discovery" => AssistantPageContextType.discovery, "circles" => AssistantPageContextType.circles, "article" => AssistantPageContextType.article, "profile" => AssistantPageContextType.profile, "chat" => AssistantPageContextType.chat, "create" => AssistantPageContextType.create, "search" => AssistantPageContextType.search, _ => throw FormatException('$path.pageType' + ' has an invalid enum value'), },
-      pageObjects: map["pageObjects"] == null ? null : List<AssistantObjectGroundingView>.unmodifiable(_generatedRequestList(map["pageObjects"], '$path.pageObjects').asMap().entries.map((entry) => AssistantObjectGroundingView.fromWire(_generatedRequestObject(entry.value, '$path.pageObjects' + '[${entry.key}]'), '$path.pageObjects' + '[${entry.key}]'))),
-      userActions: map["userActions"] == null ? null : List<AssistantUserActionGroundingView>.unmodifiable(_generatedRequestList(map["userActions"], '$path.userActions').asMap().entries.map((entry) => AssistantUserActionGroundingView.fromWire(_generatedRequestObject(entry.value, '$path.userActions' + '[${entry.key}]'), '$path.userActions' + '[${entry.key}]'))),
-      intersectionEvidenceRefs: map["intersectionEvidenceRefs"] == null ? null : List<AssistantIntersectionEvidenceRef>.unmodifiable(_generatedRequestList(map["intersectionEvidenceRefs"], '$path.intersectionEvidenceRefs').asMap().entries.map((entry) => AssistantIntersectionEvidenceRef.fromWire(_generatedRequestObject(entry.value, '$path.intersectionEvidenceRefs' + '[${entry.key}]'), '$path.intersectionEvidenceRefs' + '[${entry.key}]'))),
-      consentMatrix: map["consentMatrix"] == null ? null : AssistantConsentMatrix.fromWire(_generatedRequestObject(map["consentMatrix"], '$path.consentMatrix'), '$path.consentMatrix'),
+      capturedAt: map["capturedAt"] == null
+          ? null
+          : _generatedRequestTimestamp(map["capturedAt"], '$path.capturedAt'),
+      pageType: map["pageType"] == null
+          ? null
+          : switch (map["pageType"]) {
+              "unknown" => AssistantPageContextType.unknown,
+              "home" => AssistantPageContextType.home,
+              "discovery" => AssistantPageContextType.discovery,
+              "circles" => AssistantPageContextType.circles,
+              "article" => AssistantPageContextType.article,
+              "profile" => AssistantPageContextType.profile,
+              "chat" => AssistantPageContextType.chat,
+              "create" => AssistantPageContextType.create,
+              "search" => AssistantPageContextType.search,
+              _ => throw FormatException(
+                '$path.pageType' + ' has an invalid enum value',
+              ),
+            },
+      pageObjects: map["pageObjects"] == null
+          ? null
+          : List<AssistantObjectGroundingView>.unmodifiable(
+              _generatedRequestList(
+                map["pageObjects"],
+                '$path.pageObjects',
+              ).asMap().entries.map(
+                (entry) => AssistantObjectGroundingView.fromWire(
+                  _generatedRequestObject(
+                    entry.value,
+                    '$path.pageObjects' + '[${entry.key}]',
+                  ),
+                  '$path.pageObjects' + '[${entry.key}]',
+                ),
+              ),
+            ),
+      userActions: map["userActions"] == null
+          ? null
+          : List<AssistantUserActionGroundingView>.unmodifiable(
+              _generatedRequestList(
+                map["userActions"],
+                '$path.userActions',
+              ).asMap().entries.map(
+                (entry) => AssistantUserActionGroundingView.fromWire(
+                  _generatedRequestObject(
+                    entry.value,
+                    '$path.userActions' + '[${entry.key}]',
+                  ),
+                  '$path.userActions' + '[${entry.key}]',
+                ),
+              ),
+            ),
+      intersectionEvidenceRefs: map["intersectionEvidenceRefs"] == null
+          ? null
+          : List<AssistantIntersectionEvidenceRef>.unmodifiable(
+              _generatedRequestList(
+                map["intersectionEvidenceRefs"],
+                '$path.intersectionEvidenceRefs',
+              ).asMap().entries.map(
+                (entry) => AssistantIntersectionEvidenceRef.fromWire(
+                  _generatedRequestObject(
+                    entry.value,
+                    '$path.intersectionEvidenceRefs' + '[${entry.key}]',
+                  ),
+                  '$path.intersectionEvidenceRefs' + '[${entry.key}]',
+                ),
+              ),
+            ),
+      consentMatrix: map["consentMatrix"] == null
+          ? null
+          : AssistantConsentMatrix.fromWire(
+              _generatedRequestObject(
+                map["consentMatrix"],
+                '$path.consentMatrix',
+              ),
+              '$path.consentMatrix',
+            ),
     );
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
-    if (this.capturedAt != null) "capturedAt": this.capturedAt!.toUtc().toIso8601String(),
+    if (this.capturedAt != null)
+      "capturedAt": this.capturedAt!.toUtc().toIso8601String(),
     if (this.pageType != null) "pageType": this.pageType!.wireName,
-    if (this.pageObjects != null) "pageObjects": this.pageObjects!.map((value) => value.toWire()).toList(growable: false),
-    if (this.userActions != null) "userActions": this.userActions!.map((value) => value.toWire()).toList(growable: false),
-    if (this.intersectionEvidenceRefs != null) "intersectionEvidenceRefs": this.intersectionEvidenceRefs!.map((value) => value.toWire()).toList(growable: false),
-    if (this.consentMatrix != null) "consentMatrix": this.consentMatrix!.toWire(),
+    if (this.pageObjects != null)
+      "pageObjects": this.pageObjects!
+          .map((value) => value.toWire())
+          .toList(growable: false),
+    if (this.userActions != null)
+      "userActions": this.userActions!
+          .map((value) => value.toWire())
+          .toList(growable: false),
+    if (this.intersectionEvidenceRefs != null)
+      "intersectionEvidenceRefs": this.intersectionEvidenceRefs!
+          .map((value) => value.toWire())
+          .toList(growable: false),
+    if (this.consentMatrix != null)
+      "consentMatrix": this.consentMatrix!.toWire(),
   };
 }
 
@@ -217,11 +335,22 @@ final class AssistantCreateSessionRequest {
   final String? summary;
   final String clientRequestId;
 
-  factory AssistantCreateSessionRequest.fromWire(Map<String, Object?> map, [String path = "AssistantCreateSessionRequest"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"summary", "clientRequestId"}, path);
+  factory AssistantCreateSessionRequest.fromWire(
+    Map<String, Object?> map, [
+    String path = "AssistantCreateSessionRequest",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "summary",
+      "clientRequestId",
+    }, path);
     return AssistantCreateSessionRequest(
-      summary: map["summary"] == null ? null : _generatedRequestString(map["summary"], '$path.summary'),
-      clientRequestId: _generatedRequestString(map["clientRequestId"], '$path.clientRequestId'),
+      summary: map["summary"] == null
+          ? null
+          : _generatedRequestString(map["summary"], '$path.summary'),
+      clientRequestId: _generatedRequestString(
+        map["clientRequestId"],
+        '$path.clientRequestId',
+      ),
     );
   }
 
@@ -241,9 +370,10 @@ final class AssistantCreationRunIntent {
   }) : draftTitle = draftTitle,
        draftSummary = draftSummary,
        bodyDigest = bodyDigest,
-       boundCircleIds = boundCircleIds == null ? null : List.unmodifiable(boundCircleIds),
-       primaryHomepageId = primaryHomepageId {
-  }
+       boundCircleIds = boundCircleIds == null
+           ? null
+           : List.unmodifiable(boundCircleIds),
+       primaryHomepageId = primaryHomepageId {}
 
   final String? draftTitle;
   final String? draftSummary;
@@ -251,14 +381,46 @@ final class AssistantCreationRunIntent {
   final List<String>? boundCircleIds;
   final String? primaryHomepageId;
 
-  factory AssistantCreationRunIntent.fromWire(Map<String, Object?> map, [String path = "AssistantCreationRunIntent"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"draftTitle", "draftSummary", "bodyDigest", "boundCircleIds", "primaryHomepageId"}, path);
+  factory AssistantCreationRunIntent.fromWire(
+    Map<String, Object?> map, [
+    String path = "AssistantCreationRunIntent",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "draftTitle",
+      "draftSummary",
+      "bodyDigest",
+      "boundCircleIds",
+      "primaryHomepageId",
+    }, path);
     return AssistantCreationRunIntent(
-      draftTitle: map["draftTitle"] == null ? null : _generatedRequestString(map["draftTitle"], '$path.draftTitle'),
-      draftSummary: map["draftSummary"] == null ? null : _generatedRequestString(map["draftSummary"], '$path.draftSummary'),
-      bodyDigest: map["bodyDigest"] == null ? null : _generatedRequestString(map["bodyDigest"], '$path.bodyDigest'),
-      boundCircleIds: map["boundCircleIds"] == null ? null : List<String>.unmodifiable(_generatedRequestList(map["boundCircleIds"], '$path.boundCircleIds').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.boundCircleIds' + '[${entry.key}]'))),
-      primaryHomepageId: map["primaryHomepageId"] == null ? null : _generatedRequestString(map["primaryHomepageId"], '$path.primaryHomepageId'),
+      draftTitle: map["draftTitle"] == null
+          ? null
+          : _generatedRequestString(map["draftTitle"], '$path.draftTitle'),
+      draftSummary: map["draftSummary"] == null
+          ? null
+          : _generatedRequestString(map["draftSummary"], '$path.draftSummary'),
+      bodyDigest: map["bodyDigest"] == null
+          ? null
+          : _generatedRequestString(map["bodyDigest"], '$path.bodyDigest'),
+      boundCircleIds: map["boundCircleIds"] == null
+          ? null
+          : List<String>.unmodifiable(
+              _generatedRequestList(
+                map["boundCircleIds"],
+                '$path.boundCircleIds',
+              ).asMap().entries.map(
+                (entry) => _generatedRequestString(
+                  entry.value,
+                  '$path.boundCircleIds' + '[${entry.key}]',
+                ),
+              ),
+            ),
+      primaryHomepageId: map["primaryHomepageId"] == null
+          ? null
+          : _generatedRequestString(
+              map["primaryHomepageId"],
+              '$path.primaryHomepageId',
+            ),
     );
   }
 
@@ -266,8 +428,12 @@ final class AssistantCreationRunIntent {
     if (this.draftTitle != null) "draftTitle": this.draftTitle!,
     if (this.draftSummary != null) "draftSummary": this.draftSummary!,
     if (this.bodyDigest != null) "bodyDigest": this.bodyDigest!,
-    if (this.boundCircleIds != null) "boundCircleIds": this.boundCircleIds!.map((value) => value).toList(growable: false),
-    if (this.primaryHomepageId != null) "primaryHomepageId": this.primaryHomepageId!,
+    if (this.boundCircleIds != null)
+      "boundCircleIds": this.boundCircleIds!
+          .map((value) => value)
+          .toList(growable: false),
+    if (this.primaryHomepageId != null)
+      "primaryHomepageId": this.primaryHomepageId!,
   };
 }
 
@@ -305,19 +471,55 @@ final class AssistantDeviceActionExecutionReceipt {
   final String? deviceObjectId;
   final String? failureCode;
 
-  factory AssistantDeviceActionExecutionReceipt.fromWire(Map<String, Object?> map, [String path = "AssistantDeviceActionExecutionReceipt"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"installationId", "deviceId", "capability", "inputDigest", "permit", "idempotencyKey", "outcome", "executedAt", "deviceObjectId", "failureCode"}, path);
+  factory AssistantDeviceActionExecutionReceipt.fromWire(
+    Map<String, Object?> map, [
+    String path = "AssistantDeviceActionExecutionReceipt",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "installationId",
+      "deviceId",
+      "capability",
+      "inputDigest",
+      "permit",
+      "idempotencyKey",
+      "outcome",
+      "executedAt",
+      "deviceObjectId",
+      "failureCode",
+    }, path);
     return AssistantDeviceActionExecutionReceipt(
-      installationId: _generatedRequestString(map["installationId"], '$path.installationId'),
+      installationId: _generatedRequestString(
+        map["installationId"],
+        '$path.installationId',
+      ),
       deviceId: _generatedRequestString(map["deviceId"], '$path.deviceId'),
-      capability: _generatedRequestString(map["capability"], '$path.capability'),
-      inputDigest: _generatedRequestString(map["inputDigest"], '$path.inputDigest'),
+      capability: _generatedRequestString(
+        map["capability"],
+        '$path.capability',
+      ),
+      inputDigest: _generatedRequestString(
+        map["inputDigest"],
+        '$path.inputDigest',
+      ),
       permit: _generatedRequestString(map["permit"], '$path.permit'),
-      idempotencyKey: _generatedRequestString(map["idempotencyKey"], '$path.idempotencyKey'),
+      idempotencyKey: _generatedRequestString(
+        map["idempotencyKey"],
+        '$path.idempotencyKey',
+      ),
       outcome: _generatedRequestString(map["outcome"], '$path.outcome'),
-      executedAt: _generatedRequestTimestamp(map["executedAt"], '$path.executedAt'),
-      deviceObjectId: map["deviceObjectId"] == null ? null : _generatedRequestString(map["deviceObjectId"], '$path.deviceObjectId'),
-      failureCode: map["failureCode"] == null ? null : _generatedRequestString(map["failureCode"], '$path.failureCode'),
+      executedAt: _generatedRequestTimestamp(
+        map["executedAt"],
+        '$path.executedAt',
+      ),
+      deviceObjectId: map["deviceObjectId"] == null
+          ? null
+          : _generatedRequestString(
+              map["deviceObjectId"],
+              '$path.deviceObjectId',
+            ),
+      failureCode: map["failureCode"] == null
+          ? null
+          : _generatedRequestString(map["failureCode"], '$path.failureCode'),
     );
   }
 
@@ -336,20 +538,28 @@ final class AssistantDeviceActionExecutionReceipt {
 }
 
 final class AssistantEntryQuery {
-  const AssistantEntryQuery({
-    String? pageType,
-    String? objectId,
-  }) : pageType = pageType,
-       objectId = objectId;
+  const AssistantEntryQuery({String? pageType, String? objectId})
+    : pageType = pageType,
+      objectId = objectId;
 
   final String? pageType;
   final String? objectId;
 
-  factory AssistantEntryQuery.fromWire(Map<String, Object?> map, [String path = "AssistantEntryQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"pageType", "objectId"}, path);
+  factory AssistantEntryQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "AssistantEntryQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "pageType",
+      "objectId",
+    }, path);
     return AssistantEntryQuery(
-      pageType: map["pageType"] == null ? null : _generatedRequestString(map["pageType"], '$path.pageType'),
-      objectId: map["objectId"] == null ? null : _generatedRequestString(map["objectId"], '$path.objectId'),
+      pageType: map["pageType"] == null
+          ? null
+          : _generatedRequestString(map["pageType"], '$path.pageType'),
+      objectId: map["objectId"] == null
+          ? null
+          : _generatedRequestString(map["objectId"], '$path.objectId'),
     );
   }
 
@@ -378,13 +588,31 @@ final class AssistantIntersectionEvidenceRef {
   final String objectTypeRef;
   final String objectId;
 
-  factory AssistantIntersectionEvidenceRef.fromWire(Map<String, Object?> map, [String path = "AssistantIntersectionEvidenceRef"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"intersectionId", "evidenceId", "sourceRef", "objectTypeRef", "objectId"}, path);
+  factory AssistantIntersectionEvidenceRef.fromWire(
+    Map<String, Object?> map, [
+    String path = "AssistantIntersectionEvidenceRef",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "intersectionId",
+      "evidenceId",
+      "sourceRef",
+      "objectTypeRef",
+      "objectId",
+    }, path);
     return AssistantIntersectionEvidenceRef(
-      intersectionId: _generatedRequestString(map["intersectionId"], '$path.intersectionId'),
-      evidenceId: _generatedRequestString(map["evidenceId"], '$path.evidenceId'),
+      intersectionId: _generatedRequestString(
+        map["intersectionId"],
+        '$path.intersectionId',
+      ),
+      evidenceId: _generatedRequestString(
+        map["evidenceId"],
+        '$path.evidenceId',
+      ),
       sourceRef: _generatedRequestString(map["sourceRef"], '$path.sourceRef'),
-      objectTypeRef: _generatedRequestString(map["objectTypeRef"], '$path.objectTypeRef'),
+      objectTypeRef: _generatedRequestString(
+        map["objectTypeRef"],
+        '$path.objectTypeRef',
+      ),
       objectId: _generatedRequestString(map["objectId"], '$path.objectId'),
     );
   }
@@ -428,7 +656,10 @@ final class AssistantLearningFactAppendCommand {
        eventType = _normalizeGeneratedOptionalText(eventType),
        feedbackType = _normalizeGeneratedOptionalText(feedbackType),
        feedbackScore = feedbackScore,
-       reasonCodes = _normalizeGeneratedTextList(reasonCodes, deduplicate: true),
+       reasonCodes = _normalizeGeneratedTextList(
+         reasonCodes,
+         deduplicate: true,
+       ),
        actionType = _normalizeGeneratedOptionalText(actionType),
        suggestedActionId = _normalizeGeneratedOptionalText(suggestedActionId),
        durationMs = durationMs,
@@ -445,10 +676,18 @@ final class AssistantLearningFactAppendCommand {
       throw ArgumentError.value(this.factType, "factType", 'must not be blank');
     }
     if (this.assistantTurnId.isEmpty) {
-      throw ArgumentError.value(this.assistantTurnId, "assistantTurnId", 'must not be blank');
+      throw ArgumentError.value(
+        this.assistantTurnId,
+        "assistantTurnId",
+        'must not be blank',
+      );
     }
     if (this.referralSource.isEmpty) {
-      throw ArgumentError.value(this.referralSource, "referralSource", 'must not be blank');
+      throw ArgumentError.value(
+        this.referralSource,
+        "referralSource",
+        'must not be blank',
+      );
     }
     if (this.domainId.isEmpty) {
       throw ArgumentError.value(this.domainId, "domainId", 'must not be blank');
@@ -475,28 +714,109 @@ final class AssistantLearningFactAppendCommand {
   final bool trainingEligible;
   final DateTime occurredAt;
 
-  factory AssistantLearningFactAppendCommand.fromWire(Map<String, Object?> map, [String path = "AssistantLearningFactAppendCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"eventId", "factType", "assistantTurnId", "triggerMessageId", "referralSource", "domainId", "eventType", "feedbackType", "feedbackScore", "reasonCodes", "actionType", "suggestedActionId", "durationMs", "queryText", "answerText", "feedbackText", "correctionText", "trainingEligible", "occurredAt"}, path);
+  factory AssistantLearningFactAppendCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "AssistantLearningFactAppendCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "eventId",
+      "factType",
+      "assistantTurnId",
+      "triggerMessageId",
+      "referralSource",
+      "domainId",
+      "eventType",
+      "feedbackType",
+      "feedbackScore",
+      "reasonCodes",
+      "actionType",
+      "suggestedActionId",
+      "durationMs",
+      "queryText",
+      "answerText",
+      "feedbackText",
+      "correctionText",
+      "trainingEligible",
+      "occurredAt",
+    }, path);
     return AssistantLearningFactAppendCommand(
       eventId: _generatedRequestString(map["eventId"], '$path.eventId'),
       factType: _generatedRequestString(map["factType"], '$path.factType'),
-      assistantTurnId: _generatedRequestString(map["assistantTurnId"], '$path.assistantTurnId'),
-      triggerMessageId: map["triggerMessageId"] == null ? null : _generatedRequestString(map["triggerMessageId"], '$path.triggerMessageId'),
-      referralSource: _generatedRequestString(map["referralSource"], '$path.referralSource'),
+      assistantTurnId: _generatedRequestString(
+        map["assistantTurnId"],
+        '$path.assistantTurnId',
+      ),
+      triggerMessageId: map["triggerMessageId"] == null
+          ? null
+          : _generatedRequestString(
+              map["triggerMessageId"],
+              '$path.triggerMessageId',
+            ),
+      referralSource: _generatedRequestString(
+        map["referralSource"],
+        '$path.referralSource',
+      ),
       domainId: _generatedRequestString(map["domainId"], '$path.domainId'),
-      eventType: map["eventType"] == null ? null : _generatedRequestString(map["eventType"], '$path.eventType'),
-      feedbackType: map["feedbackType"] == null ? null : _generatedRequestString(map["feedbackType"], '$path.feedbackType'),
-      feedbackScore: map["feedbackScore"] == null ? null : _generatedRequestDouble(map["feedbackScore"], '$path.feedbackScore'),
-      reasonCodes: map.containsKey("reasonCodes") ? List<String>.unmodifiable(_generatedRequestList(map["reasonCodes"], '$path.reasonCodes').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.reasonCodes' + '[${entry.key}]'))) : const <String>[],
-      actionType: map["actionType"] == null ? null : _generatedRequestString(map["actionType"], '$path.actionType'),
-      suggestedActionId: map["suggestedActionId"] == null ? null : _generatedRequestString(map["suggestedActionId"], '$path.suggestedActionId'),
-      durationMs: map["durationMs"] == null ? null : _generatedRequestInt(map["durationMs"], '$path.durationMs'),
-      queryText: map["queryText"] == null ? null : _generatedRequestString(map["queryText"], '$path.queryText'),
-      answerText: map["answerText"] == null ? null : _generatedRequestString(map["answerText"], '$path.answerText'),
-      feedbackText: map["feedbackText"] == null ? null : _generatedRequestString(map["feedbackText"], '$path.feedbackText'),
-      correctionText: map["correctionText"] == null ? null : _generatedRequestString(map["correctionText"], '$path.correctionText'),
-      trainingEligible: _generatedRequestBool(map["trainingEligible"], '$path.trainingEligible'),
-      occurredAt: _generatedRequestTimestamp(map["occurredAt"], '$path.occurredAt'),
+      eventType: map["eventType"] == null
+          ? null
+          : _generatedRequestString(map["eventType"], '$path.eventType'),
+      feedbackType: map["feedbackType"] == null
+          ? null
+          : _generatedRequestString(map["feedbackType"], '$path.feedbackType'),
+      feedbackScore: map["feedbackScore"] == null
+          ? null
+          : _generatedRequestDouble(
+              map["feedbackScore"],
+              '$path.feedbackScore',
+            ),
+      reasonCodes: map.containsKey("reasonCodes")
+          ? List<String>.unmodifiable(
+              _generatedRequestList(
+                map["reasonCodes"],
+                '$path.reasonCodes',
+              ).asMap().entries.map(
+                (entry) => _generatedRequestString(
+                  entry.value,
+                  '$path.reasonCodes' + '[${entry.key}]',
+                ),
+              ),
+            )
+          : const <String>[],
+      actionType: map["actionType"] == null
+          ? null
+          : _generatedRequestString(map["actionType"], '$path.actionType'),
+      suggestedActionId: map["suggestedActionId"] == null
+          ? null
+          : _generatedRequestString(
+              map["suggestedActionId"],
+              '$path.suggestedActionId',
+            ),
+      durationMs: map["durationMs"] == null
+          ? null
+          : _generatedRequestInt(map["durationMs"], '$path.durationMs'),
+      queryText: map["queryText"] == null
+          ? null
+          : _generatedRequestString(map["queryText"], '$path.queryText'),
+      answerText: map["answerText"] == null
+          ? null
+          : _generatedRequestString(map["answerText"], '$path.answerText'),
+      feedbackText: map["feedbackText"] == null
+          ? null
+          : _generatedRequestString(map["feedbackText"], '$path.feedbackText'),
+      correctionText: map["correctionText"] == null
+          ? null
+          : _generatedRequestString(
+              map["correctionText"],
+              '$path.correctionText',
+            ),
+      trainingEligible: _generatedRequestBool(
+        map["trainingEligible"],
+        '$path.trainingEligible',
+      ),
+      occurredAt: _generatedRequestTimestamp(
+        map["occurredAt"],
+        '$path.occurredAt',
+      ),
     );
   }
 
@@ -504,15 +824,20 @@ final class AssistantLearningFactAppendCommand {
     "eventId": this.eventId,
     "factType": this.factType,
     "assistantTurnId": this.assistantTurnId,
-    if (this.triggerMessageId != null) "triggerMessageId": this.triggerMessageId!,
+    if (this.triggerMessageId != null)
+      "triggerMessageId": this.triggerMessageId!,
     "referralSource": this.referralSource,
     "domainId": this.domainId,
     if (this.eventType != null) "eventType": this.eventType!,
     if (this.feedbackType != null) "feedbackType": this.feedbackType!,
     if (this.feedbackScore != null) "feedbackScore": this.feedbackScore!,
-    if (this.reasonCodes.isNotEmpty) "reasonCodes": this.reasonCodes.map((value) => value).toList(growable: false),
+    if (this.reasonCodes.isNotEmpty)
+      "reasonCodes": this.reasonCodes
+          .map((value) => value)
+          .toList(growable: false),
     if (this.actionType != null) "actionType": this.actionType!,
-    if (this.suggestedActionId != null) "suggestedActionId": this.suggestedActionId!,
+    if (this.suggestedActionId != null)
+      "suggestedActionId": this.suggestedActionId!,
     if (this.durationMs != null) "durationMs": this.durationMs!,
     if (this.queryText != null) "queryText": this.queryText!,
     if (this.answerText != null) "answerText": this.answerText!,
@@ -533,10 +858,19 @@ final class AssistantObjectGroundingView {
   final String objectTypeRef;
   final String objectId;
 
-  factory AssistantObjectGroundingView.fromWire(Map<String, Object?> map, [String path = "AssistantObjectGroundingView"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"objectTypeRef", "objectId"}, path);
+  factory AssistantObjectGroundingView.fromWire(
+    Map<String, Object?> map, [
+    String path = "AssistantObjectGroundingView",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "objectTypeRef",
+      "objectId",
+    }, path);
     return AssistantObjectGroundingView(
-      objectTypeRef: _generatedRequestString(map["objectTypeRef"], '$path.objectTypeRef'),
+      objectTypeRef: _generatedRequestString(
+        map["objectTypeRef"],
+        '$path.objectTypeRef',
+      ),
       objectId: _generatedRequestString(map["objectId"], '$path.objectId'),
     );
   }
@@ -548,20 +882,26 @@ final class AssistantObjectGroundingView {
 }
 
 final class AssistantPauseRunRequest {
-  const AssistantPauseRunRequest({
-    required String runId,
-    String? reason,
-  }) : runId = runId,
-       reason = reason;
+  const AssistantPauseRunRequest({required String runId, String? reason})
+    : runId = runId,
+      reason = reason;
 
   final String runId;
   final String? reason;
 
-  factory AssistantPauseRunRequest.fromWire(Map<String, Object?> map, [String path = "AssistantPauseRunRequest"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"runId", "reason"}, path);
+  factory AssistantPauseRunRequest.fromWire(
+    Map<String, Object?> map, [
+    String path = "AssistantPauseRunRequest",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "runId",
+      "reason",
+    }, path);
     return AssistantPauseRunRequest(
       runId: _generatedRequestString(map["runId"], '$path.runId'),
-      reason: map["reason"] == null ? null : _generatedRequestString(map["reason"], '$path.reason'),
+      reason: map["reason"] == null
+          ? null
+          : _generatedRequestString(map["reason"], '$path.reason'),
     );
   }
 
@@ -572,20 +912,31 @@ final class AssistantPauseRunRequest {
 }
 
 final class AssistantPreferenceByIdRequest {
-  AssistantPreferenceByIdRequest({
-    required String preferenceId,
-  }) : preferenceId = preferenceId {
+  AssistantPreferenceByIdRequest({required String preferenceId})
+    : preferenceId = preferenceId {
     if (this.preferenceId.isEmpty) {
-      throw ArgumentError.value(this.preferenceId, "preferenceId", 'must not be blank');
+      throw ArgumentError.value(
+        this.preferenceId,
+        "preferenceId",
+        'must not be blank',
+      );
     }
   }
 
   final String preferenceId;
 
-  factory AssistantPreferenceByIdRequest.fromWire(Map<String, Object?> map, [String path = "AssistantPreferenceByIdRequest"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"preferenceId"}, path);
+  factory AssistantPreferenceByIdRequest.fromWire(
+    Map<String, Object?> map, [
+    String path = "AssistantPreferenceByIdRequest",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "preferenceId",
+    }, path);
     return AssistantPreferenceByIdRequest(
-      preferenceId: _generatedRequestString(map["preferenceId"], '$path.preferenceId'),
+      preferenceId: _generatedRequestString(
+        map["preferenceId"],
+        '$path.preferenceId',
+      ),
     );
   }
 
@@ -595,9 +946,7 @@ final class AssistantPreferenceByIdRequest {
 }
 
 final class AssistantRunByIdQuery {
-  AssistantRunByIdQuery({
-    required String runId,
-  }) : runId = runId {
+  AssistantRunByIdQuery({required String runId}) : runId = runId {
     if (this.runId.isEmpty) {
       throw ArgumentError.value(this.runId, "runId", 'must not be blank');
     }
@@ -605,35 +954,35 @@ final class AssistantRunByIdQuery {
 
   final String runId;
 
-  factory AssistantRunByIdQuery.fromWire(Map<String, Object?> map, [String path = "AssistantRunByIdQuery"]) {
+  factory AssistantRunByIdQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "AssistantRunByIdQuery",
+  ]) {
     _generatedRequestRejectUnknownFields(map, const <String>{"runId"}, path);
     return AssistantRunByIdQuery(
       runId: _generatedRequestString(map["runId"], '$path.runId'),
     );
   }
 
-  Map<String, Object?> toWire() => <String, Object?>{
-    "runId": this.runId,
-  };
+  Map<String, Object?> toWire() => <String, Object?>{"runId": this.runId};
 }
 
 final class AssistantRunCommandRequest {
-  const AssistantRunCommandRequest({
-    required String runId,
-  }) : runId = runId;
+  const AssistantRunCommandRequest({required String runId}) : runId = runId;
 
   final String runId;
 
-  factory AssistantRunCommandRequest.fromWire(Map<String, Object?> map, [String path = "AssistantRunCommandRequest"]) {
+  factory AssistantRunCommandRequest.fromWire(
+    Map<String, Object?> map, [
+    String path = "AssistantRunCommandRequest",
+  ]) {
     _generatedRequestRejectUnknownFields(map, const <String>{"runId"}, path);
     return AssistantRunCommandRequest(
       runId: _generatedRequestString(map["runId"], '$path.runId'),
     );
   }
 
-  Map<String, Object?> toWire() => <String, Object?>{
-    "runId": this.runId,
-  };
+  Map<String, Object?> toWire() => <String, Object?>{"runId": this.runId};
 }
 
 final class AssistantRunDefinitionOfDoneInput {
@@ -642,36 +991,74 @@ final class AssistantRunDefinitionOfDoneInput {
     List<String>? constraints,
     List<String>? verificationRequirements,
   }) : outcome = outcome,
-       constraints = constraints == null ? null : List.unmodifiable(constraints),
-       verificationRequirements = verificationRequirements == null ? null : List.unmodifiable(verificationRequirements) {
-  }
+       constraints = constraints == null
+           ? null
+           : List.unmodifiable(constraints),
+       verificationRequirements = verificationRequirements == null
+           ? null
+           : List.unmodifiable(verificationRequirements) {}
 
   final String outcome;
   final List<String>? constraints;
   final List<String>? verificationRequirements;
 
-  factory AssistantRunDefinitionOfDoneInput.fromWire(Map<String, Object?> map, [String path = "AssistantRunDefinitionOfDoneInput"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"outcome", "constraints", "verificationRequirements"}, path);
+  factory AssistantRunDefinitionOfDoneInput.fromWire(
+    Map<String, Object?> map, [
+    String path = "AssistantRunDefinitionOfDoneInput",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "outcome",
+      "constraints",
+      "verificationRequirements",
+    }, path);
     return AssistantRunDefinitionOfDoneInput(
       outcome: _generatedRequestString(map["outcome"], '$path.outcome'),
-      constraints: map["constraints"] == null ? null : List<String>.unmodifiable(_generatedRequestList(map["constraints"], '$path.constraints').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.constraints' + '[${entry.key}]'))),
-      verificationRequirements: map["verificationRequirements"] == null ? null : List<String>.unmodifiable(_generatedRequestList(map["verificationRequirements"], '$path.verificationRequirements').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.verificationRequirements' + '[${entry.key}]'))),
+      constraints: map["constraints"] == null
+          ? null
+          : List<String>.unmodifiable(
+              _generatedRequestList(
+                map["constraints"],
+                '$path.constraints',
+              ).asMap().entries.map(
+                (entry) => _generatedRequestString(
+                  entry.value,
+                  '$path.constraints' + '[${entry.key}]',
+                ),
+              ),
+            ),
+      verificationRequirements: map["verificationRequirements"] == null
+          ? null
+          : List<String>.unmodifiable(
+              _generatedRequestList(
+                map["verificationRequirements"],
+                '$path.verificationRequirements',
+              ).asMap().entries.map(
+                (entry) => _generatedRequestString(
+                  entry.value,
+                  '$path.verificationRequirements' + '[${entry.key}]',
+                ),
+              ),
+            ),
     );
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
     "outcome": this.outcome,
-    if (this.constraints != null) "constraints": this.constraints!.map((value) => value).toList(growable: false),
-    if (this.verificationRequirements != null) "verificationRequirements": this.verificationRequirements!.map((value) => value).toList(growable: false),
+    if (this.constraints != null)
+      "constraints": this.constraints!
+          .map((value) => value)
+          .toList(growable: false),
+    if (this.verificationRequirements != null)
+      "verificationRequirements": this.verificationRequirements!
+          .map((value) => value)
+          .toList(growable: false),
   };
 }
 
 final class AssistantRunEventStreamQuery {
-  AssistantRunEventStreamQuery({
-    required String runId,
-    String? resumeToken,
-  }) : runId = runId,
-       resumeToken = resumeToken {
+  AssistantRunEventStreamQuery({required String runId, String? resumeToken})
+    : runId = runId,
+      resumeToken = resumeToken {
     if (this.runId.isEmpty) {
       throw ArgumentError.value(this.runId, "runId", 'must not be blank');
     }
@@ -680,11 +1067,19 @@ final class AssistantRunEventStreamQuery {
   final String runId;
   final String? resumeToken;
 
-  factory AssistantRunEventStreamQuery.fromWire(Map<String, Object?> map, [String path = "AssistantRunEventStreamQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"runId", "resumeToken"}, path);
+  factory AssistantRunEventStreamQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "AssistantRunEventStreamQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "runId",
+      "resumeToken",
+    }, path);
     return AssistantRunEventStreamQuery(
       runId: _generatedRequestString(map["runId"], '$path.runId'),
-      resumeToken: map["resumeToken"] == null ? null : _generatedRequestString(map["resumeToken"], '$path.resumeToken'),
+      resumeToken: map["resumeToken"] == null
+          ? null
+          : _generatedRequestString(map["resumeToken"], '$path.resumeToken'),
     );
   }
 
@@ -710,13 +1105,44 @@ final class AssistantRunIntent {
   final AssistantSearchRunIntent? search;
   final AssistantCreationRunIntent? creationAssistance;
 
-  factory AssistantRunIntent.fromWire(Map<String, Object?> map, [String path = "AssistantRunIntent"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"kind", "answer", "search", "creationAssistance"}, path);
+  factory AssistantRunIntent.fromWire(
+    Map<String, Object?> map, [
+    String path = "AssistantRunIntent",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "kind",
+      "answer",
+      "search",
+      "creationAssistance",
+    }, path);
     return AssistantRunIntent(
-      kind: switch (map["kind"]) { "answer" => AssistantRunIntentKind.answer, "search" => AssistantRunIntentKind.search, "creation_assistance" => AssistantRunIntentKind.creationAssistance, _ => throw FormatException('$path.kind' + ' has an invalid enum value'), },
-      answer: map["answer"] == null ? null : AssistantAnswerRunIntent.fromWire(_generatedRequestObject(map["answer"], '$path.answer'), '$path.answer'),
-      search: map["search"] == null ? null : AssistantSearchRunIntent.fromWire(_generatedRequestObject(map["search"], '$path.search'), '$path.search'),
-      creationAssistance: map["creationAssistance"] == null ? null : AssistantCreationRunIntent.fromWire(_generatedRequestObject(map["creationAssistance"], '$path.creationAssistance'), '$path.creationAssistance'),
+      kind: switch (map["kind"]) {
+        "answer" => AssistantRunIntentKind.answer,
+        "search" => AssistantRunIntentKind.search,
+        "creation_assistance" => AssistantRunIntentKind.creationAssistance,
+        _ => throw FormatException('$path.kind' + ' has an invalid enum value'),
+      },
+      answer: map["answer"] == null
+          ? null
+          : AssistantAnswerRunIntent.fromWire(
+              _generatedRequestObject(map["answer"], '$path.answer'),
+              '$path.answer',
+            ),
+      search: map["search"] == null
+          ? null
+          : AssistantSearchRunIntent.fromWire(
+              _generatedRequestObject(map["search"], '$path.search'),
+              '$path.search',
+            ),
+      creationAssistance: map["creationAssistance"] == null
+          ? null
+          : AssistantCreationRunIntent.fromWire(
+              _generatedRequestObject(
+                map["creationAssistance"],
+                '$path.creationAssistance',
+              ),
+              '$path.creationAssistance',
+            ),
     );
   }
 
@@ -724,7 +1150,8 @@ final class AssistantRunIntent {
     "kind": this.kind.wireName,
     if (this.answer != null) "answer": this.answer!.toWire(),
     if (this.search != null) "search": this.search!.toWire(),
-    if (this.creationAssistance != null) "creationAssistance": this.creationAssistance!.toWire(),
+    if (this.creationAssistance != null)
+      "creationAssistance": this.creationAssistance!.toWire(),
   };
 }
 
@@ -744,37 +1171,74 @@ final class AssistantSearchRunIntent {
   final String? sourceSurfaceId;
   final bool? fromGlobalSearch;
 
-  factory AssistantSearchRunIntent.fromWire(Map<String, Object?> map, [String path = "AssistantSearchRunIntent"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"query", "searchIntensity", "sourceSurfaceId", "fromGlobalSearch"}, path);
+  factory AssistantSearchRunIntent.fromWire(
+    Map<String, Object?> map, [
+    String path = "AssistantSearchRunIntent",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "query",
+      "searchIntensity",
+      "sourceSurfaceId",
+      "fromGlobalSearch",
+    }, path);
     return AssistantSearchRunIntent(
       query: _generatedRequestString(map["query"], '$path.query'),
-      searchIntensity: map["searchIntensity"] == null ? null : switch (map["searchIntensity"]) { "low" => SearchIntensity.low, "medium" => SearchIntensity.medium, "high" => SearchIntensity.high, _ => throw FormatException('$path.searchIntensity' + ' has an invalid enum value'), },
-      sourceSurfaceId: map["sourceSurfaceId"] == null ? null : _generatedRequestString(map["sourceSurfaceId"], '$path.sourceSurfaceId'),
-      fromGlobalSearch: map["fromGlobalSearch"] == null ? null : _generatedRequestBool(map["fromGlobalSearch"], '$path.fromGlobalSearch'),
+      searchIntensity: map["searchIntensity"] == null
+          ? null
+          : switch (map["searchIntensity"]) {
+              "low" => SearchIntensity.low,
+              "medium" => SearchIntensity.medium,
+              "high" => SearchIntensity.high,
+              _ => throw FormatException(
+                '$path.searchIntensity' + ' has an invalid enum value',
+              ),
+            },
+      sourceSurfaceId: map["sourceSurfaceId"] == null
+          ? null
+          : _generatedRequestString(
+              map["sourceSurfaceId"],
+              '$path.sourceSurfaceId',
+            ),
+      fromGlobalSearch: map["fromGlobalSearch"] == null
+          ? null
+          : _generatedRequestBool(
+              map["fromGlobalSearch"],
+              '$path.fromGlobalSearch',
+            ),
     );
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
     "query": this.query,
-    if (this.searchIntensity != null) "searchIntensity": this.searchIntensity!.wireName,
+    if (this.searchIntensity != null)
+      "searchIntensity": this.searchIntensity!.wireName,
     if (this.sourceSurfaceId != null) "sourceSurfaceId": this.sourceSurfaceId!,
-    if (this.fromGlobalSearch != null) "fromGlobalSearch": this.fromGlobalSearch!,
+    if (this.fromGlobalSearch != null)
+      "fromGlobalSearch": this.fromGlobalSearch!,
   };
 }
 
 final class AssistantSessionByIdQuery {
-  AssistantSessionByIdQuery({
-    required String sessionId,
-  }) : sessionId = sessionId.trim() {
+  AssistantSessionByIdQuery({required String sessionId})
+    : sessionId = sessionId.trim() {
     if (this.sessionId.isEmpty) {
-      throw ArgumentError.value(this.sessionId, "sessionId", 'must not be blank');
+      throw ArgumentError.value(
+        this.sessionId,
+        "sessionId",
+        'must not be blank',
+      );
     }
   }
 
   final String sessionId;
 
-  factory AssistantSessionByIdQuery.fromWire(Map<String, Object?> map, [String path = "AssistantSessionByIdQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"sessionId"}, path);
+  factory AssistantSessionByIdQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "AssistantSessionByIdQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "sessionId",
+    }, path);
     return AssistantSessionByIdQuery(
       sessionId: _generatedRequestString(map["sessionId"], '$path.sessionId'),
     );
@@ -789,11 +1253,9 @@ final class AssistantSessionListQuery {
   static const int defaultLimit = 20;
   static const int maximumLimit = 50;
 
-  AssistantSessionListQuery({
-    int limit = 20,
-    String? cursor,
-  }) : limit = limit,
-       cursor = _normalizeGeneratedOptionalText(cursor) {
+  AssistantSessionListQuery({int limit = 20, String? cursor})
+    : limit = limit,
+      cursor = _normalizeGeneratedOptionalText(cursor) {
     if (this.limit <= 0) {
       throw ArgumentError.value(this.limit, "limit", "must be positive");
     }
@@ -805,11 +1267,21 @@ final class AssistantSessionListQuery {
   final int limit;
   final String? cursor;
 
-  factory AssistantSessionListQuery.fromWire(Map<String, Object?> map, [String path = "AssistantSessionListQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"limit", "cursor"}, path);
+  factory AssistantSessionListQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "AssistantSessionListQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "limit",
+      "cursor",
+    }, path);
     return AssistantSessionListQuery(
-      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 20,
-      cursor: map["cursor"] == null ? null : _generatedRequestString(map["cursor"], '$path.cursor'),
+      limit: map.containsKey("limit")
+          ? _generatedRequestInt(map["limit"], '$path.limit')
+          : 20,
+      cursor: map["cursor"] == null
+          ? null
+          : _generatedRequestString(map["cursor"], '$path.cursor'),
     );
   }
 
@@ -820,20 +1292,31 @@ final class AssistantSessionListQuery {
 }
 
 final class AssistantSkillSubscriptionByIdQuery {
-  AssistantSkillSubscriptionByIdQuery({
-    required String subscriptionId,
-  }) : subscriptionId = subscriptionId.trim() {
+  AssistantSkillSubscriptionByIdQuery({required String subscriptionId})
+    : subscriptionId = subscriptionId.trim() {
     if (this.subscriptionId.isEmpty) {
-      throw ArgumentError.value(this.subscriptionId, "subscriptionId", 'must not be blank');
+      throw ArgumentError.value(
+        this.subscriptionId,
+        "subscriptionId",
+        'must not be blank',
+      );
     }
   }
 
   final String subscriptionId;
 
-  factory AssistantSkillSubscriptionByIdQuery.fromWire(Map<String, Object?> map, [String path = "AssistantSkillSubscriptionByIdQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"subscriptionId"}, path);
+  factory AssistantSkillSubscriptionByIdQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "AssistantSkillSubscriptionByIdQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "subscriptionId",
+    }, path);
     return AssistantSkillSubscriptionByIdQuery(
-      subscriptionId: _generatedRequestString(map["subscriptionId"], '$path.subscriptionId'),
+      subscriptionId: _generatedRequestString(
+        map["subscriptionId"],
+        '$path.subscriptionId',
+      ),
     );
   }
 
@@ -846,11 +1329,9 @@ final class AssistantSkillSubscriptionListQuery {
   static const int defaultLimit = 20;
   static const int maximumLimit = 100;
 
-  AssistantSkillSubscriptionListQuery({
-    int limit = 20,
-    String? status,
-  }) : limit = limit,
-       status = _normalizeGeneratedOptionalText(status) {
+  AssistantSkillSubscriptionListQuery({int limit = 20, String? status})
+    : limit = limit,
+      status = _normalizeGeneratedOptionalText(status) {
     if (this.limit <= 0) {
       throw ArgumentError.value(this.limit, "limit", "must be positive");
     }
@@ -862,11 +1343,21 @@ final class AssistantSkillSubscriptionListQuery {
   final int limit;
   final String? status;
 
-  factory AssistantSkillSubscriptionListQuery.fromWire(Map<String, Object?> map, [String path = "AssistantSkillSubscriptionListQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"limit", "status"}, path);
+  factory AssistantSkillSubscriptionListQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "AssistantSkillSubscriptionListQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "limit",
+      "status",
+    }, path);
     return AssistantSkillSubscriptionListQuery(
-      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 20,
-      status: map["status"] == null ? null : _generatedRequestString(map["status"], '$path.status'),
+      limit: map.containsKey("limit")
+          ? _generatedRequestInt(map["limit"], '$path.limit')
+          : 20,
+      status: map["status"] == null
+          ? null
+          : _generatedRequestString(map["status"], '$path.status'),
     );
   }
 
@@ -901,16 +1392,67 @@ final class AssistantStartRunRequest {
   final AssistantRunDefinitionOfDoneInput? definitionOfDone;
   final AssistantSurfaceCapabilities? surfaceCapabilities;
 
-  factory AssistantStartRunRequest.fromWire(Map<String, Object?> map, [String path = "AssistantStartRunRequest"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"sessionId", "clientRequestId", "intent", "contextSnapshot", "reasoningProfile", "definitionOfDone", "surfaceCapabilities"}, path);
+  factory AssistantStartRunRequest.fromWire(
+    Map<String, Object?> map, [
+    String path = "AssistantStartRunRequest",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "sessionId",
+      "clientRequestId",
+      "intent",
+      "contextSnapshot",
+      "reasoningProfile",
+      "definitionOfDone",
+      "surfaceCapabilities",
+    }, path);
     return AssistantStartRunRequest(
       sessionId: _generatedRequestString(map["sessionId"], '$path.sessionId'),
-      clientRequestId: _generatedRequestString(map["clientRequestId"], '$path.clientRequestId'),
-      intent: AssistantRunIntent.fromWire(_generatedRequestObject(map["intent"], '$path.intent'), '$path.intent'),
-      contextSnapshot: map["contextSnapshot"] == null ? null : AssistantContextSnapshot.fromWire(_generatedRequestObject(map["contextSnapshot"], '$path.contextSnapshot'), '$path.contextSnapshot'),
-      reasoningProfile: map["reasoningProfile"] == null ? null : switch (map["reasoningProfile"]) { "fast" => AssistantReasoningProfile.fast, "balanced" => AssistantReasoningProfile.balanced, "deep" => AssistantReasoningProfile.deep, "background_long" => AssistantReasoningProfile.backgroundLong, _ => throw FormatException('$path.reasoningProfile' + ' has an invalid enum value'), },
-      definitionOfDone: map["definitionOfDone"] == null ? null : AssistantRunDefinitionOfDoneInput.fromWire(_generatedRequestObject(map["definitionOfDone"], '$path.definitionOfDone'), '$path.definitionOfDone'),
-      surfaceCapabilities: map["surfaceCapabilities"] == null ? null : AssistantSurfaceCapabilities.fromWire(_generatedRequestObject(map["surfaceCapabilities"], '$path.surfaceCapabilities'), '$path.surfaceCapabilities'),
+      clientRequestId: _generatedRequestString(
+        map["clientRequestId"],
+        '$path.clientRequestId',
+      ),
+      intent: AssistantRunIntent.fromWire(
+        _generatedRequestObject(map["intent"], '$path.intent'),
+        '$path.intent',
+      ),
+      contextSnapshot: map["contextSnapshot"] == null
+          ? null
+          : AssistantContextSnapshot.fromWire(
+              _generatedRequestObject(
+                map["contextSnapshot"],
+                '$path.contextSnapshot',
+              ),
+              '$path.contextSnapshot',
+            ),
+      reasoningProfile: map["reasoningProfile"] == null
+          ? null
+          : switch (map["reasoningProfile"]) {
+              "fast" => AssistantReasoningProfile.fast,
+              "balanced" => AssistantReasoningProfile.balanced,
+              "deep" => AssistantReasoningProfile.deep,
+              "background_long" => AssistantReasoningProfile.backgroundLong,
+              _ => throw FormatException(
+                '$path.reasoningProfile' + ' has an invalid enum value',
+              ),
+            },
+      definitionOfDone: map["definitionOfDone"] == null
+          ? null
+          : AssistantRunDefinitionOfDoneInput.fromWire(
+              _generatedRequestObject(
+                map["definitionOfDone"],
+                '$path.definitionOfDone',
+              ),
+              '$path.definitionOfDone',
+            ),
+      surfaceCapabilities: map["surfaceCapabilities"] == null
+          ? null
+          : AssistantSurfaceCapabilities.fromWire(
+              _generatedRequestObject(
+                map["surfaceCapabilities"],
+                '$path.surfaceCapabilities',
+              ),
+              '$path.surfaceCapabilities',
+            ),
     );
   }
 
@@ -918,10 +1460,14 @@ final class AssistantStartRunRequest {
     "sessionId": this.sessionId,
     "clientRequestId": this.clientRequestId,
     "intent": this.intent.toWire(),
-    if (this.contextSnapshot != null) "contextSnapshot": this.contextSnapshot!.toWire(),
-    if (this.reasoningProfile != null) "reasoningProfile": this.reasoningProfile!.wireName,
-    if (this.definitionOfDone != null) "definitionOfDone": this.definitionOfDone!.toWire(),
-    if (this.surfaceCapabilities != null) "surfaceCapabilities": this.surfaceCapabilities!.toWire(),
+    if (this.contextSnapshot != null)
+      "contextSnapshot": this.contextSnapshot!.toWire(),
+    if (this.reasoningProfile != null)
+      "reasoningProfile": this.reasoningProfile!.wireName,
+    if (this.definitionOfDone != null)
+      "definitionOfDone": this.definitionOfDone!.toWire(),
+    if (this.surfaceCapabilities != null)
+      "surfaceCapabilities": this.surfaceCapabilities!.toWire(),
   };
 }
 
@@ -935,11 +1481,20 @@ final class AssistantSteerRunRequest {
   final String runId;
   final String instruction;
 
-  factory AssistantSteerRunRequest.fromWire(Map<String, Object?> map, [String path = "AssistantSteerRunRequest"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"runId", "instruction"}, path);
+  factory AssistantSteerRunRequest.fromWire(
+    Map<String, Object?> map, [
+    String path = "AssistantSteerRunRequest",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "runId",
+      "instruction",
+    }, path);
     return AssistantSteerRunRequest(
       runId: _generatedRequestString(map["runId"], '$path.runId'),
-      instruction: _generatedRequestString(map["instruction"], '$path.instruction'),
+      instruction: _generatedRequestString(
+        map["instruction"],
+        '$path.instruction',
+      ),
     );
   }
 
@@ -962,12 +1517,25 @@ final class AssistantSubmitDeviceActionReceiptRequest {
   final String toolInvocationId;
   final AssistantDeviceActionExecutionReceipt receipt;
 
-  factory AssistantSubmitDeviceActionReceiptRequest.fromWire(Map<String, Object?> map, [String path = "AssistantSubmitDeviceActionReceiptRequest"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"runId", "toolInvocationId", "receipt"}, path);
+  factory AssistantSubmitDeviceActionReceiptRequest.fromWire(
+    Map<String, Object?> map, [
+    String path = "AssistantSubmitDeviceActionReceiptRequest",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "runId",
+      "toolInvocationId",
+      "receipt",
+    }, path);
     return AssistantSubmitDeviceActionReceiptRequest(
       runId: _generatedRequestString(map["runId"], '$path.runId'),
-      toolInvocationId: _generatedRequestString(map["toolInvocationId"], '$path.toolInvocationId'),
-      receipt: AssistantDeviceActionExecutionReceipt.fromWire(_generatedRequestObject(map["receipt"], '$path.receipt'), '$path.receipt'),
+      toolInvocationId: _generatedRequestString(
+        map["toolInvocationId"],
+        '$path.toolInvocationId',
+      ),
+      receipt: AssistantDeviceActionExecutionReceipt.fromWire(
+        _generatedRequestObject(map["receipt"], '$path.receipt'),
+        '$path.receipt',
+      ),
     );
   }
 
@@ -997,8 +1565,7 @@ final class AssistantSurfaceCapabilities {
        theme = theme,
        textScale = textScale,
        reducedMotion = reducedMotion,
-       offline = offline {
-  }
+       offline = offline {}
 
   final String surfaceId;
   final List<String> supportedNodeKinds;
@@ -1010,25 +1577,68 @@ final class AssistantSurfaceCapabilities {
   final bool reducedMotion;
   final bool offline;
 
-  factory AssistantSurfaceCapabilities.fromWire(Map<String, Object?> map, [String path = "AssistantSurfaceCapabilities"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"surfaceId", "supportedNodeKinds", "supportedActionIntents", "viewportClass", "platform", "theme", "textScale", "reducedMotion", "offline"}, path);
+  factory AssistantSurfaceCapabilities.fromWire(
+    Map<String, Object?> map, [
+    String path = "AssistantSurfaceCapabilities",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "surfaceId",
+      "supportedNodeKinds",
+      "supportedActionIntents",
+      "viewportClass",
+      "platform",
+      "theme",
+      "textScale",
+      "reducedMotion",
+      "offline",
+    }, path);
     return AssistantSurfaceCapabilities(
       surfaceId: _generatedRequestString(map["surfaceId"], '$path.surfaceId'),
-      supportedNodeKinds: List<String>.unmodifiable(_generatedRequestList(map["supportedNodeKinds"], '$path.supportedNodeKinds').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.supportedNodeKinds' + '[${entry.key}]'))),
-      supportedActionIntents: List<String>.unmodifiable(_generatedRequestList(map["supportedActionIntents"], '$path.supportedActionIntents').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.supportedActionIntents' + '[${entry.key}]'))),
-      viewportClass: _generatedRequestString(map["viewportClass"], '$path.viewportClass'),
+      supportedNodeKinds: List<String>.unmodifiable(
+        _generatedRequestList(
+          map["supportedNodeKinds"],
+          '$path.supportedNodeKinds',
+        ).asMap().entries.map(
+          (entry) => _generatedRequestString(
+            entry.value,
+            '$path.supportedNodeKinds' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      supportedActionIntents: List<String>.unmodifiable(
+        _generatedRequestList(
+          map["supportedActionIntents"],
+          '$path.supportedActionIntents',
+        ).asMap().entries.map(
+          (entry) => _generatedRequestString(
+            entry.value,
+            '$path.supportedActionIntents' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      viewportClass: _generatedRequestString(
+        map["viewportClass"],
+        '$path.viewportClass',
+      ),
       platform: _generatedRequestString(map["platform"], '$path.platform'),
       theme: _generatedRequestString(map["theme"], '$path.theme'),
       textScale: _generatedRequestDouble(map["textScale"], '$path.textScale'),
-      reducedMotion: _generatedRequestBool(map["reducedMotion"], '$path.reducedMotion'),
+      reducedMotion: _generatedRequestBool(
+        map["reducedMotion"],
+        '$path.reducedMotion',
+      ),
       offline: _generatedRequestBool(map["offline"], '$path.offline'),
     );
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
     "surfaceId": this.surfaceId,
-    "supportedNodeKinds": this.supportedNodeKinds.map((value) => value).toList(growable: false),
-    "supportedActionIntents": this.supportedActionIntents.map((value) => value).toList(growable: false),
+    "supportedNodeKinds": this.supportedNodeKinds
+        .map((value) => value)
+        .toList(growable: false),
+    "supportedActionIntents": this.supportedActionIntents
+        .map((value) => value)
+        .toList(growable: false),
     "viewportClass": this.viewportClass,
     "platform": this.platform,
     "theme": this.theme,
@@ -1047,7 +1657,11 @@ final class AssistantTurnListQuery {
        limit = limit,
        cursor = cursor {
     if (this.sessionId.isEmpty) {
-      throw ArgumentError.value(this.sessionId, "sessionId", 'must not be blank');
+      throw ArgumentError.value(
+        this.sessionId,
+        "sessionId",
+        'must not be blank',
+      );
     }
   }
 
@@ -1055,12 +1669,23 @@ final class AssistantTurnListQuery {
   final int? limit;
   final String? cursor;
 
-  factory AssistantTurnListQuery.fromWire(Map<String, Object?> map, [String path = "AssistantTurnListQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"sessionId", "limit", "cursor"}, path);
+  factory AssistantTurnListQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "AssistantTurnListQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "sessionId",
+      "limit",
+      "cursor",
+    }, path);
     return AssistantTurnListQuery(
       sessionId: _generatedRequestString(map["sessionId"], '$path.sessionId'),
-      limit: map["limit"] == null ? null : _generatedRequestInt(map["limit"], '$path.limit'),
-      cursor: map["cursor"] == null ? null : _generatedRequestString(map["cursor"], '$path.cursor'),
+      limit: map["limit"] == null
+          ? null
+          : _generatedRequestInt(map["limit"], '$path.limit'),
+      cursor: map["cursor"] == null
+          ? null
+          : _generatedRequestString(map["cursor"], '$path.cursor'),
     );
   }
 
@@ -1087,13 +1712,30 @@ final class AssistantUserActionGroundingView {
   final String? objectId;
   final DateTime? occurredAt;
 
-  factory AssistantUserActionGroundingView.fromWire(Map<String, Object?> map, [String path = "AssistantUserActionGroundingView"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"action", "objectTypeRef", "objectId", "occurredAt"}, path);
+  factory AssistantUserActionGroundingView.fromWire(
+    Map<String, Object?> map, [
+    String path = "AssistantUserActionGroundingView",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "action",
+      "objectTypeRef",
+      "objectId",
+      "occurredAt",
+    }, path);
     return AssistantUserActionGroundingView(
       action: _generatedRequestString(map["action"], '$path.action'),
-      objectTypeRef: map["objectTypeRef"] == null ? null : _generatedRequestString(map["objectTypeRef"], '$path.objectTypeRef'),
-      objectId: map["objectId"] == null ? null : _generatedRequestString(map["objectId"], '$path.objectId'),
-      occurredAt: map["occurredAt"] == null ? null : _generatedRequestTimestamp(map["occurredAt"], '$path.occurredAt'),
+      objectTypeRef: map["objectTypeRef"] == null
+          ? null
+          : _generatedRequestString(
+              map["objectTypeRef"],
+              '$path.objectTypeRef',
+            ),
+      objectId: map["objectId"] == null
+          ? null
+          : _generatedRequestString(map["objectId"], '$path.objectId'),
+      occurredAt: map["occurredAt"] == null
+          ? null
+          : _generatedRequestTimestamp(map["occurredAt"], '$path.occurredAt'),
     );
   }
 
@@ -1101,7 +1743,8 @@ final class AssistantUserActionGroundingView {
     "action": this.action,
     if (this.objectTypeRef != null) "objectTypeRef": this.objectTypeRef!,
     if (this.objectId != null) "objectId": this.objectId!,
-    if (this.occurredAt != null) "occurredAt": this.occurredAt!.toUtc().toIso8601String(),
+    if (this.occurredAt != null)
+      "occurredAt": this.occurredAt!.toUtc().toIso8601String(),
   };
 }
 
@@ -1114,10 +1757,18 @@ final class ConfirmSkillDataControlRequestCommand {
        expectedRevision = expectedRevision,
        confirmed = confirmed {
     if (this.requestId.isEmpty) {
-      throw ArgumentError.value(this.requestId, "requestId", 'must not be blank');
+      throw ArgumentError.value(
+        this.requestId,
+        "requestId",
+        'must not be blank',
+      );
     }
     if (this.expectedRevision <= 0) {
-      throw ArgumentError.value(this.expectedRevision, "expectedRevision", "must be positive");
+      throw ArgumentError.value(
+        this.expectedRevision,
+        "expectedRevision",
+        "must be positive",
+      );
     }
   }
 
@@ -1125,11 +1776,21 @@ final class ConfirmSkillDataControlRequestCommand {
   final int expectedRevision;
   final bool confirmed;
 
-  factory ConfirmSkillDataControlRequestCommand.fromWire(Map<String, Object?> map, [String path = "ConfirmSkillDataControlRequestCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"requestId", "expectedRevision", "confirmed"}, path);
+  factory ConfirmSkillDataControlRequestCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "ConfirmSkillDataControlRequestCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "requestId",
+      "expectedRevision",
+      "confirmed",
+    }, path);
     return ConfirmSkillDataControlRequestCommand(
       requestId: _generatedRequestString(map["requestId"], '$path.requestId'),
-      expectedRevision: _generatedRequestInt(map["expectedRevision"], '$path.expectedRevision'),
+      expectedRevision: _generatedRequestInt(
+        map["expectedRevision"],
+        '$path.expectedRevision',
+      ),
       confirmed: _generatedRequestBool(map["confirmed"], '$path.confirmed'),
     );
   }
@@ -1164,7 +1825,11 @@ final class CreateAssistantSkillSubscriptionCommand {
       throw ArgumentError.value(this.domainId, "domainId", 'must not be blank');
     }
     if (this.clientRequestId.isEmpty) {
-      throw ArgumentError.value(this.clientRequestId, "clientRequestId", 'must not be blank');
+      throw ArgumentError.value(
+        this.clientRequestId,
+        "clientRequestId",
+        'must not be blank',
+      );
     }
   }
 
@@ -1176,16 +1841,54 @@ final class CreateAssistantSkillSubscriptionCommand {
   final SkillSubscriptionDestinationWire destination;
   final String clientRequestId;
 
-  factory CreateAssistantSkillSubscriptionCommand.fromWire(Map<String, Object?> map, [String path = "CreateAssistantSkillSubscriptionCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"skillId", "domainId", "tagRefs", "searchQueryPlan", "trigger", "destination", "clientRequestId"}, path);
+  factory CreateAssistantSkillSubscriptionCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "CreateAssistantSkillSubscriptionCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "skillId",
+      "domainId",
+      "tagRefs",
+      "searchQueryPlan",
+      "trigger",
+      "destination",
+      "clientRequestId",
+    }, path);
     return CreateAssistantSkillSubscriptionCommand(
       skillId: _generatedRequestString(map["skillId"], '$path.skillId'),
       domainId: _generatedRequestString(map["domainId"], '$path.domainId'),
-      tagRefs: map.containsKey("tagRefs") ? List<String>.unmodifiable(_generatedRequestList(map["tagRefs"], '$path.tagRefs').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.tagRefs' + '[${entry.key}]'))) : const <String>[],
-      searchQueryPlan: SkillSubscriptionSearchQueryPlanWire.fromWire(_generatedRequestObject(map["searchQueryPlan"], '$path.searchQueryPlan'), '$path.searchQueryPlan'),
-      trigger: SkillSubscriptionTriggerWire.fromWire(_generatedRequestObject(map["trigger"], '$path.trigger'), '$path.trigger'),
-      destination: SkillSubscriptionDestinationWire.fromWire(_generatedRequestObject(map["destination"], '$path.destination'), '$path.destination'),
-      clientRequestId: _generatedRequestString(map["clientRequestId"], '$path.clientRequestId'),
+      tagRefs: map.containsKey("tagRefs")
+          ? List<String>.unmodifiable(
+              _generatedRequestList(
+                map["tagRefs"],
+                '$path.tagRefs',
+              ).asMap().entries.map(
+                (entry) => _generatedRequestString(
+                  entry.value,
+                  '$path.tagRefs' + '[${entry.key}]',
+                ),
+              ),
+            )
+          : const <String>[],
+      searchQueryPlan: SkillSubscriptionSearchQueryPlanWire.fromWire(
+        _generatedRequestObject(
+          map["searchQueryPlan"],
+          '$path.searchQueryPlan',
+        ),
+        '$path.searchQueryPlan',
+      ),
+      trigger: SkillSubscriptionTriggerWire.fromWire(
+        _generatedRequestObject(map["trigger"], '$path.trigger'),
+        '$path.trigger',
+      ),
+      destination: SkillSubscriptionDestinationWire.fromWire(
+        _generatedRequestObject(map["destination"], '$path.destination'),
+        '$path.destination',
+      ),
+      clientRequestId: _generatedRequestString(
+        map["clientRequestId"],
+        '$path.clientRequestId',
+      ),
     );
   }
 
@@ -1214,52 +1917,85 @@ final class CreateSkillDataControlRequestCommand {
   final String skillId;
   final List<SkillDataControlAction> requestedActions;
 
-  factory CreateSkillDataControlRequestCommand.fromWire(Map<String, Object?> map, [String path = "CreateSkillDataControlRequestCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"skillId", "requestedActions"}, path);
+  factory CreateSkillDataControlRequestCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "CreateSkillDataControlRequestCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "skillId",
+      "requestedActions",
+    }, path);
     return CreateSkillDataControlRequestCommand(
       skillId: _generatedRequestString(map["skillId"], '$path.skillId'),
-      requestedActions: List<SkillDataControlAction>.unmodifiable(_generatedRequestList(map["requestedActions"], '$path.requestedActions').asMap().entries.map((entry) => switch (entry.value) { "hide_activity_history" => SkillDataControlAction.hideActivityHistory, "revoke_consent" => SkillDataControlAction.revokeConsent, "archive_subscriptions" => SkillDataControlAction.archiveSubscriptions, _ => throw FormatException('$path.requestedActions' + '[${entry.key}]' + ' has an invalid enum value'), })),
+      requestedActions: List<SkillDataControlAction>.unmodifiable(
+        _generatedRequestList(
+          map["requestedActions"],
+          '$path.requestedActions',
+        ).asMap().entries.map(
+          (entry) => switch (entry.value) {
+            "hide_activity_history" =>
+              SkillDataControlAction.hideActivityHistory,
+            "revoke_consent" => SkillDataControlAction.revokeConsent,
+            "archive_subscriptions" =>
+              SkillDataControlAction.archiveSubscriptions,
+            _ => throw FormatException(
+              '$path.requestedActions' +
+                  '[${entry.key}]' +
+                  ' has an invalid enum value',
+            ),
+          },
+        ),
+      ),
     );
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
     "skillId": this.skillId,
-    "requestedActions": this.requestedActions.map((value) => value.wireName).toList(growable: false),
+    "requestedActions": this.requestedActions
+        .map((value) => value.wireName)
+        .toList(growable: false),
   };
 }
 
 final class GetSkillCatalogItemQuery {
-  const GetSkillCatalogItemQuery({
-    required String skillId,
-  }) : skillId = skillId;
+  const GetSkillCatalogItemQuery({required String skillId}) : skillId = skillId;
 
   final String skillId;
 
-  factory GetSkillCatalogItemQuery.fromWire(Map<String, Object?> map, [String path = "GetSkillCatalogItemQuery"]) {
+  factory GetSkillCatalogItemQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "GetSkillCatalogItemQuery",
+  ]) {
     _generatedRequestRejectUnknownFields(map, const <String>{"skillId"}, path);
     return GetSkillCatalogItemQuery(
       skillId: _generatedRequestString(map["skillId"], '$path.skillId'),
     );
   }
 
-  Map<String, Object?> toWire() => <String, Object?>{
-    "skillId": this.skillId,
-  };
+  Map<String, Object?> toWire() => <String, Object?>{"skillId": this.skillId};
 }
 
 final class GetSkillDataControlRequestQuery {
-  GetSkillDataControlRequestQuery({
-    required String requestId,
-  }) : requestId = requestId {
+  GetSkillDataControlRequestQuery({required String requestId})
+    : requestId = requestId {
     if (this.requestId.isEmpty) {
-      throw ArgumentError.value(this.requestId, "requestId", 'must not be blank');
+      throw ArgumentError.value(
+        this.requestId,
+        "requestId",
+        'must not be blank',
+      );
     }
   }
 
   final String requestId;
 
-  factory GetSkillDataControlRequestQuery.fromWire(Map<String, Object?> map, [String path = "GetSkillDataControlRequestQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"requestId"}, path);
+  factory GetSkillDataControlRequestQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "GetSkillDataControlRequestQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "requestId",
+    }, path);
     return GetSkillDataControlRequestQuery(
       requestId: _generatedRequestString(map["requestId"], '$path.requestId'),
     );
@@ -1277,17 +2013,33 @@ final class GetSkillSurfacePlacementQuery {
   }) : surfaceKind = surfaceKind,
        surfaceId = surfaceId {
     if (this.surfaceId.isEmpty) {
-      throw ArgumentError.value(this.surfaceId, "surfaceId", 'must not be blank');
+      throw ArgumentError.value(
+        this.surfaceId,
+        "surfaceId",
+        'must not be blank',
+      );
     }
   }
 
   final SkillSurfaceKind surfaceKind;
   final String surfaceId;
 
-  factory GetSkillSurfacePlacementQuery.fromWire(Map<String, Object?> map, [String path = "GetSkillSurfacePlacementQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"surfaceKind", "surfaceId"}, path);
+  factory GetSkillSurfacePlacementQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "GetSkillSurfacePlacementQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "surfaceKind",
+      "surfaceId",
+    }, path);
     return GetSkillSurfacePlacementQuery(
-      surfaceKind: switch (map["surfaceKind"]) { "conversation" => SkillSurfaceKind.conversation, "circle" => SkillSurfaceKind.circle, _ => throw FormatException('$path.surfaceKind' + ' has an invalid enum value'), },
+      surfaceKind: switch (map["surfaceKind"]) {
+        "conversation" => SkillSurfaceKind.conversation,
+        "circle" => SkillSurfaceKind.circle,
+        _ => throw FormatException(
+          '$path.surfaceKind' + ' has an invalid enum value',
+        ),
+      },
       surfaceId: _generatedRequestString(map["surfaceId"], '$path.surfaceId'),
     );
   }
@@ -1299,9 +2051,7 @@ final class GetSkillSurfacePlacementQuery {
 }
 
 final class GetSkillUserSettingQuery {
-  GetSkillUserSettingQuery({
-    required String skillId,
-  }) : skillId = skillId {
+  GetSkillUserSettingQuery({required String skillId}) : skillId = skillId {
     if (this.skillId.isEmpty) {
       throw ArgumentError.value(this.skillId, "skillId", 'must not be blank');
     }
@@ -1309,16 +2059,17 @@ final class GetSkillUserSettingQuery {
 
   final String skillId;
 
-  factory GetSkillUserSettingQuery.fromWire(Map<String, Object?> map, [String path = "GetSkillUserSettingQuery"]) {
+  factory GetSkillUserSettingQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "GetSkillUserSettingQuery",
+  ]) {
     _generatedRequestRejectUnknownFields(map, const <String>{"skillId"}, path);
     return GetSkillUserSettingQuery(
       skillId: _generatedRequestString(map["skillId"], '$path.skillId'),
     );
   }
 
-  Map<String, Object?> toWire() => <String, Object?>{
-    "skillId": this.skillId,
-  };
+  Map<String, Object?> toWire() => <String, Object?>{"skillId": this.skillId};
 }
 
 final class GrantSkillConsentRequest {
@@ -1335,17 +2086,35 @@ final class GrantSkillConsentRequest {
   final String skillId;
   final List<String> grantedScopes;
 
-  factory GrantSkillConsentRequest.fromWire(Map<String, Object?> map, [String path = "GrantSkillConsentRequest"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"skillId", "grantedScopes"}, path);
+  factory GrantSkillConsentRequest.fromWire(
+    Map<String, Object?> map, [
+    String path = "GrantSkillConsentRequest",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "skillId",
+      "grantedScopes",
+    }, path);
     return GrantSkillConsentRequest(
       skillId: _generatedRequestString(map["skillId"], '$path.skillId'),
-      grantedScopes: List<String>.unmodifiable(_generatedRequestList(map["grantedScopes"], '$path.grantedScopes').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.grantedScopes' + '[${entry.key}]'))),
+      grantedScopes: List<String>.unmodifiable(
+        _generatedRequestList(
+          map["grantedScopes"],
+          '$path.grantedScopes',
+        ).asMap().entries.map(
+          (entry) => _generatedRequestString(
+            entry.value,
+            '$path.grantedScopes' + '[${entry.key}]',
+          ),
+        ),
+      ),
     );
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
     "skillId": this.skillId,
-    "grantedScopes": this.grantedScopes.map((value) => value).toList(growable: false),
+    "grantedScopes": this.grantedScopes
+        .map((value) => value)
+        .toList(growable: false),
   };
 }
 
@@ -1362,12 +2131,25 @@ final class ListAssistantPreferencesQuery {
   final String? sessionId;
   final String? status;
 
-  factory ListAssistantPreferencesQuery.fromWire(Map<String, Object?> map, [String path = "ListAssistantPreferencesQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"scope", "sessionId", "status"}, path);
+  factory ListAssistantPreferencesQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "ListAssistantPreferencesQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "scope",
+      "sessionId",
+      "status",
+    }, path);
     return ListAssistantPreferencesQuery(
-      scope: map["scope"] == null ? null : _generatedRequestString(map["scope"], '$path.scope'),
-      sessionId: map["sessionId"] == null ? null : _generatedRequestString(map["sessionId"], '$path.sessionId'),
-      status: map["status"] == null ? null : _generatedRequestString(map["status"], '$path.status'),
+      scope: map["scope"] == null
+          ? null
+          : _generatedRequestString(map["scope"], '$path.scope'),
+      sessionId: map["sessionId"] == null
+          ? null
+          : _generatedRequestString(map["sessionId"], '$path.sessionId'),
+      status: map["status"] == null
+          ? null
+          : _generatedRequestString(map["status"], '$path.status'),
     );
   }
 
@@ -1379,20 +2161,28 @@ final class ListAssistantPreferencesQuery {
 }
 
 final class ListAssistantTasksQuery {
-  const ListAssistantTasksQuery({
-    int? limit,
-    String? status,
-  }) : limit = limit,
-       status = status;
+  const ListAssistantTasksQuery({int? limit, String? status})
+    : limit = limit,
+      status = status;
 
   final int? limit;
   final String? status;
 
-  factory ListAssistantTasksQuery.fromWire(Map<String, Object?> map, [String path = "ListAssistantTasksQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"limit", "status"}, path);
+  factory ListAssistantTasksQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "ListAssistantTasksQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "limit",
+      "status",
+    }, path);
     return ListAssistantTasksQuery(
-      limit: map["limit"] == null ? null : _generatedRequestInt(map["limit"], '$path.limit'),
-      status: map["status"] == null ? null : _generatedRequestString(map["status"], '$path.status'),
+      limit: map["limit"] == null
+          ? null
+          : _generatedRequestInt(map["limit"], '$path.limit'),
+      status: map["status"] == null
+          ? null
+          : _generatedRequestString(map["status"], '$path.status'),
     );
   }
 
@@ -1425,12 +2215,23 @@ final class ListSkillActivitiesQuery {
   final String? cursor;
   final int? limit;
 
-  factory ListSkillActivitiesQuery.fromWire(Map<String, Object?> map, [String path = "ListSkillActivitiesQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"skillId", "cursor", "limit"}, path);
+  factory ListSkillActivitiesQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "ListSkillActivitiesQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "skillId",
+      "cursor",
+      "limit",
+    }, path);
     return ListSkillActivitiesQuery(
       skillId: _generatedRequestString(map["skillId"], '$path.skillId'),
-      cursor: map["cursor"] == null ? null : _generatedRequestString(map["cursor"], '$path.cursor'),
-      limit: map["limit"] == null ? null : _generatedRequestInt(map["limit"], '$path.limit'),
+      cursor: map["cursor"] == null
+          ? null
+          : _generatedRequestString(map["cursor"], '$path.cursor'),
+      limit: map["limit"] == null
+          ? null
+          : _generatedRequestInt(map["limit"], '$path.limit'),
     );
   }
 
@@ -1446,9 +2247,7 @@ final class ListSkillConsentsQuery {
 }
 
 final class ListSkillUserSettingsQuery {
-  ListSkillUserSettingsQuery({
-    int? limit,
-  }) : limit = limit {
+  ListSkillUserSettingsQuery({int? limit}) : limit = limit {
     if (this.limit != null && this.limit! <= 0) {
       throw ArgumentError.value(this.limit, "limit", "must be positive");
     }
@@ -1459,10 +2258,15 @@ final class ListSkillUserSettingsQuery {
 
   final int? limit;
 
-  factory ListSkillUserSettingsQuery.fromWire(Map<String, Object?> map, [String path = "ListSkillUserSettingsQuery"]) {
+  factory ListSkillUserSettingsQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "ListSkillUserSettingsQuery",
+  ]) {
     _generatedRequestRejectUnknownFields(map, const <String>{"limit"}, path);
     return ListSkillUserSettingsQuery(
-      limit: map["limit"] == null ? null : _generatedRequestInt(map["limit"], '$path.limit'),
+      limit: map["limit"] == null
+          ? null
+          : _generatedRequestInt(map["limit"], '$path.limit'),
     );
   }
 
@@ -1472,9 +2276,7 @@ final class ListSkillUserSettingsQuery {
 }
 
 final class ListSkillsQuery {
-  ListSkillsQuery({
-    int? limit,
-  }) : limit = limit {
+  ListSkillsQuery({int? limit}) : limit = limit {
     if (this.limit != null && this.limit! <= 0) {
       throw ArgumentError.value(this.limit, "limit", "must be positive");
     }
@@ -1485,10 +2287,15 @@ final class ListSkillsQuery {
 
   final int? limit;
 
-  factory ListSkillsQuery.fromWire(Map<String, Object?> map, [String path = "ListSkillsQuery"]) {
+  factory ListSkillsQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "ListSkillsQuery",
+  ]) {
     _generatedRequestRejectUnknownFields(map, const <String>{"limit"}, path);
     return ListSkillsQuery(
-      limit: map["limit"] == null ? null : _generatedRequestInt(map["limit"], '$path.limit'),
+      limit: map["limit"] == null
+          ? null
+          : _generatedRequestInt(map["limit"], '$path.limit'),
     );
   }
 
@@ -1510,12 +2317,29 @@ final class PageContextAction {
   final String? objectTypeRef;
   final String? objectId;
 
-  factory PageContextAction.fromWire(Map<String, Object?> map, [String path = "PageContextAction"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"actionType", "objectTypeRef", "objectId"}, path);
+  factory PageContextAction.fromWire(
+    Map<String, Object?> map, [
+    String path = "PageContextAction",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "actionType",
+      "objectTypeRef",
+      "objectId",
+    }, path);
     return PageContextAction(
-      actionType: _generatedRequestString(map["actionType"], '$path.actionType'),
-      objectTypeRef: map["objectTypeRef"] == null ? null : _generatedRequestString(map["objectTypeRef"], '$path.objectTypeRef'),
-      objectId: map["objectId"] == null ? null : _generatedRequestString(map["objectId"], '$path.objectId'),
+      actionType: _generatedRequestString(
+        map["actionType"],
+        '$path.actionType',
+      ),
+      objectTypeRef: map["objectTypeRef"] == null
+          ? null
+          : _generatedRequestString(
+              map["objectTypeRef"],
+              '$path.objectTypeRef',
+            ),
+      objectId: map["objectId"] == null
+          ? null
+          : _generatedRequestString(map["objectId"], '$path.objectId'),
     );
   }
 
@@ -1536,10 +2360,19 @@ final class PageContextObjectRef {
   final String objectTypeRef;
   final String objectId;
 
-  factory PageContextObjectRef.fromWire(Map<String, Object?> map, [String path = "PageContextObjectRef"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"objectTypeRef", "objectId"}, path);
+  factory PageContextObjectRef.fromWire(
+    Map<String, Object?> map, [
+    String path = "PageContextObjectRef",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "objectTypeRef",
+      "objectId",
+    }, path);
     return PageContextObjectRef(
-      objectTypeRef: _generatedRequestString(map["objectTypeRef"], '$path.objectTypeRef'),
+      objectTypeRef: _generatedRequestString(
+        map["objectTypeRef"],
+        '$path.objectTypeRef',
+      ),
       objectId: _generatedRequestString(map["objectId"], '$path.objectId'),
     );
   }
@@ -1561,8 +2394,7 @@ final class PageContextSnapshot {
        pageType = pageType,
        pageObjects = List.unmodifiable(pageObjects),
        userActions = List.unmodifiable(userActions),
-       consentGranted = consentGranted {
-  }
+       consentGranted = consentGranted {}
 
   final DateTime capturedAt;
   final AssistantPageContextType pageType;
@@ -1570,22 +2402,80 @@ final class PageContextSnapshot {
   final List<PageContextAction> userActions;
   final bool consentGranted;
 
-  factory PageContextSnapshot.fromWire(Map<String, Object?> map, [String path = "PageContextSnapshot"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"capturedAt", "pageType", "pageObjects", "userActions", "consentGranted"}, path);
+  factory PageContextSnapshot.fromWire(
+    Map<String, Object?> map, [
+    String path = "PageContextSnapshot",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "capturedAt",
+      "pageType",
+      "pageObjects",
+      "userActions",
+      "consentGranted",
+    }, path);
     return PageContextSnapshot(
-      capturedAt: _generatedRequestTimestamp(map["capturedAt"], '$path.capturedAt'),
-      pageType: switch (map["pageType"]) { "unknown" => AssistantPageContextType.unknown, "home" => AssistantPageContextType.home, "discovery" => AssistantPageContextType.discovery, "circles" => AssistantPageContextType.circles, "article" => AssistantPageContextType.article, "profile" => AssistantPageContextType.profile, "chat" => AssistantPageContextType.chat, "create" => AssistantPageContextType.create, "search" => AssistantPageContextType.search, _ => throw FormatException('$path.pageType' + ' has an invalid enum value'), },
-      pageObjects: List<PageContextObjectRef>.unmodifiable(_generatedRequestList(map["pageObjects"], '$path.pageObjects').asMap().entries.map((entry) => PageContextObjectRef.fromWire(_generatedRequestObject(entry.value, '$path.pageObjects' + '[${entry.key}]'), '$path.pageObjects' + '[${entry.key}]'))),
-      userActions: List<PageContextAction>.unmodifiable(_generatedRequestList(map["userActions"], '$path.userActions').asMap().entries.map((entry) => PageContextAction.fromWire(_generatedRequestObject(entry.value, '$path.userActions' + '[${entry.key}]'), '$path.userActions' + '[${entry.key}]'))),
-      consentGranted: _generatedRequestBool(map["consentGranted"], '$path.consentGranted'),
+      capturedAt: _generatedRequestTimestamp(
+        map["capturedAt"],
+        '$path.capturedAt',
+      ),
+      pageType: switch (map["pageType"]) {
+        "unknown" => AssistantPageContextType.unknown,
+        "home" => AssistantPageContextType.home,
+        "discovery" => AssistantPageContextType.discovery,
+        "circles" => AssistantPageContextType.circles,
+        "article" => AssistantPageContextType.article,
+        "profile" => AssistantPageContextType.profile,
+        "chat" => AssistantPageContextType.chat,
+        "create" => AssistantPageContextType.create,
+        "search" => AssistantPageContextType.search,
+        _ => throw FormatException(
+          '$path.pageType' + ' has an invalid enum value',
+        ),
+      },
+      pageObjects: List<PageContextObjectRef>.unmodifiable(
+        _generatedRequestList(
+          map["pageObjects"],
+          '$path.pageObjects',
+        ).asMap().entries.map(
+          (entry) => PageContextObjectRef.fromWire(
+            _generatedRequestObject(
+              entry.value,
+              '$path.pageObjects' + '[${entry.key}]',
+            ),
+            '$path.pageObjects' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      userActions: List<PageContextAction>.unmodifiable(
+        _generatedRequestList(
+          map["userActions"],
+          '$path.userActions',
+        ).asMap().entries.map(
+          (entry) => PageContextAction.fromWire(
+            _generatedRequestObject(
+              entry.value,
+              '$path.userActions' + '[${entry.key}]',
+            ),
+            '$path.userActions' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      consentGranted: _generatedRequestBool(
+        map["consentGranted"],
+        '$path.consentGranted',
+      ),
     );
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
     "capturedAt": this.capturedAt.toUtc().toIso8601String(),
     "pageType": this.pageType.wireName,
-    "pageObjects": this.pageObjects.map((value) => value.toWire()).toList(growable: false),
-    "userActions": this.userActions.map((value) => value.toWire()).toList(growable: false),
+    "pageObjects": this.pageObjects
+        .map((value) => value.toWire())
+        .toList(growable: false),
+    "userActions": this.userActions
+        .map((value) => value.toWire())
+        .toList(growable: false),
     "consentGranted": this.consentGranted,
   };
 }
@@ -1605,7 +2495,11 @@ final class PutSkillSurfacePlacementRequest {
        status = status,
        expectedRevision = expectedRevision {
     if (this.surfaceId.isEmpty) {
-      throw ArgumentError.value(this.surfaceId, "surfaceId", 'must not be blank');
+      throw ArgumentError.value(
+        this.surfaceId,
+        "surfaceId",
+        'must not be blank',
+      );
     }
   }
 
@@ -1616,15 +2510,55 @@ final class PutSkillSurfacePlacementRequest {
   final SkillSurfacePlacementStatus status;
   final int expectedRevision;
 
-  factory PutSkillSurfacePlacementRequest.fromWire(Map<String, Object?> map, [String path = "PutSkillSurfacePlacementRequest"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"surfaceKind", "surfaceId", "policy", "disabledSkillIds", "status", "expectedRevision"}, path);
+  factory PutSkillSurfacePlacementRequest.fromWire(
+    Map<String, Object?> map, [
+    String path = "PutSkillSurfacePlacementRequest",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "surfaceKind",
+      "surfaceId",
+      "policy",
+      "disabledSkillIds",
+      "status",
+      "expectedRevision",
+    }, path);
     return PutSkillSurfacePlacementRequest(
-      surfaceKind: switch (map["surfaceKind"]) { "conversation" => SkillSurfaceKind.conversation, "circle" => SkillSurfaceKind.circle, _ => throw FormatException('$path.surfaceKind' + ' has an invalid enum value'), },
+      surfaceKind: switch (map["surfaceKind"]) {
+        "conversation" => SkillSurfaceKind.conversation,
+        "circle" => SkillSurfaceKind.circle,
+        _ => throw FormatException(
+          '$path.surfaceKind' + ' has an invalid enum value',
+        ),
+      },
       surfaceId: _generatedRequestString(map["surfaceId"], '$path.surfaceId'),
-      policy: switch (map["policy"]) { "all_shared_eligible" => SkillSurfacePlacementPolicy.allSharedEligible, _ => throw FormatException('$path.policy' + ' has an invalid enum value'), },
-      disabledSkillIds: List<String>.unmodifiable(_generatedRequestList(map["disabledSkillIds"], '$path.disabledSkillIds').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.disabledSkillIds' + '[${entry.key}]'))),
-      status: switch (map["status"]) { "active" => SkillSurfacePlacementStatus.active, "archived" => SkillSurfacePlacementStatus.archived, _ => throw FormatException('$path.status' + ' has an invalid enum value'), },
-      expectedRevision: _generatedRequestInt(map["expectedRevision"], '$path.expectedRevision'),
+      policy: switch (map["policy"]) {
+        "all_shared_eligible" => SkillSurfacePlacementPolicy.allSharedEligible,
+        _ => throw FormatException(
+          '$path.policy' + ' has an invalid enum value',
+        ),
+      },
+      disabledSkillIds: List<String>.unmodifiable(
+        _generatedRequestList(
+          map["disabledSkillIds"],
+          '$path.disabledSkillIds',
+        ).asMap().entries.map(
+          (entry) => _generatedRequestString(
+            entry.value,
+            '$path.disabledSkillIds' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      status: switch (map["status"]) {
+        "active" => SkillSurfacePlacementStatus.active,
+        "archived" => SkillSurfacePlacementStatus.archived,
+        _ => throw FormatException(
+          '$path.status' + ' has an invalid enum value',
+        ),
+      },
+      expectedRevision: _generatedRequestInt(
+        map["expectedRevision"],
+        '$path.expectedRevision',
+      ),
     );
   }
 
@@ -1632,7 +2566,9 @@ final class PutSkillSurfacePlacementRequest {
     "surfaceKind": this.surfaceKind.wireName,
     "surfaceId": this.surfaceId,
     "policy": this.policy.wireName,
-    "disabledSkillIds": this.disabledSkillIds.map((value) => value).toList(growable: false),
+    "disabledSkillIds": this.disabledSkillIds
+        .map((value) => value)
+        .toList(growable: false),
     "status": this.status.wireName,
     "expectedRevision": this.expectedRevision,
   };
@@ -1667,16 +2603,59 @@ final class PutSkillUserSettingRequest {
   final List<String> connectorConnectionRefs;
   final int expectedRevision;
 
-  factory PutSkillUserSettingRequest.fromWire(Map<String, Object?> map, [String path = "PutSkillUserSettingRequest"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"skillId", "status", "configurationData", "configurationSchemaDigest", "memoryPolicy", "connectorConnectionRefs", "expectedRevision"}, path);
+  factory PutSkillUserSettingRequest.fromWire(
+    Map<String, Object?> map, [
+    String path = "PutSkillUserSettingRequest",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "skillId",
+      "status",
+      "configurationData",
+      "configurationSchemaDigest",
+      "memoryPolicy",
+      "connectorConnectionRefs",
+      "expectedRevision",
+    }, path);
     return PutSkillUserSettingRequest(
       skillId: _generatedRequestString(map["skillId"], '$path.skillId'),
-      status: switch (map["status"]) { "enabled" => SkillUserSettingStatus.enabled, "disabled" => SkillUserSettingStatus.disabled, _ => throw FormatException('$path.status' + ' has an invalid enum value'), },
-      configurationData: _generatedRequestObject(map["configurationData"], '$path.configurationData'),
-      configurationSchemaDigest: _generatedRequestString(map["configurationSchemaDigest"], '$path.configurationSchemaDigest'),
-      memoryPolicy: switch (map["memoryPolicy"]) { "package_default" => SkillMemoryPolicy.packageDefault, "confirm_before_save" => SkillMemoryPolicy.confirmBeforeSave, "disabled" => SkillMemoryPolicy.disabled, _ => throw FormatException('$path.memoryPolicy' + ' has an invalid enum value'), },
-      connectorConnectionRefs: List<String>.unmodifiable(_generatedRequestList(map["connectorConnectionRefs"], '$path.connectorConnectionRefs').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.connectorConnectionRefs' + '[${entry.key}]'))),
-      expectedRevision: _generatedRequestInt(map["expectedRevision"], '$path.expectedRevision'),
+      status: switch (map["status"]) {
+        "enabled" => SkillUserSettingStatus.enabled,
+        "disabled" => SkillUserSettingStatus.disabled,
+        _ => throw FormatException(
+          '$path.status' + ' has an invalid enum value',
+        ),
+      },
+      configurationData: _generatedRequestObject(
+        map["configurationData"],
+        '$path.configurationData',
+      ),
+      configurationSchemaDigest: _generatedRequestString(
+        map["configurationSchemaDigest"],
+        '$path.configurationSchemaDigest',
+      ),
+      memoryPolicy: switch (map["memoryPolicy"]) {
+        "package_default" => SkillMemoryPolicy.packageDefault,
+        "confirm_before_save" => SkillMemoryPolicy.confirmBeforeSave,
+        "disabled" => SkillMemoryPolicy.disabled,
+        _ => throw FormatException(
+          '$path.memoryPolicy' + ' has an invalid enum value',
+        ),
+      },
+      connectorConnectionRefs: List<String>.unmodifiable(
+        _generatedRequestList(
+          map["connectorConnectionRefs"],
+          '$path.connectorConnectionRefs',
+        ).asMap().entries.map(
+          (entry) => _generatedRequestString(
+            entry.value,
+            '$path.connectorConnectionRefs' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      expectedRevision: _generatedRequestInt(
+        map["expectedRevision"],
+        '$path.expectedRevision',
+      ),
     );
   }
 
@@ -1686,22 +2665,34 @@ final class PutSkillUserSettingRequest {
     "configurationData": this.configurationData,
     "configurationSchemaDigest": this.configurationSchemaDigest,
     "memoryPolicy": this.memoryPolicy.wireName,
-    "connectorConnectionRefs": this.connectorConnectionRefs.map((value) => value).toList(growable: false),
+    "connectorConnectionRefs": this.connectorConnectionRefs
+        .map((value) => value)
+        .toList(growable: false),
     "expectedRevision": this.expectedRevision,
   };
 }
 
 final class ReportPageContextCommand {
-  const ReportPageContextCommand({
-    required PageContextSnapshot contextSnapshot,
-  }) : contextSnapshot = contextSnapshot;
+  const ReportPageContextCommand({required PageContextSnapshot contextSnapshot})
+    : contextSnapshot = contextSnapshot;
 
   final PageContextSnapshot contextSnapshot;
 
-  factory ReportPageContextCommand.fromWire(Map<String, Object?> map, [String path = "ReportPageContextCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"contextSnapshot"}, path);
+  factory ReportPageContextCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "ReportPageContextCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "contextSnapshot",
+    }, path);
     return ReportPageContextCommand(
-      contextSnapshot: PageContextSnapshot.fromWire(_generatedRequestObject(map["contextSnapshot"], '$path.contextSnapshot'), '$path.contextSnapshot'),
+      contextSnapshot: PageContextSnapshot.fromWire(
+        _generatedRequestObject(
+          map["contextSnapshot"],
+          '$path.contextSnapshot',
+        ),
+        '$path.contextSnapshot',
+      ),
     );
   }
 
@@ -1711,9 +2702,7 @@ final class ReportPageContextCommand {
 }
 
 final class RevokeSkillConsentRequest {
-  RevokeSkillConsentRequest({
-    required String skillId,
-  }) : skillId = skillId {
+  RevokeSkillConsentRequest({required String skillId}) : skillId = skillId {
     if (this.skillId.isEmpty) {
       throw ArgumentError.value(this.skillId, "skillId", 'must not be blank');
     }
@@ -1721,16 +2710,17 @@ final class RevokeSkillConsentRequest {
 
   final String skillId;
 
-  factory RevokeSkillConsentRequest.fromWire(Map<String, Object?> map, [String path = "RevokeSkillConsentRequest"]) {
+  factory RevokeSkillConsentRequest.fromWire(
+    Map<String, Object?> map, [
+    String path = "RevokeSkillConsentRequest",
+  ]) {
     _generatedRequestRejectUnknownFields(map, const <String>{"skillId"}, path);
     return RevokeSkillConsentRequest(
       skillId: _generatedRequestString(map["skillId"], '$path.skillId'),
     );
   }
 
-  Map<String, Object?> toWire() => <String, Object?>{
-    "skillId": this.skillId,
-  };
+  Map<String, Object?> toWire() => <String, Object?>{"skillId": this.skillId};
 }
 
 final class SetAssistantPreferenceRequest {
@@ -1758,15 +2748,59 @@ final class SetAssistantPreferenceRequest {
   final String? sourceSessionId;
   final bool confirmed;
 
-  factory SetAssistantPreferenceRequest.fromWire(Map<String, Object?> map, [String path = "SetAssistantPreferenceRequest"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"scope", "sessionId", "kind", "value", "sourceType", "sourceSessionId", "confirmed"}, path);
+  factory SetAssistantPreferenceRequest.fromWire(
+    Map<String, Object?> map, [
+    String path = "SetAssistantPreferenceRequest",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "scope",
+      "sessionId",
+      "kind",
+      "value",
+      "sourceType",
+      "sourceSessionId",
+      "confirmed",
+    }, path);
     return SetAssistantPreferenceRequest(
-      scope: switch (map["scope"]) { "session" => AssistantPreferenceScope.session, "long_term" => AssistantPreferenceScope.longTerm, "unknown" => AssistantPreferenceScope.unknown, _ => throw FormatException('$path.scope' + ' has an invalid enum value'), },
-      sessionId: map["sessionId"] == null ? null : _generatedRequestString(map["sessionId"], '$path.sessionId'),
-      kind: switch (map["kind"]) { "response_style" => AssistantPreferenceKind.responseStyle, "reply_length" => AssistantPreferenceKind.replyLength, "tone" => AssistantPreferenceKind.tone, "language" => AssistantPreferenceKind.language, "frequent_locations" => AssistantPreferenceKind.frequentLocations, "family_terms" => AssistantPreferenceKind.familyTerms, "dietary_restrictions" => AssistantPreferenceKind.dietaryRestrictions, "travel_preferences" => AssistantPreferenceKind.travelPreferences, "unknown" => AssistantPreferenceKind.unknown, _ => throw FormatException('$path.kind' + ' has an invalid enum value'), },
+      scope: switch (map["scope"]) {
+        "session" => AssistantPreferenceScope.session,
+        "long_term" => AssistantPreferenceScope.longTerm,
+        "unknown" => AssistantPreferenceScope.unknown,
+        _ => throw FormatException(
+          '$path.scope' + ' has an invalid enum value',
+        ),
+      },
+      sessionId: map["sessionId"] == null
+          ? null
+          : _generatedRequestString(map["sessionId"], '$path.sessionId'),
+      kind: switch (map["kind"]) {
+        "response_style" => AssistantPreferenceKind.responseStyle,
+        "reply_length" => AssistantPreferenceKind.replyLength,
+        "tone" => AssistantPreferenceKind.tone,
+        "language" => AssistantPreferenceKind.language,
+        "frequent_locations" => AssistantPreferenceKind.frequentLocations,
+        "family_terms" => AssistantPreferenceKind.familyTerms,
+        "dietary_restrictions" => AssistantPreferenceKind.dietaryRestrictions,
+        "travel_preferences" => AssistantPreferenceKind.travelPreferences,
+        "unknown" => AssistantPreferenceKind.unknown,
+        _ => throw FormatException('$path.kind' + ' has an invalid enum value'),
+      },
       value: _generatedRequestString(map["value"], '$path.value'),
-      sourceType: switch (map["sourceType"]) { "explicit_rewrite" => AssistantPreferenceSourceType.explicitRewrite, "management" => AssistantPreferenceSourceType.management, "session_confirmed" => AssistantPreferenceSourceType.sessionConfirmed, "unknown" => AssistantPreferenceSourceType.unknown, _ => throw FormatException('$path.sourceType' + ' has an invalid enum value'), },
-      sourceSessionId: map["sourceSessionId"] == null ? null : _generatedRequestString(map["sourceSessionId"], '$path.sourceSessionId'),
+      sourceType: switch (map["sourceType"]) {
+        "explicit_rewrite" => AssistantPreferenceSourceType.explicitRewrite,
+        "management" => AssistantPreferenceSourceType.management,
+        "session_confirmed" => AssistantPreferenceSourceType.sessionConfirmed,
+        "unknown" => AssistantPreferenceSourceType.unknown,
+        _ => throw FormatException(
+          '$path.sourceType' + ' has an invalid enum value',
+        ),
+      },
+      sourceSessionId: map["sourceSessionId"] == null
+          ? null
+          : _generatedRequestString(
+              map["sourceSessionId"],
+              '$path.sourceSessionId',
+            ),
       confirmed: _generatedRequestBool(map["confirmed"], '$path.confirmed'),
     );
   }
@@ -1791,13 +2825,21 @@ final class UpdateAssistantSkillSubscriptionStatusCommand {
        status = status.trim(),
        clientRequestId = clientRequestId.trim() {
     if (this.subscriptionId.isEmpty) {
-      throw ArgumentError.value(this.subscriptionId, "subscriptionId", 'must not be blank');
+      throw ArgumentError.value(
+        this.subscriptionId,
+        "subscriptionId",
+        'must not be blank',
+      );
     }
     if (this.status.isEmpty) {
       throw ArgumentError.value(this.status, "status", 'must not be blank');
     }
     if (this.clientRequestId.isEmpty) {
-      throw ArgumentError.value(this.clientRequestId, "clientRequestId", 'must not be blank');
+      throw ArgumentError.value(
+        this.clientRequestId,
+        "clientRequestId",
+        'must not be blank',
+      );
     }
   }
 
@@ -1805,12 +2847,25 @@ final class UpdateAssistantSkillSubscriptionStatusCommand {
   final String status;
   final String clientRequestId;
 
-  factory UpdateAssistantSkillSubscriptionStatusCommand.fromWire(Map<String, Object?> map, [String path = "UpdateAssistantSkillSubscriptionStatusCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"subscriptionId", "status", "clientRequestId"}, path);
+  factory UpdateAssistantSkillSubscriptionStatusCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "UpdateAssistantSkillSubscriptionStatusCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "subscriptionId",
+      "status",
+      "clientRequestId",
+    }, path);
     return UpdateAssistantSkillSubscriptionStatusCommand(
-      subscriptionId: _generatedRequestString(map["subscriptionId"], '$path.subscriptionId'),
+      subscriptionId: _generatedRequestString(
+        map["subscriptionId"],
+        '$path.subscriptionId',
+      ),
       status: _generatedRequestString(map["status"], '$path.status'),
-      clientRequestId: _generatedRequestString(map["clientRequestId"], '$path.clientRequestId'),
+      clientRequestId: _generatedRequestString(
+        map["clientRequestId"],
+        '$path.clientRequestId',
+      ),
     );
   }
 
@@ -1821,7 +2876,10 @@ final class UpdateAssistantSkillSubscriptionStatusCommand {
   };
 }
 
-CloudOperationRequestPayload encodeAssistantAssistantEntryViewGetAssistantEntryGeneratedRequest(AssistantEntryQuery request) {
+CloudOperationRequestPayload
+encodeAssistantAssistantEntryViewGetAssistantEntryGeneratedRequest(
+  AssistantEntryQuery request,
+) {
   return CloudOperationRequestPayload(
     queryParameters: <String, String>{
       if (request.pageType != null) "pageType": request.pageType!,
@@ -1830,33 +2888,46 @@ CloudOperationRequestPayload encodeAssistantAssistantEntryViewGetAssistantEntryG
   );
 }
 
-CloudOperationRequestPayload encodeAssistantAssistantLearningFactAppendAssistantLearningFactGeneratedRequest(AssistantLearningFactAppendCommand request) {
+CloudOperationRequestPayload
+encodeAssistantAssistantLearningFactAppendAssistantLearningFactGeneratedRequest(
+  AssistantLearningFactAppendCommand request,
+) {
   return CloudOperationRequestPayload(
     body: <String, Object?>{
       "eventId": request.eventId,
       "factType": request.factType,
       "assistantTurnId": request.assistantTurnId,
-      if (request.triggerMessageId != null) "triggerMessageId": request.triggerMessageId!,
+      if (request.triggerMessageId != null)
+        "triggerMessageId": request.triggerMessageId!,
       "referralSource": request.referralSource,
       "domainId": request.domainId,
       if (request.eventType != null) "eventType": request.eventType!,
       if (request.feedbackType != null) "feedbackType": request.feedbackType!,
-      if (request.feedbackScore != null) "feedbackScore": request.feedbackScore!,
-      if (request.reasonCodes.isNotEmpty) "reasonCodes": request.reasonCodes.map((value) => value).toList(growable: false),
+      if (request.feedbackScore != null)
+        "feedbackScore": request.feedbackScore!,
+      if (request.reasonCodes.isNotEmpty)
+        "reasonCodes": request.reasonCodes
+            .map((value) => value)
+            .toList(growable: false),
       if (request.actionType != null) "actionType": request.actionType!,
-      if (request.suggestedActionId != null) "suggestedActionId": request.suggestedActionId!,
+      if (request.suggestedActionId != null)
+        "suggestedActionId": request.suggestedActionId!,
       if (request.durationMs != null) "durationMs": request.durationMs!,
       if (request.queryText != null) "queryText": request.queryText!,
       if (request.answerText != null) "answerText": request.answerText!,
       if (request.feedbackText != null) "feedbackText": request.feedbackText!,
-      if (request.correctionText != null) "correctionText": request.correctionText!,
+      if (request.correctionText != null)
+        "correctionText": request.correctionText!,
       "trainingEligible": request.trainingEligible,
       "occurredAt": request.occurredAt.toUtc().toIso8601String(),
     },
   );
 }
 
-CloudOperationRequestPayload encodeAssistantAssistantPreferenceListAssistantPreferencesGeneratedRequest(ListAssistantPreferencesQuery request) {
+CloudOperationRequestPayload
+encodeAssistantAssistantPreferenceListAssistantPreferencesGeneratedRequest(
+  ListAssistantPreferencesQuery request,
+) {
   return CloudOperationRequestPayload(
     queryParameters: <String, String>{
       if (request.scope != null) "scope": request.scope!,
@@ -1866,23 +2937,28 @@ CloudOperationRequestPayload encodeAssistantAssistantPreferenceListAssistantPref
   );
 }
 
-CloudOperationRequestPayload encodeAssistantAssistantPreferenceRestoreAssistantPreferenceGeneratedRequest(AssistantPreferenceByIdRequest request) {
+CloudOperationRequestPayload
+encodeAssistantAssistantPreferenceRestoreAssistantPreferenceGeneratedRequest(
+  AssistantPreferenceByIdRequest request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "preferenceId": request.preferenceId,
-    },
+    pathParameters: <String, String>{"preferenceId": request.preferenceId},
   );
 }
 
-CloudOperationRequestPayload encodeAssistantAssistantPreferenceRevokeAssistantPreferenceGeneratedRequest(AssistantPreferenceByIdRequest request) {
+CloudOperationRequestPayload
+encodeAssistantAssistantPreferenceRevokeAssistantPreferenceGeneratedRequest(
+  AssistantPreferenceByIdRequest request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "preferenceId": request.preferenceId,
-    },
+    pathParameters: <String, String>{"preferenceId": request.preferenceId},
   );
 }
 
-CloudOperationRequestPayload encodeAssistantAssistantPreferenceSetAssistantPreferenceGeneratedRequest(SetAssistantPreferenceRequest request) {
+CloudOperationRequestPayload
+encodeAssistantAssistantPreferenceSetAssistantPreferenceGeneratedRequest(
+  SetAssistantPreferenceRequest request,
+) {
   return CloudOperationRequestPayload(
     body: <String, Object?>{
       "scope": request.scope.wireName,
@@ -1890,13 +2966,17 @@ CloudOperationRequestPayload encodeAssistantAssistantPreferenceSetAssistantPrefe
       "kind": request.kind.wireName,
       "value": request.value,
       "sourceType": request.sourceType.wireName,
-      if (request.sourceSessionId != null) "sourceSessionId": request.sourceSessionId!,
+      if (request.sourceSessionId != null)
+        "sourceSessionId": request.sourceSessionId!,
       "confirmed": request.confirmed,
     },
   );
 }
 
-CloudOperationRequestPayload encodeAssistantAssistantRunApproveAssistantToolUseGeneratedRequest(AssistantApproveToolUseRequest request) {
+CloudOperationRequestPayload
+encodeAssistantAssistantRunApproveAssistantToolUseGeneratedRequest(
+  AssistantApproveToolUseRequest request,
+) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
       "runId": request.runId,
@@ -1905,98 +2985,112 @@ CloudOperationRequestPayload encodeAssistantAssistantRunApproveAssistantToolUseG
     body: <String, Object?>{
       "decision": request.decision,
       "approvalPermit": request.approvalPermit,
-      if (request.installationId != null) "installationId": request.installationId!,
+      if (request.installationId != null)
+        "installationId": request.installationId!,
       if (request.deviceId != null) "deviceId": request.deviceId!,
     },
   );
 }
 
-CloudOperationRequestPayload encodeAssistantAssistantRunCancelAssistantRunGeneratedRequest(AssistantRunCommandRequest request) {
+CloudOperationRequestPayload
+encodeAssistantAssistantRunCancelAssistantRunGeneratedRequest(
+  AssistantRunCommandRequest request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "runId": request.runId,
-    },
+    pathParameters: <String, String>{"runId": request.runId},
   );
 }
 
-CloudOperationRequestPayload encodeAssistantAssistantRunGetAssistantRunGeneratedRequest(AssistantRunByIdQuery request) {
+CloudOperationRequestPayload
+encodeAssistantAssistantRunGetAssistantRunGeneratedRequest(
+  AssistantRunByIdQuery request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "runId": request.runId,
-    },
+    pathParameters: <String, String>{"runId": request.runId},
   );
 }
 
-CloudOperationRequestPayload encodeAssistantAssistantRunPauseAssistantRunGeneratedRequest(AssistantPauseRunRequest request) {
+CloudOperationRequestPayload
+encodeAssistantAssistantRunPauseAssistantRunGeneratedRequest(
+  AssistantPauseRunRequest request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "runId": request.runId,
-    },
+    pathParameters: <String, String>{"runId": request.runId},
     body: <String, Object?>{
       if (request.reason != null) "reason": request.reason!,
     },
   );
 }
 
-CloudOperationRequestPayload encodeAssistantAssistantRunResumeAssistantRunGeneratedRequest(AssistantRunCommandRequest request) {
+CloudOperationRequestPayload
+encodeAssistantAssistantRunResumeAssistantRunGeneratedRequest(
+  AssistantRunCommandRequest request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "runId": request.runId,
-    },
+    pathParameters: <String, String>{"runId": request.runId},
   );
 }
 
-CloudOperationRequestPayload encodeAssistantAssistantRunStartAssistantRunGeneratedRequest(AssistantStartRunRequest request) {
+CloudOperationRequestPayload
+encodeAssistantAssistantRunStartAssistantRunGeneratedRequest(
+  AssistantStartRunRequest request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "sessionId": request.sessionId,
-    },
+    pathParameters: <String, String>{"sessionId": request.sessionId},
     body: <String, Object?>{
       "clientRequestId": request.clientRequestId,
       "intent": request.intent.toWire(),
-      if (request.contextSnapshot != null) "contextSnapshot": request.contextSnapshot!.toWire(),
-      if (request.reasoningProfile != null) "reasoningProfile": request.reasoningProfile!.wireName,
-      if (request.definitionOfDone != null) "definitionOfDone": request.definitionOfDone!.toWire(),
-      if (request.surfaceCapabilities != null) "surfaceCapabilities": request.surfaceCapabilities!.toWire(),
+      if (request.contextSnapshot != null)
+        "contextSnapshot": request.contextSnapshot!.toWire(),
+      if (request.reasoningProfile != null)
+        "reasoningProfile": request.reasoningProfile!.wireName,
+      if (request.definitionOfDone != null)
+        "definitionOfDone": request.definitionOfDone!.toWire(),
+      if (request.surfaceCapabilities != null)
+        "surfaceCapabilities": request.surfaceCapabilities!.toWire(),
     },
   );
 }
 
-CloudOperationRequestPayload encodeAssistantAssistantRunSteerAssistantRunGeneratedRequest(AssistantSteerRunRequest request) {
+CloudOperationRequestPayload
+encodeAssistantAssistantRunSteerAssistantRunGeneratedRequest(
+  AssistantSteerRunRequest request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "runId": request.runId,
-    },
-    body: <String, Object?>{
-      "instruction": request.instruction,
-    },
+    pathParameters: <String, String>{"runId": request.runId},
+    body: <String, Object?>{"instruction": request.instruction},
   );
 }
 
-CloudOperationRequestPayload encodeAssistantAssistantRunStreamAssistantRunEventsGeneratedRequest(AssistantRunEventStreamQuery request) {
+CloudOperationRequestPayload
+encodeAssistantAssistantRunStreamAssistantRunEventsGeneratedRequest(
+  AssistantRunEventStreamQuery request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "runId": request.runId,
-    },
+    pathParameters: <String, String>{"runId": request.runId},
     queryParameters: <String, String>{
       if (request.resumeToken != null) "resumeToken": request.resumeToken!,
     },
   );
 }
 
-CloudOperationRequestPayload encodeAssistantAssistantRunSubmitDeviceActionReceiptGeneratedRequest(AssistantSubmitDeviceActionReceiptRequest request) {
+CloudOperationRequestPayload
+encodeAssistantAssistantRunSubmitDeviceActionReceiptGeneratedRequest(
+  AssistantSubmitDeviceActionReceiptRequest request,
+) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
       "runId": request.runId,
       "toolInvocationId": request.toolInvocationId,
     },
-    body: <String, Object?>{
-      "receipt": request.receipt.toWire(),
-    },
+    body: <String, Object?>{"receipt": request.receipt.toWire()},
   );
 }
 
-CloudOperationRequestPayload encodeAssistantAssistantSessionCreateAssistantSessionGeneratedRequest(AssistantCreateSessionRequest request) {
+CloudOperationRequestPayload
+encodeAssistantAssistantSessionCreateAssistantSessionGeneratedRequest(
+  AssistantCreateSessionRequest request,
+) {
   return CloudOperationRequestPayload(
     body: <String, Object?>{
       if (request.summary != null) "summary": request.summary!,
@@ -2005,15 +3099,19 @@ CloudOperationRequestPayload encodeAssistantAssistantSessionCreateAssistantSessi
   );
 }
 
-CloudOperationRequestPayload encodeAssistantAssistantSessionGetAssistantSessionGeneratedRequest(AssistantSessionByIdQuery request) {
+CloudOperationRequestPayload
+encodeAssistantAssistantSessionGetAssistantSessionGeneratedRequest(
+  AssistantSessionByIdQuery request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "sessionId": request.sessionId,
-    },
+    pathParameters: <String, String>{"sessionId": request.sessionId},
   );
 }
 
-CloudOperationRequestPayload encodeAssistantAssistantSessionListAssistantSessionsGeneratedRequest(AssistantSessionListQuery request) {
+CloudOperationRequestPayload
+encodeAssistantAssistantSessionListAssistantSessionsGeneratedRequest(
+  AssistantSessionListQuery request,
+) {
   return CloudOperationRequestPayload(
     queryParameters: <String, String>{
       "limit": (request.limit).toString(),
@@ -2022,7 +3120,10 @@ CloudOperationRequestPayload encodeAssistantAssistantSessionListAssistantSession
   );
 }
 
-CloudOperationRequestPayload encodeAssistantAssistantTaskViewListAssistantTasksGeneratedRequest(ListAssistantTasksQuery request) {
+CloudOperationRequestPayload
+encodeAssistantAssistantTaskViewListAssistantTasksGeneratedRequest(
+  ListAssistantTasksQuery request,
+) {
   return CloudOperationRequestPayload(
     queryParameters: <String, String>{
       if (request.limit != null) "limit": (request.limit!).toString(),
@@ -2031,11 +3132,12 @@ CloudOperationRequestPayload encodeAssistantAssistantTaskViewListAssistantTasksG
   );
 }
 
-CloudOperationRequestPayload encodeAssistantAssistantTurnViewListSessionTurnsGeneratedRequest(AssistantTurnListQuery request) {
+CloudOperationRequestPayload
+encodeAssistantAssistantTurnViewListSessionTurnsGeneratedRequest(
+  AssistantTurnListQuery request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "sessionId": request.sessionId,
-    },
+    pathParameters: <String, String>{"sessionId": request.sessionId},
     queryParameters: <String, String>{
       if (request.limit != null) "limit": (request.limit!).toString(),
       if (request.cursor != null) "cursor": request.cursor!,
@@ -2043,7 +3145,10 @@ CloudOperationRequestPayload encodeAssistantAssistantTurnViewListSessionTurnsGen
   );
 }
 
-CloudOperationRequestPayload encodeAssistantPageContextReportPageContextGeneratedRequest(ReportPageContextCommand request) {
+CloudOperationRequestPayload
+encodeAssistantPageContextReportPageContextGeneratedRequest(
+  ReportPageContextCommand request,
+) {
   return CloudOperationRequestPayload(
     body: <String, Object?>{
       "contextSnapshot": request.contextSnapshot.toWire(),
@@ -2051,11 +3156,12 @@ CloudOperationRequestPayload encodeAssistantPageContextReportPageContextGenerate
   );
 }
 
-CloudOperationRequestPayload encodeAssistantSkillActivityViewListSkillActivitiesGeneratedRequest(ListSkillActivitiesQuery request) {
+CloudOperationRequestPayload
+encodeAssistantSkillActivityViewListSkillActivitiesGeneratedRequest(
+  ListSkillActivitiesQuery request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "skillId": request.skillId,
-    },
+    pathParameters: <String, String>{"skillId": request.skillId},
     queryParameters: <String, String>{
       if (request.cursor != null) "cursor": request.cursor!,
       if (request.limit != null) "limit": (request.limit!).toString(),
@@ -2063,15 +3169,17 @@ CloudOperationRequestPayload encodeAssistantSkillActivityViewListSkillActivities
   );
 }
 
-CloudOperationRequestPayload encodeAssistantSkillCatalogGetSkillCatalogItemGeneratedRequest(GetSkillCatalogItemQuery request) {
+CloudOperationRequestPayload
+encodeAssistantSkillCatalogGetSkillCatalogItemGeneratedRequest(
+  GetSkillCatalogItemQuery request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "skillId": request.skillId,
-    },
+    pathParameters: <String, String>{"skillId": request.skillId},
   );
 }
 
-CloudOperationRequestPayload encodeAssistantSkillCatalogListSkillsGeneratedRequest(ListSkillsQuery request) {
+CloudOperationRequestPayload
+encodeAssistantSkillCatalogListSkillsGeneratedRequest(ListSkillsQuery request) {
   return CloudOperationRequestPayload(
     queryParameters: <String, String>{
       if (request.limit != null) "limit": (request.limit!).toString(),
@@ -2079,35 +3187,42 @@ CloudOperationRequestPayload encodeAssistantSkillCatalogListSkillsGeneratedReque
   );
 }
 
-CloudOperationRequestPayload encodeAssistantSkillConsentGrantSkillConsentGeneratedRequest(GrantSkillConsentRequest request) {
+CloudOperationRequestPayload
+encodeAssistantSkillConsentGrantSkillConsentGeneratedRequest(
+  GrantSkillConsentRequest request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "skillId": request.skillId,
-    },
+    pathParameters: <String, String>{"skillId": request.skillId},
     body: <String, Object?>{
-      "grantedScopes": request.grantedScopes.map((value) => value).toList(growable: false),
+      "grantedScopes": request.grantedScopes
+          .map((value) => value)
+          .toList(growable: false),
     },
   );
 }
 
-CloudOperationRequestPayload encodeAssistantSkillConsentListConsentsGeneratedRequest(ListSkillConsentsQuery request) {
+CloudOperationRequestPayload
+encodeAssistantSkillConsentListConsentsGeneratedRequest(
+  ListSkillConsentsQuery request,
+) {
+  return CloudOperationRequestPayload();
+}
+
+CloudOperationRequestPayload
+encodeAssistantSkillConsentRevokeSkillConsentGeneratedRequest(
+  RevokeSkillConsentRequest request,
+) {
   return CloudOperationRequestPayload(
+    pathParameters: <String, String>{"skillId": request.skillId},
   );
 }
 
-CloudOperationRequestPayload encodeAssistantSkillConsentRevokeSkillConsentGeneratedRequest(RevokeSkillConsentRequest request) {
+CloudOperationRequestPayload
+encodeAssistantSkillDataControlRequestConfirmSkillDataControlRequestGeneratedRequest(
+  ConfirmSkillDataControlRequestCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "skillId": request.skillId,
-    },
-  );
-}
-
-CloudOperationRequestPayload encodeAssistantSkillDataControlRequestConfirmSkillDataControlRequestGeneratedRequest(ConfirmSkillDataControlRequestCommand request) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "requestId": request.requestId,
-    },
+    pathParameters: <String, String>{"requestId": request.requestId},
     body: <String, Object?>{
       "expectedRevision": request.expectedRevision,
       "confirmed": request.confirmed,
@@ -2115,26 +3230,33 @@ CloudOperationRequestPayload encodeAssistantSkillDataControlRequestConfirmSkillD
   );
 }
 
-CloudOperationRequestPayload encodeAssistantSkillDataControlRequestCreateSkillDataControlRequestGeneratedRequest(CreateSkillDataControlRequestCommand request) {
+CloudOperationRequestPayload
+encodeAssistantSkillDataControlRequestCreateSkillDataControlRequestGeneratedRequest(
+  CreateSkillDataControlRequestCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "skillId": request.skillId,
-    },
+    pathParameters: <String, String>{"skillId": request.skillId},
     body: <String, Object?>{
-      "requestedActions": request.requestedActions.map((value) => value.wireName).toList(growable: false),
+      "requestedActions": request.requestedActions
+          .map((value) => value.wireName)
+          .toList(growable: false),
     },
   );
 }
 
-CloudOperationRequestPayload encodeAssistantSkillDataControlRequestGetSkillDataControlRequestGeneratedRequest(GetSkillDataControlRequestQuery request) {
+CloudOperationRequestPayload
+encodeAssistantSkillDataControlRequestGetSkillDataControlRequestGeneratedRequest(
+  GetSkillDataControlRequestQuery request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "requestId": request.requestId,
-    },
+    pathParameters: <String, String>{"requestId": request.requestId},
   );
 }
 
-CloudOperationRequestPayload encodeAssistantSkillSubscriptionCreateSkillSubscriptionGeneratedRequest(CreateAssistantSkillSubscriptionCommand request) {
+CloudOperationRequestPayload
+encodeAssistantSkillSubscriptionCreateSkillSubscriptionGeneratedRequest(
+  CreateAssistantSkillSubscriptionCommand request,
+) {
   return CloudOperationRequestPayload(
     body: <String, Object?>{
       "skillId": request.skillId,
@@ -2148,15 +3270,19 @@ CloudOperationRequestPayload encodeAssistantSkillSubscriptionCreateSkillSubscrip
   );
 }
 
-CloudOperationRequestPayload encodeAssistantSkillSubscriptionGetSkillSubscriptionGeneratedRequest(AssistantSkillSubscriptionByIdQuery request) {
+CloudOperationRequestPayload
+encodeAssistantSkillSubscriptionGetSkillSubscriptionGeneratedRequest(
+  AssistantSkillSubscriptionByIdQuery request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "subscriptionId": request.subscriptionId,
-    },
+    pathParameters: <String, String>{"subscriptionId": request.subscriptionId},
   );
 }
 
-CloudOperationRequestPayload encodeAssistantSkillSubscriptionListSkillSubscriptionsGeneratedRequest(AssistantSkillSubscriptionListQuery request) {
+CloudOperationRequestPayload
+encodeAssistantSkillSubscriptionListSkillSubscriptionsGeneratedRequest(
+  AssistantSkillSubscriptionListQuery request,
+) {
   return CloudOperationRequestPayload(
     queryParameters: <String, String>{
       "limit": (request.limit).toString(),
@@ -2165,11 +3291,12 @@ CloudOperationRequestPayload encodeAssistantSkillSubscriptionListSkillSubscripti
   );
 }
 
-CloudOperationRequestPayload encodeAssistantSkillSubscriptionUpdateSkillSubscriptionStatusGeneratedRequest(UpdateAssistantSkillSubscriptionStatusCommand request) {
+CloudOperationRequestPayload
+encodeAssistantSkillSubscriptionUpdateSkillSubscriptionStatusGeneratedRequest(
+  UpdateAssistantSkillSubscriptionStatusCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "subscriptionId": request.subscriptionId,
-    },
+    pathParameters: <String, String>{"subscriptionId": request.subscriptionId},
     body: <String, Object?>{
       "status": request.status,
       "clientRequestId": request.clientRequestId,
@@ -2177,7 +3304,10 @@ CloudOperationRequestPayload encodeAssistantSkillSubscriptionUpdateSkillSubscrip
   );
 }
 
-CloudOperationRequestPayload encodeAssistantSkillSurfacePlacementGetSkillSurfacePlacementGeneratedRequest(GetSkillSurfacePlacementQuery request) {
+CloudOperationRequestPayload
+encodeAssistantSkillSurfacePlacementGetSkillSurfacePlacementGeneratedRequest(
+  GetSkillSurfacePlacementQuery request,
+) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
       "surfaceKind": (request.surfaceKind.wireName).toString(),
@@ -2186,7 +3316,10 @@ CloudOperationRequestPayload encodeAssistantSkillSurfacePlacementGetSkillSurface
   );
 }
 
-CloudOperationRequestPayload encodeAssistantSkillSurfacePlacementPutSkillSurfacePlacementGeneratedRequest(PutSkillSurfacePlacementRequest request) {
+CloudOperationRequestPayload
+encodeAssistantSkillSurfacePlacementPutSkillSurfacePlacementGeneratedRequest(
+  PutSkillSurfacePlacementRequest request,
+) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
       "surfaceKind": (request.surfaceKind.wireName).toString(),
@@ -2194,22 +3327,28 @@ CloudOperationRequestPayload encodeAssistantSkillSurfacePlacementPutSkillSurface
     },
     body: <String, Object?>{
       "policy": request.policy.wireName,
-      "disabledSkillIds": request.disabledSkillIds.map((value) => value).toList(growable: false),
+      "disabledSkillIds": request.disabledSkillIds
+          .map((value) => value)
+          .toList(growable: false),
       "status": request.status.wireName,
       "expectedRevision": request.expectedRevision,
     },
   );
 }
 
-CloudOperationRequestPayload encodeAssistantSkillUserSettingGetSkillUserSettingGeneratedRequest(GetSkillUserSettingQuery request) {
+CloudOperationRequestPayload
+encodeAssistantSkillUserSettingGetSkillUserSettingGeneratedRequest(
+  GetSkillUserSettingQuery request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "skillId": request.skillId,
-    },
+    pathParameters: <String, String>{"skillId": request.skillId},
   );
 }
 
-CloudOperationRequestPayload encodeAssistantSkillUserSettingListSkillUserSettingsGeneratedRequest(ListSkillUserSettingsQuery request) {
+CloudOperationRequestPayload
+encodeAssistantSkillUserSettingListSkillUserSettingsGeneratedRequest(
+  ListSkillUserSettingsQuery request,
+) {
   return CloudOperationRequestPayload(
     queryParameters: <String, String>{
       if (request.limit != null) "limit": (request.limit!).toString(),
@@ -2217,19 +3356,21 @@ CloudOperationRequestPayload encodeAssistantSkillUserSettingListSkillUserSetting
   );
 }
 
-CloudOperationRequestPayload encodeAssistantSkillUserSettingPutSkillUserSettingGeneratedRequest(PutSkillUserSettingRequest request) {
+CloudOperationRequestPayload
+encodeAssistantSkillUserSettingPutSkillUserSettingGeneratedRequest(
+  PutSkillUserSettingRequest request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "skillId": request.skillId,
-    },
+    pathParameters: <String, String>{"skillId": request.skillId},
     body: <String, Object?>{
       "status": request.status.wireName,
       "configurationData": request.configurationData,
       "configurationSchemaDigest": request.configurationSchemaDigest,
       "memoryPolicy": request.memoryPolicy.wireName,
-      "connectorConnectionRefs": request.connectorConnectionRefs.map((value) => value).toList(growable: false),
+      "connectorConnectionRefs": request.connectorConnectionRefs
+          .map((value) => value)
+          .toList(growable: false),
       "expectedRevision": request.expectedRevision,
     },
   );
 }
-

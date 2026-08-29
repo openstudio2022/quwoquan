@@ -12,6 +12,8 @@ import argparse
 import sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True
+
 if __package__ in {None, ""}:
     # 原单文件为 parents[3]；包形态多一层目录，改为 parents[4]，值仍是仓库根。
     sys.path.insert(0, str(Path(__file__).resolve().parents[4]))

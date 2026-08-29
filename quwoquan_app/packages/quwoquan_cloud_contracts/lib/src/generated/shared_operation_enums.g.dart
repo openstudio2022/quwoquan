@@ -1,5 +1,5 @@
 // Code generated from canonical cross-domain enums. DO NOT EDIT.
-// ContractGraph SHA256: 05b1683f93feb5234ad8184f318b5d32e9f340e4d7e36d1e833581cfc400702c
+// ContractGraph SHA256: 2ba8995ae51f9f431ebc75e30f64d31285cc4cfb724f0ef1d8473c11011a5469
 
 library;
 
@@ -144,6 +144,23 @@ enum HomepageType {
   }
 }
 
+enum MediaDeliveryAccessMode {
+  public("public"),
+  signedGrant("signed_grant");
+
+  const MediaDeliveryAccessMode(this.wireName);
+
+  final String wireName;
+
+  static MediaDeliveryAccessMode fromWire(Object? value, String path) {
+    return switch (value) {
+      "public" => MediaDeliveryAccessMode.public,
+      "signed_grant" => MediaDeliveryAccessMode.signedGrant,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
 enum RelationshipState {
   self("self"),
   notFollowing("not_following"),
@@ -166,4 +183,3 @@ enum RelationshipState {
     };
   }
 }
-

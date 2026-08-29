@@ -20,6 +20,7 @@
       "required": [
         "approvedQuota",
         "initialPool",
+        "frozenTargetCeiling",
         "replenishFactor",
         "maxRounds",
         "stallRounds"
@@ -27,6 +28,7 @@
       "properties": {
         "approvedQuota": {"type": "integer", "minimum": 1},
         "initialPool": {"type": "integer", "minimum": 1},
+        "frozenTargetCeiling": {"type": "integer", "minimum": 1},
         "replenishFactor": {"type": "number", "minimum": 1},
         "maxRounds": {"type": "integer", "minimum": 1},
         "stallRounds": {"type": "integer", "minimum": 1}

@@ -15,6 +15,8 @@ final class ContentPostViewData {
     required this.authorId,
     required this.displayName,
     required this.avatarUrl,
+    this.authorAvatarAssetId,
+    this.authorAvatarAccessMode,
     this.authorBackgroundUrl,
     required this.authorRoleLabel,
     required this.authorIdentityTags,
@@ -33,6 +35,7 @@ final class ContentPostViewData {
     this.durationMs,
     this.mediaAssetId,
     this.mediaAssetVersion,
+    this.mediaItems = const <PostMediaItem>[],
     this.hlsCmafMasterManifestUrl,
     this.hlsCmafDescriptorVersion,
     required this.likeCount,
@@ -92,6 +95,8 @@ final class ContentPostViewData {
       authorId: wire.authorId?.trim() ?? '',
       displayName: wire.authorDisplayName?.trim() ?? '',
       avatarUrl: wire.authorAvatarUrl?.trim() ?? '',
+      authorAvatarAssetId: wire.authorAvatarAssetId,
+      authorAvatarAccessMode: wire.authorAvatarAccessMode,
       authorBackgroundUrl: wire.authorBackgroundUrl,
       authorRoleLabel: wire.authorRoleLabel?.trim() ?? '',
       authorIdentityTags: List<String>.unmodifiable(
@@ -112,6 +117,7 @@ final class ContentPostViewData {
       durationMs: wire.durationMs,
       mediaAssetId: wire.mediaAssetId,
       mediaAssetVersion: wire.mediaAssetVersion,
+      mediaItems: wire.mediaItems ?? const <PostMediaItem>[],
       hlsCmafMasterManifestUrl: wire.hlsCmafMasterManifestUrl,
       hlsCmafDescriptorVersion: wire.hlsCmafDescriptorVersion,
       likeCount: wire.likeCount,
@@ -141,6 +147,11 @@ final class ContentPostViewData {
   String get personaId => authorId;
   final String displayName;
   final String avatarUrl;
+
+  /// 作者头像的媒体交付绑定（DEC-033）：release authority 的资产标识与交付形态。
+  /// 契约缺席即为 null，禁止以 personaId/postId 冒充资产标识。
+  final String? authorAvatarAssetId;
+  final MediaDeliveryAccessMode? authorAvatarAccessMode;
   final String? authorBackgroundUrl;
   final String authorRoleLabel;
   final List<String> authorIdentityTags;
@@ -159,6 +170,11 @@ final class ContentPostViewData {
   final int? durationMs;
   final String? mediaAssetId;
   final int? mediaAssetVersion;
+
+  /// 逐条媒体的交付绑定投影（DEC-033）：保留契约 `mediaItems` 的每条
+  /// `mediaAssetId`/`accessMode`/`coverAssetId`，映射不得丢弃。
+  /// wire 缺席时为空列表。
+  final List<PostMediaItem> mediaItems;
   final String? hlsCmafMasterManifestUrl;
   final int? hlsCmafDescriptorVersion;
   final int likeCount;
@@ -245,6 +261,8 @@ final class ContentPostViewData {
     authorId: authorId,
     displayName: displayName,
     avatarUrl: avatarUrl,
+    authorAvatarAssetId: authorAvatarAssetId,
+    authorAvatarAccessMode: authorAvatarAccessMode,
     authorBackgroundUrl: authorBackgroundUrl,
     authorRoleLabel: authorRoleLabel,
     authorIdentityTags: authorIdentityTags,
@@ -263,6 +281,7 @@ final class ContentPostViewData {
     durationMs: durationMs,
     mediaAssetId: mediaAssetId,
     mediaAssetVersion: mediaAssetVersion,
+    mediaItems: mediaItems,
     hlsCmafMasterManifestUrl: hlsCmafMasterManifestUrl,
     hlsCmafDescriptorVersion: hlsCmafDescriptorVersion,
     likeCount: likeCount,

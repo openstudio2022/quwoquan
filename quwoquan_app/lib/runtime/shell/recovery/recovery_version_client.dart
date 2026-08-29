@@ -21,13 +21,16 @@ final class RecoveryVersionClient {
       appVersion: appVersion,
       buildNumber: buildNumber,
     );
+    final requestedPlatform = platform.trim().toLowerCase();
     final result = RecoveryVersionResult(
+      platform: response.platform,
       latestVersion: response.latestVersion.trim(),
       latestBuild: response.latestBuild,
       minimumSupportedVersion: response.minimumSupportedVersion.trim(),
       minimumSupportedBuild: response.minimumSupportedBuild,
       updateState: response.updateState,
-      updateUrl: response.updateUrl.trim(),
+      updateChannel: response.updateChannel,
+      updateUrl: response.updateUrl?.trim(),
       recoveryUrl: response.recoveryUrl.trim(),
     );
     final expectedUpdateState = switch (buildNumber) {
@@ -37,7 +40,14 @@ final class RecoveryVersionClient {
         RecoveryUpdateState.available,
       _ => RecoveryUpdateState.none,
     };
-    if (result.latestVersion.isEmpty ||
+    final hasCanonicalUpdateChannel = hasCanonicalRecoveryVersionTarget(
+      platform: result.platform,
+      channel: result.updateChannel,
+      updateUrl: result.updateUrl,
+    );
+    if (result.platform.wireName != requestedPlatform ||
+        !hasCanonicalUpdateChannel ||
+        result.latestVersion.isEmpty ||
         result.minimumSupportedVersion.isEmpty ||
         result.latestBuild <= 0 ||
         result.minimumSupportedBuild <= 0 ||

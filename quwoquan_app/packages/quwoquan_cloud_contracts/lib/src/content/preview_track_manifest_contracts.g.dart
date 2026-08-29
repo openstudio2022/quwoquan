@@ -1,5 +1,5 @@
 // Code generated from canonical content MediaAsset preview-track schema. DO NOT EDIT.
-// ContractGraph SHA256: 05b1683f93feb5234ad8184f318b5d32e9f340e4d7e36d1e833581cfc400702c
+// ContractGraph SHA256: 2ba8995ae51f9f431ebc75e30f64d31285cc4cfb724f0ef1d8473c11011a5469
 
 library;
 
@@ -62,19 +62,84 @@ final class PreviewTrackManifestWire {
   final List<PreviewTrackSpriteWire> sprites;
   final List<PreviewTrackFrameWire> frames;
 
-  factory PreviewTrackManifestWire.fromWire(Object? value, [String path = "PreviewTrackManifestWire"]) {
+  factory PreviewTrackManifestWire.fromWire(
+    Object? value, [
+    String path = "PreviewTrackManifestWire",
+  ]) {
     final map = _previewRequiredObject(value, path);
-    _previewRejectUnknownFields(map, const <String>{"schema", "assetId", "assetVersion", "trackVersion", "processorProfile", "accessPolicy", "frameIntervalMs", "sprites", "frames"}, path);
+    _previewRejectUnknownFields(map, const <String>{
+      "schema",
+      "assetId",
+      "assetVersion",
+      "trackVersion",
+      "processorProfile",
+      "accessPolicy",
+      "frameIntervalMs",
+      "sprites",
+      "frames",
+    }, path);
     return PreviewTrackManifestWire(
-      schema: _previewRequiredConstString(map["schema"], '$path.schema', "quwoquan.content.preview_track_manifest"),
-      assetId: _previewRequiredString(map["assetId"], '$path.assetId', minLength: 1),
-      assetVersion: _previewRequiredInt(map["assetVersion"], '$path.assetVersion', min: 1),
-      trackVersion: _previewRequiredInt(map["trackVersion"], '$path.trackVersion', min: 1),
-      processorProfile: _previewRequiredString(map["processorProfile"], '$path.processorProfile', minLength: 1),
-      accessPolicy: PreviewTrackAccessPolicy.fromWire(map["accessPolicy"], '$path.accessPolicy'),
-      frameIntervalMs: _previewRequiredInt(map["frameIntervalMs"], '$path.frameIntervalMs', min: 1000, max: 30000),
-      sprites: List<PreviewTrackSpriteWire>.unmodifiable(_previewRequiredList(map["sprites"], '$path.sprites', minItems: 1, maxItems: 64).asMap().entries.map((entry) => PreviewTrackSpriteWire.fromWire(entry.value, '$path.sprites' + '[${entry.key}]'))),
-      frames: List<PreviewTrackFrameWire>.unmodifiable(_previewRequiredList(map["frames"], '$path.frames', minItems: 1, maxItems: 1000).asMap().entries.map((entry) => PreviewTrackFrameWire.fromWire(entry.value, '$path.frames' + '[${entry.key}]'))),
+      schema: _previewRequiredConstString(
+        map["schema"],
+        '$path.schema',
+        "quwoquan.content.preview_track_manifest",
+      ),
+      assetId: _previewRequiredString(
+        map["assetId"],
+        '$path.assetId',
+        minLength: 1,
+      ),
+      assetVersion: _previewRequiredInt(
+        map["assetVersion"],
+        '$path.assetVersion',
+        min: 1,
+      ),
+      trackVersion: _previewRequiredInt(
+        map["trackVersion"],
+        '$path.trackVersion',
+        min: 1,
+      ),
+      processorProfile: _previewRequiredString(
+        map["processorProfile"],
+        '$path.processorProfile',
+        minLength: 1,
+      ),
+      accessPolicy: PreviewTrackAccessPolicy.fromWire(
+        map["accessPolicy"],
+        '$path.accessPolicy',
+      ),
+      frameIntervalMs: _previewRequiredInt(
+        map["frameIntervalMs"],
+        '$path.frameIntervalMs',
+        min: 1000,
+        max: 30000,
+      ),
+      sprites: List<PreviewTrackSpriteWire>.unmodifiable(
+        _previewRequiredList(
+          map["sprites"],
+          '$path.sprites',
+          minItems: 1,
+          maxItems: 64,
+        ).asMap().entries.map(
+          (entry) => PreviewTrackSpriteWire.fromWire(
+            entry.value,
+            '$path.sprites' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      frames: List<PreviewTrackFrameWire>.unmodifiable(
+        _previewRequiredList(
+          map["frames"],
+          '$path.frames',
+          minItems: 1,
+          maxItems: 1000,
+        ).asMap().entries.map(
+          (entry) => PreviewTrackFrameWire.fromWire(
+            entry.value,
+            '$path.frames' + '[${entry.key}]',
+          ),
+        ),
+      ),
     );
   }
 
@@ -108,16 +173,45 @@ final class PreviewTrackFrameWire {
   final int width;
   final int height;
 
-  factory PreviewTrackFrameWire.fromWire(Object? value, [String path = "PreviewTrackFrameWire"]) {
+  factory PreviewTrackFrameWire.fromWire(
+    Object? value, [
+    String path = "PreviewTrackFrameWire",
+  ]) {
     final map = _previewRequiredObject(value, path);
-    _previewRejectUnknownFields(map, const <String>{"timeMs", "spriteId", "x", "y", "width", "height"}, path);
+    _previewRejectUnknownFields(map, const <String>{
+      "timeMs",
+      "spriteId",
+      "x",
+      "y",
+      "width",
+      "height",
+    }, path);
     return PreviewTrackFrameWire(
-      timeMs: _previewRequiredInt(map["timeMs"], '$path.timeMs', min: 0, max: 3600000),
-      spriteId: _previewRequiredString(map["spriteId"], '$path.spriteId', minLength: 1),
+      timeMs: _previewRequiredInt(
+        map["timeMs"],
+        '$path.timeMs',
+        min: 0,
+        max: 3600000,
+      ),
+      spriteId: _previewRequiredString(
+        map["spriteId"],
+        '$path.spriteId',
+        minLength: 1,
+      ),
       x: _previewRequiredInt(map["x"], '$path.x', min: 0),
       y: _previewRequiredInt(map["y"], '$path.y', min: 0),
-      width: _previewRequiredInt(map["width"], '$path.width', min: 1, max: 1920),
-      height: _previewRequiredInt(map["height"], '$path.height', min: 1, max: 1080),
+      width: _previewRequiredInt(
+        map["width"],
+        '$path.width',
+        min: 1,
+        max: 1920,
+      ),
+      height: _previewRequiredInt(
+        map["height"],
+        '$path.height',
+        min: 1,
+        max: 1080,
+      ),
     );
   }
 
@@ -148,16 +242,51 @@ final class PreviewTrackSpriteWire {
   final int width;
   final int height;
 
-  factory PreviewTrackSpriteWire.fromWire(Object? value, [String path = "PreviewTrackSpriteWire"]) {
+  factory PreviewTrackSpriteWire.fromWire(
+    Object? value, [
+    String path = "PreviewTrackSpriteWire",
+  ]) {
     final map = _previewRequiredObject(value, path);
-    _previewRejectUnknownFields(map, const <String>{"spriteId", "publicSliceKey", "mimeType", "sha256", "width", "height"}, path);
+    _previewRejectUnknownFields(map, const <String>{
+      "spriteId",
+      "publicSliceKey",
+      "mimeType",
+      "sha256",
+      "width",
+      "height",
+    }, path);
     return PreviewTrackSpriteWire(
-      spriteId: _previewRequiredString(map["spriteId"], '$path.spriteId', minLength: 1),
-      publicSliceKey: _previewRequiredString(map["publicSliceKey"], '$path.publicSliceKey', pattern: "^media/video/s/"),
-      mimeType: PreviewTrackSpriteMimeType.fromWire(map["mimeType"], '$path.mimeType'),
-      sha256: _previewRequiredString(map["sha256"], '$path.sha256', pattern: "^sha256:[0-9a-f]{64}\$"),
-      width: _previewRequiredInt(map["width"], '$path.width', min: 1, max: 8192),
-      height: _previewRequiredInt(map["height"], '$path.height', min: 1, max: 8192),
+      spriteId: _previewRequiredString(
+        map["spriteId"],
+        '$path.spriteId',
+        minLength: 1,
+      ),
+      publicSliceKey: _previewRequiredString(
+        map["publicSliceKey"],
+        '$path.publicSliceKey',
+        pattern: "^media/video/s/",
+      ),
+      mimeType: PreviewTrackSpriteMimeType.fromWire(
+        map["mimeType"],
+        '$path.mimeType',
+      ),
+      sha256: _previewRequiredString(
+        map["sha256"],
+        '$path.sha256',
+        pattern: "^sha256:[0-9a-f]{64}\$",
+      ),
+      width: _previewRequiredInt(
+        map["width"],
+        '$path.width',
+        min: 1,
+        max: 8192,
+      ),
+      height: _previewRequiredInt(
+        map["height"],
+        '$path.height',
+        min: 1,
+        max: 8192,
+      ),
     );
   }
 
@@ -170,7 +299,6 @@ final class PreviewTrackSpriteWire {
     "height": height,
   };
 }
-
 
 Map<String, Object?> _previewRequiredObject(Object? value, String path) {
   if (value is! Map) {
@@ -228,12 +356,7 @@ String _previewRequiredConstString(
   return decoded;
 }
 
-int _previewRequiredInt(
-  Object? value,
-  String path, {
-  int? min,
-  int? max,
-}) {
+int _previewRequiredInt(Object? value, String path, {int? min, int? max}) {
   if (value is! num || value.isNaN || value.isInfinite) {
     throw FormatException('$path must be an integer');
   }
@@ -253,6 +376,8 @@ void _previewRejectUnknownFields(
 ) {
   final unknown = map.keys.where((key) => !allowed.contains(key)).toList();
   if (unknown.isNotEmpty) {
-    throw FormatException('$path contains unknown fields: ${unknown.join(', ')}');
+    throw FormatException(
+      '$path contains unknown fields: ${unknown.join(', ')}',
+    );
   }
 }

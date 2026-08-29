@@ -101,10 +101,10 @@
 ### OPEN-001 Push 外送商用闭环
 
 - 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
+- 优先级：`P0`
+- 准出影响：`block`
 - 影响或价值：仍缺 APNs/FCM 非内存 Provider 投递与终态回执、失败重试/DLQ 运行证据、同一候选四环境 readback 及 Android/iPhone 真机验收。`NotificationDeliveryJob` 对象、Mongo store/outbox、受保护路由的 production composition 与真实 Mongo `api_integration` 已存在。外部投递无法确认时必须 fail-closed，不影响已落盘站内通知可读。
-- 完成判定：`GWT-001` 对应的站内与 push 行为均满足，且真实 `api_integration`、`user_acceptance` CaseResult 直接引用本节点。
+- 完成判定：`GWT-001` 对应的站内与 push 行为均满足，且真实 `api_integration` 与 Android/iPhone 物理设备 `user_acceptance` CaseResult 直接引用本节点并绑定同一 source/candidate/package、双账号和 APNs/FCM Provider receipt。站内通知可读、模拟器、test double 或缺外部终态的结果只证明子集，不能关闭本 OPEN、父级 [`OPEN-007`](../spec.md#open-007) 或 [`AppRoot OPEN-008`](../../../spec.md#open-008)。
 
 <a id="open-002"></a>
 ### OPEN-002 Gathering invitation AppMessage 尚缺 App 动作与 Remote UAT

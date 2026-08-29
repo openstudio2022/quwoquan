@@ -404,8 +404,20 @@ def build_candidate_binding(
     canonical_git_revision = len(source_revision) == 40 and all(
         character in "0123456789abcdef" for character in source_revision
     )
-    readiness_source_revision = str(readiness.get("sourceRevision") or "").strip()
-    source_revision_matches = readiness_source_revision == source_revision
+    if "sourceIdentities" in readiness or "sourceIdentitySetDigest" in readiness:
+        # 新 Data 溯源模型：readiness 以 sourceIdentities/
+        # sourceIdentitySetDigest 表达来源，顶层 sourceRevision 投影已
+        # 退役；release 身份绑定由上方 releaseId/manifestDigest 精确元组
+        # 承担。CandidateBinding 的 source_revision 只绑定 package
+        # candidate 的 Git revision。
+        source_revision_matches = bool(
+            str(readiness.get("sourceIdentitySetDigest") or "").strip()
+        )
+    else:
+        readiness_source_revision = str(
+            readiness.get("sourceRevision") or ""
+        ).strip()
+        source_revision_matches = readiness_source_revision == source_revision
     if readiness_phase == "consumer":
         # Consumer readiness is bound to the mutable test-live runtime by the
         # exact release/verify/manifest/readiness tuple. Its Data provenance is
@@ -612,9 +624,20 @@ def build_test_data_handoff(
 ) -> dict[str, Any]:
     """Freeze a redacted, exact candidate/request/evidence handoff contract."""
 
-    source_revision = str(readiness.get("sourceRevision") or "").strip()
-    if source_revision != candidate.source_revision:
-        raise ValueError("canonical Data readiness sourceRevision drifted from candidate")
+    if "sourceIdentities" in readiness or "sourceIdentitySetDigest" in readiness:
+        # 新 Data 溯源模型：溯源由 sourceIdentities/sourceIdentitySetDigest
+        # 与 readiness checksum 承担；handoff 的 sourceRevision 字段绑定
+        # package candidate 的 Git revision（见 CandidateBinding）。
+        if not str(readiness.get("sourceIdentitySetDigest") or "").strip():
+            raise ValueError(
+                "canonical Data readiness sourceIdentitySetDigest is absent"
+            )
+    else:
+        source_revision = str(readiness.get("sourceRevision") or "").strip()
+        if source_revision != candidate.source_revision:
+            raise ValueError(
+                "canonical Data readiness sourceRevision drifted from candidate"
+            )
     evidence_unsigned = {
         key: value for key, value in evidence.items() if key != "evidenceDigest"
     }

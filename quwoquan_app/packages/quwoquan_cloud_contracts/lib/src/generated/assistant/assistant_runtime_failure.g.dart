@@ -28,16 +28,16 @@ class RuntimeFailureWire {
   final Map<String, dynamic> context;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'code': code,
-        'origin': origin,
-        'kind': kind,
-        'nature': nature,
-        'messageKey': messageKey,
-        'recoveryAction': recoveryAction.wireName,
-        'disruptionLevel': disruptionLevel.wireName,
-        'traceId': traceId,
-        'context': context,
-      };
+    'code': code,
+    'origin': origin,
+    'kind': kind,
+    'nature': nature,
+    'messageKey': messageKey,
+    'recoveryAction': recoveryAction.wireName,
+    'disruptionLevel': disruptionLevel.wireName,
+    'traceId': traceId,
+    'context': context,
+  };
 
   factory RuntimeFailureWire.fromJson(Map<String, dynamic> json) {
     const allowedFields = <String>{
@@ -55,34 +55,72 @@ class RuntimeFailureWire {
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('RuntimeFailureWire response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'RuntimeFailureWire response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (json.containsKey('code') && json['code'] != null && (json['code'] is! String)) {
-      throw const FormatException('RuntimeFailureWire field code has an invalid wire value');
+    if (json.containsKey('code') &&
+        json['code'] != null &&
+        (json['code'] is! String)) {
+      throw const FormatException(
+        'RuntimeFailureWire field code has an invalid wire value',
+      );
     }
-    if (json.containsKey('origin') && json['origin'] != null && (json['origin'] is! String)) {
-      throw const FormatException('RuntimeFailureWire field origin has an invalid wire value');
+    if (json.containsKey('origin') &&
+        json['origin'] != null &&
+        (json['origin'] is! String)) {
+      throw const FormatException(
+        'RuntimeFailureWire field origin has an invalid wire value',
+      );
     }
-    if (json.containsKey('kind') && json['kind'] != null && (json['kind'] is! String)) {
-      throw const FormatException('RuntimeFailureWire field kind has an invalid wire value');
+    if (json.containsKey('kind') &&
+        json['kind'] != null &&
+        (json['kind'] is! String)) {
+      throw const FormatException(
+        'RuntimeFailureWire field kind has an invalid wire value',
+      );
     }
-    if (json.containsKey('nature') && json['nature'] != null && (json['nature'] is! String)) {
-      throw const FormatException('RuntimeFailureWire field nature has an invalid wire value');
+    if (json.containsKey('nature') &&
+        json['nature'] != null &&
+        (json['nature'] is! String)) {
+      throw const FormatException(
+        'RuntimeFailureWire field nature has an invalid wire value',
+      );
     }
-    if (json.containsKey('messageKey') && json['messageKey'] != null && (json['messageKey'] is! String)) {
-      throw const FormatException('RuntimeFailureWire field messageKey has an invalid wire value');
+    if (json.containsKey('messageKey') &&
+        json['messageKey'] != null &&
+        (json['messageKey'] is! String)) {
+      throw const FormatException(
+        'RuntimeFailureWire field messageKey has an invalid wire value',
+      );
     }
-    if (json.containsKey('recoveryAction') && json['recoveryAction'] != null && (json['recoveryAction'] is! String)) {
-      throw const FormatException('RuntimeFailureWire field recoveryAction has an invalid wire value');
+    if (json.containsKey('recoveryAction') &&
+        json['recoveryAction'] != null &&
+        (json['recoveryAction'] is! String)) {
+      throw const FormatException(
+        'RuntimeFailureWire field recoveryAction has an invalid wire value',
+      );
     }
-    if (json.containsKey('disruptionLevel') && json['disruptionLevel'] != null && (json['disruptionLevel'] is! String)) {
-      throw const FormatException('RuntimeFailureWire field disruptionLevel has an invalid wire value');
+    if (json.containsKey('disruptionLevel') &&
+        json['disruptionLevel'] != null &&
+        (json['disruptionLevel'] is! String)) {
+      throw const FormatException(
+        'RuntimeFailureWire field disruptionLevel has an invalid wire value',
+      );
     }
-    if (json.containsKey('traceId') && json['traceId'] != null && (json['traceId'] is! String)) {
-      throw const FormatException('RuntimeFailureWire field traceId has an invalid wire value');
+    if (json.containsKey('traceId') &&
+        json['traceId'] != null &&
+        (json['traceId'] is! String)) {
+      throw const FormatException(
+        'RuntimeFailureWire field traceId has an invalid wire value',
+      );
     }
-    if (json.containsKey('context') && json['context'] != null && (json['context'] is! Map)) {
-      throw const FormatException('RuntimeFailureWire field context has an invalid wire value');
+    if (json.containsKey('context') &&
+        json['context'] != null &&
+        (json['context'] is! Map)) {
+      throw const FormatException(
+        'RuntimeFailureWire field context has an invalid wire value',
+      );
     }
     return RuntimeFailureWire(
       code: (json['code'] as String?)?.trim() ?? "",
@@ -90,10 +128,16 @@ class RuntimeFailureWire {
       kind: (json['kind'] as String?)?.trim() ?? "",
       nature: (json['nature'] as String?)?.trim() ?? "",
       messageKey: (json['messageKey'] as String?)?.trim() ?? "",
-      recoveryAction: parseToolRecoveryActionStrict((json['recoveryAction'] as String?)?.trim() ?? ""),
-      disruptionLevel: parseToolDisruptionLevelStrict((json['disruptionLevel'] as String?)?.trim() ?? ""),
+      recoveryAction: parseToolRecoveryActionStrict(
+        (json['recoveryAction'] as String?)?.trim() ?? "",
+      ),
+      disruptionLevel: parseToolDisruptionLevelStrict(
+        (json['disruptionLevel'] as String?)?.trim() ?? "",
+      ),
       traceId: (json['traceId'] as String?)?.trim() ?? "",
-      context: (json['context'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
+      context:
+          (json['context'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{},
     );
   }
 }
@@ -110,10 +154,11 @@ class RuntimeFailureWireFields {
   static const String context = 'context';
 }
 
-
 RuntimeFailureWire decodeRuntimeFailureWire(Object? response) {
   if (response is! Map) {
-    throw const FormatException('RuntimeFailureWire response must be an object');
+    throw const FormatException(
+      'RuntimeFailureWire response must be an object',
+    );
   }
   return RuntimeFailureWire.fromJson(response.cast<String, dynamic>());
 }

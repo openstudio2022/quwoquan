@@ -8,8 +8,7 @@ AGENTS.md 与特性树重复正文让两处各自漂移。本工具可重复生�
 1. 僵尸 reference：`.agents/skills/**/references/**` 下未被任何技能资产、
    registry、命令或 AGENTS.md 引用的 Markdown 文件。
 2. harness 分叉：`.cursor/skills` / `.codex/skills` 中不指向 `.agents/skills/`
-   真相源的实体 stub、指向不存在真相源的死指针，以及 `.claude/skills`
-   物化为普通目录（应为 symlink）。
+   真相源的实体 stub，以及指向不存在真相源的死指针。
 3. 重复正文：各级 AGENTS.md 段落与 `specs/feature-tree/**` 正文逐字重复
    （normalize 后 >=120 字符），两处各自漂移的前兆。
 
@@ -124,12 +123,7 @@ def collect_zombie_references(root: Path) -> list[str]:
 
 
 def collect_harness_forks(root: Path) -> list[str]:
-    """harness 目录里不指向真相源的实体、死指针与物化的 .claude/skills。
-
-    本函数报告 worktree 表象（lstat），提示当前工作副本可能漂移；提交形态的
-    阻断真相由 verify_agent_context_budget 的 git index mode 锁拥有——两者
-    视角互补，index 未物化而 worktree 物化时这里仍应提示。
-    """
+    """Cursor/Codex skill stub 中不指向真相源的实体与死指针。"""
     issues: list[str] = []
     for pattern in (".cursor/skills/*/SKILL.md", ".codex/skills/*/SKILL.md"):
         for stub in sorted(root.glob(pattern)):
@@ -145,12 +139,6 @@ def collect_harness_forks(root: Path) -> list[str]:
             for target in re.findall(r"\.agents/skills/[\w\-]+/SKILL\.md", text):
                 if not (root / target).is_file():
                     issues.append(f"{rel}: 指向不存在的真相源 {target}（死指针）")
-    claude_skills = root / ".claude/skills"
-    if claude_skills.exists() and not claude_skills.is_symlink():
-        issues.append(
-            ".claude/skills: 已物化为普通目录——应为指向 .agents/skills 的 symlink，"
-            "物化副本会与真相源漂移"
-        )
     return issues
 
 

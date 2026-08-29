@@ -30,9 +30,8 @@ class ProfileInteractionDirectionSwitch extends StatelessWidget {
       isDark,
       ColorType.selectionBackground,
     );
-    final border = AppColors.iosSeparator(
-      context,
-    ).withValues(alpha: isDark ? 0.34 : 0.26);
+    final border = AppColors.iosSeparator(context)
+        .withValues(alpha: isDark ? 0.34 : 0.26);
     final labelSize = AppTypography.secondaryTabLabelResponsive(context);
 
     Widget segment(InteractionDirection direction, String label) {
@@ -154,9 +153,8 @@ class _InteractionActionChip extends StatelessWidget {
     final accent = AppColors.iosAccent(context);
     final inactiveForeground = AppColors.iosSecondaryLabel(context);
     final foreground = active ? accent : inactiveForeground;
-    final border = AppColors.iosSeparator(
-      context,
-    ).withValues(alpha: isDark ? 0.30 : 0.22);
+    final border = AppColors.iosSeparator(context)
+        .withValues(alpha: isDark ? 0.30 : 0.22);
     return CupertinoButton(
       key: actionKey,
       padding: EdgeInsets.zero,
@@ -277,24 +275,36 @@ class _ProfileInteractionPreviewTileState
       return Stack(
         fit: StackFit.expand,
         children: <Widget>[
-          AppCachedNetworkImage(
-            key: ValueKey<String>(
-              'profile-interaction-preview-image-${widget.item.activityId}-$_retrySeed',
+          mediaDeliveryImage(
+            binding: MediaDeliveryBinding(
+              assetId: widget.item.previewImageAssetId?.trim() ?? '',
+              accessMode: widget.item.previewImageAccessMode,
+              publicUrl: imageUrl,
             ),
-            imageUrl: imageUrl,
+            kind: MediaDeliveryKind.image,
             fit: BoxFit.cover,
-            cdnPreset: CdnImagePreset.thumbnail,
             placeholder: _buildLoading(context),
             errorWidget: _buildLoadFailed(context),
-            imageBuilder: kind == _ProfilePreviewKind.video
-                ? (context, imageProvider) => Stack(
-                    fit: StackFit.expand,
-                    children: <Widget>[
-                      Image(image: imageProvider, fit: BoxFit.cover),
-                      _buildPlayBadge(context),
-                    ],
-                  )
-                : null,
+            absentWidget: _buildLoadFailed(context),
+            publicBuilder: (context, publicUrl) => AppCachedNetworkImage(
+              key: ValueKey<String>(
+                'profile-interaction-preview-image-${widget.item.activityId}-$_retrySeed',
+              ),
+              imageUrl: publicUrl,
+              fit: BoxFit.cover,
+              cdnPreset: CdnImagePreset.thumbnail,
+              placeholder: _buildLoading(context),
+              errorWidget: _buildLoadFailed(context),
+              imageBuilder: kind == _ProfilePreviewKind.video
+                  ? (context, imageProvider) => Stack(
+                      fit: StackFit.expand,
+                      children: <Widget>[
+                        Image(image: imageProvider, fit: BoxFit.cover),
+                        _buildPlayBadge(context),
+                      ],
+                    )
+                  : null,
+            ),
           ),
         ],
       );

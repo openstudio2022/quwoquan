@@ -21,11 +21,12 @@ from content.execution.identity import parse_execution_id
 from content.execution.planning.work_request_contract import (
     _MAX_DOCUMENT_BYTES,
     _RESULT_SCHEMA,
-    _digest,
     _document_size,
     _validated_result,
 )
+from content.execution.planning.work_request_dependencies import canonical_digest
 from core import paths
+from core.control_types import RecoveryNextAction
 from core.io import read_json
 from core.schema import assert_valid
 
@@ -49,14 +50,14 @@ def _assert_work_request_identity(work_request: Mapping[str, Any]) -> str:
         ref = Path(str(binding.get("ref") or ""))
         if ref.is_absolute() or ".." in ref.parts:
             raise ValueError("WorkRequest dependency ref is not portable")
-    if work_request.get("dependencySetDigest") != _digest(dict(dependencies)):
+    if work_request.get("dependencySetDigest") != canonical_digest(dict(dependencies)):
         raise ValueError("WorkRequest dependency set digest drift")
     stable = {
         key: value
         for key, value in work_request.items()
         if key not in {"workRequestId", "workRequestDigest", "compiledAt"}
     }
-    observed_digest = _digest(stable)
+    observed_digest = canonical_digest(stable)
     if work_request.get("workRequestDigest") != observed_digest:
         raise ValueError("WorkRequest canonical payload digest drift")
     if work_request.get("workRequestId") != (
@@ -178,7 +179,7 @@ def confirmed_projection(
     receipt_stable = {
         key: value for key, value in receipt.items() if key != "receiptDigest"
     }
-    if receipt.get("receiptDigest") != _digest(receipt_stable):
+    if receipt.get("receiptDigest") != canonical_digest(receipt_stable):
         raise ValueError("WorkRequest compile receipt digest drift")
     expected_receipt = {
         "workRequestId": work_request["workRequestId"],
@@ -232,7 +233,7 @@ def confirmed_projection(
             envelope.get("carrier") != row["carrier"]
             or envelope.get("executionId") != row["executionId"]
             or envelope.get("requestDigest") != row["requestDigest"]
-            or envelope.get("requestDigest") != _digest(envelope_stable)
+            or envelope.get("requestDigest") != canonical_digest(envelope_stable)
             or envelope.get("frozenAt") != work_request["compiledAt"]
         ):
             raise ValueError("WorkRequest carrier envelope binding drift")
@@ -250,6 +251,8 @@ def confirmed_projection(
             "compileReceiptDigest": str(receipt["receiptDigest"]),
             "carrierEnvelopes": list(work_request["carrierEnvelopes"]),
             "replayed": replayed,
+            "nextAction": RecoveryNextAction.NONE.value,
+            "reentryRef": None,
         }
     )
 
@@ -306,13 +309,18 @@ def batch_documents_factory(
                 "evidenceRootRef": first["sourcePoolEvidenceRootRef"],
             },
             "carrierEnvelopes": refs,
+            **(
+                {"acquisitionRootRef": normalized["acquisitionRootRef"]}
+                if normalized["acquisitionRootRef"]
+                else {}
+            ),
             "retention": {
                 "archiveAfterDays": 180,
                 "deleteAfterDays": 365,
                 "tombstoneRequired": True,
             },
         }
-        work_request_digest = _digest(work_request_stable)
+        work_request_digest = canonical_digest(work_request_stable)
         work_request: dict[str, Any] = {
             **work_request_stable,
             "workRequestId": (
@@ -355,7 +363,7 @@ def batch_documents_factory(
             "durationMs": duration_ms,
             "compiledAt": compiled_at,
         }
-        receipt = {**receipt_stable, "receiptDigest": _digest(receipt_stable)}
+        receipt = {**receipt_stable, "receiptDigest": canonical_digest(receipt_stable)}
         assert_valid(receipt, "execution", "work_request_compile_receipt")
         if _document_size(receipt) > _MAX_DOCUMENT_BYTES:
             raise ValueError("WorkRequest compile receipt exceeds 256 KiB")

@@ -101,7 +101,7 @@ def _bind_external_article_source_identity(
     return _bind_article_source_identity(projected)
 
 
-def _registry_bound_article_source(
+def registry_bound_article_source(
     source: dict[str, Any],
 ) -> dict[str, Any] | None:
     """Bind a bespoke article source to its registry admission and attribution.
@@ -210,7 +210,7 @@ def write_article_lane(
                 entity_aliases=entity_aliases,
                 limit=_article_base_candidate_limit(required_article_bases),
             ):
-                bound_source = _registry_bound_article_source(source)
+                bound_source = registry_bound_article_source(source)
                 if bound_source is None:
                     continue
                 accepted = _accept_source(
@@ -223,7 +223,7 @@ def write_article_lane(
                 )
                 if accepted:
                     article_sources.append(accepted)
-            review_support = _registry_bound_article_source(
+            review_support = registry_bound_article_source(
                 _qunar_review_support_source(entity_id)
             )
             if review_support is not None:
@@ -247,7 +247,7 @@ def write_article_lane(
                 entity_id=entity_id,
                 limit=2,
             )
-            related_source = _registry_bound_article_source(
+            related_source = registry_bound_article_source(
                 _source(
                     source_id=f"article_related_encyclopedia_support_{related_index}",
                     platform="维基百科",
@@ -278,7 +278,7 @@ def write_article_lane(
                 article_sources.append(accepted)
         if voyage_url:
             voyage_images = voyage_page_images
-            voyage_source = _registry_bound_article_source(
+            voyage_source = registry_bound_article_source(
                 _source(
                     source_id="article_wikivoyage_base",
                     platform="维基导游",
@@ -313,7 +313,7 @@ def write_article_lane(
             platform = _external_platform(link)
             category = _external_article_category(link, platform)
             source_role = "base" if category in ARTICLE_BASE_SOURCE_CATEGORIES else "supporting"
-            external_source = _registry_bound_article_source(
+            external_source = registry_bound_article_source(
                 _source(
                     source_id=(
                         f"article_external_base_{index}"
@@ -350,7 +350,7 @@ def write_article_lane(
                 continue
             category = str(known.get("category") or "travelogue").strip()
             source_role = "base" if category in ARTICLE_BASE_SOURCE_CATEGORIES else "supporting"
-            known_source = _registry_bound_article_source(
+            known_source = registry_bound_article_source(
                 _source(
                     source_id=known["source_id"] or f"article_registry_base_{index}",
                     platform=known["platform"] or "垂类专业站",

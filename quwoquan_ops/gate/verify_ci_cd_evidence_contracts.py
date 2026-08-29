@@ -10,6 +10,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[2]
 # 直接执行本 gate 时仓库根不在 sys.path 上，实现单元按仓内绝对包名导入。
 if str(ROOT) not in sys.path:

@@ -71,7 +71,7 @@ def _dev_session_launcher_handoff(
         environment,
         "--target",
         target,
-        "--launch-mode",
+        "--launch-provenance",
         "canonical_launcher",
         "--launch-policy",
         "test_live",
@@ -155,11 +155,7 @@ def _run_dev_session_target(
                     environment=environment,
                     target=target,
                     workspace_snapshot=beginning_snapshot,
-                    required_running_services=(
-                        _stackctl._TEST_LIVE_CONTENT_BINDING_REQUIRED_SERVICES
-                        if content_binding_request
-                        else frozenset()
-                    ),
+                    required_running_services=frozenset(),
                 )
             )
             warnings.extend(resume_warnings)
@@ -210,9 +206,7 @@ def _run_dev_session_target(
                         environment=environment,
                         target=target,
                         workspace_snapshot=beginning_snapshot,
-                        required_running_services=(
-                            _stackctl._TEST_LIVE_CONTENT_BINDING_REQUIRED_SERVICES
-                        ),
+                        required_running_services=frozenset(),
                     )
                 )
                 validated_attempt = dict(
@@ -321,18 +315,24 @@ def _run_dev_session_target(
             )
         )
         if content_preflight_issues:
-            return {
-                "exitCode": 1,
-                "sessionKind": "mutable",
-                "blockerKind": "test_live_content_runtime_unready",
-                "details": content_preflight_issues,
-                "fullRuntimeSelected": True,
-                "startupAttempt": dict(
-                    runtime_payload.get("startupAttempt") or {}
-                ),
-                "contentBinding": content_binding,
-                "phases": phases,
-            }
+            readiness_warnings = [
+                "readiness.content: " + str(issue)
+                for issue in content_preflight_issues
+            ]
+            warnings.extend(readiness_warnings)
+            phases.append(
+                {
+                    "name": "test-live-content-readiness",
+                    "exitCode": 0,
+                    "status": "warning",
+                    "summary": (
+                        "content readiness is degraded; mutable test_live App "
+                        "launch remains non-promotable"
+                    ),
+                    "details": readiness_warnings,
+                    "reportDir": _stackctl.relpath(report_dir),
+                }
+            )
     warnings.extend(str(item) for item in preflight_payload.get("warnings") or [])
     mutable_workspace_warnings.extend(
         str(item) for item in preflight_payload.get("mutableWorkspaceWarnings") or []
@@ -655,12 +655,26 @@ def command_dev_session(args: argparse.Namespace) -> dict[str, Any]:
         try:
             with _stackctl._local_stack_operation_lock(selections[0][1]):
                 for environment, target in selections:
+                    # The repo-level all-nonprod run only aggregates the three
+                    # target runs.  A mutable startup receipt is target-owned,
+                    # so its runRoot must stay below that environment's
+                    # canonical runs root instead of inheriting the aggregate
+                    # repo run directory.
+                    target_report_dir = (
+                        _stackctl.artifact_run_dir(
+                            environment,
+                            args.command,
+                            target=target,
+                        )
+                        if all_nonprod
+                        else report_dir
+                    )
                     session = _stackctl._run_dev_session_target(
                         environment=environment,
                         target=target,
                         device_id=str(getattr(args, "device_id", "") or ""),
                         launch_app_requested=bool(getattr(args, "launch_app", False)),
-                        report_dir=report_dir / target,
+                        report_dir=target_report_dir,
                         content_binding_request=content_binding_request,
                         app_mode=str(getattr(args, "app_mode", "content-live")),
                     )
@@ -669,6 +683,7 @@ def command_dev_session(args: argparse.Namespace) -> dict[str, Any]:
                             "environment": environment,
                             "target": target,
                             **session,
+                            "reportDir": _stackctl.relpath(target_report_dir),
                         }
                     )
                     terminal_exit = int(session["exitCode"])

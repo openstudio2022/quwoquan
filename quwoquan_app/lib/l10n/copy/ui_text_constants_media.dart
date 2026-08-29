@@ -1,6 +1,19 @@
 part of 'ui_text_constants.dart';
 
 abstract final class MediaText {
+  /// 私有媒体短签交付失败的终态文案（DEC-033）。
+  ///
+  /// 失败原因是换签未成功而非资源不存在，因此措辞只描述当前状态，不断言媒体
+  /// 缺失；恢复动作与文案同处一个终态件，用户可主动重试。
+  static const String signedDeliveryFailedMessage = '图片暂时打不开';
+  static const String signedDeliveryRetryAction = '点按重试';
+
+  /// 私有视频尚无端侧短签播放通道时的终态文案（DEC-033）。
+  ///
+  /// 这是端侧能力缺口而非一次可重试的失败，因此不给重试动作——放一个必然
+  /// 无效的按钮比不放更糟。措辞只说当前不可播放，不断言内容不存在。
+  static const String signedVideoUnsupportedMessage = '这个视频暂时无法播放';
+
   static const String articleCoverOptionTwo = '二图封面';
   static const String articleCoverOptionThree = '三图封面';
   static const String addImage = '添加图片';

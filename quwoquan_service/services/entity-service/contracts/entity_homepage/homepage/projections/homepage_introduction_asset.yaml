@@ -17,6 +17,12 @@ fields:
   type: string
 - name: url
   type: string
+# 交付访问模式（DEC-033）：signed_grant 时 url 为相对私有引用，App 必须按
+# assetId 换取短签；null 只允许出现在存量 public 交付。
+- name: accessMode
+  type: enum
+  enum_ref: MediaDeliveryAccessMode
+  nullable: true
 - name: caption
   type: string
   nullable: true

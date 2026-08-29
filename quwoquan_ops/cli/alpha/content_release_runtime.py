@@ -23,6 +23,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
 
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -592,6 +594,9 @@ def _matches_orphaned_wrapper(
             str(ports["media-origin"]),
             "--root-dir",
             str(paths.media_root.resolve()),
+            # 边缘 HMAC 复算（DEC-031）：缺少 sign-key 装配的旧进程视为
+            # 不满足契约，必须重启以获得验签能力。
+            "--private-sign-key-env",
         }
         return required.issubset(set(child))
     if name == "media-edge":
@@ -692,13 +697,15 @@ def up() -> None:
     paths.media_root.mkdir(parents=True, exist_ok=True)
     _ensure_compose_images(env)
     _run([*_compose_arguments(), "up", "-d", *COMPOSE_SERVICES], env=env)
+    # 内容导入要求服务的依赖（Mongo/Redis/下游）真的连上，所以这里等的是
+    # 深层就绪 /readyz；/healthz 只回答进程存活，会让导入在依赖未就绪时开跑。
     _wait_http(
-        f"http://127.0.0.1:{ports['content-service']}/healthz",
+        f"http://127.0.0.1:{ports['content-service']}/readyz",
         timeout_seconds=300,
         compose_service="content-service",
     )
     _wait_http(
-        f"http://127.0.0.1:{ports['user-service']}/healthz",
+        f"http://127.0.0.1:{ports['user-service']}/readyz",
         timeout_seconds=300,
         compose_service="user-service",
     )
@@ -706,7 +713,7 @@ def up() -> None:
         "media-origin": _start_process(
             paths,
             "media-origin",
-            [sys.executable, "quwoquan_ops/cli/lib/local_media_origin.py", "--listen-host", "0.0.0.0", "--listen-port", str(ports["media-origin"]), "--root-dir", str(paths.media_root), "--server-label", "alpha-release-media-origin"],
+            [sys.executable, "quwoquan_ops/cli/lib/local_media_origin.py", "--listen-host", "0.0.0.0", "--listen-port", str(ports["media-origin"]), "--root-dir", str(paths.media_root), "--server-label", "alpha-release-media-origin", "--private-sign-key-env", "ALPHA_OBJECT_STORAGE_CDN_SIGN_KEY"],
             cwd=ROOT,
             env=env,
         ),
@@ -729,7 +736,7 @@ def up() -> None:
                 "ENTITY_SERVICE_ADDR": f"0.0.0.0:{ports['entity-service']}",
                 "ENTITY_MONGO_URI": f"mongodb://127.0.0.1:{ports['mongodb']}/?directConnection=true",
                 "ENTITY_MONGO_DATABASE": "quwoquan_entity",
-                "ENTITY_REDIS_ADDR": f"127.0.0.1:{ports['redis']}",
+                "ENTITY_REDIS_GENERAL_ADDR": f"127.0.0.1:{ports['redis']}",
                 "ENTITY_USER_ACCOUNT_SECURITY_AUTHORITY_BASE_URL": (
                     f"http://127.0.0.1:{ports['user-service']}"
                 ),
@@ -738,7 +745,7 @@ def up() -> None:
     }
     _wait_http(f"http://127.0.0.1:{ports['media-origin']}/healthz", timeout_seconds=30)
     _wait_http(f"http://127.0.0.1:{ports['media-processor']}/healthz", timeout_seconds=30)
-    _wait_http(f"http://127.0.0.1:{ports['entity-service']}/healthz", timeout_seconds=120)
+    _wait_http(f"http://127.0.0.1:{ports['entity-service']}/readyz", timeout_seconds=120)
     _write_caddyfile(paths, ports)
     _start_caddy(paths, ports)
     paths.process_dir.mkdir(parents=True, exist_ok=True)

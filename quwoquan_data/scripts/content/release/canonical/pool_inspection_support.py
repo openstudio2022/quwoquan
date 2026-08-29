@@ -17,8 +17,15 @@ from content.release.canonical.effective_admission import (
 from content.release.canonical.environment_release_selection import (
     MILESTONE_TARGETS,
 )
+from content.release.canonical.environment_release_support import (
+    pool_error_code,
+)
 from content.release.canonical.object_transaction_contract import (
+    ObjectTransactionError,
     _read_json,
+)
+from content.release.canonical.pool_object_retirement import (
+    pool_object_retirement,
 )
 
 _SUPPLY_TYPES = ("homepage", "article", "image", "video")
@@ -31,6 +38,10 @@ _REASON_MESSAGES = {
     "DATA.POOL.AUTHOR_NOT_ADMITTED": "对象引用的作者尚未准入",
     "DATA.POOL.REFERENCE_MISSING": "对象缺少可交付引用",
     "DATA.POOL.SOURCE_ATTRIBUTION_INCOMPLETE": "对象缺少完整来源署名与权利归因",
+    "DATA.POOL.RETIREMENT_RECEIPT_UNREADABLE": "对象的退役回执不可读",
+    "DATA.POOL.RETIREMENT_RECEIPT_INVALID": "对象的退役回执缺必需字段",
+    "DATA.POOL.RETIREMENT_REASON_INVALID": "对象的退役原因落在闭集之外",
+    "DATA.POOL.RETIREMENT_PAYLOAD_DRIFT": "对象在退役后原始证据字节发生改写",
 }
 
 
@@ -178,6 +189,44 @@ def _not_admitted_issue(
     )
 
 
+def _retirement_reported(
+    issues: list[dict[str, str]],
+    retired: list[dict[str, str]],
+    *,
+    object_root: Path,
+    object_type: str,
+    object_ref: str,
+) -> bool:
+    """Report one retirement conclusion; True means it replaces the object issue.
+
+    「已退役」与「未准入」是两个独立结论。回执缺席时返回 False，调用方照常产出
+    原有的不可准入 issue。回执在场但不可读、缺字段、reason 越界或 payloadDigest
+    漂移时，各自落一条自己的 typed issue 而不是静默恢复成原有结论，也不计入
+    retired。
+    """
+
+    try:
+        receipt = pool_object_retirement(object_root)
+    except ObjectTransactionError as exc:
+        _issue(
+            issues,
+            gate="eligibility",
+            code=pool_error_code(exc),
+            ref=object_ref,
+        )
+        return True
+    if receipt is None:
+        return False
+    retired.append(
+        {
+            "objectType": object_type,
+            "objectRef": object_ref,
+            "reason": str(receipt["reason"]),
+        }
+    )
+    return True
+
+
 def _creator_refs(object_root: Path, document: Mapping[str, Any]) -> list[str]:
     path = object_root / "creator.refs.json"
     if path.is_file():
@@ -247,5 +296,6 @@ __all__ = [
     "_quality_passed",
     "_reason_summary",
     "_resolved_admission",
+    "_retirement_reported",
     "_valid_version",
 ]

@@ -19,7 +19,6 @@ from quwoquan_ops.cli import stackctl
 from quwoquan_ops.cli.lib import output_layout_reconciliation as reconciliation
 from quwoquan_ops.cli.lib import output_layout_reconciliation_identity as identity
 
-
 SCHEMA_PATH = (
     Path(__file__).resolve().parents[3]
     / "environments/output_layout_reconciliation_plan.schema.json"
@@ -151,6 +150,66 @@ class OutputLayoutReconciliationContractTest(unittest.TestCase):
         operation_lock.assert_not_called()
         load_plan.assert_not_called()
 
+    def test_plan_success_publishes_complete_global_lock_evidence(self) -> None:
+        args = argparse.Namespace(
+            command="repair",
+            target="repo",
+            fix="reconcile-output-layout",
+            report_dir="",
+            output_layout_action="plan",
+            output_layout_plan_ref="",
+            confirm_output_layout_reconciliation=False,
+        )
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            temporary_root = Path(temporary_dir)
+            lock_path = temporary_root / "local-runtime.lock"
+            with (
+                mock.patch.object(
+                    stackctl,
+                    "resolve_report_dir",
+                    return_value=temporary_root,
+                ),
+                mock.patch.object(stackctl, "_write_summary_bundle"),
+                mock.patch.object(
+                    stackctl,
+                    "local_runtime_operation_lock_path",
+                    return_value=lock_path,
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_output_layout_canonical_truth",
+                    return_value=_truth(),
+                ),
+                mock.patch(
+                    "quwoquan_ops.gate.verify_root_layout.root_layout_issues",
+                    return_value=[],
+                ),
+                mock.patch.object(stackctl, "output_root", return_value=temporary_root),
+            ):
+                result = stackctl.command_repair(args)
+                report = json.loads((temporary_root / "report.json").read_text())
+
+        self.assertEqual(result["exitCode"], 0)
+        self.assertEqual(report["status"], "passed")
+        self.assertEqual(
+            set(report["globalLock"]),
+            {"path", "mode", "scope", "owner", "affectedTargets"},
+        )
+        self.assertEqual(report["globalLock"]["path"], str(lock_path))
+        self.assertEqual(report["globalLock"]["mode"], "exclusive")
+        self.assertEqual(
+            report["globalLock"]["scope"],
+            "global-output-layout-reconciliation",
+        )
+        self.assertRegex(
+            report["globalLock"]["owner"],
+            r"^pid=\d+ scope=global-output-layout-reconciliation mode=exclusive startedAt=",
+        )
+        self.assertEqual(
+            report["globalLock"]["affectedTargets"],
+            [*stackctl.LOCAL_BUILD_CACHE_TARGETS, "repo"],
+        )
+
     def test_confirmed_apply_resolves_the_plan_ref_against_the_repo_runs_root(
         self,
     ) -> None:
@@ -195,9 +254,11 @@ class OutputLayoutReconciliationContractTest(unittest.TestCase):
                     lock_path=lock_path,
                 )
                 try:
-                    with self.assertRaisesRegex(RuntimeError, "already running"):
-                        with stackctl._global_output_layout_reconciliation_lock():
-                            self.fail("exclusive output reconciliation lock must not enter")
+                    with (
+                        self.assertRaisesRegex(RuntimeError, "already running"),
+                        stackctl._global_output_layout_reconciliation_lock(),
+                    ):
+                        self.fail("exclusive output reconciliation lock must not enter")
                 finally:
                     lease.close()
 

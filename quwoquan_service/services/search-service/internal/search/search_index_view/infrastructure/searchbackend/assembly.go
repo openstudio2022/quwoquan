@@ -12,12 +12,17 @@ import (
 )
 
 // ESConfig consumes the effective config rendered from the search-service autonomous package.
+//
+// SEARCH_ES_* 是 content-service / entity-service / circle-service 与本服务共享
+// 同一 Elasticsearch 集群的部署契约键，用 envAbsolute 逐字保留：它不是本服务
+// 可以单方面改名的前缀派生键。索引形状与分片策略只来自配置快照，不接受 env
+// 覆盖——它们决定物理索引的可兼容性，必须随发布包一起被 CONFIG_VERSION 钉住。
 type ESConfig struct {
-	Enabled          bool     `yaml:"enabled"`
-	Endpoints        []string `yaml:"endpoints"`
-	Username         string   `yaml:"username"`
-	Password         string   `yaml:"password"`
-	APIKey           string   `yaml:"apiKey"`
+	Enabled          bool     `yaml:"enabled" envAbsolute:"SEARCH_ES_ENABLED"`
+	Endpoints        []string `yaml:"endpoints" envAbsolute:"SEARCH_ES_ENDPOINTS"`
+	Username         string   `yaml:"username" envAbsolute:"SEARCH_ES_USERNAME"`
+	Password         string   `yaml:"password" envAbsolute:"SEARCH_ES_PASSWORD"`
+	APIKey           string   `yaml:"apiKey" envAbsolute:"SEARCH_ES_API_KEY"`
 	Index            string   `yaml:"index"`
 	RequestTimeoutMs int      `yaml:"requestTimeoutMs"`
 	InsecureTLS      bool     `yaml:"insecureTls"`

@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-018
+// spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-018.t1
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/design_system/avatar/rounded_square_avatar.dart';
@@ -548,7 +550,7 @@ void main() {
     expect(textWidget.maxLines, 2);
   });
 
-  testWidgets('圆弧机型底部安全区在三档断点下保护右侧数字且不破坏 rail 锚定', (tester) async {
+  testWidgets('圆弧机型底部安全区只垂直抬升，rail 左右保持统一对齐轨道', (tester) async {
     const bottomInset = 34.0;
     const viewports = <double>[320, 390, 768];
 
@@ -584,23 +586,19 @@ void main() {
       final actionRect = tester.getRect(
         find.byKey(const ValueKey('immersive-actions-group')),
       );
-      final commentLabelRect = tester.getRect(find.text('45'));
-      final expectedHorizontalInset =
-          AppSpacing.containerMd +
-          AppSpacing.bottomNavContentSideInset(
-            tester.element(find.byType(ImmersiveEngagementBar)),
-            bottomInset,
-          );
+      // 对齐轨道单源（REQ-019）：底部安全区不再叠加侧向收窄，
+      // rail 左右 inset 与顶栏/caption 完全一致。
+      final expectedHorizontalInset = AppSpacing.containerMd;
 
       expect(
         railRect.left,
         moreOrLessEquals(expectedHorizontalInset, epsilon: 1),
-        reason: 'width=$width: rail 左侧应包含圆弧安全保护',
+        reason: 'width=$width: rail 左缘必须落在统一对齐轨道上',
       );
       expect(
         rootRect.right - railRect.right,
         moreOrLessEquals(expectedHorizontalInset, epsilon: 1),
-        reason: 'width=$width: rail 右侧应包含圆弧安全保护',
+        reason: 'width=$width: rail 右缘必须落在统一对齐轨道上',
       );
       expect(
         railRect.right - actionRect.right,
@@ -608,14 +606,18 @@ void main() {
         reason: 'width=$width: 动作组仍应右锚到 rail',
       );
       expect(
-        commentLabelRect.right,
-        lessThanOrEqualTo(rootRect.right - expectedHorizontalInset + 1),
-        reason: 'width=$width: 评论数字不能被圆弧区域裁切',
-      );
-      expect(
         authorRect.right,
         lessThanOrEqualTo(actionRect.left),
         reason: 'width=$width: 作者/关注槽位不能挤压动作组',
+      );
+      // 垂直保护（REQ-019）：内容区在 home indicator 之上再抬升 lift。
+      expect(
+        rootRect.bottom - railRect.bottom,
+        moreOrLessEquals(
+          bottomInset + AppSpacing.immersiveBottomChromeLift,
+          epsilon: 1,
+        ),
+        reason: 'width=$width: 底部安全区保护必须以垂直抬升表达',
       );
     }
   });

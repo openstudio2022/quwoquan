@@ -14,7 +14,10 @@ from content.release.environment.topology import (
 )
 from content.release.model import FULL_SYNC_RELEASE_KINDS, ReleaseKind
 from core.io import read_json, write_json
-from core.media_asset_url import is_public_media_slice_key
+from core.media_asset_url import (
+    is_public_media_slice_key,
+    release_media_delivery_key,
+)
 from core.media_library_sync import sync_media_library
 from core.release_layout import payload_file, payload_root
 from core.schema import assert_valid
@@ -109,6 +112,15 @@ def assert_environment_release_policy(
 
 
 def release_media_public_slices(release: Path) -> dict[str, str]:
+    """Map每个交付 key 到其摘要，形态必须与 header releaseClass 一致（DEC-031）。"""
+    header_path = payload_file(release, "release.json")
+    if not header_path.is_file():
+        raise SystemExit(f"[ship] immutable release header 不存在：{header_path}")
+    release_class = str(read_json(header_path).get("releaseClass") or "").strip()
+    if release_class not in {"research", "commercial"}:
+        raise SystemExit(
+            "[ship] release header 必须声明 research/commercial releaseClass"
+        )
     manifest = read_json(payload_file(release, "media_manifest.json"))
     if manifest.get("schema") != "quwoquan_data.release_media_manifest":
         raise SystemExit("[ship] release media manifest schema 无效")
@@ -119,13 +131,23 @@ def release_media_public_slices(release: Path) -> dict[str, str]:
     for index, row in enumerate(assets):
         if not isinstance(row, Mapping):
             raise SystemExit(f"[ship] release media manifest assets[{index}] 必须为对象")
-        key = str(row.get("publicSliceKey") or "")
-        if not is_public_media_slice_key(key):
-            raise SystemExit(f"[ship] release media manifest 含非法 public slice: {key}")
+        try:
+            key = release_media_delivery_key(row)
+        except ValueError as exc:
+            raise SystemExit(f"[ship] release media manifest 交付 key 非法: {exc}") from exc
+        is_public = is_public_media_slice_key(key)
+        if release_class == "research" and is_public:
+            raise SystemExit(
+                f"[ship] research release 不得携带公开交付 slice: {key}"
+            )
+        if release_class == "commercial" and not is_public:
+            raise SystemExit(
+                f"[ship] commercial release 不得携带私有交付 key: {key}"
+            )
         sha256 = str(row.get("sha256") or "")
         prior = slices.get(key)
         if prior is not None and prior != sha256:
-            raise SystemExit(f"[ship] release media manifest public slice 摘要冲突: {key}")
+            raise SystemExit(f"[ship] release media manifest 交付 key 摘要冲突: {key}")
         slices[key] = sha256
     return dict(sorted(slices.items()))
 

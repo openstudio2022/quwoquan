@@ -28,7 +28,7 @@ prompts/
     └── review_repair.vars.yaml
 ```
 
-## 业界格式骨架（参照 claude code / codex）
+## 宿主无关的格式骨架
 
 每个环节一套 `system + task(+partials)`，统一经 `prompt_render.render(name, system_vars, task_vars)`
 产出 `prompt.md`。**静态在前、动态在后**，中间有物理分隔（`---`）。

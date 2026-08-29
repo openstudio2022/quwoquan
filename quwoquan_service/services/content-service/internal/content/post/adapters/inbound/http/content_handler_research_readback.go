@@ -10,6 +10,21 @@ import (
 	postapp "quwoquan_service/services/content-service/internal/content/post/application"
 )
 
+// requestHasResearchRole 从已验签 principal 派生 research 身份标志
+// （DEC-032）：role 由服务端签发进 access token，客户端无法自选。
+func requestHasResearchRole(r *http.Request) bool {
+	principal, ok := rtauth.PrincipalFromContext(r.Context())
+	if !ok {
+		return false
+	}
+	for _, role := range principal.Roles {
+		if role == rtauth.RoleResearch {
+			return true
+		}
+	}
+	return false
+}
+
 func (h *ContentHandler) handleGetResearchReleaseReadback(
 	w http.ResponseWriter,
 	r *http.Request,

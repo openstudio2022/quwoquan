@@ -2,7 +2,7 @@
 ///
 /// 本文件是「测试怎样满足 generated operation client 所在 provider 图」的唯一被
 /// 认可入口。它只存在于 `test/**`，`lib/**` 不得引用；它不提供任何第一方业务数据，
-/// 因此不构成 `.cursor/rules/08-mock-data-isolation.mdc` 所禁止的 mock/fixture 数据源。
+/// 因此不构成 system-architecture-and-engineering-guide DEC-019 所禁止的环境 mock/fixture 数据源。
 ///
 /// ## 为什么需要它
 ///

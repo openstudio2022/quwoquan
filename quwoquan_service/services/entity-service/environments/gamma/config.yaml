@@ -4,6 +4,5 @@ overrides:
   sys.entity-service.user_account_security_authority.base_url: http://user-service:18081
 secretRefs:
   sys.entity-service.mongo.uri: ENTITY_MONGO_URI
-  sys.entity-service.redis.general.password: ENTITY_REDIS_PASSWORD
-  sys.entity-service.redis.rec.password: ENTITY_REDIS_PASSWORD
+  sys.entity-service.redis.general.password: ENTITY_REDIS_GENERAL_PASSWORD
 externalBindings:

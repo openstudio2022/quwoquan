@@ -2,33 +2,18 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"strings"
 
-	configrelease "quwoquan_service/runtime/configrelease"
-
-	"gopkg.in/yaml.v3"
+	"quwoquan_service/runtime/servicekit"
 )
 
-type realtimeRuntimeConfig struct {
-	Service struct {
-		HTTP struct {
-			Addr string `yaml:"addr"`
-		} `yaml:"http"`
-	} `yaml:"service"`
+// config 是 realtime-gateway 的声明式配置：通用段内嵌 servicekit.BaseConfig，
+// realtime scene 按「声明即装配」交给骨架（DEC-028）。
+type config struct {
+	servicekit.BaseConfig `yaml:",inline"`
+
 	Redis struct {
-		Realtime struct {
-			Mode  string   `yaml:"mode"`
-			Addr  string   `yaml:"addr"`
-			Addrs []string `yaml:"addrs"`
-		} `yaml:"realtime"`
-	} `yaml:"redis"`
-	UserService struct {
-		AccountSecurity struct {
-			BaseURL   string `yaml:"base_url"`
-			TimeoutMs int    `yaml:"timeout_ms"`
-		} `yaml:"account_security"`
-	} `yaml:"user_service"`
+		Realtime servicekit.RedisSceneConfig `yaml:"realtime" envPrefix:"REALTIME"`
+	} `yaml:"redis" envPrefix:"REDIS"`
 }
 
 const (
@@ -36,34 +21,29 @@ const (
 	maxAccountSecurityAuthorityTimeoutMs = 5000
 )
 
-func loadRealtimeRuntimeConfig(serviceName, environment, configRoot string) (realtimeRuntimeConfig, error) {
-	path, err := configrelease.File(configRoot, serviceName, environment)
-	if err != nil {
-		return realtimeRuntimeConfig{}, err
-	}
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return realtimeRuntimeConfig{}, err
-	}
-	var cfg realtimeRuntimeConfig
-	if err := yaml.Unmarshal(raw, &cfg); err != nil {
-		return realtimeRuntimeConfig{}, fmt.Errorf("parse %s: %w", path, err)
-	}
-	cfg.Service.HTTP.Addr = strings.TrimSpace(cfg.Service.HTTP.Addr)
-	cfg.Redis.Realtime.Mode = strings.TrimSpace(cfg.Redis.Realtime.Mode)
-	cfg.Redis.Realtime.Addr = strings.TrimSpace(cfg.Redis.Realtime.Addr)
-	cfg.UserService.AccountSecurity.BaseURL = strings.TrimSpace(
-		cfg.UserService.AccountSecurity.BaseURL,
-	)
-	if cfg.Service.HTTP.Addr == "" || cfg.Redis.Realtime.Mode == "" ||
-		cfg.UserService.AccountSecurity.BaseURL == "" ||
-		cfg.UserService.AccountSecurity.TimeoutMs <
-			minAccountSecurityAuthorityTimeoutMs ||
-		cfg.UserService.AccountSecurity.TimeoutMs >
-			maxAccountSecurityAuthorityTimeoutMs {
-		return realtimeRuntimeConfig{}, fmt.Errorf(
-			"service.http.addr, redis.realtime.mode and bounded user_service.account_security config are required",
+// validateRealtimeConfig 施加网关特有的配置下界：authority 超时必须落在有界
+// 区间（过小会把正常授权判定误判为不可用，过大会让握手阻塞在依赖上），
+// beta/gamma/prod 不接受内存 Redis（连接租约与 presence 必须跨实例可见）。
+func validateRealtimeConfig(cfg *config) error {
+	timeoutMs := cfg.UserAccountSecurityAuthority.TimeoutMs
+	if timeoutMs < minAccountSecurityAuthorityTimeoutMs ||
+		timeoutMs > maxAccountSecurityAuthorityTimeoutMs {
+		return fmt.Errorf(
+			"user_account_security_authority.timeout_ms must be within [%d,%d]ms, got %d",
+			minAccountSecurityAuthorityTimeoutMs,
+			maxAccountSecurityAuthorityTimeoutMs,
+			timeoutMs,
 		)
 	}
-	return cfg, nil
+	mode, err := cfg.Redis.Realtime.DeclaredMode()
+	if err != nil {
+		return fmt.Errorf("redis.realtime %w", err)
+	}
+	if failFastEnvironment(cfg.Environment) && mode == servicekit.RedisModeMemory {
+		return fmt.Errorf(
+			"redis.realtime must not declare mode=%s when APP_ENV=%s",
+			servicekit.RedisModeMemory, cfg.Environment,
+		)
+	}
+	return nil
 }

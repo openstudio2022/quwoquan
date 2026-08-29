@@ -56,6 +56,7 @@ def _payload(**overrides: Any) -> dict[str, Any]:
         "propertyReleaseStatus": "not_required",
         "collectedAt": "2026-08-05T02:00:00Z",
         "takedownPolicy": "notice_and_takedown",
+        "derivedModifications": [],
         "directDownload": True,
         "accessControlBypassed": False,
         "drmDetected": False,

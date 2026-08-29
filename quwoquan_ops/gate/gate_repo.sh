@@ -73,6 +73,26 @@ if [[ "$scope" != "service" && "$service_phase" != "all" ]]; then
   exit 2
 fi
 
+data_phase="${GATE_DATA_PHASE:-all}"
+case "$data_phase" in
+  all|verify|local_contract) ;;
+  *)
+    echo "[gate] FAIL: invalid GATE_DATA_PHASE=$data_phase (expected all|verify|local_contract)" >&2
+    exit 2
+    ;;
+esac
+if [[ "$scope" != "data" && "$data_phase" != "all" ]]; then
+  echo "[gate] FAIL: GATE_DATA_PHASE is only valid with --scope data" >&2
+  exit 2
+fi
+# 分片下标与总数必须同时给出。只给一个时判否而不是替调用方补另一个——补出来的
+# 那一份会让 CI 静默只跑一片，而四片全绿的表象与全量绿无法区分。
+if [[ -n "${DATA_TEST_TOTAL_SHARDS:-}" && -z "${DATA_TEST_SHARD_INDEX:-}" ]] \
+  || [[ -z "${DATA_TEST_TOTAL_SHARDS:-}" && -n "${DATA_TEST_SHARD_INDEX:-}" ]]; then
+  echo "[gate] FAIL: DATA_TEST_TOTAL_SHARDS and DATA_TEST_SHARD_INDEX must be provided together" >&2
+  exit 2
+fi
+
 # Python script governance derives independent app/service/ops/data
 # boundaries. A scoped Delivery job validates its own boundary; the aggregate
 # local gate keeps the strict whole-repository check.
@@ -374,7 +394,7 @@ run_app() {
   python3 quwoquan_ops/gate/verify_app_client_contract_kind_alignment.py || exit 1
   dart quwoquan_ops/tools/runtime_error_codegen/bin/generate_runtime_errors.dart --check
   dart quwoquan_ops/tools/runtime_error_codegen/bin/check_runtime_error_cutover.dart
-  (cd quwoquan_app && flutter pub get --offline)
+  (cd quwoquan_app && flutter pub get --offline --enforce-lockfile)
   # 仅分析主 App 业务代码与测试；vendor/plugins/** 属于 path overrides 的第三方依赖，
   # 其 example/test/pigeons 不应作为 quwoquan_app 主工程门禁输入。
   (cd quwoquan_app && flutter analyze lib test)
@@ -382,8 +402,8 @@ run_app() {
   # 生产 pubspec 不含 patrol，因此它们只能在这里被静态分析。两条分析的并集
   # 必须覆盖全部 canonical UAT，由 verify_local_dependency_purity 证明无排除假绿。
   # host 的 lock 由 App 的 lock 播种，两侧版本逐条对齐，只多出 patrol 自己那几个包；
-  # --offline 在这里不成立：那 7 个包 App 从不解析，runner 缓存里没有。
-  (cd quwoquan_app/test_host/patrol && flutter pub get --enforce-lockfile)
+  # gate 只消费 dependency sync 已封存到本机 cache 的图，不在静态分析期联网补包。
+  (cd quwoquan_app/test_host/patrol && flutter pub get --offline --enforce-lockfile)
   (cd quwoquan_app/test_host/patrol && flutter analyze \
     lib test/patrol test/canonical/user_acceptance test/canonical/support/runtime/patrol)
   # Dart 语义门禁：视觉 token + iOS 语义风格（chevron / Cupertino 组件边界）
@@ -547,7 +567,7 @@ run_app() {
   fi
 
   if [[ "$app_phase" == "tests" || "$app_phase" == "coverage" || "$app_phase" == "serial" ]]; then
-    (cd quwoquan_app && flutter pub get --offline)
+    (cd quwoquan_app && flutter pub get --offline --enforce-lockfile)
   fi
 
   # 唯一 canonical coverage rule 的端侧行 + 分支计量。--collect 自带一次
@@ -663,9 +683,68 @@ run_portal() (
   rm -f "$portal_dir"/*.tsbuildinfo "$portal_dir"/vite.config.js "$portal_dir"/vite.config.d.ts
 )
 
+run_data_verify() {
+  echo "[gate] quwoquan_data verify"
+  python3 quwoquan_data/scripts/cli.py verify all
+}
+
+run_data_local_contract() {
+  local total="${DATA_TEST_TOTAL_SHARDS:-1}"
+  local index="${DATA_TEST_SHARD_INDEX:-0}"
+  echo "[gate] quwoquan_data local_contract (shard ${index}/${total})"
+  local -a test_files=()
+  local candidate selector_output selector_status
+  local selector_output_dir="$ROOT/.qwq_output/env/repo/local/repo-gate/process/data-shard-selector"
+  if ! mkdir -p "$selector_output_dir"; then
+    echo "[gate] FAIL: could not prepare managed data shard selector output" >&2
+    return 1
+  fi
+  if ! selector_output="$(
+    umask 077
+    mktemp "$selector_output_dir/selected.XXXXXX"
+  )"; then
+    echo "[gate] FAIL: could not allocate managed data shard selector output" >&2
+    return 1
+  fi
+  selector_status=0
+  if python3 -B quwoquan_ops/gate/delivery_gate_data_shard.py \
+    --total-shards "$total" --shard-index "$index" >"$selector_output"; then
+    :
+  else
+    selector_status=$?
+  fi
+  if (( selector_status != 0 )); then
+    echo "[gate] FAIL: data shard selector failed (exit=${selector_status})" >&2
+    if ! rm -f -- "$selector_output"; then
+      echo "[gate] FAIL: could not clean managed selector output; preserving selector exit=${selector_status}" >&2
+    fi
+    return "$selector_status"
+  fi
+  while IFS= read -r candidate; do
+    [[ -n "$candidate" ]] && test_files+=("$candidate")
+  done <"$selector_output"
+  if ! rm -f -- "$selector_output"; then
+    echo "[gate] FAIL: could not clean managed data shard selector output" >&2
+    return 1
+  fi
+  if (( ${#test_files[@]} == 0 )); then
+    echo "[gate] FAIL: data local_contract shard ${index}/${total} selected no test files" >&2
+    return 1
+  fi
+  echo "[gate] data local_contract files=${#test_files[@]}"
+  python3 -B -m pytest -q "${test_files[@]}"
+}
+
 run_data() {
   echo "[gate] quwoquan_data"
-  python3 quwoquan_data/scripts/cli.py verify all
+  case "$data_phase" in
+    verify) run_data_verify ;;
+    local_contract) run_data_local_contract ;;
+    all)
+      run_data_verify
+      run_data_local_contract
+      ;;
+  esac
 }
 
 echo "[gate] repo quality gate (scope=$scope)"

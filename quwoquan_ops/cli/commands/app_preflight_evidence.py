@@ -380,11 +380,35 @@ def _run_app_content_release_probe(
             app_uat_plan=app_uat_plan,
             output_root=_stackctl.output_root(),
         )
+    research = readiness_phase == ReadinessPhase.RESEARCH.value
+    research_consumer_token = ""
+    if research:
+        # research 相位匿名内容面已按 DEC-032 收敛为 no_active_release 空页，
+        # release-bound 非空读回必须以 research consumer 凭证消费（凭证只在
+        # 进程内存传递）。私有媒体没有匿名可采样的公开 slice，media_sample
+        # 与 feed_media_slices 的公开 URL 读回不适用：媒体可显示证据由
+        # isolation probe signedMedia 段与 App 端短签消费 CaseResult 承载。
+        from quwoquan_ops.cli.lib.research_consumer_credential import (
+            issue_research_consumer_credential,
+        )
+
+        environment = target.removesuffix("-local")
+        credential = issue_research_consumer_credential(
+            environment=environment,
+            release_id=str(readiness.get("releaseId") or ""),
+            verify_run_id=str(readiness.get("verifyRunId") or ""),
+        )
+        research_consumer_token = str(credential.get("bearerToken") or "")
+        if not research_consumer_token:
+            raise ValueError(
+                "research consumer credential issuance returned no bearer token"
+            )
     check, _output, findings = _stackctl._run_environment_integration_probe(
         _stackctl.load_environment_topology(),
         target,
         report_dir,
         require_non_empty_content_feed=True,
+        research_consumer_token=research_consumer_token,
         release_post_expectations={"video_book_feed": video_work_ids},
         release_search_canaries=search_canaries,
         release_samples=list(sample_resolution.get("samples") or []),
@@ -395,10 +419,11 @@ def _run_app_content_release_probe(
             # App 视频书页真实消费 premium_stream 频道；typed_video 绿不代表
             # 视频书绿，设备 UAT 前必须同时证明 premium 池非空。
             "premium_feed",
-            # feed items 非空不等于媒体可显示：设备 UAT 前逐 slice 字节读回。
-            "feed_media_slices",
+            # feed items 非空不等于媒体可显示：设备 UAT 前逐 slice 字节读回
+            # （research 私有交付无公开 slice，由短签消费证据承载）。
+            *(("feed_media_slices",) if not research else ()),
             *(("global_search",) if search_canaries_required else ()),
-            "media_sample",
+            *(("media_sample",) if not research else ()),
             *(("release_sample",) if sample_resolution else ()),
         ),
         probe_name="app-content-release-bound-search-and-video-page",

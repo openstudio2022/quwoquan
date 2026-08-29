@@ -7,6 +7,8 @@ from pathlib import Path
 
 import yaml
 
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -465,7 +467,7 @@ def main() -> int:
             )
     renderer_text = PROD_RENDERER.read_text(encoding="utf-8")
     for token in (
-        "CONFIG_ACK_REQUIRED_INSTANCES",
+        "PLATFORM_OPS_CONFIG_ACK_REQUIRED_INSTANCES",
         "SERVICE_INSTANCE_ID",
         "PLATFORM_OPS_BASE_URL",
     ):

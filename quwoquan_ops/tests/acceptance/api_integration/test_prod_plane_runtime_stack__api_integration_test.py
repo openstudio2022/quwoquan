@@ -224,10 +224,18 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
                 notification_env["NOTIFICATION_MONGO_URI"],
                 "mongodb://host.containers.internal:19410/?directConnection=true",
             )
-            self.assertEqual(
-                notification_env["NOTIFICATION_REDIS_ADDR"],
-                "host.containers.internal:19420",
-            )
+            self.assertNotIn("NOTIFICATION_REDIS_ADDR", notification_env)
+            for scene in ("GENERAL", "REALTIME"):
+                self.assertEqual(
+                    notification_env[f"NOTIFICATION_REDIS_{scene}_ADDR"],
+                    "host.containers.internal:19420",
+                )
+                self.assertEqual(
+                    notification_env[f"NOTIFICATION_REDIS_{scene}_MODE"], "standalone"
+                )
+                self.assertEqual(
+                    notification_env[f"NOTIFICATION_REDIS_{scene}_TLS"], "false"
+                )
             self.assertEqual(notification_env["NOTIFICATION_REDIS_GENERAL_DB"], "1")
             self.assertEqual(notification_env["NOTIFICATION_REDIS_REALTIME_DB"], "4")
             self.assertEqual(
@@ -360,7 +368,7 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
             self.assertNotIn("livekit", services)
             self.assertNotIn("coturn", services)
             self.assertEqual(
-                services["content-service"]["environment"]["MONGO_URI"],
+                services["content-service"]["environment"]["CONTENT_MONGO_URI"],
                 "mongodb://mongodb:27017/?directConnection=true",
             )
             self.assertEqual(
@@ -512,14 +520,14 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
             realtime_env = compose["services"]["realtime-gateway"]["environment"]
             rtc_env = compose["services"]["rtc-service"]["environment"]
             self.assertEqual(
-                realtime_env["REALTIME_REDIS_ADDR"],
+                realtime_env["REALTIME_GATEWAY_REDIS_REALTIME_ADDR"],
                 "host.containers.internal:19420",
             )
             self.assertEqual(
-                rtc_env["MONGO_URI"],
+                rtc_env["RTC_MONGO_URI"],
                 "mongodb://host.containers.internal:19410/?directConnection=true",
             )
-            self.assertEqual(rtc_env["REDIS_ADDR"], "host.containers.internal:19420")
+            self.assertEqual(rtc_env["RTC_REDIS_ADDR"], "host.containers.internal:19420")
             self.assertIn(
                 "PROD_RTC_MEDIA_CONNECTION_URL",
                 rtc_env["RTC_MEDIA_CONNECTION_URL"],

@@ -51,13 +51,13 @@ _BINDING_MANIFEST_FIELDS = frozenset(
 )
 
 
-def materialize_provider_binding_overlay(
+def _compile_overlay_artifacts(
     env_name: str,
     target_name: str,
     *,
     source_root: Path,
-) -> dict[str, Any]:
-    """Compile once from the immutable capsule and atomically publish build inputs."""
+) -> tuple[dict[str, bytes], dict[str, Any]]:
+    """Compile the environment bindings once and return staged files + manifest."""
 
     source_root = Path(source_root).resolve()
     compiled = compile_single_environment_bindings(
@@ -152,7 +152,22 @@ def materialize_provider_binding_overlay(
     staged_files["manifest.json"] = (
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
     ).encode("utf-8")
+    return staged_files, payload
 
+
+def materialize_provider_binding_overlay(
+    env_name: str,
+    target_name: str,
+    *,
+    source_root: Path,
+) -> dict[str, Any]:
+    """Compile once from the immutable capsule and atomically publish build inputs."""
+
+    staged_files, payload = _compile_overlay_artifacts(
+        env_name,
+        target_name,
+        source_root=source_root,
+    )
     shared_root = _pkg.runtime_shared_deployment_package_dir(
         env_name,
         target=target_name,
@@ -202,6 +217,34 @@ def materialize_provider_binding_overlay(
         expected_target=target_name,
         candidate_root=candidate_root,
     )
+
+
+def materialize_mutable_provider_binding_overlay(
+    env_name: str,
+    target_name: str,
+    *,
+    source_root: Path,
+    output_root: Path,
+) -> tuple[Path, str]:
+    """把 overlay 编译进普通目录，供 mutable test-live 的 Compose build 消费。
+
+    Immutable package 走 candidate staging 发布；mutable test-live 的镜像由
+    `docker compose build` 从当前工作树构建，Dockerfile 依赖 named build context
+    ``qwq_provider_bindings``，因此这里以同一编译产物物化一个 run-scoped 目录。
+    """
+
+    staged_files, payload = _compile_overlay_artifacts(
+        env_name,
+        target_name,
+        source_root=source_root,
+    )
+    output_root = Path(output_root).resolve()
+    output_root.mkdir(parents=True, exist_ok=True)
+    for relative, encoded in sorted(staged_files.items()):
+        destination = output_root / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(encoded)
+    return output_root, str(payload["bindingManifestDigest"])
 
 
 def load_provider_binding_overlay(

@@ -5,5 +5,5 @@ overrides:
   sys.circle-service.es.shards: 3
 secretRefs:
   sys.circle-service.mongo.uri: CIRCLE_MONGO_URI
-  sys.circle-service.redis.password: CIRCLE_REDIS_PASSWORD
+  sys.circle-service.redis.general.password: CIRCLE_REDIS_GENERAL_PASSWORD
 externalBindings:

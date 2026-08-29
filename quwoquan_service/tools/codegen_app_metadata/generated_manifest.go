@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -281,6 +284,110 @@ func removeUntrackedGeneratedOutputs() error {
 		}
 	}
 	return nil
+}
+
+func formatGeneratedDartOutputs() error {
+	return formatGeneratedDartOutputsWith(runDartFormatter)
+}
+
+func formatGeneratedDartOutputsWith(
+	formatter func(
+		appRoot string,
+		relativePaths []string,
+	) (map[string][]byte, error),
+) error {
+	relativePaths := make([]string, 0, len(generatedManifestOutputs))
+	for relative := range generatedManifestOutputs {
+		if strings.HasSuffix(relative, ".dart") {
+			relativePaths = append(relativePaths, relative)
+		}
+	}
+	if len(relativePaths) == 0 {
+		return nil
+	}
+	sort.Strings(relativePaths)
+	formatted, err := formatter(generatedManifestAppRoot, relativePaths)
+	if err != nil {
+		return fmt.Errorf("format generated Dart outputs: %w", err)
+	}
+	formattedPaths := make([]string, 0, len(formatted))
+	for relative := range formatted {
+		formattedPaths = append(formattedPaths, relative)
+	}
+	sort.Strings(formattedPaths)
+	if strings.Join(relativePaths, "\n") != strings.Join(formattedPaths, "\n") {
+		return fmt.Errorf(
+			"formatter output path set mismatch: expected=%v actual=%v",
+			relativePaths,
+			formattedPaths,
+		)
+	}
+	for _, relative := range relativePaths {
+		path := filepath.Join(
+			generatedManifestAppRoot,
+			filepath.FromSlash(relative),
+		)
+		payload := formatted[relative]
+		if err := os.WriteFile(path, payload, 0o644); err != nil {
+			return fmt.Errorf("write formatted generated output %s: %w", relative, err)
+		}
+		recordGeneratedFile(path, payload)
+	}
+	fmt.Printf("formatted generated Dart outputs: %d\n", len(relativePaths))
+	return nil
+}
+
+type dartFormatterOutput struct {
+	Path   string `json:"path"`
+	Source string `json:"source"`
+}
+
+func runDartFormatter(
+	appRoot string,
+	relativePaths []string,
+) (map[string][]byte, error) {
+	args := append([]string{"format", "--output=json"}, relativePaths...)
+	command := exec.Command("dart", args...)
+	command.Dir = appRoot
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	command.Stdout = &stdout
+	command.Stderr = &stderr
+	if err := command.Run(); err != nil {
+		return nil, fmt.Errorf(
+			"dart format failed: %w: %s",
+			err,
+			strings.TrimSpace(stderr.String()),
+		)
+	}
+	formatted := make(map[string][]byte, len(relativePaths))
+	decoder := json.NewDecoder(&stdout)
+	for {
+		var output dartFormatterOutput
+		if err := decoder.Decode(&output); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, fmt.Errorf("decode dart format output: %w", err)
+		}
+		relative := filepath.ToSlash(filepath.Clean(output.Path))
+		if filepath.IsAbs(output.Path) ||
+			relative == ".." ||
+			strings.HasPrefix(relative, "../") {
+			return nil, fmt.Errorf(
+				"dart format returned path outside App root: %s",
+				output.Path,
+			)
+		}
+		if _, duplicate := formatted[relative]; duplicate {
+			return nil, fmt.Errorf(
+				"dart format returned duplicate path: %s",
+				relative,
+			)
+		}
+		formatted[relative] = []byte(output.Source)
+	}
+	return formatted, nil
 }
 
 func writeGeneratedManifest(path string) error {

@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import argparse
 import re
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 from content.release.environment._ship_operation_dependencies import (
     ShipOperationDependencies,
@@ -51,6 +53,16 @@ def _failure_receipt_error(error: Exception) -> str:
         message,
     )
     return (message or "verification failed")[:1024]
+
+
+def _failure_receipt_evidence(error: Exception) -> dict[str, Any]:
+    """Retain bounded typed attempt evidence exposed by a verifier blocker."""
+
+    attempts = getattr(error, "operation_attempts", ())
+    if not isinstance(attempts, (list, tuple)) or not attempts:
+        return {}
+    rows = [dict(row) for row in attempts[:2] if isinstance(row, Mapping)]
+    return {"operationAttempts": rows} if rows else {}
 
 
 def _verify_release_consumers(
@@ -107,8 +119,9 @@ def _verify_release_consumers(
         stage: str,
         error: Exception,
         *,
-        evidence: dict[str, str] | None = None,
+        evidence: dict[str, Any] | None = None,
     ) -> None:
+        failure_evidence = _failure_receipt_evidence(error)
         dependencies.write_verification_result(
             run / "result.json",
             {
@@ -121,6 +134,7 @@ def _verify_release_consumers(
                 "status": ReleaseRunStatus.FAILED,
                 "failedStage": stage,
                 "error": _failure_receipt_error(error),
+                **failure_evidence,
                 **dict(evidence or {}),
             },
         )

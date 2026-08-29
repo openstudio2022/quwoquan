@@ -29,6 +29,11 @@ from typing import Iterable, Sequence
 from core.runtime_policy import active_runtime_policy
 from core.image_decode import ImageDecodeFailure, probe_image_path
 from core.media_processing_policy import MEDIA_PROCESSING_POLICY
+from core.media_source_provenance import (
+    REASON_PREFIX,
+    WATERMARK_PRONE_ORIGIN_PLATFORMS,
+    declared_origin_platform,
+)
 
 # ─── 后端探测 ──────────────────────────────────────────────────────
 try:  # pragma: no cover - 依赖探测
@@ -105,31 +110,18 @@ RIGHTS_CONTEXT_TERMS: tuple[str, ...] = (
 _HANDLE_RE = re.compile(r"@[\w\u4e00-\u9fff][\w\u4e00-\u9fff\-_.]{1,30}")
 
 
-class WatermarkProneSourceMarker(StrEnum):
-    """Stable provenance markers whose original images commonly retain marks.
-
-    This is a source-provenance safety rule, not a rights judgement. A Commons
-    re-host can be correctly licensed while its original bitmap still carries a
-    retired platform watermark, so the two checks cannot substitute for each
-    other.
-    """
-
-    PANORAMIO = "panoramio"
-
-
 def watermark_prone_source_reason(values: Iterable[str]) -> str:
     """Return a deterministic exclusion reason for known watermark-prone origin.
 
-    Pixel OCR remains the primary detector. This provenance guard closes the
-    documented false-negative class where small corner overlays are below OCR's
-    confidence threshold but the original file identity explicitly records its
-    watermark-prone hosting origin.
+    这是文件身份层的 OCR 补充判据：像素 OCR 仍是主检测器，此处只关闭「角标
+    低于置信阈值但文件身份本身写明高风险托管源」这一漏检类。高风险平台闭集
+    的唯一真相源是 ``core.media_source_provenance``；出处类别裁决由该模块的
+    ``watermark_prone_provenance_reason`` 承担，本函数不做出处类别判定。
     """
 
-    normalized = "\n".join(str(value or "").casefold() for value in values)
-    for marker in WatermarkProneSourceMarker:
-        if marker.value in normalized:
-            return f"watermark_prone_source_provenance:{marker.value}"
+    platform = declared_origin_platform(values)
+    if platform in WATERMARK_PRONE_ORIGIN_PLATFORMS:
+        return f"{REASON_PREFIX}:{platform.value}"
     return ""
 
 # ─── 阈值 ──────────────────────────────────────────────────────────

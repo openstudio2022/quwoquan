@@ -58,10 +58,6 @@ extension _MediaPageFlipBookStateSoftSurface on _MediaPageFlipBookState {
     }
 
     return <Widget>[
-      _buildBackwardPageSpaceReplacementLayer(
-        pageRect: resolveBookPageRect(scene.layout, isRightPage: true),
-        textureRef: binding.recto,
-      ),
       if (renderFrame.bottomClipArea.length >= 3)
         _buildDynamicPageLayer(
           key: const ValueKey<String>('media-pageflip-bottom-layer'),
@@ -222,19 +218,6 @@ extension _MediaPageFlipBookStateSoftSurface on _MediaPageFlipBookState {
       return true;
     }
     return visualAngle.abs() <= math.pi / 2;
-  }
-
-  Widget _buildBackwardPageSpaceReplacementLayer({
-    required Rect pageRect,
-    required _MediaPageTextureRef textureRef,
-  }) {
-    return Positioned.fromRect(
-      key: const ValueKey<String>(
-        'media-pageflip-backward-previous-front-replacement',
-      ),
-      rect: pageRect,
-      child: _buildTextureSurface(textureRef),
-    );
   }
 
   Widget _buildTextureSurface(_MediaPageTextureRef ref) {

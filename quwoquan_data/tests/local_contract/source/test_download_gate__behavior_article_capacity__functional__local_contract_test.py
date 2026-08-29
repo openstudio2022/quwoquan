@@ -276,6 +276,8 @@ def _write_article_capacity_source_with_two_images(
     )
 
 
+# spec_ref: specs/feature-tree/runtime/runtime-data-engineering/article-commercial-scale-closure/spec.md#gwt-004.t1
+# spec_ref: specs/feature-tree/runtime/runtime-data-engineering/article-commercial-scale-closure/spec.md#gwt-004.t2
 def test_article_capacity_keeps_quality_body_as_text_only_when_images_duplicate(
     monkeypatch,
 ):
@@ -318,6 +320,7 @@ def test_article_capacity_keeps_quality_body_as_text_only_when_images_duplicate(
     assert diagnostics["articleImageSoftWarnings"]["no_publishable_source_asset"] == 1
 
 
+# spec_ref: specs/feature-tree/runtime/runtime-data-engineering/article-commercial-scale-closure/spec.md#gwt-004.t1
 def test_download_fetch_resume_keeps_text_only_article_ready_when_images_duplicate(
     monkeypatch,
 ):
@@ -388,6 +391,8 @@ def test_download_fetch_resume_keeps_text_only_article_ready_when_images_duplica
     assert "ready=1/quota=1" in recovered.message
 
 
+# spec_ref: specs/feature-tree/runtime/runtime-data-engineering/article-commercial-scale-closure/spec.md#gwt-004.t1
+# spec_ref: specs/feature-tree/runtime/runtime-data-engineering/article-commercial-scale-closure/spec.md#gwt-004.t5
 def test_article_capacity_keeps_quality_body_as_text_only_when_one_image_is_unsafe(
     monkeypatch,
 ):
@@ -426,6 +431,102 @@ def test_article_capacity_keeps_quality_body_as_text_only_when_one_image_is_unsa
     assert diagnostics["pickedArticleBaseSources"] == 1
     assert diagnostics["articleRejects"] == {}
     assert diagnostics["articleImageSoftWarnings"]["no_publishable_source_asset"] == 1
+
+
+# spec_ref: specs/feature-tree/runtime/runtime-data-engineering/article-commercial-scale-closure/spec.md#gwt-004.t6
+def test_text_only_source_is_not_counted_as_lacking_publishable_assets(monkeypatch):
+    """来源本就声明 text_only 时谈不上缺可发布素材，该键必须缺席。"""
+    from content.execution.controller import content_plan_assets
+
+    entity = "纯文字景区"
+    fixture = ExecutionFixtureBuilder(
+        ARTICLE_TASK,
+        targets=({"entityType": "地点/景区", "name": entity},),
+    )
+    fixture.build()
+    entity_dir = execution_entity_object_dir(ARTICLE_TASK, "地点", "景区", entity)
+    body = f"# {entity}实地游览\n\n" + (f"{entity} 的旅行正文与现场观察。 " * 400)
+    write_source_unit(
+        entity_dir,
+        ordinal=1,
+        source_id="article_text_only",
+        source_md=body,
+        quality={"sourceId": "article_text_only", "quality": "A-story", "score": 9},
+        platform="旅行平台",
+        source_category="travelogue",
+        source_role="base",
+        research_lane="article",
+        publish_media_mode="text_only",
+        url=f"https://example.com/{entity}/article",
+        title=f"{entity}实地游览",
+        target_ref=f"/entity/地点/景区/{entity}",
+        execution_id=ARTICLE_TASK,
+        build_variants=False,
+        **ARTICLE_SOURCE_UNIT_IDENTITY,
+        source=article_source_registry_binding(
+            platform="旅行平台",
+            url=f"https://example.com/{entity}/article",
+        ),
+    )
+    monkeypatch.setattr(
+        content_plan_assets, "_canonical_image_asset_issue", lambda *_args: ""
+    )
+    monkeypatch.setattr(
+        content_plan_assets,
+        "_assess_content_plan_publish_image",
+        lambda *_args: SimpleNamespace(blocks_image_publish=False),
+    )
+    context = ExecutionContext(
+        execution_id=ARTICLE_TASK,
+        entity_ids=(entity,),
+        spec=fixture.spec(),
+    )
+
+    passed, issues, diagnostics = _content_capacity_gate_for_entity(context, entity)
+
+    assert passed, issues
+    assert diagnostics["pickedArticleBaseSources"] == 1
+    assert diagnostics["articleRejects"] == {}
+    assert "no_publishable_source_asset" not in diagnostics["articleImageSoftWarnings"]
+
+
+# spec_ref: specs/feature-tree/runtime/runtime-data-engineering/article-commercial-scale-closure/spec.md#gwt-004.t7
+def test_image_soft_warnings_reconcile_back_to_the_exact_source(monkeypatch):
+    """只留计数无法回到来源；软警告必须点名它所属的 sourceId。"""
+    from content.execution.controller import content_plan_assets
+
+    entity = "对账景区"
+    fixture = ExecutionFixtureBuilder(
+        ARTICLE_TASK,
+        targets=({"entityType": "地点/景区", "name": entity},),
+    )
+    fixture.build()
+    entity_dir = execution_entity_object_dir(ARTICLE_TASK, "地点", "景区", entity)
+    _write_article_capacity_source_with_two_images(
+        entity_dir, entity, source_id="article_reconcile"
+    )
+    monkeypatch.setattr(
+        content_plan_assets, "_canonical_image_asset_issue", lambda *_args: ""
+    )
+    monkeypatch.setattr(
+        content_plan_assets,
+        "_assess_content_plan_publish_image",
+        lambda asset_path, _ctx: SimpleNamespace(
+            blocks_image_publish="body" in asset_path.name
+        ),
+    )
+    context = ExecutionContext(
+        execution_id=ARTICLE_TASK,
+        entity_ids=(entity,),
+        spec=fixture.spec(),
+    )
+
+    passed, issues, diagnostics = _content_capacity_gate_for_entity(context, entity)
+
+    assert passed, issues
+    warned_sources = diagnostics["articleImageSoftWarningSources"]
+    assert warned_sources["no_publishable_source_asset"] == ["article_reconcile"]
+    assert diagnostics["articleSourceClosure"][0]["sourceId"] == "article_reconcile"
 
 
 def test_article_source_shortfall_is_absorbed_when_any_object_is_ready():

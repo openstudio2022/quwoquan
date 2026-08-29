@@ -2,7 +2,12 @@
 // Source: recommendation/recommendation/recommendation_model_release/intersection_kind_registry.yaml
 
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show IntersectionActionDispatch, IntersectionActionKey, IntersectionActionTier, IntersectionGateKey, IntersectionObjectKind;
+    show
+        IntersectionActionDispatch,
+        IntersectionActionKey,
+        IntersectionActionTier,
+        IntersectionGateKey,
+        IntersectionObjectKind;
 
 final class IntersectionActionPolicy {
   const IntersectionActionPolicy({
@@ -25,7 +30,7 @@ final class IntersectionActionPolicy {
 }
 
 const Map<IntersectionActionKey, IntersectionActionPolicy>
-    intersectionActionPolicies = <IntersectionActionKey, IntersectionActionPolicy>{
+intersectionActionPolicies = <IntersectionActionKey, IntersectionActionPolicy>{
   IntersectionActionKey.askAssistant: IntersectionActionPolicy(
     key: IntersectionActionKey.askAssistant,
     tier: IntersectionActionTier.light,
@@ -35,7 +40,10 @@ const Map<IntersectionActionKey, IntersectionActionPolicy>
   IntersectionActionKey.createFollowup: IntersectionActionPolicy(
     key: IntersectionActionKey.createFollowup,
     tier: IntersectionActionTier.heavy,
-    requiredGates: <IntersectionGateKey>{IntersectionGateKey.login, IntersectionGateKey.realName},
+    requiredGates: <IntersectionGateKey>{
+      IntersectionGateKey.login,
+      IntersectionGateKey.realName,
+    },
     dispatch: IntersectionActionDispatch.assistant,
   ),
   IntersectionActionKey.followObject: IntersectionActionPolicy(
@@ -53,7 +61,11 @@ const Map<IntersectionActionKey, IntersectionActionPolicy>
   IntersectionActionKey.greetPerson: IntersectionActionPolicy(
     key: IntersectionActionKey.greetPerson,
     tier: IntersectionActionTier.light,
-    requiredGates: <IntersectionGateKey>{IntersectionGateKey.login, IntersectionGateKey.greetPreference, IntersectionGateKey.blocked},
+    requiredGates: <IntersectionGateKey>{
+      IntersectionGateKey.login,
+      IntersectionGateKey.greetPreference,
+      IntersectionGateKey.blocked,
+    },
     dispatch: IntersectionActionDispatch.message,
   ),
   IntersectionActionKey.joinCircle: IntersectionActionPolicy(
@@ -65,7 +77,12 @@ const Map<IntersectionActionKey, IntersectionActionPolicy>
   IntersectionActionKey.messagePerson: IntersectionActionPolicy(
     key: IntersectionActionKey.messagePerson,
     tier: IntersectionActionTier.heavy,
-    requiredGates: <IntersectionGateKey>{IntersectionGateKey.login, IntersectionGateKey.mutualConsent, IntersectionGateKey.blocked, IntersectionGateKey.rateLimit},
+    requiredGates: <IntersectionGateKey>{
+      IntersectionGateKey.login,
+      IntersectionGateKey.mutualConsent,
+      IntersectionGateKey.blocked,
+      IntersectionGateKey.rateLimit,
+    },
     dispatch: IntersectionActionDispatch.message,
   ),
   IntersectionActionKey.openContent: IntersectionActionPolicy(
@@ -95,7 +112,13 @@ const Map<IntersectionActionKey, IntersectionActionPolicy>
   IntersectionActionKey.startGathering: IntersectionActionPolicy(
     key: IntersectionActionKey.startGathering,
     tier: IntersectionActionTier.heavy,
-    requiredGates: <IntersectionGateKey>{IntersectionGateKey.login, IntersectionGateKey.realName, IntersectionGateKey.minorMode, IntersectionGateKey.blocked, IntersectionGateKey.rateLimit},
+    requiredGates: <IntersectionGateKey>{
+      IntersectionGateKey.login,
+      IntersectionGateKey.realName,
+      IntersectionGateKey.minorMode,
+      IntersectionGateKey.blocked,
+      IntersectionGateKey.rateLimit,
+    },
     dispatch: IntersectionActionDispatch.gathering,
   ),
   IntersectionActionKey.viewSharedPeople: IntersectionActionPolicy(
@@ -108,18 +131,18 @@ const Map<IntersectionActionKey, IntersectionActionPolicy>
 
 const Map<IntersectionObjectKind, String> intersectionRouteIdByObjectKind =
     <IntersectionObjectKind, String>{
-  IntersectionObjectKind.person: "userProfile",
-  IntersectionObjectKind.circle: "circleDetail",
-  IntersectionObjectKind.school: "homepageDetail",
-  IntersectionObjectKind.place: "homepageDetail",
-  IntersectionObjectKind.enterprise: "homepageDetail",
-  IntersectionObjectKind.route: "homepageDetail",
-  IntersectionObjectKind.photoSpot: "homepageDetail",
-  IntersectionObjectKind.gear: "homepageDetail",
-  IntersectionObjectKind.content: "workBrowser",
-  IntersectionObjectKind.entity: "homepageDetail",
-  IntersectionObjectKind.gathering: "gatheringDetail",
-};
+      IntersectionObjectKind.person: "userProfile",
+      IntersectionObjectKind.circle: "circleDetail",
+      IntersectionObjectKind.school: "homepageDetail",
+      IntersectionObjectKind.place: "homepageDetail",
+      IntersectionObjectKind.enterprise: "homepageDetail",
+      IntersectionObjectKind.route: "homepageDetail",
+      IntersectionObjectKind.photoSpot: "homepageDetail",
+      IntersectionObjectKind.gear: "homepageDetail",
+      IntersectionObjectKind.content: "workBrowser",
+      IntersectionObjectKind.entity: "homepageDetail",
+      IntersectionObjectKind.gathering: "gatheringDetail",
+    };
 
 String intersectionRouteIdForObjectKind(IntersectionObjectKind kind) =>
     intersectionRouteIdByObjectKind[kind] ?? '';

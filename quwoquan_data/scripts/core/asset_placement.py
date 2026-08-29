@@ -326,11 +326,14 @@ def place_homepage_assets_in_markdown(
     契约（百科主页结构化计划 §6/§7/§10）：
     - 封面只在 frontmatter `coverImage` 声明，正文不重复展示封面。
     - 正文内嵌图唯一形态 = 块级 `:::figure layout="fullWidth"`（禁 wrapLeft/wrapRight），
-      仅原图注（一行）；只有 placementType=inline 且有可靠章节锚点时才能进入正文。
+      仅原图注（一行）。
     - 其余合格图全部进文末固定 `## 相关图片` 章节的单个 `:::gallery`（grid）。
-    - 就地改写 asset["role"]：cover 保持；进正文的标 inline；其余标 related。
 
-    幂等：正文已引用的 inline asset 不重复注入；groupMember 即使被旧草稿引用，
+    这里只渲染，不裁决。`asset["role"]` 是 `1.download` 冻结的处置（DEC-029），
+    本函数按它落版面，不再依据成稿正文把 related 提升为 inline——正文是图片的
+    下游，让它反过来改处置就形成了第二个决策点。
+
+    幂等：正文已引用的 inline asset 不重复注入；非 inline 处置即使被旧草稿引用，
     也会从正文移除并归入相关图片。
     """
     frontmatter, content = _split_frontmatter(body or "")
@@ -351,17 +354,12 @@ def place_homepage_assets_in_markdown(
         if ref:
             placement_by_id[ref.split("/")[-1]] = placement
 
-    # 旧草稿可能把图集成员展开进正文。先统一剥离，再计算章节行号，避免删除块后
-    # 行号漂移；新链路不会为 groupMember 生成 Agent 占位符。
+    # 成稿可能把非内嵌处置的图展开进正文。先统一剥离，再计算章节行号，避免删除块
+    # 后行号漂移；判据是冻结处置而不是正文自称。
     for asset in valid_assets:
         asset_id = _asset_id(asset)
-        placement = placement_by_id.get(asset_id)
-        placement_type = str(
-            (placement or {}).get("placementType")
-            or asset.get("placementType")
-            or ""
-        )
-        if asset_id in referenced and placement_type != "inline":
+        role = str(asset.get("role") or "")
+        if asset_id in referenced and role != HomepageAssetDisposition.INLINE.value:
             content = _strip_asset_figure_blocks(content, asset_id)
     referenced = referenced_asset_ids(content)
 
@@ -391,27 +389,14 @@ def place_homepage_assets_in_markdown(
             # 封面只在 frontmatter；若正文误引用由结构门拦截。
             asset["imageLayout"] = "fullWidth"
             continue
-        placement = placement_by_id.get(asset_id)
-        placement_type = str(
-            (placement or {}).get("placementType")
-            or asset.get("placementType")
-            or ""
-        )
-        if placement_type != "inline":
-            asset["role"] = HomepageAssetDisposition.RELATED.value
+        if role != HomepageAssetDisposition.INLINE.value:
             asset["imageLayout"] = "grid"
             related.append(asset)
             continue
         if asset_id in referenced:
-            asset["role"] = HomepageAssetDisposition.INLINE.value
             asset["imageLayout"] = "fullWidth"
             continue
-        caption = str(asset.get("caption") or "")
-        # 无原图注（或退化 caption）不得作正文解释图 → 页尾相关图片。
-        if not caption.strip() or _caption_is_degraded(caption, file_name=str(asset.get("fileName") or "")):
-            asset["role"] = HomepageAssetDisposition.RELATED.value
-            related.append(asset)
-            continue
+        placement = placement_by_id.get(asset_id)
         target_line = -1
         if placement is not None:
             slug = slugify_section(str(placement.get("sectionSlug") or ""))
@@ -422,14 +407,21 @@ def place_homepage_assets_in_markdown(
                     target_line = s_line
                     break
         if target_line < 0:
-            asset["role"] = HomepageAssetDisposition.RELATED.value
-            related.append(asset)
-            continue
-        asset["role"] = HomepageAssetDisposition.INLINE.value
+            # 处置在 1.download 已冻结为正文内嵌，成稿却没有它的章节锚点，也没有
+            # 把占位符带回来。静默降级为相关图片会让冻结结论与落盘版面分叉，而这
+            # 分叉正是兑现判据要拦的；因此在这里失败，由 repair 通道让创作方补回。
+            raise ValueError(
+                f"homepage inline asset has no anchor in the delivered draft: {asset_id}"
+            )
         asset["imageLayout"] = "fullWidth"
         _queue(
             target_line,
-            _figure_block(asset_id, layout="fullWidth", caption=caption, fig_id=_figure_id("", seq)),
+            _figure_block(
+                asset_id,
+                layout="fullWidth",
+                caption=str(asset.get("caption") or ""),
+                fig_id=_figure_id("", seq),
+            ),
         )
         seq += 1
 
@@ -452,7 +444,7 @@ def place_homepage_assets_in_markdown(
     return frontmatter + new_content
 
 
-def _caption_is_degraded(caption: str, *, file_name: str = "") -> bool:
+def caption_is_degraded(caption: str, *, file_name: str = "") -> bool:
     """caption 是否退化（文件名占位 / 原文标记残留 / 英文拉丁主导，缺中文语义）。
 
     中文内容产品里 caption 必须以原文中文语义为基础：
@@ -503,7 +495,7 @@ def caption_semantic_issues(
         role = str(asset.get("role") or "").strip()
         if not caption and role == "related":
             continue
-        if _caption_is_degraded(caption, file_name=file_name):
+        if caption_is_degraded(caption, file_name=file_name):
             issues.append(
                 f"{prefix}asset {asset_id or file_name or '<unknown>'} caption 退化为文件名或无语义: {caption!r}"
             )

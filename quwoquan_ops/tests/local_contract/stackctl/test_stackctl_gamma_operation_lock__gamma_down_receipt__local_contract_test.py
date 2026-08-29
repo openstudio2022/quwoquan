@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import inspect
+import json
 import os
 import tempfile
 from pathlib import Path
@@ -80,7 +81,7 @@ class StackctlGammaOperationLockContractTest(
             "status": "running",
             "target": "gamma-local",
             "env": "gamma",
-            "composeProject": "quwoquan_gamma_release_current_1",
+            "composeProject": "quwoquan_gamma_release_7002_1",
             "configurationDigest": configuration_digest,
             "imageTransportTag": transport_tag,
             "imageComposition": composition,
@@ -102,7 +103,7 @@ class StackctlGammaOperationLockContractTest(
         }
         self.assertEqual(
             loaded,
-            (expected_composition, "quwoquan_gamma_release_current_1"),
+            (expected_composition, "quwoquan_gamma_release_7002_1"),
         )
         self.assertNotIn(
             "provider-protocol-substitute",
@@ -118,7 +119,7 @@ class StackctlGammaOperationLockContractTest(
         environment = {
             "QWQ_LOCAL_RELEASE_ENV": "gamma",
             "QWQ_LOCAL_RELEASE_TARGET": "gamma-local",
-            "LOCAL_GAMMA_COMPOSE_PROJECT_NAME": "quwoquan_gamma_release_test",
+            "LOCAL_GAMMA_COMPOSE_PROJECT_NAME": "quwoquan_gamma_release_7002_1",
         }
         with tempfile.TemporaryDirectory() as temporary_dir:
             report_dir = Path(temporary_dir) / "report"
@@ -187,7 +188,11 @@ class StackctlGammaOperationLockContractTest(
                 ) as run,
                 mock.patch.object(
                     stackctl,
-                    "_wait_for_network_ports_released",
+                    "_runtime_owned_port_occupancy_report",
+                ) as ownership_report,
+                mock.patch.object(
+                    stackctl,
+                    "_wait_for_published_endpoints_released",
                 ) as wait_for_ports,
                 mock.patch.object(
                     stackctl,
@@ -222,6 +227,7 @@ class StackctlGammaOperationLockContractTest(
         active_observability.assert_not_called()
         load_runtime_composition.assert_not_called()
         bind_package_composition.assert_not_called()
+        ownership_report.assert_not_called()
         wait_for_ports.assert_not_called()
 
         script = Path(
@@ -239,6 +245,73 @@ class StackctlGammaOperationLockContractTest(
             down_block.index("QWQ_PREPARED_ATTEMPT_ONLY"),
             down_block.index("docker compose"),
         )
+
+    def test_lock_contention_and_operation_failure_get_distinct_recovery_actions(
+        self,
+    ) -> None:
+        """恢复动作必须与真实阻断同源。
+
+        锁内操作自身失败（端口所有权投影、published endpoint 释放探测）与「锁被
+        别的持有者占用」恢复动作不同。两者都被同一条 `except RuntimeError` 收敛
+        时，前者会被误报成「等 Patrol/UAT lease 结束」——而当时并没有任何持有者，
+        操作员被指向一个不存在的等待对象。
+        """
+        lease_text = "wait for the active Patrol/UAT runtime lease to finish"
+        cases = (
+            (
+                stackctl.LocalOperationLockBusyError(
+                    "local stack operation is already running: pid=4242"
+                ),
+                "local_operation_lock_busy",
+                True,
+            ),
+            (
+                RuntimeError(
+                    "GATE_BLOCK: gamma-local runtime port ownership was not projected"
+                ),
+                "down_operation_failed",
+                False,
+            ),
+        )
+        for error, expected_kind, expects_lease_text in cases:
+            with (
+                self.subTest(blocker=expected_kind),
+                tempfile.TemporaryDirectory() as temporary_dir,
+            ):
+                report_dir = Path(temporary_dir) / "report"
+                report_dir.mkdir(parents=True)
+                with (
+                    mock.patch.object(
+                        stackctl, "load_environment_topology", return_value={}
+                    ),
+                    mock.patch.object(
+                        stackctl, "get_target", return_value={"env": "gamma"}
+                    ),
+                    mock.patch.object(
+                        stackctl, "resolve_report_dir", return_value=report_dir
+                    ),
+                    mock.patch.object(
+                        stackctl,
+                        "_local_stack_operation_lock",
+                        side_effect=error,
+                    ),
+                    mock.patch.object(stackctl, "_write_summary_bundle"),
+                ):
+                    result = stackctl.command_down(
+                        argparse.Namespace(target="gamma-local", report_dir="")
+                    )
+
+                self.assertEqual(result["exitCode"], 2, result)
+                report = json.loads((report_dir / "report.json").read_text())
+                self.assertEqual(report["blockerKind"], expected_kind)
+                detail_text = "\n".join(result["details"])
+                self.assertIn(str(error), detail_text)
+                self.assertEqual(lease_text in detail_text, expects_lease_text)
+                if not expects_lease_text:
+                    self.assertIn(
+                        "no other operation holds the local runtime lock",
+                        detail_text,
+                    )
 
     def test_missing_or_stopped_receipt_never_executes_local_teardown(self) -> None:
         # 两种缺席各有自己的判据：回执缺失时连身份都没有，回执已停止时身份还在但
@@ -384,7 +457,7 @@ class StackctlGammaOperationLockContractTest(
                 mock.patch.object(
                     stackctl,
                     "_load_gamma_runtime_image_composition",
-                    return_value=(runtime_composition, "quwoquan_gamma_release_old"),
+                    return_value=(runtime_composition, "quwoquan_gamma_release_7001_1"),
                 ),
                 mock.patch.object(stackctl, "_apply_gamma_image_composition"),
             ):
@@ -400,7 +473,7 @@ class StackctlGammaOperationLockContractTest(
             (
                 runtime_composition,
                 "runtime-receipt",
-                "quwoquan_gamma_release_old",
+                "quwoquan_gamma_release_7001_1",
                 False,
             ),
         )
@@ -493,7 +566,7 @@ class StackctlGammaOperationLockContractTest(
             "status": "running",
             "target": "gamma-local",
             "env": "gamma",
-            "composeProject": "quwoquan_beta_release_old_1",
+            "composeProject": "quwoquan_beta_release_7001_1",
             "configurationDigest": "sha256:" + "f" * 64,
             "imageTransportTag": "unused",
             "imageComposition": {"images": {}},
@@ -546,7 +619,7 @@ class StackctlGammaOperationLockContractTest(
             "status": "running",
             "target": "gamma-local",
             "env": "gamma",
-            "composeProject": "quwoquan_gamma_release_current_1",
+            "composeProject": "quwoquan_gamma_release_7002_1",
             "configurationDigest": "sha256:" + "f" * 64,
             "imageTransportTag": "0.1.2",
             "imageComposition": {
@@ -580,7 +653,10 @@ class StackctlGammaOperationLockContractTest(
                 mock.patch.object(
                     stackctl,
                     "get_target",
-                    return_value={"env": "gamma"},
+                    # portProfile 是本地 target 的必需声明位（environment_topology
+                    # 在装配期强制），端口所有权投影只从这里取 profile；替身省掉它
+                    # 会让 down 在真实拓扑下能跑的路径在测试里判否。
+                    return_value={"env": "gamma", "portProfile": "gamma-local"},
                 ),
                 mock.patch.object(
                     stackctl,
@@ -611,7 +687,7 @@ class StackctlGammaOperationLockContractTest(
                             "images": {"api-edge": {"ref": "sha256:" + "2" * 64}},
                             "configurationDigest": "sha256:" + "3" * 64,
                         },
-                        "quwoquan_gamma_release_receipt",
+                        "quwoquan_gamma_release_7003_1",
                     ),
                 ),
                 mock.patch.object(
@@ -631,10 +707,29 @@ class StackctlGammaOperationLockContractTest(
                 mock.patch.object(
                     stackctl,
                     "_bind_gamma_down_parse_environment",
-                    side_effect=lambda environment: environment.update(
+                    # receipt_bound 是生产侧的显式声明位：immutable down 走回执绑定的
+                    # Compose 模型而不是当前工作树渲染。替身必须接住它，否则替身宽于
+                    # 生产契约，调用方漏传时测试仍绿。
+                    side_effect=lambda environment, receipt_bound=False: environment.update(
                         {"QWQ_COMPOSE_OBJECT_STORAGE_ACCESS_KEY_ID": "unused"}
                     ),
                 ) as bind_environment,
+                mock.patch.object(
+                    stackctl,
+                    "_receipt_bound_local_compose_model",
+                    return_value={"services": {"api-edge": {"ports": [{}]}}},
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "project_compose_published_endpoints",
+                    return_value=[
+                        {
+                            "role": "api-edge",
+                            "hostPort": 19000,
+                            "protocol": "tcp",
+                        }
+                    ],
+                ),
                 mock.patch.object(
                     stackctl,
                     "run",
@@ -647,7 +742,22 @@ class StackctlGammaOperationLockContractTest(
                 ),
                 mock.patch.object(
                     stackctl,
-                    "_wait_for_network_ports_released",
+                    "_runtime_owned_port_occupancy_report",
+                    return_value={
+                        "profile": "gamma-local",
+                        "publishedEndpoints": [
+                            {
+                                "role": "api-edge",
+                                "hostPort": 19000,
+                                "protocol": "tcp",
+                                "open": False,
+                            }
+                        ],
+                    },
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_wait_for_published_endpoints_released",
                     return_value=[],
                 ),
                 mock.patch.object(stackctl, "_write_summary_bundle"),
@@ -662,7 +772,12 @@ class StackctlGammaOperationLockContractTest(
         self.assertEqual(result["exitCode"], 0)
         bind_package_composition.assert_not_called()
         apply_composition.assert_called_once()
-        bind_environment.assert_called_once_with(compose_environment)
+        # receipt_bound=True 必须显式传：immutable down 的 Compose 模型来自回执绑定，
+        # 漏传会让它回落到当前工作树渲染，而那份渲染与回执里的候选可能已经不同源。
+        bind_environment.assert_called_once_with(
+            compose_environment,
+            receipt_bound=True,
+        )
         self.assertEqual(
             run.call_args_list[0].kwargs["env"][
                 "QWQ_COMPOSE_OBJECT_STORAGE_ACCESS_KEY_ID"

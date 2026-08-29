@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -85,6 +87,18 @@ def parse_args() -> argparse.Namespace:
         "--github-output",
         default="",
         help="Optional path to write GitHub Actions outputs.",
+    )
+    parser.add_argument(
+        "--scope-receipt",
+        default="",
+        help="Optional typed scope decision receipt path.",
+    )
+    parser.add_argument(
+        "--required-scope",
+        action="append",
+        choices=("service", "app", "portal", "topology", "data"),
+        default=[],
+        help="Scope required by trigger policy even when the diff is not impacted.",
     )
     return parser.parse_args()
 
@@ -186,6 +200,37 @@ def write_github_outputs(path: str, impacted: dict[str, bool]) -> None:
     Path(path).write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def write_scope_receipt(
+    path: str,
+    *,
+    base_sha: str,
+    head_sha: str,
+    changed_files: list[str],
+    impacted: dict[str, bool],
+) -> None:
+    encoded_paths = json.dumps(
+        changed_files,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    payload = {
+        "schema": "ci-impacted-scope-receipt",
+        "baseSha": base_sha,
+        "headSha": head_sha,
+        "changedPathsDigest": "sha256:" + hashlib.sha256(encoded_paths).hexdigest(),
+        "scopes": {
+            key: "required" if value else "not_required"
+            for key, value in sorted(impacted.items())
+        },
+    }
+    receipt_path = Path(path)
+    receipt_path.parent.mkdir(parents=True, exist_ok=True)
+    receipt_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
 def main() -> int:
     args = parse_args()
     try:
@@ -206,12 +251,22 @@ def main() -> int:
             )
         else:
             impacted = classify(changed_files)
+        for required_scope in args.required_scope:
+            impacted[required_scope] = True
     except Exception as exc:  # noqa: BLE001
         print(f"detect_ci_impacted_scopes: FAIL: {exc}", file=sys.stderr)
         return 1
 
     if args.github_output:
         write_github_outputs(args.github_output, impacted)
+    if args.scope_receipt:
+        write_scope_receipt(
+            args.scope_receipt,
+            base_sha=args.base_sha,
+            head_sha=args.head_sha,
+            changed_files=changed_files,
+            impacted=impacted,
+        )
 
     for key, value in impacted.items():
         print(f"{key}={'true' if value else 'false'}")

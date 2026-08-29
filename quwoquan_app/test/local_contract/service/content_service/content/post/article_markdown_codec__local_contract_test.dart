@@ -1,6 +1,7 @@
 // spec_ref: specs/feature-tree/discovery-content/content-type-framework/markdown-article-kernel/spec.md#gwt-002
 // spec_ref: specs/feature-tree/discovery-content/content-type-framework/markdown-article-kernel/spec.md#gwt-003
 // spec_ref: specs/feature-tree/discovery-content/content-type-framework/markdown-article-kernel/spec.md#gwt-004
+// spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-016
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/article_document_models.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/article_markdown_codec.dart';
@@ -43,6 +44,31 @@ coverImage: asset://cover
       final figure = document.nodes.where((node) => node.isFigure).single;
       expect(figure.assetId, 'cover');
       expect(figure.imageUrl, contains('cover-display.webp'));
+    });
+
+    test('媒体交付缺席时 figure imageUrl 保持缺席语义（GWT-016），不伪装 asset://', () {
+      // manifest 未命中该资产、无 resolver 注入、媒体端点未配置：
+      // 引用无法解析出交付 URL 属于「缺席」，必须以空 imageUrl 表达，
+      // 不得包装成看似合法的 asset:// URL 再让加载栈失败。
+      final document = ArticleMarkdownCodec.parseDocument('''
+---
+title: 缺席语义
+---
+# 缺席语义
+
+![无法解析](asset://orphan-asset)
+''');
+
+      final figure = document.nodes.where((node) => node.isFigure).single;
+      expect(figure.assetId, 'orphan-asset');
+      expect(
+        figure.imageUrl,
+        isEmpty,
+        reason: '缺席不得伪装为 asset:// URL（结果状态单义）',
+      );
+      // 缺席不影响资产身份：序列化仍按 assetId 写回 canonical 引用。
+      final serialized = ArticleMarkdownCodec.serializeDocument(document);
+      expect(serialized, contains('asset://orphan-asset'));
     });
 
     test('parses entity labels into structured inline spans', () {

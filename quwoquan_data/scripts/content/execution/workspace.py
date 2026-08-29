@@ -28,14 +28,7 @@ from .identity import SelectionPolicy, parse_execution_id, validate_execution_id
 MANIFEST_FILENAME = "execution_manifest.json"
 REQUEST_REF = "0.plan/request.json"
 TARGET_SET_REF = "0.plan/target_set.json"
-WORK_PACKAGE_DIRECTORIES = (
-    "0.plan",
-    "sources",
-    "entities",
-    "posts",
-    "_shared",
-    "evidence",
-)
+WORK_PACKAGE_DIRECTORIES = core_paths.EXECUTION_ROOT_DIRECTORIES
 _TRANSACTION_OBJECT_MARKERS = ("--entity-", "--post-")
 class ExecutionSourceDigestDriftError(ValueError):
     """The immutable execution was created from different repository inputs."""

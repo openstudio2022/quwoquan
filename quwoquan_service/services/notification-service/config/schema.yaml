@@ -1,12 +1,12 @@
 description: notification-service 自治运行配置；环境只维护差异和 secret reference。
 configs:
-- key: sys.notification-service.accountSecurityAuthority.baseUrl
+- key: sys.notification-service.user_account_security_authority.base_url
   type: string
   scope: workload
   reload: restart
   rollout: progressive
   sensitive: false
-- key: sys.notification-service.accountSecurityAuthority.timeoutMs
+- key: sys.notification-service.user_account_security_authority.timeout_ms
   type: int
   scope: workload
   reload: restart
@@ -116,30 +116,76 @@ configs:
   rollout: progressive
   sensitive: false
   default: notification-external-result-projector
-- key: sys.notification-service.redis.addr
+- key: sys.notification-service.notification.chat_offline_push.enabled
+  type: bool
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: true
+- key: sys.notification-service.redis.general.mode
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+- key: sys.notification-service.redis.general.addr
   type: string
   scope: workload
   reload: restart
   rollout: progressive
   sensitive: false
   default: redis:6379
-- key: sys.notification-service.redis.password
-  type: string
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: true
-- key: sys.notification-service.redis.general_db
+- key: sys.notification-service.redis.general.db
   type: int
   scope: workload
   reload: restart
   rollout: progressive
   sensitive: false
   default: 1
-- key: sys.notification-service.redis.realtime_db
+- key: sys.notification-service.redis.general.password
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: true
+- key: sys.notification-service.redis.general.tls
+  type: bool
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: false
+- key: sys.notification-service.redis.realtime.mode
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+- key: sys.notification-service.redis.realtime.addr
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: redis:6379
+- key: sys.notification-service.redis.realtime.db
   type: int
   scope: workload
   reload: restart
   rollout: progressive
   sensitive: false
   default: 4
+- key: sys.notification-service.redis.realtime.password
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: true
+- key: sys.notification-service.redis.realtime.tls
+  type: bool
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: false

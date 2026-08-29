@@ -526,7 +526,9 @@ class LoginMethodFooter extends StatelessWidget {
     return Container(
       key: const ValueKey<String>('loginMethodFooter'),
       width: double.infinity,
-      constraints: const BoxConstraints(minHeight: 132),
+      constraints: const BoxConstraints(
+        minHeight: AppSpacing.loginMethodFooterMinHeight,
+      ),
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.lg,
         AppSpacing.sm,

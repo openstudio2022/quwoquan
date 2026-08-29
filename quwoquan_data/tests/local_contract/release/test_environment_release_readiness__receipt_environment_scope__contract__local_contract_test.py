@@ -35,6 +35,7 @@ ENVIRONMENT = "gamma"
 IMPORT_RUN_ID = "apply-001"
 VERIFY_RUN_ID = "verify-001"
 ENTITY_REF = "地点/景区/测试实体"
+NORMALIZED_ENTITY_REF = "entity:景区:测试实体"
 CREATOR_ID = "creator-a"
 TAG_REF = "Topic/旅行"
 POSTS = (
@@ -298,6 +299,8 @@ def _fixture(root: Path) -> dict[str, Path]:
             "contentIdentity": "work",
             "contentType": content_type,
             "publishTitle": post_titles[content_type],
+            "entityRefs": [f"/entity/{ENTITY_REF}"],
+            "normalizedEntityRefs": [NORMALIZED_ENTITY_REF],
             "authorId": "author-a",
             "creatorProfileId": CREATOR_ID,
             "tagRefs": [TAG_REF],
@@ -576,11 +579,20 @@ def _fixture(root: Path) -> dict[str, Path]:
                     "query": post_id,
                     "status": 200,
                     "matchedObjectIds": [post_id],
-                    "request": _request_evidence(
-                        "/search",
-                        "search.global",
-                        suffix=f"search-{post_id}",
-                    ),
+                    "attempts": [
+                        {
+                            "attempt": 1,
+                            "canonicalErrorCode": "none",
+                            "recoveryAction": "none",
+                            "recoveryAfterSeconds": 0,
+                            "retryAfterSeconds": 0,
+                            "operation": _request_evidence(
+                                "/search",
+                                "search.global",
+                                suffix=f"search-{post_id}",
+                            ),
+                        }
+                    ],
                 }
                 for _post_ref, post_id, _content_type in POSTS
             ]
@@ -591,11 +603,20 @@ def _fixture(root: Path) -> dict[str, Path]:
                     "query": "creator-a",
                     "status": 200,
                     "matchedObjectIds": ["author-a"],
-                    "request": _request_evidence(
-                        "/search",
-                        "search.global",
-                        suffix="search-author-a",
-                    ),
+                    "attempts": [
+                        {
+                            "attempt": 1,
+                            "canonicalErrorCode": "none",
+                            "recoveryAction": "none",
+                            "recoveryAfterSeconds": 0,
+                            "retryAfterSeconds": 0,
+                            "operation": _request_evidence(
+                                "/search",
+                                "search.global",
+                                suffix="search-author-a",
+                            ),
+                        }
+                    ],
                 }
             ],
             "creators": [
@@ -681,12 +702,56 @@ def _convert_fixture_to_research(paths: dict[str, Path]) -> str:
         document["releaseClass"] = "research"
         document["productLifecycleState"] = "research"
         write_json(path, document)
+
+    media_path = release / "payload/media_manifest.json"
+    media_manifest = json.loads(media_path.read_text(encoding="utf-8"))
+    extension_by_content_type = {
+        "image/jpeg": "jpg",
+        "video/mp4": "mp4",
+    }
+    for asset in media_manifest["assets"]:
+        digest = str(asset["sha256"]).removeprefix("sha256:")
+        extension = extension_by_content_type[str(asset["contentType"])]
+        asset.pop("publicSliceKey")
+        asset["privateObjectKey"] = (
+            f"media/objects/sha256/{digest[:2]}/{digest[2:4]}/"
+            f"{digest}.{extension}"
+        )
+    write_json(media_path, media_manifest)
+    media_by_id = {asset["assetId"]: asset for asset in media_manifest["assets"]}
+
+    homepage_path = paths["verify"] / "homepage-api-verification.json"
+    homepage_report = json.loads(homepage_path.read_text(encoding="utf-8"))
+    homepage_report["entities"][0]["coverUrl"] = media_by_id[
+        "entity-cover-a"
+    ]["privateObjectKey"]
+    write_json(homepage_path, homepage_report)
+
     post_path = paths["verify"] / "post-api-verification.json"
     post_report = json.loads(post_path.read_text(encoding="utf-8"))
     post_report["readinessPhase"] = "research"
     post_report["internalSubjectHash"] = subject_hash
     post_report.pop("guestActorHash", None)
     post_report.pop("guestLogin", None)
+    creator = post_report["creators"][0]
+    creator["avatarUrl"] = media_by_id["creator-avatar-a"]["privateObjectKey"]
+    creator["avatarProbeCount"] = 0
+    creator["avatarProbe"] = None
+    for post in post_report["posts"]:
+        post["mediaProbes"] = [
+            {
+                "assetId": probe["assetId"],
+                "kind": media_by_id[probe["assetId"]]["kind"],
+                "deliveryRef": media_by_id[probe["assetId"]][
+                    "privateObjectKey"
+                ],
+                "anonymousStatus": 403,
+                "expectedBytes": media_by_id[probe["assetId"]]["bytes"],
+                "expectedSha256": media_by_id[probe["assetId"]]["sha256"],
+                "signedProbe": None,
+            }
+            for probe in post["mediaProbes"]
+        ]
     write_json(post_path, post_report)
     _resign_release(paths)
     return subject_hash

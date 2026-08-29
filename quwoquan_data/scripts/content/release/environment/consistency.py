@@ -14,7 +14,7 @@ from content.release.environment.release_media_consistency import (
 from core.content_library import MediaHoldingError, resolve_media_holding
 from core.io import read_json, write_json
 from core.paths import PUBLISH_ROOT
-from core.release_layout import payload_file, payload_root
+from core.release_layout import PAYLOAD_DIR, payload_file, payload_root
 
 DESIRED_SCHEMA = "quwoquan_data.release_desired_state"
 
@@ -380,10 +380,19 @@ def scan_release_file(
     phase: str = "preflight",
     metadata_root: Path | None = None,
 ) -> dict[str, Any]:
+    if release_root is None:
+        # release_layout 唯一布局：desired_state.json 只存在于 <releaseRoot>/payload/ 下，
+        # 且禁止 flat release tree 回退，因此 release root 必是 payload 的父目录。
+        if path.parent.name != PAYLOAD_DIR:
+            raise SystemExit(
+                "[data-release-consistency] desired state 必须位于 "
+                f"<releaseRoot>/{PAYLOAD_DIR}/ 下，收到: {path}"
+            )
+        release_root = path.parent.parent
     return scan_release_contract(
         read_json(path),
         publish_root=publish_root,
-        release_root=release_root or path.parent,
+        release_root=release_root,
         env_run_root=env_run_root,
         phase=phase,
         metadata_root=metadata_root,

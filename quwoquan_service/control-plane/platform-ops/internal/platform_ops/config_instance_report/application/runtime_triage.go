@@ -5,9 +5,14 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"quwoquan_service/runtime/controlplane"
 )
+
+// configReportStaleThreshold 判定实例配置上报失联：同步周期默认 30s，超过
+// 该阈值仍无新上报的实例，其 inSync 声明不再可信，单独归入 stale 分类。
+const configReportStaleThreshold = 10 * time.Minute
 
 type ProjectionSummary struct {
 	ApprovalCount int `json:"approvalCount"`
@@ -25,6 +30,7 @@ type ConfigInstanceDriftItem struct {
 	EffectiveHash string `json:"effectiveHash,omitempty"`
 	Source        string `json:"source,omitempty"`
 	LastError     string `json:"lastError,omitempty"`
+	UpdatedAt     string `json:"updatedAt,omitempty"`
 	InSync        bool   `json:"inSync"`
 }
 
@@ -41,6 +47,7 @@ type TriageSummary struct {
 	ConfigDrift        controlplane.ConfigDriftSummary    `json:"configDrift"`
 	ServiceDrift       []ServiceDriftItem                 `json:"serviceDrift"`
 	OutOfSyncInstances []ConfigInstanceDriftItem          `json:"outOfSyncInstances"`
+	StaleInstances     []ConfigInstanceDriftItem          `json:"staleInstances"`
 	BacklogCandidates  []controlplane.BacklogCandidate    `json:"backlogCandidates"`
 	RuntimeReady       bool                               `json:"runtimeReady"`
 	Source             string                             `json:"source"`
@@ -83,16 +90,43 @@ func (facade *RuntimeFacade) GetTriageSummary(
 		return TriageSummary{}, err
 	}
 	filtered := filterReports(reports, scope)
-	drift := controlplane.SummarizeConfigDrift(filtered)
-	serviceDrift := summarizeDriftByService(filtered)
-	outOfSync := collectOutOfSync(filtered, 8)
+	fresh, staleReports := splitByReportFreshness(filtered, facade.now())
+	drift := controlplane.SummarizeConfigDrift(fresh)
+	drift.StaleInstances = len(staleReports)
+	drift.TotalInstances = len(filtered)
+	serviceDrift := summarizeDriftByService(fresh)
+	outOfSync := collectDriftItems(fresh, 8, func(report controlplane.Document) bool {
+		return !boolValue(report["inSync"])
+	})
+	stale := collectDriftItems(staleReports, 8, nil)
 	return TriageSummary{
 		Scope: scope, ProjectionSummary: projection, ConfigDrift: drift,
 		ServiceDrift: serviceDrift, OutOfSyncInstances: outOfSync,
-		BacklogCandidates: buildBacklogCandidates(scope, drift, serviceDrift, outOfSync),
-		RuntimeReady:      drift.OutOfSyncInstances == 0,
+		StaleInstances:    stale,
+		BacklogCandidates: buildBacklogCandidates(scope, drift, serviceDrift, outOfSync, stale),
+		RuntimeReady:      drift.OutOfSyncInstances == 0 && drift.StaleInstances == 0,
 		Source:            "control-plane",
 	}, nil
+}
+
+// splitByReportFreshness 按上报新鲜度分流：updatedAt 缺失、不可解析或距 now
+// 超过 configReportStaleThreshold 的实例归入 stale——它们无法证明当前收敛
+// 状态，其 inSync 声明不参与 in-sync/out-of-sync 计数。恰好等于阈值仍算新鲜。
+func splitByReportFreshness(
+	reports []controlplane.Document,
+	now time.Time,
+) (fresh []controlplane.Document, stale []controlplane.Document) {
+	fresh = make([]controlplane.Document, 0, len(reports))
+	stale = make([]controlplane.Document, 0)
+	for _, report := range reports {
+		updatedAt, err := time.Parse(time.RFC3339, stringValue(report["updatedAt"]))
+		if err != nil || now.Sub(updatedAt) > configReportStaleThreshold {
+			stale = append(stale, report)
+			continue
+		}
+		fresh = append(fresh, report)
+	}
+	return fresh, stale
 }
 
 func filterReports(
@@ -151,10 +185,16 @@ func summarizeDriftByService(reports []controlplane.Document) []ServiceDriftItem
 	return items
 }
 
-func collectOutOfSync(reports []controlplane.Document, limit int) []ConfigInstanceDriftItem {
+// collectDriftItems 把 report 文档投影为 typed slice：filter 为 nil 时全收，
+// 统一按 service/cluster/instanceId 排序并截断到 limit。
+func collectDriftItems(
+	reports []controlplane.Document,
+	limit int,
+	filter func(controlplane.Document) bool,
+) []ConfigInstanceDriftItem {
 	items := make([]ConfigInstanceDriftItem, 0, len(reports))
 	for _, report := range reports {
-		if boolValue(report["inSync"]) {
+		if filter != nil && !filter(report) {
 			continue
 		}
 		items = append(items, ConfigInstanceDriftItem{
@@ -162,7 +202,8 @@ func collectOutOfSync(reports []controlplane.Document, limit int) []ConfigInstan
 			Cluster: stringValue(report["cluster"]), Service: stringValue(report["service"]),
 			InstanceID: stringValue(report["instanceId"]), DesiredHash: stringValue(report["desiredHash"]),
 			EffectiveHash: stringValue(report["effectiveHash"]), Source: stringValue(report["source"]),
-			LastError: stringValue(report["lastError"]), InSync: boolValue(report["inSync"]),
+			LastError: stringValue(report["lastError"]), UpdatedAt: stringValue(report["updatedAt"]),
+			InSync: boolValue(report["inSync"]),
 		})
 	}
 	sort.Slice(items, func(i, j int) bool {
@@ -185,8 +226,34 @@ func buildBacklogCandidates(
 	drift controlplane.ConfigDriftSummary,
 	serviceDrift []ServiceDriftItem,
 	outOfSync []ConfigInstanceDriftItem,
+	stale []ConfigInstanceDriftItem,
 ) []controlplane.BacklogCandidate {
 	candidates := make([]controlplane.BacklogCandidate, 0, 4)
+	if drift.StaleInstances > 0 {
+		severity := "warning"
+		if drift.StaleInstances >= 3 {
+			severity = "critical"
+		}
+		staleServices := make([]string, 0, len(stale))
+		seenServices := map[string]bool{}
+		for _, item := range stale {
+			if !seenServices[item.Service] {
+				seenServices[item.Service] = true
+				staleServices = append(staleServices, item.Service)
+			}
+		}
+		candidates = append(candidates, controlplane.BacklogCandidate{
+			ID:       "platform-config-staleness-" + scopeKey(scope),
+			Category: "config_staleness", Severity: severity,
+			Title:   "恢复失联实例的配置上报",
+			Summary: "在 " + scopeLabel(scope) + " 下有 " + strconv.Itoa(drift.StaleInstances) + " 个实例超过 " + configReportStaleThreshold.String() + " 未上报配置状态，收敛结论不可信。",
+			Owner:   "platform-ops", NextAction: "检查实例存活与 PLATFORM_OPS_BASE_URL 连通性，恢复 config sync 循环。",
+			DrilldownRoute: "/platform/config/drift", RepairEntry: "/platform/rollout",
+			AlertID: "config_release_error_rate", AuditRoute: "/audit",
+			Evidence: map[string]any{"staleInstances": drift.StaleInstances,
+				"staleServices": staleServices, "scope": scope},
+		})
+	}
 	if len(serviceDrift) > 0 && drift.OutOfSyncInstances > 0 {
 		top := serviceDrift[0]
 		severity := "warning"

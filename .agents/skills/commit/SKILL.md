@@ -8,57 +8,25 @@ metadata:
 
 # commit
 
-提交已通过评审的增量并复核门禁与工作树状态。五段执行契约见根 `AGENTS.md`。
+## 触发与输入
 
-## 触发
-
-- 显式命令 `/commit`，或用户明确要求提交。
-- [MUST NOT] 未经用户要求主动提交。
-
-## 输入
-
-- 最近一次通过的 POST 评审 HANDOFF（无通过结论即停止，先回对应工作流补评审）。
-- `git status` / `git diff` / `git log`（并行取得）与待提交文件范围。
-
-## 角色
-
-主会话扮演 **committer**，受 Git 安全协议约束：不改 git config，不做破坏性操作。
+只在用户明确要求创建 Git commit 时使用。输入是已评审的本次增量、当前 HEAD/status、本 scope 文件清单和最近有效 POST 证据。
 
 ## 执行
 
-自由度：低（固定序列）。
+1. 重新检查 branch、HEAD、脏树、untracked、可疑 secret/PII、所有权与并行 writer；不纳入任务外文件。
+2. 仅用显式 pathspec 暂存当前 scope，检视 staged diff 与生成物身份。
+3. 执行 L0 `quwoquan_ops/gate/commit_gate.sh`；不把 `--no-verify` 当常规通道。按仓库风格生成中文信息并提交。
+4. 提交后核对新 SHA、提交文件与剩余工作树，不清理他人变更。
 
-1. 并行读 `git status`、`git diff`、`git log`（对齐仓库提交信息风格）。
-2. 检查待提交范围：不含秘密文件（`.env`、credentials 等）；不含未归属或与本任务无关的
-   并行会话改动——**脏工作树是常态**，只暂存相关文件。
-3. 暂存相关文件并提交；提交信息用中文、聚焦 why、遵循仓库风格。
-   本地 pre-commit 走 L0 `quwoquan_ops/gate/commit_gate.sh`
-   （目标 ≤10 分钟，硬顶 15 分钟）；全量 local_contract 由 CI Delivery Gate 分片承接。
-4. 提交后复核 `git status` 确认成功与剩余工作树状态；
-   本地失败摘要见 `.qwq_output/env/repo/runs/commit-gate/`。
+## 完成证据
 
-## 交付件
-
-**提交回执**：commit id、提交范围、门禁结果和剩余工作树状态。
-
-送审前自检：提交内容与 HANDOFF 产出物清单一致；无秘密文件；无无关改动混入。
-
-## 内置评审
-
-- PRE：消费已有 POST 评审结论，无通过结论即 `GATE_BLOCK`。
-- POST：L0 commit gate 即本工作流的 POST 证据，不再另派 reviewer。
+交付 commit SHA、message、精确文件列表、L0 命令/退出码和提交后 status。本地 commit gate 不代表 CI、runtime、release 或 UAT 通过。
 
 ## 失败与停止
 
-- [MUST NOT] 自动 push；[MUST NOT] 把 `--no-verify` 当常规合入手段；
-  [MUST NOT] 提交无关改动。
-- 提交失败或被 hook 拒绝：修复后创建**新**提交，不得 amend。
-- 提交无验收、无测试证据或未处置 `OPEN block` 的增量：`GATE_BLOCK`。
+无用户明确授权、POST 证据缺失/过期、secret/所有权风险、无法精确暂存或 L0 失败时 `GATE_BLOCK`，不创建提交。不 reset、clean 或覆盖来消红。
 
-## HANDOFF
+## 条件性交接
 
-- **完成判据**：见 [completion-criteria](../review/references/completion-criteria.md) 本工作流段；证据链条目带命令+退出码+时间戳+SHA，下游过期即复跑。
-- **产出物**：提交回执。
-- **未决项去向**：剩余工作树状态与未提交残量如实列出。
-- **唯一合法下游**：报告给用户（用户要求 push / PR 时按其明确指令执行）。
-- **证据链**：commit gate 输出、`git status` 复核结果。
+提交本身用简短交付。只有提交后仍有跨会话、发布/环境或外部阻断时，才持久化 SHA、剩余 scope、证据指纹和唯一后续动作。

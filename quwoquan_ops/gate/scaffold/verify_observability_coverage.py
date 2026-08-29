@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import sys
 
+sys.dont_write_bytecode = True
+
 from nonfunctional_coverage_lib import Failures, ROOT
 
 if str(ROOT) not in sys.path:

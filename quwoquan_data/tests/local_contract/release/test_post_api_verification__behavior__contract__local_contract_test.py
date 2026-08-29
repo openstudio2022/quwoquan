@@ -18,6 +18,8 @@ if str(SCRIPTS) not in sys.path:
 
 from core.io import write_json  # noqa: E402
 from core.release_layout import payload_digest  # noqa: E402
+from content.release.environment import post_api_feed_verification as feed_subject  # noqa: E402
+from content.release.environment import post_api_projection_verification as projection_subject  # noqa: E402
 from content.release.environment import post_api_verification as subject  # noqa: E402
 from content.release.environment import public_api_client as public_api_subject  # noqa: E402
 from content.release.environment.public_api_client import (  # noqa: E402
@@ -111,6 +113,10 @@ def _projected_post(row: dict[str, object]) -> dict[str, object]:
 
 def _write_release(root: Path) -> Path:
     release = root / "data/releases" / RELEASE_ID
+    write_json(
+        release / "payload/release.json",
+        {"releaseId": RELEASE_ID, "releaseClass": "commercial"},
+    )
     write_json(
         release / "payload/desired_state.json",
         {
@@ -298,14 +304,28 @@ def _write_creator_import_report(root: Path, *, environment: DeploymentEnvironme
     return report
 
 
-def _operation(path: str, page_id: str, *, status: int = 200) -> PublicApiOperationEvidence:
+def _operation(
+    path: str,
+    page_id: str,
+    *,
+    status: int = 200,
+    request_identity: public_api_subject.PublicApiRequestIdentity | None = None,
+) -> PublicApiOperationEvidence:
     nonce = uuid.uuid4().hex
     return PublicApiOperationEvidence(
         path=f"/{path.lstrip('/')}",
         page_id=page_id,
         status=status,
-        request_id=f"DATA.{page_id}.{nonce}",
-        trace_id=f"DATA.readiness.{page_id}.{nonce}",
+        request_id=(
+            request_identity.request_id
+            if request_identity is not None
+            else f"DATA.{page_id}.{nonce}"
+        ),
+        trace_id=(
+            request_identity.trace_id
+            if request_identity is not None
+            else f"DATA.readiness.{page_id}.{nonce}"
+        ),
         started_at="2026-07-28T00:00:00.000Z",
         ended_at="2026-07-28T00:00:00.001Z",
         duration_ms=1,
@@ -420,7 +440,7 @@ def test_post_api_verification__binds_releaseimport_posts__contract__local_contr
     pagination = tmp_path / "service-pagination.yaml"
     _write_pagination_contract(pagination)
     monkeypatch.setattr(subject, "OUTPUT_ROOT", tmp_path)
-    monkeypatch.setattr(subject, "CONTENT_POST_OPERATIONS_PATH", pagination)
+    monkeypatch.setattr(feed_subject, "CONTENT_POST_OPERATIONS_PATH", pagination)
 
     def _get_bytes(_client, url: str, **kwargs):
         if url.endswith(".mp4"):
@@ -440,13 +460,16 @@ def test_post_api_verification__binds_releaseimport_posts__contract__local_contr
 
     monkeypatch.setattr(subject.PublicApiClient, "get_bytes", _get_bytes)
     monkeypatch.setattr(subject.PublicApiClient, "get_json", _get_json)
+    monkeypatch.setattr(projection_subject, "_sleep_seconds", lambda _seconds: None)
     search_bodies: list[dict[str, object]] = []
+    search_attempts: dict[str, int] = {}
 
-    def _post_json(_client, path: str, *, page_id: str, body, **_kwargs):
+    def _post_json(_client, path: str, *, page_id: str, body, **kwargs):
         assert path == "search"
         assert page_id == "search.global"
         search_bodies.append(dict(body))
         object_id = str((body.get("ids") or [""])[0])
+        search_attempts[object_id] = search_attempts.get(object_id, 0) + 1
         post = next((row for row in POSTS if row["postId"] == object_id), None)
         if post is not None:
             assert body["objectTypes"] == ["content.post"]
@@ -455,10 +478,35 @@ def test_post_api_verification__binds_releaseimport_posts__contract__local_contr
             assert object_id in {row["personaId"] for row in CREATORS}
             assert body["objectTypes"] == ["user.profile"]
             assert "contentTypes" not in body
+        request_identity = kwargs.get("request_identity")
+        if object_id == "post-article-a" and search_attempts[object_id] == 1:
+            return PublicApiResponse(
+                status=503,
+                payload={
+                    "code": "GATEWAY.MIDDLEWARE.upstream_unavailable",
+                    "recovery": {
+                        "action": "retry",
+                        "afterSeconds": 1,
+                        "disruptionLevel": "snackbar",
+                    },
+                },
+                operation=_operation(
+                    path,
+                    page_id,
+                    status=503,
+                    request_identity=request_identity,
+                ),
+                headers={"Retry-After": "1"},
+            )
         return PublicApiResponse(
             status=200,
             payload={"hits": [{"objectId": object_id}]},
-            operation=_operation(path, page_id, status=200),
+            operation=_operation(
+                path,
+                page_id,
+                status=200,
+                request_identity=request_identity,
+            ),
         )
 
     monkeypatch.setattr(subject.PublicApiClient, "post_json", _post_json)
@@ -530,7 +578,29 @@ def test_post_api_verification__binds_releaseimport_posts__contract__local_contr
     # premium_stream release-bound 读回证据（typed_video 绿不代表视频书绿）。
     assert queries["premium_stream"]["matchedPostIds"] == ["post-video-a"]
     assert len(payload["searchQueries"]) == len(POSTS) + len(CREATORS)
-    assert len(search_bodies) == len(POSTS) + len(CREATORS)
+    assert all(
+        "attempts" in row and "request" not in row
+        for row in payload["searchQueries"]
+    )
+    assert len(search_bodies) == len(POSTS) + len(CREATORS) + 1
+    retried_search = next(
+        row for row in payload["searchQueries"] if row["targetId"] == "post-article-a"
+    )
+    assert [
+        row["operation"]["status"] for row in retried_search["attempts"]
+    ] == [503, 200]
+    assert len(
+        {
+            row["operation"]["requestId"]
+            for row in retried_search["attempts"]
+        }
+    ) == 1
+    assert len(
+        {
+            row["operation"]["traceId"]
+            for row in retried_search["attempts"]
+        }
+    ) == 1
     assert payload["guestActorHash"] == "sha256:" + "a" * 64
     assert payload["guestLogin"]["pageId"] == "user.login.anonymous"
     assert {request["pageId"] for row in queries.values() for request in row["requests"]} == {
@@ -561,7 +631,7 @@ def test_visible_release_feed__rejects_invalid_object_cards_envelope__local_cont
         subject.PostApiVerificationError,
         match="response payload must be an object|lacks objectCards array",
     ):
-        subject._verify_visible_release_feed(
+        feed_subject._verify_visible_release_feed(
             client,
             cases_by_id={},
             creators_by_author={},
@@ -583,7 +653,7 @@ def test_feed_item_match__accepts_canonical_projection_subset__local_contract() 
         ),
     )
 
-    matched = subject._feed_item_matches_release(
+    matched = feed_subject._feed_item_matches_release(
         {
             "postId": "post-article-a",
             "contentType": "article",
@@ -688,7 +758,7 @@ def test_feed_item_match__rejects_missing_creator_snapshot__local_contract(
         subject.PostApiVerificationError,
         match=rf"lacks required {missing_field}",
     ):
-        subject._feed_item_matches_release(
+        feed_subject._feed_item_matches_release(
             item,
             cases_by_id={"post-article-a": case},
             creators_by_author={"creator-article-a": creator},
@@ -712,7 +782,7 @@ def test_feed_item_match__rejects_unknown_projection_field__local_contract(
         subject.PostApiVerificationError,
         match=rf"unknown ContentPostProjection fields: {unknown_field}",
     ):
-        subject._feed_item_matches_release(
+        feed_subject._feed_item_matches_release(
             item,
             cases_by_id={},
             creators_by_author={},
@@ -733,7 +803,7 @@ def test_post_api_verification__rejects_incomplete_releaseimport_binding__contra
     pagination = tmp_path / "service-pagination.yaml"
     _write_pagination_contract(pagination)
     monkeypatch.setattr(subject, "OUTPUT_ROOT", tmp_path)
-    monkeypatch.setattr(subject, "CONTENT_POST_OPERATIONS_PATH", pagination)
+    monkeypatch.setattr(feed_subject, "CONTENT_POST_OPERATIONS_PATH", pagination)
 
     with pytest.raises(subject.PostApiVerificationError, match="do not exactly match"):
         subject.write_post_api_verification(
@@ -783,4 +853,3 @@ def test_post_api_verification__rejects_import_manifest_digest_drift__local_cont
             api_base_url="https://api.test",
             media_delivery_base_url="https://media.test",
         )
-

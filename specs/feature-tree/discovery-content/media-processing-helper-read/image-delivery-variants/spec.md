@@ -24,7 +24,7 @@
 
 - 编辑算法、滤镜目录、用户配方、滤镜使用事实、视频 ABR。
 - 单图最小像素下限：`REQ-007` 只约束上界语义，下限由下载阶段的图片质量准入拥有，本节点不复制也不改写。
-- 单对象存储预算本身的数值与门禁：`REQ-008` 只消费它，其规格 owner 见 `OPEN-006`。
+- 单对象存储预算本身的数值：`REQ-008` 只消费它，其规格 owner 为 [`multi-carrier-release`](../../object-homepage-coverage-scaling/multi-carrier-release/spec.md#req-012) 的 `REQ-012`。
 
 ## 3. 行为要求
 
@@ -210,7 +210,7 @@
 - 两个锚点都不改变 App 用户可见终态，因此不追加 `user_acceptance`。环境消费证据继续由 `OPEN-005` 承接。
 - 既有 `local_contract` 套件正把「最宽 profile 封顶」与「按长边判定」两条规则断言为正确；这些断言必须随 `REQ-007` 反转或退役，不得与新 `GWT-006.t1` 并存。
 - 「不可解码即失败」一例现只断到「返回了非空问题串」，弱于 `GWT-006.t3` 要求的 typed 失败，不得直接追加 `spec_ref` 冒充已覆盖。
-- 单对象存储预算的数值与其门禁目前只存在于实现、尚未落到任一 spec 节点。本节点只消费不认领，须为该预算指定规格 owner。
+- 单对象存储预算的数值已有规格 owner：[`multi-carrier-release`](../../object-homepage-coverage-scaling/multi-carrier-release/spec.md#req-012) 认领逐载体取值的唯一声明位与两侧派生。本节点仍只消费不认领，因此不得在服务侧另立预算取值；本节点尚缺的是判定形态本身——按宽度而非长边、最宽档不被自己封顶、闭包在 canonical 写定前拦截。
 - `multi-carrier-release` `REQ-006` 的零合格 typed 原因闭集已在该节点扩容为六值，并同批引入 publish 准入观测阶段与缩减对象体量运营动作。`ALL_OBJECTS_QUALITY_REJECTED` 仍只归 review 阶段。
 - 实现只消费该闭集，媒体侧仍只产出对象级排除码，不得自行发明批次级原因码，也不得把对象级排除码复制成第二份批次级枚举。
 

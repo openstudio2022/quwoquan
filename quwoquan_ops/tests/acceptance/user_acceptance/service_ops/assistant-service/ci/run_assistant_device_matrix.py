@@ -21,6 +21,8 @@ from typing import Any
 from uuid import uuid4
 
 
+sys.dont_write_bytecode = True
+
 def _find_repo_root() -> Path:
     for candidate in Path(__file__).resolve().parents:
         if (candidate / "quwoquan_app").is_dir() and (candidate / "quwoquan_service").is_dir():

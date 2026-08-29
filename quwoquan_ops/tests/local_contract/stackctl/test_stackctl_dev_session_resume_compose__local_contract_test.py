@@ -16,8 +16,10 @@ from unittest import mock
 from quwoquan_ops.cli import stackctl
 
 from quwoquan_ops.tests.support.stackctl_dev_session_test_support import (
-    _ok,
     _handoff_completed,
+    _mutable_compose_config_json,
+    _mutable_unfinalized_runtime_plan,
+    _ok,
     _runtime_started,
     _runtime_started_with_identity,
     StackctlDevSessionTestBase,
@@ -544,6 +546,8 @@ class StackctlDevSessionResumeComposeTest(StackctlDevSessionTestBase):
             outputs = stackctl._dev_session_materialize_compose_files(
                 [base, source],
                 destination_root=Path(temporary) / "rendered",
+                provider_binding_overlay_context=Path(temporary) / "overlay",
+                provider_binding_manifest_digest="sha256:" + "0" * 64,
             )
 
             payload = json.loads(outputs[1].read_text(encoding="utf-8"))
@@ -569,6 +573,9 @@ class StackctlDevSessionResumeComposeTest(StackctlDevSessionTestBase):
             dockerfile = build_context / "services/content-service/build/Dockerfile"
             dockerfile.parent.mkdir(parents=True)
             dockerfile.write_text("FROM scratch\n", encoding="utf-8")
+            core_dockerfile = build_context / "cmd/service-core/Dockerfile"
+            core_dockerfile.parent.mkdir(parents=True)
+            core_dockerfile.write_text("FROM scratch\n", encoding="utf-8")
             source.write_text(
                 "services:\n"
                 "  content-service:\n"
@@ -635,10 +642,20 @@ class StackctlDevSessionResumeComposeTest(StackctlDevSessionTestBase):
 
     def test_mutable_projection_exposes_target_public_api_host(self) -> None:
         topology = stackctl.load_environment_topology()
+        manifest = stackctl.load_port_manifest()
         for environment in ("alpha", "beta", "gamma"):
             target = f"{environment}-local"
-            projected = stackctl._gamma_env_from_port_manifest(topology, target)
+            projected = stackctl._gamma_env_from_port_manifest(
+                topology,
+                target,
+                manifest=manifest,
+            )
+            ports = stackctl.profile_ports(manifest, target)
             self.assertEqual(projected["COMPOSE_PARALLEL_LIMIT"], "1")
+            self.assertEqual(
+                projected["LOCAL_GAMMA_ADMIN_PORT"],
+                str(ports["caddy-admin"]),
+            )
             self.assertEqual(
                 projected["QWQ_OUTPUT_ROOT"],
                 str(stackctl.output_root().expanduser().resolve()),
@@ -670,12 +687,7 @@ class StackctlDevSessionResumeComposeTest(StackctlDevSessionTestBase):
 
     def test_mutable_runtime_uses_exact_project_and_current_source_compose(self) -> None:
         rendered = {
-            "plan": {
-                "composeProject": "quwoquan_alpha_test_live",
-                "composeDigest": "sha256:" + "1" * 64,
-                "configurationDigest": "sha256:" + "2" * 64,
-                "publishedPorts": {"product-ops-service": 17250},
-            },
+            "plan": _mutable_unfinalized_runtime_plan(),
             "environment": {
                 "LOCAL_GAMMA_COMPOSE_BUILD_TIMEOUT_SECONDS": "3600",
                 "LOCAL_GAMMA_COMPOSE_UP_TIMEOUT_SECONDS": "45",
@@ -690,7 +702,12 @@ class StackctlDevSessionResumeComposeTest(StackctlDevSessionTestBase):
         def execute(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
             executions.append(argv)
             timeouts.append(float(kwargs["timeout_seconds"]))
-            return subprocess.CompletedProcess(argv, 0, "", "")
+            stdout = (
+                _mutable_compose_config_json()
+                if argv[-3:] == ["config", "--format", "json"]
+                else ""
+            )
+            return subprocess.CompletedProcess(argv, 0, stdout, "")
 
         def transition(**kwargs: object) -> dict[str, object]:
             receipt_transitions.append(kwargs)
@@ -732,21 +749,35 @@ class StackctlDevSessionResumeComposeTest(StackctlDevSessionTestBase):
                 side_effect=AssertionError("mutable runtime must not select a candidate"),
             ),
         ):
+            report_dir = Path(temporary)
             result = stackctl._start_mutable_test_live_runtime(
                 environment="alpha",
                 target="alpha-local",
-                report_dir=Path(temporary),
+                report_dir=report_dir,
                 workspace_snapshot={"mutableStateDigest": "sha256:" + "2" * 64},
+            )
+            persisted_plan = json.loads(
+                (report_dir / "mutable-runtime-plan.json").read_text(encoding="utf-8")
             )
 
         self.assertEqual(result["exitCode"], 0)
+        self.assertEqual(
+            persisted_plan["publishedPorts"],
+            [
+                {
+                    "role": "product-ops-service",
+                    "hostPort": 17250,
+                    "protocol": "tcp",
+                }
+            ],
+        )
         self.assertEqual(len(executions), 7)
         self.assertEqual(timeouts, [90.0, *([3600.0] * 6)])
         for command in executions:
             self.assertEqual(command[:5], ["docker", "compose", "-p", "quwoquan_alpha_test_live", "-f"])
             self.assertNotIn("package", command)
             self.assertNotIn("candidate", " ".join(command))
-        self.assertEqual(executions[0][-2:], ["config", "--quiet"])
+        self.assertEqual(executions[0][-3:], ["config", "--format", "json"])
         # The policy owner is brought up in three staged steps before the
         # project-wide build, because Recommendation refuses a full runtime
         # until Product Ops has published the run-bound policy facts.

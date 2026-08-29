@@ -13,6 +13,7 @@
     "soakEvidenceDigest",
     "applicability",
     "frozenCapacity",
+    "frozenLiveness",
     "calibratedAt",
     "receiptDigest"
   ],
@@ -32,6 +33,12 @@
     },
     "frozenCapacity": {
       "$ref": "capacity_calibration_values.schema.json#/$defs/frozenCapacity"
+    },
+    "frozenLiveness": {
+      "$ref": "capacity_calibration_values.schema.json#/$defs/frozenLiveness"
+    },
+    "frozenPrescreen": {
+      "$ref": "capacity_calibration_values.schema.json#/$defs/frozenPrescreen"
     },
     "calibratedAt": {
       "type": "string",
@@ -64,7 +71,8 @@
         "calibrationReceiptRef",
         "calibrationReceiptDigest",
         "applicability",
-        "frozenCapacity"
+        "frozenCapacity",
+        "frozenLiveness"
       ],
       "properties": {
         "calibrationId": {
@@ -86,6 +94,9 @@
         },
         "frozenCapacity": {
           "$ref": "capacity_calibration_values.schema.json#/$defs/frozenCapacity"
+        },
+        "frozenLiveness": {
+          "$ref": "capacity_calibration_values.schema.json#/$defs/frozenLiveness"
         }
       }
     },
@@ -99,6 +110,7 @@
         "calibrationReceiptDigest",
         "applicability",
         "frozenCapacity",
+        "frozenLiveness",
         "frozenAtEpochSeconds",
         "waveCount",
         "fleetBatchDeadlineEpochSeconds"
@@ -123,6 +135,9 @@
         },
         "frozenCapacity": {
           "$ref": "capacity_calibration_values.schema.json#/$defs/frozenCapacity"
+        },
+        "frozenLiveness": {
+          "$ref": "capacity_calibration_values.schema.json#/$defs/frozenLiveness"
         },
         "frozenAtEpochSeconds": {
           "type": "integer",

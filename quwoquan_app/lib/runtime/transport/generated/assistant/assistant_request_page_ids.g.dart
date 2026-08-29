@@ -5,14 +5,18 @@ class AssistantRequestPageIds {
   const AssistantRequestPageIds._();
 
   static const Map<String, String> operationToPageId = <String, String>{
-    'ActivateAssistantPolicyRollout': 'assistant.activate.assistant.policy.rollout',
-    'ActivateAssistantSkillPackageRelease': 'assistant.activate.assistant.skill.package.release',
+    'ActivateAssistantPolicyRollout':
+        'assistant.activate.assistant.policy.rollout',
+    'ActivateAssistantSkillPackageRelease':
+        'assistant.activate.assistant.skill.package.release',
     'AppendAssistantLearningFact': 'assistant.learning.facts.append',
     'ApproveAssistantToolUse': 'assistant.approve.assistant.tool.use',
     'CancelAssistantRun': 'assistant.cancel.assistant.run',
-    'ConfirmSkillDataControlRequest': 'assistant.confirm.skill.data.control.request',
+    'ConfirmSkillDataControlRequest':
+        'assistant.confirm.skill.data.control.request',
     'CreateAssistantSession': 'assistant.create.assistant.session',
-    'CreateSkillDataControlRequest': 'assistant.create.skill.data.control.request',
+    'CreateSkillDataControlRequest':
+        'assistant.create.skill.data.control.request',
     'CreateSkillSubscription': 'assistant.create.skill.subscription',
     'GetAssistantEntry': 'assistant.entry.get',
     'GetAssistantRun': 'assistant.get.assistant.run',
@@ -43,66 +47,99 @@ class AssistantRequestPageIds {
     'ResumeAssistantRun': 'assistant.resume.assistant.run',
     'RevokeAssistantPreference': 'assistant.revoke.assistant.preference',
     'RevokeSkillConsent': 'assistant.skills.consent.revoke',
-    'RollbackAssistantPolicyRollout': 'assistant.rollback.assistant.policy.rollout',
-    'RollbackAssistantSkillPackageRelease': 'assistant.rollback.assistant.skill.package.release',
+    'RollbackAssistantPolicyRollout':
+        'assistant.rollback.assistant.policy.rollout',
+    'RollbackAssistantSkillPackageRelease':
+        'assistant.rollback.assistant.skill.package.release',
     'SetAssistantPreference': 'assistant.set.assistant.preference',
     'StageAssistantPolicyRelease': 'assistant.stage.assistant.policy.release',
-    'StageAssistantSkillPackageRelease': 'assistant.stage.assistant.skill.package.release',
+    'StageAssistantSkillPackageRelease':
+        'assistant.stage.assistant.skill.package.release',
     'StartAssistantRun': 'assistant.run.start',
     'SteerAssistantRun': 'assistant.steer.assistant.run',
     'StreamAssistantRunEvents': 'assistant.stream.assistant.run.events',
     'SubmitDeviceActionReceipt': 'assistant.submit.device.action.receipt',
     'TickSkillSubscriptionCron': 'assistant.tick.skill.subscription.cron',
-    'UpdateSkillSubscriptionStatus': 'assistant.update.skill.subscription.status',
+    'UpdateSkillSubscriptionStatus':
+        'assistant.update.skill.subscription.status',
   };
 
-  static const String activateAssistantPolicyRollout = 'assistant.activate.assistant.policy.rollout';
-  static const String activateAssistantSkillPackageRelease = 'assistant.activate.assistant.skill.package.release';
-  static const String appendAssistantLearningFact = 'assistant.learning.facts.append';
-  static const String approveAssistantToolUse = 'assistant.approve.assistant.tool.use';
+  static const String activateAssistantPolicyRollout =
+      'assistant.activate.assistant.policy.rollout';
+  static const String activateAssistantSkillPackageRelease =
+      'assistant.activate.assistant.skill.package.release';
+  static const String appendAssistantLearningFact =
+      'assistant.learning.facts.append';
+  static const String approveAssistantToolUse =
+      'assistant.approve.assistant.tool.use';
   static const String cancelAssistantRun = 'assistant.cancel.assistant.run';
-  static const String confirmSkillDataControlRequest = 'assistant.confirm.skill.data.control.request';
-  static const String createAssistantSession = 'assistant.create.assistant.session';
-  static const String createSkillDataControlRequest = 'assistant.create.skill.data.control.request';
-  static const String createSkillSubscription = 'assistant.create.skill.subscription';
+  static const String confirmSkillDataControlRequest =
+      'assistant.confirm.skill.data.control.request';
+  static const String createAssistantSession =
+      'assistant.create.assistant.session';
+  static const String createSkillDataControlRequest =
+      'assistant.create.skill.data.control.request';
+  static const String createSkillSubscription =
+      'assistant.create.skill.subscription';
   static const String getAssistantEntry = 'assistant.entry.get';
   static const String getAssistantRun = 'assistant.get.assistant.run';
   static const String getAssistantSession = 'assistant.get.assistant.session';
-  static const String getDomainReaderDescriptor = 'assistant.get.domain.reader.descriptor';
-  static const String getLearningOpsSummary = 'assistant.get.learning.ops.summary';
+  static const String getDomainReaderDescriptor =
+      'assistant.get.domain.reader.descriptor';
+  static const String getLearningOpsSummary =
+      'assistant.get.learning.ops.summary';
   static const String getSkillCatalogItem = 'assistant.get.skill.catalog.item';
-  static const String getSkillDataControlRequest = 'assistant.get.skill.data.control.request';
+  static const String getSkillDataControlRequest =
+      'assistant.get.skill.data.control.request';
   static const String getSkillSubscription = 'assistant.get.skill.subscription';
-  static const String getSkillSurfacePlacement = 'assistant.get.skill.surface.placement';
+  static const String getSkillSurfacePlacement =
+      'assistant.get.skill.surface.placement';
   static const String getSkillUserSetting = 'assistant.get.skill.user.setting';
   static const String grantSkillConsent = 'assistant.skills.consent.grant';
-  static const String listAssistantPreferences = 'assistant.list.assistant.preferences';
-  static const String listAssistantSessions = 'assistant.list.assistant.sessions';
+  static const String listAssistantPreferences =
+      'assistant.list.assistant.preferences';
+  static const String listAssistantSessions =
+      'assistant.list.assistant.sessions';
   static const String listAssistantTasks = 'assistant.list.assistant.tasks';
   static const String listConsents = 'assistant.list.consents';
-  static const String listDomainReaderDescriptors = 'assistant.list.domain.reader.descriptors';
+  static const String listDomainReaderDescriptors =
+      'assistant.list.domain.reader.descriptors';
   static const String listSessionTurns = 'assistant.list.session.turns';
   static const String listSkillActivities = 'assistant.list.skill.activities';
-  static const String listSkillSubscriptions = 'assistant.list.skill.subscriptions';
-  static const String listSkillUserSettings = 'assistant.list.skill.user.settings';
+  static const String listSkillSubscriptions =
+      'assistant.list.skill.subscriptions';
+  static const String listSkillUserSettings =
+      'assistant.list.skill.user.settings';
   static const String listSkills = 'assistant.skills.list';
   static const String pauseAssistantRun = 'assistant.pause.assistant.run';
-  static const String putSkillSurfacePlacement = 'assistant.put.skill.surface.placement';
+  static const String putSkillSurfacePlacement =
+      'assistant.put.skill.surface.placement';
   static const String putSkillUserSetting = 'assistant.put.skill.user.setting';
   static const String reportPageContext = 'assistant.page_context.report';
-  static const String restoreAssistantPreference = 'assistant.restore.assistant.preference';
+  static const String restoreAssistantPreference =
+      'assistant.restore.assistant.preference';
   static const String resumeAssistantRun = 'assistant.resume.assistant.run';
-  static const String revokeAssistantPreference = 'assistant.revoke.assistant.preference';
+  static const String revokeAssistantPreference =
+      'assistant.revoke.assistant.preference';
   static const String revokeSkillConsent = 'assistant.skills.consent.revoke';
-  static const String rollbackAssistantPolicyRollout = 'assistant.rollback.assistant.policy.rollout';
-  static const String rollbackAssistantSkillPackageRelease = 'assistant.rollback.assistant.skill.package.release';
-  static const String setAssistantPreference = 'assistant.set.assistant.preference';
-  static const String stageAssistantPolicyRelease = 'assistant.stage.assistant.policy.release';
-  static const String stageAssistantSkillPackageRelease = 'assistant.stage.assistant.skill.package.release';
+  static const String rollbackAssistantPolicyRollout =
+      'assistant.rollback.assistant.policy.rollout';
+  static const String rollbackAssistantSkillPackageRelease =
+      'assistant.rollback.assistant.skill.package.release';
+  static const String setAssistantPreference =
+      'assistant.set.assistant.preference';
+  static const String stageAssistantPolicyRelease =
+      'assistant.stage.assistant.policy.release';
+  static const String stageAssistantSkillPackageRelease =
+      'assistant.stage.assistant.skill.package.release';
   static const String startAssistantRun = 'assistant.run.start';
   static const String steerAssistantRun = 'assistant.steer.assistant.run';
-  static const String streamAssistantRunEvents = 'assistant.stream.assistant.run.events';
-  static const String submitDeviceActionReceipt = 'assistant.submit.device.action.receipt';
-  static const String tickSkillSubscriptionCron = 'assistant.tick.skill.subscription.cron';
-  static const String updateSkillSubscriptionStatus = 'assistant.update.skill.subscription.status';
+  static const String streamAssistantRunEvents =
+      'assistant.stream.assistant.run.events';
+  static const String submitDeviceActionReceipt =
+      'assistant.submit.device.action.receipt';
+  static const String tickSkillSubscriptionCron =
+      'assistant.tick.skill.subscription.cron';
+  static const String updateSkillSubscriptionStatus =
+      'assistant.update.skill.subscription.status';
 }

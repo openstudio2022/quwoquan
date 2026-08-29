@@ -23,6 +23,30 @@ from .redis_stream_probe import RedisStreamProbeError, stream_field_values
 
 
 COLLECTION_PATH = "/control-plane/product/experiments"
+_ADMISSION_NOT_READY_CODE = "GATEWAY.MIDDLEWARE.upstream_unavailable"
+_ADMISSION_NOT_READY_REQUIRED_FIELDS = frozenset(
+    {
+        "code",
+        "origin",
+        "nature",
+        "userMessage",
+        "debugMessage",
+        "module",
+        "kind",
+        "reason",
+        "location",
+        "context",
+        "recovery",
+    }
+)
+_SAFE_TYPED_FAILURE_FIELDS = (
+    "code",
+    "origin",
+    "nature",
+    "module",
+    "kind",
+    "reason",
+)
 # 真相源：product-ops contracts/product_ops/experiment/storage.yaml 与
 # experiment/infrastructure/messaging/publisher.go 的
 # ExperimentPolicyActivatedStream。该流带 7 天 retention（XTRIM MINID +
@@ -97,8 +121,9 @@ class ExperimentPolicyActivationError(RuntimeError):
 class ExperimentPolicyTransportError(ExperimentPolicyActivationError):
     """Connection-level failure before any HTTP status was produced.
 
-    只有这一类失败允许在幂等 command 上重试：目标进程尚未监听
-    （bootstrap 与 product-ops 启动竞态）、连接被拒绝或被重置。凡拿到
+    这一类失败允许在幂等 command 上重试：目标进程尚未监听
+    （bootstrap 与 product-ops 启动竞态）、连接被拒绝或被重置。除
+    servicekit 的完整 typed admission-not-ready envelope 外，凡拿到
     HTTP 状态码的业务失败（4xx/5xx、非 JSON 响应）都必须 fail-fast。
     """
 
@@ -576,9 +601,11 @@ def _activate_one_policy(
         + recipe_digest.removeprefix("sha256:")[:24]
     )
     # create 携带 Idempotency-Key、readback 是只读 GET：两者对连接级失败
-    # （进程尚未监听 / 连接被拒 / 连接被重置）重试都是安全的。业务失败
-    # （HTTP 状态码、非 JSON 响应）不进入重试，保持 fail-fast。
-    create_status, create_payload = _request_json_with_transport_retry(
+    # （进程尚未监听 / 连接被拒 / 连接被重置）重试都是安全的。
+    # Compose healthcheck 只证明 /healthz liveness，所以冷启动时还可能收到
+    # servicekit 在 OpenAdmission 前发射的规范 typed 503。该情形仅对
+    # 原 body 和同一 Idempotency-Key 做 deadline 内重试；其他业务失败 fail-fast。
+    create_status, create_payload = _request_json_with_create_startup_retry(
         method="POST",
         url=product_ops_base_url.rstrip("/") + COLLECTION_PATH,
         token=token,
@@ -589,8 +616,20 @@ def _activate_one_policy(
         deadline=deadline,
     )
     if create_status not in {201, 409}:
+        typed_failure = _safe_typed_failure_fingerprint(create_payload)
+        typed_suffix = (
+            "; typedFailure=" + json.dumps(
+                typed_failure,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            if typed_failure
+            else ""
+        )
         raise ExperimentPolicyActivationError(
-            f"experiment policy create returned HTTP {create_status} for {policy_id}"
+            "experiment policy create returned "
+            f"HTTP {create_status} for {policy_id}{typed_suffix}"
         )
     list_status, catalog = _request_json_with_transport_retry(
         method="GET",
@@ -766,6 +805,102 @@ def _request_json_with_transport_retry(
             if time.monotonic() >= deadline:
                 raise
             time.sleep(retry_interval_seconds)
+
+
+def _request_json_with_create_startup_retry(
+    *,
+    method: str,
+    url: str,
+    token: str,
+    cafile: str | None,
+    body: dict[str, Any] | None,
+    headers: dict[str, str],
+    attempt_timeout_seconds: float,
+    deadline: float,
+) -> tuple[int, dict[str, Any]]:
+    """Retry only servicekit's exact pre-admission 503 until the caller deadline."""
+
+    while True:
+        status, payload = _request_json_with_transport_retry(
+            method=method,
+            url=url,
+            token=token,
+            cafile=cafile,
+            body=body,
+            headers=headers,
+            attempt_timeout_seconds=attempt_timeout_seconds,
+            deadline=deadline,
+        )
+        if not _is_admission_not_ready(status, payload):
+            return status, payload
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return status, payload
+        # The exact same body/header objects are passed to the next request; in
+        # particular the idempotency key cannot drift across the startup race.
+        time.sleep(min(1.0, remaining))
+
+
+def _is_admission_not_ready(status: int, payload: dict[str, Any]) -> bool:
+    if not _ADMISSION_NOT_READY_REQUIRED_FIELDS.issubset(payload):
+        return False
+    recovery = payload.get("recovery")
+    return (
+        status == 503
+        and payload.get("code") == _ADMISSION_NOT_READY_CODE
+        and payload.get("origin") == "remoteDependency"
+        and payload.get("module") == "GATEWAY"
+        and payload.get("nature") == "transient"
+        and payload.get("userMessage") == "服务暂不可用，请稍后重试"
+        and payload.get("debugMessage") == "debug_message_redacted"
+        and payload.get("kind") == "unavailable"
+        and payload.get("reason") == "upstream_unavailable"
+        and payload.get("location")
+        == {
+            "businessObject": "cloud_request",
+            "functionModule": "runtime_errors",
+        }
+        and payload.get("context")
+        == {
+            "attributes": [
+                {"key": "module", "value": "GATEWAY"},
+                {"key": "reason", "value": "upstream_unavailable"},
+            ]
+        }
+        and isinstance(recovery, dict)
+        and recovery.get("action") == "retry"
+        and recovery.get("afterSeconds") == 1
+        and recovery.get("disruptionLevel") == "snackbar"
+    )
+
+
+def _safe_typed_failure_fingerprint(payload: dict[str, Any]) -> dict[str, Any]:
+    """Project only bounded non-secret error classification fields.
+
+    HTTP error bodies can contain correlation IDs, source locations or future
+    provider details.  Startup receipts need the typed blocker identity, not
+    the original response, so the projection is an explicit allowlist.
+    """
+
+    fingerprint = {
+        field: payload[field]
+        for field in _SAFE_TYPED_FAILURE_FIELDS
+        if isinstance(payload.get(field), str) and payload[field]
+    }
+    recovery = payload.get("recovery")
+    if isinstance(recovery, dict):
+        safe_recovery: dict[str, Any] = {}
+        if isinstance(recovery.get("action"), str) and recovery["action"]:
+            safe_recovery["action"] = recovery["action"]
+        after_seconds = recovery.get("afterSeconds")
+        if isinstance(after_seconds, int) and not isinstance(after_seconds, bool):
+            safe_recovery["afterSeconds"] = after_seconds
+        disruption = recovery.get("disruptionLevel")
+        if isinstance(disruption, str) and disruption:
+            safe_recovery["disruptionLevel"] = disruption
+        if safe_recovery:
+            fingerprint["recovery"] = safe_recovery
+    return fingerprint
 
 
 def _request_json(

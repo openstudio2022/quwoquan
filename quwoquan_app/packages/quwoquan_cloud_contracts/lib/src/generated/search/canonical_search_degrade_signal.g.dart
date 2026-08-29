@@ -43,22 +43,32 @@ class CanonicalSearchDegradeSignal {
 }
 
 void _validateCanonicalSearchDegradeSignalWire(Map<String, dynamic> m) {
-  const allowed = <String>{
-    'code',
-    'message',
-    'objectType',
-  };
-  final unknown = m.keys.where((key) => !allowed.contains(key)).toList(growable: false);
+  const allowed = <String>{'code', 'message', 'objectType'};
+  final unknown = m.keys
+      .where((key) => !allowed.contains(key))
+      .toList(growable: false);
   if (unknown.isNotEmpty) {
-    throw FormatException('CanonicalSearchDegradeSignal contains unknown fields: ${unknown.join(',')}');
+    throw FormatException(
+      'CanonicalSearchDegradeSignal contains unknown fields: ${unknown.join(',')}',
+    );
   }
   if (!m.containsKey('code') || m['code'] == null || (m['code'] is! String)) {
-    throw FormatException('CanonicalSearchDegradeSignal.code has an invalid wire value');
+    throw FormatException(
+      'CanonicalSearchDegradeSignal.code has an invalid wire value',
+    );
   }
-  if (!m.containsKey('message') || m['message'] == null || (m['message'] is! String)) {
-    throw FormatException('CanonicalSearchDegradeSignal.message has an invalid wire value');
+  if (!m.containsKey('message') ||
+      m['message'] == null ||
+      (m['message'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchDegradeSignal.message has an invalid wire value',
+    );
   }
-  if (m.containsKey('objectType') && m['objectType'] != null && (m['objectType'] is! String)) {
-    throw FormatException('CanonicalSearchDegradeSignal.objectType has an invalid wire value');
+  if (m.containsKey('objectType') &&
+      m['objectType'] != null &&
+      (m['objectType'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchDegradeSignal.objectType has an invalid wire value',
+    );
   }
 }

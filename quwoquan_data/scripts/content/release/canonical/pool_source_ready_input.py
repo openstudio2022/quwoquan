@@ -46,6 +46,38 @@ def _file_sha256(path: Path) -> str:
     return "sha256:" + digest.hexdigest()
 
 
+def physical_evidence_binding(
+    row: Mapping[str, Any], *, carrier: str
+) -> dict[str, Any]:
+    """The reference that proves one candidate has physical backing, by carrier.
+
+    homepage/article carry a source-ready capsule suite; image/video carry a media
+    source admission receipt instead, and the pool contract forbids the suite
+    fields on them. Demanding `sourceUnitRef` from every carrier therefore reads a
+    key that, for media candidates, is absent by contract — which took the whole
+    image lane out of dispatch rather than reporting anything about it.
+    """
+
+    if carrier in {"image", "video"}:
+        admission_ref = str(row.get("sourceAdmissionRef") or "").strip()
+        if not admission_ref:
+            raise ValueError(
+                f"media candidate lacks sourceAdmissionRef: {row.get('candidateId')}"
+            )
+        return {"sourceAdmissionRef": admission_ref}
+    source_unit_ref = str(row.get("sourceUnitRef") or "").strip()
+    if not source_unit_ref:
+        raise ValueError(
+            f"source-ready candidate lacks sourceUnitRef: {row.get('candidateId')}"
+        )
+    return {
+        "sourceUnitRef": source_unit_ref,
+        "sourceReadyEvidenceRootRef": str(
+            row.get("sourceReadyEvidenceRootRef") or "."
+        ),
+    }
+
+
 def load_source_ready_input(
     *,
     output_root: Path,
@@ -104,10 +136,7 @@ def load_source_ready_input(
                 "candidateId": str(row["candidateId"]),
                 "objectRef": object_ref,
                 "entityRef": str(row["entityRef"]),
-                "sourceUnitRef": str(row["sourceUnitRef"]),
-                "sourceReadyEvidenceRootRef": str(
-                    row.get("sourceReadyEvidenceRootRef") or "."
-                ),
+                **physical_evidence_binding(row, carrier=carrier),
             }
         )
     for rows in candidates.values():

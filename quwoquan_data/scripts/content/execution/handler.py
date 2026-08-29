@@ -71,6 +71,9 @@ from content.execution.runtime_evidence.cli import (
     register_runtime_evidence_parser,
 )
 from content.execution.stage_receipt_cli import register_stage_receipt_parsers
+from content.homepage.homepage_media_freeze_cli import (
+    register_freeze_homepage_media_parser,
+)
 
 
 def register_parser(subparsers: argparse._SubParsersAction) -> None:
@@ -108,4 +111,5 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     register_reconcile_failed_campaign_parser(commands)
     register_reconcile_submissions_parser(commands)
     register_runtime_evidence_parser(commands)
+    register_freeze_homepage_media_parser(commands)
     register_stage_receipt_parsers(commands)

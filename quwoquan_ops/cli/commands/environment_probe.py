@@ -509,6 +509,8 @@ def _run_environment_integration_probe(
     report_dir: Path,
     *,
     require_non_empty_content_feed: bool = False,
+    research_anonymous_convergence: bool = False,
+    research_consumer_token: str = "",
     release_post_expectations: dict[str, set[str]] | None = None,
     release_search_canaries: Sequence[Mapping[str, str]] = (),
     release_samples: Sequence[Mapping[str, Any]] = (),
@@ -536,6 +538,11 @@ def _run_environment_integration_probe(
     ]
     if require_non_empty_content_feed:
         argv.append("--require-non-empty-content-feed")
+    if research_anonymous_convergence:
+        argv.append("--research-anonymous-convergence")
+    if research_consumer_token:
+        # research consumer 凭证只经环境变量注入探针子进程，不落 argv。
+        argv.append("--research-consumer-readback")
     for check_name in only_checks:
         argv.extend(["--only-check", check_name])
     expectation_flags = {
@@ -609,7 +616,7 @@ def _run_environment_integration_probe(
                 media_image,
             ]
         )
-    token = _stackctl._resolve_test_auth_token(env_name)
+    token = research_consumer_token or _stackctl._resolve_test_auth_token(env_name)
     temporary_actor: Any | None = None
     temporary_actor_instance_id = ""
     public_release_checks = {
@@ -621,7 +628,11 @@ def _run_environment_integration_probe(
     requires_reference_identity = not only_checks or any(
         check_name not in public_release_checks for check_name in only_checks
     )
-    if env_name in {"beta", "gamma"} and not token and requires_reference_identity:
+    if (
+        env_name in {"beta", "gamma"}
+        and not token
+        and requires_reference_identity
+    ):
         # Health/probe callers never reuse a retained mutable account. One
         # isolated actor lives exactly for this script body and is then closed.
         previous_ssl_cert_file = os.environ.get("SSL_CERT_FILE")

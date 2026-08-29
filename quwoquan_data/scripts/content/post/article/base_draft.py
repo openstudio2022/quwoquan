@@ -321,22 +321,43 @@ def assign_base_draft(
 
 
 # ─── 底稿正文读取与贴合度 ──────────────────────────────────────────────
-def load_base_draft_text(execution_id: str, base_source_ref: str | None) -> str:
-    """读底稿正文：优先 source.clean.md，回退 source.md。"""
+def _base_draft_source_candidates(
+    execution_id: str, base_source_ref: str | None
+) -> list[Path]:
+    """底稿引用可能指向的清洗正文文件，按优先级排列。
+
+    候选顺序是底稿正文的唯一解析规则：读全文的 `load_base_draft_text` 与只要文件
+    路径的 `base_draft_source_path` 必须落到同一个文件，否则「判据看的正文」与
+    「issue 指的行号」会来自两份不同的稿子。
+    """
     if not base_source_ref:
-        return ""
+        return []
     candidate = execution_root(execution_id) / str(base_source_ref)
-    paths: list[Path] = []
     # 兼容指向 source.clean.md / source.md / 来源目录三种情况；review 与 prompt 都应优先消费清洗正文。
     if candidate.name == "source.clean.md":
-        paths.extend([candidate, candidate.parent / "source.md"])
-    elif candidate.name == "source.md":
-        paths.extend([candidate.parent / "source.clean.md", candidate])
-    elif candidate.suffix:
-        paths.extend([candidate, candidate.parent / "source.clean.md", candidate.parent / "source.md"])
-    else:
-        paths.extend([candidate / "source.clean.md", candidate / "source.md"])
-    for path in paths:
+        return [candidate, candidate.parent / "source.md"]
+    if candidate.name == "source.md":
+        return [candidate.parent / "source.clean.md", candidate]
+    if candidate.suffix:
+        return [
+            candidate,
+            candidate.parent / "source.clean.md",
+            candidate.parent / "source.md",
+        ]
+    return [candidate / "source.clean.md", candidate / "source.md"]
+
+
+def base_draft_source_path(execution_id: str, base_source_ref: str | None) -> Path | None:
+    """底稿正文所在文件；引用不在场或候选文件都不存在时返回 `None`。"""
+    for path in _base_draft_source_candidates(execution_id, base_source_ref):
+        if path.is_file():
+            return path
+    return None
+
+
+def load_base_draft_text(execution_id: str, base_source_ref: str | None) -> str:
+    """读底稿正文：优先 source.clean.md，回退 source.md。"""
+    for path in _base_draft_source_candidates(execution_id, base_source_ref):
         if path.is_file():
             try:
                 return _extract_base_draft_body(path.read_text(encoding="utf-8"))

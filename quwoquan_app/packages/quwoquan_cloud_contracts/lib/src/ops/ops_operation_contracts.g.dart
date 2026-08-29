@@ -1,5 +1,5 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: 05b1683f93feb5234ad8184f318b5d32e9f340e4d7e36d1e833581cfc400702c
+// ContractGraph SHA256: 2ba8995ae51f9f431ebc75e30f64d31285cc4cfb724f0ef1d8473c11011a5469
 
 library;
 
@@ -98,12 +98,14 @@ enum StartupRecoveryMount {
 enum StartupRecoveryPhase {
   startupChecking("startup_checking"),
   startupUpdateRequired("startup_update_required"),
+  startupWebOnly("startup_web_only"),
   startupLatest("startup_latest"),
   startupVersionUnavailable("startup_version_unavailable"),
   runtimeUnavailable("runtime_unavailable"),
   runtimeReentering("runtime_reentering"),
   runtimeVersionChecking("runtime_version_checking"),
   runtimeUpdateRequired("runtime_update_required"),
+  runtimeWebOnly("runtime_web_only"),
   runtimeLatest("runtime_latest"),
   runtimeVersionUnavailable("runtime_version_unavailable");
 
@@ -115,14 +117,18 @@ enum StartupRecoveryPhase {
     return switch (value) {
       "startup_checking" => StartupRecoveryPhase.startupChecking,
       "startup_update_required" => StartupRecoveryPhase.startupUpdateRequired,
+      "startup_web_only" => StartupRecoveryPhase.startupWebOnly,
       "startup_latest" => StartupRecoveryPhase.startupLatest,
-      "startup_version_unavailable" => StartupRecoveryPhase.startupVersionUnavailable,
+      "startup_version_unavailable" =>
+        StartupRecoveryPhase.startupVersionUnavailable,
       "runtime_unavailable" => StartupRecoveryPhase.runtimeUnavailable,
       "runtime_reentering" => StartupRecoveryPhase.runtimeReentering,
       "runtime_version_checking" => StartupRecoveryPhase.runtimeVersionChecking,
       "runtime_update_required" => StartupRecoveryPhase.runtimeUpdateRequired,
+      "runtime_web_only" => StartupRecoveryPhase.runtimeWebOnly,
       "runtime_latest" => StartupRecoveryPhase.runtimeLatest,
-      "runtime_version_unavailable" => StartupRecoveryPhase.runtimeVersionUnavailable,
+      "runtime_version_unavailable" =>
+        StartupRecoveryPhase.runtimeVersionUnavailable,
       _ => throw FormatException('$path has an invalid enum value'),
     };
   }
@@ -137,7 +143,8 @@ enum StartupRecoverySurface {
 
   static StartupRecoverySurface fromWire(Object? value, String path) {
     return switch (value) {
-      "page.app.startup_recovery" => StartupRecoverySurface.pageAppStartupRecovery,
+      "page.app.startup_recovery" =>
+        StartupRecoverySurface.pageAppStartupRecovery,
       _ => throw FormatException('$path has an invalid enum value'),
     };
   }
@@ -172,7 +179,7 @@ final class AppReleaseRecoveryView {
     required this.minimumSupportedVersion,
     required this.minimumSupportedBuild,
     required this.updateState,
-    required this.updateUrl,
+    this.updateUrl,
     required this.recoveryUrl,
   });
 
@@ -182,19 +189,45 @@ final class AppReleaseRecoveryView {
   final String minimumSupportedVersion;
   final String minimumSupportedBuild;
   final AppReleaseUpdateState updateState;
-  final String updateUrl;
+  final String? updateUrl;
   final String recoveryUrl;
 
-  factory AppReleaseRecoveryView.fromWire(Map<String, Object?> map, [String path = "AppReleaseRecoveryView"]) {
-    _rejectUnknownFields(map, const <String>{"platform", "latestVersion", "latestBuild", "minimumSupportedVersion", "minimumSupportedBuild", "updateState", "updateUrl", "recoveryUrl"}, path);
+  factory AppReleaseRecoveryView.fromWire(
+    Map<String, Object?> map, [
+    String path = "AppReleaseRecoveryView",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "platform",
+      "latestVersion",
+      "latestBuild",
+      "minimumSupportedVersion",
+      "minimumSupportedBuild",
+      "updateState",
+      "updateUrl",
+      "recoveryUrl",
+    }, path);
     return AppReleaseRecoveryView(
       platform: _requiredString(map["platform"], '$path.platform'),
-      latestVersion: _requiredString(map["latestVersion"], '$path.latestVersion'),
+      latestVersion: _requiredString(
+        map["latestVersion"],
+        '$path.latestVersion',
+      ),
       latestBuild: _requiredString(map["latestBuild"], '$path.latestBuild'),
-      minimumSupportedVersion: _requiredString(map["minimumSupportedVersion"], '$path.minimumSupportedVersion'),
-      minimumSupportedBuild: _requiredString(map["minimumSupportedBuild"], '$path.minimumSupportedBuild'),
-      updateState: AppReleaseUpdateState.fromWire(map["updateState"], '$path.updateState'),
-      updateUrl: _requiredString(map["updateUrl"], '$path.updateUrl'),
+      minimumSupportedVersion: _requiredString(
+        map["minimumSupportedVersion"],
+        '$path.minimumSupportedVersion',
+      ),
+      minimumSupportedBuild: _requiredString(
+        map["minimumSupportedBuild"],
+        '$path.minimumSupportedBuild',
+      ),
+      updateState: AppReleaseUpdateState.fromWire(
+        map["updateState"],
+        '$path.updateState',
+      ),
+      updateUrl: map["updateUrl"] == null
+          ? null
+          : _requiredString(map["updateUrl"], '$path.updateUrl'),
       recoveryUrl: _requiredString(map["recoveryUrl"], '$path.recoveryUrl'),
     );
   }
@@ -206,7 +239,7 @@ final class AppReleaseRecoveryView {
     "minimumSupportedVersion": minimumSupportedVersion,
     "minimumSupportedBuild": minimumSupportedBuild,
     "updateState": updateState.wireName,
-    "updateUrl": updateUrl,
+    if (updateUrl != null) "updateUrl": updateUrl!,
     "recoveryUrl": recoveryUrl,
   };
 }
@@ -220,11 +253,20 @@ final class EventRecordBatchReceipt {
   final int acceptedCount;
   final bool duplicateBatch;
 
-  factory EventRecordBatchReceipt.fromWire(Map<String, Object?> map, [String path = "EventRecordBatchReceipt"]) {
-    _rejectUnknownFields(map, const <String>{"acceptedCount", "duplicateBatch"}, path);
+  factory EventRecordBatchReceipt.fromWire(
+    Map<String, Object?> map, [
+    String path = "EventRecordBatchReceipt",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "acceptedCount",
+      "duplicateBatch",
+    }, path);
     return EventRecordBatchReceipt(
       acceptedCount: _requiredInt(map["acceptedCount"], '$path.acceptedCount'),
-      duplicateBatch: _requiredBool(map["duplicateBatch"], '$path.duplicateBatch'),
+      duplicateBatch: _requiredBool(
+        map["duplicateBatch"],
+        '$path.duplicateBatch',
+      ),
     );
   }
 
@@ -249,10 +291,22 @@ final class RecordVisitReceipt {
   final DateTime occurredAt;
   final bool replayed;
 
-  factory RecordVisitReceipt.fromWire(Map<String, Object?> map, [String path = "RecordVisitReceipt"]) {
-    _rejectUnknownFields(map, const <String>{"targetType", "targetKey", "visitCount", "occurredAt", "replayed"}, path);
+  factory RecordVisitReceipt.fromWire(
+    Map<String, Object?> map, [
+    String path = "RecordVisitReceipt",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "targetType",
+      "targetKey",
+      "visitCount",
+      "occurredAt",
+      "replayed",
+    }, path);
     return RecordVisitReceipt(
-      targetType: VisitTargetType.fromWire(map["targetType"], '$path.targetType'),
+      targetType: VisitTargetType.fromWire(
+        map["targetType"],
+        '$path.targetType',
+      ),
       targetKey: _requiredNonBlankString(map["targetKey"], '$path.targetKey'),
       visitCount: _requiredInt(map["visitCount"], '$path.visitCount'),
       occurredAt: _requiredTimestamp(map["occurredAt"], '$path.occurredAt'),
@@ -278,11 +332,20 @@ final class StartupTelemetryBatchReceipt {
   final int acceptedCount;
   final bool duplicateBatch;
 
-  factory StartupTelemetryBatchReceipt.fromWire(Map<String, Object?> map, [String path = "StartupTelemetryBatchReceipt"]) {
-    _rejectUnknownFields(map, const <String>{"acceptedCount", "duplicateBatch"}, path);
+  factory StartupTelemetryBatchReceipt.fromWire(
+    Map<String, Object?> map, [
+    String path = "StartupTelemetryBatchReceipt",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "acceptedCount",
+      "duplicateBatch",
+    }, path);
     return StartupTelemetryBatchReceipt(
       acceptedCount: _requiredInt(map["acceptedCount"], '$path.acceptedCount'),
-      duplicateBatch: _requiredBool(map["duplicateBatch"], '$path.duplicateBatch'),
+      duplicateBatch: _requiredBool(
+        map["duplicateBatch"],
+        '$path.duplicateBatch',
+      ),
     );
   }
 
@@ -293,16 +356,29 @@ final class StartupTelemetryBatchReceipt {
 }
 
 AppReleaseRecoveryView decodeAppReleaseRecoveryView(Object? response) =>
-    AppReleaseRecoveryView.fromWire(_requiredObject(response, "AppReleaseRecoveryView"), "AppReleaseRecoveryView");
+    AppReleaseRecoveryView.fromWire(
+      _requiredObject(response, "AppReleaseRecoveryView"),
+      "AppReleaseRecoveryView",
+    );
 
 EventRecordBatchReceipt decodeEventRecordBatchReceipt(Object? response) =>
-    EventRecordBatchReceipt.fromWire(_requiredObject(response, "EventRecordBatchReceipt"), "EventRecordBatchReceipt");
+    EventRecordBatchReceipt.fromWire(
+      _requiredObject(response, "EventRecordBatchReceipt"),
+      "EventRecordBatchReceipt",
+    );
 
 RecordVisitReceipt decodeRecordVisitReceipt(Object? response) =>
-    RecordVisitReceipt.fromWire(_requiredObject(response, "RecordVisitReceipt"), "RecordVisitReceipt");
+    RecordVisitReceipt.fromWire(
+      _requiredObject(response, "RecordVisitReceipt"),
+      "RecordVisitReceipt",
+    );
 
-StartupTelemetryBatchReceipt decodeStartupTelemetryBatchReceipt(Object? response) =>
-    StartupTelemetryBatchReceipt.fromWire(_requiredObject(response, "StartupTelemetryBatchReceipt"), "StartupTelemetryBatchReceipt");
+StartupTelemetryBatchReceipt decodeStartupTelemetryBatchReceipt(
+  Object? response,
+) => StartupTelemetryBatchReceipt.fromWire(
+  _requiredObject(response, "StartupTelemetryBatchReceipt"),
+  "StartupTelemetryBatchReceipt",
+);
 
 void decodeEmptyResponse(Object? response) {
   if (response != null) {
@@ -333,7 +409,9 @@ void _rejectUnknownFields(
   final unknown = value.keys.where((key) => !allowed.contains(key)).toList()
     ..sort();
   if (unknown.isNotEmpty) {
-    throw FormatException('$path contains unknown fields: ${unknown.join(', ')}');
+    throw FormatException(
+      '$path contains unknown fields: ${unknown.join(', ')}',
+    );
   }
 }
 

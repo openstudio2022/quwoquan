@@ -3,7 +3,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping
+from typing import Iterable, Mapping
+
+from core.media_source_provenance import DerivedModification
+from core.source_attribution import derived_modifications_value
 
 
 def _text(value: object) -> str:
@@ -253,12 +256,23 @@ class SourcedVideoEvidence:
             "takedownPolicy": self.takedown_policy,
         }
 
-    def post_attribution_dict(self) -> dict[str, object]:
-        """Project attribution for a post manifest, which carries no asset decision."""
+    def post_attribution_dict(
+        self,
+        *,
+        derived_modifications: Iterable[DerivedModification],
+    ) -> dict[str, object]:
+        """Project attribution for a post manifest, which carries no asset decision.
+
+        衍生修改由调用方按本次交付真实做过的操作传入，并只在这里物化一次。
+        ``attribution_dict`` 描述的是未经修改的原始来源，交付副本的修改事实不能
+        与它共用一个取值，否则「原样收到」与「转码后发布」在证据上无法区分。
+        """
         return {
             field: value
             for field, value in self.attribution_dict().items()
             if field != "distributionDecision"
+        } | {
+            "derivedModifications": derived_modifications_value(derived_modifications)
         }
 
     def author_prompt_dict(self) -> dict[str, object]:

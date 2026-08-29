@@ -14,6 +14,7 @@ from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
     _read_json,
 )
+from core.paths import DATA_GC_WORKSPACE_ROOT, OUTPUT_ROOT
 from core.schema import assert_valid
 
 GC_PLAN_SCHEMA = "quwoquan_data.canonical_gc_plan"
@@ -34,6 +35,12 @@ GC_CANDIDATE_KINDS = frozenset(
         "acquisition_staging",
     }
 )
+
+
+def gc_workspace_root(output_root: Path) -> Path:
+    """Return the collector's own evidence root under one output root."""
+
+    return output_root.resolve() / DATA_GC_WORKSPACE_ROOT.relative_to(OUTPUT_ROOT)
 
 
 def json_digest(value: Mapping[str, Any], *, excluded: str) -> str:
@@ -238,6 +245,7 @@ __all__ = [
     "GC_PLAN_SCHEMA",
     "GC_REFERENCE_GRAPH_SCHEMA",
     "file_digest",
+    "gc_workspace_root",
     "json_digest",
     "load_regular_json",
     "validate_apply_receipt",

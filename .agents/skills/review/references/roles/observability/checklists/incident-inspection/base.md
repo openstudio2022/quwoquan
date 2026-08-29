@@ -1,21 +1,9 @@
-# observability · incident-inspection · base
+# observability · incident-inspection
 
-## DURING 执行中
-
-- [MUST] 异常按 fingerprint 分组统计，不逐条罗列原始日志
-  check: 报告出现未聚合的重复异常条目，判失败
-- [MUST] 每个结论附可复查的查询语句或链接（ES query、dashboard、trace id）
-  check: 结论无法凭报告内信息复查，判失败
-
-## POST 自检
-
-- [MUST] 新增告警声明阈值、去噪策略与 owner；不允许无人认领的告警
-  check: 告警定义缺 owner 或阈值依据，判失败
-- [SHOULD] 巡检发现的观测盲区（缺指标、缺日志字段、缺告警）已转 `OPEN-###`
-
-## HANDOFF 交接
-
-- 产出：fingerprint 分组报告与查询链接
-- 未决项去向：观测盲区转 `OPEN-###`
-- 下一步：修复走 `dev`，观测补齐走 `dev` 或 `design`
-- 证据链：查询语句与报告
+- [MUST] 异常按 fingerprint 聚合，结论附可复查查询与时间范围。
+  check: 读取报告；重复逐条罗列或缺 query/time range 时判失败。
+- [MUST] 日志和 trace 已脱敏，原始敏感载荷不进入报告。
+  check: 扫描报告样本；出现 token/凭据/完整 PII 时判失败。
+- [MUST] 复现资格、优先级与 owner 有证据，不由单条样本推断。
+  check: 读取每组裁决；缺样本量、影响面或 owner 时判失败。
+- [SHOULD] 观测盲区进入最低可关闭节点的 OPEN。

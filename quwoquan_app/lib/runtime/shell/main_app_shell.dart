@@ -143,7 +143,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
       );
       _syncIncomingCallCoordinator();
       final pushTapNavigator = PushTapNavigator(
-        messagingClient: ref.read(pushTapMessagingClientProvider),
+        intentSource: ref.read(pushTapIntentSourceProvider),
         push: (location) {
           if (mounted) {
             context.push(location);

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"quwoquan_service/runtime/servicekit"
 	integrationconfig "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/runtimeconfig"
 	integrationsupport "quwoquan_service/services/integration-service/tests/support"
 )
@@ -22,41 +23,35 @@ func TestLoadRuntimeConfigReadsCanonicalSnapshot(t *testing.T) {
 	t.Setenv("CONFIG_ROOT", configRoot)
 	t.Setenv("CONFIG_VERSION", configDigest)
 
-	cfg, err := integrationconfig.Load()
-	if err != nil {
-		t.Fatalf("load canonical config snapshot: %v", err)
-	}
+	cfg := loadIntegrationSnapshot(t)
 	if cfg.Service.HTTP.Addr != ":18086" || cfg.MongoDB.Database != "quwoquan_integration" ||
 		cfg.Integration.Location.NearbyDefaultLimit != 25 {
 		t.Fatalf("canonical snapshot drift: %#v", cfg)
 	}
 }
 
-func TestMergeConfigFileRejectsRetiredLocationProviderSelection(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.yaml")
-	writeRuntimeConfigFile(t, path, "integration:\n  location:\n    primary_provider: baidu\n")
-	if err := integrationconfig.MergeFile(&integrationconfig.Config{}, path); err == nil {
+func TestSnapshotGuardRejectsRetiredLocationProviderSelection(t *testing.T) {
+	if err := integrationconfig.SnapshotGuard(
+		[]byte("integration:\n  location:\n    primary_provider: baidu\n"),
+	); err == nil {
 		t.Fatal("retired runtime provider selection must fail closed")
 	}
 }
 
-func TestApplyEnvOverridesRejectsRetiredLocationProviderSelection(t *testing.T) {
+func TestRetiredEnvKeysRejectRetiredLocationProviderSelection(t *testing.T) {
 	t.Setenv("INTEGRATION_LOCATION_PROVIDER", "baidu")
-	if err := integrationconfig.ApplyEnvOverrides(&integrationconfig.Config{}); err == nil {
-		t.Fatal("retired location provider environment selection must fail closed")
+	err := servicekit.RejectRetiredEnvKeys(integrationconfig.RetiredEnvKeys())
+	if err == nil || !strings.Contains(err.Error(), "INTEGRATION_LOCATION_PROVIDER is retired") {
+		t.Fatalf("retired location provider environment selection must fail closed: %v", err)
 	}
 }
 
-func TestMergeConfigFileRejectsRetiredExternalProviderSelection(t *testing.T) {
+func TestSnapshotGuardRejectsRetiredExternalProviderSelection(t *testing.T) {
 	for _, key := range []string{"sms", "push"} {
 		t.Run(key, func(t *testing.T) {
-			path := filepath.Join(t.TempDir(), "config.yaml")
-			writeRuntimeConfigFile(
-				t,
-				path,
-				"integration:\n  external_interaction:\n    "+key+":\n      enabled: true\n",
+			err := integrationconfig.SnapshotGuard(
+				[]byte("integration:\n  external_interaction:\n    " + key + ":\n      enabled: true\n"),
 			)
-			err := integrationconfig.MergeFile(&integrationconfig.Config{}, path)
 			if err == nil || !strings.Contains(err.Error(), "generated external provider binding") {
 				t.Fatalf("retired %s config must fail closed: %v", key, err)
 			}
@@ -64,16 +59,36 @@ func TestMergeConfigFileRejectsRetiredExternalProviderSelection(t *testing.T) {
 	}
 }
 
-func TestApplyEnvOverridesRejectsRetiredExternalProviderSelection(t *testing.T) {
+func TestRetiredEnvKeysRejectRetiredExternalProviderSelection(t *testing.T) {
 	for _, key := range []string{"INTEGRATION_SMS_PROVIDER", "INTEGRATION_PUSH_MODE"} {
 		t.Run(key, func(t *testing.T) {
 			t.Setenv(key, "retired")
-			err := integrationconfig.ApplyEnvOverrides(&integrationconfig.Config{})
-			if err == nil || !strings.Contains(err.Error(), "generated external provider binding") {
+			err := servicekit.RejectRetiredEnvKeys(integrationconfig.RetiredEnvKeys())
+			if err == nil || !strings.Contains(err.Error(), key+" is retired") {
 				t.Fatalf("retired %s override must fail closed: %v", key, err)
 			}
 		})
 	}
+}
+
+// loadIntegrationSnapshot 走服务启动的同一条加载路径：身份解析 → 唯一渲染
+// 快照 → 退役段守卫。测试不允许存在第二条读取实现。
+func loadIntegrationSnapshot(t *testing.T) integrationconfig.Config {
+	t.Helper()
+	identity, err := servicekit.ResolveIdentity("integration-service")
+	if err != nil {
+		t.Fatalf("resolve runtime identity: %v", err)
+	}
+	cfg := integrationconfig.Config{}
+	raw, err := servicekit.LoadYAMLConfigRaw(identity, &cfg)
+	if err != nil {
+		t.Fatalf("load canonical config snapshot: %v", err)
+	}
+	if err := integrationconfig.SnapshotGuard(raw); err != nil {
+		t.Fatalf("canonical snapshot rejected: %v", err)
+	}
+	cfg.Environment = identity.AppEnv
+	return cfg
 }
 
 func writeRuntimeConfigFile(t *testing.T, path string, content string) {

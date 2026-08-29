@@ -59,14 +59,37 @@ func TestImmutableReleaseIdentityPrecedesOptionalMutableTestLiveSentinel(t *test
 		t.Fatal("resolve test source path")
 	}
 	serviceRoot := filepath.Clean(filepath.Join(filepath.Dir(sourcePath), "../../../.."))
-	mainSource, err := os.ReadFile(filepath.Join(serviceRoot, "cmd", "api", "main.go"))
+
+	// 迁移到声明式骨架之前，这条判据是「cmd/api/main.go 里
+	// controlplane.StartReleaseConfigAttestation( 的文本位置早于
+	// rtauth.OperationAuthorizationForRuntime(」。骨架接手镜像身份校验之后，那
+	// 两个字面量不再共存于服务源码，但不变量本身存续：servicekit.Bootstrap 在
+	// ValidateConfigIdentity 通过之后才调用 OperationGuard 工厂，缺一即拒绝装配。
+	//
+	// 因此判据从「同一文件里两个调用的先后」迁到「装配确实经过承担该校验的骨架
+	// 入口」——依然是不可绕过的文本证据，只是校验发生在骨架而非服务里。api-edge
+	// 若改回自建 http.Server 或自行选 guard，本断言立刻变红。
+	bootstrapSource, err := os.ReadFile(
+		filepath.Join(serviceRoot, "cmd", "api", "bootstrap.go"),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	attestation := strings.Index(string(mainSource), "controlplane.StartReleaseConfigAttestation(")
-	authorization := strings.Index(string(mainSource), "rtauth.OperationAuthorizationForRuntime(")
-	if attestation < 0 || authorization < 0 || attestation >= authorization {
-		t.Fatal("immutable release identity must be validated before operation authorization selection")
+	source := string(bootstrapSource)
+	if !strings.Contains(source, "servicekit.Bootstrap(serviceName, newBootstrapSpec())") {
+		t.Fatal(
+			"api-edge must assemble through servicekit.Bootstrap, which validates " +
+				"the immutable release identity before selecting the operation guard",
+		)
+	}
+	if !strings.Contains(source, "rtauth.OperationAuthorizationForRuntime(") {
+		t.Fatal("api-edge must keep selecting the runtime-aware operation boundary")
+	}
+	if strings.Contains(source, "http.Server{") {
+		t.Fatal(
+			"api-edge must not build its own HTTP server: that bypasses the " +
+				"skeleton's release identity validation",
+		)
 	}
 
 	compose, err := os.ReadFile(filepath.Join(serviceRoot, "deploy", "compose.yaml"))

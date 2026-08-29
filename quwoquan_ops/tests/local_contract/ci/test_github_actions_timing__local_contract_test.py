@@ -302,6 +302,64 @@ class GithubActionsTimingTest(unittest.TestCase):
         self.assertEqual(values["calendar_lead_time_seconds"], 1860)
         self.assertNotIn("approval_wait_seconds", values)
 
+    def test_pr_calendar_includes_push_evidence_wait_while_machine_uses_external_phases(
+        self,
+    ) -> None:
+        run = {"created_at": "2026-08-26T00:00:00Z"}
+        jobs = [
+            job(
+                "Delivery Gate — Topology",
+                "2026-08-26T00:00:00Z",
+                "2026-08-26T00:00:01Z",
+                "2026-08-26T00:01:00Z",
+            ),
+            job(
+                "Delivery Gate — Service Core (L2)",
+                "2026-08-26T00:01:00Z",
+                "2026-08-26T00:01:01Z",
+                "2026-08-26T00:05:00Z",
+            ),
+            job(
+                "Delivery Gate — App (L1)",
+                "2026-08-26T00:01:00Z",
+                "2026-08-26T00:01:01Z",
+                "2026-08-26T00:12:00Z",
+            ),
+        ]
+        values = calculate(
+            run,
+            jobs,
+            phases={
+                "topology": "Delivery Gate — Topology",
+                "service": "Delivery Gate — Service Core (L2)",
+                "app_evidence": "Delivery Gate — App (L1)",
+            },
+            required_counts={"topology": 1, "service": 1, "app_evidence": 1},
+            candidate_job="",
+            prod_job="",
+            critical_start="run",
+            dag_layers=[
+                ("topology",),
+                (
+                    "service",
+                    "app_static",
+                    "app_tests",
+                    "app_serial",
+                    "app_coverage",
+                ),
+            ],
+            external_phases={
+                "app_static": 120,
+                "app_tests": 300,
+                "app_serial": 180,
+                "app_coverage": 480,
+            },
+        )
+        self.assertEqual(values["calendar_lead_time_seconds"], 720)
+        self.assertEqual(values["candidate_ready_at"], "2026-08-26T00:12:00Z")
+        self.assertEqual(values["machine_critical_path_seconds"], 539)
+        self.assertEqual(values["phase_app_coverage"], 480)
+
     def test_jobs_start_cannot_replace_official_run_start(self) -> None:
         with self.assertRaisesRegex(ValueError, "must start at workflow run"):
             calculate(

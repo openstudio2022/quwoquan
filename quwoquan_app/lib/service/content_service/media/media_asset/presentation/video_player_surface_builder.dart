@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quwoquan_app/runtime/di/media_delivery_composition.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/video_playback_failure_overlay.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
@@ -15,12 +16,11 @@ final class VideoPlayerSurfaceBuilder {
   const VideoPlayerSurfaceBuilder._();
 
   static Widget buildPlaceholder({
-    required MediaDeliveryReference? thumbnailReference,
+    required MediaDeliveryBinding thumbnailBinding,
     required bool autoPlay,
     required bool showProgress,
     required bool showSlowHint,
   }) {
-    final thumbnailUrl = thumbnailReference?.url ?? '';
     return Container(
       width: double.infinity,
       height: double.infinity,
@@ -28,17 +28,9 @@ final class VideoPlayerSurfaceBuilder {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          if (thumbnailUrl.isNotEmpty)
-            Positioned.fill(
-              child: AppCachedNetworkImage(
-                imageUrl: thumbnailUrl,
-                imageUrlCandidates: <String>[thumbnailUrl],
-                cdnPreset: CdnImagePreset.cover,
-                fit: BoxFit.cover,
-                placeholder: const SizedBox.shrink(),
-                errorWidget: const SizedBox.shrink(),
-              ),
-            ),
+          Positioned.fill(
+            child: _thumbnail(thumbnailBinding),
+          ),
           ColoredBox(color: AppColors.black.withValues(alpha: 0.22)),
           // 聚焦自动播放（autoPlay）时显示加载转圈，避免与卡片层叠出第二个
           // 「播放三角」按钮；未自动播放时仍用播放三角作为点按查看提示。
@@ -78,23 +70,14 @@ final class VideoPlayerSurfaceBuilder {
   }
 
   static Widget buildDeferred({
-    required MediaDeliveryReference? thumbnailReference,
+    required MediaDeliveryBinding thumbnailBinding,
   }) {
-    final thumbnailUrl = thumbnailReference?.url ?? '';
     return ColoredBox(
       color: AppColors.black,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          if (thumbnailUrl.isNotEmpty)
-            AppCachedNetworkImage(
-              imageUrl: thumbnailUrl,
-              imageUrlCandidates: <String>[thumbnailUrl],
-              cdnPreset: CdnImagePreset.cover,
-              fit: BoxFit.cover,
-              placeholder: const SizedBox.shrink(),
-              errorWidget: const SizedBox.shrink(),
-            ),
+          _thumbnail(thumbnailBinding),
           ColoredBox(color: AppColors.black.withValues(alpha: 0.16)),
         ],
       ),
@@ -103,17 +86,40 @@ final class VideoPlayerSurfaceBuilder {
 
   static Widget buildFailure({
     required MediaPlaybackFailure failure,
-    required MediaDeliveryReference? thumbnailReference,
+    required MediaDeliveryBinding thumbnailBinding,
     required bool retrying,
     required VoidCallback? onRetry,
     required VoidCallback? onExit,
   }) {
     return VideoPlaybackFailureOverlay(
       failure: failure,
-      thumbnailReference: thumbnailReference,
+      thumbnailBinding: thumbnailBinding,
       retrying: retrying,
       onRetry: onRetry,
       onExit: onExit,
+    );
+  }
+
+  /// 视频封面的 typed 交付渲染（DEC-033）。
+  ///
+  /// 封面缺席时不占位，与既有「无封面直接露黑底」的观感一致；私有封面经统一
+  /// 分流入口换短签，公开封面维持既有候选推导与 CDN 预设。
+  static Widget _thumbnail(MediaDeliveryBinding binding) {
+    return mediaDeliveryImage(
+      binding: binding,
+      kind: MediaDeliveryKind.image,
+      fit: BoxFit.cover,
+      placeholder: const SizedBox.shrink(),
+      errorWidget: const SizedBox.shrink(),
+      absentWidget: const SizedBox.shrink(),
+      publicBuilder: (context, publicUrl) => AppCachedNetworkImage(
+        imageUrl: publicUrl,
+        imageUrlCandidates: <String>[publicUrl],
+        cdnPreset: CdnImagePreset.cover,
+        fit: BoxFit.cover,
+        placeholder: const SizedBox.shrink(),
+        errorWidget: const SizedBox.shrink(),
+      ),
     );
   }
 

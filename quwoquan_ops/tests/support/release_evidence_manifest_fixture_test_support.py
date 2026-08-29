@@ -101,6 +101,8 @@ class ReleaseEvidenceManifestFixtureMixin:
                     for environment in finalizer.ENVIRONMENTS
                 },
                 "applicationPackages": {},
+                "publicWeb": None,
+                "androidOfficialRelease": None,
                 "opsPortal": None,
                 "contractGraphDigest": None,
                 "requiredEvidence": {
@@ -139,6 +141,8 @@ class ReleaseEvidenceManifestFixtureMixin:
                         f"applicationPackages.{build_product_id}"
                         for build_product_id in finalizer.APPLICATION_PACKAGES
                     ),
+                    "publicWeb",
+                    "androidOfficialRelease",
                     "opsPortal",
                     "contractGraphDigest",
                     "providerEvidence",

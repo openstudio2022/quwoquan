@@ -1,8 +1,7 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 05b1683f93feb5234ad8184f318b5d32e9f340e4d7e36d1e833581cfc400702c
+// ContractGraph SHA256: 2ba8995ae51f9f431ebc75e30f64d31285cc4cfb724f0ef1d8473c11011a5469
 
 part of '../../../notification/notification_operation_contracts.g.dart';
-
 
 void _generatedRequestRejectUnknownFields(
   Map<String, Object?> map,
@@ -16,18 +15,15 @@ void _generatedRequestRejectUnknownFields(
   }
 }
 
-
 String _generatedRequestString(Object? value, String path) {
   if (value is String) return value;
   throw FormatException('$path must be a string');
 }
 
-
 int _generatedRequestInt(Object? value, String path) {
   if (value is int) return value;
   throw FormatException('$path must be an integer');
 }
-
 
 bool _generatedRequestBool(Object? value, String path) {
   if (value is bool) return value;
@@ -35,14 +31,18 @@ bool _generatedRequestBool(Object? value, String path) {
 }
 
 final class AckAppMessageCommand {
-  const AckAppMessageCommand({
-    required String messageId,
-  }) : messageId = messageId;
+  const AckAppMessageCommand({required String messageId})
+    : messageId = messageId;
 
   final String messageId;
 
-  factory AckAppMessageCommand.fromWire(Map<String, Object?> map, [String path = "AckAppMessageCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"messageId"}, path);
+  factory AckAppMessageCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "AckAppMessageCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "messageId",
+    }, path);
     return AckAppMessageCommand(
       messageId: _generatedRequestString(map["messageId"], '$path.messageId'),
     );
@@ -54,20 +54,31 @@ final class AckAppMessageCommand {
 }
 
 final class AckIncomingCallPresentationCommand {
-  AckIncomingCallPresentationCommand({
-    required String deliveryKey,
-  }) : deliveryKey = deliveryKey.trim() {
+  AckIncomingCallPresentationCommand({required String deliveryKey})
+    : deliveryKey = deliveryKey.trim() {
     if (this.deliveryKey.isEmpty) {
-      throw ArgumentError.value(this.deliveryKey, "deliveryKey", 'must not be blank');
+      throw ArgumentError.value(
+        this.deliveryKey,
+        "deliveryKey",
+        'must not be blank',
+      );
     }
   }
 
   final String deliveryKey;
 
-  factory AckIncomingCallPresentationCommand.fromWire(Map<String, Object?> map, [String path = "AckIncomingCallPresentationCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"deliveryKey"}, path);
+  factory AckIncomingCallPresentationCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "AckIncomingCallPresentationCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "deliveryKey",
+    }, path);
     return AckIncomingCallPresentationCommand(
-      deliveryKey: _generatedRequestString(map["deliveryKey"], '$path.deliveryKey'),
+      deliveryKey: _generatedRequestString(
+        map["deliveryKey"],
+        '$path.deliveryKey',
+      ),
     );
   }
 
@@ -77,14 +88,17 @@ final class AckIncomingCallPresentationCommand {
 }
 
 final class GetAppMessageQuery {
-  const GetAppMessageQuery({
-    required String messageId,
-  }) : messageId = messageId;
+  const GetAppMessageQuery({required String messageId}) : messageId = messageId;
 
   final String messageId;
 
-  factory GetAppMessageQuery.fromWire(Map<String, Object?> map, [String path = "GetAppMessageQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"messageId"}, path);
+  factory GetAppMessageQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "GetAppMessageQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "messageId",
+    }, path);
     return GetAppMessageQuery(
       messageId: _generatedRequestString(map["messageId"], '$path.messageId'),
     );
@@ -125,13 +139,29 @@ final class ListAppMessagesQuery {
   final String? cursor;
   final int limit;
 
-  factory ListAppMessagesQuery.fromWire(Map<String, Object?> map, [String path = "ListAppMessagesQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"type", "read", "cursor", "limit"}, path);
+  factory ListAppMessagesQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "ListAppMessagesQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "type",
+      "read",
+      "cursor",
+      "limit",
+    }, path);
     return ListAppMessagesQuery(
-      messageType: map["type"] == null ? null : _generatedRequestString(map["type"], '$path.type'),
-      read: map["read"] == null ? null : _generatedRequestBool(map["read"], '$path.read'),
-      cursor: map["cursor"] == null ? null : _generatedRequestString(map["cursor"], '$path.cursor'),
-      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 20,
+      messageType: map["type"] == null
+          ? null
+          : _generatedRequestString(map["type"], '$path.type'),
+      read: map["read"] == null
+          ? null
+          : _generatedRequestBool(map["read"], '$path.read'),
+      cursor: map["cursor"] == null
+          ? null
+          : _generatedRequestString(map["cursor"], '$path.cursor'),
+      limit: map.containsKey("limit")
+          ? _generatedRequestInt(map["limit"], '$path.limit')
+          : 20,
     );
   }
 
@@ -144,14 +174,18 @@ final class ListAppMessagesQuery {
 }
 
 final class ReadAppMessageCommand {
-  const ReadAppMessageCommand({
-    required String messageId,
-  }) : messageId = messageId;
+  const ReadAppMessageCommand({required String messageId})
+    : messageId = messageId;
 
   final String messageId;
 
-  factory ReadAppMessageCommand.fromWire(Map<String, Object?> map, [String path = "ReadAppMessageCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"messageId"}, path);
+  factory ReadAppMessageCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "ReadAppMessageCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "messageId",
+    }, path);
     return ReadAppMessageCommand(
       messageId: _generatedRequestString(map["messageId"], '$path.messageId'),
     );
@@ -162,28 +196,35 @@ final class ReadAppMessageCommand {
   };
 }
 
-CloudOperationRequestPayload encodeNotificationNotificationAckAppMessageGeneratedRequest(AckAppMessageCommand request) {
+CloudOperationRequestPayload
+encodeNotificationNotificationAckAppMessageGeneratedRequest(
+  AckAppMessageCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "messageId": request.messageId,
-    },
+    pathParameters: <String, String>{"messageId": request.messageId},
   );
 }
 
-CloudOperationRequestPayload encodeNotificationNotificationGetAppMessageGeneratedRequest(GetAppMessageQuery request) {
+CloudOperationRequestPayload
+encodeNotificationNotificationGetAppMessageGeneratedRequest(
+  GetAppMessageQuery request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "messageId": request.messageId,
-    },
+    pathParameters: <String, String>{"messageId": request.messageId},
   );
 }
 
-CloudOperationRequestPayload encodeNotificationNotificationGetAppMessageUnreadCountGeneratedRequest(GetAppMessageUnreadCountQuery request) {
-  return CloudOperationRequestPayload(
-  );
+CloudOperationRequestPayload
+encodeNotificationNotificationGetAppMessageUnreadCountGeneratedRequest(
+  GetAppMessageUnreadCountQuery request,
+) {
+  return CloudOperationRequestPayload();
 }
 
-CloudOperationRequestPayload encodeNotificationNotificationListAppMessagesGeneratedRequest(ListAppMessagesQuery request) {
+CloudOperationRequestPayload
+encodeNotificationNotificationListAppMessagesGeneratedRequest(
+  ListAppMessagesQuery request,
+) {
   return CloudOperationRequestPayload(
     queryParameters: <String, String>{
       if (request.messageType != null) "type": request.messageType!,
@@ -194,19 +235,20 @@ CloudOperationRequestPayload encodeNotificationNotificationListAppMessagesGenera
   );
 }
 
-CloudOperationRequestPayload encodeNotificationNotificationReadAppMessageGeneratedRequest(ReadAppMessageCommand request) {
+CloudOperationRequestPayload
+encodeNotificationNotificationReadAppMessageGeneratedRequest(
+  ReadAppMessageCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "messageId": request.messageId,
-    },
+    pathParameters: <String, String>{"messageId": request.messageId},
   );
 }
 
-CloudOperationRequestPayload encodeNotificationNotificationDeliveryJobAckIncomingCallPresentationGeneratedRequest(AckIncomingCallPresentationCommand request) {
+CloudOperationRequestPayload
+encodeNotificationNotificationDeliveryJobAckIncomingCallPresentationGeneratedRequest(
+  AckIncomingCallPresentationCommand request,
+) {
   return CloudOperationRequestPayload(
-    body: <String, Object?>{
-      "deliveryKey": request.deliveryKey,
-    },
+    body: <String, Object?>{"deliveryKey": request.deliveryKey},
   );
 }
-

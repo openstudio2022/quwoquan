@@ -26,6 +26,13 @@ fields:
   - NOT_NULL
   description: feedRequestId，与曝光同批归因
   role: append_only_fact
+- name: experimentBucket
+  source: context.experimentBucket
+  type: string
+  constraints:
+  - NOT_NULL
+  description: 从已持久化 RecommendationExposureFact 复制的服务端权威实验分桶；不接受客户端行为 payload 提供
+  role: append_only_fact
 - name: userId
   source: userId
   type: string

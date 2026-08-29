@@ -18,6 +18,7 @@ if str(SCRIPTS_ROOT) not in sys.path:
 from content.execution.execution_terminal import (  # noqa: E402
     TerminalExecutionEvidence,
 )
+from core.control_types import ContentType  # noqa: E402
 from verify import verify_content_execution_layout as layout  # noqa: E402
 
 
@@ -75,7 +76,8 @@ def test_named_execution_layout_ignores_other_disposable_work_packages(monkeypat
         "ExecutionSpec",
         SimpleNamespace(
             from_mapping=lambda _value: SimpleNamespace(
-                scope=SimpleNamespace(coverage_targets=())
+                scope=SimpleNamespace(coverage_targets=()),
+                content=SimpleNamespace(carriers=(ContentType.HOMEPAGE,)),
             )
         ),
     )

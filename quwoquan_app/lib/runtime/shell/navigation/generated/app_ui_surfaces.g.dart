@@ -1000,9 +1000,6 @@ class AppUiSurfaces {
       'GetPublicGathering',
       'GetGathering',
       'GetGatheringPlan',
-      'CreateGatheringPlan',
-      'ProposeGatheringPlan',
-      'CommitGatheringPlanProposal',
       'ListGatheringPlanRevisions',
       'UpdateGathering',
       'JoinOpenGathering',
@@ -1036,6 +1033,7 @@ class AppUiSurfaces {
       'GetGatheringChatBoard',
       'GetGathering',
       'GetGatheringPlan',
+      'ListGatheringPlanRevisions',
     ],
   );
 

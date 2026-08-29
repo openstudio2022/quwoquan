@@ -21,6 +21,7 @@ func BindPostAuthorSnapshots(
 		}
 		post.AuthorDisplayName = creator.DisplayName
 		post.AuthorAvatarURL = creator.AvatarURL
+		post.AuthorAvatarAssetID = creator.AvatarAssetID
 	}
 	return nil
 }

@@ -44,6 +44,7 @@ class _Ranker:
     def rank(self, *, subject_id: str, scenario: str, session_id: str, limit: int):
         assert limit == 300
         return RankingResult(
+            experiment_bucket="model",
             model_bucket="model",
             model_channel="champion",
             model_release_id="release-001",

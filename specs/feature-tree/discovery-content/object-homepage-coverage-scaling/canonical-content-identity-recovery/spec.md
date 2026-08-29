@@ -63,13 +63,12 @@
 ## 7. 开放事项
 
 <a id="open-001"></a>
-### OPEN-001 invalid canonical identity 导致 Homepage 永久饥饿
+### OPEN-001 invalid canonical identity 恢复链缺 fault-injection api_integration 证据
 
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：当前峨眉山 Homepage 已有 canonical manifest，但 latest pool record 与 payload digest 漂移，底层事实为 `DATA.POOL.PAYLOAD_DIGEST_DRIFT`。`pool-inspect` 把它折叠为 generic `DATA.POOL.OBJECT_NOT_ADMITTED`，source-ready loader 又只因 manifest 存在就把同 stable objectRef 视为已消费，现场结果为 `gap=1`、`sourceReadyBacklog=0`、`dispatchCandidateCount=0`；backfill 同时返回 drift 且不给 repair requirement，因此继续补采 source 或重试都不会前进。
-- 尚缺实现：把“已准入且已消费”“存在但可修复”“存在且不可修复的 canonical collision”分为互斥状态；保留最深层 `DATA.POOL.PAYLOAD_DIGEST_DRIFT`，由受治理 repair/rebuild 或显式终止 stable identity 收敛。不得把 invalid canonical 当作新对象覆盖，也不得无声过滤 source-ready candidate。
-- 尚缺验收证据：缺少 payload drift 的 pool-inspect typed readback、source-ready 调度裁决、从 immutable evidence 修复后 contentVersion/recordSequence 前进、不可修复时显式终止且不再计入可调度 backlog 的 api_integration。
+- 影响或价值：仍缺完成判定要求的 api_integration 证据。三态互斥（已准入且已消费、存在但可修复、存在且不可修复）、最深层 `DATA.POOL.PAYLOAD_DIGEST_DRIFT` 保留到读取面与恢复动作路由已实现并由 local_contract 锚定；识别现场（峨眉山 Homepage 的 payload digest 漂移致 `gap=1`、`sourceReadyBacklog=0` 永久饥饿）已由受治理 record repair 收敛，`pool-inspect` 读回 `admitted_current` 且无深层错误、`recordSequence` 前进到 2。
+- 尚缺验收证据：从真实 canonical application command 出发、经基础设施存储边界 fault-injection port 制造 drift、覆盖 record repair / payload rebuild / terminal 三互斥分支的 api_integration。
 - 完成判定：`GWT-001.t1..t4` 由同一 api_integration 直接覆盖。测试先通过真实 canonical application command 创建有效状态，再只通过明确的基础设施存储边界 fault-injection port 制造 digest drift，禁止直接写 manifest、ledger 或 fixture seed，并分别构造 record repair、payload rebuild 与 terminal 的互斥证据谓词。首轮 inspection 精确保留 `DATA.POOL.PAYLOAD_DIGEST_DRIFT` 且只给出对应 command。record repair 保持 `contentVersion` 只推进 `recordSequence`，payload rebuild 同时推进两者并保留旧证据，terminal 不创建新内容版本且携带 terminal reason/next action。三个分支都不再出现 `gap>0 && backlog=0 && 无恢复动作`。
 - 依赖：canonical repair authority、immutable evidence 来源、recordSequence/contentVersion 与 source-ready consumer 的职责边界由 [L2 DEC-023](../design.md#dec-023) 冻结；实现不得通过放宽 payload digest 或恢复 manifest-only admission 完成。

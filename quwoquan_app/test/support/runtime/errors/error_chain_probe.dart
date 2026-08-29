@@ -10,6 +10,8 @@ import 'package:quwoquan_app/runtime/observability/analytics.dart';
 import 'package:quwoquan_app/runtime/observability/trackers/page_lifecycle_observability.dart';
 import 'package:quwoquan_app/runtime/observability/telemetry/app_page_experience_tracker.dart';
 
+import '../observability/recording_app_telemetry_recorder.dart';
+
 /// 客户端可见业务域的**错误链端到端**探针。
 ///
 /// 一条用例贯通全链，任何一环断裂都会在同一个断言里暴露：
@@ -195,6 +197,7 @@ Future<ErrorChainOutcome> runErrorChainForError(
   final analytics = RecordingAnalyticsService();
   PageLifecycleObservability(
     analytics: analytics,
+    telemetryRecorder: RecordingAppTelemetryRecorder(),
     pageExperienceTracker: AppPageExperienceTracker.instance,
   ).recordPageState(
     pageName: pageName,

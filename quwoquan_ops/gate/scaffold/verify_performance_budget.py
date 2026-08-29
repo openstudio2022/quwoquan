@@ -8,6 +8,8 @@ import json
 import sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True
+
 from nonfunctional_coverage_lib import Failures, ROOT
 
 

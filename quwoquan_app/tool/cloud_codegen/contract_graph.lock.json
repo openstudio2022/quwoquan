@@ -12730,186 +12730,6 @@
     },
     {
       "actorRequirement": "persona",
-      "aggregateOwner": "GatheringPlan",
-      "authMode": "required",
-      "canonicalOperationId": "circle.gathering_plan.CommitGatheringPlanProposal",
-      "clientContract": {
-        "dartImport": "../circle/circle_operation_contracts.g.dart",
-        "responseDecoder": "decodeGatheringPlanCommandResult",
-        "responseType": "GatheringPlanCommandResult"
-      },
-      "commercial": {
-        "blockReason": "Chat Board/App Remote、durable consumer 与跨域 user_acceptance 尚未接线；三层证据未闭合",
-        "explicit": true,
-        "gapId": "CIRCLE_GATHERING_PLAN_COMMERCIAL_CLOSURE",
-        "status": "blocked",
-        "targetStory": "circle-community-gathering-plan-collaboration"
-      },
-      "concurrency": {},
-      "domain": "circle",
-      "errorCodes": [
-        "CIRCLE.USER.gathering_plan_not_found",
-        "CIRCLE.USER.gathering_plan_invalid",
-        "CIRCLE.USER.gathering_plan_proposal_not_found",
-        "CIRCLE.USER.gathering_plan_permission_denied",
-        "CIRCLE.USER.gathering_plan_gathering_unavailable",
-        "CIRCLE.USER.gathering_plan_version_conflict",
-        "CIRCLE.USER.gathering_plan_revision_conflict",
-        "CIRCLE.USER.gathering_plan_proposal_conflict",
-        "CIRCLE.USER.gathering_plan_idempotency_conflict",
-        "CIRCLE.SYSTEM.gathering_plan_storage_failed"
-      ],
-      "facadeMethod": "commitGatheringPlanProposal",
-      "facet": "GatheringPlanCommandFacet",
-      "invariantTarget": "GatheringPlan",
-      "kind": "command",
-      "localOperationId": "CommitGatheringPlanProposal",
-      "method": "POST",
-      "mutationTarget": "GatheringPlan",
-      "objectId": "circle.gathering_plan",
-      "ownershipPolicy": "delegated_current_gathering_host",
-      "pagination": null,
-      "pathTemplate": "/gathering-plans/{planId}/commit",
-      "permissions": [],
-      "principal": "persona",
-      "privacy": {
-        "logPolicy": "metadata_only",
-        "requestClassification": "INTERNAL",
-        "responseClassification": "INTERNAL"
-      },
-      "reliability": {
-        "cancellation": "supported",
-        "idempotency": "required",
-        "maxAttempts": 2,
-        "retryMode": "idempotent",
-        "timeoutMilliseconds": 3000
-      },
-      "requestBindings": {
-        "path": [
-          {
-            "field": "planId",
-            "name": "planId"
-          }
-        ]
-      },
-      "requestBodyKind": "object",
-      "requestConstants": null,
-      "requestEntity": "CommitGatheringPlanProposalCommand",
-      "responseAdmission": null,
-      "responseBody": "",
-      "responseBodyKind": "",
-      "responseEntity": "GatheringPlanCommandResult",
-      "scopes": [],
-      "slo": {
-        "availabilityPercent": 99.9,
-        "latencyP95Milliseconds": 1500
-      },
-      "sourcePath": "circle/circle_management/gathering_plan/operations.yaml",
-      "streaming": null,
-      "successStatus": null,
-      "surfaceIds": [
-        "gatheringDetail"
-      ],
-      "telemetry": {
-        "attributes": [
-          "outcome",
-          "acknowledgement_mode"
-        ],
-        "metric": "circle_gathering_plan_commit",
-        "trace": true
-      },
-      "transport": "json"
-    },
-    {
-      "actorRequirement": "persona",
-      "aggregateOwner": "GatheringPlan",
-      "authMode": "required",
-      "canonicalOperationId": "circle.gathering_plan.CreateGatheringPlan",
-      "clientContract": {
-        "dartImport": "../circle/circle_operation_contracts.g.dart",
-        "responseDecoder": "decodeGatheringPlanCommandResult",
-        "responseType": "GatheringPlanCommandResult"
-      },
-      "commercial": {
-        "blockReason": "Chat Board/App Remote、durable consumer 与跨域 user_acceptance 尚未接线；三层证据未闭合",
-        "explicit": true,
-        "gapId": "CIRCLE_GATHERING_PLAN_COMMERCIAL_CLOSURE",
-        "status": "blocked",
-        "targetStory": "circle-community-gathering-plan-collaboration"
-      },
-      "concurrency": {},
-      "domain": "circle",
-      "errorCodes": [
-        "CIRCLE.USER.gathering_plan_invalid",
-        "CIRCLE.USER.gathering_plan_permission_denied",
-        "CIRCLE.USER.gathering_plan_gathering_unavailable",
-        "CIRCLE.USER.gathering_plan_already_exists",
-        "CIRCLE.USER.gathering_plan_idempotency_conflict",
-        "CIRCLE.SYSTEM.gathering_plan_storage_failed"
-      ],
-      "facadeMethod": "createGatheringPlan",
-      "facet": "GatheringPlanCommandFacet",
-      "invariantTarget": "GatheringPlan",
-      "kind": "command",
-      "localOperationId": "CreateGatheringPlan",
-      "method": "POST",
-      "mutationTarget": "GatheringPlan",
-      "objectId": "circle.gathering_plan",
-      "ownershipPolicy": "delegated_current_gathering_host",
-      "pagination": null,
-      "pathTemplate": "/gatherings/{gatheringId}/plan",
-      "permissions": [],
-      "principal": "persona",
-      "privacy": {
-        "logPolicy": "metadata_only",
-        "requestClassification": "INTERNAL",
-        "responseClassification": "INTERNAL"
-      },
-      "reliability": {
-        "cancellation": "supported",
-        "idempotency": "required",
-        "maxAttempts": 2,
-        "retryMode": "idempotent",
-        "timeoutMilliseconds": 3000
-      },
-      "requestBindings": {
-        "path": [
-          {
-            "field": "gatheringId",
-            "name": "gatheringId"
-          }
-        ]
-      },
-      "requestBodyKind": "object",
-      "requestConstants": null,
-      "requestEntity": "CreateGatheringPlanCommand",
-      "responseAdmission": null,
-      "responseBody": "",
-      "responseBodyKind": "",
-      "responseEntity": "GatheringPlanCommandResult",
-      "scopes": [],
-      "slo": {
-        "availabilityPercent": 99.9,
-        "latencyP95Milliseconds": 1500
-      },
-      "sourcePath": "circle/circle_management/gathering_plan/operations.yaml",
-      "streaming": null,
-      "successStatus": 201,
-      "surfaceIds": [
-        "gatheringDetail"
-      ],
-      "telemetry": {
-        "attributes": [
-          "outcome",
-          "authority_kind"
-        ],
-        "metric": "circle_gathering_plan_create",
-        "trace": true
-      },
-      "transport": "json"
-    },
-    {
-      "actorRequirement": "persona",
       "aggregateOwner": "",
       "authMode": "required",
       "canonicalOperationId": "circle.gathering_plan.GetGatheringPlan",
@@ -13082,6 +12902,7 @@
       "streaming": null,
       "successStatus": null,
       "surfaceIds": [
+        "gatheringBoard",
         "gatheringDetail"
       ],
       "telemetry": {
@@ -13090,96 +12911,6 @@
           "has_more"
         ],
         "metric": "circle_gathering_plan_revision_list",
-        "trace": true
-      },
-      "transport": "json"
-    },
-    {
-      "actorRequirement": "persona",
-      "aggregateOwner": "GatheringPlan",
-      "authMode": "required",
-      "canonicalOperationId": "circle.gathering_plan.ProposeGatheringPlan",
-      "clientContract": {
-        "dartImport": "../circle/circle_operation_contracts.g.dart",
-        "responseDecoder": "decodeGatheringPlanCommandResult",
-        "responseType": "GatheringPlanCommandResult"
-      },
-      "commercial": {
-        "blockReason": "Chat Board/App Remote、durable consumer 与跨域 user_acceptance 尚未接线；三层证据未闭合",
-        "explicit": true,
-        "gapId": "CIRCLE_GATHERING_PLAN_COMMERCIAL_CLOSURE",
-        "status": "blocked",
-        "targetStory": "circle-community-gathering-plan-collaboration"
-      },
-      "concurrency": {},
-      "domain": "circle",
-      "errorCodes": [
-        "CIRCLE.USER.gathering_plan_not_found",
-        "CIRCLE.USER.gathering_plan_invalid",
-        "CIRCLE.USER.gathering_plan_permission_denied",
-        "CIRCLE.USER.gathering_plan_gathering_unavailable",
-        "CIRCLE.USER.gathering_plan_version_conflict",
-        "CIRCLE.USER.gathering_plan_revision_conflict",
-        "CIRCLE.USER.gathering_plan_idempotency_conflict",
-        "CIRCLE.SYSTEM.gathering_plan_storage_failed"
-      ],
-      "facadeMethod": "proposeGatheringPlan",
-      "facet": "GatheringPlanCommandFacet",
-      "invariantTarget": "GatheringPlan",
-      "kind": "command",
-      "localOperationId": "ProposeGatheringPlan",
-      "method": "POST",
-      "mutationTarget": "GatheringPlan",
-      "objectId": "circle.gathering_plan",
-      "ownershipPolicy": "delegated_current_gathering_host_or_active_participation",
-      "pagination": null,
-      "pathTemplate": "/gathering-plans/{planId}/proposals",
-      "permissions": [],
-      "principal": "persona",
-      "privacy": {
-        "logPolicy": "metadata_only",
-        "requestClassification": "INTERNAL",
-        "responseClassification": "INTERNAL"
-      },
-      "reliability": {
-        "cancellation": "supported",
-        "idempotency": "required",
-        "maxAttempts": 2,
-        "retryMode": "idempotent",
-        "timeoutMilliseconds": 3000
-      },
-      "requestBindings": {
-        "path": [
-          {
-            "field": "planId",
-            "name": "planId"
-          }
-        ]
-      },
-      "requestBodyKind": "object",
-      "requestConstants": null,
-      "requestEntity": "ProposeGatheringPlanCommand",
-      "responseAdmission": null,
-      "responseBody": "",
-      "responseBodyKind": "",
-      "responseEntity": "GatheringPlanCommandResult",
-      "scopes": [],
-      "slo": {
-        "availabilityPercent": 99.9,
-        "latencyP95Milliseconds": 1500
-      },
-      "sourcePath": "circle/circle_management/gathering_plan/operations.yaml",
-      "streaming": null,
-      "successStatus": null,
-      "surfaceIds": [
-        "gatheringDetail"
-      ],
-      "telemetry": {
-        "attributes": [
-          "outcome",
-          "authority_kind"
-        ],
-        "metric": "circle_gathering_plan_propose",
         "trace": true
       },
       "transport": "json"
@@ -30138,13 +29869,13 @@
   ],
   "breakingReport": {
     "path": "quwoquan_app/tool/cloud_codegen/contract_graph.breaking.json",
-    "sha256": "73686e24f1eb9845729286170f61a8ff553fe20b8bfe9c56667f114d9c79041d"
+    "sha256": "8071cb6c5342a9a974730f5b37da232aeac9059e70de265c23c9aba6cb84ddb6"
   },
   "contractGraph": {
-    "compilerHash": "sha256:f267b8682b52fc7b8315c124b74b4c94a7c98c8d6e6f40f997e08cffe0af876a",
+    "compilerHash": "sha256:3b7d4716dcaad122fc0404b0e7b782f81b45913a95ff7dadc0d26fa4974d9e45",
     "path": "quwoquan_service/generated/contract_graph.json",
-    "sha256": "05b1683f93feb5234ad8184f318b5d32e9f340e4d7e36d1e833581cfc400702c",
-    "sourceDigestSetSha256": "2c58e2b1d9404d31923e47e9af4f81cc88fca61492ae99c602d991bfc4d90534"
+    "sha256": "2ba8995ae51f9f431ebc75e30f64d31285cc4cfb724f0ef1d8473c11011a5469",
+    "sourceDigestSetSha256": "92e0a9a5efbab3c19823fdd61ee0ee8b60a8cc163503f2cc5673330b7f2827b5"
   },
   "generator": "app-cloud-handoff"
 }

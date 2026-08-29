@@ -215,11 +215,17 @@ final pushEndpointGatewayProvider = Provider<PushEndpointGateway>((ref) {
   return PersistentPushEndpointGateway();
 });
 
-/// Firebase 只在防腐层内部判断 Android；业务仅消费 runtime state/capability。
-final firebaseIncomingCallRuntimeProvider =
-    Provider<FirebaseIncomingCallRuntime>((ref) {
-      final runtime = FirebaseIncomingCallRuntime(
-        pushEndpointGateway: ref.watch(pushEndpointGatewayProvider),
+final firebasePushMessagingClientProvider =
+    Provider<FirebasePushMessagingClient>((ref) {
+      return const FirebasePluginPushMessagingClient();
+    });
+
+final firebasePushMessagingRuntimeProvider =
+    Provider<FirebasePushMessagingRuntime>((ref) {
+      final platform = ref.watch(platformTargetProvider);
+      final runtime = FirebasePushMessagingRuntime(
+        client: ref.watch(firebasePushMessagingClientProvider),
+        platformReader: () => platform,
       );
       ref.onDispose(() {
         unawaited(runtime.stop());
@@ -227,20 +233,20 @@ final firebaseIncomingCallRuntimeProvider =
       return runtime;
     });
 
-/// 设备推送 tap 直达的防腐入口：Android 消费 FCM 打开流；其余平台返回
-/// null 表示能力不可用，消费方按一致降级处理（R-XP5），不得抛错。
-final pushTapMessagingClientProvider = Provider<FirebasePushMessagingClient?>((
-  ref,
-) {
-  switch (ref.watch(platformTargetProvider)) {
-    case AppPlatform.android:
-      return const FirebasePluginPushMessagingClient();
-    case AppPlatform.ios:
-    case AppPlatform.web:
-    case AppPlatform.ohos:
-    case AppPlatform.desktop:
-      // iOS 普通 alert 推送端点种类尚未注册（现有 apns_voip 仅来电）；
-      // 该缺口由 chat-offline-push-delivery OPEN 承接。
-      return null;
-  }
+/// 来电与通用 tap 路由共享同一 Firebase 初始化 owner，不重复探测配置状态。
+final firebaseIncomingCallRuntimeProvider =
+    Provider<FirebaseIncomingCallRuntime>((ref) {
+      final runtime = FirebaseIncomingCallRuntime(
+        pushEndpointGateway: ref.watch(pushEndpointGatewayProvider),
+        messagingRuntime: ref.watch(firebasePushMessagingRuntimeProvider),
+      );
+      ref.onDispose(() {
+        unawaited(runtime.stop());
+      });
+      return runtime;
+    });
+
+/// 非 Android 平台能力由同一 runtime owner 返回 unsupported；消费方只见中性 intent。
+final pushTapIntentSourceProvider = Provider<PushTapIntentSource?>((ref) {
+  return ref.watch(firebasePushMessagingRuntimeProvider);
 });

@@ -47,6 +47,7 @@ class ArticleDocumentNode {
     required this.type,
     this.text = '',
     this.assetId = '',
+    this.accessMode = '',
     this.imageUrl = '',
     this.imageLayout = 'fullWidth',
     this.caption = '',
@@ -85,6 +86,7 @@ class ArticleDocumentNode {
       type: type,
       text: (map['text'] ?? '').toString(),
       assetId: (map['assetId'] ?? '').toString(),
+      accessMode: (map['accessMode'] ?? '').toString(),
       imageUrl: (map['imageUrl'] ?? '').toString(),
       imageLayout: (map['imageLayout'] ?? 'fullWidth').toString(),
       caption: (map['caption'] ?? '').toString(),
@@ -99,6 +101,11 @@ class ArticleDocumentNode {
   final ArticleDocumentNodeType type;
   final String text;
   final String assetId;
+
+  /// 契约声明的交付访问模式（PostArticleAsset.accessMode，DEC-033）。
+  /// 空串表示契约缺席（存量 public 交付）；消费面按 typed 绑定分流，
+  /// 不从 URL 形态反推。
+  final String accessMode;
   final String imageUrl;
   final String imageLayout;
   final String caption;
@@ -134,6 +141,7 @@ class ArticleDocumentNode {
     ArticleDocumentNodeType? type,
     String? text,
     String? assetId,
+    String? accessMode,
     String? imageUrl,
     String? imageLayout,
     String? caption,
@@ -147,6 +155,7 @@ class ArticleDocumentNode {
       type: type ?? this.type,
       text: text ?? this.text,
       assetId: assetId ?? this.assetId,
+      accessMode: accessMode ?? this.accessMode,
       imageUrl: imageUrl ?? this.imageUrl,
       imageLayout: imageLayout ?? this.imageLayout,
       caption: caption ?? this.caption,
@@ -163,6 +172,7 @@ class ArticleDocumentNode {
       'type': type.name,
       if (hasText) 'text': text,
       if (assetId.trim().isNotEmpty) 'assetId': assetId,
+      if (accessMode.trim().isNotEmpty) 'accessMode': accessMode,
       if (hasImage) 'imageUrl': imageUrl,
       if (isFigure) 'imageLayout': imageLayout,
       if (caption.trim().isNotEmpty) 'caption': caption,
@@ -495,6 +505,7 @@ class ArticleDocumentBlock {
     this.text = '',
     this.imageUrl = '',
     this.imageLayout = 'fullWidth',
+    this.accessMode = '',
     this.caption = '',
     this.orderedIndex,
     this.textAlign = '',
@@ -509,6 +520,11 @@ class ArticleDocumentBlock {
   final String text;
   final String imageUrl;
   final String imageLayout;
+
+  /// 契约声明的交付访问模式（PostArticleAsset.accessMode，DEC-033）。
+  /// 空串表示契约缺席（存量 public 交付）。
+  final String accessMode;
+
   final String caption;
   final int? orderedIndex;
 
@@ -536,12 +552,17 @@ class ArticleDocumentAsset {
     required this.offset,
     this.imageUrl = '',
     this.imageLayout = 'fullWidth',
+    this.accessMode = '',
     this.caption = '',
   });
 
   final String id;
   final int offset;
   final String imageUrl;
+
+  /// 契约声明的交付访问模式（PostArticleAsset.accessMode，DEC-033）。
+  /// 空串表示契约缺席（存量 public 交付）。
+  final String accessMode;
   final String imageLayout;
   final String caption;
 
@@ -904,6 +925,7 @@ _ArticleDocumentProjection _projectArticleDocument(
             offset: bodyBuffer.length,
             imageUrl: node.imageUrl,
             imageLayout: node.imageLayout,
+            accessMode: node.accessMode,
             caption: node.caption,
           ),
         );
@@ -914,6 +936,7 @@ _ArticleDocumentProjection _projectArticleDocument(
             offset: bodyBuffer.length,
             imageUrl: node.imageUrl,
             imageLayout: node.imageLayout,
+            accessMode: node.accessMode,
             caption: node.caption,
           );
           blocks.add(b);

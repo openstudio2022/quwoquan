@@ -39,7 +39,7 @@ class _FakeRunner:
                     "Config": {
                         "Image": image_ref,
                         "Labels": {
-                            "com.docker.compose.project": "quwoquan_alpha_release_uat",
+                            "com.docker.compose.project": "quwoquan_alpha_release_4021_1",
                             "com.docker.compose.service": service,
                         },
                     },
@@ -62,7 +62,7 @@ class ControlledEdgeFaultTest(unittest.TestCase):
             "env": "alpha",
             "target": "alpha-local",
             "workload": "full",
-            "composeProject": "quwoquan_alpha_release_uat",
+            "composeProject": "quwoquan_alpha_release_4021_1",
             "configurationDigest": "sha256:" + "1" * 64,
             "imageComposition": {
                 "images": {"api-edge": {"ref": _sha256_digest("image:api-edge")}}

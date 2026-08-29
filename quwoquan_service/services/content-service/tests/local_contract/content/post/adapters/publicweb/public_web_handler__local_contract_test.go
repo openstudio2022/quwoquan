@@ -225,10 +225,10 @@ func TestPublicPostHTMLRendersBodyImagesFromAssetManifest(t *testing.T) {
 	html := recorder.Body.String()
 
 	// manifest cdnUrl 直出。
-	assertContains(t, html, `<figure><img src="https://cdn.example.test/p/full.webp" alt="五彩池全景" loading="lazy">`)
+	assertContains(t, html, `<figure><img src="https://cdn.example.test/p/full.webp" alt="五彩池全景" loading="lazy" data-asset-id="asset-cdn">`)
 	assertContains(t, html, "<figcaption>五彩池全景</figcaption>")
 	// PublicSliceKey + CDN origin 派生；caption 从指令行属性回退。
-	assertContains(t, html, `<img src="https://cdn.example.test/public/post-web-1/slice-2.webp" alt="雪宝顶" loading="lazy">`)
+	assertContains(t, html, `<img src="https://cdn.example.test/public/post-web-1/slice-2.webp" alt="雪宝顶" loading="lazy" data-asset-id="asset-slice">`)
 	// 无公网 URL 的 asset 跳过，不泄漏 asset://。
 	if strings.Contains(html, "asset-missing") || strings.Contains(html, "asset://") {
 		t.Fatalf("missing-url asset leaked: %s", html)

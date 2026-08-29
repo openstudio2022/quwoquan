@@ -295,6 +295,7 @@ func integrationEdgeHandler(
 			OperationPrefix: strings.SplitN(descriptor.CanonicalOperationID, ".", 2)[0] + ".",
 			Upstream:        origin,
 		}},
+		BudgetAllowance:      500 * time.Millisecond,
 		TrustedNetworkHeader: "X-Edge-Client-IP",
 		ContractGraphSHA256:  descriptor.ContractGraphSHA256,
 	})

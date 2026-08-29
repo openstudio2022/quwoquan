@@ -271,9 +271,12 @@ def test_homepage_low_fidelity_repair_rebuilds_from_frozen_base_not_old_draft(
 
     _, prompt = reliabletask_author._author_prompt(SimpleNamespace(), job)
 
-    assert "不得在低保真旧 page.md 上继续扩写" in prompt
+    assert "不得在旧 page.md 上继续扩写" in prompt
     assert "以 prompt.md 中完整的『底稿材料』重新构建 page.md" in prompt
-    assert "每个底稿段落至少保留三分之二原句骨架" in prompt
+    # 重建反馈不得自带沿用尺度：它只能把写法交回 prompt.md 的 sourceUseMode 指令，
+    # 否则 factual_reference_only 会被推回近抄。
+    assert "sourceUseMode" in prompt
+    assert "三分之二原句骨架" not in prompt
 
 
 def test_homepage_repair_feedback_rejects_untyped_recovery_contract(
@@ -333,7 +336,7 @@ def test_failed_independent_review_becomes_homepage_author_repair(
 ) -> None:
     from content.execution.controller import (
         homepage_author_finalization,
-        stage_download_build,
+        homepage_review_stage,
     )
     from content.homepage import homepage_review
 
@@ -368,7 +371,7 @@ def test_failed_independent_review_becomes_homepage_author_repair(
         ),
     )
 
-    stage_download_build._write_homepage_independent_review_repairs(ctx)
+    homepage_review_stage.write_homepage_independent_review_repairs(ctx)
 
     assert captured["ref"] == "/entity/地点/景区/测试实体甲"
     assert captured["materialization_messages"] == (

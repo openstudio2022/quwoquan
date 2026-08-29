@@ -1,3 +1,6 @@
+/// spec_ref: specs/feature-tree/chat-conversation/message-reliability-foundation/realtime-push-and-offline-sync/spec.md#gwt-002.t2
+library;
+
 import 'dart:async';
 
 import 'package:fake_async/fake_async.dart';
@@ -107,6 +110,7 @@ void main() {
           ),
           authTokenProvider: const _TokenProvider('jwt-token'),
           operations: operations,
+          activeConversationIdResolver: () => null,
           onEvents: (_) {},
           cursorStore: _MemoryLongPollCursorStore(),
         );
@@ -152,6 +156,7 @@ void main() {
           ),
           authTokenProvider: const _TokenProvider('jwt-token'),
           operations: operations,
+          activeConversationIdResolver: () => null,
           onEvents: (events) {
             delivered.addAll(events);
             transport.stop();
@@ -189,6 +194,7 @@ void main() {
           ),
           authTokenProvider: const _TokenProvider(null),
           operations: operations,
+          activeConversationIdResolver: () => null,
           onEvents: (_) {},
           cursorStore: _MemoryLongPollCursorStore(),
         );
@@ -217,6 +223,7 @@ void main() {
           ),
           authTokenProvider: const _TokenProvider('jwt-token'),
           operations: operations,
+          activeConversationIdResolver: () => null,
           onEvents: (_) {},
           cursorStore: _MemoryLongPollCursorStore(),
         );
@@ -232,6 +239,96 @@ void main() {
         transport.dispose();
       });
     });
+
+    test(
+      'five consecutive handler failures enter backoff without tight loop',
+      () {
+        fakeAsync((clock) {
+          var requestCount = 0;
+          var handlerFailures = 0;
+          late LongPollTransport transport;
+          final operations = _RealtimeOperations(
+            onLongPoll: ({timeout, cursor}) async {
+              requestCount += 1;
+              return _longPollResponse(
+                events: <realtime.RealtimeEventEnvelope>[
+                  _syncHint('failing-event-$requestCount', requestCount),
+                ],
+                nextCursor: '$requestCount-0',
+              );
+            },
+          );
+          transport = LongPollTransport(
+            config: const RealtimeConfig(
+              wsUrl: 'ws://127.0.0.1:18080/realtime/ws',
+              longPollHoldSec: 1,
+            ),
+            authTokenProvider: const _TokenProvider('jwt-token'),
+            operations: operations,
+            activeConversationIdResolver: () => null,
+            onEvents: (_) {
+              handlerFailures += 1;
+              if (handlerFailures >= 6) transport.stop();
+              throw StateError('downstream recovery failed');
+            },
+            cursorStore: _MemoryLongPollCursorStore(),
+          );
+
+          transport.start();
+          clock.flushMicrotasks();
+
+          expect(requestCount, 5, reason: '连续下游失败必须累计，不能每轮重置错误计数');
+          expect(handlerFailures, 5);
+          expect(clock.pendingTimers, hasLength(1), reason: '第 5 次连续失败后必须进入退避');
+          clock.elapse(const Duration(seconds: 4));
+          expect(requestCount, 5, reason: '退避窗口内不得继续紧循环请求');
+
+          transport.stop();
+          transport.dispose();
+        });
+      },
+    );
+
+    test(
+      'stop while cursor store read is pending prevents gateway poll',
+      () async {
+        final cursorStore = _BlockingReadCursorStore();
+        var requestCount = 0;
+        final operations = _RealtimeOperations(
+          onLongPoll: ({timeout, cursor}) async {
+            requestCount += 1;
+            return _longPollResponse(nextCursor: '100-0');
+          },
+        );
+        final transport = LongPollTransport(
+          config: const RealtimeConfig(
+            wsUrl: 'ws://127.0.0.1:18080/realtime/ws',
+            longPollHoldSec: 1,
+          ),
+          authTokenProvider: const _TokenProvider('jwt-token'),
+          operations: operations,
+          activeConversationIdResolver: () => null,
+          onEvents: (_) {},
+          cursorStore: cursorStore,
+        );
+
+        transport.start();
+        await cursorStore.readEntered.future.timeout(
+          const Duration(seconds: 2),
+        );
+        transport.stop();
+        cursorStore.releaseRead.complete('99-0');
+        await Future<void>.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
+        transport.dispose();
+
+        expect(
+          requestCount,
+          0,
+          reason: '旧 generation 的 cursor read 完成后不得再发 gateway 请求',
+        );
+      },
+    );
 
     test('long poll persists cursor and emits one resume recovery', () async {
       final cursorStore = _MemoryLongPollCursorStore();
@@ -261,15 +358,18 @@ void main() {
         ),
         authTokenProvider: const _TokenProvider('jwt-token'),
         operations: operations,
+        activeConversationIdResolver: () => 'conv_active',
         onEvents: (events) {
           delivered.addAll(events);
-          if (delivered.any((event) => event['eventId'] == 'event-2')) {
-            transport.stop();
-            if (!completed.isCompleted) completed.complete();
-          }
         },
         cursorStore: cursorStore,
       );
+      cursorStore.onWrite = (cursor) {
+        if (cursor == '101-0') {
+          transport.stop();
+          if (!completed.isCompleted) completed.complete();
+        }
+      };
 
       transport.start();
       await completed.future.timeout(const Duration(seconds: 2));
@@ -280,13 +380,123 @@ void main() {
         delivered.where((event) => event['type'] == 'Reconnected'),
         hasLength(1),
       );
+      expect(
+        delivered.singleWhere(
+          (event) => event['type'] == 'Reconnected',
+        )['conversationId'],
+        'conv_active',
+      );
       expect(cursorStore.values.values.single, '101-0');
+    });
+
+    test(
+      'long poll preserves cursor when reconnect recovery dispatch fails',
+      () async {
+        final credential = await RealtimeConnectionCredential.resolveHttp(
+          const _TokenProvider('jwt-token'),
+        );
+        final cursorStore = _MemoryLongPollCursorStore()
+          ..values[credential!.cursorPartition] = '99-0';
+        final delivered = <Map<String, dynamic>>[];
+        final failed = Completer<String>();
+        late LongPollTransport transport;
+        final operations = _RealtimeOperations(
+          onLongPoll: ({timeout, cursor}) async {
+            expect(cursor, '99-0');
+            return _longPollResponse(
+              nextCursor: '100-0',
+              transportResumed: true,
+            );
+          },
+        );
+        transport = LongPollTransport(
+          config: const RealtimeConfig(
+            wsUrl: 'ws://127.0.0.1:18080/realtime/ws',
+            longPollHoldSec: 1,
+          ),
+          authTokenProvider: const _TokenProvider('jwt-token'),
+          operations: operations,
+          activeConversationIdResolver: () => 'conv_active',
+          onEvents: (events) async {
+            delivered.addAll(events);
+            await Future<void>.delayed(Duration.zero);
+            throw StateError('gap recovery rejected');
+          },
+          cursorStore: cursorStore,
+        );
+        transport.onFirstTransportFailure = (reasonCode) {
+          transport.stop();
+          if (!failed.isCompleted) failed.complete(reasonCode);
+        };
+
+        transport.start();
+        final failureReason = await failed.future.timeout(
+          const Duration(seconds: 2),
+        );
+        await Future<void>.delayed(Duration.zero);
+        transport.dispose();
+
+        expect(failureReason, 'StateError');
+        expect(delivered, <Map<String, dynamic>>[
+          <String, dynamic>{
+            'type': 'Reconnected',
+            'conversationId': 'conv_active',
+          },
+        ]);
+        expect(
+          cursorStore.values[credential.cursorPartition],
+          '99-0',
+          reason: '恢复分发失败必须保留已提交游标，供下一次重试继续补洞',
+        );
+      },
+    );
+
+    test('stop during awaited event dispatch prevents cursor commit', () async {
+      final cursorStore = _MemoryLongPollCursorStore();
+      final callbackEntered = Completer<void>();
+      final releaseCallback = Completer<void>();
+      final operations = _RealtimeOperations(
+        onLongPoll: ({timeout, cursor}) async => _longPollResponse(
+          events: <realtime.RealtimeEventEnvelope>[
+            _syncHint('event-before-stop', 1),
+          ],
+          nextCursor: '100-0',
+        ),
+      );
+      final transport = LongPollTransport(
+        config: const RealtimeConfig(
+          wsUrl: 'ws://127.0.0.1:18080/realtime/ws',
+          longPollHoldSec: 1,
+        ),
+        authTokenProvider: const _TokenProvider('jwt-token'),
+        operations: operations,
+        activeConversationIdResolver: () => null,
+        onEvents: (_) async {
+          if (!callbackEntered.isCompleted) callbackEntered.complete();
+          await releaseCallback.future;
+        },
+        cursorStore: cursorStore,
+      );
+
+      transport.start();
+      await callbackEntered.future.timeout(const Duration(seconds: 2));
+      transport.stop();
+      releaseCallback.complete();
+      await Future<void>.delayed(Duration.zero);
+      transport.dispose();
+
+      expect(
+        cursorStore.values,
+        isEmpty,
+        reason: 'stop/dispose 后不得提交仍在 callback 中的旧 generation cursor',
+      );
     });
   });
 }
 
 final class _MemoryLongPollCursorStore implements LongPollCursorStore {
   final Map<String, String> values = <String, String>{};
+  void Function(String cursor)? onWrite;
 
   @override
   Future<String?> read(String partition) async => values[partition];
@@ -294,11 +504,28 @@ final class _MemoryLongPollCursorStore implements LongPollCursorStore {
   @override
   Future<void> write(String partition, String cursor) async {
     values[partition] = cursor;
+    onWrite?.call(cursor);
   }
 }
 
-typedef _LongPollHandler =
-    Future<realtime.LongPollResponse> Function({int? timeout, String? cursor});
+final class _BlockingReadCursorStore implements LongPollCursorStore {
+  final Completer<void> readEntered = Completer<void>();
+  final Completer<String?> releaseRead = Completer<String?>();
+
+  @override
+  Future<String?> read(String partition) {
+    if (!readEntered.isCompleted) readEntered.complete();
+    return releaseRead.future;
+  }
+
+  @override
+  Future<void> write(String partition, String cursor) async {}
+}
+
+typedef _LongPollHandler = Future<realtime.LongPollResponse> Function({
+  int? timeout,
+  String? cursor,
+});
 
 final class _RealtimeOperations implements RealtimeConnectionOperationGateway {
   const _RealtimeOperations({required this.onLongPoll});

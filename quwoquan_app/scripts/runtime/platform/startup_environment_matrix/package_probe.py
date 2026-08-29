@@ -114,8 +114,8 @@ def _launcher_handoff(
         environment,
         "--target",
         target or RUNTIME_TARGETS[environment],
-        "--launch-mode",
-        "matrix_verify",
+        "--launch-provenance",
+        "canonical_launcher",
     ]
     if trust_output:
         argv.extend(("--runtime-config-trust-output", trust_output))

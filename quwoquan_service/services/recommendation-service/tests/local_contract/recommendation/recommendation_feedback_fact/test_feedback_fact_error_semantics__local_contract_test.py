@@ -153,6 +153,7 @@ class _ExposureStore:
         return SimpleNamespace(
             exposure_id="exposure-001",
             subject_id="persona-001",
+            experiment_bucket="model",
         )
 
     def exists(self, exposure_id):

@@ -45,9 +45,13 @@ class StartupProbeParserContractTest(unittest.TestCase):
                     launcher,
                     environment,
                     target,
-                    launch_mode="startup-probe-test",
+                    launch_provenance="canonical_launcher",
                 )
                 self.assertEqual(handoff["buildProfile"], profile)
+                self.assertEqual(
+                    handoff["launchProvenance"],
+                    "canonical_launcher",
+                )
                 self.assertRegex(
                     handoff["runtimeConfigPackageDigest"],
                     r"^sha256:[0-9a-f]{64}$",

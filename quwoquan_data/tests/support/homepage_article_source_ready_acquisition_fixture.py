@@ -92,6 +92,7 @@ def _attribution(name: str) -> dict[str, object]:
         "propertyReleaseStatus": "not_required",
         "collectedAt": CAPTURED_AT,
         "takedownPolicy": "remove_on_verified_rights_or_source_dispute",
+        "derivedModifications": [],
     }
 
 

@@ -18,6 +18,11 @@ import time
 from pathlib import Path
 from typing import Any
 
+from canonical_app_instance.activation import (
+    FORBIDDEN_COMPILE_ENVIRONMENT_KEYS,
+    compile_environment,
+)
+
 
 APP_DIR = Path(__file__).resolve().parents[2]
 ROOT = APP_DIR.parent
@@ -29,11 +34,16 @@ TARGETS = {
     "gamma": "gamma-local",
     "prod": "prod-hosted",
 }
-ARTIFACTS = {
-    "android": APP_DIR / "build/app/outputs/flutter-apk/app-debug.apk",
-    "ios": APP_DIR / "build/ios/iphonesimulator/Runner.app",
-    "web": APP_DIR / "build/web",
-}
+def _artifact_path(platform: str, build_profile: str) -> Path:
+    if platform == "android":
+        return APP_DIR / (
+            f"build/app/outputs/flutter-apk/app-{build_profile}-debug.apk"
+        )
+    if platform == "ios":
+        return APP_DIR / "build/ios/iphonesimulator/Runner.app"
+    return APP_DIR / "build/web"
+
+
 SPEC_REFS = (
     (
         "specs/feature-tree/runtime/runtime-client-foundation/"
@@ -55,8 +65,8 @@ def _handoff(environment: str) -> dict[str, Any]:
             environment,
             "--target",
             TARGETS[environment],
-            "--launch-mode",
-            "matrix_build",
+            "--launch-provenance",
+            "canonical_launcher",
         ],
         cwd=APP_DIR,
         check=True,
@@ -101,17 +111,49 @@ def _retain_artifact(
 
 
 def _build_command(platform: str, handoff: dict[str, Any]) -> list[str]:
+    # flavor 只认 handoff 的 buildProfile：环境属于 runtime package，不是构建维度。
     command = ["flutter", "build"]
     if platform == "android":
-        command.extend(["apk", "--debug", "--flavor", str(handoff["environment"])])
+        command.extend(["apk", "--debug", "--flavor", str(handoff["buildProfile"])])
     elif platform == "ios":
         command.extend(
-            ["ios", "--simulator", "--debug", "--flavor", str(handoff["environment"])]
+            ["ios", "--simulator", "--debug", "--flavor", str(handoff["buildProfile"])]
         )
     else:
         command.extend(["web", "--debug"])
     command.extend(["--target", str(handoff["entrypoint"])])
     return command
+
+
+def _build_key(platform: str, handoff: dict[str, Any]) -> tuple[str, str]:
+    # Web is the single shared build product. Mobile has one product per trust
+    # domain; Alpha/Beta/Gamma therefore share the same nonprod bytes.
+    profile = "shared" if platform == "web" else str(handoff["buildProfile"])
+    return profile, platform
+
+
+def _compile_environment(
+    *,
+    build_profile: str,
+    platform: str,
+    ios_simulator_id: str,
+) -> dict[str, str]:
+    environment = compile_environment(os.environ)
+    environment["QWQ_APP_BUILD_CONTEXT"] = "package-only"
+    if platform == "web":
+        # Web is the shared product and must not inherit either mobile trust
+        # domain even when the invoking terminal last launched a device build.
+        for key in (
+            "QWQ_APP_BUILD_PROFILE",
+            "QWQ_ANDROID_RUNTIME_CONFIG_ASSET_ROOT",
+            "QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH",
+        ):
+            environment.pop(key, None)
+    else:
+        environment["QWQ_APP_BUILD_PROFILE"] = build_profile
+    if platform == "ios" and ios_simulator_id:
+        environment["QWQ_IOS_SIMULATOR_UDID"] = ios_simulator_id
+    return environment
 
 
 def main() -> int:
@@ -147,34 +189,26 @@ def main() -> int:
     report_dir = output_root / stamp
     report_dir.mkdir(parents=True, exist_ok=True)
     builds: list[dict[str, Any]] = []
+    handoffs = {environment: _handoff(environment) for environment in environments}
+    compiled: dict[tuple[str, str], dict[str, Any]] = {}
 
     for environment in environments:
-        handoff = _handoff(environment)
+        handoff = handoffs[environment]
         for platform in platforms:
+            key = _build_key(platform, handoff)
             command = _build_command(platform, handoff)
-            process_env = dict(os.environ)
-            process_env["QWQ_ENVIRONMENT"] = environment
-            process_env["QWQ_APP_RUNTIME_ENV"] = environment
-            process_env["QWQ_LAUNCH_TARGET"] = str(handoff["target"])
-            process_env["QWQ_APP_BUILD_CONTEXT"] = "package-only"
-            process_env["QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST"] = str(
-                handoff["runtimeConfigPackageDigest"]
+            existing = compiled.get(key)
+            if existing is not None and existing["command"] != command:
+                raise RuntimeError(
+                    f"build product {key} resolved conflicting compile commands"
+                )
+            if existing is not None:
+                continue
+            process_env = _compile_environment(
+                build_profile=key[0],
+                platform=platform,
+                ios_simulator_id=args.ios_simulator_id,
             )
-            process_env["QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST"] = str(
-                handoff["effectiveLaunchManifestDigest"]
-            )
-            runtime_values = handoff["runtimeConfigPackage"]["runtime"]
-            process_env["QWQ_APP_RECOVERY_BASE_URL"] = str(
-                runtime_values["gatewayBaseUrl"]
-            )
-            process_env["QWQ_APP_PUBLIC_WEB_URL"] = str(
-                runtime_values["publicWebBaseUrl"]
-            )
-            process_env["QWQ_APP_DOWNLOAD_BASE_URL"] = str(
-                runtime_values["appDownloadBaseUrl"]
-            )
-            if platform == "ios" and args.ios_simulator_id:
-                process_env["QWQ_IOS_SIMULATOR_UDID"] = args.ios_simulator_id
             started = time.monotonic()
             result = subprocess.run(
                 command,
@@ -182,7 +216,7 @@ def main() -> int:
                 env=process_env,
                 check=False,
             )
-            artifact = ARTIFACTS[platform]
+            artifact = _artifact_path(platform, str(handoff["buildProfile"]))
             succeeded = result.returncode == 0 and artifact.is_file()
             if artifact.is_dir():
                 succeeded = result.returncode == 0 and any(
@@ -193,9 +227,26 @@ def main() -> int:
                 retained_artifact = _retain_artifact(
                     artifact,
                     report_dir=report_dir,
-                    environment=environment,
+                    environment=f"build-{key[0]}",
                     platform=platform,
                 )
+            compiled[key] = {
+                "command": command,
+                "representativeEnvironment": environment,
+                "exitCode": result.returncode,
+                "elapsedMs": round((time.monotonic() - started) * 1000),
+                "artifact": retained_artifact or artifact,
+                "artifactSha256": (
+                    _sha256(retained_artifact) if retained_artifact else ""
+                ),
+                "status": "component_ready" if succeeded else "failed",
+            }
+
+    for environment in environments:
+        handoff = handoffs[environment]
+        for platform in platforms:
+            key = _build_key(platform, handoff)
+            product = compiled[key]
             builds.append(
                 {
                     "caseId": f"component-build:{environment}:{platform}",
@@ -204,7 +255,15 @@ def main() -> int:
                     "runtimeEnv": environment,
                     "runtimeTarget": handoff["target"],
                     "platform": platform,
+                    "buildProductKey": f"{key[0]}:{key[1]}",
+                    "representativeEnvironment": product[
+                        "representativeEnvironment"
+                    ],
                     "entrypoint": handoff["entrypoint"],
+                    "launchProvenance": handoff["launchProvenance"],
+                    "runtimeConfigSupplyMode": handoff[
+                        "runtimeConfigSupplyMode"
+                    ],
                     "runtimeConfigPackageDigest": handoff[
                         "runtimeConfigPackageDigest"
                     ],
@@ -212,13 +271,11 @@ def main() -> int:
                         "effectiveLaunchManifestDigest"
                     ],
                     "buildContext": "package-only",
-                    "exitCode": result.returncode,
-                    "elapsedMs": round((time.monotonic() - started) * 1000),
-                    "artifact": str(retained_artifact or artifact),
-                    "artifactSha256": (
-                        _sha256(retained_artifact) if retained_artifact else ""
-                    ),
-                    "status": "component_ready" if succeeded else "failed",
+                    "exitCode": product["exitCode"],
+                    "elapsedMs": product["elapsedMs"],
+                    "artifact": str(product["artifact"]),
+                    "artifactSha256": product["artifactSha256"],
+                    "status": product["status"],
                     "specRefs": list(SPEC_REFS),
                 }
             )
@@ -229,6 +286,7 @@ def main() -> int:
         "status": "component_ready" if failed == 0 else "failed",
         "required": len(builds),
         "executed": len(builds),
+        "compileExecutions": len(compiled),
         "skipped": 0,
         "failed": failed,
         "baselineId": args.baseline_id,

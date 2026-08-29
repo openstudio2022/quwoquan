@@ -16,6 +16,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -583,6 +585,30 @@ def apply_dns_records(*, allow_production_mutation: bool = False) -> dict[str, A
     except DnsProviderError as exc:
         raise DomainGovernanceError(str(exc)) from exc
 
+    # zone 级审计：对账以计划声明的 (name, type) 为边界，因此计划外的名字必须
+    # 由整 zone 列举兜住——控制台手工新增的入口要被看见，而不是静默通过。
+    # 服务商自带的 NS/SOA 属于已知豁免，与未登记入口分列。
+    zone_exempt_types = {"NS", "SOA"}
+    observed_exempt: list[dict[str, Any]] = []
+    try:
+        zone_records = provider.list_zone_records()
+    except DnsProviderError as exc:
+        raise DomainGovernanceError(str(exc)) from exc
+    for item in zone_records:
+        identity = (
+            str(item.get("name") or "").rstrip(".").lower(),
+            str(item.get("type") or "").upper(),
+        )
+        entry = {
+            "type": identity[1],
+            "name": identity[0],
+            "value": str(item.get("content") or ""),
+        }
+        if identity[1] in zone_exempt_types:
+            observed_exempt.append(entry)
+        elif identity not in grouped and entry not in observed_foreign:
+            observed_foreign.append(entry)
+
     return {
         "schema": "quwoquan.domain-governance-apply-receipt",
         "capturedAt": datetime.now(timezone.utc).isoformat(),
@@ -592,6 +618,7 @@ def apply_dns_records(*, allow_production_mutation: bool = False) -> dict[str, A
         # 计划外但同名同类型的记录（备案、第三方站点校验等）不被收敛触碰，只如实上报，
         # 让运维能看见 zone 里还有什么，而不是让它们静默消失。
         "observedUnmanaged": observed_foreign,
+        "observedExempt": observed_exempt,
         "pending": pending_dns_scopes(),
     }
 

@@ -15,6 +15,18 @@ APP_TEST_ROOT = ROOT / "quwoquan_app" / "test" / "local_contract"
 
 DEFAULT_FLUTTER_CAP = 40
 MIN_FLUTTER_CAP = 24
+PYTEST_CAP = 80
+
+DATA_LOCAL_CONTRACT_ROOT = "quwoquan_data/tests/local_contract"
+
+# 这四处实现面被 data local_contract 的每个子目录引用，影响面就是全域。给它们
+# 编一份「相关目录」清单只会假装收敛：清单外的目录同样会因这里的改动而红。
+DATA_CROSSCUTTING_PREFIXES = (
+    "quwoquan_data/scripts/verify/",
+    "quwoquan_data/scripts/cli.py",
+    "quwoquan_data/scripts/content/review/",
+    "quwoquan_data/scripts/content/templates/",
+)
 
 SMOKE_STATIC = [
     "verify-app-mock-isolation",
@@ -279,9 +291,18 @@ def select_go_services(paths: list[str]) -> list[str]:
     return services
 
 
-def select_pytest_paths(paths: list[str]) -> list[str]:
+def select_pytest_paths(paths: list[str]) -> tuple[list[str], list[str]]:
+    """返回 (本地跑的测试路径, 交给 Delivery Gate 的 data 全域回归)。
+
+    第二个返回值不是可选的诊断信息：commit gate 的硬顶是 15 分钟而 data
+    `local_contract` 全量约 21 分钟，横切实现面（`verify/`、`cli.py`、
+    `content/review/`、`content/templates/`）的影响面就是全域，本地无论怎么选都
+    覆盖不全。把它登记成 deferred 而不是选 80 条了事，是为了让「本地绿」不被读成
+    「data 全域绿」——后者只有 Delivery Gate 的四片能给。
+    """
     selected: list[str] = []
     seen: set[str] = set()
+    deferred: list[str] = []
     # worktree 生命周期治理的实现散在 hooks、cli/lib 与 policies 三处，决策表却只有一份。
     # 不显式映射的话，改 hook 或改阈值都不会触发它——最需要回归的两类改动恰好都漏掉。
     worktree_lifecycle_tests = (
@@ -408,6 +429,18 @@ def select_pytest_paths(paths: list[str]) -> list[str]:
             "quwoquan_data/scripts/governance/",
             ("quwoquan_data/tests/local_contract/governance",),
         ),
+        (
+            "quwoquan_data/scripts/content/homepage/",
+            ("quwoquan_data/tests/local_contract/homepage",),
+        ),
+        (
+            "quwoquan_data/scripts/content/post/",
+            ("quwoquan_data/tests/local_contract/post",),
+        ),
+        (
+            "quwoquan_data/scripts/content/filter_catalog/",
+            ("quwoquan_data/tests/local_contract/filter_catalog",),
+        ),
     )
     for path in paths:
         for root in (
@@ -422,6 +455,9 @@ def select_pytest_paths(paths: list[str]) -> list[str]:
                     selected.append(path)
         if "/tests/" in path:
             continue
+        if any(path.startswith(prefix) for prefix in DATA_CROSSCUTTING_PREFIXES):
+            if DATA_LOCAL_CONTRACT_ROOT not in deferred:
+                deferred.append(DATA_LOCAL_CONTRACT_ROOT)
         for source_prefix, test_targets in source_mappings:
             if path.startswith(source_prefix):
                 for test_target in test_targets:
@@ -430,21 +466,24 @@ def select_pytest_paths(paths: list[str]) -> list[str]:
                     seen.add(test_target)
                     selected.append(test_target)
                 break
-    return selected[:80]
+    if len(selected) > PYTEST_CAP:
+        deferred.extend(selected[PYTEST_CAP:])
+    return selected[:PYTEST_CAP], deferred
 
 
 def build_plan(paths: list[str], cap: int) -> dict:
     flags = classify(paths)
     flutter_tests, deferred = select_flutter_tests(paths, cap)
+    pytest_paths, pytest_deferred = select_pytest_paths(paths)
     return {
         "changed_files": paths,
         "flags": flags,
         "static_checks": static_checks(flags),
         "flutter_tests": flutter_tests,
-        "deferred_to_ci": deferred,
+        "deferred_to_ci": deferred + pytest_deferred,
         "flutter_cap": cap,
         "go_services": select_go_services(paths),
-        "pytest_paths": select_pytest_paths(paths),
+        "pytest_paths": pytest_paths,
         "run_portal": flags["has_portal"] and not (
             flags["has_app"] or flags["has_service"] or flags["has_data"]
         ),

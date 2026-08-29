@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import argparse
 import json
-from collections.abc import Mapping
+from collections import Counter
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from core.control_types import (
     ExecutionStage,
     ExecutionStateStatus,
     QueueJobStage,
+    RecoveryNextAction,
     ReliableTaskDispatchStatus,
 )
 from core.schema import assert_valid
@@ -19,6 +21,7 @@ from content.execution import store
 from content.execution.agent.reliabletask_dispatch import (
     dispatch_reliabletask_checkpoint,
 )
+from content.execution.runtime_contract import canonical_sha256
 from content.execution.closure.pool_delivery import (
     validate_pool_delivery_intent_for_job,
 )
@@ -32,16 +35,147 @@ from content.execution.workspace import load_frozen_execution_manifest
 _DELIVERY_ONLY_INVALID = "DATA.POOL.DELIVERY_ONLY_INVALID"
 
 
-def _result(**values: Any) -> dict[str, Any]:
+_TERMINAL_RESULTS = frozenset({"appended", "replayed"})
+
+
+def _object_result(
+    *,
+    execution_id: str,
+    object_ref: str,
+    intent_id: str | None,
+    result: str,
+    canonical_object: Mapping[str, Any] | None = None,
+    issue_codes: Sequence[str] = (),
+    next_action: RecoveryNextAction = RecoveryNextAction.NONE,
+) -> dict[str, Any]:
+    """Build one per-object row; reentry is present exactly when work remains."""
+
+    settled = result in _TERMINAL_RESULTS and canonical_object is not None
+    closure_digest = (
+        str(canonical_object["objectClosureDigest"]) if settled else ""
+    )
+    own_intents = [intent_id] if intent_id else []
+    reentry = {
+        "executionId": execution_id,
+        "batchInputDigest": _batch_digest(own_intents),
+        "intentIds": own_intents,
+    }
+    return {
+        "objectRef": object_ref,
+        "intentId": intent_id,
+        "transactionInputDigest": (
+            closure_digest if closure_digest.startswith("sha256:") else None
+        ),
+        "result": result,
+        "canonicalObject": dict(canonical_object) if settled else None,
+        "issueCodes": [] if settled else sorted(set(issue_codes)),
+        "nextAction": (
+            RecoveryNextAction.NONE.value if settled else next_action.value
+        ),
+        "reentryRef": None if settled else reentry,
+    }
+
+
+def _batch_digest(intent_ids: Sequence[str | None]) -> str:
+    return canonical_sha256(sorted({str(value) for value in intent_ids if value}))
+
+
+def _result(
+    *,
+    execution_id: str,
+    recovery_mode: str,
+    object_results: Sequence[Mapping[str, Any]],
+    issue_codes: Sequence[str] = (),
+) -> dict[str, Any]:
+    """Project one drain report whose every aggregate derives from the rows.
+
+    Counts, status and next action are derived rather than passed in: a caller
+    that computes them separately becomes a second truth source that can drift
+    from `objectResults`, which is the only per-object evidence a re-entering
+    operator can act on.
+    """
+
+    rows = [dict(row) for row in object_results]
+    by_result = Counter(str(row["result"]) for row in rows)
+    pending = by_result["pending"]
+    blocked = by_result["blocked"]
+    settled_rows = [row for row in rows if str(row["result"]) in _TERMINAL_RESULTS]
+    canonical_objects = [
+        dict(row["canonicalObject"])
+        for row in settled_rows
+        if isinstance(row.get("canonicalObject"), Mapping)
+    ]
+    intent_ids = sorted({str(row["intentId"]) for row in rows if row.get("intentId")})
+    batch_input_digest = _batch_digest(intent_ids)
+    if pending:
+        status = "waiting"
+    elif blocked:
+        status = "blocked"
+    else:
+        status = "completed"
+    unsettled_actions = [
+        str(row["nextAction"]) for row in rows if row.get("reentryRef") is not None
+    ]
+    next_action = RecoveryNextAction.NONE.value
+    if status != "completed":
+        next_action = (
+            unsettled_actions[0]
+            if unsettled_actions
+            else RecoveryNextAction.RESUME_DELIVERY.value
+        )
     report = {
         "schema": "quwoquan_data.pool_delivery_drain_result",
-        **values,
+        "executionId": execution_id,
+        "recoveryMode": recovery_mode,
+        "executionStatePreserved": True,
+        "status": status,
+        # attempted/qualified 只数进入交付的对象；excluded 是评审已裁定不交付的，
+        # 把它算进尝试会让通过率的分母虚高。
+        "attemptedCount": len(rows) - by_result["excluded"],
+        "completedCount": len(settled_rows),
+        "qualifiedCount": len(rows) - by_result["excluded"],
+        "discardedCount": by_result["excluded"] + blocked,
+        "total": len(rows),
+        "appendedCount": by_result["appended"],
+        "replayedCount": by_result["replayed"],
+        "pendingCount": pending,
+        "excludedCount": by_result["excluded"],
+        "blockedCount": blocked,
+        "poolDelta": by_result["appended"],
+        "batchInputDigest": batch_input_digest,
+        "recordSetDigest": canonical_sha256(
+            [
+                dict(row["poolRecord"])
+                for row in canonical_objects
+                if isinstance(row.get("poolRecord"), Mapping)
+            ]
+        ),
+        "objectResults": rows,
+        "intentIds": intent_ids,
+        "canonicalObjects": canonical_objects,
+        "issueCodes": sorted(
+            {
+                *(str(code) for code in issue_codes if str(code).strip()),
+                *(
+                    str(code)
+                    for row in rows
+                    for code in row.get("issueCodes") or ()
+                    if str(code).strip()
+                ),
+            }
+        ),
+        "nextAction": next_action,
+        "reentryRef": {
+            "executionId": execution_id,
+            "batchInputDigest": batch_input_digest,
+            "intentIds": intent_ids,
+        },
     }
     assert_valid(
         report,
         "execution",
         "pool_delivery_drain_result",
-        label=f"pool delivery drain:{report.get('executionId', '')}",
+        label=f"pool delivery drain:{execution_id}",
     )
     return report
 
@@ -91,10 +225,20 @@ def _drain_reviewed_delivery_only(
         raise ValueError(
             f"{_DELIVERY_ONLY_INVALID}: review closure has no qualified object"
         )
-    intents: list[str] = []
-    canonical_objects: list[dict[str, str]] = []
-    issue_codes: list[str] = []
+    # 评审已裁定丢弃的对象也进 objectResults：只留一个批次级 discardedCount 时，
+    # 重入的运维方无法知道是哪几个对象被排除在本次交付之外。
+    rows: list[dict[str, Any]] = [
+        _object_result(
+            execution_id=execution_id,
+            object_ref=str(verdict.object_ref),
+            intent_id=None,
+            result="excluded",
+            next_action=RecoveryNextAction.REPAIR_EVIDENCE,
+        )
+        for verdict in closure.discarded
+    ]
     for verdict in closure.qualified:
+        intent_id: str | None = None
         try:
             intent, _path = write_pool_delivery_intent(
                 execution_id,
@@ -102,32 +246,131 @@ def _drain_reviewed_delivery_only(
                 object_ref=verdict.object_ref,
                 content_object_dir=verdict.publish_ref,
             )
-            intents.append(str(intent["intentId"]))
-            canonical_objects.append(
-                promote_post_object(
-                    execution_id,
-                    verdict.publish_ref,
-                    pool_delivery_intent=intent,
-                )
+            intent_id = str(intent["intentId"])
+            canonical_object = promote_post_object(
+                execution_id,
+                verdict.publish_ref,
+                pool_delivery_intent=intent,
             )
         except (OSError, RuntimeError, TypeError, ValueError) as exc:
             if is_hard_publish_failure(exc):
                 raise
-            issue_codes.append(publish_issue_code(exc) or PUBLISH_APPLY_FAILED)
-    completed = len(canonical_objects)
-    publish_discarded = len(closure.qualified) - completed
+            rows.append(
+                _object_result(
+                    execution_id=execution_id,
+                    object_ref=str(verdict.object_ref),
+                    intent_id=intent_id,
+                    result="blocked",
+                    issue_codes=[publish_issue_code(exc) or PUBLISH_APPLY_FAILED],
+                    next_action=RecoveryNextAction.REPAIR_EVIDENCE,
+                )
+            )
+            continue
+        rows.append(
+            _object_result(
+                execution_id=execution_id,
+                object_ref=str(verdict.object_ref),
+                intent_id=intent_id,
+                result=str(canonical_object.get("admissionResult") or "appended"),
+                canonical_object=canonical_object,
+            )
+        )
     return _result(
-        executionId=execution_id,
-        recoveryMode="reviewed_delivery_only",
-        executionStatePreserved=True,
-        status="completed" if completed else "blocked",
-        attemptedCount=len(closure.qualified),
-        completedCount=completed,
-        qualifiedCount=len(closure.qualified),
-        discardedCount=len(closure.discarded) + publish_discarded,
-        intentIds=sorted(intents),
-        canonicalObjects=canonical_objects,
-        issueCodes=sorted(set(issue_codes)),
+        execution_id=execution_id,
+        recovery_mode="reviewed_delivery_only",
+        object_results=rows,
+    )
+
+
+def _canonical_object_from_applied_evidence(job: Any) -> Mapping[str, Any] | None:
+    """Read one succeeded publish job's canonical object back from its evidence.
+
+    The fleet applies the object transaction in its own process, so the drain
+    report can only speak about a succeeded job by re-reading the durable apply
+    report. Returning absent (rather than a synthesized row) keeps a job whose
+    evidence is unreadable in a blocked state instead of claiming a pool delta.
+    """
+
+    from core.io import read_json
+    from core.paths import OUTPUT_ROOT
+
+    reference = str(job.result_envelope_ref or "").strip()
+    if not reference:
+        return None
+    path = OUTPUT_ROOT / reference
+    if not path.is_file():
+        return None
+    try:
+        applied = read_json(path)
+    except (OSError, TypeError, ValueError):
+        return None
+    if not isinstance(applied, Mapping):
+        return None
+    canonical_ref = str(applied.get("canonicalObjectRef") or "").strip()
+    transaction_id = str(applied.get("transactionId") or "").strip()
+    if not canonical_ref.startswith(("entities/", "posts/")) or not transaction_id:
+        return None
+    return {
+        "transactionId": transaction_id,
+        "applyReportRef": reference,
+        "canonicalObjectRef": canonical_ref,
+        "canonicalObjectSha256": str(applied.get("canonicalObjectSha256") or ""),
+        "objectClosureDigest": str(applied.get("objectClosureDigest") or ""),
+        "admissionResult": str(applied.get("admissionResult") or "appended"),
+    }
+
+
+def _job_object_result(
+    execution_id: str,
+    job: Any,
+    intent: Mapping[str, Any],
+    *,
+    failure_code: str | None = None,
+) -> dict[str, Any]:
+    """Project one publish job's durable state into a per-object drain row."""
+
+    from core.control_types import QueueJobState
+
+    intent_id = str(intent["intentId"])
+    object_ref = str(job.ref)
+    if job.state is QueueJobState.SUCCEEDED:
+        canonical_object = _canonical_object_from_applied_evidence(job)
+        if canonical_object is None:
+            return _object_result(
+                execution_id=execution_id,
+                object_ref=object_ref,
+                intent_id=intent_id,
+                result="blocked",
+                issue_codes=[failure_code or _DELIVERY_ONLY_INVALID],
+                next_action=RecoveryNextAction.REPAIR_EVIDENCE,
+            )
+        return _object_result(
+            execution_id=execution_id,
+            object_ref=object_ref,
+            intent_id=intent_id,
+            result=str(canonical_object["admissionResult"]),
+            canonical_object=canonical_object,
+        )
+    if job.state in {QueueJobState.BLOCKED, QueueJobState.DEAD}:
+        issue = job.last_issue
+        return _object_result(
+            execution_id=execution_id,
+            object_ref=object_ref,
+            intent_id=intent_id,
+            result="blocked",
+            issue_codes=[
+                failure_code
+                or (issue.code.value if issue is not None else _DELIVERY_ONLY_INVALID)
+            ],
+            next_action=RecoveryNextAction.REPAIR_EVIDENCE,
+        )
+    return _object_result(
+        execution_id=execution_id,
+        object_ref=object_ref,
+        intent_id=intent_id,
+        result="pending",
+        issue_codes=[failure_code] if failure_code else (),
+        next_action=RecoveryNextAction.RESUME_DELIVERY,
     )
 
 
@@ -177,55 +420,37 @@ def drain_pool_delivery(
             raise ValueError(
                 "pool delivery execution has no current ReliableTask receipt"
             )
-        completed = int(report.succeeded)
-        # 通过的回执已经用 canonical 受理口径闭合，没有需要投影的失败归因；
-        # 只有未通过的回执才把每个 job 的 typed failure code 带出来。
-        issue_codes = (
-            []
-            if report.passed
-            else sorted(
-                {
-                    str(outcome.failure_code or _DELIVERY_ONLY_INVALID)
-                    for outcome in report.outcomes
-                    if outcome.status != "succeeded"
-                }
+        # 通过的回执已经用 canonical 受理口径闭合；未通过的回执把每个 job 的
+        # typed failure code 带回它自己那一行，不再压成一个批次级集合。
+        failure_by_ref = {
+            str(getattr(outcome, "ref", "") or ""): str(
+                getattr(outcome, "failure_code", "") or _DELIVERY_ONLY_INVALID
             )
-        )
+            for outcome in report.outcomes
+            if getattr(outcome, "status", "") != "succeeded"
+        }
         return _result(
-            executionId=normalized,
-            recoveryMode="frozen_publish_jobs",
-            executionStatePreserved=True,
-            status=("completed" if completed else "blocked"),
-            attemptedCount=sum(outcome.attempts for outcome in report.outcomes),
-            completedCount=completed,
-            qualifiedCount=len(intents),
-            discardedCount=max(0, len(intents) - completed),
-            intentIds=sorted(str(intent["intentId"]) for intent in intents),
-            canonicalObjects=[],
-            issueCodes=issue_codes,
+            execution_id=normalized,
+            recovery_mode="frozen_publish_jobs",
+            object_results=[
+                _job_object_result(
+                    normalized,
+                    job,
+                    intent,
+                    failure_code=failure_by_ref.get(str(job.ref)),
+                )
+                for job, intent in zip(jobs, intents, strict=True)
+            ],
         )
-    dispatch_status = dispatch.status.value
-    if (
-        dispatch.status is not ReliableTaskDispatchStatus.WAITING
-        and dispatch.completed_count > 0
-    ):
-        dispatch_status = ReliableTaskDispatchStatus.COMPLETED.value
+    dispatch_issue_codes = sorted({issue.code.value for issue in dispatch.issues})
     return _result(
-        executionId=normalized,
-        recoveryMode="frozen_publish_jobs",
-        executionStatePreserved=True,
-        status=dispatch_status,
-        attemptedCount=dispatch.attempted_count,
-        completedCount=dispatch.completed_count,
-        qualifiedCount=len(intents),
-        discardedCount=(
-            0
-            if dispatch.status is ReliableTaskDispatchStatus.WAITING
-            else max(0, len(intents) - dispatch.completed_count)
-        ),
-        intentIds=sorted(str(intent["intentId"]) for intent in intents),
-        canonicalObjects=[],
-        issueCodes=sorted({issue.code.value for issue in dispatch.issues}),
+        execution_id=normalized,
+        recovery_mode="frozen_publish_jobs",
+        object_results=[
+            _job_object_result(normalized, job, intent)
+            for job, intent in zip(jobs, intents, strict=True)
+        ],
+        issue_codes=dispatch_issue_codes,
     )
 
 

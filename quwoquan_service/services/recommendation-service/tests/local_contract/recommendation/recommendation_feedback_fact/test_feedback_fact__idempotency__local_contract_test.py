@@ -45,6 +45,7 @@ def _fact() -> RecommendationFeedbackFact:
         source_event_id="behavior-001",
         exposure_id="exposure-001",
         feed_request_id="request-001",
+        experiment_bucket="model",
         subject_id="account-001",
         persona_id="persona-001",
         target_type="post",

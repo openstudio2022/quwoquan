@@ -7,6 +7,7 @@ class _IntersectionCardModel {
     required this.targetType,
     required this.targetId,
     required this.coverUrl,
+    this.coverBinding = const MediaDeliveryBinding.absent(),
     required this.categoryLabel,
     required this.categoryIcon,
     required this.title,
@@ -21,6 +22,9 @@ class _IntersectionCardModel {
   final _IntersectionTargetType targetType;
   final String targetId;
   final String coverUrl;
+
+  /// 封面的 typed 交付绑定（DEC-033）；缺席时退回 [coverUrl] 的公开路。
+  final MediaDeliveryBinding coverBinding;
   final String categoryLabel;
   final IconData categoryIcon;
   final String title;
@@ -100,6 +104,7 @@ class _NetworkResultCardModel {
     required this.title,
     required this.supportingText,
     required this.coverUrl,
+    this.coverBinding = const MediaDeliveryBinding.absent(),
     required this.footerLabel,
     required this.eyebrowText,
     required this.likeCount,
@@ -110,6 +115,9 @@ class _NetworkResultCardModel {
   final String title;
   final String supportingText;
   final String coverUrl;
+
+  /// 封面的 typed 交付绑定（DEC-033）；缺席时退回 [coverUrl] 的公开路。
+  final MediaDeliveryBinding coverBinding;
   final String footerLabel;
   final String eyebrowText;
   final int likeCount;
@@ -122,6 +130,12 @@ class _NetworkResultCardModel {
     ];
     return _NetworkResultCardModel(
       postId: item.postId,
+      // 交付形态取自搜索投影声明（DEC-033），不从 URL 形态反推。
+      coverBinding: MediaDeliveryBinding(
+        assetId: item.coverAssetId?.trim() ?? '',
+        accessMode: item.coverAccessMode,
+        publicUrl: item.coverUrl ?? '',
+      ),
       title: item.title?.trim().isNotEmpty == true
           ? item.title!.trim()
           : (item.highlightText?.trim().isNotEmpty == true

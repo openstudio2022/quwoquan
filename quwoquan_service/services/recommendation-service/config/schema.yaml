@@ -59,7 +59,6 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-  default: standalone
 - key: sys.recommendation-service.redis.general.password
   type: string
   scope: workload
@@ -135,7 +134,6 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-  default: standalone
 - key: sys.recommendation-service.redis.rec.password
   type: string
   scope: workload

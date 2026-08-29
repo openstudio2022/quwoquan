@@ -62,6 +62,8 @@ const Set<String> runtimePackageTrustEnvelopeKeys = <String>{
   'runtimeConfigPackageDigest',
   'runtimeConfigTrustEnvelopeDigest',
   'effectiveLaunchManifestDigest',
+  'launchProvenance',
+  'runtimeConfigSupplyMode',
 };
 
 const Set<String> runtimePackageForbiddenContentKeys = <String>{
@@ -312,7 +314,6 @@ class ResolvedRuntimePackage {
     'environment': environment,
     'buildProfile': buildProfile,
     'target': target,
-    'launchMode': 'external_runtime_package',
     'launchPolicy': launchPolicy,
     'payloadDigest': payloadDigest,
     'signatureKeyId': signatureKeyId,

@@ -532,8 +532,9 @@ func (h *ContentHandler) handleGetFeed(w http.ResponseWriter, r *http.Request) {
 		SubCategory:     params.SubCategory,
 		Cursor:          params.Cursor,
 		Limit:           params.Limit,
-		FeedRequestID:   params.FeedRequestId,
-		BlockedKeywords: ResolveBlockedKeywords(r),
+		FeedRequestID:     params.FeedRequestId,
+		BlockedKeywords:   ResolveBlockedKeywords(r),
+		ResearchPrincipal: requestHasResearchRole(r),
 	})
 	if err != nil {
 		writeHTTPError(w, r, err)

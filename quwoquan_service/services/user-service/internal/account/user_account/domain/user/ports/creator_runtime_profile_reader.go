@@ -22,13 +22,23 @@ type CreatorWorkView struct {
 // CreatorRuntimeProfileView is UserAccount's consumer-owned public profile
 // port. Full release/import state remains private to CreatorRuntimeProfile.
 type CreatorRuntimeProfileView struct {
-	CreatorID            string
-	PersonaID            string
-	Handle               string
-	DisplayName          string
-	Headline             string
-	Bio                  string
-	AvatarURL            string
+	CreatorID   string
+	PersonaID   string
+	Handle      string
+	DisplayName string
+	Headline    string
+	Bio         string
+	AvatarURL   string
+	// AvatarAssetID 是头像的媒体资产标识（DEC-033，契约
+	// creator_runtime_profile/fields.yaml avatarAssetId）。signed_grant 交付时
+	// App 以它换取短签；空串表示缺席（读面按契约 NULLABLE 出 null），
+	// 禁止以 personaId 冒充媒体资产标识。
+	AvatarAssetID string
+	// AvatarAccessMode 是头像交付访问模式（契约 PersonaProfileView
+	// avatarAccessMode，enum 唯一真相源 contracts/metadata/_shared/types.yaml
+	// MediaDeliveryAccessMode: public|signed_grant）。由 composition 层依据
+	// 导入时按 release authority 断言写入的存储事实单点派生；空串表示缺席。
+	AvatarAccessMode     string
 	AvatarVersion        int64
 	CoverURL             string
 	PublicProfileTagRefs []string

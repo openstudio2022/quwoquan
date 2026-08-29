@@ -21,7 +21,7 @@ from content.release.canonical.object_transaction_contract import (
     _safe_rel,
 )
 from core.content_library import MEDIA_KIND, admit_library_entry
-from core.media_asset_url import sha256_file
+from core.media_asset_url import release_media_delivery_key, sha256_file
 from core.release_layout import payload_file, payload_root
 from core.source_digest import SourceDefinitionSnapshot
 
@@ -172,11 +172,19 @@ def copy_reviewed_closure_media(
             raise ObjectTransactionError(
                 f"reviewed closure adoption media asset {index} is invalid"
             )
+        try:
+            delivery_key = release_media_delivery_key(row)
+        except ValueError as exc:
+            raise ObjectTransactionError(
+                f"reviewed closure adoption media asset {index} is invalid: {exc}"
+            ) from exc
         public_slice = _safe_rel(
-            str(row.get("publicSliceKey") or ""),
-            label=f"mediaAssets[{index}].publicSliceKey",
+            delivery_key,
+            label=f"mediaAssets[{index}].deliveryKey",
         ).as_posix()
-        if public_slice in expected_slices:
+        # Research CAS keys are content-addressed and may be shared by several
+        # assets; derived public slices stay exclusive (DEC-031).
+        if public_slice in expected_slices and "publicSliceKey" in row:
             raise ObjectTransactionError(
                 f"reviewed closure adoption media slice duplicated: {public_slice}"
             )

@@ -355,7 +355,14 @@ def run_once(
             if dart_attempt and dart_attempt.get("attemptId")
             else attempt_id
         ),
-        "launchMode": dart_attempt.get("launchMode") if dart_attempt else None,
+        "launchProvenance": (
+            dart_attempt.get("launchProvenance") if dart_attempt else None
+        ),
+        "runtimeConfigSupplyMode": (
+            dart_attempt.get("runtimeConfigSupplyMode")
+            if dart_attempt
+            else None
+        ),
         "hotRestart": dart_attempt.get("hotRestart") if dart_attempt else None,
         "runtimeConfigurationState": (
             dart_attempt.get("configurationState") if dart_attempt else None
@@ -575,11 +582,19 @@ def main() -> int:
             "safeTerminalMs": max(safe_values) if safe_values else None,
             "reportedSafeTerminalMs": max(safe_values) if safe_values else None,
             "nativeReceivedSafeTerminalMs": max(safe_values) if safe_values else None,
-            "launchMode": next(
+            "launchProvenance": next(
                 (
-                    sample.get("launchMode")
+                    sample.get("launchProvenance")
                     for sample in samples
-                    if sample.get("launchMode")
+                    if sample.get("launchProvenance")
+                ),
+                None,
+            ),
+            "runtimeConfigSupplyMode": next(
+                (
+                    sample.get("runtimeConfigSupplyMode")
+                    for sample in samples
+                    if sample.get("runtimeConfigSupplyMode")
                 ),
                 None,
             ),

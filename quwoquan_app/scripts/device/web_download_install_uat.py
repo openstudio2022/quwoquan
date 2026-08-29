@@ -29,6 +29,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+sys.dont_write_bytecode = True
+
 APP_DIR = Path(__file__).resolve().parents[2]
 ROOT = APP_DIR.parent
 if str(ROOT) not in sys.path:

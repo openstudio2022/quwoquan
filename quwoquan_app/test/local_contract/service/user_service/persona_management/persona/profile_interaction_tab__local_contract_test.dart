@@ -475,6 +475,7 @@ ProfileInteractionActivityViewData _interaction({
     targetContentId: 'post_$id',
     targetContentType: targetContentType,
     targetContentSummary: '旧字段不应作为主句',
+    targetAvailability: 'active',
     displayPersonaId: displayPersonaId,
     displayName: displayName,
     displayAvatarUrl: displayAvatarUrl,

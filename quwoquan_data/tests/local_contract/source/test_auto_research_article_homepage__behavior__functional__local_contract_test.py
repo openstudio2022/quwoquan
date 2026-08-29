@@ -336,14 +336,19 @@ def test_parallel_image_auto_research_writes_availability_report():
     assert availability["readyTargets"] == ["可用景区", "缺源景区"], availability
     assert availability["ineligibleTargets"] == [], availability
     assert [row["entityId"] for row in availability["imageSoftWarnings"]] == ["缺源景区"]
-    assert report["throughput"]["maxWorkers"] == 2
+    # 冻结上限与实测峰值各自呈现，不合并成一个 worker 数。
+    assert report["throughput"]["frozenMaxConcurrentWorkers"] == 2
+    assert report["throughput"]["peakConcurrentWorkers"] <= 2
     assert progress_events[0]["status"] == "running"
     assert progress_events[-1]["status"] == "succeeded"
-    assert progress_events[-1]["completedCount"] == 2
+    assert progress_events[-1]["terminalEntityCount"] == 2
     progress = read_json(execution_root(task) / "_shared" / "auto_research_progress.json")
     assert progress["status"] == "succeeded"
-    assert progress["entityCount"] == 2
-    assert progress["workers"] == 2
+    assert progress["candidateEntityCount"] == 2
+    assert progress["terminalEntityCount"] == 2
+    assert progress["frozenMaxConcurrentWorkers"] == 2
+    # 终止后最后一次心跳的事实仍在文档里。
+    assert progress["lastHeartbeatEpochSeconds"] >= 1
     assert not (execution_root(task) / "_shared" / "source_unavailable_targets.json").exists()
     missing_image_plan = (
         resolve_entity_object_dir(task, "缺源景区", etype_hint="景区")
@@ -394,7 +399,14 @@ def test_parallel_auto_research_persists_incremental_report_on_interrupt(monkeyp
                 "ineligibleTargets": [],
                 "ineligibleTargetCount": 0,
             },
-            "throughput": {"maxWorkers": 2, "entityCount": 1, "elapsedSeconds": 10.0},
+            "throughput": {
+                "factKind": "single_run_observation",
+                "frozenMaxConcurrentWorkers": 2,
+                "peakConcurrentWorkers": 1,
+                "entityCount": 1,
+                "elapsedSeconds": 10.0,
+                "entitiesPerMinute": 6.0,
+            },
         },
     )
 
@@ -438,7 +450,8 @@ def test_parallel_auto_research_persists_incremental_report_on_interrupt(monkeyp
     assert [item["entityId"] for item in persisted["updated"]] == ["既有景区", "快景区"]
     progress = read_json(shared / "auto_research_progress.json")
     assert progress["status"] == "interrupted"
-    assert progress["completedCount"] == 1
+    assert progress["terminalEntityCount"] == 1
+    assert progress["candidateEntityCount"] == 2
 
 
 def test_commercial_article_plans_only_registry_admitted_sources():

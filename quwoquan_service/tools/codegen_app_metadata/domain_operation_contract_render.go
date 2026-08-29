@@ -59,7 +59,12 @@ func renderDomainOperationContract(
 	}
 	sort.Strings(enumNames)
 	for _, name := range enumNames {
-		renderDomainWireEnum(&output, name, spec.EnumMembers[name])
+		renderDomainWireEnum(
+			&output,
+			name,
+			spec.EnumMembers[name],
+			spec.EnumUnknownMembers[name],
+		)
 	}
 
 	modelNames := make([]string, 0, len(spec.Models))
@@ -133,11 +138,12 @@ func renderDomainWireEnum(
 	output *strings.Builder,
 	name string,
 	members []canonicalRequestEnumMember,
+	unknownMember string,
 ) {
 	fmt.Fprintf(output, "enum %s {\n", name)
 	for index, member := range members {
 		terminator := ","
-		if index == len(members)-1 {
+		if index == len(members)-1 && unknownMember == "" {
 			terminator = ";"
 		}
 		fmt.Fprintf(
@@ -148,8 +154,24 @@ func renderDomainWireEnum(
 			terminator,
 		)
 	}
-	fmt.Fprintf(output, "\n  const %s(this.wireName);\n\n", name)
-	output.WriteString("  final String wireName;\n\n")
+	if unknownMember != "" {
+		fmt.Fprintf(output, "  %s(\"\");\n", unknownMember)
+		fmt.Fprintf(output, "\n  const %s(this._wireName);\n\n", name)
+		output.WriteString("  final String _wireName;\n\n")
+		output.WriteString("  String get wireName => switch (this) {\n")
+		fmt.Fprintf(
+			output,
+			"    %s.%s => throw StateError('%s.%s cannot be encoded'),\n",
+			name,
+			unknownMember,
+			name,
+			unknownMember,
+		)
+		output.WriteString("    _ => _wireName,\n  };\n\n")
+	} else {
+		fmt.Fprintf(output, "\n  const %s(this.wireName);\n\n", name)
+		output.WriteString("  final String wireName;\n\n")
+	}
 	fmt.Fprintf(output, "  static %s fromWire(Object? value, String path) {\n", name)
 	output.WriteString("    return switch (value) {\n")
 	for _, member := range members {
@@ -161,12 +183,11 @@ func renderDomainWireEnum(
 			member.DartMember,
 		)
 	}
-	output.WriteString(
-		"      _ => throw FormatException('$path has an invalid enum value'),\n" +
-			"    };\n" +
-			"  }\n" +
-			"}\n\n",
-	)
+	if unknownMember != "" {
+		fmt.Fprintf(output, "      String() => %s.%s,\n", name, unknownMember)
+	}
+	output.WriteString("      _ => throw FormatException('$path has an invalid enum value'),\n")
+	output.WriteString("    };\n  }\n}\n\n")
 }
 
 func renderDomainResponseModel(

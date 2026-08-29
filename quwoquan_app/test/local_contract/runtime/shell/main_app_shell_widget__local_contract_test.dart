@@ -1017,7 +1017,8 @@ void main() {
 
       expect(find.byType(LoginPage), findsOneWidget);
 
-      await tester.tap(find.byIcon(CupertinoIcons.xmark));
+      // REQ-012：根步骤顶栏为返回箭头，箭头即执行宿主关闭策略。
+      await tester.tap(find.byIcon(CupertinoIcons.back));
       await _pumpRouteTransition(tester);
 
       expect(find.byType(LoginPage), findsNothing);
@@ -1053,7 +1054,8 @@ void main() {
 
       expect(find.byType(LoginPage), findsOneWidget);
 
-      await tester.tap(find.byIcon(CupertinoIcons.xmark));
+      // REQ-012：根步骤顶栏为返回箭头，箭头即执行宿主关闭策略。
+      await tester.tap(find.byIcon(CupertinoIcons.back));
       await _pumpRouteTransition(tester);
 
       expect(find.byType(LoginPage), findsNothing);
@@ -1146,7 +1148,8 @@ void main() {
 
       expect(find.byType(LoginPage), findsOneWidget);
 
-      await tester.tap(find.byIcon(CupertinoIcons.xmark));
+      // REQ-012：根步骤顶栏为返回箭头，箭头即执行宿主关闭策略。
+      await tester.tap(find.byIcon(CupertinoIcons.back));
       await _pumpRouteTransition(tester);
 
       expect(find.byType(LoginPage), findsNothing);
@@ -1174,7 +1177,8 @@ void main() {
       expect(find.byType(LoginPage), findsOneWidget);
       expect(find.text('CHAT_PAGE'), findsNothing);
 
-      await tester.tap(find.byIcon(CupertinoIcons.xmark));
+      // REQ-012：根步骤顶栏为返回箭头，箭头即执行宿主关闭策略。
+      await tester.tap(find.byIcon(CupertinoIcons.back));
       await _pumpRouteTransition(tester);
 
       expect(find.byType(LoginPage), findsNothing);
@@ -1203,7 +1207,8 @@ void main() {
       expect(find.text('CHAT_PAGE'), findsNothing);
 
       // 关闭登录页：必须 go 到安全兜底（首页），禁止 pop 回 /chat 再次命中守卫。
-      await tester.tap(find.byIcon(CupertinoIcons.xmark));
+      // REQ-012：根步骤顶栏为返回箭头，箭头即执行宿主关闭策略。
+      await tester.tap(find.byIcon(CupertinoIcons.back));
       await _pumpRouteTransition(tester);
 
       expect(find.byType(LoginPage), findsNothing);
@@ -1231,7 +1236,8 @@ void main() {
       expect(find.byType(LoginPage), findsOneWidget);
       expect(find.text('GATHERING_CREATE_PAGE'), findsNothing);
 
-      await tester.tap(find.byIcon(CupertinoIcons.xmark));
+      // REQ-012：根步骤顶栏为返回箭头，箭头即执行宿主关闭策略。
+      await tester.tap(find.byIcon(CupertinoIcons.back));
       await _pumpRouteTransition(tester);
 
       expect(find.byType(LoginPage), findsNothing);
@@ -1273,7 +1279,8 @@ void main() {
       expect(find.byType(LoginPage), findsOneWidget);
       expect(find.text('CREATE_PAGE'), findsNothing);
 
-      await tester.tap(find.byIcon(CupertinoIcons.xmark));
+      // REQ-012：根步骤顶栏为返回箭头，箭头即执行宿主关闭策略。
+      await tester.tap(find.byIcon(CupertinoIcons.back));
       await _pumpRouteTransition(tester);
 
       expect(find.byType(LoginPage), findsNothing);

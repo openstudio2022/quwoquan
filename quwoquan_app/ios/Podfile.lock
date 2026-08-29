@@ -294,7 +294,7 @@ SPEC CHECKSUMS:
   nanopb: fad817b59e0457d11a5dfbde799381cd727c1275
   package_info_plus: c0502532a26c7662a62a356cebe2692ec5fe4ec4
   permission_handler_apple: ee2fe0fd04551b304eb002714ff067c371c822ed
-  photo_manager: d8a1055c2d3ee24fc300461c66e0defdec58b3d6
+  photo_manager: c6f81af0b066feb6467c9070e970c446028e2f2c
   PromisesObjC: 752c3227f599e3467650e47ea36f433eeb10c273
   QWQVendorAlipaySDK: 4b70402b79be6d1a42e0da6d562d4d54a711f9c8
   QWQVendorQQOpenSDK: 97087f6c520288e3e2c1959f931ba76728a2819e

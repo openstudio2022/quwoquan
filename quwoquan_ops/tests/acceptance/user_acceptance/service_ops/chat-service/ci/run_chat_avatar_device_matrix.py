@@ -26,6 +26,8 @@ def _find_repo_root() -> Path:
 
 from typing import Any
 
+sys.dont_write_bytecode = True
+
 CHAT_AVATAR_SUPPORT_DIR = Path(__file__).resolve().parents[1] / "support"
 if str(CHAT_AVATAR_SUPPORT_DIR) not in sys.path:
     sys.path.insert(0, str(CHAT_AVATAR_SUPPORT_DIR))

@@ -5,7 +5,6 @@ import importlib.util
 import sys
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[4]
 MODULE_PATH = ROOT / "quwoquan_ops" / "cli" / "feature_tree.py"
 SPEC = importlib.util.spec_from_file_location("feature_tree", MODULE_PATH)
@@ -103,7 +102,7 @@ def test_feature_context_outputs_parent_chain_acceptance_and_open(
     )
     monkeypatch.setattr(ft_context, "REPO_ROOT", root)
     monkeypatch.setattr(ft_context, "TREE_ROOT", tree)
-    monkeypatch.setattr(ft_gitio, "git_changed_paths", lambda: [])
+    monkeypatch.setattr(ft_gitio, "git_changed_paths", list)
     outputs: dict[str, str] = {}
 
     def capture_output(name: str, content: str) -> Path:
@@ -120,7 +119,10 @@ def test_feature_context_outputs_parent_chain_acceptance_and_open(
 
     # L3 目标输出完整父链、相关验收与当前 OPEN。
     exit_code = feature_tree.command_context(
-        argparse.Namespace(target="specs/feature-tree/domain/capability/story/spec.md")
+        argparse.Namespace(
+            target="specs/feature-tree/domain/capability/story/spec.md",
+            format="expanded",
+        )
     )
     capsys.readouterr()
 
@@ -133,6 +135,135 @@ def test_feature_context_outputs_parent_chain_acceptance_and_open(
     # 相关验收与当前 OPEN 一并输出。
     assert "GWT-001 演示验收" in context_md
     assert "OPEN-001 未完成主路径" in context_md
+
+
+def test_l2_dec_owner_rejects_same_priority_ambiguity(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t2
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/spec.md#sit-004
+    root = build_tree(tmp_path)
+    tree = root / "specs/feature-tree"
+    code_path = root / "quwoquan_app/lib/design_system/pageflip/geometry.dart"
+    write(code_path, "class Geometry {}\n")
+    (tree / "domain/spec.md").write_text(
+        "# L1 Domain Service：领域 (`domain`)\n\n"
+        "## 7. 工程归属\n\n"
+        "- App：`quwoquan_app/lib/design_system/pageflip`\n",
+        encoding="utf-8",
+    )
+    for capability in ("capability", "other-capability"):
+        write(
+            tree / f"domain/{capability}/spec.md",
+            f"# L2 Business Capability：能力 (`{capability}`)\n",
+        )
+        write(
+            tree / f"domain/{capability}/story/spec.md",
+            "# L3 Story：故事 (`story`)\n\n"
+            '<a id="req-003"></a>\n'
+            "### REQ-003 要求\n\n- 行为。\n\n"
+            '<a id="gwt-003"></a>\n'
+            "### GWT-003 验收\n\n- THEN 结果。\n",
+        )
+        write(
+            tree / f"domain/{capability}/design.md",
+            f"# L2 Design：能力 (`{capability}`)\n\n"
+            '<a id="dec-002"></a>\n'
+            "### DEC-002 同优先级归属\n\n"
+            "- 适用工程根：`quwoquan_app/lib/design_system/pageflip`\n"
+            "- 影响 Story：[`story`](./story/spec.md)\n"
+            "- 关联要求：`REQ-003`\n"
+            "- 关联验收：`GWT-003`\n",
+        )
+    monkeypatch.setattr(ft_context, "REPO_ROOT", root)
+    monkeypatch.setattr(ft_context, "TREE_ROOT", tree)
+
+    try:
+        feature_tree.resolve_target(code_path, feature_tree.discover_nodes())
+    except ValueError as error:
+        assert "多个 L2 DEC 同优先级认领" in str(error)
+    else:
+        raise AssertionError("same-priority L2 DEC ownership must be blocked")
+
+    try:
+        feature_tree.resolve_target(
+            root / "quwoquan_app/lib/unowned/object.dart",
+            feature_tree.discover_nodes(),
+        )
+    except ValueError as error:
+        assert str(error).startswith("GATE_BLOCK:")
+        assert "未被任何 L1 工程归属认领" in str(error)
+    else:
+        raise AssertionError("unowned target must be blocked")
+
+
+def test_repository_pageflip_roots_resolve_to_one_story_with_exact_anchors() -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t1
+    nodes = feature_tree.discover_nodes()
+    targets = (
+        "quwoquan_app/lib/design_system/pageflip/geometry.dart",
+        (
+            "quwoquan_app/lib/service/content_service/content/post/presentation/"
+            "article_reader/pageflip/host/article_read_only_book_deck.dart"
+        ),
+        (
+            "quwoquan_app/test/local_contract/design_system/pageflip/"
+            "pageflip_core__local_contract_test.dart"
+        ),
+        (
+            "quwoquan_app/test/local_contract/service/content_service/content/post/"
+            "presentation/article_reader/pageflip/host/"
+            "article_read_only_book_deck__local_contract_test.dart"
+        ),
+    )
+
+    resolutions = [feature_tree.resolve_target_details(target, nodes) for target in targets]
+
+    assert {
+        resolution.node.rel for resolution in resolutions
+    } == {
+        (
+            "specs/feature-tree/discovery-content/dual-rail-discovery-redesign/"
+            "works-immersive-viewer/spec.md"
+        )
+    }
+    assert {
+        resolution.design_ownership.anchor
+        for resolution in resolutions
+        if resolution.design_ownership is not None
+    } == {"dec-002"}
+    assert all(
+        resolution.design_ownership is not None
+        and resolution.design_ownership.requirement_anchors
+        == (
+            "req-003",
+            "req-009",
+            "req-011",
+            "req-016",
+            "req-017",
+            "req-018",
+            "req-019",
+            "req-020",
+            "req-021",
+        )
+        and resolution.design_ownership.acceptance_anchors
+        == (
+            "gwt-003",
+            "gwt-010",
+            "gwt-015",
+            "gwt-016",
+            "gwt-017",
+            "gwt-018",
+            "gwt-019",
+            "gwt-020",
+        )
+        for resolution in resolutions
+    )
+    args = feature_tree.build_parser().parse_args(
+        ["context", "--target", targets[0]]
+    )
+    assert args.format == "manifest"
 
 
 def test_code_path_resolves_from_l1_engineering_ownership(tmp_path: Path, monkeypatch) -> None:
@@ -166,7 +297,7 @@ def test_agent_asset_path_resolves_from_l1_agent_ownership(tmp_path: Path, monke
     l1_spec.write_text(
         "# L1 Domain Service：领域 (`domain`)\n\n"
         "## 7. 工程归属\n\n"
-        "- Agent：`.agents`、`.claude`、`.codex`、`.cursor`\n",
+        "- Agent：`.agents`、`.codex`、`.cursor`\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(ft_context, "REPO_ROOT", root)

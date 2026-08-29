@@ -18,8 +18,8 @@ services:
       CONFIG_VERSION: "${QWQ_COMPOSE_CHAT_SERVICE_CONFIG_VERSION:?QWQ_COMPOSE_CHAT_SERVICE_CONFIG_VERSION is required}"
       IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:?immutable image version is required}"
       CHAT_SERVICE_ADDR: ":18081"
-      MONGO_URI: mongodb://mongodb:27017
-      MONGO_DATABASE: quwoquan_chat
+      CHAT_MONGO_URI: mongodb://mongodb:27017
+      CHAT_MONGO_DATABASE: quwoquan_chat
       CHAT_REDIS_REALTIME_ADDR: redis:6379
       CHAT_REDIS_GENERAL_ADDR: redis:6379
       CHAT_REDIS_RELIABLE_TASK_ADDR: redis:6379

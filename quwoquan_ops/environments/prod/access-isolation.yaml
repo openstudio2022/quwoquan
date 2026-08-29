@@ -13,13 +13,23 @@ target: prod-hosted
 
 # 公网地址仅是 SSH 管理端点；它不属于 App runtime topology，且不得进入
 # runtime.yaml、environment_runtime.yaml 或任何 public base。
+#
+# 主机搬迁 / 弹性公网 IP 变更时，同一部署事实有两个互不替代的投影，必须同步：
+#   1. 管理面：本文件的 management.sshHost 与对应 hosts[].sshHost（受版本控制，
+#      可审计），改完跑 `python3 quwoquan_ops/gate/verify_prod_plane_access_isolation.py`。
+#   2. 数据面：公网 DNS 的 A 记录地址，经受保护变量 QWQ_PROD_EDGE_IPV4 注入
+#      `python3 quwoquan_ops/cli/domain_governance.py apply`，地址本身不入仓库。
+# 两者当前指向同一台主机，但语义独立（管理端点 vs 公开服务地址），不得互相引用
+# 或合并为一个字段。DNS 记录 TTL 为 600s，切换后按该 TTL 收敛。
+# QWQ_PROD_EDGE_IPV4 走受保护变量不是因为地址是机密（公网 DNS 本就可查），而是
+# 换机时只改注入值、不产生仓库改动；管理端点相反，需要受版本控制以便审计。
 management:
-  sshHost: "118.31.239.122"
+  sshHost: "8.211.190.91"
   purpose: ssh-only-management
   defaultHostId: prod-host-01
   hosts:
     - id: prod-host-01
-      sshHost: "118.31.239.122"
+      sshHost: "8.211.190.91"
       planes: [service, edge]
 
 # prevalidate / gray / prod 是同一 prod-hosted 目标内的 deployment instance，

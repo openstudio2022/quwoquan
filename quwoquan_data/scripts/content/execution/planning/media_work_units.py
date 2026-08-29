@@ -225,6 +225,153 @@ def project_media_work_units(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class MediaWorkUnitObjectBinding:
+    """一个 workUnit 到一个 content object 的唯一身份绑定。
+
+    brief 与 content object 必须共享 ``object_identity()`` 返回的同一映射，
+    identity 只在此处物化一次，调用方不得各自拼装。
+    """
+
+    work_unit_id: str
+    carrier: str
+    coverage_target_name: str
+    coverage_target_type: str
+    receipt_ref: str
+    asset_id: str
+    content_sha256: str
+
+    def object_identity(self) -> dict[str, str]:
+        return {"workUnitId": self.work_unit_id}
+
+    def object_ref(self, *, target: str) -> str:
+        normalized = str(target or "").strip()
+        if not normalized:
+            raise ValueError("media work-unit object ref requires a coverage target")
+        short = self.work_unit_id.removeprefix(_SHA256_PREFIX)[:12]
+        return f"{normalized}_{self.carrier}_{short}".replace("/", "_")
+
+
+@dataclass(frozen=True, slots=True)
+class MediaWorkUnitObjectBindingSet:
+    bindings: tuple[MediaWorkUnitObjectBinding, ...]
+    exclusions: tuple[dict[str, Any], ...]
+
+    def by_work_unit_id(self) -> dict[str, MediaWorkUnitObjectBinding]:
+        return {binding.work_unit_id: binding for binding in self.bindings}
+
+
+def _object_binding_exclusion(
+    raw: Mapping[str, Any],
+    *,
+    code: str,
+) -> dict[str, Any]:
+    """把无法唯一映射的单资产写成 typed exclusion，不牵连同批其它资产。"""
+
+    candidate = MediaWorkUnitCandidate.from_mapping(raw)
+    evidence = candidate.evidence_dict()
+    candidate_names = list(candidate.candidate_names)
+    return {
+        "workUnitCandidateId": _digest(
+            {**evidence, "candidateNames": candidate_names}
+        ),
+        **evidence,
+        "candidateNames": candidate_names,
+        "code": code,
+    }
+
+
+def media_work_unit_object_bindings(
+    rows: Iterable[Mapping[str, Any]],
+    *,
+    carrier: str,
+) -> MediaWorkUnitObjectBindingSet:
+    """把冻结 workUnit 投影为逐一对应的 content object 身份绑定。
+
+    无法唯一映射的资产（缺 canonical coverage target、workUnitId 摘要漂移或
+    同一 identity 重复出现）只写该资产的 typed exclusion，其余资产照常绑定。
+    """
+
+    if carrier not in {"image", "video"}:
+        raise ValueError("media work-unit carrier must be image or video")
+    bindings: list[MediaWorkUnitObjectBinding] = []
+    exclusions: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    seen_assets: set[tuple[str, str]] = set()
+    for raw in rows:
+        if not isinstance(raw, Mapping):
+            raise TypeError("media workUnit rows must contain objects")
+        if str(raw.get("carrier") or "").strip() != carrier:
+            continue
+        candidate = MediaWorkUnitCandidate.from_mapping(raw)
+        target = raw.get("coverageTarget")
+        if not isinstance(target, Mapping):
+            exclusions.append(_object_binding_exclusion(raw, code=_UNMAPPED))
+            continue
+        try:
+            target_name = _required_text(target, "name")
+            target_type = _required_text(target, "entityType")
+        except TypeError:
+            exclusions.append(_object_binding_exclusion(raw, code=_UNMAPPED))
+            continue
+        stable = {
+            **candidate.evidence_dict(),
+            "coverageTarget": {"name": target_name, "entityType": target_type},
+        }
+        try:
+            work_unit_id = _sha256(raw, "workUnitId")
+        except (TypeError, ValueError):
+            exclusions.append(_object_binding_exclusion(raw, code=_AMBIGUOUS))
+            continue
+        asset_key = (candidate.receipt_ref, candidate.asset_id)
+        if work_unit_id != _digest(stable) or work_unit_id in seen_ids or asset_key in seen_assets:
+            exclusions.append(_object_binding_exclusion(raw, code=_AMBIGUOUS))
+            continue
+        seen_ids.add(work_unit_id)
+        seen_assets.add(asset_key)
+        bindings.append(
+            MediaWorkUnitObjectBinding(
+                work_unit_id=work_unit_id,
+                carrier=carrier,
+                coverage_target_name=target_name,
+                coverage_target_type=target_type,
+                receipt_ref=candidate.receipt_ref,
+                asset_id=candidate.asset_id,
+                content_sha256=candidate.content_sha256,
+            )
+        )
+    return MediaWorkUnitObjectBindingSet(
+        bindings=tuple(bindings),
+        exclusions=tuple(exclusions),
+    )
+
+
+def work_unit_object_binding(
+    candidate: Mapping[str, Any],
+    *,
+    carrier: str,
+) -> MediaWorkUnitObjectBinding | None:
+    """解析单个 plan candidate 声明的 workUnit 身份。
+
+    ``None`` 表示该 candidate 未声明 workUnit 身份（quota-only 模式）；
+    声明了但无法唯一映射时抛错，绝不静默产出无身份对象。
+    """
+
+    declared = candidate.get("workUnitId")
+    if declared is None:
+        return None
+    binding_set = media_work_unit_object_bindings(
+        [{**dict(candidate), "carrier": carrier}],
+        carrier=carrier,
+    )
+    if len(binding_set.bindings) != 1:
+        raise ValueError(
+            "media plan candidate declares a workUnitId that cannot be bound to "
+            "exactly one content object"
+        )
+    return binding_set.bindings[0]
+
+
 def work_units_by_target(spec: Mapping[str, Any], *, carrier: str) -> dict[str, tuple[dict[str, Any], ...]]:
     content = spec.get("content") if isinstance(spec.get("content"), Mapping) else {}
     grouped: dict[str, list[dict[str, Any]]] = {}
@@ -308,9 +455,13 @@ def validate_frozen_work_unit_exclusions(rows: object) -> tuple[dict[str, Any], 
 
 __all__ = [
     "MediaWorkUnitCandidate",
+    "MediaWorkUnitObjectBinding",
+    "MediaWorkUnitObjectBindingSet",
     "MediaWorkUnitProjection",
+    "media_work_unit_object_bindings",
     "project_media_work_units",
     "validate_frozen_work_unit_exclusions",
     "validate_frozen_work_units",
+    "work_unit_object_binding",
     "work_units_by_target",
 ]

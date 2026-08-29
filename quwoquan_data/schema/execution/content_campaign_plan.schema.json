@@ -319,8 +319,20 @@
           "type": "array",
           "items": { "$ref": "campaign_external_input_ref.schema.json" }
         },
-        "externalInputsDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
-      }
+        "externalInputsDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "acquisitionRootRef": { "type": "string", "minLength": 1 }
+      },
+      "allOf": [
+        {
+          "$comment": "ref 只带 kind 子根，基准根必须与 ref 同行；缺基准根时 capsule 物化只能取默认根，冻结出的 ref 在那里指不到任何字节。",
+          "if": {
+            "properties": { "externalInputRefs": { "minItems": 1 } },
+            "required": ["externalInputRefs"]
+          },
+          "then": { "required": ["acquisitionRootRef"] },
+          "else": { "not": { "required": ["acquisitionRootRef"] } }
+        }
+      ]
     }
   }
 }

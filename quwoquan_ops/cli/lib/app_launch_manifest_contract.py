@@ -7,7 +7,6 @@ from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
-from pathlib import Path
 from typing import Any
 from .app_identity import (
     build_profile_for_environment,
@@ -24,13 +23,9 @@ from .app_runtime_config_signing import (
     decode_keyring,
     verify_signature,
 )
-from .common import load_json_yaml
+from .generated.app_launch_contract import APP_LAUNCH_MANIFEST
 
 
-ROOT = Path(__file__).resolve().parents[3]
-LAUNCH_MANIFEST_METADATA = (
-    ROOT / "quwoquan_service/contracts/metadata/_shared/app_launch_manifest.yaml"
-)
 _RUNTIME_CONFIG_TRUST_ENVELOPE_FIELDS = {
     "schema",
     "buildProfile",
@@ -44,20 +39,15 @@ class LaunchManifestContractError(ValueError):
 
 
 def load_launch_manifest_contract(
-    path: Path = LAUNCH_MANIFEST_METADATA,
+    override: object | None = None,
 ) -> dict[str, Any]:
-    """Load and structurally validate the canonical launch-manifest metadata."""
+    """Load the generated immutable projection; runtime metadata overrides are forbidden."""
 
-    if not path.is_file():
+    if override is not None:
         raise LaunchManifestContractError(
-            f"launch manifest metadata is missing: {path}"
+            "runtime launch-manifest overrides are forbidden; regenerate the App launch contract"
         )
-    try:
-        decoded = load_json_yaml(path)
-    except (OSError, RuntimeError, UnicodeError, ValueError) as exc:
-        raise LaunchManifestContractError(
-            f"launch manifest metadata cannot be loaded: {exc}"
-        ) from exc
+    decoded = deepcopy(APP_LAUNCH_MANIFEST)
     if not isinstance(decoded, dict):
         raise LaunchManifestContractError("launch manifest metadata must be an object")
     if decoded.get("schema_id") != "app_launch_manifest":
@@ -982,4 +972,3 @@ def validate_handoff_against_metadata(
         if any(transport.get(field) not in {"", None} for field in transport_fields):
             issues.append("transport evidence must be empty when transport.required=false")
     return list(dict.fromkeys(issues))
-

@@ -244,6 +244,21 @@ def validate_research_isolation_pass_proof(
         ),
         (signed.get("issuanceOperation"), "media issuance", frozenset({200})),
         (signed.get("accessOperation"), "media access", frozenset({200, 206})),
+        (
+            signed.get("rangeAccessOperation"),
+            "media range access",
+            frozenset({200, 206}),
+        ),
+        (
+            signed.get("forgedSignatureOperation"),
+            "forged signature denial",
+            frozenset({401, 403}),
+        ),
+        (
+            signed.get("tamperedExpiryOperation"),
+            "tampered expiry denial",
+            frozenset({401, 403}),
+        ),
         (signed.get("auditReadbackOperation"), "media audit", frozenset({200})),
         (readback.get("operation"), "positive readback", frozenset({200})),
     )

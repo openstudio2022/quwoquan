@@ -10,16 +10,20 @@ import json
 import os
 import re
 import sys
-import urllib.error
 import urllib.parse
-import urllib.request
 from pathlib import Path
 from typing import Any
+
+sys.dont_write_bytecode = True
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from quwoquan_ops.ci.lib.github_actions_api import (
+    GithubActionsApiError,
+    request_json,
+)
 from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import validate_manifest
 from quwoquan_ops.gate.verify_git_branch_policy import load_policy
 
@@ -29,21 +33,16 @@ SHA256_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
 def _api_get(repository: str, path: str, token: str) -> Any:
-    request = urllib.request.Request(
-        f"https://api.github.com/repos/{repository}{path}",
-        headers={
-            "Accept": "application/vnd.github+json",
-            "Authorization": f"Bearer {token}",
-            "X-GitHub-Api-Version": "2022-11-28",
-        },
-    )
     try:
-        with urllib.request.urlopen(request, timeout=10) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except (OSError, urllib.error.HTTPError, json.JSONDecodeError) as error:
+        payload, _ = request_json(
+            f"https://api.github.com/repos/{repository}{path}",
+            token,
+        )
+        return payload
+    except GithubActionsApiError as error:
         raise RuntimeError(
             "OPS.BRANCH.AUTHORITY_UNAVAILABLE: GitHub governance query failed "
-            f"for {path}: {error}"
+            f"for {path}: {error.reason}"
         ) from error
 
 

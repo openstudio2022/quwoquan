@@ -5,38 +5,154 @@ enum AssistantErrorCode {
   runUnauthorized('ASSISTANT.USER.run_unauthorized', '请先登录后使用助手能力', 401),
   runNotFound('ASSISTANT.USER.run_not_found', '本次执行不存在或已失效', 404),
   runInvalidArgument('ASSISTANT.USER.run_invalid_argument', '执行请求参数有误', 400),
-  runStateConflict('ASSISTANT.USER.run_state_conflict', '本次任务状态已经变化，请刷新后重试', 409),
-  deviceActionUnavailable('ASSISTANT.SYSTEM.device_action_unavailable', '当前设备暂不支持此操作，请手动完成', 0),
-  deviceActionPermissionDenied('ASSISTANT.USER.device_action_permission_denied', '请在系统设置中允许此设备操作后重试', 0),
+  runStateConflict(
+    'ASSISTANT.USER.run_state_conflict',
+    '本次任务状态已经变化，请刷新后重试',
+    409,
+  ),
+  deviceActionUnavailable(
+    'ASSISTANT.SYSTEM.device_action_unavailable',
+    '当前设备暂不支持此操作，请手动完成',
+    0,
+  ),
+  deviceActionPermissionDenied(
+    'ASSISTANT.USER.device_action_permission_denied',
+    '请在系统设置中允许此设备操作后重试',
+    0,
+  ),
   deviceActionFailed('ASSISTANT.SYSTEM.device_action_failed', '设备操作未完成，请重试', 0),
-  delegatedApprovalInvalid('ASSISTANT.USER.delegated_approval_invalid', '本次确认已失效，请刷新后重新确认', 403),
-  deviceActionPermitInvalid('ASSISTANT.USER.device_action_permit_invalid', '设备操作许可与当前动作不匹配', 403),
-  deviceActionPermitExpired('ASSISTANT.USER.device_action_permit_expired', '设备操作许可已过期，请重新确认', 410),
-  deviceActionPermitReplayed('ASSISTANT.USER.device_action_permit_replayed', '该设备操作结果已经提交', 409),
-  intersectionEvidenceNotFound('ASSISTANT.USER.intersection_evidence_not_found', '这条交集线索已失效或不可访问', 404),
-  intersectionEvidenceUnavailable('ASSISTANT.MIDDLEWARE.intersection_evidence_unavailable', '交集证据暂时无法核验，请稍后重试', 503),
-  runIdempotencyConflict('ASSISTANT.USER.run_idempotency_conflict', '请求重复提交，请刷新后重试', 409),
-  runStorageUnavailable('ASSISTANT.SYSTEM.run_storage_unavailable', '助手执行服务暂不可用，请稍后重试', 503),
-  runPolicyUnavailable('ASSISTANT.SYSTEM.run_policy_unavailable', '助手策略暂不可用，请稍后重试', 503),
-  runReasoningProfileUnavailable('ASSISTANT.SYSTEM.run_reasoning_profile_unavailable', '当前推理配置无法满足本次任务要求', 0),
-  runSkillPackageUnavailable('ASSISTANT.SYSTEM.run_skill_package_unavailable', '助手技能包暂不可用，请稍后重试', 503),
-  runSkillDisabled('ASSISTANT.USER.run_skill_disabled', '该技能在当前场景未启用，请检查个人或群聊技能设置', 409),
-  skillConsentRequired('ASSISTANT.USER.skill_consent_required', '该能力需要先授权后使用', 403),
-  connectorCapabilityRequired('ASSISTANT.USER.connector_capability_required', '请先连接并授权所需的外部应用能力', 0),
-  connectorGatewayUnavailable('ASSISTANT.SYSTEM.connector_gateway_unavailable', '外部应用连接状态暂时无法确认，请稍后重试', 0),
-  streamUnavailable('ASSISTANT.SYSTEM.stream_unavailable', '流式服务暂不可用，请稍后重试', 503),
+  delegatedApprovalInvalid(
+    'ASSISTANT.USER.delegated_approval_invalid',
+    '本次确认已失效，请刷新后重新确认',
+    403,
+  ),
+  deviceActionPermitInvalid(
+    'ASSISTANT.USER.device_action_permit_invalid',
+    '设备操作许可与当前动作不匹配',
+    403,
+  ),
+  deviceActionPermitExpired(
+    'ASSISTANT.USER.device_action_permit_expired',
+    '设备操作许可已过期，请重新确认',
+    410,
+  ),
+  deviceActionPermitReplayed(
+    'ASSISTANT.USER.device_action_permit_replayed',
+    '该设备操作结果已经提交',
+    409,
+  ),
+  intersectionEvidenceNotFound(
+    'ASSISTANT.USER.intersection_evidence_not_found',
+    '这条交集线索已失效或不可访问',
+    404,
+  ),
+  intersectionEvidenceUnavailable(
+    'ASSISTANT.MIDDLEWARE.intersection_evidence_unavailable',
+    '交集证据暂时无法核验，请稍后重试',
+    503,
+  ),
+  runIdempotencyConflict(
+    'ASSISTANT.USER.run_idempotency_conflict',
+    '请求重复提交，请刷新后重试',
+    409,
+  ),
+  runStorageUnavailable(
+    'ASSISTANT.SYSTEM.run_storage_unavailable',
+    '助手执行服务暂不可用，请稍后重试',
+    503,
+  ),
+  runPolicyUnavailable(
+    'ASSISTANT.SYSTEM.run_policy_unavailable',
+    '助手策略暂不可用，请稍后重试',
+    503,
+  ),
+  runReasoningProfileUnavailable(
+    'ASSISTANT.SYSTEM.run_reasoning_profile_unavailable',
+    '当前推理配置无法满足本次任务要求',
+    0,
+  ),
+  runSkillPackageUnavailable(
+    'ASSISTANT.SYSTEM.run_skill_package_unavailable',
+    '助手技能包暂不可用，请稍后重试',
+    503,
+  ),
+  runSkillDisabled(
+    'ASSISTANT.USER.run_skill_disabled',
+    '该技能在当前场景未启用，请检查个人或群聊技能设置',
+    409,
+  ),
+  skillConsentRequired(
+    'ASSISTANT.USER.skill_consent_required',
+    '该能力需要先授权后使用',
+    403,
+  ),
+  connectorCapabilityRequired(
+    'ASSISTANT.USER.connector_capability_required',
+    '请先连接并授权所需的外部应用能力',
+    0,
+  ),
+  connectorGatewayUnavailable(
+    'ASSISTANT.SYSTEM.connector_gateway_unavailable',
+    '外部应用连接状态暂时无法确认，请稍后重试',
+    0,
+  ),
+  streamUnavailable(
+    'ASSISTANT.SYSTEM.stream_unavailable',
+    '流式服务暂不可用，请稍后重试',
+    503,
+  ),
   upstreamTimeout('ASSISTANT.MIDDLEWARE.upstream_timeout', '请求超时，请稍后重试', 0),
-  modelProviderUnavailable('ASSISTANT.MIDDLEWARE.model_provider_unavailable', '助手模型服务暂不可用，请稍后重试', 0),
+  modelProviderUnavailable(
+    'ASSISTANT.MIDDLEWARE.model_provider_unavailable',
+    '助手模型服务暂不可用，请稍后重试',
+    0,
+  ),
   toolUnavailable('ASSISTANT.MIDDLEWARE.tool_unavailable', '所需能力暂不可用，请稍后重试', 0),
-  runExecutionFailed('ASSISTANT.SYSTEM.run_execution_failed', '本次任务执行失败，请稍后重试', 0),
-  publicSearchProviderUnavailable('ASSISTANT.MIDDLEWARE.public_search_provider_unavailable', '公开信息检索暂不可用，请稍后重试', 0),
-  webTargetRejected('ASSISTANT.USER.web_target_rejected', '该网页目标不符合公开只读访问规则', 0),
-  webFetchUnavailable('ASSISTANT.MIDDLEWARE.web_fetch_unavailable', '公开网页暂时无法读取，请稍后重试', 0),
-  webBudgetExhausted('ASSISTANT.MIDDLEWARE.web_budget_exhausted', '本次任务的网页探索预算已用完', 0),
-  webBudgetUnavailable('ASSISTANT.SYSTEM.web_budget_unavailable', '网页探索预算状态暂时不可用，请稍后重试', 0),
-  webEvidenceUnavailable('ASSISTANT.SYSTEM.web_evidence_unavailable', '网页证据暂时无法安全保存或读取，请稍后重试', 0),
-  weatherProviderUnavailable('ASSISTANT.MIDDLEWARE.weather_provider_unavailable', '天气数据暂不可用，请稍后重试', 0),
-  financeProviderUnavailable('ASSISTANT.MIDDLEWARE.finance_provider_unavailable', '金融行情数据暂不可用，请稍后重试', 0),
+  runExecutionFailed(
+    'ASSISTANT.SYSTEM.run_execution_failed',
+    '本次任务执行失败，请稍后重试',
+    0,
+  ),
+  publicSearchProviderUnavailable(
+    'ASSISTANT.MIDDLEWARE.public_search_provider_unavailable',
+    '公开信息检索暂不可用，请稍后重试',
+    0,
+  ),
+  webTargetRejected(
+    'ASSISTANT.USER.web_target_rejected',
+    '该网页目标不符合公开只读访问规则',
+    0,
+  ),
+  webFetchUnavailable(
+    'ASSISTANT.MIDDLEWARE.web_fetch_unavailable',
+    '公开网页暂时无法读取，请稍后重试',
+    0,
+  ),
+  webBudgetExhausted(
+    'ASSISTANT.MIDDLEWARE.web_budget_exhausted',
+    '本次任务的网页探索预算已用完',
+    0,
+  ),
+  webBudgetUnavailable(
+    'ASSISTANT.SYSTEM.web_budget_unavailable',
+    '网页探索预算状态暂时不可用，请稍后重试',
+    0,
+  ),
+  webEvidenceUnavailable(
+    'ASSISTANT.SYSTEM.web_evidence_unavailable',
+    '网页证据暂时无法安全保存或读取，请稍后重试',
+    0,
+  ),
+  weatherProviderUnavailable(
+    'ASSISTANT.MIDDLEWARE.weather_provider_unavailable',
+    '天气数据暂不可用，请稍后重试',
+    0,
+  ),
+  financeProviderUnavailable(
+    'ASSISTANT.MIDDLEWARE.finance_provider_unavailable',
+    '金融行情数据暂不可用，请稍后重试',
+    0,
+  ),
   unknown('', '找私助暂时不可用，请稍后重试', 500);
 
   final String code;
@@ -57,79 +173,112 @@ enum AssistantErrorCode {
 class AssistantErrorMessages {
   const AssistantErrorMessages._();
 
-  static const Map<AssistantErrorCode, String> zh = <AssistantErrorCode, String>{
-    AssistantErrorCode.runUnauthorized: '请先登录后使用助手能力',
-    AssistantErrorCode.runNotFound: '本次执行不存在或已失效',
-    AssistantErrorCode.runInvalidArgument: '执行请求参数有误',
-    AssistantErrorCode.runStateConflict: '本次任务状态已经变化，请刷新后重试',
-    AssistantErrorCode.deviceActionUnavailable: '当前设备暂不支持此操作，请手动完成',
-    AssistantErrorCode.deviceActionPermissionDenied: '请在系统设置中允许此设备操作后重试',
-    AssistantErrorCode.deviceActionFailed: '设备操作未完成，请重试',
-    AssistantErrorCode.delegatedApprovalInvalid: '本次确认已失效，请刷新后重新确认',
-    AssistantErrorCode.deviceActionPermitInvalid: '设备操作许可与当前动作不匹配',
-    AssistantErrorCode.deviceActionPermitExpired: '设备操作许可已过期，请重新确认',
-    AssistantErrorCode.deviceActionPermitReplayed: '该设备操作结果已经提交',
-    AssistantErrorCode.intersectionEvidenceNotFound: '这条交集线索已失效或不可访问',
-    AssistantErrorCode.intersectionEvidenceUnavailable: '交集证据暂时无法核验，请稍后重试',
-    AssistantErrorCode.runIdempotencyConflict: '请求重复提交，请刷新后重试',
-    AssistantErrorCode.runStorageUnavailable: '助手执行服务暂不可用，请稍后重试',
-    AssistantErrorCode.runPolicyUnavailable: '助手策略暂不可用，请稍后重试',
-    AssistantErrorCode.runReasoningProfileUnavailable: '当前推理配置无法满足本次任务要求',
-    AssistantErrorCode.runSkillPackageUnavailable: '助手技能包暂不可用，请稍后重试',
-    AssistantErrorCode.runSkillDisabled: '该技能在当前场景未启用，请检查个人或群聊技能设置',
-    AssistantErrorCode.skillConsentRequired: '该能力需要先授权后使用',
-    AssistantErrorCode.connectorCapabilityRequired: '请先连接并授权所需的外部应用能力',
-    AssistantErrorCode.connectorGatewayUnavailable: '外部应用连接状态暂时无法确认，请稍后重试',
-    AssistantErrorCode.streamUnavailable: '流式服务暂不可用，请稍后重试',
-    AssistantErrorCode.upstreamTimeout: '请求超时，请稍后重试',
-    AssistantErrorCode.modelProviderUnavailable: '助手模型服务暂不可用，请稍后重试',
-    AssistantErrorCode.toolUnavailable: '所需能力暂不可用，请稍后重试',
-    AssistantErrorCode.runExecutionFailed: '本次任务执行失败，请稍后重试',
-    AssistantErrorCode.publicSearchProviderUnavailable: '公开信息检索暂不可用，请稍后重试',
-    AssistantErrorCode.webTargetRejected: '该网页目标不符合公开只读访问规则',
-    AssistantErrorCode.webFetchUnavailable: '公开网页暂时无法读取，请稍后重试',
-    AssistantErrorCode.webBudgetExhausted: '本次任务的网页探索预算已用完',
-    AssistantErrorCode.webBudgetUnavailable: '网页探索预算状态暂时不可用，请稍后重试',
-    AssistantErrorCode.webEvidenceUnavailable: '网页证据暂时无法安全保存或读取，请稍后重试',
-    AssistantErrorCode.weatherProviderUnavailable: '天气数据暂不可用，请稍后重试',
-    AssistantErrorCode.financeProviderUnavailable: '金融行情数据暂不可用，请稍后重试',
-  };
+  static const Map<AssistantErrorCode, String> zh =
+      <AssistantErrorCode, String>{
+        AssistantErrorCode.runUnauthorized: '请先登录后使用助手能力',
+        AssistantErrorCode.runNotFound: '本次执行不存在或已失效',
+        AssistantErrorCode.runInvalidArgument: '执行请求参数有误',
+        AssistantErrorCode.runStateConflict: '本次任务状态已经变化，请刷新后重试',
+        AssistantErrorCode.deviceActionUnavailable: '当前设备暂不支持此操作，请手动完成',
+        AssistantErrorCode.deviceActionPermissionDenied: '请在系统设置中允许此设备操作后重试',
+        AssistantErrorCode.deviceActionFailed: '设备操作未完成，请重试',
+        AssistantErrorCode.delegatedApprovalInvalid: '本次确认已失效，请刷新后重新确认',
+        AssistantErrorCode.deviceActionPermitInvalid: '设备操作许可与当前动作不匹配',
+        AssistantErrorCode.deviceActionPermitExpired: '设备操作许可已过期，请重新确认',
+        AssistantErrorCode.deviceActionPermitReplayed: '该设备操作结果已经提交',
+        AssistantErrorCode.intersectionEvidenceNotFound: '这条交集线索已失效或不可访问',
+        AssistantErrorCode.intersectionEvidenceUnavailable: '交集证据暂时无法核验，请稍后重试',
+        AssistantErrorCode.runIdempotencyConflict: '请求重复提交，请刷新后重试',
+        AssistantErrorCode.runStorageUnavailable: '助手执行服务暂不可用，请稍后重试',
+        AssistantErrorCode.runPolicyUnavailable: '助手策略暂不可用，请稍后重试',
+        AssistantErrorCode.runReasoningProfileUnavailable: '当前推理配置无法满足本次任务要求',
+        AssistantErrorCode.runSkillPackageUnavailable: '助手技能包暂不可用，请稍后重试',
+        AssistantErrorCode.runSkillDisabled: '该技能在当前场景未启用，请检查个人或群聊技能设置',
+        AssistantErrorCode.skillConsentRequired: '该能力需要先授权后使用',
+        AssistantErrorCode.connectorCapabilityRequired: '请先连接并授权所需的外部应用能力',
+        AssistantErrorCode.connectorGatewayUnavailable: '外部应用连接状态暂时无法确认，请稍后重试',
+        AssistantErrorCode.streamUnavailable: '流式服务暂不可用，请稍后重试',
+        AssistantErrorCode.upstreamTimeout: '请求超时，请稍后重试',
+        AssistantErrorCode.modelProviderUnavailable: '助手模型服务暂不可用，请稍后重试',
+        AssistantErrorCode.toolUnavailable: '所需能力暂不可用，请稍后重试',
+        AssistantErrorCode.runExecutionFailed: '本次任务执行失败，请稍后重试',
+        AssistantErrorCode.publicSearchProviderUnavailable: '公开信息检索暂不可用，请稍后重试',
+        AssistantErrorCode.webTargetRejected: '该网页目标不符合公开只读访问规则',
+        AssistantErrorCode.webFetchUnavailable: '公开网页暂时无法读取，请稍后重试',
+        AssistantErrorCode.webBudgetExhausted: '本次任务的网页探索预算已用完',
+        AssistantErrorCode.webBudgetUnavailable: '网页探索预算状态暂时不可用，请稍后重试',
+        AssistantErrorCode.webEvidenceUnavailable: '网页证据暂时无法安全保存或读取，请稍后重试',
+        AssistantErrorCode.weatherProviderUnavailable: '天气数据暂不可用，请稍后重试',
+        AssistantErrorCode.financeProviderUnavailable: '金融行情数据暂不可用，请稍后重试',
+      };
 
-  static const Map<AssistantErrorCode, String> en = <AssistantErrorCode, String>{
-    AssistantErrorCode.runUnauthorized: 'Please sign in to use assistant capabilities',
+  static const Map<AssistantErrorCode, String>
+  en = <AssistantErrorCode, String>{
+    AssistantErrorCode.runUnauthorized:
+        'Please sign in to use assistant capabilities',
     AssistantErrorCode.runNotFound: 'Assistant run not found or expired',
     AssistantErrorCode.runInvalidArgument: 'Assistant run request is invalid',
-    AssistantErrorCode.runStateConflict: 'The assistant run state has changed; refresh and try again',
-    AssistantErrorCode.deviceActionUnavailable: 'This action is unavailable on this device; complete it manually',
-    AssistantErrorCode.deviceActionPermissionDenied: 'Allow this device action in system settings and try again',
-    AssistantErrorCode.deviceActionFailed: 'The device action did not complete; try again',
-    AssistantErrorCode.delegatedApprovalInvalid: 'This approval is no longer valid; refresh and confirm again',
-    AssistantErrorCode.deviceActionPermitInvalid: 'The device action permit does not match this action',
-    AssistantErrorCode.deviceActionPermitExpired: 'The device action permit expired; confirm again',
-    AssistantErrorCode.deviceActionPermitReplayed: 'This device action result was already submitted',
-    AssistantErrorCode.intersectionEvidenceNotFound: 'This intersection evidence is no longer available',
-    AssistantErrorCode.intersectionEvidenceUnavailable: 'Intersection evidence cannot be verified right now',
-    AssistantErrorCode.runIdempotencyConflict: 'Duplicate request, please refresh and retry',
-    AssistantErrorCode.runStorageUnavailable: 'Assistant run service is temporarily unavailable',
-    AssistantErrorCode.runPolicyUnavailable: 'Assistant policy is temporarily unavailable',
-    AssistantErrorCode.runReasoningProfileUnavailable: 'The current reasoning profile cannot satisfy this task',
-    AssistantErrorCode.runSkillPackageUnavailable: 'Assistant Skill package is temporarily unavailable',
+    AssistantErrorCode.runStateConflict:
+        'The assistant run state has changed; refresh and try again',
+    AssistantErrorCode.deviceActionUnavailable:
+        'This action is unavailable on this device; complete it manually',
+    AssistantErrorCode.deviceActionPermissionDenied:
+        'Allow this device action in system settings and try again',
+    AssistantErrorCode.deviceActionFailed:
+        'The device action did not complete; try again',
+    AssistantErrorCode.delegatedApprovalInvalid:
+        'This approval is no longer valid; refresh and confirm again',
+    AssistantErrorCode.deviceActionPermitInvalid:
+        'The device action permit does not match this action',
+    AssistantErrorCode.deviceActionPermitExpired:
+        'The device action permit expired; confirm again',
+    AssistantErrorCode.deviceActionPermitReplayed:
+        'This device action result was already submitted',
+    AssistantErrorCode.intersectionEvidenceNotFound:
+        'This intersection evidence is no longer available',
+    AssistantErrorCode.intersectionEvidenceUnavailable:
+        'Intersection evidence cannot be verified right now',
+    AssistantErrorCode.runIdempotencyConflict:
+        'Duplicate request, please refresh and retry',
+    AssistantErrorCode.runStorageUnavailable:
+        'Assistant run service is temporarily unavailable',
+    AssistantErrorCode.runPolicyUnavailable:
+        'Assistant policy is temporarily unavailable',
+    AssistantErrorCode.runReasoningProfileUnavailable:
+        'The current reasoning profile cannot satisfy this task',
+    AssistantErrorCode.runSkillPackageUnavailable:
+        'Assistant Skill package is temporarily unavailable',
     AssistantErrorCode.runSkillDisabled: 'This skill is disabled by the current personal or shared-surface policy',
-    AssistantErrorCode.skillConsentRequired: 'This capability requires consent before use',
+    AssistantErrorCode.skillConsentRequired:
+        'This capability requires consent before use',
     AssistantErrorCode.connectorCapabilityRequired: 'Connect and authorize the required external capability before continuing',
-    AssistantErrorCode.connectorGatewayUnavailable: 'Connector authorization cannot be verified right now; retry later',
-    AssistantErrorCode.streamUnavailable: 'Streaming is temporarily unavailable; please try again later',
-    AssistantErrorCode.upstreamTimeout: 'Request timed out, please try again later',
-    AssistantErrorCode.modelProviderUnavailable: 'Assistant model service is temporarily unavailable',
-    AssistantErrorCode.toolUnavailable: 'The required capability is temporarily unavailable',
-    AssistantErrorCode.runExecutionFailed: 'This assistant run failed; please try again later',
-    AssistantErrorCode.publicSearchProviderUnavailable: 'Public search is temporarily unavailable',
-    AssistantErrorCode.webTargetRejected: 'This web target is not allowed by the public read-only access policy',
-    AssistantErrorCode.webFetchUnavailable: 'The public web page cannot be read right now',
-    AssistantErrorCode.webBudgetExhausted: 'This run has exhausted its public web exploration budget',
-    AssistantErrorCode.webBudgetUnavailable: 'The public web budget state is temporarily unavailable',
-    AssistantErrorCode.webEvidenceUnavailable: 'Web evidence cannot be safely stored or read right now',
-    AssistantErrorCode.weatherProviderUnavailable: 'Weather data is temporarily unavailable',
-    AssistantErrorCode.financeProviderUnavailable: 'Financial market data is temporarily unavailable',
+    AssistantErrorCode.connectorGatewayUnavailable:
+        'Connector authorization cannot be verified right now; retry later',
+    AssistantErrorCode.streamUnavailable:
+        'Streaming is temporarily unavailable; please try again later',
+    AssistantErrorCode.upstreamTimeout:
+        'Request timed out, please try again later',
+    AssistantErrorCode.modelProviderUnavailable:
+        'Assistant model service is temporarily unavailable',
+    AssistantErrorCode.toolUnavailable:
+        'The required capability is temporarily unavailable',
+    AssistantErrorCode.runExecutionFailed:
+        'This assistant run failed; please try again later',
+    AssistantErrorCode.publicSearchProviderUnavailable:
+        'Public search is temporarily unavailable',
+    AssistantErrorCode.webTargetRejected:
+        'This web target is not allowed by the public read-only access policy',
+    AssistantErrorCode.webFetchUnavailable:
+        'The public web page cannot be read right now',
+    AssistantErrorCode.webBudgetExhausted:
+        'This run has exhausted its public web exploration budget',
+    AssistantErrorCode.webBudgetUnavailable:
+        'The public web budget state is temporarily unavailable',
+    AssistantErrorCode.webEvidenceUnavailable:
+        'Web evidence cannot be safely stored or read right now',
+    AssistantErrorCode.weatherProviderUnavailable:
+        'Weather data is temporarily unavailable',
+    AssistantErrorCode.financeProviderUnavailable:
+        'Financial market data is temporarily unavailable',
   };
 }

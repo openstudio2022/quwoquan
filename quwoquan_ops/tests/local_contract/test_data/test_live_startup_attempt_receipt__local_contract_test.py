@@ -26,7 +26,16 @@ def _plan() -> dict[str, object]:
         "providerRuntimeDigest": "sha256:" + "3" * 64,
         "portProfile": "alpha-local",
         "portBlock": {"start": 17000, "end": 17999},
-        "publishedPorts": {"api-edge": 17000, "sms-provider-substitute": 17080},
+        "publishedPorts": [
+            {"role": "api-edge", "hostPort": 17000, "protocol": "tcp"},
+            {"role": "coturn", "hostPort": 17180, "protocol": "tcp"},
+            {"role": "coturn", "hostPort": 17180, "protocol": "udp"},
+            {
+                "role": "product-ops-service",
+                "hostPort": 17250,
+                "protocol": "tcp",
+            },
+        ],
         "tlsProfile": "local-managed",
         "resolverHandoffDigest": "sha256:" + "4" * 64,
         "publicWebPackage": {
@@ -88,6 +97,13 @@ class TestLiveStartupAttemptReceiptContractTest(unittest.TestCase):
         self.assertEqual(running, loaded)
         self.assertEqual(running["status"], "running")
         self.assertEqual(running["configurationDigest"], "sha256:" + "2" * 64)
+        self.assertEqual(
+            running["publishedPorts"][1:3],
+            [
+                {"role": "coturn", "hostPort": 17180, "protocol": "tcp"},
+                {"role": "coturn", "hostPort": 17180, "protocol": "udp"},
+            ],
+        )
         self.assertEqual(running["sourceRevision"], "a" * 40)
         self.assertEqual(
             running["publicWebPackage"]["packageVersion"],
@@ -223,14 +239,27 @@ class TestLiveStartupAttemptReceiptContractTest(unittest.TestCase):
             process_patch, runs_patch = self._patch_roots(root)
             with process_patch, runs_patch:
                 invalid = _plan()
-                invalid["publishedPorts"] = {"api-edge": 18000}
-                with self.assertRaisesRegex(ValueError, "escapes target block"):
+                invalid["publishedPorts"] = [
+                    {"role": "api-edge", "hostPort": 18000, "protocol": "tcp"}
+                ]
+                with self.assertRaisesRegex(ValueError, "canonical"):
                     receipt.transition_test_live_startup_attempt(
                         environment="alpha",
                         target="alpha-local",
                         attempt_id="alpha-test-live-attempt-4",
                         status="prepared",
                         runtime_plan=invalid,
+                        run_root=run_root,
+                    )
+                legacy = _plan()
+                legacy["publishedPorts"] = {"api-edge": 17000}
+                with self.assertRaisesRegex(ValueError, "publishedPorts"):
+                    receipt.transition_test_live_startup_attempt(
+                        environment="alpha",
+                        target="alpha-local",
+                        attempt_id="alpha-test-live-attempt-legacy",
+                        status="prepared",
+                        runtime_plan=legacy,
                         run_root=run_root,
                     )
                 receipt_path = receipt.test_live_startup_attempt_path("alpha-local")

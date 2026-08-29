@@ -1,5 +1,5 @@
 kind: external_reference
-description: Android、iOS 与 Web 当前已发布应用版本、最小支持 Build、受信更新/恢复地址和 Android 正式 APK 校验事实的只读发布配置引用；唯一真相源是随环境发布包进入运行态的 product-ops 配置。
+description: Android、iOS 与 Web 当前已发布应用版本、最小支持 Build、平台允许的受信更新/恢复地址和 Android 正式 APK 校验事实的只读发布配置引用；唯一真相源是随环境发布包进入运行态的 product-ops 配置。
 identity:
   fields:
   - platform
@@ -25,7 +25,7 @@ assistant_access:
     scopes: []
 business_rules:
 - 每个平台同时只有一个 current release，latestBuild 与 minimumSupportedBuild 均为正十进制整数、minimumSupportedBuild 不得大于 latestBuild，Build 只增不减
-- Android、iOS 与 Web 必须同时声明受信 updateUrl 与 recoveryUrl；iOS 更新地址只能指向官方 App Store，恢复地址只能属于官方 Web Origin
+- Android 与 Web 必须声明受信 updateUrl，三平台都必须声明受信 recoveryUrl；公众 iOS 的 updateUrl 必须为 null 且 recoveryUrl 只能属于官方 Web Origin，独立 App Store 渠道地址不得借该字段下发
 - Android updateUrl 只能是官方 Web Origin 的 HTTPS 下载端点，APK URL 只能属于官方 CDN 白名单
 - Android latest 指针只能在生产签名、包名、Build、证书摘要、文件大小和 SHA-256 全部验证后切换
 - updateState 只由当前 Build、minimumSupportedBuild 与 latestBuild 确定：低于 minimum 为 required，低于 latest 为 available，其余为 none

@@ -36,13 +36,28 @@ class SearchResponseView {
   factory SearchResponseView.fromMap(Map<String, dynamic> m) {
     _validateSearchResponseViewWire(m);
     return SearchResponseView(
-      interpretedQuery: OwnerSearchInterpretedQuery.fromMap(_parseStringKeyMap(m['interpretedQuery']) ?? <String, dynamic>{}),
+      interpretedQuery: OwnerSearchInterpretedQuery.fromMap(
+        _parseStringKeyMap(m['interpretedQuery']) ?? <String, dynamic>{},
+      ),
       hits: _parseProjectionDtoList(m['hits'], CanonicalSearchHit.fromMap),
-      citations: _parseProjectionDtoList(m['citations'], CanonicalSearchCitation.fromMap),
-      facets: _parseProjectionDtoList(m['facets'], CanonicalSearchFacet.fromMap),
-      degradeSignals: _parseProjectionDtoList(m['degradeSignals'], CanonicalSearchDegradeSignal.fromMap),
-      provenance: CanonicalSearchProvenance.fromMap(_parseStringKeyMap(m['provenance']) ?? <String, dynamic>{}),
-      relatedTerms: List<String>.unmodifiable(List<String>.from(m['relatedTerms'] as List)),
+      citations: _parseProjectionDtoList(
+        m['citations'],
+        CanonicalSearchCitation.fromMap,
+      ),
+      facets: _parseProjectionDtoList(
+        m['facets'],
+        CanonicalSearchFacet.fromMap,
+      ),
+      degradeSignals: _parseProjectionDtoList(
+        m['degradeSignals'],
+        CanonicalSearchDegradeSignal.fromMap,
+      ),
+      provenance: CanonicalSearchProvenance.fromMap(
+        _parseStringKeyMap(m['provenance']) ?? <String, dynamic>{},
+      ),
+      relatedTerms: List<String>.unmodifiable(
+        List<String>.from(m['relatedTerms'] as List),
+      ),
       experimentBucket: m['experimentBucket'] as String?,
       requestId: m['requestId'] as String,
       nextCursor: m['nextCursor'] as String?,
@@ -53,9 +68,13 @@ class SearchResponseView {
     return <String, dynamic>{
       'interpretedQuery': interpretedQuery.toMap(),
       'hits': hits.map((value) => value.toMap()).toList(growable: false),
-      'citations': citations.map((value) => value.toMap()).toList(growable: false),
+      'citations': citations
+          .map((value) => value.toMap())
+          .toList(growable: false),
       'facets': facets.map((value) => value.toMap()).toList(growable: false),
-      'degradeSignals': degradeSignals.map((value) => value.toMap()).toList(growable: false),
+      'degradeSignals': degradeSignals
+          .map((value) => value.toMap())
+          .toList(growable: false),
       'provenance': provenance.toMap(),
       'relatedTerms': relatedTerms,
       'experimentBucket': experimentBucket,
@@ -104,39 +123,96 @@ void _validateSearchResponseViewWire(Map<String, dynamic> m) {
     'requestId',
     'nextCursor',
   };
-  final unknown = m.keys.where((key) => !allowed.contains(key)).toList(growable: false);
+  final unknown = m.keys
+      .where((key) => !allowed.contains(key))
+      .toList(growable: false);
   if (unknown.isNotEmpty) {
-    throw FormatException('SearchResponseView contains unknown fields: ${unknown.join(',')}');
+    throw FormatException(
+      'SearchResponseView contains unknown fields: ${unknown.join(',')}',
+    );
   }
-  if (!m.containsKey('interpretedQuery') || m['interpretedQuery'] == null || (m['interpretedQuery'] is! Map || (m['interpretedQuery'] as Map).keys.any((key) => key is! String))) {
-    throw FormatException('SearchResponseView.interpretedQuery has an invalid wire value');
+  if (!m.containsKey('interpretedQuery') ||
+      m['interpretedQuery'] == null ||
+      (m['interpretedQuery'] is! Map ||
+          (m['interpretedQuery'] as Map).keys.any((key) => key is! String))) {
+    throw FormatException(
+      'SearchResponseView.interpretedQuery has an invalid wire value',
+    );
   }
-  if (!m.containsKey('hits') || m['hits'] == null || (m['hits'] is! List || (m['hits'] as List).any((value) => value is! Map || value.keys.any((key) => key is! String)))) {
+  if (!m.containsKey('hits') ||
+      m['hits'] == null ||
+      (m['hits'] is! List ||
+          (m['hits'] as List).any(
+            (value) => value is! Map || value.keys.any((key) => key is! String),
+          ))) {
     throw FormatException('SearchResponseView.hits has an invalid wire value');
   }
-  if (!m.containsKey('citations') || m['citations'] == null || (m['citations'] is! List || (m['citations'] as List).any((value) => value is! Map || value.keys.any((key) => key is! String)))) {
-    throw FormatException('SearchResponseView.citations has an invalid wire value');
+  if (!m.containsKey('citations') ||
+      m['citations'] == null ||
+      (m['citations'] is! List ||
+          (m['citations'] as List).any(
+            (value) => value is! Map || value.keys.any((key) => key is! String),
+          ))) {
+    throw FormatException(
+      'SearchResponseView.citations has an invalid wire value',
+    );
   }
-  if (!m.containsKey('facets') || m['facets'] == null || (m['facets'] is! List || (m['facets'] as List).any((value) => value is! Map || value.keys.any((key) => key is! String)))) {
-    throw FormatException('SearchResponseView.facets has an invalid wire value');
+  if (!m.containsKey('facets') ||
+      m['facets'] == null ||
+      (m['facets'] is! List ||
+          (m['facets'] as List).any(
+            (value) => value is! Map || value.keys.any((key) => key is! String),
+          ))) {
+    throw FormatException(
+      'SearchResponseView.facets has an invalid wire value',
+    );
   }
-  if (!m.containsKey('degradeSignals') || m['degradeSignals'] == null || (m['degradeSignals'] is! List || (m['degradeSignals'] as List).any((value) => value is! Map || value.keys.any((key) => key is! String)))) {
-    throw FormatException('SearchResponseView.degradeSignals has an invalid wire value');
+  if (!m.containsKey('degradeSignals') ||
+      m['degradeSignals'] == null ||
+      (m['degradeSignals'] is! List ||
+          (m['degradeSignals'] as List).any(
+            (value) => value is! Map || value.keys.any((key) => key is! String),
+          ))) {
+    throw FormatException(
+      'SearchResponseView.degradeSignals has an invalid wire value',
+    );
   }
-  if (!m.containsKey('provenance') || m['provenance'] == null || (m['provenance'] is! Map || (m['provenance'] as Map).keys.any((key) => key is! String))) {
-    throw FormatException('SearchResponseView.provenance has an invalid wire value');
+  if (!m.containsKey('provenance') ||
+      m['provenance'] == null ||
+      (m['provenance'] is! Map ||
+          (m['provenance'] as Map).keys.any((key) => key is! String))) {
+    throw FormatException(
+      'SearchResponseView.provenance has an invalid wire value',
+    );
   }
-  if (!m.containsKey('relatedTerms') || m['relatedTerms'] == null || (m['relatedTerms'] is! List || (m['relatedTerms'] as List).any((value) => value is! String))) {
-    throw FormatException('SearchResponseView.relatedTerms has an invalid wire value');
+  if (!m.containsKey('relatedTerms') ||
+      m['relatedTerms'] == null ||
+      (m['relatedTerms'] is! List ||
+          (m['relatedTerms'] as List).any((value) => value is! String))) {
+    throw FormatException(
+      'SearchResponseView.relatedTerms has an invalid wire value',
+    );
   }
-  if (m.containsKey('experimentBucket') && m['experimentBucket'] != null && (m['experimentBucket'] is! String)) {
-    throw FormatException('SearchResponseView.experimentBucket has an invalid wire value');
+  if (m.containsKey('experimentBucket') &&
+      m['experimentBucket'] != null &&
+      (m['experimentBucket'] is! String)) {
+    throw FormatException(
+      'SearchResponseView.experimentBucket has an invalid wire value',
+    );
   }
-  if (!m.containsKey('requestId') || m['requestId'] == null || (m['requestId'] is! String)) {
-    throw FormatException('SearchResponseView.requestId has an invalid wire value');
+  if (!m.containsKey('requestId') ||
+      m['requestId'] == null ||
+      (m['requestId'] is! String)) {
+    throw FormatException(
+      'SearchResponseView.requestId has an invalid wire value',
+    );
   }
-  if (m.containsKey('nextCursor') && m['nextCursor'] != null && (m['nextCursor'] is! String)) {
-    throw FormatException('SearchResponseView.nextCursor has an invalid wire value');
+  if (m.containsKey('nextCursor') &&
+      m['nextCursor'] != null &&
+      (m['nextCursor'] is! String)) {
+    throw FormatException(
+      'SearchResponseView.nextCursor has an invalid wire value',
+    );
   }
 }
 
@@ -157,7 +233,6 @@ List<T> _parseProjectionDtoList<T>(
   return out;
 }
 
-
 Map<String, dynamic>? _parseStringKeyMap(dynamic v) {
   if (v == null) return null;
   if (v is Map<String, dynamic>) return v;
@@ -173,9 +248,7 @@ SearchResponseView decodeSearchResponseView(Object? value) {
   if (value is! Map || value.keys.any((key) => key is! String)) {
     throw const FormatException('SearchResponseView must be an object');
   }
-  final response = SearchResponseView.fromMap(
-    Map<String, dynamic>.from(value),
-  );
+  final response = SearchResponseView.fromMap(Map<String, dynamic>.from(value));
   for (final hit in response.hits) {
     validateCanonicalSearchHitSingleTrack(hit);
   }

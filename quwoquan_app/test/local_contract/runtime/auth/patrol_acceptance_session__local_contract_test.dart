@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_app_state.dart';
+
 import '../../../support/runtime/patrol_acceptance_session.dart';
 
 void main() {
@@ -69,6 +70,57 @@ void main() {
       expect(session.ownerId, 'runtime-owner');
       expect(session.activePersonaId, 'runtime-persona');
     });
+
+    test('host runner installs one typed conversation without changing actor identity', () {
+      final session = installPatrolAcceptanceSessionForRunner(
+        accessToken: 'runtime-access',
+        refreshToken: 'runtime-refresh',
+        ownerId: 'runtime-owner',
+        personaId: 'runtime-persona',
+      );
+
+      final conversation = installPatrolTestDataConversationForRunner(
+        conversationId: ' conversation-live ',
+        initialMessageIds: const [' message-a ', 'message-b'],
+      );
+
+      expect(conversation.conversationId, 'conversation-live');
+      expect(conversation.initialMessageIds, ['message-a', 'message-b']);
+      expect(patrolRunnerInstalledTestDataConversation, same(conversation));
+      expect(requirePatrolTestDataConversationForRunner(), same(conversation));
+      expect(patrolRunnerInstalledAcceptanceSession, same(session));
+      expect(
+        () => conversation.initialMessageIds.add('message-c'),
+        throwsUnsupportedError,
+      );
+    });
+
+    for (final invalid in <({String conversationId, List<String> messages})>[
+      (conversationId: '', messages: const ['message-a']),
+      (conversationId: 'conversation-a', messages: const []),
+      (conversationId: 'conversation-a', messages: const ['']),
+      (
+        conversationId: 'conversation-a',
+        messages: const ['message-a', ' message-a '],
+      ),
+    ]) {
+      test('rejects incomplete or duplicate typed conversation handoff', () {
+        installPatrolAcceptanceSessionForRunner(
+          accessToken: 'runtime-access',
+          refreshToken: 'runtime-refresh',
+          ownerId: 'runtime-owner',
+          personaId: 'runtime-persona',
+        );
+        expect(
+          () => installPatrolTestDataConversationForRunner(
+            conversationId: invalid.conversationId,
+            initialMessageIds: invalid.messages,
+          ),
+          throwsStateError,
+        );
+        expect(patrolRunnerInstalledTestDataConversation, isNull);
+      });
+    }
 
     test(
       'command actor resolves from authenticated session before projection',

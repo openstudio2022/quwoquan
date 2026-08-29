@@ -1,226 +1,95 @@
-"""stackctl `app-content-uat` 子命令域与 UAT dart 目标常量。
-
-从 stackctl.py 逐字迁出;本模块保留 argparse 表面、编排主干与常量家族:
-
-- `register_parser`:`app-content-uat` 子命令的 argparse 表面(帮助文案与
-  参数集合逐字节保持不变);
-- `command_app_content_uat`:runtime use lock 编排的 UAT 入口;
-- `_command_app_content_uat`:Alpha/Beta/Gamma release-bound App 内容
-  自动验收的顺序执行体;
-- `_app_content_uat_requires_typed_actor`:typed actor 需求判定;
-- UAT dart 目标常量家族(`VIDEO_PLAYBACK_CANARY_UAT_TEST_TARGET` /
-  `HOME_VIDEO_PLAYBACK_UAT_TEST_TARGET` / `DISCOVERY_FEED_UAT_TEST_TARGET` /
-  `CONTROLLED_EDGE_RECOVERY_UAT_TEST_TARGET` /
-  `APP_CORE_READBACK_UAT_TEST_TARGET` / `IOS_DIRECT_FLUTTER_RUN_UAT` /
-  `STARTUP_FIRST_FRAME_UAT` / `APP_CONTENT_UAT_ENVELOPE_ARGUMENTS`)与
-  typed actor target 集合:`_ALPHA_APP_CONTENT_TYPED_ACTOR_TARGETS` 等
-  frozenset 在模块加载期引用同模块常量,因此常量家族随本模块物理聚合
-  (verify_profiles / verify_domain / app_preflight 经 stackctl 命名空间
-  运行期消费)。`RELEASE_HOMEPAGE_UAT_TEST_TARGET` /
-  `RUNTIME_RECOVERY_UAT_TEST_TARGET` / `GAMMA_CONTENT_UAT_TARGET` 仍由
-  stackctl 拥有(content-acceptance / verify 域消费)。
-
-test-live 运行时绑定与证据家族(`_app_content_patrol_evidence` /
-`_APP_CONTENT_TEST_LIVE_STARTUP_IDENTITY_FIELDS` /
-`_app_content_test_live_runtime_binding` /
-`_app_content_test_live_actor_context` /
-`_ios_direct_flutter_log_reader_retryable`)在
-`commands/app_preflight_uat_binding.py`;本模块以薄 re-export 保持对
-stackctl 的符号面零漂移。
-
-data readiness 真相源家族在 `commands/app_preflight_shared.py` 与
-`commands/app_preflight_readiness.py`;preflight 三命令在
-`commands/app_preflight.py`。测试经 ``mock.patch.object(stackctl,
-...)`` patch 本模块符号与协作符号,因此函数体内一律经函数内延迟导入
-`_stackctl` 属性访问(含本模块符号互调),保持 monkeypatch 语义并避免
-顶层循环 import。
-"""
+"""stackctl `app-content-uat` immutable candidate 页面 UAT 编排。"""
 
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
-import sys
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
+from quwoquan_ops.cli.commands.app_preflight_uat_binding import (
+    _APP_CONTENT_TEST_LIVE_STARTUP_IDENTITY_FIELDS,
+    APP_PAGE_ARTIFACT_BINDING_BLOCKER,
+    _app_content_launch_binding,
+    _app_content_page_artifact_binding,
+    _app_content_patrol_evidence,
+    _app_content_readiness_path,
+    _app_content_test_live_actor_context,
+    _app_content_test_live_runtime_binding,
+    _controlled_edge_recovery_evidence_issue,
+    _ios_direct_flutter_log_reader_retryable,
+    _run_app_content_message_home_command,
+)
+from quwoquan_ops.cli.commands.app_preflight_uat_launch import (
+    FLUTTER_ANDROID_3_47_GRADLE_8_14_POLICY_ID,
+    FLUTTER_IOS_3_47_COCOAPODS_1_16_POLICY_ID,
+    materialize_app_content_launch_projection,
+    verify_app_content_launch_projection,
+    write_app_content_launch_control,
+)
+from quwoquan_ops.cli.commands.app_preflight_uat_patrol_dependency import (
+    PatrolDependencyFailure,
+    execute_patrol_with_dependency_cas,
+    patrol_dependency_failure,
+)
+from quwoquan_ops.cli.commands.app_preflight_uat_platform import (
+    execute_canonical_platform_launch,
+)
+from quwoquan_ops.cli.commands.app_preflight_uat_support import (
+    _ALPHA_APP_CONTENT_TYPED_ACTOR_TARGETS,
+    _BETA_GAMMA_APP_CONTENT_TYPED_ACTOR_TARGETS,
+    APP_CONTENT_UAT_ENVELOPE_ARGUMENTS,
+    APP_CORE_READBACK_UAT_TEST_TARGET,
+    CONTROLLED_EDGE_RECOVERY_UAT_TEST_TARGET,
+    DISCOVERY_FEED_UAT_TEST_TARGET,
+    HOME_VIDEO_PLAYBACK_UAT_TEST_TARGET,
+    IOS_DIRECT_FLUTTER_RUN_UAT,
+    MESSAGE_HOME_UAT_TEST_TARGET,
+    PROFILE_JOURNEY_UAT_TEST_TARGET,
+    STARTUP_FIRST_FRAME_UAT,
+    VIDEO_PLAYBACK_CANARY_UAT_TEST_TARGET,
+    _app_content_android_launch_command,
+    _app_content_experience_screenshot_digests,
+    _app_content_uat_requires_typed_actor,
+    register_parser,
+)
 from quwoquan_ops.cli.lib.test_data.capabilities.common import ActorRole
 from quwoquan_ops.cli.lib.test_data.model import TestDataContext
 from quwoquan_ops.cli.smoke.environment_patrol_smoke.constants import (
     APP_CONTENT_VIDEO_PAGE_COUNT_ENV,
 )
-
-from quwoquan_ops.cli.commands.app_preflight_uat_binding import (
-    _APP_CONTENT_TEST_LIVE_STARTUP_IDENTITY_FIELDS,
-    _app_content_patrol_evidence,
-    _run_app_content_message_home_command,
-    _app_content_test_live_actor_context,
-    _app_content_test_live_runtime_binding,
-    _ios_direct_flutter_log_reader_retryable,
+from quwoquan_ops.cli.smoke.environment_patrol_smoke.external_aut_driver import (
+    EXTERNAL_AUT_CANONICAL_BINDING_ENV,
+    encode_external_aut_canonical_binding,
 )
 
-# 与 stackctl.ROOT 同源同值(仓库根);仅用于模块加载期常量绑定,
-# 函数体内仍统一经 `_stackctl.ROOT` 访问。
-_REPO_ROOT = Path(__file__).resolve().parents[3]
-
-
-VIDEO_PLAYBACK_CANARY_UAT_TEST_TARGET = "test/user_acceptance/journeys/home_video_playback/video_playback_canary__user_acceptance_test.dart"
-HOME_VIDEO_PLAYBACK_UAT_TEST_TARGET = "test/user_acceptance/journeys/home_video_playback/home_video_playback__user_acceptance_test.dart"
-DISCOVERY_FEED_UAT_TEST_TARGET = (
-    "test/user_acceptance/service/content_service/content/feed_delivery_page/"
-    "feed_load__user_acceptance_test.dart"
-)
-CONTROLLED_EDGE_RECOVERY_UAT_TEST_TARGET = (
-    "test/user_acceptance/service/content_service/content/feed_delivery_page/"
-    "feed_controlled_edge_recovery__user_acceptance_test.dart"
-)
-APP_CORE_READBACK_UAT_TEST_TARGET = (
-    "test/user_acceptance/journeys/app_startup/"
-    "app_core_readback__user_acceptance_test.dart"
-)
-PROFILE_JOURNEY_UAT_TEST_TARGET = (
-    "test/user_acceptance/journeys/profile/"
-    "profile_journey__user_acceptance_test.dart"
-)
-MESSAGE_HOME_UAT_TEST_TARGET = (
-    "test/user_acceptance/service/chat_service/chat/chat_inbox_view/"
-    "message_home_remote__user_acceptance_test.dart"
-)
-IOS_DIRECT_FLUTTER_RUN_UAT = (
-    _REPO_ROOT / "quwoquan_app/scripts/device/verify_ios_hot_restart.py"
-)
-STARTUP_FIRST_FRAME_UAT = (
-    _REPO_ROOT / "quwoquan_app/scripts/device/verify_startup_first_frame.py"
-)
-APP_CONTENT_UAT_ENVELOPE_ARGUMENTS = (
-    ("releaseId", "--data-release-id"),
-    ("releaseClass", "--data-release-class"),
-    ("productLifecycleState", "--product-lifecycle-state"),
-    ("homepageId", "--data-release-homepage-id"),
-    ("homepageTitle", "--data-release-homepage-title"),
-    ("articleWorkId", "--data-release-article-work-id"),
-    ("articleTitle", "--data-release-article-title"),
-    ("imageWorkId", "--data-release-image-work-id"),
-    ("imageTitle", "--data-release-image-title"),
-    ("creatorName", "--data-release-creator-name"),
-    ("creatorUserHandle", "--data-release-creator-user-handle"),
-    ("creatorPersonaId", "--data-release-creator-persona-id"),
-    (
-        "creatorAvatarAssetId",
-        "--data-release-creator-avatar-asset-id",
-    ),
-    ("tagLabel", "--data-release-tag-label"),
-    ("videoAttribution", "--data-release-video-attribution"),
-)
-
-
-def register_parser(
-    subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
-) -> None:
-    app_content_uat_parser = subparsers.add_parser(
-        "app-content-uat",
-        help="顺序执行 Alpha/Beta/Gamma release-bound App 内容自动验收",
-    )
-    app_content_uat_parser.add_argument(
-        "--report-dir", default=argparse.SUPPRESS
-    )
-    app_content_uat_parser.add_argument(
-        "--targets",
-        default="alpha-local,beta-local,gamma-local",
-    )
-    app_content_uat_parser.add_argument(
-        "--platform",
-        choices=("ios-simulator", "android"),
-        default="ios-simulator",
-    )
-    app_content_uat_parser.add_argument("--device-id", required=True)
-    app_content_uat_parser.add_argument("--dry-run", action="store_true")
-
-
-_ALPHA_APP_CONTENT_TYPED_ACTOR_TARGETS = frozenset(
-    {
-        DISCOVERY_FEED_UAT_TEST_TARGET,
-        # 作者主页旅程含关注/取关真实往返，需要真实非生产身份。
-        PROFILE_JOURNEY_UAT_TEST_TARGET,
-        MESSAGE_HOME_UAT_TEST_TARGET,
-        APP_CORE_READBACK_UAT_TEST_TARGET,
-        HOME_VIDEO_PLAYBACK_UAT_TEST_TARGET,
-        VIDEO_PLAYBACK_CANARY_UAT_TEST_TARGET,
-        CONTROLLED_EDGE_RECOVERY_UAT_TEST_TARGET,
-    }
-)
-_BETA_GAMMA_APP_CONTENT_TYPED_ACTOR_TARGETS = frozenset(
-    {
-        PROFILE_JOURNEY_UAT_TEST_TARGET,
-        MESSAGE_HOME_UAT_TEST_TARGET,
-        APP_CORE_READBACK_UAT_TEST_TARGET,
-        HOME_VIDEO_PLAYBACK_UAT_TEST_TARGET,
-    }
-)
-
-
-def _app_content_uat_requires_typed_actor(
-    environment: str,
-    patrol_target: str,
-) -> bool:
-    import quwoquan_ops.cli.stackctl as _stackctl
-
-    if environment == "alpha":
-        return patrol_target in _stackctl._ALPHA_APP_CONTENT_TYPED_ACTOR_TARGETS
-    if environment in {"beta", "gamma"}:
-        return patrol_target in _stackctl._BETA_GAMMA_APP_CONTENT_TYPED_ACTOR_TARGETS
-    return False
-
-
-def _app_content_experience_screenshot_digests(
-    runs: Sequence[Mapping[str, Any]],
-    *,
-    target: str,
-) -> dict[str, str]:
-    required = (
-        "homepage-feed",
-        "app-core-readback",
-        "message-home",
-        "profile-journey",
-    )
-    selected = {
-        suite: next(
-            item
-            for item in runs
-            if item.get("target") == target
-            and item.get("suite") == suite
-            and int(item.get("exitCode", 1)) == 0
-        )
-        for suite in required
-    }
-    expected_environment = target.removesuffix("-local")
-    digests: dict[str, str] = {}
-    for suite, item in selected.items():
-        evidence = item.get("evidence", {})
-        evidence = evidence if isinstance(evidence, Mapping) else {}
-        marker = evidence.get("screenshotMarker", {})
-        marker = marker if isinstance(marker, Mapping) else {}
-        if (
-            marker.get("environment") != expected_environment
-            or marker.get("suite") != suite
-            or not str(marker.get("route") or "").strip()
-            or not str(marker.get("terminalKey") or "").strip()
-        ):
-            raise ValueError(
-                f"{suite} page screenshot lacks exact route/key marker"
-            )
-        digests[suite] = str(evidence.get("screenshotDigest", ""))
-    missing = [suite for suite, digest in digests.items() if not digest]
-    if missing:
-        raise ValueError(
-            "required page screenshot digest is missing: " + ", ".join(missing)
-        )
-    if len(set(digests.values())) != len(digests):
-        raise ValueError(
-            "homepage/video-book/message/profile screenshots must be distinct"
-        )
-    return digests
+__all__ = [
+    "APP_CONTENT_UAT_ENVELOPE_ARGUMENTS",
+    "APP_CORE_READBACK_UAT_TEST_TARGET",
+    "CONTROLLED_EDGE_RECOVERY_UAT_TEST_TARGET",
+    "DISCOVERY_FEED_UAT_TEST_TARGET",
+    "HOME_VIDEO_PLAYBACK_UAT_TEST_TARGET",
+    "IOS_DIRECT_FLUTTER_RUN_UAT",
+    "MESSAGE_HOME_UAT_TEST_TARGET",
+    "PROFILE_JOURNEY_UAT_TEST_TARGET",
+    "STARTUP_FIRST_FRAME_UAT",
+    "VIDEO_PLAYBACK_CANARY_UAT_TEST_TARGET",
+    "_ALPHA_APP_CONTENT_TYPED_ACTOR_TARGETS",
+    "_APP_CONTENT_TEST_LIVE_STARTUP_IDENTITY_FIELDS",
+    "_BETA_GAMMA_APP_CONTENT_TYPED_ACTOR_TARGETS",
+    "_app_content_experience_screenshot_digests",
+    "_app_content_patrol_evidence",
+    "_app_content_test_live_actor_context",
+    "_app_content_test_live_runtime_binding",
+    "_app_content_uat_requires_typed_actor",
+    "_command_app_content_uat",
+    "_ios_direct_flutter_log_reader_retryable",
+    "_run_app_content_message_home_command",
+    "command_app_content_uat",
+    "register_parser",
+]
 
 
 def _command_app_content_uat(
@@ -241,6 +110,7 @@ def _command_app_content_uat(
         if getattr(args, "report_dir", "")
         else _stackctl.repo_run_dir("app-content-uat", target="nonprod-local")
     )
+    canonical_output_root = Path(_stackctl.output_root()).expanduser().resolve()
     issues = list(initial_issues)
     if not targets or len(targets) != len(set(targets)):
         issues.append("--targets must contain unique non-empty targets")
@@ -259,7 +129,8 @@ def _command_app_content_uat(
                 argparse.Namespace(
                     target=target,
                     report_dir=str(report_dir / target / "preflight"),
-                    runtime_mode="test_live",
+                    purpose="content_live",
+                    runtime_mode="immutable_candidate",
                 )
             )
             preflights.append(result)
@@ -279,6 +150,9 @@ def _command_app_content_uat(
     if not issues and preflights:
         releases = {str(item.get("releaseId") or "") for item in preflights}
         digests = {str(item.get("manifestDigest") or "") for item in preflights}
+        release_trains = {
+            str(item.get("releaseTrainId") or "") for item in runtime_bindings
+        }
         app_uat_envelopes = {
             json.dumps(
                 item.get("appUatEnvelope") or {},
@@ -301,12 +175,16 @@ def _command_app_content_uat(
             issues.append("Alpha/Beta/Gamma active releaseId is not identical")
         elif len(digests) != 1 or "" in digests:
             issues.append("Alpha/Beta/Gamma manifest digest is not identical")
+        elif len(release_trains) != 1 or "" in release_trains:
+            issues.append("Alpha/Beta/Gamma releaseTrainId is not identical")
         elif len(app_uat_envelopes) != 1 or "{}" in app_uat_envelopes:
             issues.append("Alpha/Beta/Gamma appUatEnvelope is not identical")
         elif len(app_uat_plans) != 1 or "{}" in app_uat_plans:
             issues.append("Alpha/Beta/Gamma appUatPlan is not identical")
 
     runs: list[dict[str, Any]] = []
+    launch_bindings: dict[str, dict[str, str]] = {}
+    launch_projections: dict[str, dict[str, str]] = {}
     experience_screenshot_digests: dict[str, dict[str, str]] = {}
     if not issues:
         for preflight in preflights:
@@ -338,9 +216,13 @@ def _command_app_content_uat(
                 issues.append(f"{target}: canonical App UAT video page is empty")
                 break
             release_video_page_count = len(expected_video_work_ids)
-            readiness_path = (
-                _stackctl.output_root().expanduser().resolve()
-                / str(preflight["readinessReceiptRef"])
+            try:
+                readiness_path = _app_content_readiness_path(preflight)
+            except (OSError, RuntimeError, TypeError, ValueError) as exc:
+                issues.append(f"{target}: {exc}")
+                break
+            runtime_binding = next(
+                item for item in runtime_bindings if item.get("target") == target
             )
             if bool(getattr(args, "dry_run", False)):
                 runs.append(
@@ -356,9 +238,7 @@ def _command_app_content_uat(
                         "videoPagination": dict(
                             app_uat_plan.get("videoPagination") or {}
                         ),
-                        "mediaChecks": dict(
-                            app_uat_plan.get("mediaChecks") or {}
-                        ),
+                        "mediaChecks": dict(app_uat_plan.get("mediaChecks") or {}),
                     }
                 )
             else:
@@ -368,113 +248,104 @@ def _command_app_content_uat(
                             target=target,
                             readiness_path=readiness_path,
                             app_uat_plan=app_uat_plan,
-                            report_dir=(
-                                report_dir / target / "release-bound-readback"
-                            ),
+                            report_dir=(report_dir / target / "release-bound-readback"),
                         )
                     )
                 except (OSError, RuntimeError, TypeError, ValueError) as exc:
                     issues.append(f"{target}: {exc}")
                     break
-            if args.platform == "ios-simulator":
-                direct_command = [
-                    sys.executable,
-                    str(_stackctl.IOS_DIRECT_FLUTTER_RUN_UAT),
-                    "--env",
-                    environment,
-                    "--device-id",
-                    device_id,
-                    "--launch-surface",
-                    "direct_flutter_run",
-                    # app-content-uat cold compile includes the current tree's
-                    # frontend and Xcode build; observed builds exceed seven
-                    # minutes, so this one evidence run needs a private budget.
-                    "--ready-timeout-seconds",
-                    "900",
-                    # Only the native observation of the cold terminal gets
-                    # this page-UAT allowance. Dart-reported cold and all hot
-                    # restart terminal budgets remain the canonical 6000ms.
-                    "--max-cold-native-safe-terminal-ms",
-                    "12000",
-                    "--output-dir",
-                    str(report_dir / target / "direct-flutter-run"),
-                ]
-                if bool(getattr(args, "dry_run", False)):
-                    direct_command.append("--preflight-only")
-                direct_execution_lock = None
+            launch_attempt_path = (
+                report_dir / target / "canonical-launch" / "attempt-1" / "attempt.json"
+            )
+            launch_report_path = launch_attempt_path.with_name("report.json")
+            launch_terminal_path = launch_attempt_path.with_name(
+                "startup-terminal.json"
+            )
+            launch_projection: dict[str, Any] = {}
+            launch_control: dict[str, Any] = {}
+            build_projection_policy_id = (
+                FLUTTER_ANDROID_3_47_GRADLE_8_14_POLICY_ID
+                if args.platform == "android"
+                else FLUTTER_IOS_3_47_COCOAPODS_1_16_POLICY_ID
+            )
+            if not bool(getattr(args, "dry_run", False)):
                 try:
-                    if not bool(getattr(args, "dry_run", False)):
-                        direct_execution_lock = _stackctl.acquire_patrol_execution_lock(
-                            env_name=target,
-                            target=f"direct-flutter-run:{device_id}",
-                        )
-                    direct_result = _stackctl.run(
-                        direct_command,
-                        cwd=_stackctl.ROOT / "quwoquan_app",
+                    launch_projection = materialize_app_content_launch_projection(
+                        runtime_binding=runtime_binding,
+                        output_root=canonical_output_root,
+                        projection_root=(
+                            report_dir
+                            / target
+                            / "canonical-launch"
+                            / "source-projection"
+                        ),
+                        evidence_path=(
+                            report_dir
+                            / target
+                            / "canonical-launch"
+                            / "source-projection.json"
+                        ),
                     )
-                    try:
-                        direct_evidence = json.loads(direct_result.stdout)
-                    except json.JSONDecodeError:
-                        direct_evidence = {}
-                    direct_retry_reports: list[str] = []
-                    if (
-                        direct_result.returncode != 0
-                        and isinstance(direct_evidence, dict)
-                        and _stackctl._ios_direct_flutter_log_reader_retryable(
-                            direct_evidence
-                        )
-                    ):
-                        direct_retry_reports.append(
-                            str(direct_evidence.get("reportPath") or "")
-                        )
-                        direct_result = _stackctl.run(
-                            direct_command,
-                            cwd=_stackctl.ROOT / "quwoquan_app",
-                        )
-                        try:
-                            direct_evidence = json.loads(direct_result.stdout)
-                        except json.JSONDecodeError:
-                            direct_evidence = {}
-                except RuntimeError as exc:
+                    launch_control = write_app_content_launch_control(
+                        runtime_binding=runtime_binding,
+                        projection=launch_projection,
+                        output_root=canonical_output_root,
+                        control_path=launch_attempt_path.with_name("control.json"),
+                        attempt_path=launch_attempt_path,
+                        report_path=launch_report_path,
+                        terminal_receipt_path=launch_terminal_path,
+                        platform=str(args.platform),
+                        device_id=device_id,
+                        build_projection_policy_id=build_projection_policy_id,
+                        build_projection_seal_path=launch_attempt_path.with_name(
+                            "build-projection-seal.json"
+                        ),
+                        expected_build_projection_digest=None,
+                    )
+                    launch_projections[target] = launch_projection
+                except (OSError, TypeError, ValueError) as exc:
                     issues.append(f"{target}: {exc}")
                     break
-                finally:
-                    if direct_execution_lock is not None:
-                        direct_execution_lock.close()
-                direct_passed = (
-                    direct_result.returncode == 0
-                    and isinstance(direct_evidence, dict)
-                    and direct_evidence.get("status") == "passed"
-                    and direct_evidence.get("launchMode") == "direct_flutter_run"
-                    and _stackctl._DATA_READINESS_DIGEST_RE.fullmatch(
-                        str(direct_evidence.get("consumerLeaseId") or "")
+            launch_app_root = (
+                Path(launch_projection["sourceProjectionRoot"]) / "quwoquan_app"
+                if launch_projection
+                else _stackctl.ROOT / "quwoquan_app"
+            )
+            if launch_projection:
+                try:
+                    verify_app_content_launch_projection(
+                        projection_root=Path(launch_projection["sourceProjectionRoot"]),
+                        evidence_path=Path(
+                            launch_projection["sourceProjectionEvidenceRef"]
+                        ),
+                        reject_unmanifested=True,
                     )
-                    is not None
-                )
-                runs.append(
-                    {
-                        "target": target,
-                        "suite": "direct-flutter-run",
-                        "exitCode": direct_result.returncode,
-                        "reportRef": str(direct_evidence.get("reportPath") or ""),
-                        "launchMode": direct_evidence.get("launchMode"),
-                        "consumerLeaseId": direct_evidence.get("consumerLeaseId"),
-                        "attempts": direct_evidence.get("attempts", []),
-                        "retryCount": len(direct_retry_reports),
-                        "supersededFailedReportRefs": direct_retry_reports,
-                    }
-                )
-                if not direct_passed:
-                    detail = (direct_result.stderr or direct_result.stdout).strip()
-                    issues.append(
-                        f"{target}: literal flutter run failed: "
-                        + (detail[:800] if detail else "typed report is incomplete")
-                    )
+                except (OSError, TypeError, ValueError) as exc:
+                    issues.append(f"{target}: {exc}")
                     break
-            # Android compile/install/cold-start/first-frame belongs to the
-            # immediately preceding canonical run.sh content-live receipt.
-            # Patrol uninstalls its credential-bearing test package by design,
-            # so app-content-uat owns only the release-bound page journeys.
+            if not execute_canonical_platform_launch(
+                args=args,
+                stackctl=_stackctl,
+                environment=environment,
+                target=target,
+                device_id=device_id,
+                launch_attempt_path=launch_attempt_path,
+                launch_report_path=launch_report_path,
+                launch_control=launch_control,
+                canonical_output_root=canonical_output_root,
+                launch_app_root=launch_app_root,
+                runtime_binding=runtime_binding,
+                launch_projection=launch_projection,
+                build_projection_policy_id=build_projection_policy_id,
+                report_dir=report_dir,
+                issues=issues,
+                runs=runs,
+                launch_bindings=launch_bindings,
+                android_launch_command=_app_content_android_launch_command,
+                launch_binding_reader=_app_content_launch_binding,
+                write_launch_control=write_app_content_launch_control,
+            ):
+                break
             suite_plan: list[tuple[str, str, bool, str]] = [
                 ("homepage-feed", _stackctl.DISCOVERY_FEED_UAT_TEST_TARGET, False, ""),
                 # 作者主页旅程：他人主页「记录」列表必须真实解码渲染（回归
@@ -506,21 +377,35 @@ def _command_app_content_uat(
                     release_video_work_id,
                 ),
             ]
+            # Every target owns its own controlled-fault evidence after the
+            # positive homepage readback. The Patrol host resolves only the
+            # current receipt-bound Compose project and exact API Edge
+            # containers, restores them in its existing finally path, regains
+            # health, then retries in the same installation.
+            suite_plan.insert(
+                1,
+                (
+                    "controlled-edge-recovery",
+                    _stackctl.CONTROLLED_EDGE_RECOVERY_UAT_TEST_TARGET,
+                    False,
+                    "",
+                ),
+            )
             typed_actor_context: TestDataContext | None = None
             if not bool(getattr(args, "dry_run", False)) and any(
-                _stackctl._app_content_uat_requires_typed_actor(environment, patrol_target)
+                _stackctl._app_content_uat_requires_typed_actor(
+                    environment, patrol_target
+                )
                 for _suite_name, patrol_target, _bind_release, _work_id in suite_plan
             ):
                 try:
-                    typed_actor_context = _stackctl._app_content_test_live_actor_context(
-                        preflight=preflight,
-                        runtime_binding=next(
-                            item
-                            for item in runtime_bindings
-                            if item.get("target") == target
-                        ),
-                        readiness_path=readiness_path,
-                        report_dir=report_dir,
+                    typed_actor_context = (
+                        _stackctl._app_content_test_live_actor_context(
+                            preflight=preflight,
+                            runtime_binding=runtime_binding,
+                            readiness_path=readiness_path,
+                            report_dir=report_dir,
+                        )
                     )
                 except (OSError, RuntimeError, TypeError, ValueError) as exc:
                     issues.append(f"{target}: {exc}")
@@ -533,9 +418,7 @@ def _command_app_content_uat(
                     suite_name=f"app-content-{suite_name}",
                     patrol_target=patrol_target,
                     data_readiness_path=(readiness_path if bind_release else None),
-                    release_video_work_id=(
-                        canary_work_id if bind_release else None
-                    ),
+                    release_video_work_id=(canary_work_id if bind_release else None),
                 )
                 if command is None:
                     issues.append(f"{target}: {suite_name} topology is incomplete")
@@ -568,12 +451,25 @@ def _command_app_content_uat(
                     patrol_target,
                 )
                 execution_command = {**command, "argv": argv}
+                if suite_name == "homepage-feed" and not bool(
+                    getattr(args, "dry_run", False)
+                ):
+                    recorded_launch = launch_bindings.get(target)
+                    if not isinstance(recorded_launch, Mapping):
+                        issues.append(
+                            f"{target}: external production AUT launch binding is missing"
+                        )
+                        break
+                    execution_command["env"] = {
+                        **dict(command.get("env") or {}),
+                        EXTERNAL_AUT_CANONICAL_BINDING_ENV: (
+                            encode_external_aut_canonical_binding(recorded_launch)
+                        ),
+                    }
                 if patrol_target == _stackctl.APP_CORE_READBACK_UAT_TEST_TARGET:
                     execution_command["env"] = {
                         **dict(command.get("env") or {}),
-                        APP_CONTENT_VIDEO_PAGE_COUNT_ENV: str(
-                            release_video_page_count
-                        ),
+                        APP_CONTENT_VIDEO_PAGE_COUNT_ENV: str(release_video_page_count),
                     }
                 if patrol_target == _stackctl.PROFILE_JOURNEY_UAT_TEST_TARGET:
                     execution_command["env"] = {
@@ -589,6 +485,7 @@ def _command_app_content_uat(
                         }
                     )
                 test_data_scope: dict[str, Any] | None = None
+                patrol_dependency_readback: dict[str, Any] = {}
                 if bool(getattr(args, "dry_run", False)):
                     result = _stackctl.run(
                         argv,
@@ -600,21 +497,60 @@ def _command_app_content_uat(
                             "status": "planned",
                             "baselineEligible": False,
                         }
-                elif patrol_target == _stackctl.MESSAGE_HOME_UAT_TEST_TARGET:
-                    result, test_data_scope = (
-                        _stackctl._run_app_content_message_home_command(
-                            execution_command,
-                            target_name=target,
-                            actor_context=typed_actor_context,
-                        )
-                    )
                 else:
-                    result = _stackctl._run_profile_command(
-                        execution_command,
-                        target_name=target,
-                        actor_context=typed_actor_context,
-                    )
-                    if typed_actor_required:
+                    recorded_launch = launch_bindings.get(target)
+                    if not isinstance(recorded_launch, Mapping):
+                        issues.append(
+                            f"{target}: Patrol launch dependency binding is missing"
+                        )
+                        break
+                    try:
+                        result, test_data_scope, patrol_dependency_readback = (
+                            execute_patrol_with_dependency_cas(
+                                stackctl=_stackctl,
+                                profile_command=execution_command,
+                                target_name=target,
+                                actor_context=typed_actor_context,
+                                message_home=(
+                                    patrol_target
+                                    == _stackctl.MESSAGE_HOME_UAT_TEST_TARGET
+                                ),
+                                launch_projection=launch_projections[target],
+                                launch_binding=recorded_launch,
+                                platform=str(args.platform),
+                            )
+                        )
+                    except Exception as exc:  # noqa: BLE001 - safe typed projection
+                        failure = (
+                            exc
+                            if isinstance(exc, PatrolDependencyFailure)
+                            else patrol_dependency_failure(exc, stage="command")
+                        )
+                        error_code = failure.error_code
+                        safe_failure = failure.as_dict()
+                        safe_detail = str(failure)
+                        runs.append(
+                            {
+                                "target": target,
+                                "suite": suite_name,
+                                "exitCode": 2,
+                                "errorCode": error_code,
+                                "typedBlocker": {
+                                    **safe_failure,
+                                    "sourceOperationId": "app_content_uat.patrol_dependency_projection",
+                                    "httpStatus": None,
+                                },
+                            }
+                        )
+                        issues.append(
+                            f"{target}: {suite_name} dependency projection failed: "
+                            f"{safe_detail}"
+                        )
+                        break
+                    if (
+                        typed_actor_required
+                        and patrol_target != _stackctl.MESSAGE_HOME_UAT_TEST_TARGET
+                    ):
                         page_report = _stackctl._read_json_object(
                             str(command["reportPath"])
                         )
@@ -627,27 +563,156 @@ def _command_app_content_uat(
                                     "status": str(page_report.get("status") or ""),
                                 },
                             }
+                patrol_evidence = _stackctl._app_content_patrol_evidence(
+                    str(command["reportPath"])
+                )
+                controlled_edge_evidence_issue = ""
+                if (
+                    patrol_target == _stackctl.CONTROLLED_EDGE_RECOVERY_UAT_TEST_TARGET
+                    and result.returncode == 0
+                    and not bool(getattr(args, "dry_run", False))
+                ):
+                    try:
+                        gateway_option = argv.index("--gateway-base-url")
+                        expected_health_url = (
+                            str(argv[gateway_option + 1]).rstrip("/") + "/healthz"
+                        )
+                    except (IndexError, ValueError):
+                        controlled_edge_evidence_issue = (
+                            "controlled edge recovery command lacks canonical API Edge"
+                        )
+                    else:
+                        controlled_edge_evidence_issue = (
+                            _controlled_edge_recovery_evidence_issue(
+                                patrol_evidence,
+                                target=target,
+                                environment=environment,
+                                runtime_binding=runtime_binding,
+                                expected_health_url=expected_health_url,
+                            )
+                        )
+                page_artifact_binding: dict[str, Any] = {}
+                page_artifact_binding_issue = ""
+                reported_page_binding = patrol_evidence.get("testedAppArtifactBinding")
+                patrol_typed_blocker = patrol_evidence.get("typedBlocker")
+                artifact_binding_blocker = patrol_evidence.get("artifactBindingBlocker")
+                first_child_blocker = (
+                    patrol_typed_blocker
+                    if isinstance(patrol_typed_blocker, Mapping)
+                    and str(patrol_typed_blocker.get("errorCode") or "")
+                    else artifact_binding_blocker
+                    if isinstance(artifact_binding_blocker, Mapping)
+                    and str(artifact_binding_blocker.get("errorCode") or "")
+                    else {}
+                )
+                first_child_error_code = str(first_child_blocker.get("errorCode") or "")
+                if (
+                    result.returncode == 0
+                    or (
+                        isinstance(reported_page_binding, Mapping)
+                        and bool(reported_page_binding)
+                    )
+                ) and not bool(getattr(args, "dry_run", False)):
+                    recorded_launch = launch_bindings.get(target)
+                    if not isinstance(recorded_launch, Mapping):
+                        page_artifact_binding_issue = (
+                            f"{APP_PAGE_ARTIFACT_BINDING_BLOCKER}: "
+                            "canonical launch binding is missing"
+                        )
+                    else:
+                        try:
+                            page_artifact_binding = _app_content_page_artifact_binding(
+                                page_evidence=patrol_evidence,
+                                launch_binding=recorded_launch,
+                                expected_patrol_target=patrol_target,
+                                expected_environment_alias=(
+                                    "local-gamma" if target == "gamma-local" else target
+                                ),
+                                expected_platform=str(
+                                    recorded_launch.get("platform") or ""
+                                ),
+                                expected_device_id=str(
+                                    recorded_launch.get("deviceId") or ""
+                                ),
+                            )
+                        except (TypeError, ValueError) as exc:
+                            page_artifact_binding_issue = str(exc)
                 run_payload = {
                     "target": target,
                     "suite": suite_name,
-                    "exitCode": result.returncode,
+                    "exitCode": (
+                        result.returncode
+                        if result.returncode != 0
+                        else 2
+                        if first_child_error_code or page_artifact_binding_issue
+                        else 1
+                        if controlled_edge_evidence_issue
+                        else result.returncode
+                    ),
                     "reportRef": str(command["reportPath"]),
                     "typedTestDataActor": typed_actor_required,
                     "typedTestDataConversation": (
                         patrol_target == _stackctl.MESSAGE_HOME_UAT_TEST_TARGET
                     ),
-                    "evidence": _stackctl._app_content_patrol_evidence(
-                        str(command["reportPath"])
-                    ),
+                    "evidence": patrol_evidence,
                 }
+                if page_artifact_binding:
+                    run_payload["pageArtifactBinding"] = page_artifact_binding
+                if page_artifact_binding_issue:
+                    run_payload["pageArtifactBinding"] = {
+                        "status": "gate_block",
+                        "errorCode": APP_PAGE_ARTIFACT_BINDING_BLOCKER,
+                        "detail": page_artifact_binding_issue,
+                    }
+                if patrol_dependency_readback:
+                    run_payload["dependencyProjectionReadback"] = (
+                        patrol_dependency_readback
+                    )
+                if first_child_error_code:
+                    run_payload["errorCode"] = first_child_error_code
+                    run_payload["typedBlocker"] = dict(first_child_blocker)
+                elif page_artifact_binding_issue and result.returncode == 0:
+                    run_payload["errorCode"] = APP_PAGE_ARTIFACT_BINDING_BLOCKER
+                # 聚合回执的 consumerLeaseIds 从 run 顶层同一个键收集。Patrol 分支
+                # 原先只把 lease 留在 evidence 里，于是该数组恒为空，device_bound
+                # 层的 lease 子集判定永远不成立——不是 lease 没拿到，是没被读到。
+                patrol_lease = patrol_evidence.get("consumerLease")
+                patrol_lease_id = (
+                    str(patrol_lease.get("leaseId") or "").strip()
+                    if isinstance(patrol_lease, Mapping)
+                    else ""
+                )
+                if patrol_lease_id:
+                    run_payload["consumerLeaseId"] = patrol_lease_id
                 if test_data_scope is not None:
                     run_payload["testDataScope"] = test_data_scope
                 runs.append(run_payload)
                 if result.returncode != 0:
-                    detail = (result.stderr or result.stdout).strip()
+                    detail = (
+                        page_artifact_binding_issue
+                        if first_child_error_code == APP_PAGE_ARTIFACT_BINDING_BLOCKER
+                        else (result.stderr or result.stdout).strip()
+                        or first_child_error_code
+                    )
                     issues.append(
                         f"{target}: {suite_name} failed: "
                         + (detail[:800] if detail else f"exit={result.returncode}")
+                    )
+                    break
+                if first_child_error_code:
+                    issues.append(
+                        f"{target}: {suite_name} failed: {first_child_error_code}"
+                    )
+                    break
+                if controlled_edge_evidence_issue:
+                    issues.append(
+                        f"{target}: {suite_name} failed: "
+                        + controlled_edge_evidence_issue
+                    )
+                    break
+                if page_artifact_binding_issue:
+                    issues.append(
+                        f"{target}: {suite_name} failed: " + page_artifact_binding_issue
                     )
                     break
             if not issues and not bool(getattr(args, "dry_run", False)):
@@ -660,10 +725,45 @@ def _command_app_content_uat(
                     )
                 except (StopIteration, TypeError, ValueError) as exc:
                     issues.append(f"{target}: {exc}")
+            if not issues and not bool(getattr(args, "dry_run", False)):
+                recorded_launch = launch_bindings.get(target)
+                if not isinstance(recorded_launch, Mapping):
+                    issues.append(f"{target}: canonical launch binding is missing")
+                else:
+                    try:
+                        current_runtime_binding = (
+                            _stackctl._app_content_test_live_runtime_binding(preflight)
+                        )
+                        if current_runtime_binding != runtime_binding:
+                            raise ValueError(
+                                "active candidate/package binding changed during UAT"
+                            )
+                        current_launch = _app_content_launch_binding(
+                            runtime_binding=current_runtime_binding,
+                            report_ref=str(recorded_launch["launchReportRef"]),
+                            attempt_ref=str(recorded_launch["launchAttemptRef"]),
+                            platform=str(args.platform),
+                            device_id=device_id,
+                            launch_provenance=(
+                                "workspace_flutter_run"
+                                if args.platform == "ios-simulator"
+                                else "canonical_launcher"
+                            ),
+                            launch_projection=launch_projections[target],
+                        )
+                    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+                        issues.append(f"{target}: {exc}")
+                    else:
+                        if current_launch != recorded_launch:
+                            issues.append(
+                                f"{target}: canonical launch binding changed during UAT"
+                            )
             if issues:
                 break
 
     dry_run = bool(getattr(args, "dry_run", False))
+    if not issues and not dry_run and set(launch_bindings) != set(targets):
+        issues.append("canonical launch bindings are incomplete for requested targets")
     status = "gate_block" if issues else ("planned" if dry_run else "passed")
     payload = {
         "schema": "quwoquan_ops.app_content_uat_receipt",
@@ -671,11 +771,23 @@ def _command_app_content_uat(
         "targets": targets,
         "platform": str(args.platform),
         "deviceId": device_id,
-        "launchPolicy": "test_live",
-        "packageBaseline": "",
-        "runtimeBindings": {
-            str(item["target"]): item for item in runtime_bindings
+        "launchPolicy": "immutable_candidate",
+        "nonPromotable": True,
+        "packageBaselines": {
+            str(item.get("target") or ""): str(item.get("candidateDigest") or "")
+            for item in runtime_bindings
+            if str(item.get("target") or "")
         },
+        "releaseTrainId": (
+            str(runtime_bindings[0].get("releaseTrainId") or "")
+            if runtime_bindings
+            and len(
+                {str(item.get("releaseTrainId") or "") for item in runtime_bindings}
+            )
+            == 1
+            else ""
+        ),
+        "runtimeBindings": {str(item["target"]): item for item in runtime_bindings},
         "runtimeBindingDigests": {
             str(item["target"]): "sha256:"
             + hashlib.sha256(
@@ -688,9 +800,22 @@ def _command_app_content_uat(
             ).hexdigest()
             for item in runtime_bindings
         },
-        "releaseId": (
-            str(preflights[0].get("releaseId") or "") if preflights else ""
+        "launchBindings": launch_bindings,
+        "firstBlocker": (
+            next(
+                (
+                    str(item.get("errorCode") or "")
+                    for item in runs
+                    if str(item.get("errorCode") or "")
+                ),
+                "",
+            )
         ),
+        "launchBindingDigests": {
+            target: _stackctl._canonical_document_checksum(binding)
+            for target, binding in launch_bindings.items()
+        },
+        "releaseId": (str(preflights[0].get("releaseId") or "") if preflights else ""),
         "manifestDigest": (
             str(preflights[0].get("manifestDigest") or "") if preflights else ""
         ),
@@ -710,9 +835,7 @@ def _command_app_content_uat(
             if preflights and preflights[0].get("appUatEnvelope")
             else ""
         ),
-        "appUatPlan": (
-            preflights[0].get("appUatPlan", {}) if preflights else {}
-        ),
+        "appUatPlan": (preflights[0].get("appUatPlan", {}) if preflights else {}),
         "appUatPlanDigest": (
             _stackctl._canonical_document_checksum(
                 dict(preflights[0].get("appUatPlan") or {})
@@ -761,9 +884,14 @@ def _command_app_content_uat(
             and isinstance(item.get("evidence"), dict)
         },
         "controlledEdgeRecoveries": {
-            str(item.get("target") or ""): (
-                (item.get("evidence") or {}).get("controlledEdgeFault") or {}
-            )
+            str(item.get("target") or ""): {
+                "evidence": (
+                    (item.get("evidence") or {}).get("controlledEdgeFault") or {}
+                ),
+                "receipt": (
+                    (item.get("evidence") or {}).get("controlledEdgeFaultReceipt") or {}
+                ),
+            }
             for item in runs
             if item.get("suite") == "controlled-edge-recovery"
             and isinstance(item.get("evidence"), dict)

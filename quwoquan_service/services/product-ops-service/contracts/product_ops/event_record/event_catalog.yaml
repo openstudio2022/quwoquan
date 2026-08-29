@@ -33,6 +33,40 @@ extension_fields:
   result:
     type: string
     max_length: 128
+  mediaType:
+    type: string
+    enum:
+    - image
+    - video
+  candidatesTried:
+    type: int
+    minimum: 0
+  mediaFailureKind:
+    type: string
+    enum:
+    - networkUnavailable
+    - dnsNxdomain
+    - handshakeTerminated
+    - certificateVerifyFailed
+    - connectionRefused
+    - noPlayableSource
+    - controllerSlotTimeout
+    - initializationTimeout
+    - decoderInitialization
+    - http404
+    - http4xx
+    - http5xx
+    - other
+  userScene:
+    type: string
+    enum:
+    - network
+    - temporary
+    - busy
+    - unavailable
+    - unsupported
+  retryable:
+    type: bool
   failReasonCode:
     type: string
     max_length: 128
@@ -845,6 +879,33 @@ events:
   - failReasonCode
   normal_sample_rate: 1.0
   internal_priority: critical
+- event_type: media_load_state
+  log_type: event
+  required_extensions:
+  - mediaType
+  - result
+  - durationMs
+  - candidatesTried
+  optional_extensions:
+  - surfaceId
+  - objectType
+  - objectId
+  - copyKey
+  - failReasonCode
+  - recoveryAction
+  - requestId
+  - traceId
+  - mediaFailureKind
+  - userScene
+  - retryable
+  normal_sample_rate: 0.1
+  slow_threshold_ms: 3000
+  always_keep_results:
+  - failure
+  - timeout
+  - retry
+  - absent
+  internal_priority: normal
 - event_type: rtc_call_outcome
   log_type: event
   required_extensions:

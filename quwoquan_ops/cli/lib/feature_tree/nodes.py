@@ -1,9 +1,9 @@
 """Node 与目录原生树发现。"""
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 
 from . import context
 
@@ -67,5 +67,8 @@ def parent_chain(node: Node, by_dir: dict[Path, Node]) -> list[Node]:
         chain.append(current)
         if current.level == 0:
             break
-        current = by_dir.get(current.directory.parent)
+        # ``by_dir`` 由 CLI 以 ``directory.resolve()`` 建立；macOS 下
+        # pytest/tmp 路径可经 ``/var -> /private/var`` 符号链接，父目录也必须
+        # 以同一 canonical 形态查找，否则 manifest 会悄然只剩叶节点。
+        current = by_dir.get(current.directory.parent.resolve())
     return list(reversed(chain))

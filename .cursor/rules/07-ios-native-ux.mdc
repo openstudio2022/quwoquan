@@ -1,8 +1,0 @@
----
-description: Flutter iOS 原生画质 UX 指针：语义 token、断点、双色、材质单层单义、浮层分型
-globs: quwoquan_app/**/*.dart
-alwaysApply: false
----
-
-写或改任何 widget、页面、sheet、导航 surface 前，先读
-`.agents/skills/review/references/roles/ux/references/flutter-design-system.md`。

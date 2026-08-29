@@ -1,9 +1,12 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: 05b1683f93feb5234ad8184f318b5d32e9f340e4d7e36d1e833581cfc400702c
+// ContractGraph SHA256: 2ba8995ae51f9f431ebc75e30f64d31285cc4cfb724f0ef1d8473c11011a5469
 
 library;
 
 import '../operation_request_payload.dart';
+import "../generated/shared_operation_enums.g.dart";
+
+export "../generated/shared_operation_enums.g.dart";
 
 part '../generated/requests/gateway/gateway_operation_contracts.g.requests.g.dart';
 
@@ -62,12 +65,21 @@ final class SearchPageDegradeSignal {
   final String message;
   final String? objectType;
 
-  factory SearchPageDegradeSignal.fromWire(Map<String, Object?> map, [String path = "SearchPageDegradeSignal"]) {
-    _rejectUnknownFields(map, const <String>{"code", "message", "objectType"}, path);
+  factory SearchPageDegradeSignal.fromWire(
+    Map<String, Object?> map, [
+    String path = "SearchPageDegradeSignal",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "code",
+      "message",
+      "objectType",
+    }, path);
     return SearchPageDegradeSignal(
       code: _requiredString(map["code"], '$path.code'),
       message: _requiredString(map["message"], '$path.message'),
-      objectType: map["objectType"] == null ? null : _requiredString(map["objectType"], '$path.objectType'),
+      objectType: map["objectType"] == null
+          ? null
+          : _requiredString(map["objectType"], '$path.objectType'),
     );
   }
 
@@ -79,15 +91,15 @@ final class SearchPageDegradeSignal {
 }
 
 final class SearchPageFacet {
-  const SearchPageFacet({
-    required this.key,
-    required this.count,
-  });
+  const SearchPageFacet({required this.key, required this.count});
 
   final String key;
   final int count;
 
-  factory SearchPageFacet.fromWire(Map<String, Object?> map, [String path = "SearchPageFacet"]) {
+  factory SearchPageFacet.fromWire(
+    Map<String, Object?> map, [
+    String path = "SearchPageFacet",
+  ]) {
     _rejectUnknownFields(map, const <String>{"key", "count"}, path);
     return SearchPageFacet(
       key: _requiredString(map["key"], '$path.key'),
@@ -110,6 +122,8 @@ final class SearchPageItem {
     this.subtitle,
     this.snippet,
     this.thumbnailUrl,
+    this.thumbnailAssetId,
+    this.thumbnailAccessMode,
     required this.action,
     required this.rankPosition,
     this.rankReason,
@@ -122,23 +136,66 @@ final class SearchPageItem {
   final String? subtitle;
   final String? snippet;
   final String? thumbnailUrl;
+  final String? thumbnailAssetId;
+  final MediaDeliveryAccessMode? thumbnailAccessMode;
   final String action;
   final int rankPosition;
   final String? rankReason;
 
-  factory SearchPageItem.fromWire(Map<String, Object?> map, [String path = "SearchPageItem"]) {
-    _rejectUnknownFields(map, const <String>{"objectRef", "resultType", "contentType", "title", "subtitle", "snippet", "thumbnailUrl", "action", "rankPosition", "rankReason"}, path);
+  factory SearchPageItem.fromWire(
+    Map<String, Object?> map, [
+    String path = "SearchPageItem",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "objectRef",
+      "resultType",
+      "contentType",
+      "title",
+      "subtitle",
+      "snippet",
+      "thumbnailUrl",
+      "thumbnailAssetId",
+      "thumbnailAccessMode",
+      "action",
+      "rankPosition",
+      "rankReason",
+    }, path);
     return SearchPageItem(
       objectRef: _requiredString(map["objectRef"], '$path.objectRef'),
-      resultType: SearchPageObjectType.fromWire(map["resultType"], '$path.resultType'),
-      contentType: map["contentType"] == null ? null : SearchPageContentType.fromWire(map["contentType"], '$path.contentType'),
+      resultType: SearchPageObjectType.fromWire(
+        map["resultType"],
+        '$path.resultType',
+      ),
+      contentType: map["contentType"] == null
+          ? null
+          : SearchPageContentType.fromWire(
+              map["contentType"],
+              '$path.contentType',
+            ),
       title: _requiredString(map["title"], '$path.title'),
-      subtitle: map["subtitle"] == null ? null : _requiredString(map["subtitle"], '$path.subtitle'),
-      snippet: map["snippet"] == null ? null : _requiredString(map["snippet"], '$path.snippet'),
-      thumbnailUrl: map["thumbnailUrl"] == null ? null : _requiredString(map["thumbnailUrl"], '$path.thumbnailUrl'),
+      subtitle: map["subtitle"] == null
+          ? null
+          : _requiredString(map["subtitle"], '$path.subtitle'),
+      snippet: map["snippet"] == null
+          ? null
+          : _requiredString(map["snippet"], '$path.snippet'),
+      thumbnailUrl: map["thumbnailUrl"] == null
+          ? null
+          : _requiredString(map["thumbnailUrl"], '$path.thumbnailUrl'),
+      thumbnailAssetId: map["thumbnailAssetId"] == null
+          ? null
+          : _requiredString(map["thumbnailAssetId"], '$path.thumbnailAssetId'),
+      thumbnailAccessMode: map["thumbnailAccessMode"] == null
+          ? null
+          : MediaDeliveryAccessMode.fromWire(
+              map["thumbnailAccessMode"],
+              '$path.thumbnailAccessMode',
+            ),
       action: _requiredString(map["action"], '$path.action'),
       rankPosition: _requiredInt(map["rankPosition"], '$path.rankPosition'),
-      rankReason: map["rankReason"] == null ? null : _requiredString(map["rankReason"], '$path.rankReason'),
+      rankReason: map["rankReason"] == null
+          ? null
+          : _requiredString(map["rankReason"], '$path.rankReason'),
     );
   }
 
@@ -150,6 +207,9 @@ final class SearchPageItem {
     if (subtitle != null) "subtitle": subtitle!,
     if (snippet != null) "snippet": snippet!,
     if (thumbnailUrl != null) "thumbnailUrl": thumbnailUrl!,
+    if (thumbnailAssetId != null) "thumbnailAssetId": thumbnailAssetId!,
+    if (thumbnailAccessMode != null)
+      "thumbnailAccessMode": thumbnailAccessMode!.wireName,
     "action": action,
     "rankPosition": rankPosition,
     if (rankReason != null) "rankReason": rankReason!,
@@ -175,16 +235,79 @@ final class SearchPageSlice {
   final String searchRequestId;
   final String? nextCursor;
 
-  factory SearchPageSlice.fromWire(Map<String, Object?> map, [String path = "SearchPageSlice"]) {
-    _rejectUnknownFields(map, const <String>{"items", "facets", "suggestions", "matchedTerms", "degradeSignals", "searchRequestId", "nextCursor"}, path);
+  factory SearchPageSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "SearchPageSlice",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "items",
+      "facets",
+      "suggestions",
+      "matchedTerms",
+      "degradeSignals",
+      "searchRequestId",
+      "nextCursor",
+    }, path);
     return SearchPageSlice(
-      items: List<SearchPageItem>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => SearchPageItem.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
-      facets: List<SearchPageFacet>.unmodifiable(_requiredList(map["facets"], '$path.facets').asMap().entries.map((entry) => SearchPageFacet.fromWire(_requiredObject(entry.value, '$path.facets' + '[${entry.key}]'), '$path.facets' + '[${entry.key}]'))),
-      suggestions: List<String>.unmodifiable(_requiredList(map["suggestions"], '$path.suggestions').asMap().entries.map((entry) => _requiredString(entry.value, '$path.suggestions' + '[${entry.key}]'))),
-      matchedTerms: List<String>.unmodifiable(_requiredList(map["matchedTerms"], '$path.matchedTerms').asMap().entries.map((entry) => _requiredString(entry.value, '$path.matchedTerms' + '[${entry.key}]'))),
-      degradeSignals: List<SearchPageDegradeSignal>.unmodifiable(_requiredList(map["degradeSignals"], '$path.degradeSignals').asMap().entries.map((entry) => SearchPageDegradeSignal.fromWire(_requiredObject(entry.value, '$path.degradeSignals' + '[${entry.key}]'), '$path.degradeSignals' + '[${entry.key}]'))),
-      searchRequestId: _requiredString(map["searchRequestId"], '$path.searchRequestId'),
-      nextCursor: map["nextCursor"] == null ? null : _requiredString(map["nextCursor"], '$path.nextCursor'),
+      items: List<SearchPageItem>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => SearchPageItem.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      facets: List<SearchPageFacet>.unmodifiable(
+        _requiredList(map["facets"], '$path.facets').asMap().entries.map(
+          (entry) => SearchPageFacet.fromWire(
+            _requiredObject(entry.value, '$path.facets' + '[${entry.key}]'),
+            '$path.facets' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      suggestions: List<String>.unmodifiable(
+        _requiredList(
+          map["suggestions"],
+          '$path.suggestions',
+        ).asMap().entries.map(
+          (entry) => _requiredString(
+            entry.value,
+            '$path.suggestions' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      matchedTerms: List<String>.unmodifiable(
+        _requiredList(
+          map["matchedTerms"],
+          '$path.matchedTerms',
+        ).asMap().entries.map(
+          (entry) => _requiredString(
+            entry.value,
+            '$path.matchedTerms' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      degradeSignals: List<SearchPageDegradeSignal>.unmodifiable(
+        _requiredList(
+          map["degradeSignals"],
+          '$path.degradeSignals',
+        ).asMap().entries.map(
+          (entry) => SearchPageDegradeSignal.fromWire(
+            _requiredObject(
+              entry.value,
+              '$path.degradeSignals' + '[${entry.key}]',
+            ),
+            '$path.degradeSignals' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      searchRequestId: _requiredString(
+        map["searchRequestId"],
+        '$path.searchRequestId',
+      ),
+      nextCursor: map["nextCursor"] == null
+          ? null
+          : _requiredString(map["nextCursor"], '$path.nextCursor'),
     );
   }
 
@@ -193,14 +316,19 @@ final class SearchPageSlice {
     "facets": facets.map((value) => value.toWire()).toList(growable: false),
     "suggestions": suggestions.map((value) => value).toList(growable: false),
     "matchedTerms": matchedTerms.map((value) => value).toList(growable: false),
-    "degradeSignals": degradeSignals.map((value) => value.toWire()).toList(growable: false),
+    "degradeSignals": degradeSignals
+        .map((value) => value.toWire())
+        .toList(growable: false),
     "searchRequestId": searchRequestId,
     if (nextCursor != null) "nextCursor": nextCursor!,
   };
 }
 
 SearchPageSlice decodeSearchPageSlice(Object? response) =>
-    SearchPageSlice.fromWire(_requiredObject(response, "SearchPageSlice"), "SearchPageSlice");
+    SearchPageSlice.fromWire(
+      _requiredObject(response, "SearchPageSlice"),
+      "SearchPageSlice",
+    );
 
 Map<String, Object?> _requiredObject(Object? value, String path) {
   if (value is! Map<Object?, Object?>) {
@@ -225,7 +353,9 @@ void _rejectUnknownFields(
   final unknown = value.keys.where((key) => !allowed.contains(key)).toList()
     ..sort();
   if (unknown.isNotEmpty) {
-    throw FormatException('$path contains unknown fields: ${unknown.join(', ')}');
+    throw FormatException(
+      '$path contains unknown fields: ${unknown.join(', ')}',
+    );
   }
 }
 

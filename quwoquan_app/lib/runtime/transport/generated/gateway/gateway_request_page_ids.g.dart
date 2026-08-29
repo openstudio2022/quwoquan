@@ -8,5 +8,6 @@ class GatewayRequestPageIds {
     'ExecutePersistedGraphQLQuery': 'gateway.execute.persisted.graph.q.l.query',
   };
 
-  static const String executePersistedGraphQLQuery = 'gateway.execute.persisted.graph.q.l.query';
+  static const String executePersistedGraphQLQuery =
+      'gateway.execute.persisted.graph.q.l.query';
 }

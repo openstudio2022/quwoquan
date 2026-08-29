@@ -8,6 +8,8 @@ import sys
 
 import yaml
 
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 

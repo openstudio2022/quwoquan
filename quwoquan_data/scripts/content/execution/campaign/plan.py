@@ -138,6 +138,7 @@ def write_report(
     failure: str | None,
     active_carriers: tuple[str, ...],
     workloads: Mapping[str, int],
+    revision_audits: list[dict[str, Any]] | None = None,
 ) -> Path:
     from content.execution.campaign.runtime import read_runtime_snapshot
 
@@ -163,6 +164,7 @@ def write_report(
         "sourceDigest": source_digest,
         "entityCatalogDigest": entity_catalog_digest,
         "lanes": lanes,
+        "revisionAudits": list(revision_audits or []),
         "failure": failure,
         "startedAt": started_at,
         "updatedAt": utc_now(),
@@ -455,6 +457,11 @@ def freeze_plan(
             "externalInputRefs": refs,
             "externalInputsDigest": digest,
         }
+        acquisition_root_ref = str(
+            submissions[carrier].get("acquisitionRootRef") or ""
+        ).strip()
+        if acquisition_root_ref:
+            lane_external_inputs[carrier]["acquisitionRootRef"] = acquisition_root_ref
     aggregate_external_digest = payload_digest(
         {
             "schema": "quwoquan_data.campaign_external_input_lanes",

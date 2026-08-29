@@ -810,9 +810,6 @@ surfaces:
       - GetPublicGathering
       - GetGathering
       - GetGatheringPlan
-      - CreateGatheringPlan
-      - ProposeGatheringPlan
-      - CommitGatheringPlanProposal
       - ListGatheringPlanRevisions
       - UpdateGathering
       - JoinOpenGathering
@@ -843,6 +840,7 @@ surfaces:
       - GetGatheringChatBoard
       - GetGathering
       - GetGatheringPlan
+      - ListGatheringPlanRevisions
 
   - id: settingsHome
     owner: settings

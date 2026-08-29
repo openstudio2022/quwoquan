@@ -13,13 +13,16 @@ import json
 import os
 import re
 import stat
+from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 from uuid import uuid4
 
+from .data_execution_fleet import project_runtime_owned_ports
 from .environment_topology import get_target, load_environment_topology
 from .output_paths import env_runs_root, target_process_dir
+from .port_manifest import load_port_manifest
 
 
 SCHEMA = "stackctl.mutable_test_live_startup_attempt"
@@ -120,6 +123,21 @@ def _canonical_run_root(value: object, *, environment: str) -> str:
     return str(resolved)
 
 
+def _published_endpoint_documents(value: object, *, label: str) -> list[dict[str, Any]]:
+    if (
+        isinstance(value, (str, bytes, bytearray, Mapping))
+        or not isinstance(value, Sequence)
+        or not value
+    ):
+        raise ValueError(f"{label} publishedPorts must be a non-empty list")
+    endpoints: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, Mapping):
+            raise ValueError(f"{label} publishedPorts entries must be objects")
+        endpoints.append(dict(item))
+    return endpoints
+
+
 def validate_test_live_startup_attempt(
     value: object,
     *,
@@ -202,28 +220,48 @@ def validate_test_live_startup_attempt(
         raise ValueError("test-live startup receipt publicWebPackage is invalid")
 
     block = value.get("portBlock")
-    ports = value.get("publishedPorts")
     if (
         not isinstance(block, dict)
         or set(block) != {"start", "end"}
         or not isinstance(block.get("start"), int)
+        or isinstance(block.get("start"), bool)
         or not isinstance(block.get("end"), int)
+        or isinstance(block.get("end"), bool)
         or block["start"] < 1
         or block["end"] <= block["start"]
     ):
         raise ValueError("test-live startup receipt portBlock is invalid")
-    if not isinstance(ports, dict) or not ports:
-        raise ValueError("test-live startup receipt publishedPorts is invalid")
-    for role, port in ports.items():
-        if (
-            not isinstance(role, str)
-            or not role.strip()
-            or not isinstance(port, int)
-            or isinstance(port, bool)
-            or port < block["start"]
-            or port > block["end"]
-        ):
-            raise ValueError("test-live startup receipt publishedPorts escapes target block")
+    manifest = load_port_manifest()
+    profile = manifest.get("profiles", {}).get(target)
+    if not isinstance(profile, Mapping) or block != {
+        "start": profile.get("blockStart"),
+        "end": profile.get("blockEnd"),
+    }:
+        raise ValueError("test-live startup receipt portBlock is not canonical")
+    ports = _published_endpoint_documents(
+        value.get("publishedPorts"),
+        label="test-live startup receipt",
+    )
+    try:
+        project_runtime_owned_ports(
+            port_profile=target,
+            published_ports=ports,
+            manifest=manifest,
+        )
+    except ValueError as exc:
+        raise ValueError(
+            f"test-live startup receipt publishedPorts are invalid: {exc}"
+        ) from exc
+    stable_ports = sorted(
+        ports,
+        key=lambda endpoint: (
+            int(endpoint["hostPort"]),
+            str(endpoint["protocol"]),
+            str(endpoint["role"]),
+        ),
+    )
+    if ports != stable_ports:
+        raise ValueError("test-live startup receipt publishedPorts order is not canonical")
 
     canonical_run_root = _canonical_run_root(
         value.get("runRoot"),
@@ -262,7 +300,10 @@ def _identity_from_plan(
         "providerRuntimeDigest": plan.get("providerRuntimeDigest"),
         "portProfile": plan.get("portProfile"),
         "portBlock": dict(plan.get("portBlock") or {}),
-        "publishedPorts": dict(plan.get("publishedPorts") or {}),
+        "publishedPorts": _published_endpoint_documents(
+            plan.get("publishedPorts"),
+            label="test-live startup runtime plan",
+        ),
         "tlsProfile": plan.get("tlsProfile"),
         "resolverHandoffDigest": plan.get("resolverHandoffDigest"),
         "publicWebPackage": dict(plan.get("publicWebPackage") or {}),

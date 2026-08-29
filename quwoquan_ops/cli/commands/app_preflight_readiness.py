@@ -204,6 +204,18 @@ def _load_data_release_readiness(
             )
         if "guestActorHash" in receipt or "guestLogin" in receipt:
             issues.append("research Data readiness must not retain guest identity")
+        # post 域 readback 口径字段：runtime proof 复核的权威预期集合。
+        # 字段必然存在由 Data schema 承担；此处只校验形态，避免对新字段
+        # 之前签发的历史 receipt（如 test-live binding 所指）溯及既往。
+        # 缺失时 research isolation 复核会对 None fail-closed。
+        for readback_key in (
+            "researchReadbackEntityRefs",
+            "researchReadbackMediaAssetIds",
+        ):
+            if readback_key in receipt:
+                _stackctl._validated_string_set(
+                    receipt.get(readback_key), label=readback_key, issues=issues
+                )
     else:
         if _stackctl._DATA_READINESS_DIGEST_RE.fullmatch(
             str(receipt.get("guestActorHash") or "")
@@ -474,11 +486,22 @@ def _load_data_release_readiness(
                     str(row.get("avatarAssetId") or "").strip()
                     for row in ready_creator_evidence
                 }
-                if (
-                    creator_refs != collections["creators"]
-                    or len(avatar_asset_ids) != avatar_count
-                    or "" in avatar_asset_ids
-                    or any(
+                # DEC-031：research 私有交付不做匿名 avatar/图片取回探测。
+                # avatar 以相对 CAS key 形态闭合（probeCount=0）；图片以
+                # 匿名 401/403 拒绝探测闭合（releaseMediaProbe → researchMediaProbe）。
+                research_delivery = readiness_phase is ReadinessPhase.RESEARCH
+                if research_delivery:
+                    ready_avatar_drift = any(
+                        row.get("profileStatus") != 200
+                        or row.get("avatarProbeCount") != 0
+                        or row.get("avatarProbe") is not None
+                        or not str(row.get("avatarUrl") or "").startswith(
+                            "media/objects/sha256/"
+                        )
+                        for row in ready_creator_evidence
+                    )
+                else:
+                    ready_avatar_drift = any(
                         row.get("profileStatus") != 200
                         or row.get("avatarProbeCount") != 1
                         or not isinstance(row.get("avatarProbe"), dict)
@@ -497,6 +520,11 @@ def _load_data_release_readiness(
                         or row["avatarProbe"].get("hashVerified") is not True
                         for row in ready_creator_evidence
                     )
+                if (
+                    creator_refs != collections["creators"]
+                    or len(avatar_asset_ids) != avatar_count
+                    or "" in avatar_asset_ids
+                    or ready_avatar_drift
                     or any(
                         row.get("profileStatus") != 200
                         or row.get("avatarAssetId") is not None
@@ -513,19 +541,37 @@ def _load_data_release_readiness(
                     issues.append(
                         "Data readiness creator avatar evidence is not release-bound"
                     )
-                image_asset_ids = {
-                    str(probe.get("assetId") or "").strip()
-                    for row in post_verification.get("posts") or []
-                    if isinstance(row, dict)
-                    for probe in row.get("mediaProbes") or []
-                    if isinstance(probe, dict)
-                    and probe.get("kind") == "image"
-                    and probe.get("status") == 200
-                    and str(probe.get("mimeType") or "").startswith("image/")
-                    and probe.get("bytes") == probe.get("expectedBytes")
-                    and probe.get("sha256") == probe.get("expectedSha256")
-                    and probe.get("hashVerified") is True
-                }
+                if research_delivery:
+                    image_asset_ids = {
+                        str(probe.get("assetId") or "").strip()
+                        for row in post_verification.get("posts") or []
+                        if isinstance(row, dict)
+                        for probe in row.get("mediaProbes") or []
+                        if isinstance(probe, dict)
+                        and probe.get("kind") == "image"
+                        and str(probe.get("deliveryRef") or "").startswith(
+                            "media/objects/sha256/"
+                        )
+                        and probe.get("anonymousStatus") in {401, 403}
+                        and _stackctl._DATA_READINESS_DIGEST_RE.fullmatch(
+                            str(probe.get("expectedSha256") or "")
+                        )
+                        is not None
+                    }
+                else:
+                    image_asset_ids = {
+                        str(probe.get("assetId") or "").strip()
+                        for row in post_verification.get("posts") or []
+                        if isinstance(row, dict)
+                        for probe in row.get("mediaProbes") or []
+                        if isinstance(probe, dict)
+                        and probe.get("kind") == "image"
+                        and probe.get("status") == 200
+                        and str(probe.get("mimeType") or "").startswith("image/")
+                        and probe.get("bytes") == probe.get("expectedBytes")
+                        and probe.get("sha256") == probe.get("expectedSha256")
+                        and probe.get("hashVerified") is True
+                    }
                 if (
                     "" in image_asset_ids
                     or len(image_asset_ids) != image_count

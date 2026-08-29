@@ -6,22 +6,29 @@
 from __future__ import annotations
 
 import json
-import os
 import stat
 from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from ..port_manifest import (
+    compose_published_endpoint_roles,
+    compose_publisher_container_role_closure,
+    load_port_manifest,
+)
 from .constants import (
     ATTESTATION_TTL_SECONDS,
     SCHEMA,
     OrphanComposeTeardownError,
+    _atomic_write_create_once,
     _canonical_bytes,
     _digest,
+    _normalize_published_endpoints,
     _timestamp,
     _utc_text,
-    canonical_project,
+    declared_port_profile,
+    require_canonical_project,
 )
 
 
@@ -66,12 +73,149 @@ def validate_attestation(
     target = str(value.get("target") or "")
     if expected_target and target != expected_target:
         raise OrphanComposeTeardownError("orphan Compose attestation target mismatch")
-    project = canonical_project(target)
-    if value.get("project") != project:
-        raise OrphanComposeTeardownError("orphan Compose attestation project mismatch")
+    project = require_canonical_project(target, value.get("project"))
     snapshot = value.get("snapshot")
-    if not isinstance(snapshot, dict) or snapshot.get("target") != target or snapshot.get("project") != project:
+    if (
+        not isinstance(snapshot, dict)
+        or snapshot.get("target") != target
+        or snapshot.get("project") != project
+    ):
         raise OrphanComposeTeardownError("orphan Compose attestation snapshot identity mismatch")
+    snapshot_fields = {
+        "target",
+        "project",
+        "canonicalPorts",
+        "otherTargetPortBlocks",
+        "publishedEndpoints",
+        "containers",
+        "networks",
+        "volumes",
+    }
+    if set(snapshot) != snapshot_fields:
+        raise OrphanComposeTeardownError(
+            "orphan Compose attestation snapshot fields mismatch"
+        )
+    canonical_ports = snapshot.get("canonicalPorts")
+    if not isinstance(canonical_ports, list):
+        raise OrphanComposeTeardownError(
+            "orphan Compose attestation canonical port inventory is invalid"
+        )
+    canonical_roles: set[str] = set()
+    for item in canonical_ports:
+        if not isinstance(item, Mapping) or set(item) != {"name", "port", "open"}:
+            raise OrphanComposeTeardownError(
+                "orphan Compose attestation canonical port fields are invalid"
+            )
+        role = str(item.get("name") or "").strip()
+        port = item.get("port")
+        opened = item.get("open")
+        if (
+            not role
+            or role in canonical_roles
+            or isinstance(port, bool)
+            or not isinstance(port, int)
+            or not 0 < port < 65536
+            or not isinstance(opened, bool)
+        ):
+            raise OrphanComposeTeardownError(
+                "orphan Compose attestation canonical port identity is invalid"
+            )
+        canonical_roles.add(role)
+    published_endpoints = _normalize_published_endpoints(
+        snapshot.get("publishedEndpoints")
+    )
+    if any(str(item["role"]) not in canonical_roles for item in published_endpoints):
+        raise OrphanComposeTeardownError(
+            "orphan Compose published endpoint role is not canonical"
+        )
+    containers = snapshot.get("containers")
+    if not isinstance(containers, list):
+        raise OrphanComposeTeardownError(
+            "orphan Compose attestation container inventory is invalid"
+        )
+    container_fields = {
+        "id",
+        "name",
+        "service",
+        "labels",
+        "imageRef",
+        "imageDigest",
+        "configurationDigest",
+        "publishedEndpoints",
+    }
+    port_profile = declared_port_profile(target)
+    try:
+        publisher_roles = compose_published_endpoint_roles(
+            load_port_manifest(),
+            port_profile,
+        )
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        raise OrphanComposeTeardownError(
+            "orphan Compose attestation publisher manifest is invalid"
+        ) from exc
+    # 白名单必须恰好覆盖 inventory 能合法产出的集合，否则封存会把刚采到的事实判否。
+    # inventory 有两条归因路径：四元组精确命中 canonical hostPort；以及旧栈发布的非
+    # canonical hostPort —— 那条只在容器发布口仅归一个 role 时成立。这里按同一判据
+    # 分成精确集与「独占容器发布口」集，两者都从 publisher_roles 派生，不另立判据。
+    container_role_closure = compose_publisher_container_role_closure(publisher_roles)
+    canonical_identities: set[tuple[str, str, str, int]] = set()
+    sole_owner_identities: set[tuple[str, str, str]] = set()
+    # `sole_owner_identities` 的键丢掉了 containerPort，它与 inventory 的归因等价只在
+    # 「同一 role 在同一 composeService+protocol 下只有一个容器口」时成立。该前提今天由
+    # port manifest 的两条校验联合保证，但那是跨文件不变量：放宽任一条，白名单就会比
+    # inventory 宽，本该判否的非 canonical hostPort 会被放行。故就地显式断言，不外借。
+    role_container_ports: dict[tuple[str, str, str], set[int]] = {}
+    for (
+        compose_service,
+        container_port,
+        protocol,
+        host_port,
+    ), role in publisher_roles.items():
+        canonical_identities.add((compose_service, role, protocol, host_port))
+        role_container_ports.setdefault(
+            (compose_service, role, protocol), set()
+        ).add(container_port)
+        if len(container_role_closure[(compose_service, container_port, protocol)]) == 1:
+            sole_owner_identities.add((compose_service, role, protocol))
+    ambiguous = sorted(
+        f"{compose_service}/{role}/{protocol}"
+        for (compose_service, role, protocol), ports in role_container_ports.items()
+        if len(ports) != 1
+    )
+    if ambiguous:
+        raise OrphanComposeTeardownError(
+            "orphan Compose publisher role owns multiple container ports under one "
+            "service/protocol; attestation cannot bound the whitelist: "
+            + ", ".join(ambiguous)
+        )
+    container_endpoints: list[dict[str, object]] = []
+    for container in containers:
+        if not isinstance(container, Mapping) or set(container) != container_fields:
+            raise OrphanComposeTeardownError(
+                "orphan Compose attestation container fields mismatch"
+            )
+        service = str(container.get("service") or "").strip()
+        endpoints = _normalize_published_endpoints(
+            container.get("publishedEndpoints")
+        )
+        for endpoint in endpoints:
+            role = str(endpoint["role"])
+            protocol = str(endpoint["protocol"])
+            if (service, role, protocol, int(endpoint["hostPort"])) in (
+                canonical_identities
+            ):
+                continue
+            if (service, role, protocol) in sole_owner_identities:
+                continue
+            raise OrphanComposeTeardownError(
+                "orphan Compose published endpoint publisher identity is not canonical: "
+                f"{service}/{role}:{endpoint['hostPort']}/{protocol}"
+            )
+        container_endpoints.extend(endpoints)
+    if published_endpoints != _normalize_published_endpoints(container_endpoints):
+        raise OrphanComposeTeardownError(
+            "orphan Compose attestation published endpoint inventory mismatch"
+        )
     if value.get("snapshotDigest") != _digest(snapshot):
         raise OrphanComposeTeardownError("orphan Compose attestation snapshot digest mismatch")
     unsigned = dict(value)
@@ -113,24 +257,11 @@ def write_attestation_create_once(
     allowed_root: Path,
 ) -> Path:
     candidate = _safe_attestation_path(path, allowed_root=allowed_root)
-    payload = _canonical_bytes(value) + b"\n"
-    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
-    try:
-        descriptor = os.open(candidate, flags, 0o600)
-    except OSError as exc:
-        raise OrphanComposeTeardownError(
-            "orphan Compose attestation already exists or is unsafe"
-        ) from exc
-    try:
-        with os.fdopen(descriptor, "wb") as handle:
-            descriptor = -1
-            handle.write(payload)
-            handle.flush()
-            os.fsync(handle.fileno())
-    finally:
-        if descriptor >= 0:
-            os.close(descriptor)
-    return candidate
+    return _atomic_write_create_once(
+        candidate,
+        _canonical_bytes(value) + b"\n",
+        label="attestation",
+    )
 
 
 def load_attestation(

@@ -279,8 +279,9 @@ void main() {
         isTrue,
       );
       expect(
-        ContentUIConfig.featureFlags.containsKey('enable_article_page_curl'),
+        ContentUIConfig.featureFlags['enable_article_page_curl'],
         isTrue,
+        reason: 'page curl 是文章阅读默认交互，禁用只能来自显式 runtime override',
       );
       expect(
         ContentUIConfig.featureFlags.containsKey(

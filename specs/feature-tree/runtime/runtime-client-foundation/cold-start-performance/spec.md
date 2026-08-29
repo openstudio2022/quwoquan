@@ -67,7 +67,7 @@
 <a id="req-004"></a>
 ### REQ-004 iOS 与 Android 使用不同受信恢复通道
 
-- 公众 iOS 不提供“前往更新”原生包动作；版本服务返回空 `updateUrl`，恢复页提供已验证的官方 PWA/网页版地址。只有已认证且设备已登记的内测成员才可由官网受控入口使用 Ad Hoc 安装通道。
+- 公众 iOS 不提供“前往更新”原生包动作；版本服务返回 `updateUrl=null`，恢复页提供已验证的官方 PWA/网页版地址。只有已认证且设备已登记的内测成员才可由官网受控入口使用 Ad Hoc 安装通道。
 - Android 的“前往更新”只打开趣我圈官方 HTTPS 下载端点，下载端点重定向至受信 CDN 上的当前正式签名 APK；不打开第三方商店或来源不明 APK。
 - 通用官网下载页按可信平台提示自动识别 iOS、Android/鸿蒙或桌面；iOS 展示 PWA 安装指引，Android/鸿蒙进入 APK 下载，桌面提供 Android 下载与 iOS PWA 指引两个明确入口。
 - 更新或下载页返回前台后只重新读取本地 Build 和查询版本，不自动重新启动流程或重复打开外部页面。
@@ -91,15 +91,16 @@
 <a id="req-007"></a>
 ### REQ-007 环境构建、安装与运行证据必须绑定同一启动清单
 
-- 每次受支持构建必须生成符合 `app_launch_manifest.app_effective_launch_manifest` 共享协议的 immutable effective launch manifest；构建、安装、启动与发布证据不满足 canonical target/environment、摘要或 transport 约束时必须 fail closed。
-- `quwoquan_app/run.sh -d <device>` 是显式设备选择与 transport 准备入口。裸 `flutter run` 和 IDE 直接 Flutter Debug 也必须由 Xcode/Gradle backend 在安装前按 `QWQ_ENVIRONMENT=alpha|beta|gamma` 选择同一份 canonical handoff，默认 Alpha。
-- 两条路径都必须把完整 handoff、entrypoint 和全部 runtime defines 交给 Flutter resident compiler，使冷启动、Hot Reload 与 Hot Restart 消费同一环境、target 与 digest。禁止 native build phase 临时拼装第二份 URL、密钥或 release 配置。
-- 本地 Debug 安装前必须执行只读 App 预检。Alpha/Beta/Gamma `test_live` 未绑定内容或 runtime、Provider、内容证据不健康时只记录结构化 warning，并进入 `no_active_release`/typed unavailable 安全 Shell；`content-live`、immutable candidate 与 Prod 的 release、readiness、rollback/replay、首页、视频书、Creator/头像及媒体任一必要证据不成立时仍 fail closed，并只输出首个 typed blocker。该分层不改变正式 App 的网络恢复语义，普通运行期网络或服务故障仍进入安全 Shell 内的页面级恢复。
-- Android `BuildConfig` 与 iOS `QWQNativeRuntime.plist` 必须内嵌 effective launch manifest 摘要；启动失败标记、runtime probe 和制品 provenance 必须回报同一摘要，禁止跨 target、跨环境或重打包复用。
+- 每次受支持构建只生成并嵌入 build-profile trust 与 immutable AppArtifact identity；每次受支持启动在安装后 activation 中生成符合 `app_launch_manifest.app_effective_launch_manifest` 共享协议的 target manifest。构建、安装、启动与发布证据不能以同一 artifact identity、active manifest 摘要和 transport 约束串联时必须 fail closed，target/environment 不得烘焙进 nonprod AppArtifact。
+- `quwoquan_app/run.sh -d <device>` 是显式设备选择与 transport 准备的唯一执行体。新工作区终端的字面 `flutter run`（`workspace_flutter_run`）与受控制 IDE Run/Debug（`workspace_ide_debug`）分别薄包装并归一化进入同一执行体（`QWQ_ENVIRONMENT=alpha|beta|gamma` 显式选择，默认 Alpha），不建立第二条启动协议。
+- 所有路径的运行时环境、target 与 endpoint 只经安装后 runtime package activation 成立，不进入 `DART_DEFINES` 或 Flutter 编译输入。冷启动、Hot Reload 与 Hot Restart 消费同一 active package 与 digest。
+- 未经 facade/canonical handoff 的原始 Xcode/Gradle backend 在缺 build-profile trust envelope 时 fail-closed，typed blocker 信息指向 `run.sh` 或工作区 facade 激活。禁止 native build phase 临时拼装第二份 URL、密钥或 release 配置。
+- 本地 Debug 安装前必须执行只读 App 预检。Alpha/Beta/Gamma `test_live` 的 `ui-only` 与 `content-live` 在 runtime、Provider、内容、观测或容量 readiness 不健康时都只记录结构化 warning，并继续真实编译、安装、activation 与启动。`content-live` 启动后真实请求 Remote 内容并进入成功、`no_active_release` 或 typed unavailable。只有身份/信任、非法 target、最小 runtime package、工具链/真实编译与 activation 失败仍 fail closed。immutable candidate、内容 UAT 与 Prod 的 release、readiness、rollback/replay、首页、视频书、Creator/头像及媒体证据继续严格阻断。
+- Android `BuildConfig` 与 iOS `QWQNativeRuntime.plist` 只内嵌 AppArtifact identity 与 build-profile trust 摘要；启动失败标记、runtime probe 和 provenance 必须同时回报该 artifact identity 与安装后 active effective manifest 摘要，禁止跨 target、跨环境或重打包复用。
 - package-only 四环境编译只能证明组件可构建，不得标记为 runtime UAT。运行证据必须来自真实 `MAIN/LAUNCHER` 或 iOS scene 启动，且包含非 `unknown` 的本次 attempt ID、当前 motion contract、safe terminal、Gate/Main 或 scene 结果和单一 task。
-- Prod Android AAB/APK 与 iOS IPA 必须先验证平台签名、禁止 Mock/test/local transport 泄漏，并证明内嵌清单摘要与发布 handoff 一致，才可从 component-ready 推进到 deployable。
+- Prod Android AAB/APK 与 iOS IPA 必须先验证平台签名、禁止 Mock/test/local transport 泄漏，并证明内嵌 AppArtifact identity/build-profile trust 与发布 handoff 一致，才可从 component-ready 推进到 deployable。
 - Debug、Profile 与 Release 对同一启动错误必须渲染同一 canonical surface；Debug 只允许追加脱敏日志与诊断面，不得保留开发红屏或第二套用户终态。BuildMode 不得改变路由、数据源、空态、错误态或恢复动作。
-- 应用市场可能对上传制品重签、拆分或优化；安装后启动必须回读嵌入 launch manifest 摘要、version/build 与当前签名身份，并与发布 provenance 的 source candidate 绑定验证，不得要求下载二进制与上传二进制逐字节相同，也不得因市场处理差异改变启动行为。
+- 应用市场可能对上传制品重签、拆分或优化；安装后启动必须回读嵌入 AppArtifact identity/build-profile trust、active effective manifest、version/build 与当前签名身份，并与发布 provenance 的 source candidate 绑定验证，不得要求下载二进制与上传二进制逐字节相同，也不得因市场处理差异改变启动行为。
 - 安装后首次点击图标冷启动与后续任意次点击图标启动必须读取同一嵌入 manifest 与 runtime package，进入同一安全 Shell 行为；首启只在性能采样中以 first-install 维度区分，不得拥有独立业务分支。
 
 ## 4. 契约引用
@@ -130,7 +131,7 @@
 - AND iOS 在调用 Flutter AppDelegate 启动生命周期和创建 implicit Flutter Engine 前进入原生恢复 root；恢复分支不初始化 Flutter 或商业插件。
 - AND 缺失 runtime package 的 Android/iOS 构建在安装前失败；恢复页、safeRecovery 或 Flutter 首帧均不得作为构建入口可用性的成功证据。
 - AND 安装后运行时配置校验失败（例如旧构建派生物携带被禁止或缺失的 runtime package 键）时，App 呈现阻断式配置错误页并列出脱敏键名，不进入业务壳，不显示网络或版本恢复文案。
-- AND 连续冷启动、Hot Restart 与再次冷启动中，每个 attempt 的 `launchMode` 均与本次入口绑定为 `canonical_launcher` 或 `direct_flutter_run`，且 `configurationState=complete`；Hot Restart 的 fatal 请求被拒绝，安全 Shell 与 fatal 矛盾 marker 在 Flutter Engine 创建前自愈清理。
+- AND 连续冷启动、Hot Restart 与再次冷启动中，每个 attempt 的 `launchProvenance` 均来自 metadata 闭集并与本次入口绑定为 `canonical_launcher`、`workspace_flutter_run` 或 `workspace_ide_debug`，且 `configurationState=complete`；Hot Restart 的 fatal 请求被拒绝，安全 Shell 与 fatal 矛盾 marker 在 Flutter Engine 创建前自愈清理。
 - AND 首帧立即提供网页版。有新版且存在当前平台可安装通道时，Android 经官网 HTTPS 端点下载正式签名 APK，公众 iOS 继续使用 PWA/网页版。已最新、没有合规原生通道或检查未完成时提供网页版且不存在启动重试。
 
 <a id="gwt-003"></a>
@@ -146,14 +147,14 @@
 - GIVEN Alpha、Beta、Gamma、Prod 的 Android/iOS package 与对应 effective launch manifest。
 - WHEN CI 执行 package purity、原生 Gate、API integration、AppRoot `UAT-003` 和设备启动矩阵。
 - THEN package、native identity、runtime probe 与发布 provenance 的环境、target、URL、entrypoint 和摘要完全一致；Android launcher task 唯一，iOS fatal recovery scene 不创建 implicit Flutter Engine。
-- AND 缺失真实设备、签名、hosted Prod、telemetry readback 或公网恢复通道时保持 `GATE_BLOCK`/`OPEN-001`，不得以编译成功、模拟器或 package-only 报告替代。
+- AND 缺失外部闭环证据时按 owner 分别保持 typed blocker：真实设备、签名、hosted Prod 或公网恢复通道缺失绑定 `GATE_BLOCK`/`OPEN-001`；Elasticsearch、端云补报或 telemetry readback 缺失绑定 `GATE_BLOCK`/`OPEN-003`。不得以编译成功、模拟器、package-only、本地日志、进程内事件或旧环境回执替代。
 
 <a id="gwt-005"></a>
 ### GWT-005 安装后首启、后续图标启动与市场身份回读一致
 
 - GIVEN 设备经任一有效渠道完成安装——脚本安装、打包 Debug 安装、Android `prod-sim` exact Release、Android/iOS `prod-hosted` Release、应用市场客户端安装（含市场重签/优化后的制品）、官网签名 APK，或在旧版本上覆盖升级；iOS Simulator Debug 不计作 Release 安装。
 - WHEN 首次点击图标冷启动，随后杀进程再次点击图标启动。
-- THEN 两次启动读取同一嵌入 launch manifest 与 runtime package，进入同一安全 Shell 行为；首启只在性能采样中携带 first-install 维度。
+- THEN 两次启动读取同一嵌入 AppArtifact identity/build-profile trust 与同一 active runtime package/effective manifest，进入同一安全 Shell 行为；首启只在性能采样中携带 first-install 维度。
 - AND 市场安装制品的回读证明当前签名身份、version/build 与发布 provenance 的 source candidate 绑定一致，市场处理差异不改变任何启动行为。
 - AND Debug 与 Release 对同一注入启动错误渲染同一 canonical surface，Debug 仅追加脱敏诊断。
 - AND 覆盖升级后的启动行为指纹与全新安装一致，不存在升级用户独有的启动死路。
@@ -173,7 +174,7 @@
 - 优先级：`P0`
 - 准出影响：`block`
 - 影响或价值：当前缺少 Android/iPhone 真机硬崩溃后消费正式 app release 与 Web/PWA 发布回执的恢复分流、外部跳转和无重试录像证据；生产签名、CDN、DNS/TLS 与 PWA 材料分别由协作 Story 拥有，本 Story 不复制其发布事实。
-- 完成判定：`GWT-002` 在 Alpha、Beta、Gamma 和 Prod 对应真实端点完成；每个 CaseResult 绑定 `app-release-recovery-routing` 与 `public-content-web-entry` 的正式回执，并证明 Android/iPhone 真机只消费 canonical 恢复通道。
+- 完成判定：`GWT-002` 在 Alpha、Beta、Gamma 和 Prod 对应真实端点完成，且 `GWT-004.t3` 的真实设备、签名、hosted Prod 与公网恢复通道 CaseResult 绑定 `app-release-recovery-routing` 与 `public-content-web-entry` 的正式回执，并证明 Android/iPhone 真机只消费 canonical 恢复通道。
 - 依赖：[`app-release-recovery-routing`](../../../product-ops-growth/product-control-plane-foundation/app-release-recovery-routing/spec.md) `OPEN-001`、[`public-content-web-entry`](../public-content-web-entry/spec.md) `OPEN-004`、实体设备与发布权限。
 
 <a id="open-002"></a>
@@ -192,7 +193,7 @@
 - 优先级：`P0`
 - 准出影响：`block`
 - 影响或价值：Prod 真实 Elasticsearch Log sink Provider、Android/iPhone 受保护真机与可供销毁的账号尚未就绪，无法补齐恢复异常断网补报的真实环境证据。
-- 完成判定：`GWT-003` 在受保护真机上证明端侧加密队列、服务接收、损坏记录安全处置和断网补报；旧 `/ops/startup-events` 不承载恢复异常。
+- 完成判定：`GWT-003` 在受保护真机上证明端侧加密队列、服务接收、损坏记录安全处置和断网补报，且 `GWT-004.t4` 绑定同一候选的 Elasticsearch、端云补报与 telemetry readback；旧 `/ops/startup-events` 不承载恢复异常。
 - 依赖：Prod Elasticsearch Log sink endpoint、受保护认证材料与 Provider receipt，受保护 Android/iPhone 设备与可销毁账号。
 
 <a id="open-004"></a>

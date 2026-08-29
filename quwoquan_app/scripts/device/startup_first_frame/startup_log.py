@@ -147,10 +147,10 @@ def _flutter_safe_terminal_confirmed(raw_log: str) -> bool:
     return (
         "android_startup_safe_terminal_race_dismissed" in raw_log
         or "ios_startup_safe_terminal_race_dismissed" in raw_log
-        or "android_startup_safe_terminal reportedElapsedMs=" in raw_log
-        or "ios_startup_safe_terminal reportedElapsedMs=" in raw_log
-        or "android_startup_safe_terminal elapsedMs=" in raw_log
-        or "ios_startup_safe_terminal elapsedMs=" in raw_log
+        or "android_startup_safe_terminal surface=" in raw_log
+        or "ios_startup_safe_terminal surface=" in raw_log
+        or "android_startup_safe_terminal_rejected surface=" in raw_log
+        or "ios_startup_safe_terminal_rejected surface=" in raw_log
         or '"eventName":"startup_safe_terminal"' in raw_log
         or '"eventName": "startup_safe_terminal"' in raw_log
     )
@@ -163,7 +163,8 @@ def extract_dart_startup_attempts(raw_log: str) -> list[dict[str, Any]]:
     pattern = re.compile(
         r"(?:android|ios)_dart_startup_attempt "
         r"attemptId=(?P<attemptId>[A-Za-z0-9_-]+)"
-        r"(?:\s+launchMode=(?P<launchMode>[A-Za-z0-9_-]+))?"
+        r"(?:\s+launchProvenance=(?P<launchProvenance>[A-Za-z0-9_-]+))?"
+        r"(?:\s+runtimeConfigSupplyMode=(?P<runtimeConfigSupplyMode>[A-Za-z0-9_-]+))?"
         r"(?:\s+hotRestart=(?P<hotRestart>true|false))?"
         r"(?:\s+configurationState=(?P<configurationState>[A-Za-z0-9_-]+))?"
         r"(?:\s+effectiveLaunchManifestDigest="
@@ -189,11 +190,14 @@ def extract_startup_watchdog_evidence(raw_log: str) -> dict[str, Any]:
         raw_log,
     )
     safe_terminal = re.search(
-        r"(?:android|ios)_startup_safe_terminal (?:elapsedMs|reportedElapsedMs)=(\d+)",
+        r"(?:android|ios)_startup_safe_terminal "
+        r"surface=(?P<surface>[a-z_]+) "
+        r"(?:elapsedMs|reportedElapsedMs)=(?P<elapsedMs>\d+)",
         raw_log,
     )
     reported_safe_terminal = re.search(
-        r"(?:android|ios)_startup_safe_terminal reportedElapsedMs=(\d+)",
+        r"(?:android|ios)_startup_safe_terminal surface=[a-z_]+ "
+        r"reportedElapsedMs=(\d+)",
         raw_log,
     )
     native_received_safe_terminal = re.search(
@@ -203,7 +207,8 @@ def extract_startup_watchdog_evidence(raw_log: str) -> dict[str, Any]:
     dart_attempt = re.search(
         r"(?:android|ios)_dart_startup_attempt "
         r"attemptId=(?P<attemptId>[A-Za-z0-9_-]+)"
-        r"(?:\s+launchMode=(?P<launchMode>[A-Za-z0-9_-]+))?"
+        r"(?:\s+launchProvenance=(?P<launchProvenance>[A-Za-z0-9_-]+))?"
+        r"(?:\s+runtimeConfigSupplyMode=(?P<runtimeConfigSupplyMode>[A-Za-z0-9_-]+))?"
         r"(?:\s+hotRestart=(?P<hotRestart>true|false))?"
         r"(?:\s+configurationState=(?P<configurationState>[A-Za-z0-9_-]+))?"
         r"(?:\s+effectiveLaunchManifestDigest="
@@ -240,11 +245,16 @@ def extract_startup_watchdog_evidence(raw_log: str) -> dict[str, Any]:
     race_dismissed = "startup_safe_terminal_race_dismissed" in raw_log
     return {
         "rendererFirstFrameMs": int(renderer.group(1)) if renderer else None,
-        "safeTerminalMs": int(safe_terminal.group(1)) if safe_terminal else None,
+        "safeTerminalMs": (
+            int(safe_terminal.group("elapsedMs")) if safe_terminal else None
+        ),
+        "safeTerminalSurface": (
+            safe_terminal.group("surface") if safe_terminal else None
+        ),
         "reportedSafeTerminalMs": (
             int(reported_safe_terminal.group(1))
             if reported_safe_terminal
-            else int(safe_terminal.group(1))
+            else int(safe_terminal.group("elapsedMs"))
             if safe_terminal
             else None
         ),
@@ -262,7 +272,12 @@ def extract_startup_watchdog_evidence(raw_log: str) -> dict[str, Any]:
         ),
         "canonicalTerminal": None,
         "attemptId": attempt_id,
-        "launchMode": dart_attempt.group("launchMode") if dart_attempt else None,
+        "launchProvenance": (
+            dart_attempt.group("launchProvenance") if dart_attempt else None
+        ),
+        "runtimeConfigSupplyMode": (
+            dart_attempt.group("runtimeConfigSupplyMode") if dart_attempt else None
+        ),
         "hotRestart": (
             dart_attempt.group("hotRestart") == "true"
             if dart_attempt and dart_attempt.group("hotRestart") is not None
@@ -309,10 +324,20 @@ def classify_startup_terminal(
     never a terminal surface.
     """
 
-    if sequence.get("safeRecoveryShown"):
+    watchdog = extract_startup_watchdog_evidence(raw_log)
+    terminal_surface = watchdog.get("safeTerminalSurface")
+    native_surface_required = re.search(
+        r"(?:android|ios)_(?:dart_startup_attempt|startup_safe_terminal)",
+        raw_log,
+    ) is not None
+    if sequence.get("safeRecoveryShown") or terminal_surface in {
+        "safe_recovery",
+        "flutter_recovery",
+    }:
         return "safeRecovery"
     if (
-        sequence.get("shellFirstPaintMs") is not None
+        (not native_surface_required or terminal_surface == "router_shell")
+        and sequence.get("shellFirstPaintMs") is not None
         and sequence.get("overlayRemovedMs") is not None
     ):
         return "routerShell"

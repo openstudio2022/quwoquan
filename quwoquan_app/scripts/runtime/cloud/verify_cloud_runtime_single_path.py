@@ -10,6 +10,8 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Iterable, NamedTuple
 
+sys.dont_write_bytecode = True
+
 _SCRIPTS_ROOT = next(
     parent
     for parent in Path(__file__).resolve().parents
@@ -384,22 +386,31 @@ def _parse_generated_method_metadata(
     canonical_to_identifier = {
         canonical: identifier
         for identifier, canonical in re.findall(
-            r'^\s+static const String ([A-Za-z][A-Za-z0-9_]*) = "([^"]+)";', source, re.MULTILINE
+            r"^\s+static\s+const\s+String\s+"
+            r'([A-Za-z][A-Za-z0-9_]*)\s*=\s*"([^"]+)"\s*;',
+            source,
+            re.MULTILINE,
         )
     }
     ready_methods = frozenset(generated_methods)
     result: dict[str, GeneratedMethodMetadata] = {}
     for match in re.finditer(
-        r'^  "(?P<canonical>[^"]+)": CloudOperationContract\(\n'
-        r'(?P<body>.*?)(?=\n  "[^"]+": CloudOperationContract\(|\n\};)',
-        source, re.MULTILINE | re.DOTALL,
+        r'^ {2}"(?P<canonical>[^"]+)"[ \t]*:[ \t\r\n]*'
+        r"CloudOperationContract\([ \t\r\n]*"
+        r'(?P<body>.*?)(?=^ {2}"[^"]+"[ \t]*:'
+        r"[ \t\r\n]*CloudOperationContract\(|^};)",
+        source,
+        re.MULTILINE | re.DOTALL,
     ):
         canonical_id = match.group("canonical")
         identifier = canonical_to_identifier.get(canonical_id)
         if identifier not in ready_methods:
             continue
         body = match.group("body")
-        fields = tuple(re.search(rf'{name}: "([^"]+)"', body) for name in ("domain", "transport"))
+        fields = tuple(
+            re.search(rf'\b{name}\s*:\s*"([^"]+)"', body)
+            for name in ("domain", "transport")
+        )
         if any(field is None for field in fields):
             raise ValueError(
                 f"generated method metadata is incomplete: {canonical_id}"

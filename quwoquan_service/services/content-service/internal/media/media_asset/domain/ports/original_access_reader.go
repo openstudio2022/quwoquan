@@ -14,6 +14,10 @@ type OriginalAccessSlice struct {
 	FileSize         int64
 	ProcessingStatus string
 	AccessPolicy     string
+	// SourceReleaseID 是 data release importer 投影写入的归属 release；
+	// UGC 上传资产为空。research principal 的 grant 准入以它判定 active
+	// research release membership（DEC-031）。
+	SourceReleaseID string
 }
 
 type OriginalAccessReader interface {

@@ -4,7 +4,7 @@ part of 'video_player_widget.dart';
 extension _VideoPlayerWidgetPresentation on _VideoPlayerWidgetState {
   Widget _buildVideoPlaceholder() {
     return VideoPlayerSurfaceBuilder.buildPlaceholder(
-      thumbnailReference: widget.thumbnailReference,
+      thumbnailBinding: widget.thumbnailBinding,
       autoPlay: widget.autoPlay,
       showProgress: _showCompactProgress,
       showSlowHint: _isInitializationSlow,
@@ -13,7 +13,7 @@ extension _VideoPlayerWidgetPresentation on _VideoPlayerWidgetState {
 
   Widget _buildDeferredWidget() {
     return VideoPlayerSurfaceBuilder.buildDeferred(
-      thumbnailReference: widget.thumbnailReference,
+      thumbnailBinding: widget.thumbnailBinding,
     );
   }
 
@@ -23,7 +23,7 @@ extension _VideoPlayerWidgetPresentation on _VideoPlayerWidgetState {
         MediaPlaybackFailure.fromKind(MediaCandidateFailureKind.other);
     return VideoPlayerSurfaceBuilder.buildFailure(
       failure: failure,
-      thumbnailReference: widget.thumbnailReference,
+      thumbnailBinding: widget.thumbnailBinding,
       retrying: _isRetrying,
       onRetry: failure.isRetryable
           ? () {

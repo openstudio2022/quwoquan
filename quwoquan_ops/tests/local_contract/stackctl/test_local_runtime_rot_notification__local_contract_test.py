@@ -39,7 +39,7 @@ from quwoquan_ops.cli.lib.local_runtime_rot_watch import (
 
 _GiB = 2**30
 _TARGET = {"backend": "local"}
-_STARTUP = {"status": "running", "composeProject": "quwoquan_gamma_release_current_1"}
+_STARTUP = {"status": "running", "composeProject": "quwoquan_gamma_release_7002_1"}
 
 _HEALTHY_CONTAINERS = [
     {
@@ -290,8 +290,16 @@ class LaunchWaitWatchdogLocalContractTest(unittest.TestCase):
                 environment="gamma",
                 target="gamma-local",
                 platform="android",
+                build_profile="nonprod",
                 build_mode="debug",
                 run_mode="ui-only",
+                launch_provenance="canonical_launcher",
+                runtime_config_supply_mode="external_runtime_package",
+                runtime_config_trust_envelope_digest="sha256:" + "a" * 64,
+                runtime_config_package_digest="sha256:" + "a" * 64,
+                application_id="com.quwoquan.fixture",
+                flutter_version="3.47.0",
+                command_resolution_digest="sha256:" + "a" * 64,
                 device_id="emulator-5554",
             )
 

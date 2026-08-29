@@ -1,5 +1,8 @@
 """local gamma 启动编排、release 生命周期与配置身份合约。
 """
+# spec_ref: specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/spec.md#sit-001.t4
+# spec_ref: specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/spec.md#sit-001.t5
+
 from __future__ import annotations
 
 import yaml
@@ -384,10 +387,11 @@ class LocalGammaStartupReleaseLifecycleTest(unittest.TestCase):
         self.assertIn("recommendation-service", inspect_list)
 
     def test_gamma_up_bootstraps_policy_owner_before_full_stack(self) -> None:
-        """Gamma 冷启动 policy 死锁：投影拓扑 product-ops -> service-core(healthy)
-        -> recommendation(healthy)，而 recommendation full runtime 又硬性要求
-        Product Ops 已激活 rec_model_vs_rule。全栈 compose up 前必须先经
-        loopback published port 用公开 command 激活 canonical 政策。
+        """Gamma 冷启动 policy 死锁：service-core 内 Search 等策略事实，
+        Product Ops 又等 service-core 内 UserAccount authority。先拉起
+        service-core 进程完成 Build/Bind/Start 并暴露内部 pre-admission health，
+        再用公开 command 激活 canonical 政策；只等 shallow /healthz，不等
+        aggregate /readyz 或 Compose dependency graph。
         """
 
         source = START_SCRIPT.read_text(encoding="utf-8")
@@ -412,6 +416,42 @@ class LocalGammaStartupReleaseLifecycleTest(unittest.TestCase):
             'up -d --no-build --no-deps product-ops-service',
             bootstrap_block,
         )
+        self.assertIn(
+            'up -d --no-build --no-deps service-core',
+            bootstrap_block,
+        )
+        authority_index = bootstrap_block.index(
+            'up -d --no-build --no-deps service-core'
+        )
+        product_ops_index = bootstrap_block.index(
+            'up -d --no-build --no-deps product-ops-service'
+        )
+        activation_index = bootstrap_block.index(
+            "activate_search_experiment_policy_via_published_port"
+        )
+        self.assertLess(authority_index, product_ops_index)
+        self.assertLess(product_ops_index, activation_index)
+        shallow_health_index = bootstrap_block.index(
+            "service-core did not reach shallow health"
+        )
+        self.assertLess(authority_index, shallow_health_index)
+        self.assertLess(shallow_health_index, product_ops_index)
+        self.assertIn(
+            "{{if .State.Health}}{{.State.Health.Status}}"
+            "{{else}}missing-healthcheck{{end}} {{.State.Status}}",
+            bootstrap_block,
+        )
+        self.assertIn(
+            'ps -a -q service-core',
+            bootstrap_block,
+        )
+        self.assertIn(
+            "service-core container is missing during policy owner bootstrap",
+            bootstrap_block,
+        )
+        self.assertIn('[[ "$state" == "healthy running" ]]', bootstrap_block)
+        # 文档注释必须解释为什么不等 aggregate /readyz；禁止的是实际探测。
+        self.assertNotRegex(bootstrap_block, r"(?:curl|wget)[^\n]*/readyz")
         # 激活只允许走公开 command 的 loopback 变体；禁止直写 Mongo/Redis。
         self.assertIn(
             "activate_search_experiment_policy_via_published_port",

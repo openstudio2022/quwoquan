@@ -33,6 +33,12 @@ func (reader *MongoResearchReleaseBindingReader) ReadActiveResearchRelease(
 	if err != nil || !snapshot.ContentReady() {
 		return postapp.ResearchReleaseBinding{}, fmt.Errorf("%w: active supply readback: %v", postapp.ErrResearchReleaseUnavailable, err)
 	}
+	// release 类别只认 release 级 releaseClass。规格允许 research release 选择
+	// research|commercial 两种 usageScope 的对象（commercial 是更强的许可子集），
+	// 因此不能用 per-post scope 计数反推 release 类别。
+	if strings.TrimSpace(snapshot.ReleaseClass) != "research" {
+		return postapp.ResearchReleaseBinding{}, postapp.ErrResearchReleaseNotResearch
+	}
 	filter := bson.M{
 		"sourceOwner":      "qwq_data",
 		"releaseId":        strings.TrimSpace(snapshot.ActiveReleaseID),
@@ -43,7 +49,7 @@ func (reader *MongoResearchReleaseBindingReader) ReadActiveResearchRelease(
 		"moderationStatus": "approved",
 	}
 	researchFilter := cloneBSONMap(filter)
-	researchFilter["admission.usageScope"] = "research"
+	researchFilter["admission.usageScope"] = bson.M{"$in": []string{"research", "commercial"}}
 	researchPosts, err := reader.active.postsCollection.CountDocuments(ctx, researchFilter)
 	if err != nil {
 		return postapp.ResearchReleaseBinding{}, fmt.Errorf("%w: count research posts: %v", postapp.ErrResearchReleaseUnavailable, err)

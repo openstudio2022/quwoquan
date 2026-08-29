@@ -35,6 +35,11 @@ func creatorReleaseFixture(t *testing.T) string {
 		filepath.Join(root, "payload", "desired_state.json"),
 		`{"schema":"quwoquan_data.release_desired_state","releaseId":"release-a","desiredRefs":{"creators":["creator-a"]}}`,
 	)
+	writeReleaseTestFile(
+		t,
+		filepath.Join(root, "payload", "release.json"),
+		`{"schema":"quwoquan_data.release","releaseId":"release-a","releaseClass":"commercial"}`,
+	)
 	creatorRoot := filepath.Join(root, "payload", "objects", "creators", testCreatorID)
 	writeReleaseTestFile(
 		t,

@@ -30,17 +30,17 @@ class ContextFillTaskDto {
   final ContextRetryPolicy retryPolicy;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'slotId': slotId,
-        'fillType': fillType.wireName,
-        'targetSlot': targetSlot.wireName,
-        'reason': reason,
-        'prompt': prompt,
-        'required': required,
-        'suggestions': suggestions,
-        'generatedQueryConditions': generatedQueryConditions,
-        'scopeExpansionPolicy': scopeExpansionPolicy.wireName,
-        'retryPolicy': retryPolicy.wireName,
-      };
+    'slotId': slotId,
+    'fillType': fillType.wireName,
+    'targetSlot': targetSlot.wireName,
+    'reason': reason,
+    'prompt': prompt,
+    'required': required,
+    'suggestions': suggestions,
+    'generatedQueryConditions': generatedQueryConditions,
+    'scopeExpansionPolicy': scopeExpansionPolicy.wireName,
+    'retryPolicy': retryPolicy.wireName,
+  };
 
   factory ContextFillTaskDto.fromJson(Map<String, dynamic> json) {
     const allowedFields = <String>{
@@ -59,55 +59,114 @@ class ContextFillTaskDto {
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('ContextFillTaskDto response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'ContextFillTaskDto response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (json.containsKey('slotId') && json['slotId'] != null && (json['slotId'] is! String)) {
-      throw const FormatException('ContextFillTaskDto field slotId has an invalid wire value');
+    if (json.containsKey('slotId') &&
+        json['slotId'] != null &&
+        (json['slotId'] is! String)) {
+      throw const FormatException(
+        'ContextFillTaskDto field slotId has an invalid wire value',
+      );
     }
-    if (json.containsKey('fillType') && json['fillType'] != null && (json['fillType'] is! String)) {
-      throw const FormatException('ContextFillTaskDto field fillType has an invalid wire value');
+    if (json.containsKey('fillType') &&
+        json['fillType'] != null &&
+        (json['fillType'] is! String)) {
+      throw const FormatException(
+        'ContextFillTaskDto field fillType has an invalid wire value',
+      );
     }
-    if (json.containsKey('targetSlot') && json['targetSlot'] != null && (json['targetSlot'] is! String)) {
-      throw const FormatException('ContextFillTaskDto field targetSlot has an invalid wire value');
+    if (json.containsKey('targetSlot') &&
+        json['targetSlot'] != null &&
+        (json['targetSlot'] is! String)) {
+      throw const FormatException(
+        'ContextFillTaskDto field targetSlot has an invalid wire value',
+      );
     }
-    if (json.containsKey('reason') && json['reason'] != null && (json['reason'] is! String)) {
-      throw const FormatException('ContextFillTaskDto field reason has an invalid wire value');
+    if (json.containsKey('reason') &&
+        json['reason'] != null &&
+        (json['reason'] is! String)) {
+      throw const FormatException(
+        'ContextFillTaskDto field reason has an invalid wire value',
+      );
     }
-    if (json.containsKey('prompt') && json['prompt'] != null && (json['prompt'] is! String)) {
-      throw const FormatException('ContextFillTaskDto field prompt has an invalid wire value');
+    if (json.containsKey('prompt') &&
+        json['prompt'] != null &&
+        (json['prompt'] is! String)) {
+      throw const FormatException(
+        'ContextFillTaskDto field prompt has an invalid wire value',
+      );
     }
-    if (json.containsKey('required') && json['required'] != null && (json['required'] is! bool)) {
-      throw const FormatException('ContextFillTaskDto field required has an invalid wire value');
+    if (json.containsKey('required') &&
+        json['required'] != null &&
+        (json['required'] is! bool)) {
+      throw const FormatException(
+        'ContextFillTaskDto field required has an invalid wire value',
+      );
     }
-    if (json.containsKey('suggestions') && json['suggestions'] != null && (json['suggestions'] is! List || (json['suggestions'] as List).any((item) => item is! String))) {
-      throw const FormatException('ContextFillTaskDto field suggestions has an invalid wire value');
+    if (json.containsKey('suggestions') &&
+        json['suggestions'] != null &&
+        (json['suggestions'] is! List ||
+            (json['suggestions'] as List).any((item) => item is! String))) {
+      throw const FormatException(
+        'ContextFillTaskDto field suggestions has an invalid wire value',
+      );
     }
-    if (json.containsKey('generatedQueryConditions') && json['generatedQueryConditions'] != null && (json['generatedQueryConditions'] is! List || (json['generatedQueryConditions'] as List).any((item) => item is! String))) {
-      throw const FormatException('ContextFillTaskDto field generatedQueryConditions has an invalid wire value');
+    if (json.containsKey('generatedQueryConditions') &&
+        json['generatedQueryConditions'] != null &&
+        (json['generatedQueryConditions'] is! List ||
+            (json['generatedQueryConditions'] as List).any(
+              (item) => item is! String,
+            ))) {
+      throw const FormatException(
+        'ContextFillTaskDto field generatedQueryConditions has an invalid wire value',
+      );
     }
-    if (json.containsKey('scopeExpansionPolicy') && json['scopeExpansionPolicy'] != null && (json['scopeExpansionPolicy'] is! String)) {
-      throw const FormatException('ContextFillTaskDto field scopeExpansionPolicy has an invalid wire value');
+    if (json.containsKey('scopeExpansionPolicy') &&
+        json['scopeExpansionPolicy'] != null &&
+        (json['scopeExpansionPolicy'] is! String)) {
+      throw const FormatException(
+        'ContextFillTaskDto field scopeExpansionPolicy has an invalid wire value',
+      );
     }
-    if (json.containsKey('retryPolicy') && json['retryPolicy'] != null && (json['retryPolicy'] is! String)) {
-      throw const FormatException('ContextFillTaskDto field retryPolicy has an invalid wire value');
+    if (json.containsKey('retryPolicy') &&
+        json['retryPolicy'] != null &&
+        (json['retryPolicy'] is! String)) {
+      throw const FormatException(
+        'ContextFillTaskDto field retryPolicy has an invalid wire value',
+      );
     }
     return ContextFillTaskDto(
       slotId: (json['slotId'] as String?)?.trim() ?? "",
-      fillType: parseContextFillTypeStrict((json['fillType'] as String?)?.trim() ?? ""),
-      targetSlot: parseContextTargetSlotStrict((json['targetSlot'] as String?)?.trim() ?? ""),
+      fillType: parseContextFillTypeStrict(
+        (json['fillType'] as String?)?.trim() ?? "",
+      ),
+      targetSlot: parseContextTargetSlotStrict(
+        (json['targetSlot'] as String?)?.trim() ?? "",
+      ),
       reason: (json['reason'] as String?)?.trim() ?? "",
       prompt: (json['prompt'] as String?)?.trim() ?? "",
       required: json['required'] != false,
       suggestions: _assistantStringList(json['suggestions']),
-      generatedQueryConditions: _assistantStringList(json['generatedQueryConditions']),
-      scopeExpansionPolicy: parseContextScopeExpansionPolicyStrict((json['scopeExpansionPolicy'] as String?)?.trim() ?? "none"),
-      retryPolicy: parseContextRetryPolicyStrict((json['retryPolicy'] as String?)?.trim() ?? "single_retry"),
+      generatedQueryConditions: _assistantStringList(
+        json['generatedQueryConditions'],
+      ),
+      scopeExpansionPolicy: parseContextScopeExpansionPolicyStrict(
+        (json['scopeExpansionPolicy'] as String?)?.trim() ?? "none",
+      ),
+      retryPolicy: parseContextRetryPolicyStrict(
+        (json['retryPolicy'] as String?)?.trim() ?? "single_retry",
+      ),
     );
   }
 
   static List<String> _assistantStringList(Object? value) {
     if (value is List) {
-      return value.map((item) => item.toString().trim()).where((item) => item.isNotEmpty).toList(growable: false);
+      return value
+          .map((item) => item.toString().trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
     }
     return const <String>[];
   }

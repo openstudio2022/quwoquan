@@ -7,15 +7,14 @@ import hashlib
 import json
 import os
 import sys
-import time
-import urllib.error
 import urllib.parse
-import urllib.request
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+sys.dont_write_bytecode = True
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -40,7 +39,20 @@ from quwoquan_ops.cli.probes.environment_probe_semantics import (  # noqa: E402
     _feed_media_slice_urls,
     _media_origin,
     _release_sample_semantic_result,
+    _research_anonymous_convergence_issue,
     _search_semantic_issue,
+)
+# HTTP 传输与重试裁决同样已分家到 environment_probe_transport；沿用同一 re-export
+# 约定，让 `probe.request` 一类读取面不因内部拆分而变化。
+from quwoquan_ops.cli.probes.environment_probe_transport import (  # noqa: E402
+    INTEGRATION_FEED_SESSION_ID as _INTEGRATION_FEED_SESSION_ID,
+    common_headers as _common_headers,
+    declared_transient_retry_delay as _declared_transient_retry_delay,
+    feed_headers as _feed_headers,
+    feed_url as _feed_url,
+    json_headers as _json_headers,
+    public_headers as _public_headers,
+    request,
 )
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
@@ -107,6 +119,28 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--research-anonymous-convergence",
+        action="store_true",
+        help=(
+            "Research-isolation mode: require the anonymous discovery, video-book "
+            "and premium feed queries to converge to the empty page with "
+            "emptyReason=no_active_release and no release identity echo (DEC-032). "
+            "Authenticated research consumption evidence is owned by the Data "
+            "post-api verification; this probe proves anonymous isolation."
+        ),
+    )
+    parser.add_argument(
+        "--research-consumer-readback",
+        action="store_true",
+        help=(
+            "Research-consumer mode: run the feed checks with the authenticated "
+            "research consumer identity (bearer injected via the test auth token "
+            "environment variable) instead of the anonymous surface, so that "
+            "release-bound non-empty expectations hold for a research release "
+            "(DEC-032 capability surface)."
+        ),
+    )
+    parser.add_argument(
         "--expected-discovery-post-id",
         action="append",
         default=[],
@@ -163,7 +197,22 @@ def parse_args() -> argparse.Namespace:
         default="readonly",
     )
     args = parser.parse_args()
+    if args.require_non_empty_content_feed and args.research_anonymous_convergence:
+        parser.error(
+            "--require-non-empty-content-feed and --research-anonymous-convergence "
+            "are mutually exclusive feed semantics"
+        )
+    if args.research_consumer_readback and args.research_anonymous_convergence:
+        parser.error(
+            "--research-consumer-readback and --research-anonymous-convergence "
+            "are mutually exclusive feed identities"
+        )
     args.test_auth_token = _resolve_test_auth_token(args.env, args.test_auth_token)
+    if args.research_consumer_readback and not args.test_auth_token:
+        parser.error(
+            "--research-consumer-readback requires the research consumer bearer "
+            "via the test auth token environment variable"
+        )
     return args
 
 
@@ -184,83 +233,6 @@ def _resolve_test_auth_token(env_name: str, explicit_token: str) -> str:
     return ""
 
 
-def request(
-    method: str,
-    url: str,
-    *,
-    headers: dict[str, str] | None = None,
-    body: bytes | None = None,
-    timeout: int = 12,
-    retry_attempts: int = 2,
-    retry_sleep_seconds: float = 2.0,
-) -> tuple[bool, int | None, str]:
-    retry_markers = (
-        "timed out",
-        "Remote end closed connection without response",
-        "Connection reset",
-        "Connection closed",
-    )
-    total_attempts = max(1, retry_attempts)
-    for attempt in range(1, total_attempts + 1):
-        req = urllib.request.Request(
-            url, headers=headers or {}, data=body, method=method
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=timeout) as response:
-                payload = response.read().decode("utf-8", errors="replace")
-                return True, int(response.status), payload
-        except urllib.error.HTTPError as exc:
-            payload = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
-            return False, int(exc.code), payload
-        except Exception as exc:  # noqa: BLE001
-            message = str(exc)
-            if attempt >= total_attempts or not any(
-                marker in message for marker in retry_markers
-            ):
-                return False, None, message
-            time.sleep(max(0.0, retry_sleep_seconds) * attempt)
-    return False, None, "unknown request failure"
-
-
-def _common_headers(test_auth_token: str) -> dict[str, str]:
-    headers = {
-        "Accept": "application/json",
-    }
-    token = test_auth_token.strip()
-    if token:
-        headers["Authorization"] = "Bearer " + token
-    return headers
-
-
-def _json_headers(test_auth_token: str) -> dict[str, str]:
-    headers = _common_headers(test_auth_token)
-    headers["Content-Type"] = "application/json"
-    return headers
-
-
-def _public_headers() -> dict[str, str]:
-    return {"Accept": "application/json"}
-
-
-_INTEGRATION_FEED_SESSION_ID = "stackctl-environment-integration-probe"
-
-
-def _feed_headers(test_auth_token: str = "") -> dict[str, str]:
-    """Ranked recommend feeds require a session id (query or X-Client-Session-Id)."""
-
-    headers = _common_headers(test_auth_token)
-    headers["X-Client-Session-Id"] = _INTEGRATION_FEED_SESSION_ID
-    return headers
-
-
-def _feed_url(base: str, query: str) -> str:
-    separator = "&" if "?" in query else "?"
-    return (
-        f"{base.rstrip('/')}/content/feed{query}"
-        f"{separator}sessionId={_INTEGRATION_FEED_SESSION_ID}"
-    )
-
-
 def _owner_matches_post(owner_ref: object, post_ref: str) -> bool:
     owner = str(owner_ref or "").strip().strip("/")
     post = str(post_ref or "").strip().strip("/")
@@ -277,6 +249,17 @@ def _release_probe_identity(args: argparse.Namespace) -> dict[str, Any]:
         resolve_readiness_path(raw_receipt),
         expected_environment=args.env,
     )
+    if str(identity["receipt"].get("releaseClass") or "") == "research":
+        # research 私有交付（DEC-031）不存在匿名可采样图片，media_sample
+        # 语义不成立；identity 其余字段照常供 feed 绑定检查使用。
+        return {
+            "releaseId": identity["releaseId"],
+            "manifestDigest": identity["manifestDigest"],
+            "importRunId": identity["importRunId"],
+            "verifyRunId": identity["verifyRunId"],
+            "readinessReceiptRef": identity["readinessReceiptRef"],
+            "media": None,
+        }
     image_posts = {
         str(binding["postRef"]).strip().strip("/")
         for binding in identity["postBindings"]
@@ -416,6 +399,15 @@ def build_checks(
     require_non_empty_content_feed = bool(
         getattr(args, "require_non_empty_content_feed", False)
     )
+    research_anonymous_convergence = bool(
+        getattr(args, "research_anonymous_convergence", False)
+    )
+    research_consumer_readback = bool(
+        getattr(args, "research_consumer_readback", False)
+    )
+    # feed 检查默认走匿名面（发现面语义）；research consumer 模式下改带
+    # research 凭证，否则 DEC-032 匿名收敛会让 release-bound 非空断言恒假。
+    feed_auth_token = args.test_auth_token if research_consumer_readback else ""
     media_image_base_url = str(
         getattr(
             args,
@@ -459,7 +451,7 @@ def build_checks(
             "name": "content_feed",
             "method": "GET",
             "url": _feed_url(base, "?identity=work&sort=recommend&limit=1"),
-            "headers": _feed_headers(),
+            "headers": _feed_headers(feed_auth_token),
             "expected_statuses": [200],
         },
         {
@@ -522,11 +514,11 @@ def build_checks(
                 **sample,
             }
         )
-    if require_non_empty_content_feed:
+    if require_non_empty_content_feed or research_anonymous_convergence:
         video_page_size = int(getattr(args, "video_page_size", 1) or 1)
         if not 1 <= video_page_size <= 100:
             raise ValueError("video page size must be between 1 and 100")
-        feed_headers = _feed_headers()
+        feed_headers = _feed_headers(feed_auth_token)
         checks.extend(
             [
                 {
@@ -621,6 +613,9 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
     require_non_empty_content_feed = bool(
         getattr(args, "require_non_empty_content_feed", False)
     )
+    research_anonymous_convergence = bool(
+        getattr(args, "research_anonymous_convergence", False)
+    )
     if mode == "post-deploy" and not args.test_auth_token:
         findings.append(
             "GATE_BLOCK: post-deploy integration requires a valid environment test auth token"
@@ -658,6 +653,7 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
     feed_media_slices: dict[str, str] = {}
     feed_media_origin = _media_origin(media_image_base_url)
     for check in selected_checks:
+        retry_trace: list[dict[str, Any]] = []
         ok, status_code, payload = request(
             check["method"],
             check["url"],
@@ -666,6 +662,7 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
             timeout=max(1, request_timeout_seconds),
             retry_attempts=max(1, retry_attempts),
             retry_sleep_seconds=max(0.0, retry_sleep_seconds),
+            retry_trace=retry_trace,
         )
         expected_statuses = list(check.get("expected_statuses") or [])
         matched = ok and status_code in expected_statuses
@@ -678,6 +675,10 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
             "ok": matched,
             "bodyPreview": preview,
         }
+        # 瞬时重试必须留痕：环境抖动（如 ES GC 停顿）即使被重试吸收，
+        # 也要在回执里可见，否则会静默掩盖容量与稳定性问题。
+        if retry_trace:
+            entry["retriedAttempts"] = retry_trace
         if (
             matched
             and require_non_empty_content_feed
@@ -696,6 +697,20 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
                 entry["contentItemCount"] = item_count
             if returned_post_ids:
                 entry["returnedPostIds"] = sorted(returned_post_ids)
+            if semantic_issue:
+                matched = False
+                entry["ok"] = False
+                entry["semanticError"] = semantic_issue
+        if (
+            matched
+            and research_anonymous_convergence
+            and check["name"] in {"content_feed", "video_book_feed", "premium_feed"}
+        ):
+            semantic_issue, item_count = _research_anonymous_convergence_issue(
+                payload
+            )
+            if item_count is not None:
+                entry["contentItemCount"] = item_count
             if semantic_issue:
                 matched = False
                 entry["ok"] = False
@@ -905,6 +920,10 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
         "retrySleepSeconds": retry_sleep_seconds,
         "onlyChecks": sorted(only_checks),
         "requireNonEmptyContentFeed": require_non_empty_content_feed,
+        "researchAnonymousConvergence": research_anonymous_convergence,
+        "researchConsumerReadback": bool(
+            getattr(args, "research_consumer_readback", False)
+        ),
         "checks": results,
         "findings": findings,
     }

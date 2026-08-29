@@ -50,10 +50,12 @@ enum _CircleMediaSlot { cover, avatar }
 enum _CircleMediaAction { camera, photoLibrary, remove }
 
 class CircleEditSettingsPage extends ConsumerStatefulWidget {
+  // 编辑模式的宿主对象必须在场：调用方要么已拿到圈子，要么先落缺席终态。
+  // 让它在类型上非空，缺席就无法走到需要为 visibility/joinPolicy 代偿默认值的地方。
   const CircleEditSettingsPage({
     super.key,
     required this.circleId,
-    required this.initialCircle,
+    required Circle this.initialCircle,
     this.initialTab = CircleEditSettingsTab.info,
     this.initialAvatarUrl,
   }) : isCreateMode = false;

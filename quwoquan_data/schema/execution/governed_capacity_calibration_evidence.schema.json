@@ -6,7 +6,8 @@
   "required": [
     "schema", "calibrationId", "workloadScale", "hostClass", "providerTier",
     "providerEvidenceCalibrationId", "providerCandidates", "resourcePeaks", "fleetObservations",
-    "objectTimingObservations", "decision", "recordedAt", "evidenceDigest"
+    "objectTimingObservations", "heartbeatWriteObservations", "decision",
+    "recordedAt", "evidenceDigest"
   ],
   "properties": {
     "schema": {"const": "quwoquan_data.governed_capacity_calibration_evidence"},
@@ -75,19 +76,47 @@
         }
       }
     },
+    "heartbeatWriteObservations": {
+      "type": "array",
+      "minItems": 1,
+      "description": "标定期实测的单次心跳写入开销。存活阈值的取值只能由本观测与 objectTimingObservations 推出，不得挪用 frozenCapacity 的并发上限或单对象 wall-clock。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sampleCount", "p95Seconds", "maxSeconds"],
+        "properties": {
+          "sampleCount": {"type": "integer", "minimum": 1},
+          "p95Seconds": {"type": "number", "exclusiveMinimum": 0},
+          "maxSeconds": {"type": "number", "exclusiveMinimum": 0}
+        }
+      }
+    },
     "decision": {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "autoResearchMaxConcurrentWorkers", "fleetMaxConcurrentWorkers",
-        "objectWallClockSeconds", "completionGraceSeconds", "rule"
+        "objectWallClockSeconds", "completionGraceSeconds", "rule",
+        "sourceDiscoveryHeartbeatIntervalSeconds",
+        "sourceDiscoveryHeartbeatStaleAfterSeconds",
+        "missedHeartbeatTolerance", "livenessRule"
       ],
       "properties": {
         "autoResearchMaxConcurrentWorkers": {"type": "integer", "minimum": 1},
         "fleetMaxConcurrentWorkers": {"type": "integer", "minimum": 1},
         "objectWallClockSeconds": {"type": "integer", "minimum": 60, "multipleOf": 60},
         "completionGraceSeconds": {"type": "integer", "minimum": 60, "multipleOf": 60},
-        "rule": {"const": "zero-provider-failure-candidate+observed-fleet-peak+minute-ceiling"}
+        "rule": {"const": "zero-provider-failure-candidate+observed-fleet-peak+minute-ceiling"},
+        "sourceDiscoveryHeartbeatIntervalSeconds": {"type": "integer", "minimum": 1},
+        "sourceDiscoveryHeartbeatStaleAfterSeconds": {"type": "integer", "minimum": 2},
+        "missedHeartbeatTolerance": {
+          "type": "integer",
+          "minimum": 2,
+          "description": "标定时显式声明的可容忍漏拍数。过期阈值等于心跳间隔乘以本值；它是一处写下的声明，不是代码替标定者选的常量。"
+        },
+        "livenessRule": {
+          "const": "heartbeat-write-cost-ceiling+object-duration-detection-floor+declared-missed-beat-tolerance"
+        }
       }
     },
     "recordedAt": {"type": "string", "format": "date-time"},

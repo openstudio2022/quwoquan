@@ -46,6 +46,7 @@
 - 控制面契约必须独立于用户面 API，不得依赖当前同 Pod 部署。
 - 高风险配置必须具备灰度、回滚、审计与危险动作确认能力。
 - 各领域接入时必须声明最低 `platform-control-plane` 对象集合。
+- 本地 runtime 生命周期必须消费 `config-source-governance` 输出的唯一资源所有权结果，只收敛目标 runtime 自有资源并保持独立控制面在场；所有权无法唯一裁定或目标自有资源未收敛时不得产生成功终态。
 
 ## 6. 契约与依赖
 
@@ -61,6 +62,7 @@
 - GIVEN 执行“config and reliability governance 能力”所需的身份、输入与上游事实均有效。
 - WHEN 参与者发起“config and reliability governance 能力”对应动作。
 - THEN 直属 Story 共同交付“承接 `platform-ops` 的平台运维控制面规格，负责把“配置治理 + 服务治理 + 发布灰度 + 环境依赖”沉淀为可设计、可实现、可验收的统一平台能力”，失败终态可区分且不产生伪成功事实。
+- AND 本地 runtime 生命周期只收敛目标自有资源并保持独立控制面在场；所有权无法唯一裁定或目标自有资源未收敛时不得产生成功终态。
 
 <a id="sit-002"></a>
 ### SIT-002 行数预算对单文件 stdin pipe 契约脚本的机器派生豁免

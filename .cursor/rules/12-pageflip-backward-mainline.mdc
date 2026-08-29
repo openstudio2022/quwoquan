@@ -1,9 +1,0 @@
----
-description: 后翻 BACK 渲染主线硬约束：BACK 走原生 calc + forward-isomorphic 视觉几何，recto/verso 在同一 moving sheet 内分段
-globs: quwoquan_app/lib/design_system/pageflip/**,quwoquan_app/lib/service/content_service/content/post/presentation/article_reader/pageflip/**,quwoquan_app/test/**/pageflip/**
-alwaysApply: false
----
-
-改动 BACK（后翻）渲染前，先读
-`.agents/skills/review/references/roles/pageflip/references/backward-mainline.md`。
-与 [11-pageflip-geometry-guardrails](11-pageflip-geometry-guardrails.mdc) 冲突以本条为准。

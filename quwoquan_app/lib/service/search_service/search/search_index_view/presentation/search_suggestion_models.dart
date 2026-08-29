@@ -1,4 +1,6 @@
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/application/public/circle_search_hit_views.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show MediaDeliveryAccessMode;
 import 'package:quwoquan_app/service/integration_service/external_integration/location/application/public/search_location_suggestion_view.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/application/public/social_relation_search_item_view_data.dart';
 
@@ -68,6 +70,8 @@ class NetworkSearchSuggestion {
     this.initialTabId,
     this.homepageId,
     this.coverUrl,
+    this.coverAssetId,
+    this.coverAccessMode,
   });
 
   final String query;
@@ -76,6 +80,11 @@ class NetworkSearchSuggestion {
   final String? initialTabId;
   final String? homepageId;
   final String? coverUrl;
+
+  /// 主页封面的配对资产标识与交付访问模式（DEC-033）；research 相位
+  /// 的 coverUrl 是相对私有 CAS 引用，按 coverAssetId 换短签。
+  final String? coverAssetId;
+  final MediaDeliveryAccessMode? coverAccessMode;
 
   String get displayTitle => title ?? query;
   bool get isHomepagePreview => homepageId?.trim().isNotEmpty == true;

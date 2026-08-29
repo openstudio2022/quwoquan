@@ -153,38 +153,21 @@ def test_frozen_runtime_request_rejects_unknown_or_unordered_fields() -> None:
         recipe.RuntimeExecutionRequest.from_document(request)
 
 
-def test_execute_rejects_a_provider_outside_the_vertical_policy(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    class RejectingProviderPolicy:
-        def require_declared(self, provider_ids: tuple[str, ...]) -> None:
-            raise ValueError(f"undeclared provider IDs: {provider_ids}")
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/work-request-compilation/spec.md#gwt-002.t4
+def test_execution_holds_no_second_provider_admission_gate() -> None:
+    """Provider admission is judged once, at the confirmed handoff.
 
-    reference_root = tmp_path / "quwoquan_data/reference/travel/entities/test-region-a"
-    reference_root.mkdir(parents=True)
-    monkeypatch.setattr(recipe, "REPO_ROOT", tmp_path)
-    monkeypatch.setattr(
-        recipe,
-        "load_provider_policy",
-        lambda _vertical: RejectingProviderPolicy(),
-    )
-    args = argparse.Namespace(
-        execution_id=EXECUTION_ID,
-        retry_of=None,
-        family="content/travel/homepage/homepage",
-        region_ref="test-region-a",
-        selector="source-ready-priority",
-        count=1,
-        quota=1,
-        topic=None,
-        source_providers=["provider-a"],
-        stage="plan-only",
-        recover_stage=None,
-        recovery_reason=None,
-    )
-    with pytest.raises(SystemExit, match="undeclared provider IDs"):
-        recipe.handle_execute(args)
+    `REQ-002` puts the registry closed set on `handoff.sourceSelection`, so the
+    execution stage must not carry a parallel provider policy judgement against
+    a different closed set.
+    """
+    source = (
+        SCRIPTS_ROOT
+        / "content/execution/planning/recipe/model.py"
+    ).read_text(encoding="utf-8")
+
+    assert "require_declared" not in source
+    assert "provider_policy" not in source
 
 
 def test_execute_cli_accepts_only_explicit_generic_request_parameters() -> None:

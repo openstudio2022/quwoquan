@@ -11,23 +11,19 @@ import yaml
 SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
-from core.paths import DATA_EXECUTIONS_ROOT, OBJECT_STAGES, REPO_ROOT, is_execution_id
+from core.paths import (
+    DATA_EXECUTIONS_ROOT,
+    EXECUTION_ROOT_ALLOWED_ENTRIES,
+    OBJECT_STAGES,
+    REPO_ROOT,
+    is_execution_id,
+)
 from content.execution.execution_terminal import load_terminal_execution_evidence
 from content.execution.spec_contract import ExecutionSpec
 from content.execution.store import load_spec
 from content.execution.workspace import load_execution_manifest, load_frozen_target_set
 
 
-_ROOT_ALLOWED = {
-    "execution_manifest.json",
-    "0.plan",
-    "sources",
-    "entities",
-    "posts",
-    "_shared",
-    "evidence",
-    "publish_ref.json",
-}
 _RETIRED_SOURCE_DIRS = (
     "control_plane/tasks",
     "sop",
@@ -40,7 +36,6 @@ _RETIRED_RUNTIME_PATHS = (
     "data/runs",
     "content_runs",
 )
-_STAGES = {"1.download", "2.quality", "3.compose", "4.draft", "5.review"}
 # Keep the forbidden evidence keys as runtime values. The source-level purity
 # verifier must inspect product code, not report this verifier's own contract.
 _RETIRED_IDENTITY_KEYS = frozenset(("task" + "Id", "batch" + "Id"))
@@ -103,7 +98,7 @@ def _object_stage_issues(root: Path) -> list[str]:
     issues: list[str] = []
     for stage in root.rglob("1.download"):
         object_root = stage.parent
-        missing = sorted(name for name in _STAGES if not (object_root / name).is_dir())
+        missing = [name for name in OBJECT_STAGES if not (object_root / name).is_dir()]
         if missing:
             issues.append(
                 f"{object_root.relative_to(DATA_EXECUTIONS_ROOT)}: missing execution stages {', '.join(missing)}"
@@ -227,7 +222,7 @@ def _execution_work_package_issues(entry: Path) -> list[str]:
     if not manifest.is_file():
         issues.append(f"{_display_path(entry)}: execution_manifest.json missing")
     for child in entry.iterdir():
-        if child.name not in _ROOT_ALLOWED:
+        if child.name not in EXECUTION_ROOT_ALLOWED_ENTRIES:
             issues.append(f"{_display_path(child)}: not allowed in an execution work package")
     issues.extend(_identity_issues(entry))
     issues.extend(_frozen_target_issues(entry))

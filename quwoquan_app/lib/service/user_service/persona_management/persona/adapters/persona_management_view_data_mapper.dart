@@ -24,6 +24,9 @@ PersonaProfileViewData personaProfileViewDataFromWire(
     avatarUrl: isLocalFileImageSource(rawAvatarUrl)
         ? rawAvatarUrl
         : resolveAvatarImageUrl(rawAvatarUrl, avatarVersion: 0),
+    // 媒体交付绑定（DEC-033）：契约缺席即保持 null，不以 personaId 冒充。
+    avatarAssetId: projection.avatarAssetId,
+    avatarAccessMode: projection.avatarAccessMode,
     avatarVersion: 0,
     backgroundUrl: isLocalFileImageSource(rawBackgroundUrl)
         ? rawBackgroundUrl

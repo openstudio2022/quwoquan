@@ -5,7 +5,11 @@ enum RtcErrorCode {
   invalidArgument('RTC.USER.invalid_argument', '通话操作请求格式无效', 400),
   callNotFound('RTC.USER.call_not_found', '通话不存在', 404),
   unauthorized('RTC.USER.unauthorized', '请先登录', 401),
-  accountSecurityDenied('RTC.USER.account_security_denied', '登录凭据已失效，请重新登录', 401),
+  accountSecurityDenied(
+    'RTC.USER.account_security_denied',
+    '登录凭据已失效，请重新登录',
+    401,
+  ),
   alreadyInCall('RTC.USER.already_in_call', '你正在通话中，请先结束当前通话', 409),
   callFull('RTC.USER.call_full', '通话人数已达上限', 409),
   callEnded('RTC.USER.call_ended', '通话已结束', 410),
@@ -16,8 +20,16 @@ enum RtcErrorCode {
   invalidCallAction('RTC.USER.invalid_call_action', '当前通话状态无法执行该操作', 409),
   screenShareConflict('RTC.USER.screen_share_conflict', '已有参与者正在共享屏幕', 409),
   idempotencyConflict('RTC.USER.idempotency_conflict', '请求重复且内容不一致，请重新发起', 409),
-  mediaTransportUnavailable('RTC.SYSTEM.media_transport_unavailable', '通话服务暂时不可用，请稍后重试', 503),
-  accountSecurityUnavailable('RTC.SYSTEM.account_security_unavailable', '账号安全校验暂不可用，请稍后重试', 503),
+  mediaTransportUnavailable(
+    'RTC.SYSTEM.media_transport_unavailable',
+    '通话服务暂时不可用，请稍后重试',
+    503,
+  ),
+  accountSecurityUnavailable(
+    'RTC.SYSTEM.account_security_unavailable',
+    '账号安全校验暂不可用，请稍后重试',
+    503,
+  ),
   internalError('RTC.SYSTEM.internal_error', '通话服务异常，请稍后重试', 500);
 
   final String code;

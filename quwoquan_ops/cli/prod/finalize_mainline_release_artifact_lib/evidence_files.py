@@ -13,6 +13,7 @@ from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
     APPLICATION_PACKAGES,
     APPLICATION_SOURCE_DESCRIPTOR_FIELDS,
     DIGEST_PATTERN,
+    DISTRIBUTION_EVIDENCE_PATHS,
     ENVIRONMENTS,
     OCI_DIGEST_REF_PATTERN,
     OPS_PORTAL_SOURCE_DESCRIPTOR_FIELDS,
@@ -353,6 +354,13 @@ def validate_manifest_files(artifact_dir: Path, manifest: dict[str, Any]) -> Non
             raise ValueError(
                 f"application package content binding mismatch for {build_product_id}"
             )
+    for evidence_key, canonical_path in DISTRIBUTION_EVIDENCE_PATHS.items():
+        descriptor = manifest[evidence_key]
+        path = _bound_file(artifact_dir, canonical_path, evidence_key)
+        if descriptor.get("path") != canonical_path:
+            raise ValueError(f"{evidence_key} path is not canonical")
+        if sha256_file(path) != descriptor.get("digest"):
+            raise ValueError(f"{evidence_key} digest mismatch")
     ops_portal = manifest["opsPortal"]
     relative = _validate_relative_path(ops_portal.get("path"), "opsPortal")
     path = _bound_file(artifact_dir, relative, "opsPortal")

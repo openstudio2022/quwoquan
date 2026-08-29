@@ -12,6 +12,7 @@ from typing import Any
 
 from core.io import read_json
 from core.schema import assert_valid
+from core.source_attribution import derived_modifications_value
 
 from content.source.professional_safety_evidence import file_sha256
 from content.source.professional_image_openverse_contract import (
@@ -235,6 +236,8 @@ def source_attribution(
         "propertyReleaseStatus": "unverified",
         "collectedAt": observed_at,
         "takedownPolicy": "quwoquan_standard_notice_and_takedown",
+        # 采集把 provider 原图逐字节存入 CAS，没有任何衍生修改。
+        "derivedModifications": derived_modifications_value(),
     }
 
 

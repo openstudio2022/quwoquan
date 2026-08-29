@@ -134,6 +134,7 @@ jobs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
       service: ${{ steps.detect.outputs.service }}
       app: ${{ steps.detect.outputs.app }}
+      candidate_app: ${{ steps.detect_candidate.outputs.app }}
       portal: ${{ steps.detect.outputs.portal }}
       topology: ${{ steps.detect.outputs.topology }}
       data: ${{ steps.detect.outputs.data }}
@@ -166,6 +167,35 @@ jobs:
             --base-sha "${BASE_SHA}" \
             --head-sha "${HEAD_SHA}" \
             --github-output "$GITHUB_OUTPUT"
+      - id: detect_candidate
+        name: Detect candidate-level App scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_BASE_SHA: ${{ inputs.base_sha || '' }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+          HEAD_SHA: ${{ inputs.head_sha || github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "push" ]]; then
+            CANDIDATE_BASE_SHA="$(git merge-base origin/main "$HEAD_SHA")"
+          elif [[ "$EVENT_NAME" == "pull_request" ]]; then
+            CANDIDATE_BASE_SHA="$PR_BASE_SHA"
+          else
+            CANDIDATE_BASE_SHA="$INPUT_BASE_SHA"
+            if [[ -z "$CANDIDATE_BASE_SHA" ]]; then
+              CANDIDATE_BASE_SHA="$(git rev-parse "${HEAD_SHA}^" 2>/dev/null || true)"
+            fi
+          fi
+          SCOPE_ARGS=()
+          if [[ "$EVENT_NAME" == "workflow_call" ]]; then
+            SCOPE_ARGS+=(--required-scope app)
+          fi
+          python3 quwoquan_ops/ci/detect_ci_impacted_scopes.py \
+            --base-sha "$CANDIDATE_BASE_SHA" \
+            --head-sha "$HEAD_SHA" \
+            --scope-receipt "$QWQ_OUTPUT_ROOT/env/repo/runs/ci-scope/candidate-scope.json" \
+            --github-output "$GITHUB_OUTPUT" \
+            ${SCOPE_ARGS[@]+"${SCOPE_ARGS[@]}"}
       - name: Login GHCR for candidate binding
         if: ${{ inputs.candidate_digest != '' || inputs.artifact_digest != '' || inputs.release_evidence_ref != '' || inputs.producer_workflow_run_id != '' || inputs.source_git_sha != '' }}
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
@@ -424,7 +454,7 @@ jobs:
     if: >-
       ${{
         needs.topology_regression.outputs.service == 'true' ||
-        needs.topology_regression.outputs.app == 'true' ||
+        needs.topology_regression.outputs.candidate_app == 'true' ||
         needs.topology_regression.outputs.topology == 'true' ||
         inputs.produce_release_evidence
       }}
@@ -466,7 +496,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: topology_regression
-    if: ${{ needs.topology_regression.outputs.app == 'true' }}
+    if: ${{ github.event_name != 'pull_request' && (github.event_name == 'workflow_call' || needs.topology_regression.outputs.candidate_app == 'true') }}
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
@@ -521,7 +551,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     needs: topology_regression
-    if: ${{ needs.topology_regression.outputs.app == 'true' }}
+    if: ${{ github.event_name != 'pull_request' && (github.event_name == 'workflow_call' || needs.topology_regression.outputs.candidate_app == 'true') }}
     strategy:
       fail-fast: false
       matrix:
@@ -583,7 +613,7 @@ jobs:
     runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 40
     needs: topology_regression
-    if: ${{ needs.topology_regression.outputs.app == 'true' }}
+    if: ${{ github.event_name != 'pull_request' && (github.event_name == 'workflow_call' || needs.topology_regression.outputs.candidate_app == 'true') }}
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
@@ -631,9 +661,11 @@ jobs:
     # are produced and validated on the same macOS ARM64 lane as App Serial;
     # running that subset on Linux changes rasterization rather than behavior.
     runs-on: [self-hosted, macOS, ARM64]
-    timeout-minutes: 40
+    # activation 单轨与 executor 负路径批量入树后，真实耗时已达 40 分钟量级；
+    # 预算跟随测试规模，保留约 50% 余量。
+    timeout-minutes: 60
     needs: topology_regression
-    if: ${{ needs.topology_regression.outputs.app == 'true' }}
+    if: ${{ github.event_name != 'pull_request' && (github.event_name == 'workflow_call' || needs.topology_regression.outputs.candidate_app == 'true') }}
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
@@ -676,17 +708,36 @@ jobs:
   quwoquan_app:
     name: Delivery Gate — App (L1)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     needs:
       - topology_regression
       - quwoquan_app_static
       - quwoquan_app_tests
       - quwoquan_app_serial
       - quwoquan_app_coverage
-    if: always() && needs.topology_regression.outputs.app == 'true'
+    if: always() && needs.topology_regression.outputs.candidate_app == 'true'
+    outputs:
+      source_run_id: ${{ steps.external.outputs.run_id }}
+      source_run_attempt: ${{ steps.external.outputs.run_attempt }}
+      job_closure_digest: ${{ steps.external.outputs.job_closure_digest }}
+      phase_quwoquan_app_static: ${{ steps.external.outputs.phase_quwoquan_app_static }}
+      phase_quwoquan_app_tests: ${{ steps.external.outputs.phase_quwoquan_app_tests }}
+      phase_quwoquan_app_serial: ${{ steps.external.outputs.phase_quwoquan_app_serial }}
+      phase_quwoquan_app_coverage: ${{ steps.external.outputs.phase_quwoquan_app_coverage }}
     steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ inputs.checkout_ref || github.event.pull_request.head.sha || github.sha }}
+      - id: external
+        name: Verify push-owned App evidence
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          make verify-delivery-app-evidence ARGS="--repository ${{ github.repository }} --head-sha ${{ github.event.pull_request.head.sha }} --current-run-id ${{ github.run_id }} --github-output $GITHUB_OUTPUT"
       - id: combine
-        name: Require every App phase
+        name: Require every local App phase
+        if: ${{ github.event_name != 'pull_request' }}
         env:
           TESTS_RESULT: ${{ needs.quwoquan_app_tests.result }}
           STATIC_RESULT: ${{ needs.quwoquan_app_static.result }}
@@ -721,7 +772,46 @@ jobs:
           python-version: '3.12'
       - name: 安装 Data 依赖
         run: pip install -r quwoquan_data/requirements.txt
-      - name: Gate (quwoquan_data)
+      - name: Gate (quwoquan_data verify)
+        env:
+          GATE_DATA_PHASE: verify
+        run: bash quwoquan_ops/gate/gate_repo.sh --scope data
+      - id: finish
+        if: always()
+        name: Finish timer
+        run: |
+          echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
+
+  quwoquan_data_tests:
+    name: Delivery Gate — Data Tests Shard ${{ matrix.shard_index }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: topology_regression
+    if: ${{ needs.topology_regression.outputs.data == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard_index: [0, 1, 2, 3]
+    outputs:
+      duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ inputs.checkout_ref || github.event.pull_request.head.sha || github.sha }}
+      - id: start
+        name: Start timer
+        run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
+      - name: 设置 Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: 安装 Data 依赖
+        run: pip install -r quwoquan_data/requirements.txt
+      - name: Gate (quwoquan_data local_contract shard)
+        env:
+          GATE_DATA_PHASE: local_contract
+          DATA_TEST_TOTAL_SHARDS: "4"
+          DATA_TEST_SHARD_INDEX: ${{ matrix.shard_index }}
         run: bash quwoquan_ops/gate/gate_repo.sh --scope data
       - id: finish
         if: always()
@@ -775,6 +865,7 @@ jobs:
       - quwoquan_app_serial
       - quwoquan_app_coverage
       - quwoquan_data
+      - quwoquan_data_tests
       - ops_portal
     if: always() && inputs.produce_release_evidence
     runs-on: ubuntu-latest
@@ -902,7 +993,7 @@ jobs:
       - name: Aggregate exact three-layer test results
         env:
           SERVICE_IMPACTED: ${{ needs.topology_regression.outputs.service }}
-          APP_IMPACTED: ${{ needs.topology_regression.outputs.app }}
+          APP_IMPACTED: ${{ needs.topology_regression.outputs.candidate_app }}
           DATA_IMPACTED: ${{ needs.topology_regression.outputs.data }}
           PORTAL_IMPACTED: ${{ needs.topology_regression.outputs.portal }}
           TOPOLOGY_RESULT: ${{ needs.topology_regression.result }}
@@ -915,6 +1006,7 @@ jobs:
           APP_SERIAL_RESULT: ${{ needs.quwoquan_app_serial.result }}
           APP_COVERAGE_RESULT: ${{ needs.quwoquan_app_coverage.result }}
           DATA_RESULT: ${{ needs.quwoquan_data.result }}
+          DATA_TESTS_RESULT: ${{ needs.quwoquan_data_tests.result }}
           PORTAL_RESULT: ${{ needs.ops_portal.result }}
           SOURCE_GIT_SHA: ${{ steps.identity.outputs.source_git_sha }}
           SOURCE_TREE_DIGEST: ${{ steps.identity.outputs.source_tree_digest }}
@@ -936,6 +1028,7 @@ jobs:
             --job-result "app_serial=$APP_SERIAL_RESULT"
             --job-result "app_coverage=$APP_COVERAGE_RESULT"
             --job-result "data=$DATA_RESULT"
+            --job-result "data_tests=$DATA_TESTS_RESULT"
             --job-result "portal=$PORTAL_RESULT"
             --local-required topology
             --api-required search
@@ -952,7 +1045,7 @@ jobs:
           if [[ "$APP_IMPACTED" == "true" ]]; then
             ARGS+=(--local-required app_static --local-required app_tests --local-required app_serial --local-required app_coverage)
           fi
-          if [[ "$DATA_IMPACTED" == "true" ]]; then ARGS+=(--local-required data); fi
+          if [[ "$DATA_IMPACTED" == "true" ]]; then ARGS+=(--local-required data --local-required data_tests); fi
           if [[ "$PORTAL_IMPACTED" == "true" ]]; then ARGS+=(--local-required portal); fi
           python3 quwoquan_ops/ci/render_delivery_release_evidence.py "${ARGS[@]}"
       - name: Setup Buildx for immutable Delivery evidence
@@ -991,6 +1084,7 @@ jobs:
       - quwoquan_app_serial
       - quwoquan_app_coverage
       - quwoquan_data
+      - quwoquan_data_tests
       - ops_portal
       - release_evidence
     if: always()
@@ -1010,8 +1104,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           SERVICE_IMPACTED: ${{ needs.topology_regression.outputs.service }}
-          APP_IMPACTED: ${{ needs.topology_regression.outputs.app }}
+          APP_IMPACTED: ${{ needs.topology_regression.outputs.candidate_app }}
+          APP_STATIC_EXTERNAL: ${{ needs.quwoquan_app.outputs.phase_quwoquan_app_static }}
+          APP_TESTS_EXTERNAL: ${{ needs.quwoquan_app.outputs.phase_quwoquan_app_tests }}
+          APP_SERIAL_EXTERNAL: ${{ needs.quwoquan_app.outputs.phase_quwoquan_app_serial }}
+          APP_COVERAGE_EXTERNAL: ${{ needs.quwoquan_app.outputs.phase_quwoquan_app_coverage }}
           DATA_IMPACTED: ${{ needs.topology_regression.outputs.data }}
+          EVENT_NAME: ${{ github.event_name }}
           PORTAL_IMPACTED: ${{ needs.topology_regression.outputs.portal }}
           TOPOLOGY_IMPACTED: ${{ needs.topology_regression.outputs.topology }}
           PRODUCE_RELEASE_EVIDENCE: ${{ inputs.produce_release_evidence }}
@@ -1024,11 +1123,9 @@ jobs:
             --phase "service_packaging=Delivery Gate — Service Packaging"
             --phase "service_coverage=Delivery Gate — Service Canonical Coverage"
             --phase "search=Delivery Gate — Search /search Contract Smoke"
-            --phase "app_static=Delivery Gate — App Static"
-            --phase "app_tests=Delivery Gate — App Tests Shard "
-            --phase "app_serial=Delivery Gate — App Serial"
-            --phase "app_coverage=Delivery Gate — App Canonical Coverage"
+            --phase "app_evidence=Delivery Gate — App (L1)"
             --phase "data=Delivery Gate — Data"
+            --phase "data_tests=Delivery Gate — Data Tests Shard "
             --phase "portal=Delivery Gate — Ops Portal"
             --phase "release_evidence=Delivery Gate — Candidate qualification evidence"
             --require-count "topology=1"
@@ -1043,10 +1140,39 @@ jobs:
           fi
           if [[ "$SERVICE_IMPACTED" == "true" || "$APP_IMPACTED" == "true" || "$TOPOLOGY_IMPACTED" == "true" || "$PRODUCE_RELEASE_EVIDENCE" == "true" ]]; then ARGS+=(--require-count "search=1"); FANOUT+=(search); fi
           if [[ "$APP_IMPACTED" == "true" ]]; then
-            ARGS+=(--require-count "app_static=1" --require-count "app_tests=4" --require-count "app_serial=1" --require-count "app_coverage=1")
+            if [[ "$EVENT_NAME" == "pull_request" ]]; then
+              REQUIRED_EXTERNAL=(APP_STATIC_EXTERNAL APP_TESTS_EXTERNAL APP_SERIAL_EXTERNAL APP_COVERAGE_EXTERNAL)
+              for name in "${REQUIRED_EXTERNAL[@]}"; do
+                if [[ ! "${!name}" =~ ^[0-9]+$ ]]; then
+                  echo "::error::GATE_BLOCK: verified push App timing is missing ${name}"
+                  exit 2
+                fi
+              done
+              ARGS+=(
+                --require-count "app_evidence=1"
+                --external-phase "app_static=$APP_STATIC_EXTERNAL"
+                --external-phase "app_tests=$APP_TESTS_EXTERNAL"
+                --external-phase "app_serial=$APP_SERIAL_EXTERNAL"
+                --external-phase "app_coverage=$APP_COVERAGE_EXTERNAL"
+              )
+            else
+              ARGS+=(
+                --phase "app_static=Delivery Gate — App Static"
+                --phase "app_tests=Delivery Gate — App Tests Shard "
+                --phase "app_serial=Delivery Gate — App Serial"
+                --phase "app_coverage=Delivery Gate — App Canonical Coverage"
+                --require-count "app_static=1"
+                --require-count "app_tests=4"
+                --require-count "app_serial=1"
+                --require-count "app_coverage=1"
+              )
+            fi
             FANOUT+=(app_static app_tests app_serial app_coverage)
           fi
-          if [[ "$DATA_IMPACTED" == "true" ]]; then ARGS+=(--require-count "data=1"); FANOUT+=(data); fi
+          if [[ "$DATA_IMPACTED" == "true" ]]; then
+            ARGS+=(--require-count "data=1" --require-count "data_tests=4")
+            FANOUT+=(data data_tests)
+          fi
           if [[ "$PORTAL_IMPACTED" == "true" ]]; then ARGS+=(--require-count "portal=1"); FANOUT+=(portal); fi
           if (( ${#FANOUT[@]} > 0 )); then
             ARGS+=(--dag-layer "$(IFS=,; echo "${FANOUT[*]}")")
@@ -1082,6 +1208,7 @@ jobs:
           APP_SERIAL_SECONDS: ${{ steps.job_timing.outputs.phase_app_serial }}
           APP_COVERAGE_SECONDS: ${{ steps.job_timing.outputs.phase_app_coverage }}
           DATA_SECONDS: ${{ steps.job_timing.outputs.phase_data }}
+          DATA_TESTS_SECONDS: ${{ steps.job_timing.outputs.phase_data_tests }}
           PORTAL_SECONDS: ${{ steps.job_timing.outputs.phase_portal }}
           MACHINE_CRITICAL_PATH_SECONDS: ${{ steps.job_timing.outputs.machine_critical_path_seconds }}
           RUN_CREATED_AT: ${{ steps.job_timing.outputs.run_created_at }}
@@ -1111,6 +1238,7 @@ jobs:
           if [[ -n "$APP_SERIAL_SECONDS" ]]; then PHASE_ARGS+=(--phase "quwoquan_app_serial=${APP_SERIAL_SECONDS}"); fi
           if [[ -n "$APP_COVERAGE_SECONDS" ]]; then PHASE_ARGS+=(--phase "quwoquan_app_coverage=${APP_COVERAGE_SECONDS}"); fi
           if [[ -n "$DATA_SECONDS" ]]; then PHASE_ARGS+=(--phase "quwoquan_data=${DATA_SECONDS}"); fi
+          if [[ -n "$DATA_TESTS_SECONDS" ]]; then PHASE_ARGS+=(--phase "quwoquan_data_tests=${DATA_TESTS_SECONDS}"); fi
           if [[ -n "$PORTAL_SECONDS" ]]; then PHASE_ARGS+=(--phase "ops_portal=${PORTAL_SECONDS}"); fi
           DURATION_ARGS=(--calendar-lead-time-seconds "$CALENDAR_SECONDS")
           EVIDENCE_ARGS=()
@@ -1164,6 +1292,7 @@ jobs:
           APP_SERIAL: ${{ needs.quwoquan_app_serial.result }}
           APP_COVERAGE: ${{ needs.quwoquan_app_coverage.result }}
           DATA: ${{ needs.quwoquan_data.result }}
+          DATA_TESTS: ${{ needs.quwoquan_data_tests.result }}
           PORTAL: ${{ needs.ops_portal.result }}
           RELEASE_EVIDENCE: ${{ needs.release_evidence.result }}
           PRODUCE_RELEASE_EVIDENCE: ${{ inputs.produce_release_evidence }}
@@ -1190,11 +1319,14 @@ jobs:
           expect_success_or_skipped "quwoquan_service_coverage" "${SERVICE_COVERAGE}" "检查云侧 canonical coverage 棘轮"
           expect_success_or_skipped "search_contract_smoke" "${SEARCH}" "检查 /search 商业信封与四环境探针契约"
           expect_success_or_skipped "quwoquan_app" "${APP}" "检查 app scope 汇总"
-          expect_success_or_skipped "quwoquan_app_static" "${APP_STATIC}" "检查 app static + PA core"
-          expect_success_or_skipped "quwoquan_app_tests" "${APP_TESTS}" "检查 app 分片测试"
-          expect_success_or_skipped "quwoquan_app_serial" "${APP_SERIAL}" "检查 app 串行套件"
-          expect_success_or_skipped "quwoquan_app_coverage" "${APP_COVERAGE}" "检查 app canonical coverage"
+          if [[ "${{ github.event_name }}" != "pull_request" ]]; then
+            expect_success_or_skipped "quwoquan_app_static" "${APP_STATIC}" "检查 app static + PA core"
+            expect_success_or_skipped "quwoquan_app_tests" "${APP_TESTS}" "检查 app 分片测试"
+            expect_success_or_skipped "quwoquan_app_serial" "${APP_SERIAL}" "检查 app 串行套件"
+            expect_success_or_skipped "quwoquan_app_coverage" "${APP_COVERAGE}" "检查 app canonical coverage"
+          fi
           expect_success_or_skipped "quwoquan_data" "${DATA}" "检查 data scope gate 输出"
+          expect_success_or_skipped "quwoquan_data_tests" "${DATA_TESTS}" "检查 data local_contract 分片测试"
           expect_success_or_skipped "ops_portal" "${PORTAL}" "检查 portal scope gate 输出"
           if [ "${PRODUCE_RELEASE_EVIDENCE}" = "true" ]; then
             expect_success "release_evidence" "${RELEASE_EVIDENCE}" "检查 Provider 与真实 Remote user_acceptance 不可变证据"

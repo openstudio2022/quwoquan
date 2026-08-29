@@ -207,6 +207,7 @@ def reuse_existing_aggregate_release(
                 entity_refs=desired["entities"],
                 creator_refs=desired["creators"],
                 publish_root=publish_root,
+                release_class=release_class,
             )
             if (
                 expected_media_manifest["issues"]

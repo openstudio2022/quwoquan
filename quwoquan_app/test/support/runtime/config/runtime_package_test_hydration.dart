@@ -154,6 +154,8 @@ Future<Map<String, Object?>> buildSignedTrustEnvelopeForTests({
     'runtimeConfigTrustEnvelopeDigest':
         'sha256:${crypto.sha256.convert(utf8.encode(canonicalJsonEncode(trustDocument)))}',
     'effectiveLaunchManifestDigest': 'sha256:${'c' * 64}',
+    'launchProvenance': 'canonical_launcher',
+    'runtimeConfigSupplyMode': 'external_runtime_package',
   };
 }
 

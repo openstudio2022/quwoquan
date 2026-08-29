@@ -1,4 +1,9 @@
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/runtime/di/media_delivery_composition.dart';
+import 'package:quwoquan_app/runtime/di/media_delivery_cover_slot.dart';
+import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart'
+    show MediaDeliveryKind;
+import 'package:quwoquan_app/runtime/di/content_post_media_binding.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -10,17 +15,19 @@ import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 
-typedef PostIntersectionReasonSlotBuilder =
-    Widget? Function(
-      List<IntersectionReason>? reasons, {
-      required bool isDark,
-      required ReferralSource referralSource,
-      required String contextObjectName,
-      required IntersectionTarget contextObjectTarget,
-    });
+typedef PostIntersectionReasonSlotBuilder = Widget? Function(
+  List<IntersectionReason>? reasons, {
+  required bool isDark,
+  required ReferralSource referralSource,
+  required String contextObjectName,
+  required IntersectionTarget contextObjectTarget,
+});
 
-typedef PostLikeCountResolver =
-    int Function(WidgetRef ref, String postId, {required int fallback});
+typedef PostLikeCountResolver = int Function(
+  WidgetRef ref,
+  String postId, {
+  required int fallback,
+});
 
 /// 统一记录卡（用户主页 / 圈子 / 实体三页共用范式）。
 ///
@@ -104,6 +111,11 @@ class RecordPostCard extends ConsumerWidget {
       title: _headlineText,
       supportingText: _supportingText,
       coverUrl: post.primaryVisualUrl,
+      // 交付形态取自投影 mediaItems 的同一条目（DEC-033），不从 URL 反推。
+      mediaContent: mediaDeliveryCoverSlot(
+        binding: contentPostMediaBinding(post, post.primaryVisualUrl),
+        placeholderColor: fgSecondary.withValues(alpha: 0.12),
+      ),
       mediaAspectRatio: _imageAspectRatio,
       showVideoBadge: post.isVideoLike,
       onTap: onTap,
@@ -143,7 +155,6 @@ class RecordPostCard extends ConsumerWidget {
     TextStyle metaTextStyle,
   ) {
     final name = post.displayName.trim();
-    final avatar = post.avatarUrl.trim();
     const diameter = AppSpacing.avatarUserXs;
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -152,19 +163,27 @@ class RecordPostCard extends ConsumerWidget {
           child: SizedBox(
             width: diameter,
             height: diameter,
-            child: avatar.isEmpty
-                ? ColoredBox(color: fgSecondary.withValues(alpha: 0.12))
-                : AppAvatarImage(
-                    imageUrl: avatar,
-                    size: diameter,
-                    fit: BoxFit.cover,
-                    placeholder: ColoredBox(
-                      color: fgSecondary.withValues(alpha: 0.12),
-                    ),
-                    errorWidget: ColoredBox(
-                      color: fgSecondary.withValues(alpha: 0.12),
-                    ),
-                  ),
+            child: mediaDeliveryImage(
+              binding: contentPostAuthorAvatarBinding(post),
+              kind: MediaDeliveryKind.avatar,
+              width: diameter,
+              height: diameter,
+              fit: BoxFit.cover,
+              absentWidget: ColoredBox(
+                color: fgSecondary.withValues(alpha: 0.12),
+              ),
+              publicBuilder: (context, publicUrl) => AppAvatarImage(
+                imageUrl: publicUrl,
+                size: diameter,
+                fit: BoxFit.cover,
+                placeholder: ColoredBox(
+                  color: fgSecondary.withValues(alpha: 0.12),
+                ),
+                errorWidget: ColoredBox(
+                  color: fgSecondary.withValues(alpha: 0.12),
+                ),
+              ),
+            ),
           ),
         ),
         SizedBox(width: AppSpacing.intraGroupXs),

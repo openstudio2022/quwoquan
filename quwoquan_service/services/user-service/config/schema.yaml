@@ -170,7 +170,6 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-  default: standalone
 - key: sys.user-service.redis.general.password
   type: string
   scope: workload

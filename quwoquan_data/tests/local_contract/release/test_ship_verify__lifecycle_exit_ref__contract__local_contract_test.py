@@ -285,7 +285,7 @@ def test_ship_verify__research_writes_typed_isolation_blocker_before_post_api(
 
     with pytest.raises(
         SystemExit,
-        match="DATA.RESEARCH.IDENTITY_ADAPTER_UNAVAILABLE",
+        match="DATA.RESEARCH.RUNTIME_PROOF_INCOMPLETE",
     ):
         verify_release_consumers(
             argparse.Namespace(
@@ -307,7 +307,7 @@ def test_ship_verify__research_writes_typed_isolation_blocker_before_post_api(
     assert receipt["outcome"] == "GATE_BLOCK"
     assert (
         receipt["blocker"]["code"]
-        == "DATA.RESEARCH.IDENTITY_ADAPTER_UNAVAILABLE"
+        == "DATA.RESEARCH.RUNTIME_PROOF_INCOMPLETE"
     )
     assert observed["runtime_proof_path"] == (
         tmp_path

@@ -16,6 +16,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
+sys.dont_write_bytecode = True
+
 _SCRIPTS_ROOT = next(
     parent
     for parent in Path(__file__).resolve().parents
@@ -97,7 +99,8 @@ def verify_web_cta_with_xcuitest(
     test_environment = dict(os.environ)
     for key in (
         "QWQ_APP_RUNTIME_ENV",
-        "QWQ_APP_LAUNCH_MODE",
+        "QWQ_APP_LAUNCH_PROVENANCE",
+        "QWQ_RUNTIME_CONFIG_SUPPLY_MODE",
         "QWQ_LAUNCH_TARGET",
         "QWQ_LAUNCH_HANDOFF_JSON",
         "QWQ_DART_DEFINES_DIGEST",

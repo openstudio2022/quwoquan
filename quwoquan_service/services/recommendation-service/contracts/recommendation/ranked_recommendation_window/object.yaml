@@ -26,7 +26,8 @@ assistant_access:
     scopes: []
   denied_reason: "易失运行时传输状态对小趣没有可用语义，读取只会产生不可复现的上下文。"
 business_rules:
-- 创建时一次性固化有界候选、ordinal、对象卡候选、模型分桶、模型发布、用户特征与逐项候选特征；每项 featureSnapshotDigest 必须绑定实际评分输入，后续读取不得重新排序或回查漂移特征。
+- 创建时一次性固化有界候选、ordinal、对象卡候选、服务端权威实验分桶、实际模型执行轨道、模型发布、用户特征与逐项候选特征；每项 featureSnapshotDigest 必须绑定实际评分输入，后续读取不得重新排序或回查漂移特征。
+- experimentBucket 必须来自当前 ExperimentPolicyActivated 的服务端 AssignBucket 结果；modelBucket 仅记录实际执行轨道，模型失败降级为 rule 时不得覆盖 experimentBucket。
 - Idempotency-Key 在窗口 TTL 内唯一派生 windowId；同键同载荷返回原窗口，同键异载荷必须冲突且不得重排。
 - 续页仅使用 windowId 与稳定 ordinal，读取不得刷新 TTL，也不得把另一窗口结果拼接进来。
 - 窗口过期返回结构化 not-found；Content 必须创建新窗口并重新做权限 hydration。

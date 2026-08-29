@@ -21,11 +21,17 @@
   "roles": {
     "api-edge": {
       "plane": "edge",
-      "slotOffset": 0
+      "slotOffset": 0,
+      "composePublishedEndpoints": [
+        {"composeService": "gamma-proxy", "containerPort": "profileCanonical", "protocol": "tcp"}
+      ]
     },
     "product-ops-edge": {
       "plane": "edge",
-      "slotOffset": 10
+      "slotOffset": 10,
+      "composePublishedEndpoints": [
+        {"composeService": "gamma-proxy", "containerPort": "profileCanonical", "protocol": "tcp"}
+      ]
     },
     "platform-ops-edge": {
       "plane": "edge",
@@ -37,7 +43,10 @@
     },
     "media-edge": {
       "plane": "media",
-      "slotOffset": 100
+      "slotOffset": 100,
+      "composePublishedEndpoints": [
+        {"composeService": "gamma-proxy", "containerPort": "profileCanonical", "protocol": "tcp"}
+      ]
     },
     "media-origin": {
       "plane": "media",
@@ -49,128 +58,223 @@
     },
     "object-storage-edge": {
       "plane": "media",
-      "slotOffset": 130
+      "slotOffset": 130,
+      "composePublishedEndpoints": [
+        {"composeService": "object-storage", "containerPort": "profileCanonical", "protocol": "tcp"}
+      ]
     },
     "livekit-http": {
       "plane": "media",
       "slotOffset": 140,
       "serviceHost": "livekit-sfu",
       "containerPort": 7880,
-      "scheme": "http"
+      "scheme": "http",
+      "composePublishedEndpoints": [
+        {"composeService": "livekit-sfu", "containerPort": 7880, "protocol": "tcp"}
+      ]
     },
     "livekit-rtc-tcp": {
       "plane": "media",
-      "slotOffset": 150
+      "slotOffset": 150,
+      "composePublishedEndpoints": [
+        {"composeService": "livekit-sfu", "containerPort": 7881, "protocol": "tcp"}
+      ]
     },
     "livekit-rtc-udp": {
       "plane": "media",
-      "slotOffset": 160
+      "slotOffset": 160,
+      "composePublishedEndpoints": [
+        {"composeService": "livekit-sfu", "containerPort": 7882, "protocol": "udp"}
+      ]
     },
     "livekit-metrics": {
       "plane": "media",
-      "slotOffset": 170
+      "slotOffset": 170,
+      "composePublishedEndpoints": [
+        {"composeService": "livekit-sfu", "containerPort": 6789, "protocol": "tcp"}
+      ]
     },
     "coturn": {
       "plane": "media",
-      "slotOffset": 180
+      "slotOffset": 180,
+      "composePublishedEndpoints": [
+        {"composeService": "coturn", "containerPort": 3478, "protocol": "tcp"},
+        {"composeService": "coturn", "containerPort": 3478, "protocol": "udp"}
+      ]
     },
     "chat-service": {
       "plane": "service",
-      "slotOffset": 200
+      "slotOffset": 200,
+      "composePublishedEndpoints": [
+        {"composeService": "service-core", "containerPort": 18081, "protocol": "tcp"}
+      ]
     },
     "user-service": {
       "plane": "service",
-      "slotOffset": 210
+      "slotOffset": 210,
+      "composePublishedEndpoints": [
+        {"composeService": "service-core", "containerPort": 18081, "protocol": "tcp"}
+      ]
     },
     "content-service": {
       "plane": "service",
-      "slotOffset": 220
+      "slotOffset": 220,
+      "composePublishedEndpoints": [
+        {"composeService": "service-core", "containerPort": 18080, "protocol": "tcp"}
+      ]
     },
     "assistant-service": {
       "plane": "service",
-      "slotOffset": 230
+      "slotOffset": 230,
+      "composePublishedEndpoints": [
+        {"composeService": "service-core", "containerPort": 18087, "protocol": "tcp"}
+      ]
     },
     "recommendation-service": {
       "plane": "service",
-      "slotOffset": 240
+      "slotOffset": 240,
+      "composePublishedEndpoints": [
+        {"composeService": "recommendation-service", "containerPort": 8000, "protocol": "tcp"}
+      ]
     },
     "product-ops-service": {
       "plane": "service",
-      "slotOffset": 250
+      "slotOffset": 250,
+      "composePublishedEndpoints": [
+        {"composeService": "product-ops-service", "containerPort": 18086, "protocol": "tcp"}
+      ]
     },
     "platform-ops-service": {
       "plane": "service",
-      "slotOffset": 260
+      "slotOffset": 260,
+      "composePublishedEndpoints": [
+        {"composeService": "platform-ops-service", "containerPort": 18088, "protocol": "tcp"}
+      ]
     },
     "tag-service": {
       "plane": "service",
-      "slotOffset": 270
+      "slotOffset": 270,
+      "composePublishedEndpoints": [
+        {"composeService": "service-core", "containerPort": 18092, "protocol": "tcp"}
+      ]
     },
     "search-service": {
       "plane": "service",
-      "slotOffset": 280
+      "slotOffset": 280,
+      "composePublishedEndpoints": [
+        {"composeService": "service-core", "containerPort": 18095, "protocol": "tcp"}
+      ]
     },
     "entity-service": {
       "plane": "service",
-      "slotOffset": 290
+      "slotOffset": 290,
+      "composePublishedEndpoints": [
+        {"composeService": "service-core", "containerPort": 18084, "protocol": "tcp"}
+      ]
     },
     "circle-service": {
       "plane": "service",
-      "slotOffset": 300
+      "slotOffset": 300,
+      "composePublishedEndpoints": [
+        {"composeService": "service-core", "containerPort": 18082, "protocol": "tcp"}
+      ]
     },
     "integration-service": {
       "plane": "service",
-      "slotOffset": 310
+      "slotOffset": 310,
+      "composePublishedEndpoints": [
+        {"composeService": "service-core", "containerPort": 18086, "protocol": "tcp"}
+      ]
     },
     "notification-service": {
       "plane": "service",
-      "slotOffset": 320
+      "slotOffset": 320,
+      "composePublishedEndpoints": [
+        {"composeService": "service-core", "containerPort": 18087, "protocol": "tcp"}
+      ]
     },
     "sms-provider-substitute": {
       "plane": "service",
       "slotOffset": 330,
       "serviceHost": "sms-provider-substitute",
       "containerPort": 9443,
-      "scheme": "https"
+      "scheme": "https",
+      "composePublishedEndpoints": [
+        {"composeService": "sms-provider-substitute", "containerPort": 9443, "protocol": "tcp"}
+      ]
     },
     "realtime-gateway": {
       "plane": "service",
-      "slotOffset": 340
+      "slotOffset": 340,
+      "composePublishedEndpoints": [
+        {"composeService": "realtime-gateway", "containerPort": 18090, "protocol": "tcp"}
+      ]
     },
     "rtc-service": {
       "plane": "service",
-      "slotOffset": 350
+      "slotOffset": 350,
+      "composePublishedEndpoints": [
+        {"composeService": "rtc-service", "containerPort": 18083, "protocol": "tcp"}
+      ]
     },
     "provider-protocol-substitute": {
       "plane": "service",
       "slotOffset": 360,
       "serviceHost": "provider-protocol-substitute",
       "containerPort": 18089,
-      "scheme": "https"
+      "scheme": "https",
+      "composePublishedEndpoints": [
+        {"composeService": "provider-protocol-substitute", "containerPort": 18089, "protocol": "tcp"}
+      ]
     },
     "postgres": {
       "plane": "dataDebug",
-      "slotOffset": 400
+      "slotOffset": 400,
+      "composePublishedEndpoints": [
+        {"composeService": "postgres", "containerPort": 5432, "protocol": "tcp"}
+      ]
     },
     "mongodb": {
       "plane": "dataDebug",
-      "slotOffset": 410
+      "slotOffset": 410,
+      "composePublishedEndpoints": [
+        {"composeService": "mongodb", "containerPort": 27017, "protocol": "tcp"}
+      ]
     },
     "redis": {
       "plane": "dataDebug",
-      "slotOffset": 420
+      "slotOffset": 420,
+      "composePublishedEndpoints": [
+        {"composeService": "redis", "containerPort": 6379, "protocol": "tcp"}
+      ]
     },
     "elasticsearch": {
       "plane": "dataDebug",
-      "slotOffset": 430
+      "slotOffset": 430,
+      "composePublishedEndpoints": [
+        {"composeService": "elasticsearch", "containerPort": 9200, "protocol": "tcp"}
+      ]
     },
     "data-execution-mongodb": {
       "plane": "dataDebug",
-      "slotOffset": 440
+      "slotOffset": 440,
+      "composePublishedEndpoints": [
+        {"composeService": "data-execution-mongodb", "containerPort": 27017, "protocol": "tcp"}
+      ]
     },
     "data-execution-redis": {
       "plane": "dataDebug",
-      "slotOffset": 450
+      "slotOffset": 450,
+      "composePublishedEndpoints": [
+        {"composeService": "data-execution-redis", "containerPort": 6379, "protocol": "tcp"}
+      ]
+    },
+    "caddy-admin": {
+      "plane": "dataDebug",
+      "slotOffset": 460,
+      "composePublishedEndpoints": [
+        {"composeService": "gamma-proxy", "containerPort": 2019, "protocol": "tcp"}
+      ]
     }
   },
   "profiles": {
@@ -190,5 +294,32 @@
       "blockStart": 20000,
       "blockEnd": 20999
     }
+  },
+  "composeHostPortVariables": {
+    "BETA_MONGO_PORT": "mongodb",
+    "BETA_OBJECT_STORAGE_EDGE_PORT": "object-storage-edge",
+    "BETA_POSTGRES_PORT": "postgres",
+    "BETA_REDIS_PORT": "redis",
+    "LOCAL_GAMMA_ADMIN_PORT": "caddy-admin",
+    "LOCAL_GAMMA_LIVEKIT_HTTP_PORT": "livekit-http",
+    "LOCAL_GAMMA_LIVEKIT_METRICS_PORT": "livekit-metrics",
+    "LOCAL_GAMMA_LIVEKIT_RTC_TCP_PORT": "livekit-rtc-tcp",
+    "LOCAL_GAMMA_LIVEKIT_RTC_UDP_PORT": "livekit-rtc-udp",
+    "LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT": "object-storage-edge",
+    "LOCAL_GAMMA_TURN_TCP_PORT": "coturn",
+    "LOCAL_GAMMA_TURN_UDP_PORT": "coturn",
+    "QWQ_COMPOSE_ELASTICSEARCH_PORT": "elasticsearch",
+    "QWQ_COMPOSE_PROVIDER_SUBSTITUTE_PORT": "provider-protocol-substitute",
+    "QWQ_COMPOSE_SMS_SUBSTITUTE_PORT": "sms-provider-substitute",
+    "QWQ_DATA_FLEET_MONGO_PORT": "data-execution-mongodb",
+    "QWQ_DATA_FLEET_REDIS_PORT": "data-execution-redis",
+    "QWQ_LOCAL_MONGO_PORT": "mongodb",
+    "QWQ_LOCAL_OBJECT_STORAGE_EDGE_PORT": "object-storage-edge",
+    "QWQ_LOCAL_POSTGRES_PORT": "postgres",
+    "QWQ_LOCAL_REDIS_PORT": "redis"
+  },
+  "unownedComposeSources": {
+    "docker-compose.yaml": "quwoquan_service/Makefile 的 dev 便利栈：直接用上游默认端口起一组独立容器，不由 stackctl 管理，也不属任何 target runtime 的端口所有权模型",
+    "docker-compose.local-redis.yml": "quwoquan_service/Makefile 的 dev-redis 便利栈，同上"
   }
 }

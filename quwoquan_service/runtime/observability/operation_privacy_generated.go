@@ -3,6 +3,9 @@
 
 package runtimeobservability
 
+// generatedOperationPrivacyPolicyCount 与下表同源，由同一次 normalize 派生。
+const generatedOperationPrivacyPolicyCount = 546
+
 // generatedOperationPrivacyPolicies 是 operation.privacy 的运行时投影。
 // key 为 ContractGraph operation id；查不到即 fail-closed。
 var generatedOperationPrivacyPolicies = map[string]OperationPrivacyPolicy{

@@ -18,6 +18,7 @@
     "sourceDigest",
     "entityCatalogDigest",
     "lanes",
+    "revisionAudits",
     "failure",
     "startedAt",
     "updatedAt"
@@ -94,11 +95,43 @@
         "video": { "$ref": "#/$defs/lane" }
       }
     },
+    "revisionAudits": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/revisionAudit" }
+    },
     "failure": { "type": ["string", "null"] },
     "startedAt": { "type": "string", "format": "date-time" },
     "updatedAt": { "type": "string", "format": "date-time" }
   },
   "$defs": {
+    "revisionAudit": {
+      "type": "object",
+      "required": [
+        "phase",
+        "observedAt",
+        "gitBranch",
+        "frozenCommitSha",
+        "observedCommitSha",
+        "frozenSourceDigest",
+        "observedSourceDigest",
+        "frozenExecutionBundleDigest",
+        "observedExecutionBundleDigest",
+        "drifted"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "phase": { "enum": ["review", "publish"] },
+        "observedAt": { "type": "string", "format": "date-time" },
+        "gitBranch": { "type": "string", "minLength": 1 },
+        "frozenCommitSha": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+        "observedCommitSha": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+        "frozenSourceDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "observedSourceDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "frozenExecutionBundleDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "observedExecutionBundleDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "drifted": { "type": "boolean" }
+      }
+    },
     "lane": {
       "type": "object",
       "required": [
@@ -183,8 +216,21 @@
             "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
           }
         },
-        "error": { "type": ["string", "null"] }
-      }
+        "error": { "type": ["string", "null"] },
+        "zeroQualifiedReason": {
+          "description": "从该 lane 回执投影过来的同一个原因取值。campaign 只投影不写：闭集与写者都在 lane 回执侧，campaign 的 blocked 表示全部 active lane 均为 blocked。",
+          "$ref": "../_common/zero_qualified_reason.schema.json#/$defs/zeroQualifiedReason"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["status"],
+            "properties": { "status": { "const": "blocked" } }
+          },
+          "else": { "not": { "required": ["zeroQualifiedReason"] } }
+        }
+      ]
     }
   }
 }

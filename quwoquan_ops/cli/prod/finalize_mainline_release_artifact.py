@@ -12,6 +12,8 @@ import re
 import sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -47,6 +49,10 @@ if len(APPLICATION_PACKAGES) != 5 or len(set(APPLICATION_PACKAGES)) != 5:
     raise ValueError("ReleaseEvidence App baseline must contain exactly five products")
 REQUIRED_RELEASE_EVIDENCE = ("contractGraph", "providerEvidence", "testEvidence")
 OPTIONAL_RELEASE_EVIDENCE = ("publicWeb", "androidOfficialRelease")
+DISTRIBUTION_EVIDENCE_PATHS = {
+    "publicWeb": "evidence/distribution/public-web-manifest.json",
+    "androidOfficialRelease": "evidence/distribution/android-release-manifest.json",
+}
 TEST_LAYERS = ("local_contract", "api_integration", "user_acceptance")
 RELEASE_CLOSURE_PATHS = {
     "pilot-release": "evidence/release/pilot-release-attestation.json",
@@ -71,6 +77,8 @@ ROOT_FIELDS = frozenset(
         "artifactDigest",
         "environmentArtifacts",
         "applicationPackages",
+        "publicWeb",
+        "androidOfficialRelease",
         "opsPortal",
         "contractGraphDigest",
         "requiredEvidence",
@@ -128,6 +136,7 @@ APPLICATION_PACKAGE_FIELDS = frozenset(
 APPLICATION_DESCRIPTOR_FIELDS = frozenset(
     {"path", "digest", "packageDigest", "sourceRef"}
 )
+DISTRIBUTION_DESCRIPTOR_FIELDS = frozenset({"path", "digest"})
 APPLICATION_SOURCE_DESCRIPTOR_FIELDS = APPLICATION_DESCRIPTOR_FIELDS | {
     "buildProductId"
 }

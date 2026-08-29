@@ -81,6 +81,7 @@ type AuthService struct {
 	nicknamePrefix           string
 	managedAcceptancePhone   string
 	managedAcceptanceOwnerID string
+	researchAccountIDs       map[string]struct{}
 }
 
 type AuthServiceOption func(*AuthService)
@@ -198,6 +199,25 @@ func WithManagedAcceptanceIdentity(phone, ownerID string) AuthServiceOption {
 		if phone != "" && useridentity.IsCanonicalOwnerID(ownerID) {
 			service.managedAcceptancePhone = phone
 			service.managedAcceptanceOwnerID = ownerID
+		}
+	}
+}
+
+// WithResearchAccountAllowlist 绑定 research 身份账号闭集（DEC-032）：登录与
+// refresh 的 access token 签发单点在账号命中该闭集时向 token roles 附加
+// research，能力面由 operation guard 按 role 收敛，与客户端请求头无关。
+// 空闭集表示 research 身份未启用，不影响任何账号。
+func WithResearchAccountAllowlist(accountIDs []string) AuthServiceOption {
+	return func(service *AuthService) {
+		allowlist := make(map[string]struct{}, len(accountIDs))
+		for _, raw := range accountIDs {
+			accountID := strings.TrimSpace(raw)
+			if accountID != "" {
+				allowlist[accountID] = struct{}{}
+			}
+		}
+		if len(allowlist) > 0 {
+			service.researchAccountIDs = allowlist
 		}
 	}
 }

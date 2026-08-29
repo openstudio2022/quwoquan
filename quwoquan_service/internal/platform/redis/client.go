@@ -29,14 +29,21 @@ func NewRouter(cfg rtredis.RouterConfig) (*rtredis.Router, error) {
 	return rtredis.NewRouterWithFactory(cfg, newSceneClient)
 }
 
+// 空 mode 不等价于 memory：「不接真实 Redis」必须由 mode: memory 显式声明，
+// 缺声明是装配缺陷，判否而不是替声明者选一个拓扑。
 func newSceneClient(cfg rtredis.SceneConfig) (rtredis.Client, error) {
 	switch cfg.Mode {
 	case "cluster":
 		return newClusterClient(cfg)
 	case "standalone":
 		return newStandaloneClient(cfg)
-	case "memory", "":
+	case "memory":
 		return rtredis.NewMemoryClient(), nil
+	case "":
+		return nil, fmt.Errorf(
+			"redis: scene has no mode declared; declare one of " +
+				"memory/standalone/cluster",
+		)
 	default:
 		return nil, fmt.Errorf("redis: unsupported mode %q", cfg.Mode)
 	}
@@ -388,9 +395,13 @@ end
 return {'', 1, owner_eviction_count, projected_records, projected_bytes}
 `)
 
+// 声明了物理拓扑却没有地址是注入缺陷。降级成进程内存实现会让它在运行期毫无
+// 信号地表现为「有一个不共享、重启即丢的 Redis」，因此判否。
 func newStandaloneClient(cfg rtredis.SceneConfig) (rtredis.Client, error) {
 	if cfg.Addr == "" {
-		return rtredis.NewMemoryClient(), nil
+		return nil, fmt.Errorf(
+			"redis: scene declares mode=standalone but no addr is configured",
+		)
 	}
 	opts := &goredis.Options{
 		Addr:     cfg.Addr,
@@ -403,7 +414,9 @@ func newStandaloneClient(cfg rtredis.SceneConfig) (rtredis.Client, error) {
 
 func newClusterClient(cfg rtredis.SceneConfig) (rtredis.Client, error) {
 	if len(cfg.Addrs) == 0 {
-		return rtredis.NewMemoryClient(), nil
+		return nil, fmt.Errorf(
+			"redis: scene declares mode=cluster but no addrs are configured",
+		)
 	}
 	opts := &goredis.ClusterOptions{
 		Addrs:    cfg.Addrs,

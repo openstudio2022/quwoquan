@@ -19,6 +19,10 @@ from pathlib import Path
 from typing import Any, Callable, Mapping
 from urllib.parse import urlsplit
 
+import sys
+
+sys.dont_write_bytecode = True
+
 from quwoquan_ops.ci.ai_ci_advisory import (
     AdvisoryContractError,
     FORBIDDEN_SECRET_KEY_PARTS,

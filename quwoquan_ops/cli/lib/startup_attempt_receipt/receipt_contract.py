@@ -14,6 +14,7 @@ from typing import Any
 
 import quwoquan_ops.cli.lib.startup_attempt_receipt as _pkg
 
+from ..environment_topology import require_formal_release_compose_project
 from ..immutable_image_composition import immutable_image_digest
 from ..output_paths import target_process_dir
 from .constants import (
@@ -84,9 +85,12 @@ def validate_startup_attempt(
     workload = str(value.get("workload") or "").strip()
     if workload not in WORKLOADS:
         raise ValueError("startup attempt receipt workload is invalid")
-    for field in ("attemptId", "composeProject"):
-        if not str(value.get(field) or "").strip():
-            raise ValueError(f"startup attempt receipt {field} is required")
+    if not str(value.get("attemptId") or "").strip():
+        raise ValueError("startup attempt receipt attemptId is required")
+    try:
+        require_formal_release_compose_project(target, value.get("composeProject"))
+    except ValueError as exc:
+        raise ValueError("startup attempt receipt Compose project mismatch") from exc
     for field in (
         "candidateDigest",
         "configurationDigest",

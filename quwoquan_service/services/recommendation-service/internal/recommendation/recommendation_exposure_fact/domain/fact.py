@@ -41,6 +41,7 @@ class ExposureFact:
     target_type: str
     target_id: str
     ordinal: int
+    experiment_bucket: str
     model_bucket: str
     model_channel: str | None
     model_release_id: str | None
@@ -63,6 +64,7 @@ class ExposureFact:
             self.scenario,
             self.target_type,
             self.target_id,
+            self.experiment_bucket,
             self.model_bucket,
             self.feature_snapshot_digest,
             self.ranking_snapshot_digest,
@@ -71,6 +73,8 @@ class ExposureFact:
             raise ValueError("recommendation exposure fact is incomplete")
         if self.ordinal < 0:
             raise ValueError("recommendation exposure ordinal cannot be negative")
+        if self.experiment_bucket not in {"model", "rule"}:
+            raise ValueError("recommendation exposure experimentBucket is invalid")
         if self.model_bucket not in {"model", "rule"}:
             raise ValueError("recommendation exposure modelBucket is invalid")
         if self.model_bucket == "model" and (

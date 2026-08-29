@@ -5,7 +5,8 @@
 `_all_services` / `_public_url_origin`、`_beta_env_from_port_manifest` /
 `_gamma_env_from_port_manifest`、`_formal_release_compose_project_name`、
 `_current_runtime_workload`、`_network_report` /
-`_canonical_port_occupancy_report` / `_other_local_target_port_blocks`、
+`_canonical_port_occupancy_report` / `_project_target_runtime_owned_ports` /
+`_runtime_owned_port_occupancy_report` / `_other_local_target_port_blocks`、
 `_expected_local_roles`、`_scoped_process_environment`。
 
 测试经 ``mock.patch.object(stackctl, ...)`` patch 本模块符号与协作符号，
@@ -16,13 +17,17 @@
 from __future__ import annotations
 
 import contextlib
+import errno
 import os
-import re
+import socket
+import time
 import urllib
 import urllib.error
 import urllib.parse
 import urllib.request
 
+from collections.abc import Callable
+from collections.abc import Sequence
 from typing import Any
 from typing import Mapping
 
@@ -87,23 +92,29 @@ def _beta_env_from_port_manifest(
 
 
 def _formal_release_compose_project_name(target_name: str) -> str:
-    run_id = re.sub(r"[^a-zA-Z0-9_-]", "", os.environ.get("GITHUB_RUN_ID", ""))
-    attempt = re.sub(
-        r"[^a-zA-Z0-9_-]", "", os.environ.get("GITHUB_RUN_ATTEMPT", "")
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    return _stackctl.formal_release_compose_project_name(
+        target_name,
+        run_id=os.environ.get("GITHUB_RUN_ID", ""),
+        run_attempt=os.environ.get("GITHUB_RUN_ATTEMPT", ""),
     )
-    environment_name = target_name.removesuffix("-local")
-    suffix = f"_{run_id}_{attempt}" if run_id and attempt else ""
-    return f"quwoquan_{environment_name}_release{suffix}"
 
 
-def _gamma_env_from_port_manifest(topology: dict[str, Any], target_name: str) -> dict[str, str]:
+def _gamma_env_from_port_manifest(
+    topology: dict[str, Any],
+    target_name: str,
+    *,
+    manifest: dict[str, Any] | None = None,
+) -> dict[str, str]:
     """Project any Alpha/Beta/Gamma local target into the shared OCI runtime."""
     import quwoquan_ops.cli.stackctl as _stackctl
 
-
-    manifest = _stackctl.load_port_manifest()
+    resolved_manifest = (
+        manifest if manifest is not None else _stackctl.load_port_manifest()
+    )
     profile_name = str(_stackctl.get_target(topology, target_name).get("portProfile"))
-    ports = _stackctl.profile_ports(manifest, profile_name)
+    ports = _stackctl.profile_ports(resolved_manifest, profile_name)
     target = _stackctl.get_target(topology, target_name)
     environment_name = str(target["env"])
     if environment_name not in {"alpha", "beta", "gamma"}:
@@ -198,6 +209,7 @@ def _gamma_env_from_port_manifest(topology: dict[str, Any], target_name: str) ->
         "LOCAL_GAMMA_REDIS_PORT": str(ports["redis"]),
         "LOCAL_GAMMA_POSTGRES_PORT": str(ports["postgres"]),
         "QWQ_COMPOSE_ELASTICSEARCH_PORT": str(ports["elasticsearch"]),
+        "LOCAL_GAMMA_ADMIN_PORT": str(ports["caddy-admin"]),
         "LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT": str(ports["object-storage-edge"]),
         "LOCAL_GAMMA_MEDIA_ORIGIN_PORT": str(ports["media-origin"]),
         "LOCAL_GAMMA_LIVEKIT_HTTP_PORT": str(ports["livekit-http"]),
@@ -260,6 +272,135 @@ def _current_runtime_workload(target_name: str) -> str:
     return "full"
 
 
+def socket_probe(port: int) -> bool:
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(1.2)
+            result = sock.connect_ex(("127.0.0.1", port))
+    except OSError as exc:
+        raise RuntimeError(
+            f"TCP port probe failed for 127.0.0.1:{port}: {exc}"
+        ) from exc
+    if result == 0:
+        return True
+    if result == errno.ECONNREFUSED:
+        return False
+    raise RuntimeError(
+        "TCP port probe failed for "
+        f"127.0.0.1:{port}: {os.strerror(result)} (errno={result})"
+    )
+
+
+def _wait_for_network_ports_released(
+    target_name: str,
+    *,
+    timeout_seconds: float = 45.0,
+    poll_interval_seconds: float = 0.5,
+    port_reporter: Callable[[str], dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Wait for target-owned host forwards to converge after compose down.
+
+    Docker Desktop/Colima can remove containers before its host forwarding
+    process closes the corresponding listening sockets. A single immediate
+    probe therefore creates a false cleanup failure. The bounded wait keeps
+    the fail-closed resource-release contract without restarting or otherwise
+    mutating the shared container runtime.
+    """
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    deadline = time.monotonic() + timeout_seconds
+    reporter = port_reporter or _stackctl._network_report
+    while True:
+        occupied = [
+            item for item in reporter(target_name)["ports"] if item["open"]
+        ]
+        if not occupied or time.monotonic() >= deadline:
+            return occupied
+        time.sleep(poll_interval_seconds)
+
+
+def _published_endpoint_identity(
+    endpoint: Mapping[str, object],
+) -> tuple[str, int, str]:
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    if not isinstance(endpoint, Mapping):
+        raise ValueError("runtime published endpoint must be an object")
+    role = str(endpoint.get("role") or "").strip()
+    protocol = str(endpoint.get("protocol") or "").strip().lower()
+    host_port = _stackctl.require_published_endpoint_port(
+        [endpoint],
+        role=role,
+        protocol=protocol,
+    )
+    return role, host_port, protocol
+
+
+def _published_endpoint_is_occupied(endpoint: Mapping[str, object]) -> bool:
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    role, host_port, protocol = _published_endpoint_identity(endpoint)
+    if protocol == "tcp":
+        try:
+            return _stackctl.socket_probe(host_port)
+        except RuntimeError as exc:
+            raise RuntimeError(
+                "TCP published endpoint probe failed for "
+                f"{role}:{host_port}/{protocol}: {exc}"
+            ) from exc
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.bind(("127.0.0.1", host_port))
+    except OSError as exc:
+        if exc.errno == errno.EADDRINUSE:
+            return True
+        raise RuntimeError(
+            "UDP published endpoint probe failed for "
+            f"{role}:{host_port}/{protocol}: {exc}"
+        ) from exc
+    return False
+
+
+def _wait_for_published_endpoints_released(
+    published_endpoints: Sequence[Mapping[str, object]],
+    *,
+    timeout_seconds: float = 45.0,
+    poll_interval_seconds: float = 0.5,
+) -> list[dict[str, object]]:
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    if (
+        isinstance(published_endpoints, (str, bytes, bytearray, Mapping))
+        or not isinstance(published_endpoints, Sequence)
+        or not published_endpoints
+    ):
+        raise ValueError("runtime published endpoint ownership is required")
+    normalized: list[dict[str, object]] = []
+    identities: set[tuple[str, int, str]] = set()
+    for endpoint in published_endpoints:
+        identity = _published_endpoint_identity(endpoint)
+        if identity in identities:
+            raise ValueError("runtime published endpoint identities must be distinct")
+        identities.add(identity)
+        normalized.append(
+            {
+                "role": identity[0],
+                "hostPort": identity[1],
+                "protocol": identity[2],
+            }
+        )
+    deadline = time.monotonic() + timeout_seconds
+    while True:
+        occupied = [
+            endpoint
+            for endpoint in normalized
+            if _stackctl._published_endpoint_is_occupied(endpoint)
+        ]
+        if not occupied or time.monotonic() >= deadline:
+            return occupied
+        time.sleep(poll_interval_seconds)
+
+
 def _network_report(target_name: str) -> dict[str, Any]:
     import quwoquan_ops.cli.stackctl as _stackctl
 
@@ -308,6 +449,60 @@ def _canonical_port_occupancy_report(target_name: str) -> dict[str, Any]:
         for role, port in _stackctl.profile_ports(manifest, profile_name).items()
     ]
     return {"profile": profile_name, "ports": ports, "publicEndpoints": []}
+
+
+def _project_target_runtime_owned_ports(
+    target_name: str,
+    *,
+    published_ports: Sequence[Mapping[str, object]] | None = None,
+    topology: dict[str, Any] | None = None,
+    manifest: dict[str, Any] | None = None,
+) -> list[dict[str, object]]:
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    resolved_topology = topology if topology is not None else _stackctl.load_environment_topology()
+    target = _stackctl.get_target(resolved_topology, target_name)
+    profile_name = str(target.get("portProfile") or "").strip()
+    if not profile_name:
+        raise ValueError(f"{target_name} runtime port profile is required")
+    resolved_manifest = manifest if manifest is not None else _stackctl.load_port_manifest()
+    return _stackctl.project_runtime_owned_ports(
+        port_profile=profile_name,
+        published_ports=published_ports,
+        manifest=resolved_manifest,
+    )
+
+
+def _runtime_owned_port_occupancy_report(
+    target_name: str,
+    *,
+    published_ports: Sequence[Mapping[str, object]] | None = None,
+    topology: dict[str, Any] | None = None,
+    manifest: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    resolved_topology = topology if topology is not None else _stackctl.load_environment_topology()
+    target = _stackctl.get_target(resolved_topology, target_name)
+    profile_name = str(target.get("portProfile") or "").strip()
+    resolved_manifest = manifest if manifest is not None else _stackctl.load_port_manifest()
+    owned_ports = _stackctl._project_target_runtime_owned_ports(
+        target_name,
+        published_ports=published_ports,
+        topology=resolved_topology,
+        manifest=resolved_manifest,
+    )
+    return {
+        "profile": profile_name,
+        "publishedEndpoints": [
+            {
+                **endpoint,
+                "open": _stackctl._published_endpoint_is_occupied(endpoint),
+            }
+            for endpoint in owned_ports
+        ],
+        "publicEndpoints": [],
+    }
 
 
 def _other_local_target_port_blocks(target_name: str) -> list[dict[str, Any]]:
@@ -400,16 +595,42 @@ def _expected_local_roles(
     if target_name in {"alpha-local", "beta-local", "gamma-local"}:
         environment_name = target_name.removesuffix("-local")
         provider_runtime = _stackctl._active_provider_runtime(environment_name, target_name)
-        startup = _stackctl.load_startup_attempt(target_name)
         expected_digest = str(
             provider_runtime["composition"]["runtimeCompositionDigest"]
         )
-        if (
-            not isinstance(startup, dict)
-            or startup.get("status") != "running"
-            or startup.get("workload") != "full"
-            or startup.get("providerRuntimeDigest") != expected_digest
+
+        def _startup_identity_current(candidate: object) -> bool:
+            return (
+                isinstance(candidate, dict)
+                and candidate.get("status") == "running"
+                and candidate.get("workload") == "full"
+                and candidate.get("providerRuntimeDigest") == expected_digest
+            )
+
+        def _startup_is_running(candidate: object) -> bool:
+            return isinstance(candidate, dict) and candidate.get("status") == "running"
+
+        # release 栈与 mutable test-live 栈各自持有 startup receipt，同一 target 同时
+        # 只能有一个 running。互斥由 up/dev-session 保证，但保证不等于事实：两份都
+        # running 说明两套栈在抢同一批 canonical 端口，此时任取其一都会把端口所有权
+        # 判给错误的栈。所以两份都读出来显式裁决，而不是读到一份就回落。
+        release_startup = _stackctl.load_startup_attempt(target_name)
+        test_live_startup = _stackctl.load_test_live_startup_attempt(target_name)
+        if _startup_is_running(release_startup) and _startup_is_running(
+            test_live_startup
         ):
+            raise RuntimeError(
+                f"GATE_BLOCK: {target_name} has a running release startup receipt and a "
+                "running mutable test-live startup receipt at the same time; stop one "
+                "stack before reading local topology"
+            )
+        # 只有一份 running 时它就是唯一权威；两份都不 current 才是身份漂移。
+        startup = (
+            release_startup
+            if _startup_identity_current(release_startup)
+            else test_live_startup
+        )
+        if not _startup_identity_current(startup):
             raise RuntimeError(
                 f"GATE_BLOCK: {target_name} startup Provider runtime identity is not current"
             )

@@ -20,6 +20,7 @@ from content.execution.stage_receipt import (
     fleet_status,
     record_stage_receipt,
     release_lane_claim,
+    round_timeout_admission,
 )
 
 
@@ -122,6 +123,17 @@ def register_stage_record_parser(
 
 def _handle_lane_claim(args: argparse.Namespace) -> None:
     if args.check:
+        if args.round_timeout_seconds is not None:
+            admission = round_timeout_admission(
+                args.execution_id,
+                round_timeout_seconds=args.round_timeout_seconds,
+            )
+            if not admission["admitted"]:
+                print(
+                    f"lane-claim rejected: {admission['reason']}",
+                    file=sys.stderr,
+                )
+                raise SystemExit(64)
         result = check_lane_claim(args.execution_id)
         print(json.dumps(result, ensure_ascii=False, indent=2))
         if result["active"]:
@@ -173,6 +185,13 @@ def register_lane_claim_parser(
         "--check",
         action="store_true",
         help="只读探测：活跃 claim 存在退出码 3，不写盘不刷心跳",
+    )
+    parser.add_argument(
+        "--round-timeout-seconds",
+        type=int,
+        default=None,
+        help="随 --check 声明驱动的单轮 hard timeout；长到会与 claim TTL "
+        "形成双写窗口时退出码 64",
     )
     parser.set_defaults(handler=_handle_lane_claim)
 

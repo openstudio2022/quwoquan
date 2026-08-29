@@ -123,6 +123,7 @@ class _ExposureStore:
         return SimpleNamespace(
             exposure_id="exposure-001",
             subject_id="persona-001",
+            experiment_bucket="model",
         )
 
     def exists(self, exposure_id):
@@ -166,6 +167,7 @@ def test_consumer_resolves_persisted_exposure_before_feedback_ack() -> None:
     assert consumer.process_once() == 1
     fact = next(iter(feedback_store.facts.values()))
     assert fact.exposure_id == "exposure-001"
+    assert fact.experiment_bucket == "model"
     assert fact.source_event_id == hashlib.sha256(
         b"ContentBehaviorRecorded:persona-001:client-event-001"
     ).hexdigest()

@@ -109,7 +109,11 @@ func Run() {
 	if err != nil {
 		log.Fatalf("load release object closure: %v", err)
 	}
-	releaseMediaAssets, err := LoadReleaseMediaAssets(*releaseRoot, desired.ReleaseID)
+	releaseMediaAssets, err := LoadReleaseMediaAssets(
+		*releaseRoot,
+		desired.ReleaseID,
+		releaseBinding.ReleaseClass,
+	)
 	if err != nil {
 		log.Fatalf("load release media authority: %v", err)
 	}
@@ -208,6 +212,7 @@ func Run() {
 	opts := NormalizeImportOptions(ImportOptions{
 		ReleaseID:                 desired.ReleaseID,
 		ManifestDigest:            releaseBinding.ManifestDigest,
+		ReleaseClass:              releaseBinding.ReleaseClass,
 		Mode:                      *mode,
 		DeletePolicy:              *deletePolicy,
 		SourceOwner:               *sourceOwner,
@@ -227,7 +232,19 @@ func Run() {
 	if err != nil {
 		log.Fatalf("apply Content-owned Data release: %v", err)
 	}
+	mediaAssetsProjected, err := UpsertReleaseMediaAssetProjections(
+		ctx,
+		client.Database(*postsDB).Collection("media_assets"),
+		releaseMediaAssets,
+		releaseBinding.SourceOwner,
+		opts.ReleaseID,
+		now,
+	)
+	if err != nil {
+		log.Fatalf("project release media assets: %v", err)
+	}
 	activeCounts := ImportPoolCounts(posts, len(desired.DesiredRefs.Entities))
+	activeCounts["mediaAssetsProjected"] = mediaAssetsProjected
 	activeCounts["postsUpserted"] = applyResult.PostsUpserted
 	activeCounts["postsRemoved"] = applyResult.PostsRemoved
 	activeCounts["outboxEventsReady"] = applyResult.OutboxEventsReady
@@ -349,8 +366,11 @@ func UpsertPosts(ctx context.Context, coll *mongo.Collection, posts []PostDoc, n
 }
 
 type ImportOptions struct {
-	ReleaseID                 string
-	ManifestDigest            string
+	ReleaseID      string
+	ManifestDigest string
+	// ReleaseClass 是 release.json 声明的 release 级类别（research|commercial），
+	// 随导入落进 data_release_state，供 research readback 判定 release 类别。
+	ReleaseClass              string
 	Mode                      string
 	DeletePolicy              string
 	SourceOwner               string
@@ -644,7 +664,8 @@ func UpsertPostsWithOptions(ctx context.Context, coll *mongo.Collection, posts [
 		if len(runtimeEntityRefs) == 0 {
 			runtimeEntityRefs = p.EntityRefs
 		}
-		media := ImportedMediaFields(importedPostAssets(p))
+		accessMode := MediaDeliveryAccessModeForReleaseClass(opts.ReleaseClass)
+		media := ImportedMediaFields(importedPostAssets(p), accessMode)
 		body := p.ArticleMarkdown
 		summary := ProjectImportedArticleSummary(p.ArticleMarkdown)
 		if p.ContentType == "image" {
@@ -678,13 +699,17 @@ func UpsertPostsWithOptions(ctx context.Context, coll *mongo.Collection, posts [
 			"template":                  p.Template, "generatorModel": p.GeneratorModel, "articleTemplate": p.Template,
 			"body": body, "summary": summary,
 			"mediaUrls": media.MediaURLs, "mediaItems": media.MediaItems, "coverUrl": media.CoverURL,
+			"mediaAssetIds":   media.MediaAssetIDs,
 			"articleMarkdown": p.ArticleMarkdown, "articleDigest": p.ArticleDigest, "articleMarkdownDigest": p.ArticleDigest,
-			"articleAssetManifest": p.ArticleAssetManifest,
-			"sourceTaskId":         p.SourceTaskId,
-			"createdAt":            p.CreatedAt,
-			"updatedAt":            p.UpdatedAt,
-			"publishedAt":          p.PublishedAt,
-			"version":              opts.ProjectionVersion,
+			"articleAssetManifest": ImportedArticleAssetManifest(
+				p.ArticleAssetManifest,
+				accessMode,
+			),
+			"sourceTaskId": p.SourceTaskId,
+			"createdAt":    p.CreatedAt,
+			"updatedAt":    p.UpdatedAt,
+			"publishedAt":  p.PublishedAt,
+			"version":      opts.ProjectionVersion,
 			// Path A 导入的 publish 主线文章默认视为已公开发布，保证
 			// 在线 search/feed 与 rm_discovery_feed 的 discoverability 口径一致。
 			"status":           "published",
@@ -693,6 +718,7 @@ func UpsertPostsWithOptions(ctx context.Context, coll *mongo.Collection, posts [
 			"sourceHash":       newHash,
 		}
 		applyImportedVideoFields(doc, media)
+		ApplyImportedAuthorAvatarDeliveryFields(doc, p, accessMode)
 		for k, v := range releaseFields(opts, now, "active") {
 			doc[k] = v
 		}
@@ -869,6 +895,7 @@ func UpsertReleaseState(ctx context.Context, coll *mongo.Collection, env string,
 			"environment": env, "sourceOwner": opts.SourceOwner,
 			"releaseId": opts.ReleaseID, "activeReleaseId": opts.ReleaseID, "status": "active",
 			"manifestDigest":    opts.ManifestDigest,
+			"releaseClass":      opts.ReleaseClass,
 			"projectionVersion": opts.ProjectionVersion,
 			"activatedAt":       now,
 			"readback": bson.M{

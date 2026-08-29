@@ -63,9 +63,11 @@ def _image_mentions_entity(
 ) -> bool:
     if not entity_id:
         return True
+    # 证据只取来源侧字段。`relevance` 是采集方自己写给这张图的说明，把它算作匹配证据等于
+    # 让候选自证相关：一张与实体无关的图，只要 relevance 里写上实体名就能过门，而 caption
+    # 与来源 URL 仍指向别的地方。自述不是证据，故不在此列。
     for field in (
         "caption",
-        "relevance",
         "visualSubject",
         "title",
         "sourceUrl",

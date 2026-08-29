@@ -56,7 +56,9 @@
 - article source discovery 只允许进入 registry 已声明可抓取、允许 crawl、包含 article lane 且具备 commercial release admission 的站点；robots/terms、allowed path、速率/退避、深度/日页数、canonical 去重与实体/别名/主题相关性均须形成不可变审计证据。
 - 登录墙、robots deny、网络不可达与不相关候选必须形成 typed blocked/discard；`factual_reference_only` 只保留事实引用身份，不得保存原文或伪造成功。
 - content plan 只消费 target set 冻结的 canonical target 与 aliases 作为实体锚定；只偶然列举目标的城市总览或 figure caption 不能因行长、推断短别名或标题回填成为目标文章底稿。
+- 图片与实体的相关性只由来源侧字段作证：来源说明、视觉主体、标题与来源/授权 URL。采集侧自己写给候选的 `relevance` 注释不是证据——把它算作证据等于允许候选自证相关，一张来源说明与 URL 都指向别处的图片，只要注释里写上实体名就能过门，而这类假阳性在规模生产下正是「配图与实体无关」的主要入口。
 - `factual_reference_only` 只可提取可核验事实、路线顺序、必要数字与专有名词；成稿必须使用独立句式、结构和叙事，不得保留来源连续长句、自然段、小标题或原文结构，也不得以 licensed adaptation 的底稿留存率为其设下限。
+- 来源的 `illustrated` 声明由「同源可发布图片至少两张」派生，不是独立的编辑意图。发布评估把同源图片剔到不足两张时该派生失去依据，候选按同一条规则收敛为 `text_only` 并计入 `articleImageSoftWarnings.no_publishable_source_asset`，合格正文不因图片侧短缺被丢弃；反向从 `text_only` 变为 `illustrated` 等于凭空造图，一律拒绝。来源本就声明 `text_only` 的候选谈不上缺可发布素材，不计入该软警告键。
 - independent review 已有 finished Grok journal，但 controller 中断后只剩唯一 schema-valid pending response 时，不得改写旧 execution 的 `reviewer_result`/attestation。
 - 只有唯一 pending response 与唯一未绑定 finished reviewer work unit 能生成 create-once reconciliation receipt。
 - 标准 campaign submission 必须从该 receipt 与其余 final review 自动派生 failed-only refs。
@@ -107,6 +109,16 @@
 - THEN 未命中 workload target 或统计 rate 只形成 shortfall/趋势结论，不否决至少一个 hard-qualified 对象的发布与结构性 promotion。
 - THEN active workloads 可串行或重叠执行；每个实际 task 分别终态，soak/workspace/resource samples 的缺失或失败只影响容量结论，不影响 dispatch。canonical publish 保持对象事务单写者，最终 release 仍要求 exact closure。
 - THEN 缺失对象级硬门或 receipt 身份证据时结论为 GATE_BLOCK，不能写入静态 policy 或 acceptance 数字。
+
+<a id="gwt-004"></a>
+### GWT-004 `illustrated` 来源缺可发布图片时的准入结论单义且可对账
+
+- GIVEN 一个声明 `publishMediaMode=illustrated` 的文章来源，其同源图片中只有一张能通过发布评估。
+- WHEN content plan 对该来源做候选级准入。
+- THEN 该来源以 `text_only` 进入候选集合并计入 `articleImageSoftWarnings.no_publishable_source_asset`，不计入 `articleRejects`；同一个来源不得同时出现在两侧，也不得两侧都不出现。
+- THEN 收敛后的候选不再携带任何图片声明与素材引用，其 packet 的 `text_only` 与来源 meta 的 `illustrated` 之间的差异只在素材集合为空时被接受；从 `text_only` 反向变为 `illustrated` 一律拒绝。
+- THEN `no_publishable_source_asset` 只在「来源声明需要配图而可发布图片不足」时计数；来源本就声明 `text_only` 的候选不计入该键。
+- THEN 结论可按来源逐一对账回具体候选，不只留下无法回到来源的计数。
 
 ## 6. 依赖
 

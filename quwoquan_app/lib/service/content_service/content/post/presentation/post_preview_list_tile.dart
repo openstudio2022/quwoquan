@@ -1,4 +1,7 @@
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/runtime/di/media_delivery_composition.dart';
+import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart'
+    show MediaDeliveryKind;
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
@@ -17,6 +20,7 @@ class PostPreviewListTile extends StatelessWidget {
     required this.onTap,
     this.supportingText = '',
     this.coverUrl = '',
+    this.coverBinding = const MediaDeliveryBinding.absent(),
     this.showVideoBadge = false,
     this.thumbnailWidth =
         AppSpacing.followButtonWidth + AppSpacing.intraGroupMd,
@@ -34,6 +38,10 @@ class PostPreviewListTile extends StatelessWidget {
   final String title;
   final String supportingText;
   final String coverUrl;
+
+  /// 封面的 typed 交付绑定（DEC-033）。绑定在场即由唯一分流入口决定走私有短签
+  /// 还是公开候选；缺席时退回 [coverUrl] 的公开路，本骨架不从 URL 形态反推。
+  final MediaDeliveryBinding coverBinding;
   final bool showVideoBadge;
   final double thumbnailWidth;
   final double thumbnailHeight;
@@ -107,20 +115,32 @@ class PostPreviewListTile extends StatelessWidget {
                     fit: StackFit.expand,
                     children: [
                       if (_hasCover)
-                        AppCachedNetworkImage(
-                          imageUrl: coverUrl,
+                        mediaDeliveryImage(
+                          binding: coverBinding.hasRenderableSource
+                              ? coverBinding
+                              : MediaDeliveryBinding(
+                                  assetId: '',
+                                  accessMode: null,
+                                  publicUrl: coverUrl,
+                                ),
+                          kind: MediaDeliveryKind.image,
                           fit: BoxFit.cover,
-                          cdnPreset: CdnImagePreset.thumbnail,
-                          placeholder: ColoredBox(
-                            color: fgSecondary.withValues(alpha: 0.12),
-                          ),
-                          errorWidget: ColoredBox(
-                            color: fgSecondary.withValues(alpha: 0.12),
-                            child: Icon(
-                              CupertinoIcons.photo,
-                              color: fgSecondary,
-                            ),
-                          ),
+                          publicBuilder: (context, publicUrl) =>
+                              AppCachedNetworkImage(
+                                imageUrl: publicUrl,
+                                fit: BoxFit.cover,
+                                cdnPreset: CdnImagePreset.thumbnail,
+                                placeholder: ColoredBox(
+                                  color: fgSecondary.withValues(alpha: 0.12),
+                                ),
+                                errorWidget: ColoredBox(
+                                  color: fgSecondary.withValues(alpha: 0.12),
+                                  child: Icon(
+                                    CupertinoIcons.photo,
+                                    color: fgSecondary,
+                                  ),
+                                ),
+                              ),
                         )
                       else
                         ColoredBox(

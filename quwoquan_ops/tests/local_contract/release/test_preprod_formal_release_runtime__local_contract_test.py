@@ -193,10 +193,13 @@ class PreprodFormalReleaseRuntimeTest(unittest.TestCase):
                         "_local_stack_operation_lock",
                         return_value=contextlib.nullcontext(),
                     ),
-                    mock.patch.object(
+                    # 本用例断言的是 OCI 闭包缺失时的阻断。immutable up 还会读
+                    # test-live 回执做端口互斥判定，不声明它就等于让断言依赖开发机上
+                    # 是否恰好留着一个未释放的 dev-session，结论会随环境飘。
+                    mock.patch.multiple(
                         stackctl,
-                        "load_startup_attempt",
-                        return_value=None,
+                        load_startup_attempt=mock.Mock(return_value=None),
+                        load_test_live_startup_attempt=mock.Mock(return_value=None),
                     ),
                     mock.patch.object(stackctl, "assert_local_runtime_available"),
                     mock.patch.object(

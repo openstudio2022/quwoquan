@@ -39,8 +39,7 @@ from content.execution.campaign.workspace import (
     CampaignLaneWorkspace,
     CampaignRuntimePaths,
     SourceCapsule,
-    assert_frozen_main_tree,
-    assert_frozen_revision,
+    audit_frozen_revision,
     prepare_lane_workspace,
     prepare_source_capsule,
     release_lane_workspace,
@@ -105,6 +104,7 @@ def run_campaign(
     workloads: dict[str, int] = {}
     review_carriers: list[str] = []
     recovered_review_carriers: list[str] = []
+    revision_audits: list[dict[str, Any]] = []
 
     with campaign_run_session(
         runtime,
@@ -163,6 +163,7 @@ def run_campaign(
                     failure=None,
                     active_carriers=active_carriers,
                     workloads=workloads,
+                    revision_audits=revision_audits,
                 )
 
             persist_running_report("capsule")
@@ -277,23 +278,29 @@ def run_campaign(
                         execution_root=workspaces[carrier].execution_root,
                         return_code=0,
                     )
-            assert_frozen_main_tree(
-                runtime.repo_root,
-                git_branch=str(plan["gitBranch"]),
-                commit_sha=str(plan["gitCommitSha"]),
-                source_digest=str(plan["sourceDigest"]),
-                execution_bundle_digest=str(plan["executionBundle"]["digest"]),
+            revision_audits.append(
+                audit_frozen_revision(
+                    runtime.repo_root,
+                    phase="review",
+                    git_branch=str(plan["gitBranch"]),
+                    commit_sha=str(plan["gitCommitSha"]),
+                    source_digest=str(plan["sourceDigest"]),
+                    execution_bundle_digest=str(plan["executionBundle"]["digest"]),
+                )
             )
             final_phase = "review"
             persist_running_report("review")
 
             def publish_reviewed_lane(carrier: str) -> None:
-                assert_frozen_main_tree(
-                    runtime.repo_root,
-                    git_branch=str(plan["gitBranch"]),
-                    commit_sha=str(plan["gitCommitSha"]),
-                    source_digest=str(plan["sourceDigest"]),
-                    execution_bundle_digest=str(plan["executionBundle"]["digest"]),
+                revision_audits.append(
+                    audit_frozen_revision(
+                        runtime.repo_root,
+                        phase="publish",
+                        git_branch=str(plan["gitBranch"]),
+                        commit_sha=str(plan["gitCommitSha"]),
+                        source_digest=str(plan["sourceDigest"]),
+                        execution_bundle_digest=str(plan["executionBundle"]["digest"]),
+                    )
                 )
                 # Publish stays single-writer because all carriers share the
                 # canonical PUBLISH_ROOT.  It starts as soon as this lane's
@@ -417,12 +424,15 @@ def run_campaign(
             )
             persist_running_report("publish")
             final_phase = "publish"
-            assert_frozen_revision(
-                runtime.repo_root,
-                git_branch=str(plan["gitBranch"]),
-                commit_sha=str(plan["gitCommitSha"]),
-                source_digest=str(plan["sourceDigest"]),
-                execution_bundle_digest=str(plan["executionBundle"]["digest"]),
+            revision_audits.append(
+                audit_frozen_revision(
+                    runtime.repo_root,
+                    phase="publish",
+                    git_branch=str(plan["gitBranch"]),
+                    commit_sha=str(plan["gitCommitSha"]),
+                    source_digest=str(plan["sourceDigest"]),
+                    execution_bundle_digest=str(plan["executionBundle"]["digest"]),
+                )
             )
             final_status = aggregate_status(lanes)
             final_phase = "completed"
@@ -499,6 +509,7 @@ def run_campaign(
                     failure=failure,
                     active_carriers=active_carriers,
                     workloads=workloads,
+                    revision_audits=revision_audits,
                 )
             campaign_run.finish(
                 status=final_status,

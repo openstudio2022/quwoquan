@@ -11,10 +11,15 @@ from content.execution.campaign.request_envelope import write_scale_envelopes
 from content.execution.planning.work_request_contract import (
     _RESULT_SCHEMA,
     _blocked,
-    _path,
     _validated_result,
+    declared_handoff_ref,
     WorkRequestPreviewQuery,
 )
+from content.execution.planning.work_request_dependencies import (
+    resolve_dependency_path,
+)
+from core.control_types import RecoveryNextAction
+
 from content.execution.planning.work_request_store import (
     batch_documents_factory,
     compile_lock,
@@ -41,12 +46,22 @@ class WorkRequestCommandWriter:
                 str(preview["requestDigest"]),
                 code="DATA.WORK_REQUEST.PREVIEW_DRIFT",
                 message="cancel preview digest no longer matches canonical input",
+                next_action=RecoveryNextAction.RECOMPILE_INTENT,
+                handoff_ref=declared_handoff_ref(intent),
             )
+        request_digest = str(preview["requestDigest"])
         return _validated_result(
             {
                 "schema": _RESULT_SCHEMA,
                 "outcome": "canceled",
-                "requestDigest": str(preview["requestDigest"]),
+                "requestDigest": request_digest,
+                # 取消是运营者显式终结这一次编译，不是这份意图不能再走；
+                # 想继续就重新编译，因此恢复动作在场而不是 none。
+                "nextAction": RecoveryNextAction.RECOMPILE_INTENT.value,
+                "reentryRef": {
+                    "requestDigest": request_digest,
+                    "preAcquisitionHandoffRef": declared_handoff_ref(intent),
+                },
             }
         )
 
@@ -62,6 +77,8 @@ class WorkRequestCommandWriter:
                 str(preview["requestDigest"]),
                 code="DATA.WORK_REQUEST.PREVIEW_DRIFT",
                 message="confirm preview digest no longer matches canonical input",
+                next_action=RecoveryNextAction.RECOMPILE_INTENT,
+                handoff_ref=declared_handoff_ref(intent),
             )
         try:
             with compile_lock(self._output_root):
@@ -73,6 +90,8 @@ class WorkRequestCommandWriter:
                         str(current["requestDigest"]),
                         code="DATA.WORK_REQUEST.PREVIEW_DRIFT",
                         message="dependency set changed after preview",
+                        next_action=RecoveryNextAction.RECOMPILE_INTENT,
+                        handoff_ref=declared_handoff_ref(intent),
                     )
                 existing = find_work_request_by_request_digest(
                     preview_digest, output_root=self._output_root
@@ -88,7 +107,6 @@ class WorkRequestCommandWriter:
                 envelope_paths = write_scale_envelopes(
                     str(normalized["scale"]),
                     target_names=normalized["targetNames"],
-                    source_providers=normalized["sourceProviders"],
                     carriers=normalized["activeCarriers"],
                     workloads=normalized["workloads"],
                     output_root=self._output_root,
@@ -96,7 +114,7 @@ class WorkRequestCommandWriter:
                     sequence=sequence,
                     semantic_selection_id=str(normalized["semanticSelectionId"]),
                     semantic_preflight_receipt=(
-                        _path(normalized["semanticPreflightReceiptRef"])
+                        resolve_dependency_path(normalized["semanticPreflightReceiptRef"])
                         if normalized["semanticPreflightReceiptRef"]
                         else None
                     ),
@@ -109,28 +127,28 @@ class WorkRequestCommandWriter:
                         "predecessorExecutionIdsByCarrier"
                     ],
                     predecessor_reconciliation_receipt=(
-                        _path(normalized["predecessorReconciliationReceiptRef"])
+                        resolve_dependency_path(normalized["predecessorReconciliationReceiptRef"])
                         if normalized["predecessorReconciliationReceiptRef"]
                         else None
                     ),
                     promotion_receipt=(
-                        _path(normalized["promotionReceiptRef"])
+                        resolve_dependency_path(normalized["promotionReceiptRef"])
                         if normalized["promotionReceiptRef"]
                         else None
                     ),
-                    pre_acquisition_handoff=_path(
+                    pre_acquisition_handoff=resolve_dependency_path(
                         normalized["preAcquisitionHandoffRef"]
                     ),
                     external_input_refs_by_carrier=normalized[
                         "externalInputRefsByCarrier"
                     ],
                     acquisition_root=(
-                        _path(normalized["acquisitionRootRef"])
+                        resolve_dependency_path(normalized["acquisitionRootRef"])
                         if normalized["acquisitionRootRef"]
                         else None
                     ),
-                    scale_source_pool=_path(normalized["scaleSourcePoolPlanRef"]),
-                    source_pool_evidence_root=_path(
+                    scale_source_pool=resolve_dependency_path(normalized["scaleSourcePoolPlanRef"]),
+                    source_pool_evidence_root=resolve_dependency_path(
                         normalized["sourcePoolEvidenceRootRef"]
                     ),
                     batch_documents_factory=batch_documents_factory(
@@ -153,6 +171,9 @@ class WorkRequestCommandWriter:
                 preview_digest,
                 code="DATA.WORK_REQUEST.COMPILE_BLOCKED",
                 message=str(exc),
+                # 预览已通过而写入失败，输入是好的，恢复动作是修依赖证据再重编译。
+                next_action=RecoveryNextAction.REPAIR_EVIDENCE,
+                handoff_ref=declared_handoff_ref(intent),
                 attributes={"exceptionType": type(exc).__name__},
             )
 
@@ -175,12 +196,18 @@ class WorkRequestCompilationQuery:
                 work_request_digest,
                 code="DATA.WORK_REQUEST.COMPILATION_QUERY_BLOCKED",
                 message=str(exc),
+                next_action=RecoveryNextAction.REPAIR_EVIDENCE,
+                # 查询面只拿到 digest，调用方并未声明 handoff：缺席就是缺席，
+                # 不能拿被查到的那份编译包里的 handoff 冒充「本次输入声明过」。
+                handoff_ref=None,
             )
         if path is None:
             return _blocked(
                 work_request_digest,
                 code="DATA.WORK_REQUEST.NOT_FOUND",
                 message="compiled WorkRequest does not exist",
+                next_action=RecoveryNextAction.RECOMPILE_INTENT,
+                handoff_ref=None,
             )
         raise AssertionError("unreachable WorkRequest query state")
 

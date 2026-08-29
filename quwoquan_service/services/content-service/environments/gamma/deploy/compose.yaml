@@ -3,6 +3,8 @@ services:
   # Compose replaces depends_on across files, so this environment entry owns
   # the complete dependency set and waits for the real ES health check.
   content-service:
+    environment:
+      CONTENT_RESEARCH_IDENTITY_ATTESTATION_KEY_BASE64: "${CONTENT_RESEARCH_IDENTITY_ATTESTATION_KEY_BASE64:?CONTENT_RESEARCH_IDENTITY_ATTESTATION_KEY_BASE64 is required for Gamma Research readback}"
     depends_on:
       mongodb:
         condition: service_healthy

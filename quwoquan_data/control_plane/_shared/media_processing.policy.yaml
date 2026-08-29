@@ -1,7 +1,18 @@
 policyId: media_processing
+# 单次抓取的线上传输上限，不是准入判据：源体可以比对象预算大，
+# 下载截面据 `objectStorageBudgetBytesByCarrier` 就地降采样后才决定能不能留。
+# 它只回答「愿意为一个候选花多少带宽」，不回答「这个候选能不能发」。
 sourceAssetMaxBytes: 25165824
 pageImageRenditionWidth: 1920
 maxPublishableImagePixels: 80000000
+# 单对象存储预算：一个对象是一份消费者价值，其逻辑字节闭包按载体封顶。
+# 这里是该预算的唯一声明位——下载截面的单资产判否与 publish 截面的闭包准入
+# 都从这张表取值，两侧因此不可能对同一个对象得出不同预算。
+# `default` 覆盖全部图文载体（entity/article/image）；video 另有编码轨道成本，
+# 单列一档。取值优先级固定为「具名载体 -> default」，两者都写在本文件里。
+objectStorageBudgetBytesByCarrier:
+  default: 10485760
+  video: 52428800
 maxAssessmentImagePixels: 2000000
 assessmentJpegQuality: 85
 ocrImagePixels: 2000000

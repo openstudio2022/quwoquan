@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 from content.execution import context, execution_supersession, execution_terminal
+from content.execution.closure import execution_supersession_admission
 from content.execution.controller.execute import reconcile
 from content.execution.execution_terminal import load_terminal_execution_evidence
 from content.execution import workspace
@@ -419,12 +420,12 @@ def test_source_drift_supersession_refuses_live_recorded_identity_without_argv(
     }
     write_json(root / "_shared/controller_lease.json", lease)
     monkeypatch.setattr(
-        execution_supersession,
+        execution_supersession_admission,
         "_pid_alive",
         lambda _pid: live_field == "pid",
     )
     monkeypatch.setattr(
-        execution_supersession,
+        execution_supersession_admission,
         "_pgid_alive",
         lambda _pgid: live_field == "pgid",
     )
@@ -436,8 +437,9 @@ def test_source_drift_supersession_refuses_live_recorded_identity_without_argv(
             executions_root=root.parent,
         )
 
-    assert not hasattr(execution_supersession, "_process_command")
-    assert not hasattr(execution_supersession, "_group_commands")
+    for module in (execution_supersession, execution_supersession_admission):
+        assert not hasattr(module, "_process_command")
+        assert not hasattr(module, "_group_commands")
 
 
 def test_source_drift_supersession_refuses_active_state_without_live_process(

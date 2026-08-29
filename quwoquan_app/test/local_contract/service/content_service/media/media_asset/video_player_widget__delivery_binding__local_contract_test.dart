@@ -496,8 +496,11 @@ void main() {
   test('VideoPlayerWidget API 只接收已验证的 typed delivery reference', () {
     // 编译期契约：P0/P1 都必须是 MediaDeliveryReference，不能传裸业务 object key。
     final widget = VideoPlayerWidget(deliveryReference: delivery);
-    expect(widget.deliveryReference.kind, MediaDeliveryKind.video);
-    expect(widget.deliveryReference.url, contains('video-primary-0001'));
+    // 公开路必须拿到公开交付引用；私有路由 signedDelivery 承担取址，
+    // 两者互斥由 VideoPlayerWidget 的构造断言保证。
+    expect(widget.signedDelivery, isNull);
+    expect(widget.deliveryReference!.kind, MediaDeliveryKind.video);
+    expect(widget.deliveryReference!.url, contains('video-primary-0001'));
     expect(widget.adaptiveDeliveryReference, isNull);
   });
 

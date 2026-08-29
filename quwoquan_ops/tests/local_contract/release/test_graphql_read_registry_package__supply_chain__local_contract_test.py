@@ -9,11 +9,11 @@ import base64
 import inspect
 import json
 import os
-from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
 import yaml
@@ -25,12 +25,11 @@ if str(ROOT) not in sys.path:
 from quwoquan_ops.cli import stackctl
 from quwoquan_ops.cli.lib.graphql_read_registry_package import (
     SigningMaterial,
-    materialize_graphql_read_runtime_config,
     materialize_graphql_read_registry_package,
+    materialize_graphql_read_runtime_config,
     resolve_signing_material,
     validate_packaged_graphql_read_registry,
 )
-
 
 CANDIDATE = "sha256:" + "1" * 64
 
@@ -225,6 +224,65 @@ class GraphQLReadRegistryPackageContractTest(unittest.TestCase):
                     "graphql-read-package.json",
                 },
             )
+
+    def test_registry_boundary_excludes_unrelated_dependency_symlinks(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qwq-graphql-package-") as temporary:
+            root = Path(temporary)
+            candidate = self._candidate(root)
+            framework = (
+                candidate
+                / "input-capsule/dependencies/patrol-host-ios-cocoapods"
+                / "Pods/WebRTC/WebRTC.framework"
+            )
+            framework.mkdir(parents=True)
+            framework_resources = root / "canonical-webrtc-framework-resources"
+            framework_resources.mkdir()
+            dependency_link = framework / "Resources"
+            dependency_link.symlink_to(framework_resources, target_is_directory=True)
+
+            descriptor = materialize_graphql_read_registry_package(
+                repo_root=ROOT,
+                candidate_root=candidate,
+                environment="alpha",
+                target="alpha-local",
+                candidate_digest=CANDIDATE,
+                signing=self._signing(root),
+            )
+
+            self.assertTrue(dependency_link.is_symlink())
+            self.assertEqual(
+                validate_packaged_graphql_read_registry(
+                    repo_root=ROOT,
+                    candidate_root=candidate,
+                    expected_environment="alpha",
+                    expected_target="alpha-local",
+                    expected_candidate_digest=CANDIDATE,
+                    expected_descriptor=descriptor,
+                ),
+                descriptor,
+            )
+
+    def test_registry_owned_symlink_remains_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qwq-graphql-package-") as temporary:
+            root = Path(temporary)
+            candidate = self._candidate(root)
+            foreign_envelope = root / "foreign-registry-envelope.json"
+            foreign_envelope.write_text("{}", encoding="utf-8")
+            registry_envelope = (
+                candidate
+                / "packages/services/api-edge/config/graphql-read-registry.json"
+            )
+            registry_envelope.symlink_to(foreign_envelope)
+
+            with self.assertRaisesRegex(ValueError, "symlink"):
+                materialize_graphql_read_registry_package(
+                    repo_root=ROOT,
+                    candidate_root=candidate,
+                    environment="alpha",
+                    target="alpha-local",
+                    candidate_digest=CANDIDATE,
+                    signing=self._signing(root),
+                )
 
     def test_mutable_runtime_materializes_signed_candidate_bound_files(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qwq-graphql-runtime-") as temporary:

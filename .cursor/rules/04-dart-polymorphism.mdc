@@ -1,8 +1,0 @@
----
-description: Dart 多态消费约束，禁止对 DTO 基类直接判断子类型
-globs: quwoquan_app/**/*.dart
-alwaysApply: false
----
-
-消费 DTO 基类或共享接口（`is`/`as`/`whereType` 冲动出现）时，先读
-`.agents/skills/review/references/roles/developer/references/dart.md` 的「按 DTO 子类型分支」一节。

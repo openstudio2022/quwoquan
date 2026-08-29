@@ -5,5 +5,7 @@
   "maxTotalObjects": 10,
   "maxWorkers": 1,
   "objectWallClockSeconds": 1800,
-  "completionGraceSeconds": 900
+  "completionGraceSeconds": 900,
+  "sourceDiscoveryHeartbeatIntervalSeconds": 30,
+  "sourceDiscoveryHeartbeatStaleAfterSeconds": 90
 }

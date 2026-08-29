@@ -20,7 +20,7 @@ import (
 
 const (
 	testContractGraphDigest = "72046cb9d49a8a0e05e57b9c75261d8f5e153f2fed51b6afd1a43f28ee9d62dc"
-	testPersistedQueryHash  = "3525412614f94647191c1fead96cc6da3bdc452bf0bec9edd92af4793aed3110"
+	testPersistedQueryHash  = "3a73f535735fcbb64f7de0db524e9dab2ca1f41d7f1fec91c68053dfde5bc80f"
 
 	testArticleMarkdownDigest = "sha256:bc18f7068971a44e264848ecd54b72b02d38216abb8ce3c3d2148e37e8a12398" // sha256("markdown")
 	testArticleDocumentDigest = "sha256:43cc23fa52b87b4cc1d02b5b114154151d6adddb17c9fddc06b027fa99e24008" // sha256("document")
@@ -30,19 +30,21 @@ const (
 
 func TestInternalPersistedGetPostExecutesExactOwnerReadSlice(t *testing.T) {
 	reader := &recordingPostDetailReader{detail: postports.PostDetailSlice{
-		PostID:            "post-1",
-		ContentType:       "article",
-		Title:             "canonical title",
-		Body:              "body",
-		Summary:           "summary",
-		AuthorPersonaID:   "persona-1",
-		AuthorDisplayName: "Creator",
-		CoverURL:          "https://media.example/post-1.jpg",
-		Status:            "published",
-		Visibility:        "public",
-		ModerationStatus:  "approved",
-		CreatedAt:         time.Date(2026, 8, 11, 0, 0, 0, 0, time.UTC),
-		UpdatedAt:         time.Date(2026, 8, 11, 0, 1, 0, 0, time.UTC),
+		PostID:                 "post-1",
+		ContentType:            "article",
+		Title:                  "canonical title",
+		Body:                   "body",
+		Summary:                "summary",
+		AuthorPersonaID:        "persona-1",
+		AuthorDisplayName:      "Creator",
+		AuthorAvatarAssetID:    "avatar-asset-1",
+		AuthorAvatarAccessMode: "signed_grant",
+		CoverURL:               "https://media.example/post-1.jpg",
+		Status:                 "published",
+		Visibility:             "public",
+		ModerationStatus:       "approved",
+		CreatedAt:              time.Date(2026, 8, 11, 0, 0, 0, 0, time.UTC),
+		UpdatedAt:              time.Date(2026, 8, 11, 0, 1, 0, 0, time.UTC),
 	}}
 	handler := newInternalGraphQLHandler(t, reader)
 	request := trustedInternalGraphQLRequest(t, validInternalGraphQLPayload())
@@ -73,8 +75,11 @@ func TestInternalPersistedGetPostExecutesExactOwnerReadSlice(t *testing.T) {
 	if detail["postId"] != "post-1" || detail["authorDisplayName"] != "Creator" {
 		t.Fatalf("GraphQL data=%v", detail)
 	}
-	if len(detail) != 31 {
+	if len(detail) != 33 {
 		t.Fatalf("selected GraphQL fields=%v", detail)
+	}
+	if detail["authorAvatarAssetId"] != "avatar-asset-1" || detail["authorAvatarAccessMode"] != "signed_grant" {
+		t.Fatalf("avatar media delivery binding=%v", detail)
 	}
 	if liked, exists := detail["viewerLiked"]; !exists || liked != nil {
 		t.Fatalf("internal persisted read must carry viewerLiked=null, got %v", detail["viewerLiked"])

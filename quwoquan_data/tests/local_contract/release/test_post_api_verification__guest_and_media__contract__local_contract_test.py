@@ -8,7 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-
+from jsonschema import Draft202012Validator
 from tests.local_contract.release.test_post_api_verification__behavior__contract__local_contract_test import (
     VIDEO_ATTRIBUTION,
     DeploymentEnvironment,
@@ -16,6 +16,146 @@ from tests.local_contract.release.test_post_api_verification__behavior__contract
     public_api_subject,
     subject,
 )
+
+_SIGNED_IMAGE_BYTES = b"\xff\xd8\xff\xe0"
+_SIGNED_ORIGINAL_URL = (
+    "https://signed-media.secret.test/media/private/original.jpg"
+    "?X-Amz-Signature=signature-secret"
+    "&X-Amz-Credential=credential-secret"
+    "&token=token-secret"
+)
+_SIGNED_SECRET_MARKERS = (
+    "signed-media.secret.test",
+    "/media/private/original.jpg",
+    "X-Amz-Signature",
+    "signature-secret",
+    "X-Amz-Credential",
+    "credential-secret",
+    "token=",
+    "token-secret",
+)
+
+
+def _signed_asset() -> subject.ReleaseMediaAssetCase:
+    return subject.ReleaseMediaAssetCase(
+        asset_id="research-image-a",
+        kind="image",
+        public_url="media/objects/sha256/aa/bb/research-image-a.jpg",
+        delivery_ref="media/objects/sha256/aa/bb/research-image-a.jpg",
+        expected_bytes=len(_SIGNED_IMAGE_BYTES),
+        expected_sha256="sha256:"
+        + hashlib.sha256(_SIGNED_IMAGE_BYTES).hexdigest(),
+        expected_mime_type="image/jpeg",
+    )
+
+
+class _SignedMediaClient:
+    def __init__(self, binary_response: SimpleNamespace) -> None:
+        self.binary_response = binary_response
+        self.requested_urls: list[str] = []
+
+    def post_json(self, path: str, **_kwargs: object) -> PublicApiResponse:
+        assert path == "content/media/research-image-a/original:access"
+        return PublicApiResponse(
+            status=200,
+            payload={"originalUrl": _SIGNED_ORIGINAL_URL},
+        )
+
+    def get_bytes(self, url: str, **_kwargs: object) -> SimpleNamespace:
+        self.requested_urls.append(url)
+        return self.binary_response
+
+
+def _assert_signed_secret_absent(value: object) -> None:
+    serialized = json.dumps(value, ensure_ascii=False)
+    for marker in _SIGNED_SECRET_MARKERS:
+        assert marker not in serialized
+
+
+def test_research_signed_media_success_report_keeps_request_url_process_local() -> None:
+    client = _SignedMediaClient(
+        SimpleNamespace(
+            status=200,
+            content_type="image/jpeg",
+            content_range="",
+            body=_SIGNED_IMAGE_BYTES,
+            etag='"server-etag"',
+        )
+    )
+
+    signed_probe = subject._research_signed_media_probe(client, _signed_asset())
+
+    assert client.requested_urls == [_SIGNED_ORIGINAL_URL]
+    assert signed_probe == {
+        "targetEvidence": signed_probe["targetEvidence"],
+        "status": 200,
+        "mimeType": "image/jpeg",
+        "bytes": len(_SIGNED_IMAGE_BYTES),
+        "sha256": "sha256:" + hashlib.sha256(_SIGNED_IMAGE_BYTES).hexdigest(),
+        "hashVerified": True,
+    }
+    assert signed_probe["targetEvidence"].startswith(
+        "hostClass=dns,pathHash=sha256:"
+    )
+    schema_path = (
+        Path(__file__).resolve().parents[4]
+        / "quwoquan_data/schema/release/post_api_verification.schema.json"
+    )
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    signed_probe_schema = schema["$defs"]["signedImageProbe"]
+    assert "publicUrl" not in signed_probe_schema["properties"]
+    assert schema["$defs"]["researchMediaProbe"]["properties"]["signedProbe"][
+        "oneOf"
+    ][0]["$ref"] == "#/$defs/signedImageProbe"
+    Draft202012Validator(signed_probe_schema).validate(signed_probe)
+    _assert_signed_secret_absent({"signedProbe": signed_probe})
+
+
+@pytest.mark.parametrize(
+    ("binary_response", "expected_error"),
+    [
+        (
+            SimpleNamespace(
+                status=403,
+                content_type="application/json",
+                content_range="",
+                body=b"denied",
+            ),
+            "status=403",
+        ),
+        (
+            SimpleNamespace(
+                status=200,
+                content_type="text/plain",
+                content_range="",
+                body=_SIGNED_IMAGE_BYTES,
+            ),
+            "MIME mismatch",
+        ),
+        (
+            SimpleNamespace(
+                status=200,
+                content_type="image/jpeg",
+                content_range="",
+                body=b"\xff\xd8\xff\xe1",
+            ),
+            "hash differs",
+        ),
+    ],
+    ids=("http-status", "mime", "hash"),
+)
+def test_research_signed_media_failure_receipt_never_contains_signed_url(
+    binary_response: SimpleNamespace,
+    expected_error: str,
+) -> None:
+    client = _SignedMediaClient(binary_response)
+
+    with pytest.raises(subject.PostApiVerificationError) as failure:
+        subject._research_signed_media_probe(client, _signed_asset())
+
+    assert client.requested_urls == [_SIGNED_ORIGINAL_URL]
+    assert expected_error in str(failure.value)
+    _assert_signed_secret_absent({"error": str(failure.value)})
 
 def test_video_media_probe_requires_range_and_playable_header() -> None:
     client = SimpleNamespace(
@@ -223,18 +363,27 @@ def test_public_api_client__fresh_guest_rejects_empty_persona_id(
         ).login_fresh_guest()
 
 
-def test_research_verification__fails_with_typed_identity_adapter_blocker(
+def test_research_verification__rejects_commercial_release_class(
     tmp_path: Path,
 ) -> None:
+    """research 相位只能核验 research release；类别错配必须 fail-closed。"""
+    import json as _json
+
+    release_root = tmp_path / "release"
+    (release_root / "payload").mkdir(parents=True)
+    (release_root / "payload/release.json").write_text(
+        _json.dumps({"releaseId": "research-001", "releaseClass": "commercial"}),
+        encoding="utf-8",
+    )
     with pytest.raises(
         subject.PostApiVerificationError,
-        match="DATA.RESEARCH.IDENTITY_ADAPTER_UNAVAILABLE",
+        match="readiness phase research cannot verify a commercial release",
     ):
         subject.write_post_api_verification(
             environment=DeploymentEnvironment.ALPHA,
             release_id="research-001",
             run_id="verify-001",
-            release_root=tmp_path / "release",
+            release_root=release_root,
             importer_report_path=tmp_path / "import.json",
             creator_importer_report_path=tmp_path / "creator-import.json",
             output_path=tmp_path / "post-api-verification.json",

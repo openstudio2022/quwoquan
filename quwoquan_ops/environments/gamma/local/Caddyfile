@@ -7,6 +7,17 @@
 }
 
 (media_cors) {
+	# 私有交付前缀（CAS objects / processed）只允许经短签 URL 访问
+	# （DEC-031 网络层边缘守卫）：签名真伪与绝对到期在字节交付边缘经
+	# forward_auth 复算，verifier 由 quwoquan_service/runtime/media 单点
+	# 拥有并挂载在 content-service /internal/media/delivery-auth；签名
+	# 缺失、伪造、篡改或过期均 403。Range 每段请求都会重新复算。
+	@private_media {
+		path /media/objects/* /media/processed/*
+	}
+	forward_auth @private_media content-service:18080 {
+		uri /internal/media/delivery-auth
+	}
 	# ?Cache-Control keeps the default no-store only when the immutable
 	# matcher below did not already set a Cache-Control. A hard-coded
 	# Cache-Control here would overwrite the immutable policy at flush time.

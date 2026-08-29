@@ -191,6 +191,10 @@ type RetrieveHit struct {
 	// canonical DeepLink and the bounded thumbnail/cover fields.
 	DeepLink     string `json:"-"`
 	ThumbnailURL string `json:"-"`
+	// 缩略的配对媒体资产标识与交付访问模式（DEC-033）：research 相位的封面是
+	// 相对私有 CAS 引用，消费方按 assetId 换短签，不按 URL 直连。
+	ThumbnailAssetID    string `json:"-"`
+	ThumbnailAccessMode string `json:"-"`
 	// Location dimension (cross-object): Geo/PlaceName surface the candidate's
 	// structured place when present; DistanceKm is populated only under a Near
 	// (附近) query as the haversine distance from the pin. All are zero/nil for
@@ -605,22 +609,24 @@ func rankAndMerge(plan RetrievePlan, candidates []RecallCandidate) ([]RetrieveHi
 		seen[key] = struct{}{}
 
 		hits = append(hits, RetrieveHit{
-			Target:       target,
-			ObjectType:   doc.ObjectType,
-			ObjectID:     doc.ObjectID,
-			Title:        firstNonEmpty(doc.Title, doc.ObjectID),
-			Snippet:      truncate(snippet, 180),
-			Score:        score,
-			MatchedTerms: matchedTerms,
-			MatchedTags:  matchedTagList,
-			Evidence:     []Evidence{{Field: matchedField, Snippet: truncate(snippet, 180)}},
-			Payload:      fieldsToPayload(doc.Fields),
-			DeepLink:     strings.TrimSpace(doc.DeepLink),
-			ThumbnailURL: boundedFlatCardThumbnailURL(doc.Fields),
-			Geo:          doc.Geo,
-			DistanceKm:   distanceKm,
-			PlaceName:    strings.TrimSpace(doc.Fields["placeName"]),
-			RankReasons:  rankReasons,
+			Target:              target,
+			ObjectType:          doc.ObjectType,
+			ObjectID:            doc.ObjectID,
+			Title:               firstNonEmpty(doc.Title, doc.ObjectID),
+			Snippet:             truncate(snippet, 180),
+			Score:               score,
+			MatchedTerms:        matchedTerms,
+			MatchedTags:         matchedTagList,
+			Evidence:            []Evidence{{Field: matchedField, Snippet: truncate(snippet, 180)}},
+			Payload:             fieldsToPayload(doc.Fields),
+			DeepLink:            strings.TrimSpace(doc.DeepLink),
+			ThumbnailURL:        boundedFlatCardThumbnailURL(doc.Fields),
+			ThumbnailAssetID:    strings.TrimSpace(doc.Fields["coverAssetId"]),
+			ThumbnailAccessMode: strings.TrimSpace(doc.Fields["coverAccessMode"]),
+			Geo:                 doc.Geo,
+			DistanceKm:          distanceKm,
+			PlaceName:           strings.TrimSpace(doc.Fields["placeName"]),
+			RankReasons:         rankReasons,
 		})
 		facetCounts[string(target)]++
 	}

@@ -26,6 +26,8 @@ import uuid
 from pathlib import Path
 from typing import Any, Callable
 
+sys.dont_write_bytecode = True
+
 _SUPPORT_DIR = Path(__file__).resolve().parents[1] / "support"
 if str(_SUPPORT_DIR) not in sys.path:
     sys.path.insert(0, str(_SUPPORT_DIR))

@@ -1,6 +1,7 @@
 # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/work-request-compilation/spec.md#gwt-001.t1
 # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/work-request-compilation/spec.md#gwt-001.t2
 # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/work-request-compilation/spec.md#gwt-002.t1
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/on-demand-content-pool-admission/spec.md#gwt-005.t2
 from __future__ import annotations
 
 import json
@@ -11,7 +12,10 @@ import pytest
 from content.execution.controller.execute import (
     pre_acquisition_handoff as handoff_api,
 )
-from content.execution.planning import work_request_contract
+from content.execution.planning import (
+    work_request_contract,
+    work_request_dependencies,
+)
 from content.execution.planning.work_request import WorkRequestCommandWriter
 from content.execution.planning.work_request_contract import WorkRequestPreviewQuery
 from core import paths
@@ -31,6 +35,9 @@ def _handoff_document(**overrides: object) -> dict[str, object]:
         "relatedTopicRefs": [],
         "scale": "M1",
         "workloadTargets": {"homepage": 1},
+        "sourceSelection": {
+            "homepage": {"mode": "site_primary", "providers": ["wikipedia"]},
+        },
     }
     document.update(overrides)
     return document
@@ -102,9 +109,9 @@ def test_preview_modify_needs_input_blocked_and_cancel_are_mutually_exclusive(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(work_request_contract, "_dependency_bindings", _dependencies)
+    monkeypatch.setattr(work_request_contract, "dependency_bindings", _dependencies)
     monkeypatch.setattr(
-        work_request_contract, "_canonical_ref", lambda path: path.name
+        work_request_contract, "canonical_dependency_ref", lambda path: path.name
     )
     _install_handoff(
         monkeypatch,
@@ -113,7 +120,9 @@ def test_preview_modify_needs_input_blocked_and_cancel_are_mutually_exclusive(
             "handoff-2.json": _handoff_document(
                 scale="M2", workloadTargets={"homepage": 2}
             ),
-            "handoff-broken.json": _handoff_document(workloadTargets={}),
+            "handoff-broken.json": _handoff_document(
+                workloadTargets={}, sourceSelection={}
+            ),
         },
     )
     preview_query = WorkRequestPreviewQuery()
@@ -146,12 +155,12 @@ def test_preview_modify_needs_input_blocked_and_cancel_are_mutually_exclusive(
     def unavailable(*_args: object, **_kwargs: object) -> dict[str, object]:
         raise FileNotFoundError("source-ready evidence is missing")
 
-    monkeypatch.setattr(work_request_contract, "_dependency_bindings", unavailable)
+    monkeypatch.setattr(work_request_contract, "dependency_bindings", unavailable)
     blocked = preview_query.preview(_intent(tmp_path))
     assert blocked["outcome"] == "blocked"
     assert blocked["error"]["code"] == "DATA.WORK_REQUEST.DEPENDENCY_UNAVAILABLE"
 
-    monkeypatch.setattr(work_request_contract, "_dependency_bindings", _dependencies)
+    monkeypatch.setattr(work_request_contract, "dependency_bindings", _dependencies)
     canceled = WorkRequestCommandWriter(output_root=tmp_path / "output").cancel(
         _intent(tmp_path),
         preview_digest=str(first["requestDigest"]),
@@ -164,14 +173,21 @@ def test_demand_facts_are_owned_by_handoff_not_by_caller_inputs(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(work_request_contract, "_dependency_bindings", _dependencies)
+    monkeypatch.setattr(work_request_contract, "dependency_bindings", _dependencies)
     monkeypatch.setattr(
-        work_request_contract, "_canonical_ref", lambda path: path.name
+        work_request_contract, "canonical_dependency_ref", lambda path: path.name
     )
     _install_handoff(monkeypatch, {"handoff.json": _handoff_document()})
     query = WorkRequestPreviewQuery()
 
-    for field in ("vertical", "regionRef", "topic", "lifecycle", "workloads"):
+    for field in (
+        "vertical",
+        "regionRef",
+        "topic",
+        "lifecycle",
+        "workloads",
+        "sourceProviders",
+    ):
         rejected = query.preview(_intent(tmp_path, **{field: "anything"}))
         assert rejected["outcome"] == "needs_input"
         assert f"unknown:{field}" in rejected["missingFields"]
@@ -251,26 +267,119 @@ def test_fresh_retry_conflict_and_unknown_carrier_remain_needs_input(
     ]
 
 
-def test_undeclared_source_provider_fails_closed_at_preview(
+def test_every_unsettled_compile_outcome_carries_recovery_and_reentry(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(work_request_contract, "_dependency_bindings", _dependencies)
+    monkeypatch.setattr(work_request_contract, "dependency_bindings", _dependencies)
     monkeypatch.setattr(
-        work_request_contract, "_canonical_ref", lambda path: path.name
+        work_request_contract, "canonical_dependency_ref", lambda path: path.name
     )
+    _install_handoff(
+        monkeypatch,
+        {
+            "handoff.json": _handoff_document(),
+            "handoff-broken.json": _handoff_document(
+                workloadTargets={}, sourceSelection={}
+            ),
+        },
+    )
+    query = WorkRequestPreviewQuery()
+    handoff_ref = str(tmp_path / "handoff.json")
+
+    settled = query.preview(_intent(tmp_path))
+    assert settled["outcome"] == "preview"
+    assert settled["nextAction"] == "none"
+    assert settled["reentryRef"] is None
+
+    needs_input = query.preview(_intent(tmp_path, mode="retry"))
+    assert needs_input["outcome"] == "needs_input"
+    assert needs_input["nextAction"] == "supply_input"
+    assert needs_input["reentryRef"] == {
+        "requestDigest": needs_input["requestDigest"],
+        "preAcquisitionHandoffRef": handoff_ref,
+    }
+
+    blocked = query.preview(
+        _intent(
+            tmp_path,
+            preAcquisitionHandoffRef=str(tmp_path / "handoff-broken.json"),
+        )
+    )
+    assert blocked["outcome"] == "blocked"
+    # 依赖不可读时意图本身没问题，恢复动作指向修证据而不是改意图。
+    assert blocked["nextAction"] == "repair_evidence"
+    assert blocked["reentryRef"]["preAcquisitionHandoffRef"] == str(
+        tmp_path / "handoff-broken.json"
+    )
+
+    writer = WorkRequestCommandWriter(output_root=tmp_path / "output")
+    canceled = writer.cancel(
+        _intent(tmp_path), preview_digest=str(settled["requestDigest"])
+    )
+    assert canceled["outcome"] == "canceled"
+    assert canceled["nextAction"] == "recompile_intent"
+    assert canceled["reentryRef"]["requestDigest"] == settled["requestDigest"]
+
+    drifted = writer.confirm(
+        _intent(tmp_path), preview_digest="sha256:" + "0" * 64
+    )
+    assert drifted["error"]["code"] == "DATA.WORK_REQUEST.PREVIEW_DRIFT"
+    assert drifted["nextAction"] == "recompile_intent"
+
+
+def test_undeclared_handoff_stays_absent_in_the_reentry_reference(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # 意图不完整正是 needs_input 存在的理由，所以「没声明 handoff」是合法缺席；
+    # 它必须与「声明了一个空 ref」区分开，不能被写成空字符串带进重入引用。
     _install_handoff(monkeypatch, {"handoff.json": _handoff_document()})
+    intent = _intent(tmp_path)
+    del intent["preAcquisitionHandoffRef"]
+
+    result = WorkRequestPreviewQuery().preview(intent)
+
+    assert result["outcome"] == "needs_input"
+    assert "preAcquisitionHandoffRef" in result["missingFields"]
+    assert result["reentryRef"]["preAcquisitionHandoffRef"] is None
+
+
+def test_source_providers_are_projected_from_the_handoff_selection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(work_request_contract, "dependency_bindings", _dependencies)
+    monkeypatch.setattr(
+        work_request_contract, "canonical_dependency_ref", lambda path: path.name
+    )
+    _install_handoff(
+        monkeypatch,
+        {
+            "handoff.json": _handoff_document(),
+            "handoff-empty-providers.json": _handoff_document(
+                sourceSelection={
+                    "homepage": {"mode": "site_primary", "providers": []}
+                }
+            ),
+        },
+    )
     query = WorkRequestPreviewQuery()
 
-    undeclared = query.preview(
-        _intent(tmp_path, sourceProviders=["__undeclared_provider__"])
+    projected = query.preview(_intent(tmp_path))
+    empty = query.preview(
+        _intent(
+            tmp_path,
+            preAcquisitionHandoffRef=str(tmp_path / "handoff-empty-providers.json"),
+        )
     )
 
-    assert undeclared["outcome"] == "needs_input"
-    assert any(
-        issue.startswith("undeclaredSourceProvider:")
-        for issue in undeclared["missingFields"]
-    )
+    assert projected["outcome"] == "preview"
+    assert projected["normalizedRequest"]["sourceSelection"] == {
+        "homepage": {"mode": "site_primary", "providers": ["wikipedia"]}
+    }
+    assert empty["outcome"] == "blocked"
+    assert "SOURCE_SELECTION_INVALID" in empty["error"]["message"]
 
 
 def test_dependency_set_binds_source_revision_and_external_inputs(
@@ -310,38 +419,38 @@ def test_dependency_set_binds_source_revision_and_external_inputs(
     pool.write_text(json.dumps(plan), encoding="utf-8")
     monkeypatch.setattr(paths, "REPO_ROOT", tmp_path)
     monkeypatch.setattr(
-        work_request_contract,
+        work_request_dependencies,
         "current_source_definition_snapshot",
         lambda **_kwargs: SimpleNamespace(
             to_document=lambda: {"digest": source_digest}
         ),
     )
     monkeypatch.setattr(
-        work_request_contract,
+        work_request_dependencies,
         "current_execution_bundle_identity",
         lambda **_kwargs: SimpleNamespace(
             to_document=lambda: {"digest": execution_digest}
         ),
     )
     monkeypatch.setattr(
-        work_request_contract, "entity_catalog_digest", lambda _ref: catalog_digest
+        work_request_dependencies, "entity_catalog_digest", lambda _ref: catalog_digest
     )
     monkeypatch.setattr(
-        work_request_contract,
+        work_request_dependencies,
         "validate_scale_source_pool_evidence",
         lambda *_args, **_kwargs: None,
     )
     monkeypatch.setattr(
-        work_request_contract, "CARRIER_POLICY_PATH", carrier_policy
+        work_request_dependencies, "CARRIER_POLICY_PATH", carrier_policy
     )
     monkeypatch.setattr(
-        work_request_contract, "DISTRIBUTION_POLICY_PATH", distribution
+        work_request_dependencies, "DISTRIBUTION_POLICY_PATH", distribution
     )
     monkeypatch.setattr(
-        work_request_contract, "carrier_policy_digest", lambda: DIGEST
+        work_request_dependencies, "carrier_policy_digest", lambda: DIGEST
     )
     monkeypatch.setattr(
-        work_request_contract,
+        work_request_dependencies,
         "bind_external_input_refs",
         lambda *_args, **_kwargs: [{"refDigest": "sha256:" + "e" * 64}],
     )
@@ -350,7 +459,7 @@ def test_dependency_set_binds_source_revision_and_external_inputs(
         externalInputRefsByCarrier={"homepage": [{"kind": "image"}]},
         acquisitionRootRef=str(tmp_path),
     )
-    bindings = work_request_contract._dependency_bindings(
+    bindings = work_request_dependencies.dependency_bindings(
         intent,
         scale="M1",
         workload_mode="explicit",
@@ -364,7 +473,7 @@ def test_dependency_set_binds_source_revision_and_external_inputs(
     assert "externalInputs:homepage" in bindings["dependencies"]
 
     capacity.write_text("changed\n", encoding="utf-8")
-    changed = work_request_contract._dependency_bindings(
+    changed = work_request_dependencies.dependency_bindings(
         intent,
         scale="M1",
         workload_mode="explicit",
@@ -377,7 +486,7 @@ def test_dependency_set_binds_source_revision_and_external_inputs(
     plan["sourceRevision"] = "sha256:" + "f" * 64
     pool.write_text(json.dumps(plan), encoding="utf-8")
     with pytest.raises(ValueError, match="identity or workload binding drift"):
-        work_request_contract._dependency_bindings(
+        work_request_dependencies.dependency_bindings(
             intent,
             scale="M1",
             workload_mode="explicit",
@@ -395,7 +504,7 @@ def test_preview_digest_uses_portable_governed_dependency_refs(
     (tmp_path / "quwoquan_data/reference/travel/entities/china").mkdir(
         parents=True
     )
-    monkeypatch.setattr(work_request_contract, "_dependency_bindings", _dependencies)
+    monkeypatch.setattr(work_request_contract, "dependency_bindings", _dependencies)
     _install_handoff(monkeypatch, {"handoff.json": _handoff_document()})
     relative_refs = {
         "capacityCalibrationReceiptRef": "quwoquan_data/capacity.json",

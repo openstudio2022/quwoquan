@@ -2,7 +2,14 @@
 // Source: recommendation/recommendation/recommendation_model_release/impact_help_type_registry.yaml
 
 /// §23 影响力 helpType 闭集（registry.helpTypes[].helpType，端归一/校验唯一真相源）。
-const List<String> impactHelpTypeKeys = <String>["relationship", "community", "decision", "knowledge", "spread", "audience"];
+const List<String> impactHelpTypeKeys = <String>[
+  "relationship",
+  "community",
+  "decision",
+  "knowledge",
+  "spread",
+  "audience",
+];
 
 /// helpType → 端图标语义键（registry.helpTypes[].iconKey）。
 const Map<String, String> impactIconKeyByHelpType = <String, String>{
@@ -17,13 +24,13 @@ const Map<String, String> impactIconKeyByHelpType = <String, String>{
 /// 影响 iconKey → 低饱和语义 tone（registry.toneByIconKey）。
 /// 端 IntersectionIconResolver 查本表，不再硬编码 impact 色调 switch。
 const Map<String, String> impactToneByIconKey = <String, String>{
-    'audienceReach': 'mist',
-    'cascadePath': 'clay',
-    'communityJoin': 'sage',
-    'connect': 'sage',
-    'decisionCompass': 'tea',
-    'knowledgeRead': 'mist',
-    'spreadShare': 'clay',
+  'audienceReach': 'mist',
+  'cascadePath': 'clay',
+  'communityJoin': 'sage',
+  'connect': 'sage',
+  'decisionCompass': 'tea',
+  'knowledgeRead': 'mist',
+  'spreadShare': 'clay',
 };
 
 /// 未登记 iconKey 的兜底 tone（registry.defaults.tone）。

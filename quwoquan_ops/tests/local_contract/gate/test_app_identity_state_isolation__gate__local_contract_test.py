@@ -268,6 +268,51 @@ class AppIdentityStateIsolationGateTest(unittest.TestCase):
                     _write(app / "scripts/device/run_app_instance.sh", source)
                     self.assertIn(expected, module.collect_issues(root))
 
+    def test_startup_matrix_flavor_must_come_from_the_handoff_build_profile(
+        self,
+    ) -> None:
+        """矩阵构建把环境名当 flavor 会指向不存在的 Gradle variant（如 assembleBetaDebug）；
+        flavor 单轨真相源是 handoff 的 buildProfile。"""
+
+        module = _load_module()
+        cases = {
+            "environment_as_flavor": (
+                'command.extend(["apk", "--debug", "--flavor",'
+                ' str(handoff["environment"])])\n',
+                "startup matrix must not select flavor from the runtime environment",
+            ),
+            "flavor_outside_the_handoff_track": (
+                'command.extend(["apk", "--debug", "--flavor", "nonprod"])\n',
+                "startup matrix must select flavor from the handoff buildProfile",
+            ),
+        }
+        for name, (line, expected) in cases.items():
+            with self.subTest(case=name):
+                with tempfile.TemporaryDirectory() as tmp:
+                    root = Path(tmp).resolve()
+                    app = _write_canonical_tree(root)
+                    _write(
+                        app / "scripts/device/build_startup_environment_matrix.py",
+                        _STARTUP_MATRIX + line,
+                    )
+                    self.assertIn(expected, module.collect_issues(root))
+
+    def test_launcher_comment_mentions_do_not_form_a_second_flavor_track(
+        self,
+    ) -> None:
+        """注释里的字面提及不是行为：门禁的单轨检查只作用于行为行。"""
+
+        module = _load_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            app = _write_canonical_tree(root)
+            _write(
+                app / "run.sh",
+                _LAUNCHER
+                + "# direct surface（IDE Flutter Debug / 字面 flutter run）无 --flavor 通道\n",
+            )
+            self.assertEqual(module.collect_issues(root), [])
+
     def test_unflavored_shared_runner_scheme_is_rejected(self) -> None:
         """无 flavor 的 Runner scheme 一旦可选，Xcode 侧就能绕过静态 flavor 选择。"""
 

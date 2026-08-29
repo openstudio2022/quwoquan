@@ -46,6 +46,7 @@ business_rules:
 - 分片 key/byte 上限命中只拒绝 contender，禁止淘汰其他 scope；key、payload 与 cursor 均使用无协议版本信封的唯一 canonical schema
 - 所有字符串与数组在 JSON 编码前执行字段级 byte/count 准入；单页总 payload 门不能替代字段门，禁止先物化攻击者可控的无界字符串
 - scopeHash 必须覆盖 actor/session/route/pageSize，记录另行绑定 feedRequestId、release 与 expiry
+- 推荐交付页必须原样固化 RankedRecommendationPage.experimentBucket；该字段来自服务端策略分配，独立于可因模型失败而降级的 modelBucket，并随 FeedPageDelivered 原样发布。
 - 回放只按 items.postId 原顺序执行当前可见性 hydration；缺失或不可见 Post 只删除，不补替代内容
 - 对象卡只回放已交付快照并按仍可见 Post 重基准 anchor，禁止重新召回对象卡
 - 每个非空成功响应都必须追加 FeedDeliveryPage，包括没有 nextCursor 的终页和单页；终页 outboundCursor 为空，不得因无法继续翻页而丢失交付身份。

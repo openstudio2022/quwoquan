@@ -45,6 +45,7 @@ func (delivery *rankedRecommendationDelivery) bindPage(
 	}
 	if delivery.page.WindowId != page.WindowId ||
 		delivery.page.Scenario != page.Scenario ||
+		delivery.page.ExperimentBucket != page.ExperimentBucket ||
 		delivery.page.ModelBucket != page.ModelBucket ||
 		delivery.page.PolicyDigest != page.PolicyDigest ||
 		delivery.page.RankingSnapshotDigest != page.RankingSnapshotDigest ||
@@ -107,6 +108,7 @@ func (delivery *rankedRecommendationDelivery) event(
 		PersonaID:             personaID,
 		Scenario:              delivery.page.Scenario,
 		WindowID:              delivery.page.WindowId,
+		ExperimentBucket:      delivery.page.ExperimentBucket,
 		ModelBucket:           delivery.page.ModelBucket,
 		ModelChannel:          delivery.page.ModelChannel,
 		ModelReleaseID:        delivery.page.ModelReleaseId,

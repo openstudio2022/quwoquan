@@ -4,13 +4,11 @@ from __future__ import annotations
 
 from typing import Final
 
+from core.control_types import OBJECT_STAGE_SEQUENCE
 
-STAGES: Final[tuple[str, ...]] = (
-    "1.download",
-    "2.quality",
-    "3.compose",
-    "4.draft",
-    "5.review",
+
+STAGES: Final[tuple[str, ...]] = tuple(
+    stage.value for stage in OBJECT_STAGE_SEQUENCE
 )
 LANES: Final[tuple[str, ...]] = ("homepage", "article", "image", "video")
 

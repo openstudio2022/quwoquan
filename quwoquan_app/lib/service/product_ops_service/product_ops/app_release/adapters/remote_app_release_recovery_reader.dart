@@ -37,8 +37,9 @@ final class RemoteAppReleaseRecoveryReader implements AppReleaseRecoveryReader {
         minimumSupportedBuild > latestBuild) {
       throw const FormatException('invalid minimum supported release build');
     }
-    final platform = response.platform.trim();
-    if (platform != query.platform.trim().toLowerCase()) {
+    final platformWire = response.platform.trim();
+    final identity = _recoveryIdentityFromWire(platformWire);
+    if (platformWire != query.platform.trim().toLowerCase()) {
       throw const FormatException('recovery release platform mismatch');
     }
     final updateState = switch (response.updateState) {
@@ -57,15 +58,44 @@ final class RemoteAppReleaseRecoveryReader implements AppReleaseRecoveryReader {
     if (updateState != expectedUpdateState) {
       throw const FormatException('recovery release update state mismatch');
     }
+    final updateUrl = response.updateUrl?.trim();
+    if (updateUrl != null && updateUrl.isEmpty) {
+      throw const FormatException('invalid recovery release update url');
+    }
+    final hasCanonicalUpdateChannel = switch (identity.updateChannel) {
+      AppReleaseRecoveryChannel.nativeUpdate => updateUrl != null,
+      AppReleaseRecoveryChannel.webOnly => updateUrl == null,
+    };
+    if (!hasCanonicalUpdateChannel) {
+      throw const FormatException('recovery release update channel mismatch');
+    }
     return AppReleaseRecoveryFacts(
-      platform: platform,
+      platform: identity.platform,
       latestVersion: response.latestVersion.trim(),
       latestBuild: latestBuild,
       minimumSupportedVersion: response.minimumSupportedVersion.trim(),
       minimumSupportedBuild: minimumSupportedBuild,
       updateState: updateState,
-      updateUrl: response.updateUrl.trim(),
+      updateChannel: identity.updateChannel,
+      updateUrl: updateUrl,
       recoveryUrl: response.recoveryUrl.trim(),
     );
   }
 }
+
+({AppReleaseRecoveryPlatform platform, AppReleaseRecoveryChannel updateChannel})
+_recoveryIdentityFromWire(String platform) => switch (platform) {
+  'android' => (
+    platform: AppReleaseRecoveryPlatform.android,
+    updateChannel: AppReleaseRecoveryChannel.nativeUpdate,
+  ),
+  'ios' => (
+    platform: AppReleaseRecoveryPlatform.ios,
+    updateChannel: AppReleaseRecoveryChannel.webOnly,
+  ),
+  'web' => (
+    platform: AppReleaseRecoveryPlatform.web,
+    updateChannel: AppReleaseRecoveryChannel.nativeUpdate,
+  ),
+  _ => throw const FormatException('invalid recovery release platform'),
+};

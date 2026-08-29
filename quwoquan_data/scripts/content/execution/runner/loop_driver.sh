@@ -18,17 +18,24 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../../.." && pwd)"
 CLI=(python3 "$REPO_ROOT/quwoquan_data/scripts/cli.py")
 PROMPT_SRC="$REPO_ROOT/.agents/skills/content-production/references/loop-prompt.md"
 PROMPT="$(awk 'flag{print} /^---$/{flag=1}' "$PROMPT_SRC" | sed "s/<executionId>/$EXEC_ID/g")"
-run_round() { # 单轮 hard timeout：超时杀会话进程，不写假 receipt
+run_round() { # 单轮 hard timeout：超时杀整个会话进程组，宿主派生的孙进程不残留
+  set -m  # 让本轮成为独立进程组，组 id 即下面的 pid
   bash -c "cd '$REPO_ROOT' && $HOST_CMD \"\$1\"" _ "$PROMPT" & local pid=$!
-  ( sleep "$ROUND_TIMEOUT" && kill -9 "$pid" 2>/dev/null ) & local watchdog=$!
+  set +m
+  ( sleep "$ROUND_TIMEOUT" && kill -9 -"$pid" 2>/dev/null ) & local watchdog=$!
   local rc=0; wait "$pid" || rc=$?
   kill "$watchdog" 2>/dev/null || true; wait "$watchdog" 2>/dev/null || true
   return "$rc"
 }
 for ((round = 1; round <= MAX_ROUNDS; round++)); do
-  # claim 属于执行者（每轮宿主会话）；驱动只做只读预检，不得自己写 claim
-  "${CLI[@]}" task lane-claim --execution-id "$EXEC_ID" --check >/dev/null || {
-    echo "loop_driver: active claim held by an executor session, not taking over" >&2; exit 4; }
+  # claim 属于执行者（每轮宿主会话）；驱动只做只读预检，不得自己写 claim。
+  # 同时声明本轮 hard timeout，由 CLI 判它是否短于 claim 存活窗口（退出码 64）。
+  CHECK_RC=0
+  "${CLI[@]}" task lane-claim --execution-id "$EXEC_ID" --check \
+    --round-timeout-seconds "$ROUND_TIMEOUT" >/dev/null || CHECK_RC=$?
+  if [[ "$CHECK_RC" == "64" ]]; then exit 64; fi
+  if [[ "$CHECK_RC" != "0" ]]; then
+    echo "loop_driver: active claim held by an executor session, not taking over" >&2; exit 4; fi
   read -r VERDICT NEXT < <("${CLI[@]}" task fleet-status --execution-id "$EXEC_ID" --json \
     | python3 -c 'import json,sys; e=json.load(sys.stdin)["executions"][0]; print(e["verdict"] or "none", e["next"] or "none")')
   if [[ "$VERDICT" == "blocked" ]]; then echo "loop_driver: blocked, stopping"; exit 2; fi

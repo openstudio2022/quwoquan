@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 05b1683f93feb5234ad8184f318b5d32e9f340e4d7e36d1e833581cfc400702c
+// ContractGraph SHA256: 2ba8995ae51f9f431ebc75e30f64d31285cc4cfb724f0ef1d8473c11011a5469
 
 part of '../../../circle/circle_operation_contracts.g.dart';
 
@@ -29,7 +29,6 @@ Map<String, Object?> _generatedRequestObject(Object? value, String path) {
   throw FormatException('$path must be an object');
 }
 
-
 void _generatedRequestRejectUnknownFields(
   Map<String, Object?> map,
   Set<String> allowed,
@@ -42,24 +41,20 @@ void _generatedRequestRejectUnknownFields(
   }
 }
 
-
 String _generatedRequestString(Object? value, String path) {
   if (value is String) return value;
   throw FormatException('$path must be a string');
 }
-
 
 int _generatedRequestInt(Object? value, String path) {
   if (value is int) return value;
   throw FormatException('$path must be an integer');
 }
 
-
 bool _generatedRequestBool(Object? value, String path) {
   if (value is bool) return value;
   throw FormatException('$path must be a boolean');
 }
-
 
 DateTime _generatedRequestTimestamp(Object? value, String path) {
   if (value is! String) throw FormatException('$path must be a timestamp');
@@ -67,7 +62,6 @@ DateTime _generatedRequestTimestamp(Object? value, String path) {
   if (parsed == null) throw FormatException('$path must be a timestamp');
   return parsed.toUtc();
 }
-
 
 List<Object?> _generatedRequestList(Object? value, String path) {
   if (value is List) return List<Object?>.from(value);
@@ -88,11 +82,49 @@ final class AppendCircleBehaviorFactCommand {
   final String circleId;
   final BehaviorEventType eventType;
 
-  factory AppendCircleBehaviorFactCommand.fromWire(Map<String, Object?> map, [String path = "AppendCircleBehaviorFactCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"circleId", "eventType"}, path);
+  factory AppendCircleBehaviorFactCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "AppendCircleBehaviorFactCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "circleId",
+      "eventType",
+    }, path);
     return AppendCircleBehaviorFactCommand(
       circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
-      eventType: switch (map["eventType"]) { "impression" => BehaviorEventType.impression, "click" => BehaviorEventType.click, "dwell" => BehaviorEventType.dwell, "like" => BehaviorEventType.like, "dislike" => BehaviorEventType.dislike, "undo_dislike" => BehaviorEventType.undoDislike, "hide_author" => BehaviorEventType.hideAuthor, "hide_content_type" => BehaviorEventType.hideContentType, "report" => BehaviorEventType.report, "share" => BehaviorEventType.share, "comment" => BehaviorEventType.comment, "intersection_expand" => BehaviorEventType.intersectionExpand, "intersection_feedback" => BehaviorEventType.intersectionFeedback, "wishlist_add" => BehaviorEventType.wishlistAdd, "wishlist_remove" => BehaviorEventType.wishlistRemove, "skip" => BehaviorEventType.skip, "follow" => BehaviorEventType.follow, "join_circle" => BehaviorEventType.joinCircle, "leave_circle" => BehaviorEventType.leaveCircle, "add_contact" => BehaviorEventType.addContact, "author_view" => BehaviorEventType.authorView, "entity_page_view" => BehaviorEventType.entityPageView, "tag_click" => BehaviorEventType.tagClick, "content_depth" => BehaviorEventType.contentDepth, "play_progress" => BehaviorEventType.playProgress, "effective_play" => BehaviorEventType.effectivePlay, "assistant_interest" => BehaviorEventType.assistantInterest, "onboarding_interest" => BehaviorEventType.onboardingInterest, _ => throw FormatException('$path.eventType' + ' has an invalid enum value'), },
+      eventType: switch (map["eventType"]) {
+        "impression" => BehaviorEventType.impression,
+        "click" => BehaviorEventType.click,
+        "dwell" => BehaviorEventType.dwell,
+        "like" => BehaviorEventType.like,
+        "dislike" => BehaviorEventType.dislike,
+        "undo_dislike" => BehaviorEventType.undoDislike,
+        "hide_author" => BehaviorEventType.hideAuthor,
+        "hide_content_type" => BehaviorEventType.hideContentType,
+        "report" => BehaviorEventType.report,
+        "share" => BehaviorEventType.share,
+        "comment" => BehaviorEventType.comment,
+        "intersection_expand" => BehaviorEventType.intersectionExpand,
+        "intersection_feedback" => BehaviorEventType.intersectionFeedback,
+        "wishlist_add" => BehaviorEventType.wishlistAdd,
+        "wishlist_remove" => BehaviorEventType.wishlistRemove,
+        "skip" => BehaviorEventType.skip,
+        "follow" => BehaviorEventType.follow,
+        "join_circle" => BehaviorEventType.joinCircle,
+        "leave_circle" => BehaviorEventType.leaveCircle,
+        "add_contact" => BehaviorEventType.addContact,
+        "author_view" => BehaviorEventType.authorView,
+        "entity_page_view" => BehaviorEventType.entityPageView,
+        "tag_click" => BehaviorEventType.tagClick,
+        "content_depth" => BehaviorEventType.contentDepth,
+        "play_progress" => BehaviorEventType.playProgress,
+        "effective_play" => BehaviorEventType.effectivePlay,
+        "assistant_interest" => BehaviorEventType.assistantInterest,
+        "onboarding_interest" => BehaviorEventType.onboardingInterest,
+        _ => throw FormatException(
+          '$path.eventType' + ' has an invalid enum value',
+        ),
+      },
     );
   }
 
@@ -119,8 +151,14 @@ final class ApplyCircleGroupMembershipCommand {
   final String circleId;
   final String groupId;
 
-  factory ApplyCircleGroupMembershipCommand.fromWire(Map<String, Object?> map, [String path = "ApplyCircleGroupMembershipCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"circleId", "groupId"}, path);
+  factory ApplyCircleGroupMembershipCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "ApplyCircleGroupMembershipCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "circleId",
+      "groupId",
+    }, path);
     return ApplyCircleGroupMembershipCommand(
       circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
       groupId: _generatedRequestString(map["groupId"], '$path.groupId'),
@@ -144,7 +182,11 @@ final class ApplyToGatheringCommand {
        expectedParticipationVersion = expectedParticipationVersion,
        answers = List.unmodifiable(answers) {
     if (this.gatheringId.isEmpty) {
-      throw ArgumentError.value(this.gatheringId, "gatheringId", 'must not be blank');
+      throw ArgumentError.value(
+        this.gatheringId,
+        "gatheringId",
+        'must not be blank',
+      );
     }
   }
 
@@ -153,13 +195,43 @@ final class ApplyToGatheringCommand {
   final int expectedParticipationVersion;
   final List<GatheringApplicationAnswer> answers;
 
-  factory ApplyToGatheringCommand.fromWire(Map<String, Object?> map, [String path = "ApplyToGatheringCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"gatheringId", "expectedGatheringVersion", "expectedParticipationVersion", "answers"}, path);
+  factory ApplyToGatheringCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "ApplyToGatheringCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "gatheringId",
+      "expectedGatheringVersion",
+      "expectedParticipationVersion",
+      "answers",
+    }, path);
     return ApplyToGatheringCommand(
-      gatheringId: _generatedRequestString(map["gatheringId"], '$path.gatheringId'),
-      expectedGatheringVersion: _generatedRequestInt(map["expectedGatheringVersion"], '$path.expectedGatheringVersion'),
-      expectedParticipationVersion: _generatedRequestInt(map["expectedParticipationVersion"], '$path.expectedParticipationVersion'),
-      answers: List<GatheringApplicationAnswer>.unmodifiable(_generatedRequestList(map["answers"], '$path.answers').asMap().entries.map((entry) => GatheringApplicationAnswer.fromWire(_generatedRequestObject(entry.value, '$path.answers' + '[${entry.key}]'), '$path.answers' + '[${entry.key}]'))),
+      gatheringId: _generatedRequestString(
+        map["gatheringId"],
+        '$path.gatheringId',
+      ),
+      expectedGatheringVersion: _generatedRequestInt(
+        map["expectedGatheringVersion"],
+        '$path.expectedGatheringVersion',
+      ),
+      expectedParticipationVersion: _generatedRequestInt(
+        map["expectedParticipationVersion"],
+        '$path.expectedParticipationVersion',
+      ),
+      answers: List<GatheringApplicationAnswer>.unmodifiable(
+        _generatedRequestList(
+          map["answers"],
+          '$path.answers',
+        ).asMap().entries.map(
+          (entry) => GatheringApplicationAnswer.fromWire(
+            _generatedRequestObject(
+              entry.value,
+              '$path.answers' + '[${entry.key}]',
+            ),
+            '$path.answers' + '[${entry.key}]',
+          ),
+        ),
+      ),
     );
   }
 
@@ -167,14 +239,15 @@ final class ApplyToGatheringCommand {
     "gatheringId": this.gatheringId,
     "expectedGatheringVersion": this.expectedGatheringVersion,
     "expectedParticipationVersion": this.expectedParticipationVersion,
-    "answers": this.answers.map((value) => value.toWire()).toList(growable: false),
+    "answers": this.answers
+        .map((value) => value.toWire())
+        .toList(growable: false),
   };
 }
 
 final class ArchiveCircleCommand {
-  ArchiveCircleCommand({
-    required String circleId,
-  }) : circleId = circleId.trim() {
+  ArchiveCircleCommand({required String circleId})
+    : circleId = circleId.trim() {
     if (this.circleId.isEmpty) {
       throw ArgumentError.value(this.circleId, "circleId", 'must not be blank');
     }
@@ -182,24 +255,23 @@ final class ArchiveCircleCommand {
 
   final String circleId;
 
-  factory ArchiveCircleCommand.fromWire(Map<String, Object?> map, [String path = "ArchiveCircleCommand"]) {
+  factory ArchiveCircleCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "ArchiveCircleCommand",
+  ]) {
     _generatedRequestRejectUnknownFields(map, const <String>{"circleId"}, path);
     return ArchiveCircleCommand(
       circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
     );
   }
 
-  Map<String, Object?> toWire() => <String, Object?>{
-    "circleId": this.circleId,
-  };
+  Map<String, Object?> toWire() => <String, Object?>{"circleId": this.circleId};
 }
 
 final class ArchiveCircleGroupCommand {
-  ArchiveCircleGroupCommand({
-    required String circleId,
-    required String groupId,
-  }) : circleId = circleId.trim(),
-       groupId = groupId.trim() {
+  ArchiveCircleGroupCommand({required String circleId, required String groupId})
+    : circleId = circleId.trim(),
+      groupId = groupId.trim() {
     if (this.circleId.isEmpty) {
       throw ArgumentError.value(this.circleId, "circleId", 'must not be blank');
     }
@@ -211,8 +283,14 @@ final class ArchiveCircleGroupCommand {
   final String circleId;
   final String groupId;
 
-  factory ArchiveCircleGroupCommand.fromWire(Map<String, Object?> map, [String path = "ArchiveCircleGroupCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"circleId", "groupId"}, path);
+  factory ArchiveCircleGroupCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "ArchiveCircleGroupCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "circleId",
+      "groupId",
+    }, path);
     return ArchiveCircleGroupCommand(
       circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
       groupId: _generatedRequestString(map["groupId"], '$path.groupId'),
@@ -236,7 +314,11 @@ final class ChangeGatheringAdmissionCommand {
        expectedGatheringVersion = expectedGatheringVersion,
        expectedAdmissionControlVersion = expectedAdmissionControlVersion {
     if (this.gatheringId.isEmpty) {
-      throw ArgumentError.value(this.gatheringId, "gatheringId", 'must not be blank');
+      throw ArgumentError.value(
+        this.gatheringId,
+        "gatheringId",
+        'must not be blank',
+      );
     }
   }
 
@@ -245,13 +327,32 @@ final class ChangeGatheringAdmissionCommand {
   final int expectedGatheringVersion;
   final int expectedAdmissionControlVersion;
 
-  factory ChangeGatheringAdmissionCommand.fromWire(Map<String, Object?> map, [String path = "ChangeGatheringAdmissionCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"gatheringId", "reasonRef", "expectedGatheringVersion", "expectedAdmissionControlVersion"}, path);
+  factory ChangeGatheringAdmissionCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChangeGatheringAdmissionCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "gatheringId",
+      "reasonRef",
+      "expectedGatheringVersion",
+      "expectedAdmissionControlVersion",
+    }, path);
     return ChangeGatheringAdmissionCommand(
-      gatheringId: _generatedRequestString(map["gatheringId"], '$path.gatheringId'),
-      reasonRef: map["reasonRef"] == null ? null : _generatedRequestString(map["reasonRef"], '$path.reasonRef'),
-      expectedGatheringVersion: _generatedRequestInt(map["expectedGatheringVersion"], '$path.expectedGatheringVersion'),
-      expectedAdmissionControlVersion: _generatedRequestInt(map["expectedAdmissionControlVersion"], '$path.expectedAdmissionControlVersion'),
+      gatheringId: _generatedRequestString(
+        map["gatheringId"],
+        '$path.gatheringId',
+      ),
+      reasonRef: map["reasonRef"] == null
+          ? null
+          : _generatedRequestString(map["reasonRef"], '$path.reasonRef'),
+      expectedGatheringVersion: _generatedRequestInt(
+        map["expectedGatheringVersion"],
+        '$path.expectedGatheringVersion',
+      ),
+      expectedAdmissionControlVersion: _generatedRequestInt(
+        map["expectedAdmissionControlVersion"],
+        '$path.expectedAdmissionControlVersion',
+      ),
     );
   }
 
@@ -274,7 +375,11 @@ final class ChangeGatheringCapacityCommand {
        expectedGatheringVersion = expectedGatheringVersion,
        acknowledgementDeadlineAt = acknowledgementDeadlineAt {
     if (this.gatheringId.isEmpty) {
-      throw ArgumentError.value(this.gatheringId, "gatheringId", 'must not be blank');
+      throw ArgumentError.value(
+        this.gatheringId,
+        "gatheringId",
+        'must not be blank',
+      );
     }
   }
 
@@ -283,13 +388,35 @@ final class ChangeGatheringCapacityCommand {
   final int expectedGatheringVersion;
   final DateTime? acknowledgementDeadlineAt;
 
-  factory ChangeGatheringCapacityCommand.fromWire(Map<String, Object?> map, [String path = "ChangeGatheringCapacityCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"gatheringId", "maxParticipants", "expectedGatheringVersion", "acknowledgementDeadlineAt"}, path);
+  factory ChangeGatheringCapacityCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChangeGatheringCapacityCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "gatheringId",
+      "maxParticipants",
+      "expectedGatheringVersion",
+      "acknowledgementDeadlineAt",
+    }, path);
     return ChangeGatheringCapacityCommand(
-      gatheringId: _generatedRequestString(map["gatheringId"], '$path.gatheringId'),
-      maxParticipants: _generatedRequestInt(map["maxParticipants"], '$path.maxParticipants'),
-      expectedGatheringVersion: _generatedRequestInt(map["expectedGatheringVersion"], '$path.expectedGatheringVersion'),
-      acknowledgementDeadlineAt: map["acknowledgementDeadlineAt"] == null ? null : _generatedRequestTimestamp(map["acknowledgementDeadlineAt"], '$path.acknowledgementDeadlineAt'),
+      gatheringId: _generatedRequestString(
+        map["gatheringId"],
+        '$path.gatheringId',
+      ),
+      maxParticipants: _generatedRequestInt(
+        map["maxParticipants"],
+        '$path.maxParticipants',
+      ),
+      expectedGatheringVersion: _generatedRequestInt(
+        map["expectedGatheringVersion"],
+        '$path.expectedGatheringVersion',
+      ),
+      acknowledgementDeadlineAt: map["acknowledgementDeadlineAt"] == null
+          ? null
+          : _generatedRequestTimestamp(
+              map["acknowledgementDeadlineAt"],
+              '$path.acknowledgementDeadlineAt',
+            ),
     );
   }
 
@@ -297,27 +424,29 @@ final class ChangeGatheringCapacityCommand {
     "gatheringId": this.gatheringId,
     "maxParticipants": this.maxParticipants,
     "expectedGatheringVersion": this.expectedGatheringVersion,
-    if (this.acknowledgementDeadlineAt != null) "acknowledgementDeadlineAt": this.acknowledgementDeadlineAt!.toUtc().toIso8601String(),
+    if (this.acknowledgementDeadlineAt != null)
+      "acknowledgementDeadlineAt": this.acknowledgementDeadlineAt!
+          .toUtc()
+          .toIso8601String(),
   };
 }
 
 final class CircleDetailQuery {
-  const CircleDetailQuery({
-    required String circleId,
-  }) : circleId = circleId;
+  const CircleDetailQuery({required String circleId}) : circleId = circleId;
 
   final String circleId;
 
-  factory CircleDetailQuery.fromWire(Map<String, Object?> map, [String path = "CircleDetailQuery"]) {
+  factory CircleDetailQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "CircleDetailQuery",
+  ]) {
     _generatedRequestRejectUnknownFields(map, const <String>{"circleId"}, path);
     return CircleDetailQuery(
       circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
     );
   }
 
-  Map<String, Object?> toWire() => <String, Object?>{
-    "circleId": this.circleId,
-  };
+  Map<String, Object?> toWire() => <String, Object?>{"circleId": this.circleId};
 }
 
 final class CircleDiscoveryFeedQuery {
@@ -352,15 +481,43 @@ final class CircleDiscoveryFeedQuery {
   final int limit;
   final String sort;
 
-  factory CircleDiscoveryFeedQuery.fromWire(Map<String, Object?> map, [String path = "CircleDiscoveryFeedQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"category", "subCategory", "scope", "cursor", "limit", "sort"}, path);
+  factory CircleDiscoveryFeedQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "CircleDiscoveryFeedQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "category",
+      "subCategory",
+      "scope",
+      "cursor",
+      "limit",
+      "sort",
+    }, path);
     return CircleDiscoveryFeedQuery(
-      category: map["category"] == null ? null : _generatedRequestString(map["category"], '$path.category'),
-      subCategory: map["subCategory"] == null ? null : _generatedRequestString(map["subCategory"], '$path.subCategory'),
-      scope: map.containsKey("scope") ? switch (map["scope"]) { "recommended" => CircleDiscoveryFeedScope.recommended, "mine" => CircleDiscoveryFeedScope.mine, _ => throw FormatException('$path.scope' + ' has an invalid enum value'), } : CircleDiscoveryFeedScope.recommended,
-      cursor: map["cursor"] == null ? null : _generatedRequestString(map["cursor"], '$path.cursor'),
-      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 20,
-      sort: map.containsKey("sort") ? _generatedRequestString(map["sort"], '$path.sort') : 'recommended',
+      category: map["category"] == null
+          ? null
+          : _generatedRequestString(map["category"], '$path.category'),
+      subCategory: map["subCategory"] == null
+          ? null
+          : _generatedRequestString(map["subCategory"], '$path.subCategory'),
+      scope: map.containsKey("scope")
+          ? switch (map["scope"]) {
+              "recommended" => CircleDiscoveryFeedScope.recommended,
+              "mine" => CircleDiscoveryFeedScope.mine,
+              _ => throw FormatException(
+                '$path.scope' + ' has an invalid enum value',
+              ),
+            }
+          : CircleDiscoveryFeedScope.recommended,
+      cursor: map["cursor"] == null
+          ? null
+          : _generatedRequestString(map["cursor"], '$path.cursor'),
+      limit: map.containsKey("limit")
+          ? _generatedRequestInt(map["limit"], '$path.limit')
+          : 20,
+      sort: map.containsKey("sort")
+          ? _generatedRequestString(map["sort"], '$path.sort')
+          : 'recommended',
     );
   }
 
@@ -396,15 +553,35 @@ final class CircleFeedQuery {
   final int limit;
   final String sort;
 
-  factory CircleFeedQuery.fromWire(Map<String, Object?> map, [String path = "CircleFeedQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"circleId", "identity", "type", "cursor", "limit", "sort"}, path);
+  factory CircleFeedQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "CircleFeedQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "circleId",
+      "identity",
+      "type",
+      "cursor",
+      "limit",
+      "sort",
+    }, path);
     return CircleFeedQuery(
       circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
-      identity: map["identity"] == null ? null : _generatedRequestString(map["identity"], '$path.identity'),
-      type: map["type"] == null ? null : _generatedRequestString(map["type"], '$path.type'),
-      cursor: map["cursor"] == null ? null : _generatedRequestString(map["cursor"], '$path.cursor'),
-      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 20,
-      sort: map.containsKey("sort") ? _generatedRequestString(map["sort"], '$path.sort') : 'latest',
+      identity: map["identity"] == null
+          ? null
+          : _generatedRequestString(map["identity"], '$path.identity'),
+      type: map["type"] == null
+          ? null
+          : _generatedRequestString(map["type"], '$path.type'),
+      cursor: map["cursor"] == null
+          ? null
+          : _generatedRequestString(map["cursor"], '$path.cursor'),
+      limit: map.containsKey("limit")
+          ? _generatedRequestInt(map["limit"], '$path.limit')
+          : 20,
+      sort: map.containsKey("sort")
+          ? _generatedRequestString(map["sort"], '$path.sort')
+          : 'latest',
     );
   }
 
@@ -450,14 +627,34 @@ final class CircleFileListQuery {
   final String? cursor;
   final int limit;
 
-  factory CircleFileListQuery.fromWire(Map<String, Object?> map, [String path = "CircleFileListQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"circleId", "groupId", "parentFolderId", "cursor", "limit"}, path);
+  factory CircleFileListQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "CircleFileListQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "circleId",
+      "groupId",
+      "parentFolderId",
+      "cursor",
+      "limit",
+    }, path);
     return CircleFileListQuery(
       circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
-      groupId: map["groupId"] == null ? null : _generatedRequestString(map["groupId"], '$path.groupId'),
-      parentFolderId: map["parentFolderId"] == null ? null : _generatedRequestString(map["parentFolderId"], '$path.parentFolderId'),
-      cursor: map["cursor"] == null ? null : _generatedRequestString(map["cursor"], '$path.cursor'),
-      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 20,
+      groupId: map["groupId"] == null
+          ? null
+          : _generatedRequestString(map["groupId"], '$path.groupId'),
+      parentFolderId: map["parentFolderId"] == null
+          ? null
+          : _generatedRequestString(
+              map["parentFolderId"],
+              '$path.parentFolderId',
+            ),
+      cursor: map["cursor"] == null
+          ? null
+          : _generatedRequestString(map["cursor"], '$path.cursor'),
+      limit: map.containsKey("limit")
+          ? _generatedRequestInt(map["limit"], '$path.limit')
+          : 20,
     );
   }
 
@@ -471,11 +668,9 @@ final class CircleFileListQuery {
 }
 
 final class CircleFileQuery {
-  CircleFileQuery({
-    required String circleId,
-    required String fileId,
-  }) : circleId = circleId.trim(),
-       fileId = fileId.trim() {
+  CircleFileQuery({required String circleId, required String fileId})
+    : circleId = circleId.trim(),
+      fileId = fileId.trim() {
     if (this.circleId.isEmpty) {
       throw ArgumentError.value(this.circleId, "circleId", 'must not be blank');
     }
@@ -487,8 +682,14 @@ final class CircleFileQuery {
   final String circleId;
   final String fileId;
 
-  factory CircleFileQuery.fromWire(Map<String, Object?> map, [String path = "CircleFileQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"circleId", "fileId"}, path);
+  factory CircleFileQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "CircleFileQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "circleId",
+      "fileId",
+    }, path);
     return CircleFileQuery(
       circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
       fileId: _generatedRequestString(map["fileId"], '$path.fileId'),
@@ -539,16 +740,65 @@ final class CircleGroupListQuery {
   final String? cursor;
   final int limit;
 
-  factory CircleGroupListQuery.fromWire(Map<String, Object?> map, [String path = "CircleGroupListQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"circleId", "groupType", "visibility", "parentGroupId", "nodeType", "cursor", "limit"}, path);
+  factory CircleGroupListQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "CircleGroupListQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "circleId",
+      "groupType",
+      "visibility",
+      "parentGroupId",
+      "nodeType",
+      "cursor",
+      "limit",
+    }, path);
     return CircleGroupListQuery(
       circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
-      groupType: map["groupType"] == null ? null : switch (map["groupType"]) { "public_group" => CircleGroupType.publicGroup, "self_built" => CircleGroupType.selfBuilt, "org_node" => CircleGroupType.orgNode, _ => throw FormatException('$path.groupType' + ' has an invalid enum value'), },
-      visibility: map["visibility"] == null ? null : switch (map["visibility"]) { "public" => CircleGroupVisibility.public, "private" => CircleGroupVisibility.private, _ => throw FormatException('$path.visibility' + ' has an invalid enum value'), },
-      parentGroupId: map["parentGroupId"] == null ? null : _generatedRequestString(map["parentGroupId"], '$path.parentGroupId'),
-      nodeType: map["nodeType"] == null ? null : switch (map["nodeType"]) { "generic" => OrganizationNodeType.generic, "college" => OrganizationNodeType.college, "grade" => OrganizationNodeType.grade, "classroom" => OrganizationNodeType.classroom, "department" => OrganizationNodeType.department, "team" => OrganizationNodeType.team, _ => throw FormatException('$path.nodeType' + ' has an invalid enum value'), },
-      cursor: map["cursor"] == null ? null : _generatedRequestString(map["cursor"], '$path.cursor'),
-      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 20,
+      groupType: map["groupType"] == null
+          ? null
+          : switch (map["groupType"]) {
+              "public_group" => CircleGroupType.publicGroup,
+              "self_built" => CircleGroupType.selfBuilt,
+              "org_node" => CircleGroupType.orgNode,
+              _ => throw FormatException(
+                '$path.groupType' + ' has an invalid enum value',
+              ),
+            },
+      visibility: map["visibility"] == null
+          ? null
+          : switch (map["visibility"]) {
+              "public" => CircleGroupVisibility.public,
+              "private" => CircleGroupVisibility.private,
+              _ => throw FormatException(
+                '$path.visibility' + ' has an invalid enum value',
+              ),
+            },
+      parentGroupId: map["parentGroupId"] == null
+          ? null
+          : _generatedRequestString(
+              map["parentGroupId"],
+              '$path.parentGroupId',
+            ),
+      nodeType: map["nodeType"] == null
+          ? null
+          : switch (map["nodeType"]) {
+              "generic" => OrganizationNodeType.generic,
+              "college" => OrganizationNodeType.college,
+              "grade" => OrganizationNodeType.grade,
+              "classroom" => OrganizationNodeType.classroom,
+              "department" => OrganizationNodeType.department,
+              "team" => OrganizationNodeType.team,
+              _ => throw FormatException(
+                '$path.nodeType' + ' has an invalid enum value',
+              ),
+            },
+      cursor: map["cursor"] == null
+          ? null
+          : _generatedRequestString(map["cursor"], '$path.cursor'),
+      limit: map.containsKey("limit")
+          ? _generatedRequestInt(map["limit"], '$path.limit')
+          : 20,
     );
   }
 
@@ -598,14 +848,38 @@ final class CircleGroupMembershipListQuery {
   final String? cursor;
   final int limit;
 
-  factory CircleGroupMembershipListQuery.fromWire(Map<String, Object?> map, [String path = "CircleGroupMembershipListQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"circleId", "groupId", "state", "cursor", "limit"}, path);
+  factory CircleGroupMembershipListQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "CircleGroupMembershipListQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "circleId",
+      "groupId",
+      "state",
+      "cursor",
+      "limit",
+    }, path);
     return CircleGroupMembershipListQuery(
       circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
       groupId: _generatedRequestString(map["groupId"], '$path.groupId'),
-      state: map["state"] == null ? null : switch (map["state"]) { "pending" => CircleGroupMembershipState.pending, "active" => CircleGroupMembershipState.active, "rejected" => CircleGroupMembershipState.rejected, "left" => CircleGroupMembershipState.left, "removed" => CircleGroupMembershipState.removed, _ => throw FormatException('$path.state' + ' has an invalid enum value'), },
-      cursor: map["cursor"] == null ? null : _generatedRequestString(map["cursor"], '$path.cursor'),
-      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 20,
+      state: map["state"] == null
+          ? null
+          : switch (map["state"]) {
+              "pending" => CircleGroupMembershipState.pending,
+              "active" => CircleGroupMembershipState.active,
+              "rejected" => CircleGroupMembershipState.rejected,
+              "left" => CircleGroupMembershipState.left,
+              "removed" => CircleGroupMembershipState.removed,
+              _ => throw FormatException(
+                '$path.state' + ' has an invalid enum value',
+              ),
+            },
+      cursor: map["cursor"] == null
+          ? null
+          : _generatedRequestString(map["cursor"], '$path.cursor'),
+      limit: map.containsKey("limit")
+          ? _generatedRequestInt(map["limit"], '$path.limit')
+          : 20,
     );
   }
 
@@ -619,11 +893,9 @@ final class CircleGroupMembershipListQuery {
 }
 
 final class CircleGroupQuery {
-  CircleGroupQuery({
-    required String circleId,
-    required String groupId,
-  }) : circleId = circleId.trim(),
-       groupId = groupId.trim() {
+  CircleGroupQuery({required String circleId, required String groupId})
+    : circleId = circleId.trim(),
+      groupId = groupId.trim() {
     if (this.circleId.isEmpty) {
       throw ArgumentError.value(this.circleId, "circleId", 'must not be blank');
     }
@@ -635,8 +907,14 @@ final class CircleGroupQuery {
   final String circleId;
   final String groupId;
 
-  factory CircleGroupQuery.fromWire(Map<String, Object?> map, [String path = "CircleGroupQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"circleId", "groupId"}, path);
+  factory CircleGroupQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "CircleGroupQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "circleId",
+      "groupId",
+    }, path);
     return CircleGroupQuery(
       circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
       groupId: _generatedRequestString(map["groupId"], '$path.groupId'),
@@ -687,15 +965,46 @@ final class CircleGroupSearchQuery {
   final String? cursor;
   final int limit;
 
-  factory CircleGroupSearchQuery.fromWire(Map<String, Object?> map, [String path = "CircleGroupSearchQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"circleId", "query", "visibility", "groupType", "cursor", "limit"}, path);
+  factory CircleGroupSearchQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "CircleGroupSearchQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "circleId",
+      "query",
+      "visibility",
+      "groupType",
+      "cursor",
+      "limit",
+    }, path);
     return CircleGroupSearchQuery(
       circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
       query: _generatedRequestString(map["query"], '$path.query'),
-      visibility: map["visibility"] == null ? null : switch (map["visibility"]) { "public" => CircleGroupVisibility.public, "private" => CircleGroupVisibility.private, _ => throw FormatException('$path.visibility' + ' has an invalid enum value'), },
-      groupType: map["groupType"] == null ? null : switch (map["groupType"]) { "public_group" => CircleGroupType.publicGroup, "self_built" => CircleGroupType.selfBuilt, "org_node" => CircleGroupType.orgNode, _ => throw FormatException('$path.groupType' + ' has an invalid enum value'), },
-      cursor: map["cursor"] == null ? null : _generatedRequestString(map["cursor"], '$path.cursor'),
-      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 20,
+      visibility: map["visibility"] == null
+          ? null
+          : switch (map["visibility"]) {
+              "public" => CircleGroupVisibility.public,
+              "private" => CircleGroupVisibility.private,
+              _ => throw FormatException(
+                '$path.visibility' + ' has an invalid enum value',
+              ),
+            },
+      groupType: map["groupType"] == null
+          ? null
+          : switch (map["groupType"]) {
+              "public_group" => CircleGroupType.publicGroup,
+              "self_built" => CircleGroupType.selfBuilt,
+              "org_node" => CircleGroupType.orgNode,
+              _ => throw FormatException(
+                '$path.groupType' + ' has an invalid enum value',
+              ),
+            },
+      cursor: map["cursor"] == null
+          ? null
+          : _generatedRequestString(map["cursor"], '$path.cursor'),
+      limit: map.containsKey("limit")
+          ? _generatedRequestInt(map["limit"], '$path.limit')
+          : 20,
     );
   }
 
@@ -710,22 +1019,21 @@ final class CircleGroupSearchQuery {
 }
 
 final class CircleImpactQuery {
-  const CircleImpactQuery({
-    required String circleId,
-  }) : circleId = circleId;
+  const CircleImpactQuery({required String circleId}) : circleId = circleId;
 
   final String circleId;
 
-  factory CircleImpactQuery.fromWire(Map<String, Object?> map, [String path = "CircleImpactQuery"]) {
+  factory CircleImpactQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "CircleImpactQuery",
+  ]) {
     _generatedRequestRejectUnknownFields(map, const <String>{"circleId"}, path);
     return CircleImpactQuery(
       circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
     );
   }
 
-  Map<String, Object?> toWire() => <String, Object?>{
-    "circleId": this.circleId,
-  };
+  Map<String, Object?> toWire() => <String, Object?>{"circleId": this.circleId};
 }
 
 final class CircleListQuery {
@@ -750,15 +1058,37 @@ final class CircleListQuery {
   final int limit;
   final String? sort;
 
-  factory CircleListQuery.fromWire(Map<String, Object?> map, [String path = "CircleListQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"category", "domainId", "recommendFor", "cursor", "limit", "sort"}, path);
+  factory CircleListQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "CircleListQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "category",
+      "domainId",
+      "recommendFor",
+      "cursor",
+      "limit",
+      "sort",
+    }, path);
     return CircleListQuery(
-      category: map["category"] == null ? null : _generatedRequestString(map["category"], '$path.category'),
-      domainId: map["domainId"] == null ? null : _generatedRequestString(map["domainId"], '$path.domainId'),
-      recommendFor: map["recommendFor"] == null ? null : _generatedRequestString(map["recommendFor"], '$path.recommendFor'),
-      cursor: map["cursor"] == null ? null : _generatedRequestString(map["cursor"], '$path.cursor'),
-      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 20,
-      sort: map["sort"] == null ? null : _generatedRequestString(map["sort"], '$path.sort'),
+      category: map["category"] == null
+          ? null
+          : _generatedRequestString(map["category"], '$path.category'),
+      domainId: map["domainId"] == null
+          ? null
+          : _generatedRequestString(map["domainId"], '$path.domainId'),
+      recommendFor: map["recommendFor"] == null
+          ? null
+          : _generatedRequestString(map["recommendFor"], '$path.recommendFor'),
+      cursor: map["cursor"] == null
+          ? null
+          : _generatedRequestString(map["cursor"], '$path.cursor'),
+      limit: map.containsKey("limit")
+          ? _generatedRequestInt(map["limit"], '$path.limit')
+          : 20,
+      sort: map["sort"] == null
+          ? null
+          : _generatedRequestString(map["sort"], '$path.sort'),
     );
   }
 
@@ -798,12 +1128,23 @@ final class CircleMembershipListQuery {
   final String? cursor;
   final int limit;
 
-  factory CircleMembershipListQuery.fromWire(Map<String, Object?> map, [String path = "CircleMembershipListQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"circleId", "cursor", "limit"}, path);
+  factory CircleMembershipListQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "CircleMembershipListQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "circleId",
+      "cursor",
+      "limit",
+    }, path);
     return CircleMembershipListQuery(
       circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
-      cursor: map["cursor"] == null ? null : _generatedRequestString(map["cursor"], '$path.cursor'),
-      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 20,
+      cursor: map["cursor"] == null
+          ? null
+          : _generatedRequestString(map["cursor"], '$path.cursor'),
+      limit: map.containsKey("limit")
+          ? _generatedRequestInt(map["limit"], '$path.limit')
+          : 20,
     );
   }
 
@@ -833,14 +1174,31 @@ final class CircleSearchQuery {
   final String? cursor;
   final int limit;
 
-  factory CircleSearchQuery.fromWire(Map<String, Object?> map, [String path = "CircleSearchQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"query", "categoryId", "subCategory", "cursor", "limit"}, path);
+  factory CircleSearchQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "CircleSearchQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "query",
+      "categoryId",
+      "subCategory",
+      "cursor",
+      "limit",
+    }, path);
     return CircleSearchQuery(
       query: _generatedRequestString(map["query"], '$path.query'),
-      categoryId: map["categoryId"] == null ? null : _generatedRequestString(map["categoryId"], '$path.categoryId'),
-      subCategory: map["subCategory"] == null ? null : _generatedRequestString(map["subCategory"], '$path.subCategory'),
-      cursor: map["cursor"] == null ? null : _generatedRequestString(map["cursor"], '$path.cursor'),
-      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 20,
+      categoryId: map["categoryId"] == null
+          ? null
+          : _generatedRequestString(map["categoryId"], '$path.categoryId'),
+      subCategory: map["subCategory"] == null
+          ? null
+          : _generatedRequestString(map["subCategory"], '$path.subCategory'),
+      cursor: map["cursor"] == null
+          ? null
+          : _generatedRequestString(map["cursor"], '$path.cursor'),
+      limit: map.containsKey("limit")
+          ? _generatedRequestInt(map["limit"], '$path.limit')
+          : 20,
     );
   }
 
@@ -854,74 +1212,21 @@ final class CircleSearchQuery {
 }
 
 final class CircleStatsQuery {
-  const CircleStatsQuery({
-    required String circleId,
-  }) : circleId = circleId;
+  const CircleStatsQuery({required String circleId}) : circleId = circleId;
 
   final String circleId;
 
-  factory CircleStatsQuery.fromWire(Map<String, Object?> map, [String path = "CircleStatsQuery"]) {
+  factory CircleStatsQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "CircleStatsQuery",
+  ]) {
     _generatedRequestRejectUnknownFields(map, const <String>{"circleId"}, path);
     return CircleStatsQuery(
       circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
     );
   }
 
-  Map<String, Object?> toWire() => <String, Object?>{
-    "circleId": this.circleId,
-  };
-}
-
-final class CommitGatheringPlanProposalCommand {
-  CommitGatheringPlanProposalCommand({
-    required String planId,
-    required String proposalId,
-    required int expectedPlanVersion,
-    required String expectedProposalDigest,
-    required String expectedBaseRevisionDigest,
-  }) : planId = planId,
-       proposalId = proposalId,
-       expectedPlanVersion = expectedPlanVersion,
-       expectedProposalDigest = expectedProposalDigest,
-       expectedBaseRevisionDigest = expectedBaseRevisionDigest {
-    if (this.planId.isEmpty) {
-      throw ArgumentError.value(this.planId, "planId", 'must not be blank');
-    }
-    if (this.proposalId.isEmpty) {
-      throw ArgumentError.value(this.proposalId, "proposalId", 'must not be blank');
-    }
-    if (this.expectedProposalDigest.isEmpty) {
-      throw ArgumentError.value(this.expectedProposalDigest, "expectedProposalDigest", 'must not be blank');
-    }
-    if (this.expectedBaseRevisionDigest.isEmpty) {
-      throw ArgumentError.value(this.expectedBaseRevisionDigest, "expectedBaseRevisionDigest", 'must not be blank');
-    }
-  }
-
-  final String planId;
-  final String proposalId;
-  final int expectedPlanVersion;
-  final String expectedProposalDigest;
-  final String expectedBaseRevisionDigest;
-
-  factory CommitGatheringPlanProposalCommand.fromWire(Map<String, Object?> map, [String path = "CommitGatheringPlanProposalCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"planId", "proposalId", "expectedPlanVersion", "expectedProposalDigest", "expectedBaseRevisionDigest"}, path);
-    return CommitGatheringPlanProposalCommand(
-      planId: _generatedRequestString(map["planId"], '$path.planId'),
-      proposalId: _generatedRequestString(map["proposalId"], '$path.proposalId'),
-      expectedPlanVersion: _generatedRequestInt(map["expectedPlanVersion"], '$path.expectedPlanVersion'),
-      expectedProposalDigest: _generatedRequestString(map["expectedProposalDigest"], '$path.expectedProposalDigest'),
-      expectedBaseRevisionDigest: _generatedRequestString(map["expectedBaseRevisionDigest"], '$path.expectedBaseRevisionDigest'),
-    );
-  }
-
-  Map<String, Object?> toWire() => <String, Object?>{
-    "planId": this.planId,
-    "proposalId": this.proposalId,
-    "expectedPlanVersion": this.expectedPlanVersion,
-    "expectedProposalDigest": this.expectedProposalDigest,
-    "expectedBaseRevisionDigest": this.expectedBaseRevisionDigest,
-  };
+  Map<String, Object?> toWire() => <String, Object?>{"circleId": this.circleId};
 }
 
 final class CreateCircleCommand {
@@ -986,27 +1291,108 @@ final class CreateCircleCommand {
   final String? linkedHomepageType;
   final String? linkedHomepageTitle;
 
-  factory CreateCircleCommand.fromWire(Map<String, Object?> map, [String path = "CreateCircleCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"name", "description", "rulesText", "welcomeMessage", "coverUrl", "iconUrl", "category", "subCategory", "tags", "visibility", "joinPolicy", "kind", "displaySubjectType", "followEnabled", "autoSyncChat", "linkedHomepageId", "linkedHomepageType", "linkedHomepageTitle"}, path);
+  factory CreateCircleCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "CreateCircleCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "name",
+      "description",
+      "rulesText",
+      "welcomeMessage",
+      "coverUrl",
+      "iconUrl",
+      "category",
+      "subCategory",
+      "tags",
+      "visibility",
+      "joinPolicy",
+      "kind",
+      "displaySubjectType",
+      "followEnabled",
+      "autoSyncChat",
+      "linkedHomepageId",
+      "linkedHomepageType",
+      "linkedHomepageTitle",
+    }, path);
     return CreateCircleCommand(
       name: _generatedRequestString(map["name"], '$path.name'),
-      description: map["description"] == null ? null : _generatedRequestString(map["description"], '$path.description'),
-      rulesText: map["rulesText"] == null ? null : _generatedRequestString(map["rulesText"], '$path.rulesText'),
-      welcomeMessage: map["welcomeMessage"] == null ? null : _generatedRequestString(map["welcomeMessage"], '$path.welcomeMessage'),
-      coverUrl: map["coverUrl"] == null ? null : _generatedRequestString(map["coverUrl"], '$path.coverUrl'),
-      iconUrl: map["iconUrl"] == null ? null : _generatedRequestString(map["iconUrl"], '$path.iconUrl'),
-      category: map["category"] == null ? null : _generatedRequestString(map["category"], '$path.category'),
-      subCategory: map["subCategory"] == null ? null : _generatedRequestString(map["subCategory"], '$path.subCategory'),
-      tags: map.containsKey("tags") ? List<String>.unmodifiable(_generatedRequestList(map["tags"], '$path.tags').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.tags' + '[${entry.key}]'))) : const <String>[],
-      visibility: map["visibility"] == null ? null : _generatedRequestString(map["visibility"], '$path.visibility'),
-      joinPolicy: map["joinPolicy"] == null ? null : _generatedRequestString(map["joinPolicy"], '$path.joinPolicy'),
-      kind: map["kind"] == null ? null : _generatedRequestString(map["kind"], '$path.kind'),
-      displaySubjectType: map["displaySubjectType"] == null ? null : _generatedRequestString(map["displaySubjectType"], '$path.displaySubjectType'),
-      followEnabled: map["followEnabled"] == null ? null : _generatedRequestBool(map["followEnabled"], '$path.followEnabled'),
-      autoSyncChat: map["autoSyncChat"] == null ? null : _generatedRequestBool(map["autoSyncChat"], '$path.autoSyncChat'),
-      linkedHomepageId: map["linkedHomepageId"] == null ? null : _generatedRequestString(map["linkedHomepageId"], '$path.linkedHomepageId'),
-      linkedHomepageType: map["linkedHomepageType"] == null ? null : _generatedRequestString(map["linkedHomepageType"], '$path.linkedHomepageType'),
-      linkedHomepageTitle: map["linkedHomepageTitle"] == null ? null : _generatedRequestString(map["linkedHomepageTitle"], '$path.linkedHomepageTitle'),
+      description: map["description"] == null
+          ? null
+          : _generatedRequestString(map["description"], '$path.description'),
+      rulesText: map["rulesText"] == null
+          ? null
+          : _generatedRequestString(map["rulesText"], '$path.rulesText'),
+      welcomeMessage: map["welcomeMessage"] == null
+          ? null
+          : _generatedRequestString(
+              map["welcomeMessage"],
+              '$path.welcomeMessage',
+            ),
+      coverUrl: map["coverUrl"] == null
+          ? null
+          : _generatedRequestString(map["coverUrl"], '$path.coverUrl'),
+      iconUrl: map["iconUrl"] == null
+          ? null
+          : _generatedRequestString(map["iconUrl"], '$path.iconUrl'),
+      category: map["category"] == null
+          ? null
+          : _generatedRequestString(map["category"], '$path.category'),
+      subCategory: map["subCategory"] == null
+          ? null
+          : _generatedRequestString(map["subCategory"], '$path.subCategory'),
+      tags: map.containsKey("tags")
+          ? List<String>.unmodifiable(
+              _generatedRequestList(
+                map["tags"],
+                '$path.tags',
+              ).asMap().entries.map(
+                (entry) => _generatedRequestString(
+                  entry.value,
+                  '$path.tags' + '[${entry.key}]',
+                ),
+              ),
+            )
+          : const <String>[],
+      visibility: map["visibility"] == null
+          ? null
+          : _generatedRequestString(map["visibility"], '$path.visibility'),
+      joinPolicy: map["joinPolicy"] == null
+          ? null
+          : _generatedRequestString(map["joinPolicy"], '$path.joinPolicy'),
+      kind: map["kind"] == null
+          ? null
+          : _generatedRequestString(map["kind"], '$path.kind'),
+      displaySubjectType: map["displaySubjectType"] == null
+          ? null
+          : _generatedRequestString(
+              map["displaySubjectType"],
+              '$path.displaySubjectType',
+            ),
+      followEnabled: map["followEnabled"] == null
+          ? null
+          : _generatedRequestBool(map["followEnabled"], '$path.followEnabled'),
+      autoSyncChat: map["autoSyncChat"] == null
+          ? null
+          : _generatedRequestBool(map["autoSyncChat"], '$path.autoSyncChat'),
+      linkedHomepageId: map["linkedHomepageId"] == null
+          ? null
+          : _generatedRequestString(
+              map["linkedHomepageId"],
+              '$path.linkedHomepageId',
+            ),
+      linkedHomepageType: map["linkedHomepageType"] == null
+          ? null
+          : _generatedRequestString(
+              map["linkedHomepageType"],
+              '$path.linkedHomepageType',
+            ),
+      linkedHomepageTitle: map["linkedHomepageTitle"] == null
+          ? null
+          : _generatedRequestString(
+              map["linkedHomepageTitle"],
+              '$path.linkedHomepageTitle',
+            ),
     );
   }
 
@@ -1019,16 +1405,21 @@ final class CreateCircleCommand {
     if (this.iconUrl != null) "iconUrl": this.iconUrl!,
     if (this.category != null) "category": this.category!,
     if (this.subCategory != null) "subCategory": this.subCategory!,
-    if (this.tags.isNotEmpty) "tags": this.tags.map((value) => value).toList(growable: false),
+    if (this.tags.isNotEmpty)
+      "tags": this.tags.map((value) => value).toList(growable: false),
     if (this.visibility != null) "visibility": this.visibility!,
     if (this.joinPolicy != null) "joinPolicy": this.joinPolicy!,
     if (this.kind != null) "kind": this.kind!,
-    if (this.displaySubjectType != null) "displaySubjectType": this.displaySubjectType!,
+    if (this.displaySubjectType != null)
+      "displaySubjectType": this.displaySubjectType!,
     if (this.followEnabled != null) "followEnabled": this.followEnabled!,
     if (this.autoSyncChat != null) "autoSyncChat": this.autoSyncChat!,
-    if (this.linkedHomepageId != null) "linkedHomepageId": this.linkedHomepageId!,
-    if (this.linkedHomepageType != null) "linkedHomepageType": this.linkedHomepageType!,
-    if (this.linkedHomepageTitle != null) "linkedHomepageTitle": this.linkedHomepageTitle!,
+    if (this.linkedHomepageId != null)
+      "linkedHomepageId": this.linkedHomepageId!,
+    if (this.linkedHomepageType != null)
+      "linkedHomepageType": this.linkedHomepageType!,
+    if (this.linkedHomepageTitle != null)
+      "linkedHomepageTitle": this.linkedHomepageTitle!,
   };
 }
 
@@ -1053,10 +1444,18 @@ final class CreateCircleFileCommand {
       throw ArgumentError.value(this.name, "name", 'must not be blank');
     }
     if (this.fileType == CircleFileType.file && this.assetId == null) {
-      throw ArgumentError.value(this.assetId, "assetId", "is required when fileType is file");
+      throw ArgumentError.value(
+        this.assetId,
+        "assetId",
+        "is required when fileType is file",
+      );
     }
     if (this.fileType != CircleFileType.file && this.assetId != null) {
-      throw ArgumentError.value(this.assetId, "assetId", "is forbidden unless fileType is file");
+      throw ArgumentError.value(
+        this.assetId,
+        "assetId",
+        "is forbidden unless fileType is file",
+      );
     }
   }
 
@@ -1067,15 +1466,40 @@ final class CreateCircleFileCommand {
   final CircleFileType fileType;
   final String? assetId;
 
-  factory CreateCircleFileCommand.fromWire(Map<String, Object?> map, [String path = "CreateCircleFileCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"circleId", "groupId", "parentFolderId", "name", "fileType", "assetId"}, path);
+  factory CreateCircleFileCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "CreateCircleFileCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "circleId",
+      "groupId",
+      "parentFolderId",
+      "name",
+      "fileType",
+      "assetId",
+    }, path);
     return CreateCircleFileCommand(
       circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
-      groupId: map["groupId"] == null ? null : _generatedRequestString(map["groupId"], '$path.groupId'),
-      parentFolderId: map["parentFolderId"] == null ? null : _generatedRequestString(map["parentFolderId"], '$path.parentFolderId'),
+      groupId: map["groupId"] == null
+          ? null
+          : _generatedRequestString(map["groupId"], '$path.groupId'),
+      parentFolderId: map["parentFolderId"] == null
+          ? null
+          : _generatedRequestString(
+              map["parentFolderId"],
+              '$path.parentFolderId',
+            ),
       name: _generatedRequestString(map["name"], '$path.name'),
-      fileType: switch (map["fileType"]) { "file" => CircleFileType.file, "folder" => CircleFileType.folder, _ => throw FormatException('$path.fileType' + ' has an invalid enum value'), },
-      assetId: map["assetId"] == null ? null : _generatedRequestString(map["assetId"], '$path.assetId'),
+      fileType: switch (map["fileType"]) {
+        "file" => CircleFileType.file,
+        "folder" => CircleFileType.folder,
+        _ => throw FormatException(
+          '$path.fileType' + ' has an invalid enum value',
+        ),
+      },
+      assetId: map["assetId"] == null
+          ? null
+          : _generatedRequestString(map["assetId"], '$path.assetId'),
     );
   }
 
@@ -1130,19 +1554,77 @@ final class CreateCircleGroupCommand {
   final bool storageEnabled;
   final bool noticeEnabled;
 
-  factory CreateCircleGroupCommand.fromWire(Map<String, Object?> map, [String path = "CreateCircleGroupCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"circleId", "parentGroupId", "groupType", "nodeType", "name", "description", "visibility", "joinPolicy", "storageEnabled", "noticeEnabled"}, path);
+  factory CreateCircleGroupCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "CreateCircleGroupCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "circleId",
+      "parentGroupId",
+      "groupType",
+      "nodeType",
+      "name",
+      "description",
+      "visibility",
+      "joinPolicy",
+      "storageEnabled",
+      "noticeEnabled",
+    }, path);
     return CreateCircleGroupCommand(
       circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
-      parentGroupId: map["parentGroupId"] == null ? null : _generatedRequestString(map["parentGroupId"], '$path.parentGroupId'),
-      groupType: switch (map["groupType"]) { "public_group" => CircleGroupType.publicGroup, "self_built" => CircleGroupType.selfBuilt, "org_node" => CircleGroupType.orgNode, _ => throw FormatException('$path.groupType' + ' has an invalid enum value'), },
-      nodeType: map["nodeType"] == null ? null : switch (map["nodeType"]) { "generic" => OrganizationNodeType.generic, "college" => OrganizationNodeType.college, "grade" => OrganizationNodeType.grade, "classroom" => OrganizationNodeType.classroom, "department" => OrganizationNodeType.department, "team" => OrganizationNodeType.team, _ => throw FormatException('$path.nodeType' + ' has an invalid enum value'), },
+      parentGroupId: map["parentGroupId"] == null
+          ? null
+          : _generatedRequestString(
+              map["parentGroupId"],
+              '$path.parentGroupId',
+            ),
+      groupType: switch (map["groupType"]) {
+        "public_group" => CircleGroupType.publicGroup,
+        "self_built" => CircleGroupType.selfBuilt,
+        "org_node" => CircleGroupType.orgNode,
+        _ => throw FormatException(
+          '$path.groupType' + ' has an invalid enum value',
+        ),
+      },
+      nodeType: map["nodeType"] == null
+          ? null
+          : switch (map["nodeType"]) {
+              "generic" => OrganizationNodeType.generic,
+              "college" => OrganizationNodeType.college,
+              "grade" => OrganizationNodeType.grade,
+              "classroom" => OrganizationNodeType.classroom,
+              "department" => OrganizationNodeType.department,
+              "team" => OrganizationNodeType.team,
+              _ => throw FormatException(
+                '$path.nodeType' + ' has an invalid enum value',
+              ),
+            },
       name: _generatedRequestString(map["name"], '$path.name'),
-      description: map.containsKey("description") ? _generatedRequestString(map["description"], '$path.description') : '',
-      visibility: switch (map["visibility"]) { "public" => CircleGroupVisibility.public, "private" => CircleGroupVisibility.private, _ => throw FormatException('$path.visibility' + ' has an invalid enum value'), },
-      joinPolicy: switch (map["joinPolicy"]) { "apply_only" => CircleGroupJoinPolicy.applyOnly, "invite_only" => CircleGroupJoinPolicy.inviteOnly, _ => throw FormatException('$path.joinPolicy' + ' has an invalid enum value'), },
-      storageEnabled: _generatedRequestBool(map["storageEnabled"], '$path.storageEnabled'),
-      noticeEnabled: _generatedRequestBool(map["noticeEnabled"], '$path.noticeEnabled'),
+      description: map.containsKey("description")
+          ? _generatedRequestString(map["description"], '$path.description')
+          : '',
+      visibility: switch (map["visibility"]) {
+        "public" => CircleGroupVisibility.public,
+        "private" => CircleGroupVisibility.private,
+        _ => throw FormatException(
+          '$path.visibility' + ' has an invalid enum value',
+        ),
+      },
+      joinPolicy: switch (map["joinPolicy"]) {
+        "apply_only" => CircleGroupJoinPolicy.applyOnly,
+        "invite_only" => CircleGroupJoinPolicy.inviteOnly,
+        _ => throw FormatException(
+          '$path.joinPolicy' + ' has an invalid enum value',
+        ),
+      },
+      storageEnabled: _generatedRequestBool(
+        map["storageEnabled"],
+        '$path.storageEnabled',
+      ),
+      noticeEnabled: _generatedRequestBool(
+        map["noticeEnabled"],
+        '$path.noticeEnabled',
+      ),
     );
   }
 
@@ -1182,15 +1664,43 @@ final class CreateGatheringDraftCommand {
   final GatheringPlace place;
   final GatheringPolicySet policySet;
 
-  factory CreateGatheringDraftCommand.fromWire(Map<String, Object?> map, [String path = "CreateGatheringDraftCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"hostBinding", "creatorParticipates", "purpose", "schedule", "place", "policySet"}, path);
+  factory CreateGatheringDraftCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "CreateGatheringDraftCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "hostBinding",
+      "creatorParticipates",
+      "purpose",
+      "schedule",
+      "place",
+      "policySet",
+    }, path);
     return CreateGatheringDraftCommand(
-      hostBinding: HostBinding.fromWire(_generatedRequestObject(map["hostBinding"], '$path.hostBinding'), '$path.hostBinding'),
-      creatorParticipates: _generatedRequestBool(map["creatorParticipates"], '$path.creatorParticipates'),
-      purpose: GatheringPurpose.fromWire(_generatedRequestObject(map["purpose"], '$path.purpose'), '$path.purpose'),
-      schedule: GatheringSchedule.fromWire(_generatedRequestObject(map["schedule"], '$path.schedule'), '$path.schedule'),
-      place: GatheringPlace.fromWire(_generatedRequestObject(map["place"], '$path.place'), '$path.place'),
-      policySet: GatheringPolicySet.fromWire(_generatedRequestObject(map["policySet"], '$path.policySet'), '$path.policySet'),
+      hostBinding: HostBinding.fromWire(
+        _generatedRequestObject(map["hostBinding"], '$path.hostBinding'),
+        '$path.hostBinding',
+      ),
+      creatorParticipates: _generatedRequestBool(
+        map["creatorParticipates"],
+        '$path.creatorParticipates',
+      ),
+      purpose: GatheringPurpose.fromWire(
+        _generatedRequestObject(map["purpose"], '$path.purpose'),
+        '$path.purpose',
+      ),
+      schedule: GatheringSchedule.fromWire(
+        _generatedRequestObject(map["schedule"], '$path.schedule'),
+        '$path.schedule',
+      ),
+      place: GatheringPlace.fromWire(
+        _generatedRequestObject(map["place"], '$path.place'),
+        '$path.place',
+      ),
+      policySet: GatheringPolicySet.fromWire(
+        _generatedRequestObject(map["policySet"], '$path.policySet'),
+        '$path.policySet',
+      ),
     );
   }
 
@@ -1201,44 +1711,6 @@ final class CreateGatheringDraftCommand {
     "schedule": this.schedule.toWire(),
     "place": this.place.toWire(),
     "policySet": this.policySet.toWire(),
-  };
-}
-
-final class CreateGatheringPlanCommand {
-  CreateGatheringPlanCommand({
-    required String gatheringId,
-    required List<PlanItem> items,
-    required PlanAcknowledgementPolicy acknowledgementPolicy,
-    required List<GatheringPlanParticipationRef> affectedParticipationRefs,
-  }) : gatheringId = gatheringId,
-       items = List.unmodifiable(items),
-       acknowledgementPolicy = acknowledgementPolicy,
-       affectedParticipationRefs = List.unmodifiable(affectedParticipationRefs) {
-    if (this.gatheringId.isEmpty) {
-      throw ArgumentError.value(this.gatheringId, "gatheringId", 'must not be blank');
-    }
-  }
-
-  final String gatheringId;
-  final List<PlanItem> items;
-  final PlanAcknowledgementPolicy acknowledgementPolicy;
-  final List<GatheringPlanParticipationRef> affectedParticipationRefs;
-
-  factory CreateGatheringPlanCommand.fromWire(Map<String, Object?> map, [String path = "CreateGatheringPlanCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"gatheringId", "items", "acknowledgementPolicy", "affectedParticipationRefs"}, path);
-    return CreateGatheringPlanCommand(
-      gatheringId: _generatedRequestString(map["gatheringId"], '$path.gatheringId'),
-      items: List<PlanItem>.unmodifiable(_generatedRequestList(map["items"], '$path.items').asMap().entries.map((entry) => PlanItem.fromWire(_generatedRequestObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
-      acknowledgementPolicy: PlanAcknowledgementPolicy.fromWire(_generatedRequestObject(map["acknowledgementPolicy"], '$path.acknowledgementPolicy'), '$path.acknowledgementPolicy'),
-      affectedParticipationRefs: List<GatheringPlanParticipationRef>.unmodifiable(_generatedRequestList(map["affectedParticipationRefs"], '$path.affectedParticipationRefs').asMap().entries.map((entry) => GatheringPlanParticipationRef.fromWire(_generatedRequestObject(entry.value, '$path.affectedParticipationRefs' + '[${entry.key}]'), '$path.affectedParticipationRefs' + '[${entry.key}]'))),
-    );
-  }
-
-  Map<String, Object?> toWire() => <String, Object?>{
-    "gatheringId": this.gatheringId,
-    "items": this.items.map((value) => value.toWire()).toList(growable: false),
-    "acknowledgementPolicy": this.acknowledgementPolicy.toWire(),
-    "affectedParticipationRefs": this.affectedParticipationRefs.map((value) => value.toWire()).toList(growable: false),
   };
 }
 
@@ -1257,7 +1729,11 @@ final class DecideCircleGroupMembershipCommand {
       throw ArgumentError.value(this.groupId, "groupId", 'must not be blank');
     }
     if (this.personaId.isEmpty) {
-      throw ArgumentError.value(this.personaId, "personaId", 'must not be blank');
+      throw ArgumentError.value(
+        this.personaId,
+        "personaId",
+        'must not be blank',
+      );
     }
   }
 
@@ -1265,8 +1741,15 @@ final class DecideCircleGroupMembershipCommand {
   final String groupId;
   final String personaId;
 
-  factory DecideCircleGroupMembershipCommand.fromWire(Map<String, Object?> map, [String path = "DecideCircleGroupMembershipCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"circleId", "groupId", "personaId"}, path);
+  factory DecideCircleGroupMembershipCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "DecideCircleGroupMembershipCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "circleId",
+      "groupId",
+      "personaId",
+    }, path);
     return DecideCircleGroupMembershipCommand(
       circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
       groupId: _generatedRequestString(map["groupId"], '$path.groupId'),
@@ -1291,15 +1774,25 @@ final class DecideCircleMembershipCommand {
       throw ArgumentError.value(this.circleId, "circleId", 'must not be blank');
     }
     if (this.personaId.isEmpty) {
-      throw ArgumentError.value(this.personaId, "personaId", 'must not be blank');
+      throw ArgumentError.value(
+        this.personaId,
+        "personaId",
+        'must not be blank',
+      );
     }
   }
 
   final String circleId;
   final String personaId;
 
-  factory DecideCircleMembershipCommand.fromWire(Map<String, Object?> map, [String path = "DecideCircleMembershipCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"circleId", "personaId"}, path);
+  factory DecideCircleMembershipCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "DecideCircleMembershipCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "circleId",
+      "personaId",
+    }, path);
     return DecideCircleMembershipCommand(
       circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
       personaId: _generatedRequestString(map["personaId"], '$path.personaId'),
@@ -1323,7 +1816,11 @@ final class DeclareGatheringAttendanceCommand {
        expectedGatheringVersion = expectedGatheringVersion,
        expectedParticipationVersion = expectedParticipationVersion {
     if (this.gatheringId.isEmpty) {
-      throw ArgumentError.value(this.gatheringId, "gatheringId", 'must not be blank');
+      throw ArgumentError.value(
+        this.gatheringId,
+        "gatheringId",
+        'must not be blank',
+      );
     }
   }
 
@@ -1332,30 +1829,60 @@ final class DeclareGatheringAttendanceCommand {
   final int expectedGatheringVersion;
   final int expectedParticipationVersion;
 
-  factory DeclareGatheringAttendanceCommand.fromWire(Map<String, Object?> map, [String path = "DeclareGatheringAttendanceCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"gatheringId", "evidenceRefs", "expectedGatheringVersion", "expectedParticipationVersion"}, path);
+  factory DeclareGatheringAttendanceCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "DeclareGatheringAttendanceCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "gatheringId",
+      "evidenceRefs",
+      "expectedGatheringVersion",
+      "expectedParticipationVersion",
+    }, path);
     return DeclareGatheringAttendanceCommand(
-      gatheringId: _generatedRequestString(map["gatheringId"], '$path.gatheringId'),
-      evidenceRefs: List<CanonicalObjectRef>.unmodifiable(_generatedRequestList(map["evidenceRefs"], '$path.evidenceRefs').asMap().entries.map((entry) => CanonicalObjectRef.fromWire(_generatedRequestObject(entry.value, '$path.evidenceRefs' + '[${entry.key}]'), '$path.evidenceRefs' + '[${entry.key}]'))),
-      expectedGatheringVersion: _generatedRequestInt(map["expectedGatheringVersion"], '$path.expectedGatheringVersion'),
-      expectedParticipationVersion: _generatedRequestInt(map["expectedParticipationVersion"], '$path.expectedParticipationVersion'),
+      gatheringId: _generatedRequestString(
+        map["gatheringId"],
+        '$path.gatheringId',
+      ),
+      evidenceRefs: List<CanonicalObjectRef>.unmodifiable(
+        _generatedRequestList(
+          map["evidenceRefs"],
+          '$path.evidenceRefs',
+        ).asMap().entries.map(
+          (entry) => CanonicalObjectRef.fromWire(
+            _generatedRequestObject(
+              entry.value,
+              '$path.evidenceRefs' + '[${entry.key}]',
+            ),
+            '$path.evidenceRefs' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      expectedGatheringVersion: _generatedRequestInt(
+        map["expectedGatheringVersion"],
+        '$path.expectedGatheringVersion',
+      ),
+      expectedParticipationVersion: _generatedRequestInt(
+        map["expectedParticipationVersion"],
+        '$path.expectedParticipationVersion',
+      ),
     );
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
     "gatheringId": this.gatheringId,
-    "evidenceRefs": this.evidenceRefs.map((value) => value.toWire()).toList(growable: false),
+    "evidenceRefs": this.evidenceRefs
+        .map((value) => value.toWire())
+        .toList(growable: false),
     "expectedGatheringVersion": this.expectedGatheringVersion,
     "expectedParticipationVersion": this.expectedParticipationVersion,
   };
 }
 
 final class DeleteCircleFileCommand {
-  DeleteCircleFileCommand({
-    required String circleId,
-    required String fileId,
-  }) : circleId = circleId.trim(),
-       fileId = fileId.trim() {
+  DeleteCircleFileCommand({required String circleId, required String fileId})
+    : circleId = circleId.trim(),
+      fileId = fileId.trim() {
     if (this.circleId.isEmpty) {
       throw ArgumentError.value(this.circleId, "circleId", 'must not be blank');
     }
@@ -1367,8 +1894,14 @@ final class DeleteCircleFileCommand {
   final String circleId;
   final String fileId;
 
-  factory DeleteCircleFileCommand.fromWire(Map<String, Object?> map, [String path = "DeleteCircleFileCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"circleId", "fileId"}, path);
+  factory DeleteCircleFileCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "DeleteCircleFileCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "circleId",
+      "fileId",
+    }, path);
     return DeleteCircleFileCommand(
       circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
       fileId: _generatedRequestString(map["fileId"], '$path.fileId'),
@@ -1393,7 +1926,11 @@ final class FeatureCirclePostCommand {
       throw ArgumentError.value(this.circleId, "circleId", 'must not be blank');
     }
     if (this.placementId.isEmpty) {
-      throw ArgumentError.value(this.placementId, "placementId", 'must not be blank');
+      throw ArgumentError.value(
+        this.placementId,
+        "placementId",
+        'must not be blank',
+      );
     }
   }
 
@@ -1401,11 +1938,21 @@ final class FeatureCirclePostCommand {
   final String placementId;
   final bool enabled;
 
-  factory FeatureCirclePostCommand.fromWire(Map<String, Object?> map, [String path = "FeatureCirclePostCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"circleId", "placementId", "enabled"}, path);
+  factory FeatureCirclePostCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "FeatureCirclePostCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "circleId",
+      "placementId",
+      "enabled",
+    }, path);
     return FeatureCirclePostCommand(
       circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
-      placementId: _generatedRequestString(map["placementId"], '$path.placementId'),
+      placementId: _generatedRequestString(
+        map["placementId"],
+        '$path.placementId',
+      ),
       enabled: _generatedRequestBool(map["enabled"], '$path.enabled'),
     );
   }
@@ -1426,7 +1973,11 @@ final class GatheringApplicationAnswer {
        answerText = answerText,
        selectedOptionIds = List.unmodifiable(selectedOptionIds) {
     if (this.questionId.isEmpty) {
-      throw ArgumentError.value(this.questionId, "questionId", 'must not be blank');
+      throw ArgumentError.value(
+        this.questionId,
+        "questionId",
+        'must not be blank',
+      );
     }
   }
 
@@ -1434,19 +1985,43 @@ final class GatheringApplicationAnswer {
   final String? answerText;
   final List<String> selectedOptionIds;
 
-  factory GatheringApplicationAnswer.fromWire(Map<String, Object?> map, [String path = "GatheringApplicationAnswer"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"questionId", "answerText", "selectedOptionIds"}, path);
+  factory GatheringApplicationAnswer.fromWire(
+    Map<String, Object?> map, [
+    String path = "GatheringApplicationAnswer",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "questionId",
+      "answerText",
+      "selectedOptionIds",
+    }, path);
     return GatheringApplicationAnswer(
-      questionId: _generatedRequestString(map["questionId"], '$path.questionId'),
-      answerText: map["answerText"] == null ? null : _generatedRequestString(map["answerText"], '$path.answerText'),
-      selectedOptionIds: List<String>.unmodifiable(_generatedRequestList(map["selectedOptionIds"], '$path.selectedOptionIds').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.selectedOptionIds' + '[${entry.key}]'))),
+      questionId: _generatedRequestString(
+        map["questionId"],
+        '$path.questionId',
+      ),
+      answerText: map["answerText"] == null
+          ? null
+          : _generatedRequestString(map["answerText"], '$path.answerText'),
+      selectedOptionIds: List<String>.unmodifiable(
+        _generatedRequestList(
+          map["selectedOptionIds"],
+          '$path.selectedOptionIds',
+        ).asMap().entries.map(
+          (entry) => _generatedRequestString(
+            entry.value,
+            '$path.selectedOptionIds' + '[${entry.key}]',
+          ),
+        ),
+      ),
     );
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
     "questionId": this.questionId,
     if (this.answerText != null) "answerText": this.answerText!,
-    "selectedOptionIds": this.selectedOptionIds.map((value) => value).toList(growable: false),
+    "selectedOptionIds": this.selectedOptionIds
+        .map((value) => value)
+        .toList(growable: false),
   };
 }
 
@@ -1459,7 +2034,11 @@ final class GatheringAvailabilityWatchCommand {
        expectedGatheringVersion = expectedGatheringVersion,
        expectedWatchVersion = expectedWatchVersion {
     if (this.gatheringId.isEmpty) {
-      throw ArgumentError.value(this.gatheringId, "gatheringId", 'must not be blank');
+      throw ArgumentError.value(
+        this.gatheringId,
+        "gatheringId",
+        'must not be blank',
+      );
     }
   }
 
@@ -1467,12 +2046,28 @@ final class GatheringAvailabilityWatchCommand {
   final int expectedGatheringVersion;
   final int expectedWatchVersion;
 
-  factory GatheringAvailabilityWatchCommand.fromWire(Map<String, Object?> map, [String path = "GatheringAvailabilityWatchCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"gatheringId", "expectedGatheringVersion", "expectedWatchVersion"}, path);
+  factory GatheringAvailabilityWatchCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "GatheringAvailabilityWatchCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "gatheringId",
+      "expectedGatheringVersion",
+      "expectedWatchVersion",
+    }, path);
     return GatheringAvailabilityWatchCommand(
-      gatheringId: _generatedRequestString(map["gatheringId"], '$path.gatheringId'),
-      expectedGatheringVersion: _generatedRequestInt(map["expectedGatheringVersion"], '$path.expectedGatheringVersion'),
-      expectedWatchVersion: _generatedRequestInt(map["expectedWatchVersion"], '$path.expectedWatchVersion'),
+      gatheringId: _generatedRequestString(
+        map["gatheringId"],
+        '$path.gatheringId',
+      ),
+      expectedGatheringVersion: _generatedRequestInt(
+        map["expectedGatheringVersion"],
+        '$path.expectedGatheringVersion',
+      ),
+      expectedWatchVersion: _generatedRequestInt(
+        map["expectedWatchVersion"],
+        '$path.expectedWatchVersion',
+      ),
     );
   }
 
@@ -1484,20 +2079,30 @@ final class GatheringAvailabilityWatchCommand {
 }
 
 final class GatheringIDQuery {
-  GatheringIDQuery({
-    required String gatheringId,
-  }) : gatheringId = gatheringId {
+  GatheringIDQuery({required String gatheringId}) : gatheringId = gatheringId {
     if (this.gatheringId.isEmpty) {
-      throw ArgumentError.value(this.gatheringId, "gatheringId", 'must not be blank');
+      throw ArgumentError.value(
+        this.gatheringId,
+        "gatheringId",
+        'must not be blank',
+      );
     }
   }
 
   final String gatheringId;
 
-  factory GatheringIDQuery.fromWire(Map<String, Object?> map, [String path = "GatheringIDQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"gatheringId"}, path);
+  factory GatheringIDQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "GatheringIDQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "gatheringId",
+    }, path);
     return GatheringIDQuery(
-      gatheringId: _generatedRequestString(map["gatheringId"], '$path.gatheringId'),
+      gatheringId: _generatedRequestString(
+        map["gatheringId"],
+        '$path.gatheringId',
+      ),
     );
   }
 
@@ -1520,7 +2125,11 @@ final class GatheringListByHostQuery {
        cursor = cursor,
        limit = limit {
     if (this.hostSubjectId.isEmpty) {
-      throw ArgumentError.value(this.hostSubjectId, "hostSubjectId", 'must not be blank');
+      throw ArgumentError.value(
+        this.hostSubjectId,
+        "hostSubjectId",
+        'must not be blank',
+      );
     }
     if (this.limit <= 0) {
       throw ArgumentError.value(this.limit, "limit", "must be positive");
@@ -1535,13 +2144,35 @@ final class GatheringListByHostQuery {
   final String? cursor;
   final int limit;
 
-  factory GatheringListByHostQuery.fromWire(Map<String, Object?> map, [String path = "GatheringListByHostQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"hostSubjectKind", "hostSubjectId", "cursor", "limit"}, path);
+  factory GatheringListByHostQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "GatheringListByHostQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "hostSubjectKind",
+      "hostSubjectId",
+      "cursor",
+      "limit",
+    }, path);
     return GatheringListByHostQuery(
-      hostSubjectKind: switch (map["hostSubjectKind"]) { "persona" => GatheringHostSubjectKind.persona, "entity_homepage" => GatheringHostSubjectKind.entityHomepage, "circle" => GatheringHostSubjectKind.circle, _ => throw FormatException('$path.hostSubjectKind' + ' has an invalid enum value'), },
-      hostSubjectId: _generatedRequestString(map["hostSubjectId"], '$path.hostSubjectId'),
-      cursor: map["cursor"] == null ? null : _generatedRequestString(map["cursor"], '$path.cursor'),
-      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 20,
+      hostSubjectKind: switch (map["hostSubjectKind"]) {
+        "persona" => GatheringHostSubjectKind.persona,
+        "entity_homepage" => GatheringHostSubjectKind.entityHomepage,
+        "circle" => GatheringHostSubjectKind.circle,
+        _ => throw FormatException(
+          '$path.hostSubjectKind' + ' has an invalid enum value',
+        ),
+      },
+      hostSubjectId: _generatedRequestString(
+        map["hostSubjectId"],
+        '$path.hostSubjectId',
+      ),
+      cursor: map["cursor"] == null
+          ? null
+          : _generatedRequestString(map["cursor"], '$path.cursor'),
+      limit: map.containsKey("limit")
+          ? _generatedRequestInt(map["limit"], '$path.limit')
+          : 20,
     );
   }
 
@@ -1567,10 +2198,18 @@ final class GatheringListBySourceQuery {
        cursor = cursor,
        limit = limit {
     if (this.sourceObjectTypeRef.isEmpty) {
-      throw ArgumentError.value(this.sourceObjectTypeRef, "sourceObjectTypeRef", 'must not be blank');
+      throw ArgumentError.value(
+        this.sourceObjectTypeRef,
+        "sourceObjectTypeRef",
+        'must not be blank',
+      );
     }
     if (this.sourceObjectId.isEmpty) {
-      throw ArgumentError.value(this.sourceObjectId, "sourceObjectId", 'must not be blank');
+      throw ArgumentError.value(
+        this.sourceObjectId,
+        "sourceObjectId",
+        'must not be blank',
+      );
     }
     if (this.limit <= 0) {
       throw ArgumentError.value(this.limit, "limit", "must be positive");
@@ -1585,13 +2224,31 @@ final class GatheringListBySourceQuery {
   final String? cursor;
   final int limit;
 
-  factory GatheringListBySourceQuery.fromWire(Map<String, Object?> map, [String path = "GatheringListBySourceQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"sourceObjectTypeRef", "sourceObjectId", "cursor", "limit"}, path);
+  factory GatheringListBySourceQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "GatheringListBySourceQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "sourceObjectTypeRef",
+      "sourceObjectId",
+      "cursor",
+      "limit",
+    }, path);
     return GatheringListBySourceQuery(
-      sourceObjectTypeRef: _generatedRequestString(map["sourceObjectTypeRef"], '$path.sourceObjectTypeRef'),
-      sourceObjectId: _generatedRequestString(map["sourceObjectId"], '$path.sourceObjectId'),
-      cursor: map["cursor"] == null ? null : _generatedRequestString(map["cursor"], '$path.cursor'),
-      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 20,
+      sourceObjectTypeRef: _generatedRequestString(
+        map["sourceObjectTypeRef"],
+        '$path.sourceObjectTypeRef',
+      ),
+      sourceObjectId: _generatedRequestString(
+        map["sourceObjectId"],
+        '$path.sourceObjectId',
+      ),
+      cursor: map["cursor"] == null
+          ? null
+          : _generatedRequestString(map["cursor"], '$path.cursor'),
+      limit: map.containsKey("limit")
+          ? _generatedRequestInt(map["limit"], '$path.limit')
+          : 20,
     );
   }
 
@@ -1607,11 +2264,9 @@ final class GatheringMineListQuery {
   static const int defaultLimit = 20;
   static const int maximumLimit = 50;
 
-  GatheringMineListQuery({
-    String? cursor,
-    int limit = 20,
-  }) : cursor = cursor,
-       limit = limit {
+  GatheringMineListQuery({String? cursor, int limit = 20})
+    : cursor = cursor,
+      limit = limit {
     if (this.limit <= 0) {
       throw ArgumentError.value(this.limit, "limit", "must be positive");
     }
@@ -1623,11 +2278,21 @@ final class GatheringMineListQuery {
   final String? cursor;
   final int limit;
 
-  factory GatheringMineListQuery.fromWire(Map<String, Object?> map, [String path = "GatheringMineListQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"cursor", "limit"}, path);
+  factory GatheringMineListQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "GatheringMineListQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "cursor",
+      "limit",
+    }, path);
     return GatheringMineListQuery(
-      cursor: map["cursor"] == null ? null : _generatedRequestString(map["cursor"], '$path.cursor'),
-      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 20,
+      cursor: map["cursor"] == null
+          ? null
+          : _generatedRequestString(map["cursor"], '$path.cursor'),
+      limit: map.containsKey("limit")
+          ? _generatedRequestInt(map["limit"], '$path.limit')
+          : 20,
     );
   }
 
@@ -1646,7 +2311,11 @@ final class GatheringParticipationVersionCommand {
        expectedGatheringVersion = expectedGatheringVersion,
        expectedParticipationVersion = expectedParticipationVersion {
     if (this.gatheringId.isEmpty) {
-      throw ArgumentError.value(this.gatheringId, "gatheringId", 'must not be blank');
+      throw ArgumentError.value(
+        this.gatheringId,
+        "gatheringId",
+        'must not be blank',
+      );
     }
   }
 
@@ -1654,12 +2323,28 @@ final class GatheringParticipationVersionCommand {
   final int expectedGatheringVersion;
   final int expectedParticipationVersion;
 
-  factory GatheringParticipationVersionCommand.fromWire(Map<String, Object?> map, [String path = "GatheringParticipationVersionCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"gatheringId", "expectedGatheringVersion", "expectedParticipationVersion"}, path);
+  factory GatheringParticipationVersionCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "GatheringParticipationVersionCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "gatheringId",
+      "expectedGatheringVersion",
+      "expectedParticipationVersion",
+    }, path);
     return GatheringParticipationVersionCommand(
-      gatheringId: _generatedRequestString(map["gatheringId"], '$path.gatheringId'),
-      expectedGatheringVersion: _generatedRequestInt(map["expectedGatheringVersion"], '$path.expectedGatheringVersion'),
-      expectedParticipationVersion: _generatedRequestInt(map["expectedParticipationVersion"], '$path.expectedParticipationVersion'),
+      gatheringId: _generatedRequestString(
+        map["gatheringId"],
+        '$path.gatheringId',
+      ),
+      expectedGatheringVersion: _generatedRequestInt(
+        map["expectedGatheringVersion"],
+        '$path.expectedGatheringVersion',
+      ),
+      expectedParticipationVersion: _generatedRequestInt(
+        map["expectedParticipationVersion"],
+        '$path.expectedParticipationVersion',
+      ),
     );
   }
 
@@ -1671,20 +2356,31 @@ final class GatheringParticipationVersionCommand {
 }
 
 final class GatheringPlanByGatheringQuery {
-  GatheringPlanByGatheringQuery({
-    required String gatheringId,
-  }) : gatheringId = gatheringId {
+  GatheringPlanByGatheringQuery({required String gatheringId})
+    : gatheringId = gatheringId {
     if (this.gatheringId.isEmpty) {
-      throw ArgumentError.value(this.gatheringId, "gatheringId", 'must not be blank');
+      throw ArgumentError.value(
+        this.gatheringId,
+        "gatheringId",
+        'must not be blank',
+      );
     }
   }
 
   final String gatheringId;
 
-  factory GatheringPlanByGatheringQuery.fromWire(Map<String, Object?> map, [String path = "GatheringPlanByGatheringQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"gatheringId"}, path);
+  factory GatheringPlanByGatheringQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "GatheringPlanByGatheringQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "gatheringId",
+    }, path);
     return GatheringPlanByGatheringQuery(
-      gatheringId: _generatedRequestString(map["gatheringId"], '$path.gatheringId'),
+      gatheringId: _generatedRequestString(
+        map["gatheringId"],
+        '$path.gatheringId',
+      ),
     );
   }
 
@@ -1710,12 +2406,23 @@ final class GatheringPlanRevisionPageQuery {
   final String? cursor;
   final int? limit;
 
-  factory GatheringPlanRevisionPageQuery.fromWire(Map<String, Object?> map, [String path = "GatheringPlanRevisionPageQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"planId", "cursor", "limit"}, path);
+  factory GatheringPlanRevisionPageQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "GatheringPlanRevisionPageQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "planId",
+      "cursor",
+      "limit",
+    }, path);
     return GatheringPlanRevisionPageQuery(
       planId: _generatedRequestString(map["planId"], '$path.planId'),
-      cursor: map["cursor"] == null ? null : _generatedRequestString(map["cursor"], '$path.cursor'),
-      limit: map["limit"] == null ? null : _generatedRequestInt(map["limit"], '$path.limit'),
+      cursor: map["cursor"] == null
+          ? null
+          : _generatedRequestString(map["cursor"], '$path.cursor'),
+      limit: map["limit"] == null
+          ? null
+          : _generatedRequestInt(map["limit"], '$path.limit'),
     );
   }
 
@@ -1737,10 +2444,18 @@ final class GatheringReasonCommand {
        evidenceRefs = List.unmodifiable(evidenceRefs),
        expectedGatheringVersion = expectedGatheringVersion {
     if (this.gatheringId.isEmpty) {
-      throw ArgumentError.value(this.gatheringId, "gatheringId", 'must not be blank');
+      throw ArgumentError.value(
+        this.gatheringId,
+        "gatheringId",
+        'must not be blank',
+      );
     }
     if (this.reasonRef.isEmpty) {
-      throw ArgumentError.value(this.reasonRef, "reasonRef", 'must not be blank');
+      throw ArgumentError.value(
+        this.reasonRef,
+        "reasonRef",
+        'must not be blank',
+      );
     }
   }
 
@@ -1749,20 +2464,49 @@ final class GatheringReasonCommand {
   final List<CanonicalObjectRef> evidenceRefs;
   final int expectedGatheringVersion;
 
-  factory GatheringReasonCommand.fromWire(Map<String, Object?> map, [String path = "GatheringReasonCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"gatheringId", "reasonRef", "evidenceRefs", "expectedGatheringVersion"}, path);
+  factory GatheringReasonCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "GatheringReasonCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "gatheringId",
+      "reasonRef",
+      "evidenceRefs",
+      "expectedGatheringVersion",
+    }, path);
     return GatheringReasonCommand(
-      gatheringId: _generatedRequestString(map["gatheringId"], '$path.gatheringId'),
+      gatheringId: _generatedRequestString(
+        map["gatheringId"],
+        '$path.gatheringId',
+      ),
       reasonRef: _generatedRequestString(map["reasonRef"], '$path.reasonRef'),
-      evidenceRefs: List<CanonicalObjectRef>.unmodifiable(_generatedRequestList(map["evidenceRefs"], '$path.evidenceRefs').asMap().entries.map((entry) => CanonicalObjectRef.fromWire(_generatedRequestObject(entry.value, '$path.evidenceRefs' + '[${entry.key}]'), '$path.evidenceRefs' + '[${entry.key}]'))),
-      expectedGatheringVersion: _generatedRequestInt(map["expectedGatheringVersion"], '$path.expectedGatheringVersion'),
+      evidenceRefs: List<CanonicalObjectRef>.unmodifiable(
+        _generatedRequestList(
+          map["evidenceRefs"],
+          '$path.evidenceRefs',
+        ).asMap().entries.map(
+          (entry) => CanonicalObjectRef.fromWire(
+            _generatedRequestObject(
+              entry.value,
+              '$path.evidenceRefs' + '[${entry.key}]',
+            ),
+            '$path.evidenceRefs' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      expectedGatheringVersion: _generatedRequestInt(
+        map["expectedGatheringVersion"],
+        '$path.expectedGatheringVersion',
+      ),
     );
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
     "gatheringId": this.gatheringId,
     "reasonRef": this.reasonRef,
-    "evidenceRefs": this.evidenceRefs.map((value) => value.toWire()).toList(growable: false),
+    "evidenceRefs": this.evidenceRefs
+        .map((value) => value.toWire())
+        .toList(growable: false),
     "expectedGatheringVersion": this.expectedGatheringVersion,
   };
 }
@@ -1774,18 +2518,34 @@ final class GatheringVersionCommand {
   }) : gatheringId = gatheringId,
        expectedGatheringVersion = expectedGatheringVersion {
     if (this.gatheringId.isEmpty) {
-      throw ArgumentError.value(this.gatheringId, "gatheringId", 'must not be blank');
+      throw ArgumentError.value(
+        this.gatheringId,
+        "gatheringId",
+        'must not be blank',
+      );
     }
   }
 
   final String gatheringId;
   final int expectedGatheringVersion;
 
-  factory GatheringVersionCommand.fromWire(Map<String, Object?> map, [String path = "GatheringVersionCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"gatheringId", "expectedGatheringVersion"}, path);
+  factory GatheringVersionCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "GatheringVersionCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "gatheringId",
+      "expectedGatheringVersion",
+    }, path);
     return GatheringVersionCommand(
-      gatheringId: _generatedRequestString(map["gatheringId"], '$path.gatheringId'),
-      expectedGatheringVersion: _generatedRequestInt(map["expectedGatheringVersion"], '$path.expectedGatheringVersion'),
+      gatheringId: _generatedRequestString(
+        map["gatheringId"],
+        '$path.gatheringId',
+      ),
+      expectedGatheringVersion: _generatedRequestInt(
+        map["expectedGatheringVersion"],
+        '$path.expectedGatheringVersion',
+      ),
     );
   }
 
@@ -1808,10 +2568,18 @@ final class InviteToGatheringCommand {
        expectedGatheringVersion = expectedGatheringVersion,
        expectedParticipationVersion = expectedParticipationVersion {
     if (this.gatheringId.isEmpty) {
-      throw ArgumentError.value(this.gatheringId, "gatheringId", 'must not be blank');
+      throw ArgumentError.value(
+        this.gatheringId,
+        "gatheringId",
+        'must not be blank',
+      );
     }
     if (this.participantPersonaId.isEmpty) {
-      throw ArgumentError.value(this.participantPersonaId, "participantPersonaId", 'must not be blank');
+      throw ArgumentError.value(
+        this.participantPersonaId,
+        "participantPersonaId",
+        'must not be blank',
+      );
     }
   }
 
@@ -1821,14 +2589,38 @@ final class InviteToGatheringCommand {
   final int expectedGatheringVersion;
   final int expectedParticipationVersion;
 
-  factory InviteToGatheringCommand.fromWire(Map<String, Object?> map, [String path = "InviteToGatheringCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"gatheringId", "participantPersonaId", "seatHoldUntil", "expectedGatheringVersion", "expectedParticipationVersion"}, path);
+  factory InviteToGatheringCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "InviteToGatheringCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "gatheringId",
+      "participantPersonaId",
+      "seatHoldUntil",
+      "expectedGatheringVersion",
+      "expectedParticipationVersion",
+    }, path);
     return InviteToGatheringCommand(
-      gatheringId: _generatedRequestString(map["gatheringId"], '$path.gatheringId'),
-      participantPersonaId: _generatedRequestString(map["participantPersonaId"], '$path.participantPersonaId'),
-      seatHoldUntil: _generatedRequestTimestamp(map["seatHoldUntil"], '$path.seatHoldUntil'),
-      expectedGatheringVersion: _generatedRequestInt(map["expectedGatheringVersion"], '$path.expectedGatheringVersion'),
-      expectedParticipationVersion: _generatedRequestInt(map["expectedParticipationVersion"], '$path.expectedParticipationVersion'),
+      gatheringId: _generatedRequestString(
+        map["gatheringId"],
+        '$path.gatheringId',
+      ),
+      participantPersonaId: _generatedRequestString(
+        map["participantPersonaId"],
+        '$path.participantPersonaId',
+      ),
+      seatHoldUntil: _generatedRequestTimestamp(
+        map["seatHoldUntil"],
+        '$path.seatHoldUntil',
+      ),
+      expectedGatheringVersion: _generatedRequestInt(
+        map["expectedGatheringVersion"],
+        '$path.expectedGatheringVersion',
+      ),
+      expectedParticipationVersion: _generatedRequestInt(
+        map["expectedParticipationVersion"],
+        '$path.expectedParticipationVersion',
+      ),
     );
   }
 
@@ -1842,9 +2634,8 @@ final class InviteToGatheringCommand {
 }
 
 final class JoinCircleMembershipCommand {
-  JoinCircleMembershipCommand({
-    required String circleId,
-  }) : circleId = circleId.trim() {
+  JoinCircleMembershipCommand({required String circleId})
+    : circleId = circleId.trim() {
     if (this.circleId.isEmpty) {
       throw ArgumentError.value(this.circleId, "circleId", 'must not be blank');
     }
@@ -1852,16 +2643,17 @@ final class JoinCircleMembershipCommand {
 
   final String circleId;
 
-  factory JoinCircleMembershipCommand.fromWire(Map<String, Object?> map, [String path = "JoinCircleMembershipCommand"]) {
+  factory JoinCircleMembershipCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "JoinCircleMembershipCommand",
+  ]) {
     _generatedRequestRejectUnknownFields(map, const <String>{"circleId"}, path);
     return JoinCircleMembershipCommand(
       circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
     );
   }
 
-  Map<String, Object?> toWire() => <String, Object?>{
-    "circleId": this.circleId,
-  };
+  Map<String, Object?> toWire() => <String, Object?>{"circleId": this.circleId};
 }
 
 final class LeaveCircleGroupMembershipCommand {
@@ -1881,8 +2673,14 @@ final class LeaveCircleGroupMembershipCommand {
   final String circleId;
   final String groupId;
 
-  factory LeaveCircleGroupMembershipCommand.fromWire(Map<String, Object?> map, [String path = "LeaveCircleGroupMembershipCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"circleId", "groupId"}, path);
+  factory LeaveCircleGroupMembershipCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "LeaveCircleGroupMembershipCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "circleId",
+      "groupId",
+    }, path);
     return LeaveCircleGroupMembershipCommand(
       circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
       groupId: _generatedRequestString(map["groupId"], '$path.groupId'),
@@ -1896,9 +2694,8 @@ final class LeaveCircleGroupMembershipCommand {
 }
 
 final class LeaveCircleMembershipCommand {
-  LeaveCircleMembershipCommand({
-    required String circleId,
-  }) : circleId = circleId.trim() {
+  LeaveCircleMembershipCommand({required String circleId})
+    : circleId = circleId.trim() {
     if (this.circleId.isEmpty) {
       throw ArgumentError.value(this.circleId, "circleId", 'must not be blank');
     }
@@ -1906,16 +2703,17 @@ final class LeaveCircleMembershipCommand {
 
   final String circleId;
 
-  factory LeaveCircleMembershipCommand.fromWire(Map<String, Object?> map, [String path = "LeaveCircleMembershipCommand"]) {
+  factory LeaveCircleMembershipCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "LeaveCircleMembershipCommand",
+  ]) {
     _generatedRequestRejectUnknownFields(map, const <String>{"circleId"}, path);
     return LeaveCircleMembershipCommand(
       circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
     );
   }
 
-  Map<String, Object?> toWire() => <String, Object?>{
-    "circleId": this.circleId,
-  };
+  Map<String, Object?> toWire() => <String, Object?>{"circleId": this.circleId};
 }
 
 final class MyCircleGroupMembershipQuery {
@@ -1935,8 +2733,14 @@ final class MyCircleGroupMembershipQuery {
   final String circleId;
   final String groupId;
 
-  factory MyCircleGroupMembershipQuery.fromWire(Map<String, Object?> map, [String path = "MyCircleGroupMembershipQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"circleId", "groupId"}, path);
+  factory MyCircleGroupMembershipQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "MyCircleGroupMembershipQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "circleId",
+      "groupId",
+    }, path);
     return MyCircleGroupMembershipQuery(
       circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
       groupId: _generatedRequestString(map["groupId"], '$path.groupId'),
@@ -1950,9 +2754,8 @@ final class MyCircleGroupMembershipQuery {
 }
 
 final class MyCircleMembershipQuery {
-  MyCircleMembershipQuery({
-    required String circleId,
-  }) : circleId = circleId.trim() {
+  MyCircleMembershipQuery({required String circleId})
+    : circleId = circleId.trim() {
     if (this.circleId.isEmpty) {
       throw ArgumentError.value(this.circleId, "circleId", 'must not be blank');
     }
@@ -1960,16 +2763,17 @@ final class MyCircleMembershipQuery {
 
   final String circleId;
 
-  factory MyCircleMembershipQuery.fromWire(Map<String, Object?> map, [String path = "MyCircleMembershipQuery"]) {
+  factory MyCircleMembershipQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "MyCircleMembershipQuery",
+  ]) {
     _generatedRequestRejectUnknownFields(map, const <String>{"circleId"}, path);
     return MyCircleMembershipQuery(
       circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
     );
   }
 
-  Map<String, Object?> toWire() => <String, Object?>{
-    "circleId": this.circleId,
-  };
+  Map<String, Object?> toWire() => <String, Object?>{"circleId": this.circleId};
 }
 
 final class PendingCircleMembershipListQuery {
@@ -1998,12 +2802,23 @@ final class PendingCircleMembershipListQuery {
   final String? cursor;
   final int limit;
 
-  factory PendingCircleMembershipListQuery.fromWire(Map<String, Object?> map, [String path = "PendingCircleMembershipListQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"circleId", "cursor", "limit"}, path);
+  factory PendingCircleMembershipListQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "PendingCircleMembershipListQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "circleId",
+      "cursor",
+      "limit",
+    }, path);
     return PendingCircleMembershipListQuery(
       circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
-      cursor: map["cursor"] == null ? null : _generatedRequestString(map["cursor"], '$path.cursor'),
-      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 20,
+      cursor: map["cursor"] == null
+          ? null
+          : _generatedRequestString(map["cursor"], '$path.cursor'),
+      limit: map.containsKey("limit")
+          ? _generatedRequestInt(map["limit"], '$path.limit')
+          : 20,
     );
   }
 
@@ -2028,7 +2843,11 @@ final class PersonaCircleListQuery {
        cursor = _normalizeGeneratedOptionalText(cursor),
        limit = limit {
     if (this.personaId.isEmpty) {
-      throw ArgumentError.value(this.personaId, "personaId", 'must not be blank');
+      throw ArgumentError.value(
+        this.personaId,
+        "personaId",
+        'must not be blank',
+      );
     }
     if (this.limit <= 0) {
       throw ArgumentError.value(this.limit, "limit", "must be positive");
@@ -2043,13 +2862,27 @@ final class PersonaCircleListQuery {
   final String? cursor;
   final int limit;
 
-  factory PersonaCircleListQuery.fromWire(Map<String, Object?> map, [String path = "PersonaCircleListQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"personaId", "query", "cursor", "limit"}, path);
+  factory PersonaCircleListQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "PersonaCircleListQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "personaId",
+      "query",
+      "cursor",
+      "limit",
+    }, path);
     return PersonaCircleListQuery(
       personaId: _generatedRequestString(map["personaId"], '$path.personaId'),
-      query: map["query"] == null ? null : _generatedRequestString(map["query"], '$path.query'),
-      cursor: map["cursor"] == null ? null : _generatedRequestString(map["cursor"], '$path.cursor'),
-      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 20,
+      query: map["query"] == null
+          ? null
+          : _generatedRequestString(map["query"], '$path.query'),
+      cursor: map["cursor"] == null
+          ? null
+          : _generatedRequestString(map["cursor"], '$path.cursor'),
+      limit: map.containsKey("limit")
+          ? _generatedRequestInt(map["limit"], '$path.limit')
+          : 20,
     );
   }
 
@@ -2073,7 +2906,11 @@ final class PinCirclePostCommand {
       throw ArgumentError.value(this.circleId, "circleId", 'must not be blank');
     }
     if (this.placementId.isEmpty) {
-      throw ArgumentError.value(this.placementId, "placementId", 'must not be blank');
+      throw ArgumentError.value(
+        this.placementId,
+        "placementId",
+        'must not be blank',
+      );
     }
   }
 
@@ -2081,11 +2918,21 @@ final class PinCirclePostCommand {
   final String placementId;
   final bool enabled;
 
-  factory PinCirclePostCommand.fromWire(Map<String, Object?> map, [String path = "PinCirclePostCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"circleId", "placementId", "enabled"}, path);
+  factory PinCirclePostCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "PinCirclePostCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "circleId",
+      "placementId",
+      "enabled",
+    }, path);
     return PinCirclePostCommand(
       circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
-      placementId: _generatedRequestString(map["placementId"], '$path.placementId'),
+      placementId: _generatedRequestString(
+        map["placementId"],
+        '$path.placementId',
+      ),
       enabled: _generatedRequestBool(map["enabled"], '$path.enabled'),
     );
   }
@@ -2117,12 +2964,21 @@ final class PlaceCirclePostCommand {
   final String postId;
   final String? groupId;
 
-  factory PlaceCirclePostCommand.fromWire(Map<String, Object?> map, [String path = "PlaceCirclePostCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"circleId", "postId", "groupId"}, path);
+  factory PlaceCirclePostCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "PlaceCirclePostCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "circleId",
+      "postId",
+      "groupId",
+    }, path);
     return PlaceCirclePostCommand(
       circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
       postId: _generatedRequestString(map["postId"], '$path.postId'),
-      groupId: map["groupId"] == null ? null : _generatedRequestString(map["groupId"], '$path.groupId'),
+      groupId: map["groupId"] == null
+          ? null
+          : _generatedRequestString(map["groupId"], '$path.groupId'),
     );
   }
 
@@ -2130,70 +2986,6 @@ final class PlaceCirclePostCommand {
     "circleId": this.circleId,
     "postId": this.postId,
     if (this.groupId != null) "groupId": this.groupId!,
-  };
-}
-
-final class ProposeGatheringPlanCommand {
-  ProposeGatheringPlanCommand({
-    required String planId,
-    required int expectedPlanVersion,
-    required String baseRevisionId,
-    required int baseRevisionNumber,
-    required String baseRevisionDigest,
-    required List<PlanItem> items,
-    required PlanAcknowledgementPolicy acknowledgementPolicy,
-    required List<GatheringPlanParticipationRef> affectedParticipationRefs,
-  }) : planId = planId,
-       expectedPlanVersion = expectedPlanVersion,
-       baseRevisionId = baseRevisionId,
-       baseRevisionNumber = baseRevisionNumber,
-       baseRevisionDigest = baseRevisionDigest,
-       items = List.unmodifiable(items),
-       acknowledgementPolicy = acknowledgementPolicy,
-       affectedParticipationRefs = List.unmodifiable(affectedParticipationRefs) {
-    if (this.planId.isEmpty) {
-      throw ArgumentError.value(this.planId, "planId", 'must not be blank');
-    }
-    if (this.baseRevisionId.isEmpty) {
-      throw ArgumentError.value(this.baseRevisionId, "baseRevisionId", 'must not be blank');
-    }
-    if (this.baseRevisionDigest.isEmpty) {
-      throw ArgumentError.value(this.baseRevisionDigest, "baseRevisionDigest", 'must not be blank');
-    }
-  }
-
-  final String planId;
-  final int expectedPlanVersion;
-  final String baseRevisionId;
-  final int baseRevisionNumber;
-  final String baseRevisionDigest;
-  final List<PlanItem> items;
-  final PlanAcknowledgementPolicy acknowledgementPolicy;
-  final List<GatheringPlanParticipationRef> affectedParticipationRefs;
-
-  factory ProposeGatheringPlanCommand.fromWire(Map<String, Object?> map, [String path = "ProposeGatheringPlanCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"planId", "expectedPlanVersion", "baseRevisionId", "baseRevisionNumber", "baseRevisionDigest", "items", "acknowledgementPolicy", "affectedParticipationRefs"}, path);
-    return ProposeGatheringPlanCommand(
-      planId: _generatedRequestString(map["planId"], '$path.planId'),
-      expectedPlanVersion: _generatedRequestInt(map["expectedPlanVersion"], '$path.expectedPlanVersion'),
-      baseRevisionId: _generatedRequestString(map["baseRevisionId"], '$path.baseRevisionId'),
-      baseRevisionNumber: _generatedRequestInt(map["baseRevisionNumber"], '$path.baseRevisionNumber'),
-      baseRevisionDigest: _generatedRequestString(map["baseRevisionDigest"], '$path.baseRevisionDigest'),
-      items: List<PlanItem>.unmodifiable(_generatedRequestList(map["items"], '$path.items').asMap().entries.map((entry) => PlanItem.fromWire(_generatedRequestObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
-      acknowledgementPolicy: PlanAcknowledgementPolicy.fromWire(_generatedRequestObject(map["acknowledgementPolicy"], '$path.acknowledgementPolicy'), '$path.acknowledgementPolicy'),
-      affectedParticipationRefs: List<GatheringPlanParticipationRef>.unmodifiable(_generatedRequestList(map["affectedParticipationRefs"], '$path.affectedParticipationRefs').asMap().entries.map((entry) => GatheringPlanParticipationRef.fromWire(_generatedRequestObject(entry.value, '$path.affectedParticipationRefs' + '[${entry.key}]'), '$path.affectedParticipationRefs' + '[${entry.key}]'))),
-    );
-  }
-
-  Map<String, Object?> toWire() => <String, Object?>{
-    "planId": this.planId,
-    "expectedPlanVersion": this.expectedPlanVersion,
-    "baseRevisionId": this.baseRevisionId,
-    "baseRevisionNumber": this.baseRevisionNumber,
-    "baseRevisionDigest": this.baseRevisionDigest,
-    "items": this.items.map((value) => value.toWire()).toList(growable: false),
-    "acknowledgementPolicy": this.acknowledgementPolicy.toWire(),
-    "affectedParticipationRefs": this.affectedParticipationRefs.map((value) => value.toWire()).toList(growable: false),
   };
 }
 
@@ -2212,7 +3004,11 @@ final class RemoveCircleGroupMembershipCommand {
       throw ArgumentError.value(this.groupId, "groupId", 'must not be blank');
     }
     if (this.personaId.isEmpty) {
-      throw ArgumentError.value(this.personaId, "personaId", 'must not be blank');
+      throw ArgumentError.value(
+        this.personaId,
+        "personaId",
+        'must not be blank',
+      );
     }
   }
 
@@ -2220,8 +3016,15 @@ final class RemoveCircleGroupMembershipCommand {
   final String groupId;
   final String personaId;
 
-  factory RemoveCircleGroupMembershipCommand.fromWire(Map<String, Object?> map, [String path = "RemoveCircleGroupMembershipCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"circleId", "groupId", "personaId"}, path);
+  factory RemoveCircleGroupMembershipCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "RemoveCircleGroupMembershipCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "circleId",
+      "groupId",
+      "personaId",
+    }, path);
     return RemoveCircleGroupMembershipCommand(
       circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
       groupId: _generatedRequestString(map["groupId"], '$path.groupId'),
@@ -2246,18 +3049,31 @@ final class RemoveCirclePostCommand {
       throw ArgumentError.value(this.circleId, "circleId", 'must not be blank');
     }
     if (this.placementId.isEmpty) {
-      throw ArgumentError.value(this.placementId, "placementId", 'must not be blank');
+      throw ArgumentError.value(
+        this.placementId,
+        "placementId",
+        'must not be blank',
+      );
     }
   }
 
   final String circleId;
   final String placementId;
 
-  factory RemoveCirclePostCommand.fromWire(Map<String, Object?> map, [String path = "RemoveCirclePostCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"circleId", "placementId"}, path);
+  factory RemoveCirclePostCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "RemoveCirclePostCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "circleId",
+      "placementId",
+    }, path);
     return RemoveCirclePostCommand(
       circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
-      placementId: _generatedRequestString(map["placementId"], '$path.placementId'),
+      placementId: _generatedRequestString(
+        map["placementId"],
+        '$path.placementId',
+      ),
     );
   }
 
@@ -2282,10 +3098,18 @@ final class ReviewGatheringApplicationCommand {
        expectedGatheringVersion = expectedGatheringVersion,
        expectedParticipationVersion = expectedParticipationVersion {
     if (this.gatheringId.isEmpty) {
-      throw ArgumentError.value(this.gatheringId, "gatheringId", 'must not be blank');
+      throw ArgumentError.value(
+        this.gatheringId,
+        "gatheringId",
+        'must not be blank',
+      );
     }
     if (this.participantPersonaId.isEmpty) {
-      throw ArgumentError.value(this.participantPersonaId, "participantPersonaId", 'must not be blank');
+      throw ArgumentError.value(
+        this.participantPersonaId,
+        "participantPersonaId",
+        'must not be blank',
+      );
     }
   }
 
@@ -2296,15 +3120,45 @@ final class ReviewGatheringApplicationCommand {
   final int expectedGatheringVersion;
   final int expectedParticipationVersion;
 
-  factory ReviewGatheringApplicationCommand.fromWire(Map<String, Object?> map, [String path = "ReviewGatheringApplicationCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"gatheringId", "participantPersonaId", "decision", "reasonRef", "expectedGatheringVersion", "expectedParticipationVersion"}, path);
+  factory ReviewGatheringApplicationCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "ReviewGatheringApplicationCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "gatheringId",
+      "participantPersonaId",
+      "decision",
+      "reasonRef",
+      "expectedGatheringVersion",
+      "expectedParticipationVersion",
+    }, path);
     return ReviewGatheringApplicationCommand(
-      gatheringId: _generatedRequestString(map["gatheringId"], '$path.gatheringId'),
-      participantPersonaId: _generatedRequestString(map["participantPersonaId"], '$path.participantPersonaId'),
-      decision: switch (map["decision"]) { "approve" => GatheringApplicationReviewDecision.approve, "reject" => GatheringApplicationReviewDecision.reject, _ => throw FormatException('$path.decision' + ' has an invalid enum value'), },
-      reasonRef: map["reasonRef"] == null ? null : _generatedRequestString(map["reasonRef"], '$path.reasonRef'),
-      expectedGatheringVersion: _generatedRequestInt(map["expectedGatheringVersion"], '$path.expectedGatheringVersion'),
-      expectedParticipationVersion: _generatedRequestInt(map["expectedParticipationVersion"], '$path.expectedParticipationVersion'),
+      gatheringId: _generatedRequestString(
+        map["gatheringId"],
+        '$path.gatheringId',
+      ),
+      participantPersonaId: _generatedRequestString(
+        map["participantPersonaId"],
+        '$path.participantPersonaId',
+      ),
+      decision: switch (map["decision"]) {
+        "approve" => GatheringApplicationReviewDecision.approve,
+        "reject" => GatheringApplicationReviewDecision.reject,
+        _ => throw FormatException(
+          '$path.decision' + ' has an invalid enum value',
+        ),
+      },
+      reasonRef: map["reasonRef"] == null
+          ? null
+          : _generatedRequestString(map["reasonRef"], '$path.reasonRef'),
+      expectedGatheringVersion: _generatedRequestInt(
+        map["expectedGatheringVersion"],
+        '$path.expectedGatheringVersion',
+      ),
+      expectedParticipationVersion: _generatedRequestInt(
+        map["expectedParticipationVersion"],
+        '$path.expectedParticipationVersion',
+      ),
     );
   }
 
@@ -2331,10 +3185,18 @@ final class TargetGatheringParticipationCommand {
        expectedGatheringVersion = expectedGatheringVersion,
        expectedParticipationVersion = expectedParticipationVersion {
     if (this.gatheringId.isEmpty) {
-      throw ArgumentError.value(this.gatheringId, "gatheringId", 'must not be blank');
+      throw ArgumentError.value(
+        this.gatheringId,
+        "gatheringId",
+        'must not be blank',
+      );
     }
     if (this.participantPersonaId.isEmpty) {
-      throw ArgumentError.value(this.participantPersonaId, "participantPersonaId", 'must not be blank');
+      throw ArgumentError.value(
+        this.participantPersonaId,
+        "participantPersonaId",
+        'must not be blank',
+      );
     }
   }
 
@@ -2344,14 +3206,37 @@ final class TargetGatheringParticipationCommand {
   final int expectedGatheringVersion;
   final int expectedParticipationVersion;
 
-  factory TargetGatheringParticipationCommand.fromWire(Map<String, Object?> map, [String path = "TargetGatheringParticipationCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"gatheringId", "participantPersonaId", "reasonRef", "expectedGatheringVersion", "expectedParticipationVersion"}, path);
+  factory TargetGatheringParticipationCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "TargetGatheringParticipationCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "gatheringId",
+      "participantPersonaId",
+      "reasonRef",
+      "expectedGatheringVersion",
+      "expectedParticipationVersion",
+    }, path);
     return TargetGatheringParticipationCommand(
-      gatheringId: _generatedRequestString(map["gatheringId"], '$path.gatheringId'),
-      participantPersonaId: _generatedRequestString(map["participantPersonaId"], '$path.participantPersonaId'),
-      reasonRef: map["reasonRef"] == null ? null : _generatedRequestString(map["reasonRef"], '$path.reasonRef'),
-      expectedGatheringVersion: _generatedRequestInt(map["expectedGatheringVersion"], '$path.expectedGatheringVersion'),
-      expectedParticipationVersion: _generatedRequestInt(map["expectedParticipationVersion"], '$path.expectedParticipationVersion'),
+      gatheringId: _generatedRequestString(
+        map["gatheringId"],
+        '$path.gatheringId',
+      ),
+      participantPersonaId: _generatedRequestString(
+        map["participantPersonaId"],
+        '$path.participantPersonaId',
+      ),
+      reasonRef: map["reasonRef"] == null
+          ? null
+          : _generatedRequestString(map["reasonRef"], '$path.reasonRef'),
+      expectedGatheringVersion: _generatedRequestInt(
+        map["expectedGatheringVersion"],
+        '$path.expectedGatheringVersion',
+      ),
+      expectedParticipationVersion: _generatedRequestInt(
+        map["expectedParticipationVersion"],
+        '$path.expectedParticipationVersion',
+      ),
     );
   }
 
@@ -2429,28 +3314,112 @@ final class UpdateCircleCommand {
   final String? linkedHomepageType;
   final String? linkedHomepageTitle;
 
-  factory UpdateCircleCommand.fromWire(Map<String, Object?> map, [String path = "UpdateCircleCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"circleId", "name", "description", "rulesText", "welcomeMessage", "coverUrl", "iconUrl", "category", "subCategory", "tags", "visibility", "joinPolicy", "kind", "displaySubjectType", "followEnabled", "autoSyncChat", "linkedHomepageId", "linkedHomepageType", "linkedHomepageTitle"}, path);
+  factory UpdateCircleCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "UpdateCircleCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "circleId",
+      "name",
+      "description",
+      "rulesText",
+      "welcomeMessage",
+      "coverUrl",
+      "iconUrl",
+      "category",
+      "subCategory",
+      "tags",
+      "visibility",
+      "joinPolicy",
+      "kind",
+      "displaySubjectType",
+      "followEnabled",
+      "autoSyncChat",
+      "linkedHomepageId",
+      "linkedHomepageType",
+      "linkedHomepageTitle",
+    }, path);
     return UpdateCircleCommand(
       circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
-      name: map["name"] == null ? null : _generatedRequestString(map["name"], '$path.name'),
-      description: map["description"] == null ? null : _generatedRequestString(map["description"], '$path.description'),
-      rulesText: map["rulesText"] == null ? null : _generatedRequestString(map["rulesText"], '$path.rulesText'),
-      welcomeMessage: map["welcomeMessage"] == null ? null : _generatedRequestString(map["welcomeMessage"], '$path.welcomeMessage'),
-      coverUrl: map["coverUrl"] == null ? null : _generatedRequestString(map["coverUrl"], '$path.coverUrl'),
-      iconUrl: map["iconUrl"] == null ? null : _generatedRequestString(map["iconUrl"], '$path.iconUrl'),
-      category: map["category"] == null ? null : _generatedRequestString(map["category"], '$path.category'),
-      subCategory: map["subCategory"] == null ? null : _generatedRequestString(map["subCategory"], '$path.subCategory'),
-      tags: map["tags"] == null ? null : List<String>.unmodifiable(_generatedRequestList(map["tags"], '$path.tags').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.tags' + '[${entry.key}]'))),
-      visibility: map["visibility"] == null ? null : _generatedRequestString(map["visibility"], '$path.visibility'),
-      joinPolicy: map["joinPolicy"] == null ? null : _generatedRequestString(map["joinPolicy"], '$path.joinPolicy'),
-      kind: map["kind"] == null ? null : _generatedRequestString(map["kind"], '$path.kind'),
-      displaySubjectType: map["displaySubjectType"] == null ? null : _generatedRequestString(map["displaySubjectType"], '$path.displaySubjectType'),
-      followEnabled: map["followEnabled"] == null ? null : _generatedRequestBool(map["followEnabled"], '$path.followEnabled'),
-      autoSyncChat: map["autoSyncChat"] == null ? null : _generatedRequestBool(map["autoSyncChat"], '$path.autoSyncChat'),
-      linkedHomepageId: map["linkedHomepageId"] == null ? null : _generatedRequestString(map["linkedHomepageId"], '$path.linkedHomepageId'),
-      linkedHomepageType: map["linkedHomepageType"] == null ? null : _generatedRequestString(map["linkedHomepageType"], '$path.linkedHomepageType'),
-      linkedHomepageTitle: map["linkedHomepageTitle"] == null ? null : _generatedRequestString(map["linkedHomepageTitle"], '$path.linkedHomepageTitle'),
+      name: map["name"] == null
+          ? null
+          : _generatedRequestString(map["name"], '$path.name'),
+      description: map["description"] == null
+          ? null
+          : _generatedRequestString(map["description"], '$path.description'),
+      rulesText: map["rulesText"] == null
+          ? null
+          : _generatedRequestString(map["rulesText"], '$path.rulesText'),
+      welcomeMessage: map["welcomeMessage"] == null
+          ? null
+          : _generatedRequestString(
+              map["welcomeMessage"],
+              '$path.welcomeMessage',
+            ),
+      coverUrl: map["coverUrl"] == null
+          ? null
+          : _generatedRequestString(map["coverUrl"], '$path.coverUrl'),
+      iconUrl: map["iconUrl"] == null
+          ? null
+          : _generatedRequestString(map["iconUrl"], '$path.iconUrl'),
+      category: map["category"] == null
+          ? null
+          : _generatedRequestString(map["category"], '$path.category'),
+      subCategory: map["subCategory"] == null
+          ? null
+          : _generatedRequestString(map["subCategory"], '$path.subCategory'),
+      tags: map["tags"] == null
+          ? null
+          : List<String>.unmodifiable(
+              _generatedRequestList(
+                map["tags"],
+                '$path.tags',
+              ).asMap().entries.map(
+                (entry) => _generatedRequestString(
+                  entry.value,
+                  '$path.tags' + '[${entry.key}]',
+                ),
+              ),
+            ),
+      visibility: map["visibility"] == null
+          ? null
+          : _generatedRequestString(map["visibility"], '$path.visibility'),
+      joinPolicy: map["joinPolicy"] == null
+          ? null
+          : _generatedRequestString(map["joinPolicy"], '$path.joinPolicy'),
+      kind: map["kind"] == null
+          ? null
+          : _generatedRequestString(map["kind"], '$path.kind'),
+      displaySubjectType: map["displaySubjectType"] == null
+          ? null
+          : _generatedRequestString(
+              map["displaySubjectType"],
+              '$path.displaySubjectType',
+            ),
+      followEnabled: map["followEnabled"] == null
+          ? null
+          : _generatedRequestBool(map["followEnabled"], '$path.followEnabled'),
+      autoSyncChat: map["autoSyncChat"] == null
+          ? null
+          : _generatedRequestBool(map["autoSyncChat"], '$path.autoSyncChat'),
+      linkedHomepageId: map["linkedHomepageId"] == null
+          ? null
+          : _generatedRequestString(
+              map["linkedHomepageId"],
+              '$path.linkedHomepageId',
+            ),
+      linkedHomepageType: map["linkedHomepageType"] == null
+          ? null
+          : _generatedRequestString(
+              map["linkedHomepageType"],
+              '$path.linkedHomepageType',
+            ),
+      linkedHomepageTitle: map["linkedHomepageTitle"] == null
+          ? null
+          : _generatedRequestString(
+              map["linkedHomepageTitle"],
+              '$path.linkedHomepageTitle',
+            ),
     );
   }
 
@@ -2464,16 +3433,21 @@ final class UpdateCircleCommand {
     if (this.iconUrl != null) "iconUrl": this.iconUrl!,
     if (this.category != null) "category": this.category!,
     if (this.subCategory != null) "subCategory": this.subCategory!,
-    if (this.tags != null) "tags": this.tags!.map((value) => value).toList(growable: false),
+    if (this.tags != null)
+      "tags": this.tags!.map((value) => value).toList(growable: false),
     if (this.visibility != null) "visibility": this.visibility!,
     if (this.joinPolicy != null) "joinPolicy": this.joinPolicy!,
     if (this.kind != null) "kind": this.kind!,
-    if (this.displaySubjectType != null) "displaySubjectType": this.displaySubjectType!,
+    if (this.displaySubjectType != null)
+      "displaySubjectType": this.displaySubjectType!,
     if (this.followEnabled != null) "followEnabled": this.followEnabled!,
     if (this.autoSyncChat != null) "autoSyncChat": this.autoSyncChat!,
-    if (this.linkedHomepageId != null) "linkedHomepageId": this.linkedHomepageId!,
-    if (this.linkedHomepageType != null) "linkedHomepageType": this.linkedHomepageType!,
-    if (this.linkedHomepageTitle != null) "linkedHomepageTitle": this.linkedHomepageTitle!,
+    if (this.linkedHomepageId != null)
+      "linkedHomepageId": this.linkedHomepageId!,
+    if (this.linkedHomepageType != null)
+      "linkedHomepageType": this.linkedHomepageType!,
+    if (this.linkedHomepageTitle != null)
+      "linkedHomepageTitle": this.linkedHomepageTitle!,
   };
 }
 
@@ -2496,7 +3470,11 @@ final class UpdateCircleFileCommand {
       throw ArgumentError.value(this.fileId, "fileId", 'must not be blank');
     }
     if (this.expectedVersion <= 0) {
-      throw ArgumentError.value(this.expectedVersion, "expectedVersion", "must be positive");
+      throw ArgumentError.value(
+        this.expectedVersion,
+        "expectedVersion",
+        "must be positive",
+      );
     }
   }
 
@@ -2506,14 +3484,35 @@ final class UpdateCircleFileCommand {
   final String? parentFolderId;
   final String? name;
 
-  factory UpdateCircleFileCommand.fromWire(Map<String, Object?> map, [String path = "UpdateCircleFileCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"circleId", "fileId", "expectedVersion", "parentFolderId", "name"}, path);
+  factory UpdateCircleFileCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "UpdateCircleFileCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "circleId",
+      "fileId",
+      "expectedVersion",
+      "parentFolderId",
+      "name",
+    }, path);
     return UpdateCircleFileCommand(
       circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
       fileId: _generatedRequestString(map["fileId"], '$path.fileId'),
-      expectedVersion: int.parse(_generatedRequestString(map["expectedVersion"], '$path.expectedVersion')),
-      parentFolderId: map["parentFolderId"] == null ? null : _generatedRequestString(map["parentFolderId"], '$path.parentFolderId'),
-      name: map["name"] == null ? null : _generatedRequestString(map["name"], '$path.name'),
+      expectedVersion: int.parse(
+        _generatedRequestString(
+          map["expectedVersion"],
+          '$path.expectedVersion',
+        ),
+      ),
+      parentFolderId: map["parentFolderId"] == null
+          ? null
+          : _generatedRequestString(
+              map["parentFolderId"],
+              '$path.parentFolderId',
+            ),
+      name: map["name"] == null
+          ? null
+          : _generatedRequestString(map["name"], '$path.name'),
     );
   }
 
@@ -2557,7 +3556,11 @@ final class UpdateCircleGroupCommand {
       throw ArgumentError.value(this.groupId, "groupId", 'must not be blank');
     }
     if (this.expectedVersion <= 0) {
-      throw ArgumentError.value(this.expectedVersion, "expectedVersion", "must be positive");
+      throw ArgumentError.value(
+        this.expectedVersion,
+        "expectedVersion",
+        "must be positive",
+      );
     }
   }
 
@@ -2573,20 +3576,84 @@ final class UpdateCircleGroupCommand {
   final bool? storageEnabled;
   final bool? noticeEnabled;
 
-  factory UpdateCircleGroupCommand.fromWire(Map<String, Object?> map, [String path = "UpdateCircleGroupCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"circleId", "groupId", "expectedVersion", "parentGroupId", "nodeType", "name", "description", "visibility", "joinPolicy", "storageEnabled", "noticeEnabled"}, path);
+  factory UpdateCircleGroupCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "UpdateCircleGroupCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "circleId",
+      "groupId",
+      "expectedVersion",
+      "parentGroupId",
+      "nodeType",
+      "name",
+      "description",
+      "visibility",
+      "joinPolicy",
+      "storageEnabled",
+      "noticeEnabled",
+    }, path);
     return UpdateCircleGroupCommand(
       circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
       groupId: _generatedRequestString(map["groupId"], '$path.groupId'),
-      expectedVersion: int.parse(_generatedRequestString(map["expectedVersion"], '$path.expectedVersion')),
-      parentGroupId: map["parentGroupId"] == null ? null : _generatedRequestString(map["parentGroupId"], '$path.parentGroupId'),
-      nodeType: map["nodeType"] == null ? null : switch (map["nodeType"]) { "generic" => OrganizationNodeType.generic, "college" => OrganizationNodeType.college, "grade" => OrganizationNodeType.grade, "classroom" => OrganizationNodeType.classroom, "department" => OrganizationNodeType.department, "team" => OrganizationNodeType.team, _ => throw FormatException('$path.nodeType' + ' has an invalid enum value'), },
-      name: map["name"] == null ? null : _generatedRequestString(map["name"], '$path.name'),
-      description: map["description"] == null ? null : _generatedRequestString(map["description"], '$path.description'),
-      visibility: map["visibility"] == null ? null : switch (map["visibility"]) { "public" => CircleGroupVisibility.public, "private" => CircleGroupVisibility.private, _ => throw FormatException('$path.visibility' + ' has an invalid enum value'), },
-      joinPolicy: map["joinPolicy"] == null ? null : switch (map["joinPolicy"]) { "apply_only" => CircleGroupJoinPolicy.applyOnly, "invite_only" => CircleGroupJoinPolicy.inviteOnly, _ => throw FormatException('$path.joinPolicy' + ' has an invalid enum value'), },
-      storageEnabled: map["storageEnabled"] == null ? null : _generatedRequestBool(map["storageEnabled"], '$path.storageEnabled'),
-      noticeEnabled: map["noticeEnabled"] == null ? null : _generatedRequestBool(map["noticeEnabled"], '$path.noticeEnabled'),
+      expectedVersion: int.parse(
+        _generatedRequestString(
+          map["expectedVersion"],
+          '$path.expectedVersion',
+        ),
+      ),
+      parentGroupId: map["parentGroupId"] == null
+          ? null
+          : _generatedRequestString(
+              map["parentGroupId"],
+              '$path.parentGroupId',
+            ),
+      nodeType: map["nodeType"] == null
+          ? null
+          : switch (map["nodeType"]) {
+              "generic" => OrganizationNodeType.generic,
+              "college" => OrganizationNodeType.college,
+              "grade" => OrganizationNodeType.grade,
+              "classroom" => OrganizationNodeType.classroom,
+              "department" => OrganizationNodeType.department,
+              "team" => OrganizationNodeType.team,
+              _ => throw FormatException(
+                '$path.nodeType' + ' has an invalid enum value',
+              ),
+            },
+      name: map["name"] == null
+          ? null
+          : _generatedRequestString(map["name"], '$path.name'),
+      description: map["description"] == null
+          ? null
+          : _generatedRequestString(map["description"], '$path.description'),
+      visibility: map["visibility"] == null
+          ? null
+          : switch (map["visibility"]) {
+              "public" => CircleGroupVisibility.public,
+              "private" => CircleGroupVisibility.private,
+              _ => throw FormatException(
+                '$path.visibility' + ' has an invalid enum value',
+              ),
+            },
+      joinPolicy: map["joinPolicy"] == null
+          ? null
+          : switch (map["joinPolicy"]) {
+              "apply_only" => CircleGroupJoinPolicy.applyOnly,
+              "invite_only" => CircleGroupJoinPolicy.inviteOnly,
+              _ => throw FormatException(
+                '$path.joinPolicy' + ' has an invalid enum value',
+              ),
+            },
+      storageEnabled: map["storageEnabled"] == null
+          ? null
+          : _generatedRequestBool(
+              map["storageEnabled"],
+              '$path.storageEnabled',
+            ),
+      noticeEnabled: map["noticeEnabled"] == null
+          ? null
+          : _generatedRequestBool(map["noticeEnabled"], '$path.noticeEnabled'),
     );
   }
 
@@ -2622,7 +3689,11 @@ final class UpdateCircleGroupMembershipRoleCommand {
       throw ArgumentError.value(this.groupId, "groupId", 'must not be blank');
     }
     if (this.personaId.isEmpty) {
-      throw ArgumentError.value(this.personaId, "personaId", 'must not be blank');
+      throw ArgumentError.value(
+        this.personaId,
+        "personaId",
+        'must not be blank',
+      );
     }
   }
 
@@ -2631,13 +3702,26 @@ final class UpdateCircleGroupMembershipRoleCommand {
   final String personaId;
   final CircleGroupMembershipRole role;
 
-  factory UpdateCircleGroupMembershipRoleCommand.fromWire(Map<String, Object?> map, [String path = "UpdateCircleGroupMembershipRoleCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"circleId", "groupId", "personaId", "role"}, path);
+  factory UpdateCircleGroupMembershipRoleCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "UpdateCircleGroupMembershipRoleCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "circleId",
+      "groupId",
+      "personaId",
+      "role",
+    }, path);
     return UpdateCircleGroupMembershipRoleCommand(
       circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
       groupId: _generatedRequestString(map["groupId"], '$path.groupId'),
       personaId: _generatedRequestString(map["personaId"], '$path.personaId'),
-      role: switch (map["role"]) { "owner" => CircleGroupMembershipRole.owner, "manager" => CircleGroupMembershipRole.manager, "member" => CircleGroupMembershipRole.member, _ => throw FormatException('$path.role' + ' has an invalid enum value'), },
+      role: switch (map["role"]) {
+        "owner" => CircleGroupMembershipRole.owner,
+        "manager" => CircleGroupMembershipRole.manager,
+        "member" => CircleGroupMembershipRole.member,
+        _ => throw FormatException('$path.role' + ' has an invalid enum value'),
+      },
     );
   }
 
@@ -2661,7 +3745,11 @@ final class UpdateCircleMembershipRoleCommand {
       throw ArgumentError.value(this.circleId, "circleId", 'must not be blank');
     }
     if (this.personaId.isEmpty) {
-      throw ArgumentError.value(this.personaId, "personaId", 'must not be blank');
+      throw ArgumentError.value(
+        this.personaId,
+        "personaId",
+        'must not be blank',
+      );
     }
   }
 
@@ -2669,12 +3757,24 @@ final class UpdateCircleMembershipRoleCommand {
   final String personaId;
   final CircleMemberRole role;
 
-  factory UpdateCircleMembershipRoleCommand.fromWire(Map<String, Object?> map, [String path = "UpdateCircleMembershipRoleCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"circleId", "personaId", "role"}, path);
+  factory UpdateCircleMembershipRoleCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "UpdateCircleMembershipRoleCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "circleId",
+      "personaId",
+      "role",
+    }, path);
     return UpdateCircleMembershipRoleCommand(
       circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
       personaId: _generatedRequestString(map["personaId"], '$path.personaId'),
-      role: switch (map["role"]) { "owner" => CircleMemberRole.owner, "admin" => CircleMemberRole.admin, "member" => CircleMemberRole.member, _ => throw FormatException('$path.role' + ' has an invalid enum value'), },
+      role: switch (map["role"]) {
+        "owner" => CircleMemberRole.owner,
+        "admin" => CircleMemberRole.admin,
+        "member" => CircleMemberRole.member,
+        _ => throw FormatException('$path.role' + ' has an invalid enum value'),
+      },
     );
   }
 
@@ -2702,17 +3802,38 @@ final class UpdateCircleSectionsCommand {
   final String circleId;
   final List<CircleSectionConfig> sections;
 
-  factory UpdateCircleSectionsCommand.fromWire(Map<String, Object?> map, [String path = "UpdateCircleSectionsCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"circleId", "sections"}, path);
+  factory UpdateCircleSectionsCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "UpdateCircleSectionsCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "circleId",
+      "sections",
+    }, path);
     return UpdateCircleSectionsCommand(
       circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
-      sections: List<CircleSectionConfig>.unmodifiable(_generatedRequestList(map["sections"], '$path.sections').asMap().entries.map((entry) => CircleSectionConfig.fromWire(_generatedRequestObject(entry.value, '$path.sections' + '[${entry.key}]'), '$path.sections' + '[${entry.key}]'))),
+      sections: List<CircleSectionConfig>.unmodifiable(
+        _generatedRequestList(
+          map["sections"],
+          '$path.sections',
+        ).asMap().entries.map(
+          (entry) => CircleSectionConfig.fromWire(
+            _generatedRequestObject(
+              entry.value,
+              '$path.sections' + '[${entry.key}]',
+            ),
+            '$path.sections' + '[${entry.key}]',
+          ),
+        ),
+      ),
     );
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
     "circleId": this.circleId,
-    "sections": this.sections.map((value) => value.toWire()).toList(growable: false),
+    "sections": this.sections
+        .map((value) => value.toWire())
+        .toList(growable: false),
   };
 }
 
@@ -2735,7 +3856,11 @@ final class UpdateGatheringCommand {
        hostBinding = hostBinding,
        acknowledgementDeadlineAt = acknowledgementDeadlineAt {
     if (this.gatheringId.isEmpty) {
-      throw ArgumentError.value(this.gatheringId, "gatheringId", 'must not be blank');
+      throw ArgumentError.value(
+        this.gatheringId,
+        "gatheringId",
+        'must not be blank',
+      );
     }
   }
 
@@ -2748,17 +3873,55 @@ final class UpdateGatheringCommand {
   final HostBinding hostBinding;
   final DateTime? acknowledgementDeadlineAt;
 
-  factory UpdateGatheringCommand.fromWire(Map<String, Object?> map, [String path = "UpdateGatheringCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"gatheringId", "expectedGatheringVersion", "purpose", "schedule", "place", "policySet", "hostBinding", "acknowledgementDeadlineAt"}, path);
+  factory UpdateGatheringCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "UpdateGatheringCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "gatheringId",
+      "expectedGatheringVersion",
+      "purpose",
+      "schedule",
+      "place",
+      "policySet",
+      "hostBinding",
+      "acknowledgementDeadlineAt",
+    }, path);
     return UpdateGatheringCommand(
-      gatheringId: _generatedRequestString(map["gatheringId"], '$path.gatheringId'),
-      expectedGatheringVersion: _generatedRequestInt(map["expectedGatheringVersion"], '$path.expectedGatheringVersion'),
-      purpose: GatheringPurpose.fromWire(_generatedRequestObject(map["purpose"], '$path.purpose'), '$path.purpose'),
-      schedule: GatheringSchedule.fromWire(_generatedRequestObject(map["schedule"], '$path.schedule'), '$path.schedule'),
-      place: GatheringPlace.fromWire(_generatedRequestObject(map["place"], '$path.place'), '$path.place'),
-      policySet: GatheringPolicySet.fromWire(_generatedRequestObject(map["policySet"], '$path.policySet'), '$path.policySet'),
-      hostBinding: HostBinding.fromWire(_generatedRequestObject(map["hostBinding"], '$path.hostBinding'), '$path.hostBinding'),
-      acknowledgementDeadlineAt: map["acknowledgementDeadlineAt"] == null ? null : _generatedRequestTimestamp(map["acknowledgementDeadlineAt"], '$path.acknowledgementDeadlineAt'),
+      gatheringId: _generatedRequestString(
+        map["gatheringId"],
+        '$path.gatheringId',
+      ),
+      expectedGatheringVersion: _generatedRequestInt(
+        map["expectedGatheringVersion"],
+        '$path.expectedGatheringVersion',
+      ),
+      purpose: GatheringPurpose.fromWire(
+        _generatedRequestObject(map["purpose"], '$path.purpose'),
+        '$path.purpose',
+      ),
+      schedule: GatheringSchedule.fromWire(
+        _generatedRequestObject(map["schedule"], '$path.schedule'),
+        '$path.schedule',
+      ),
+      place: GatheringPlace.fromWire(
+        _generatedRequestObject(map["place"], '$path.place'),
+        '$path.place',
+      ),
+      policySet: GatheringPolicySet.fromWire(
+        _generatedRequestObject(map["policySet"], '$path.policySet'),
+        '$path.policySet',
+      ),
+      hostBinding: HostBinding.fromWire(
+        _generatedRequestObject(map["hostBinding"], '$path.hostBinding'),
+        '$path.hostBinding',
+      ),
+      acknowledgementDeadlineAt: map["acknowledgementDeadlineAt"] == null
+          ? null
+          : _generatedRequestTimestamp(
+              map["acknowledgementDeadlineAt"],
+              '$path.acknowledgementDeadlineAt',
+            ),
     );
   }
 
@@ -2770,56 +3933,68 @@ final class UpdateGatheringCommand {
     "place": this.place.toWire(),
     "policySet": this.policySet.toWire(),
     "hostBinding": this.hostBinding.toWire(),
-    if (this.acknowledgementDeadlineAt != null) "acknowledgementDeadlineAt": this.acknowledgementDeadlineAt!.toUtc().toIso8601String(),
+    if (this.acknowledgementDeadlineAt != null)
+      "acknowledgementDeadlineAt": this.acknowledgementDeadlineAt!
+          .toUtc()
+          .toIso8601String(),
   };
 }
 
-CloudOperationRequestPayload encodeCircleCircleArchiveCircleGeneratedRequest(ArchiveCircleCommand request) {
+CloudOperationRequestPayload encodeCircleCircleArchiveCircleGeneratedRequest(
+  ArchiveCircleCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "circleId": request.circleId,
-    },
+    pathParameters: <String, String>{"circleId": request.circleId},
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleCreateCircleGeneratedRequest(CreateCircleCommand request) {
+CloudOperationRequestPayload encodeCircleCircleCreateCircleGeneratedRequest(
+  CreateCircleCommand request,
+) {
   return CloudOperationRequestPayload(
     body: <String, Object?>{
       "name": request.name,
       if (request.description != null) "description": request.description!,
       if (request.rulesText != null) "rulesText": request.rulesText!,
-      if (request.welcomeMessage != null) "welcomeMessage": request.welcomeMessage!,
+      if (request.welcomeMessage != null)
+        "welcomeMessage": request.welcomeMessage!,
       if (request.coverUrl != null) "coverUrl": request.coverUrl!,
       if (request.iconUrl != null) "iconUrl": request.iconUrl!,
       if (request.category != null) "category": request.category!,
       if (request.subCategory != null) "subCategory": request.subCategory!,
-      if (request.tags.isNotEmpty) "tags": request.tags.map((value) => value).toList(growable: false),
+      if (request.tags.isNotEmpty)
+        "tags": request.tags.map((value) => value).toList(growable: false),
       if (request.visibility != null) "visibility": request.visibility!,
       if (request.joinPolicy != null) "joinPolicy": request.joinPolicy!,
       if (request.kind != null) "kind": request.kind!,
-      if (request.displaySubjectType != null) "displaySubjectType": request.displaySubjectType!,
-      if (request.followEnabled != null) "followEnabled": request.followEnabled!,
+      if (request.displaySubjectType != null)
+        "displaySubjectType": request.displaySubjectType!,
+      if (request.followEnabled != null)
+        "followEnabled": request.followEnabled!,
       if (request.autoSyncChat != null) "autoSyncChat": request.autoSyncChat!,
-      if (request.linkedHomepageId != null) "linkedHomepageId": request.linkedHomepageId!,
-      if (request.linkedHomepageType != null) "linkedHomepageType": request.linkedHomepageType!,
-      if (request.linkedHomepageTitle != null) "linkedHomepageTitle": request.linkedHomepageTitle!,
+      if (request.linkedHomepageId != null)
+        "linkedHomepageId": request.linkedHomepageId!,
+      if (request.linkedHomepageType != null)
+        "linkedHomepageType": request.linkedHomepageType!,
+      if (request.linkedHomepageTitle != null)
+        "linkedHomepageTitle": request.linkedHomepageTitle!,
     },
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleGetCircleGeneratedRequest(CircleDetailQuery request) {
+CloudOperationRequestPayload encodeCircleCircleGetCircleGeneratedRequest(
+  CircleDetailQuery request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "circleId": request.circleId,
-    },
+    pathParameters: <String, String>{"circleId": request.circleId},
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleGetCircleFeedGeneratedRequest(CircleFeedQuery request) {
+CloudOperationRequestPayload encodeCircleCircleGetCircleFeedGeneratedRequest(
+  CircleFeedQuery request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "circleId": request.circleId,
-    },
+    pathParameters: <String, String>{"circleId": request.circleId},
     queryParameters: <String, String>{
       if (request.identity != null) "identity": request.identity!,
       if (request.type != null) "type": request.type!,
@@ -2830,23 +4005,26 @@ CloudOperationRequestPayload encodeCircleCircleGetCircleFeedGeneratedRequest(Cir
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleGetCircleImpactGeneratedRequest(CircleImpactQuery request) {
+CloudOperationRequestPayload encodeCircleCircleGetCircleImpactGeneratedRequest(
+  CircleImpactQuery request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "circleId": request.circleId,
-    },
+    pathParameters: <String, String>{"circleId": request.circleId},
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleGetCircleStatsGeneratedRequest(CircleStatsQuery request) {
+CloudOperationRequestPayload encodeCircleCircleGetCircleStatsGeneratedRequest(
+  CircleStatsQuery request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "circleId": request.circleId,
-    },
+    pathParameters: <String, String>{"circleId": request.circleId},
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleListCircleDiscoveryFeedGeneratedRequest(CircleDiscoveryFeedQuery request) {
+CloudOperationRequestPayload
+encodeCircleCircleListCircleDiscoveryFeedGeneratedRequest(
+  CircleDiscoveryFeedQuery request,
+) {
   return CloudOperationRequestPayload(
     queryParameters: <String, String>{
       if (request.category != null) "category": request.category!,
@@ -2859,7 +4037,9 @@ CloudOperationRequestPayload encodeCircleCircleListCircleDiscoveryFeedGeneratedR
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleListCirclesGeneratedRequest(CircleListQuery request) {
+CloudOperationRequestPayload encodeCircleCircleListCirclesGeneratedRequest(
+  CircleListQuery request,
+) {
   return CloudOperationRequestPayload(
     queryParameters: <String, String>{
       if (request.category != null) "category": request.category!,
@@ -2872,7 +4052,9 @@ CloudOperationRequestPayload encodeCircleCircleListCirclesGeneratedRequest(Circl
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleSearchCirclesGeneratedRequest(CircleSearchQuery request) {
+CloudOperationRequestPayload encodeCircleCircleSearchCirclesGeneratedRequest(
+  CircleSearchQuery request,
+) {
   return CloudOperationRequestPayload(
     queryParameters: <String, String>{
       "query": request.query,
@@ -2884,46 +4066,59 @@ CloudOperationRequestPayload encodeCircleCircleSearchCirclesGeneratedRequest(Cir
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleUpdateCircleGeneratedRequest(UpdateCircleCommand request) {
+CloudOperationRequestPayload encodeCircleCircleUpdateCircleGeneratedRequest(
+  UpdateCircleCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "circleId": request.circleId,
-    },
+    pathParameters: <String, String>{"circleId": request.circleId},
     body: <String, Object?>{
       if (request.name != null) "name": request.name!,
       if (request.description != null) "description": request.description!,
       if (request.rulesText != null) "rulesText": request.rulesText!,
-      if (request.welcomeMessage != null) "welcomeMessage": request.welcomeMessage!,
+      if (request.welcomeMessage != null)
+        "welcomeMessage": request.welcomeMessage!,
       if (request.coverUrl != null) "coverUrl": request.coverUrl!,
       if (request.iconUrl != null) "iconUrl": request.iconUrl!,
       if (request.category != null) "category": request.category!,
       if (request.subCategory != null) "subCategory": request.subCategory!,
-      if (request.tags != null) "tags": request.tags!.map((value) => value).toList(growable: false),
+      if (request.tags != null)
+        "tags": request.tags!.map((value) => value).toList(growable: false),
       if (request.visibility != null) "visibility": request.visibility!,
       if (request.joinPolicy != null) "joinPolicy": request.joinPolicy!,
       if (request.kind != null) "kind": request.kind!,
-      if (request.displaySubjectType != null) "displaySubjectType": request.displaySubjectType!,
-      if (request.followEnabled != null) "followEnabled": request.followEnabled!,
+      if (request.displaySubjectType != null)
+        "displaySubjectType": request.displaySubjectType!,
+      if (request.followEnabled != null)
+        "followEnabled": request.followEnabled!,
       if (request.autoSyncChat != null) "autoSyncChat": request.autoSyncChat!,
-      if (request.linkedHomepageId != null) "linkedHomepageId": request.linkedHomepageId!,
-      if (request.linkedHomepageType != null) "linkedHomepageType": request.linkedHomepageType!,
-      if (request.linkedHomepageTitle != null) "linkedHomepageTitle": request.linkedHomepageTitle!,
+      if (request.linkedHomepageId != null)
+        "linkedHomepageId": request.linkedHomepageId!,
+      if (request.linkedHomepageType != null)
+        "linkedHomepageType": request.linkedHomepageType!,
+      if (request.linkedHomepageTitle != null)
+        "linkedHomepageTitle": request.linkedHomepageTitle!,
     },
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleUpdateCircleSectionsGeneratedRequest(UpdateCircleSectionsCommand request) {
+CloudOperationRequestPayload
+encodeCircleCircleUpdateCircleSectionsGeneratedRequest(
+  UpdateCircleSectionsCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "circleId": request.circleId,
-    },
+    pathParameters: <String, String>{"circleId": request.circleId},
     body: <String, Object?>{
-      "sections": request.sections.map((value) => value.toWire()).toList(growable: false),
+      "sections": request.sections
+          .map((value) => value.toWire())
+          .toList(growable: false),
     },
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleBehaviorFactReportCircleBehaviorGeneratedRequest(AppendCircleBehaviorFactCommand request) {
+CloudOperationRequestPayload
+encodeCircleCircleBehaviorFactReportCircleBehaviorGeneratedRequest(
+  AppendCircleBehaviorFactCommand request,
+) {
   return CloudOperationRequestPayload(
     body: <String, Object?>{
       "circleId": request.circleId,
@@ -2932,14 +4127,16 @@ CloudOperationRequestPayload encodeCircleCircleBehaviorFactReportCircleBehaviorG
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleFileCreateCircleFileGeneratedRequest(CreateCircleFileCommand request) {
+CloudOperationRequestPayload
+encodeCircleCircleFileCreateCircleFileGeneratedRequest(
+  CreateCircleFileCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "circleId": request.circleId,
-    },
+    pathParameters: <String, String>{"circleId": request.circleId},
     body: <String, Object?>{
       if (request.groupId != null) "groupId": request.groupId!,
-      if (request.parentFolderId != null) "parentFolderId": request.parentFolderId!,
+      if (request.parentFolderId != null)
+        "parentFolderId": request.parentFolderId!,
       "name": request.name,
       "fileType": request.fileType.wireName,
       if (request.assetId != null) "assetId": request.assetId!,
@@ -2947,7 +4144,10 @@ CloudOperationRequestPayload encodeCircleCircleFileCreateCircleFileGeneratedRequ
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleFileDeleteCircleFileGeneratedRequest(DeleteCircleFileCommand request) {
+CloudOperationRequestPayload
+encodeCircleCircleFileDeleteCircleFileGeneratedRequest(
+  DeleteCircleFileCommand request,
+) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
       "circleId": request.circleId,
@@ -2956,7 +4156,8 @@ CloudOperationRequestPayload encodeCircleCircleFileDeleteCircleFileGeneratedRequ
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleFileGetCircleFileGeneratedRequest(CircleFileQuery request) {
+CloudOperationRequestPayload
+encodeCircleCircleFileGetCircleFileGeneratedRequest(CircleFileQuery request) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
       "circleId": request.circleId,
@@ -2965,37 +4166,44 @@ CloudOperationRequestPayload encodeCircleCircleFileGetCircleFileGeneratedRequest
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleFileListCircleFilesGeneratedRequest(CircleFileListQuery request) {
+CloudOperationRequestPayload
+encodeCircleCircleFileListCircleFilesGeneratedRequest(
+  CircleFileListQuery request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "circleId": request.circleId,
-    },
+    pathParameters: <String, String>{"circleId": request.circleId},
     queryParameters: <String, String>{
       if (request.groupId != null) "groupId": request.groupId!,
-      if (request.parentFolderId != null) "parentFolderId": request.parentFolderId!,
+      if (request.parentFolderId != null)
+        "parentFolderId": request.parentFolderId!,
       if (request.cursor != null) "cursor": request.cursor!,
       "limit": (request.limit).toString(),
     },
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleFileUpdateCircleFileGeneratedRequest(UpdateCircleFileCommand request) {
+CloudOperationRequestPayload
+encodeCircleCircleFileUpdateCircleFileGeneratedRequest(
+  UpdateCircleFileCommand request,
+) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
       "circleId": request.circleId,
       "fileId": request.fileId,
     },
-    headers: <String, String>{
-      "If-Match": '"${request.expectedVersion}"',
-    },
+    headers: <String, String>{"If-Match": '"${request.expectedVersion}"'},
     body: <String, Object?>{
-      if (request.parentFolderId != null) "parentFolderId": request.parentFolderId!,
+      if (request.parentFolderId != null)
+        "parentFolderId": request.parentFolderId!,
       if (request.name != null) "name": request.name!,
     },
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleGroupArchiveCircleGroupGeneratedRequest(ArchiveCircleGroupCommand request) {
+CloudOperationRequestPayload
+encodeCircleCircleGroupArchiveCircleGroupGeneratedRequest(
+  ArchiveCircleGroupCommand request,
+) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
       "circleId": request.circleId,
@@ -3004,13 +4212,15 @@ CloudOperationRequestPayload encodeCircleCircleGroupArchiveCircleGroupGeneratedR
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleGroupCreateCircleGroupGeneratedRequest(CreateCircleGroupCommand request) {
+CloudOperationRequestPayload
+encodeCircleCircleGroupCreateCircleGroupGeneratedRequest(
+  CreateCircleGroupCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "circleId": request.circleId,
-    },
+    pathParameters: <String, String>{"circleId": request.circleId},
     body: <String, Object?>{
-      if (request.parentGroupId != null) "parentGroupId": request.parentGroupId!,
+      if (request.parentGroupId != null)
+        "parentGroupId": request.parentGroupId!,
       "groupType": request.groupType.wireName,
       if (request.nodeType != null) "nodeType": request.nodeType!.wireName,
       "name": request.name,
@@ -3023,7 +4233,10 @@ CloudOperationRequestPayload encodeCircleCircleGroupCreateCircleGroupGeneratedRe
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleGroupGetCircleGroupGeneratedRequest(CircleGroupQuery request) {
+CloudOperationRequestPayload
+encodeCircleCircleGroupGetCircleGroupGeneratedRequest(
+  CircleGroupQuery request,
+) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
       "circleId": request.circleId,
@@ -3032,60 +4245,77 @@ CloudOperationRequestPayload encodeCircleCircleGroupGetCircleGroupGeneratedReque
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleGroupListCircleGroupsGeneratedRequest(CircleGroupListQuery request) {
+CloudOperationRequestPayload
+encodeCircleCircleGroupListCircleGroupsGeneratedRequest(
+  CircleGroupListQuery request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "circleId": request.circleId,
-    },
+    pathParameters: <String, String>{"circleId": request.circleId},
     queryParameters: <String, String>{
-      if (request.groupType != null) "groupType": (request.groupType!.wireName).toString(),
-      if (request.visibility != null) "visibility": (request.visibility!.wireName).toString(),
-      if (request.parentGroupId != null) "parentGroupId": request.parentGroupId!,
-      if (request.nodeType != null) "nodeType": (request.nodeType!.wireName).toString(),
+      if (request.groupType != null)
+        "groupType": (request.groupType!.wireName).toString(),
+      if (request.visibility != null)
+        "visibility": (request.visibility!.wireName).toString(),
+      if (request.parentGroupId != null)
+        "parentGroupId": request.parentGroupId!,
+      if (request.nodeType != null)
+        "nodeType": (request.nodeType!.wireName).toString(),
       if (request.cursor != null) "cursor": request.cursor!,
       "limit": (request.limit).toString(),
     },
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleGroupSearchCircleGroupsGeneratedRequest(CircleGroupSearchQuery request) {
+CloudOperationRequestPayload
+encodeCircleCircleGroupSearchCircleGroupsGeneratedRequest(
+  CircleGroupSearchQuery request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "circleId": request.circleId,
-    },
+    pathParameters: <String, String>{"circleId": request.circleId},
     queryParameters: <String, String>{
       "query": request.query,
-      if (request.visibility != null) "visibility": (request.visibility!.wireName).toString(),
-      if (request.groupType != null) "groupType": (request.groupType!.wireName).toString(),
+      if (request.visibility != null)
+        "visibility": (request.visibility!.wireName).toString(),
+      if (request.groupType != null)
+        "groupType": (request.groupType!.wireName).toString(),
       if (request.cursor != null) "cursor": request.cursor!,
       "limit": (request.limit).toString(),
     },
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleGroupUpdateCircleGroupGeneratedRequest(UpdateCircleGroupCommand request) {
+CloudOperationRequestPayload
+encodeCircleCircleGroupUpdateCircleGroupGeneratedRequest(
+  UpdateCircleGroupCommand request,
+) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
       "circleId": request.circleId,
       "groupId": request.groupId,
     },
-    headers: <String, String>{
-      "If-Match": '"${request.expectedVersion}"',
-    },
+    headers: <String, String>{"If-Match": '"${request.expectedVersion}"'},
     body: <String, Object?>{
-      if (request.parentGroupId != null) "parentGroupId": request.parentGroupId!,
+      if (request.parentGroupId != null)
+        "parentGroupId": request.parentGroupId!,
       if (request.nodeType != null) "nodeType": request.nodeType!.wireName,
       if (request.name != null) "name": request.name!,
       if (request.description != null) "description": request.description!,
-      if (request.visibility != null) "visibility": request.visibility!.wireName,
-      if (request.joinPolicy != null) "joinPolicy": request.joinPolicy!.wireName,
-      if (request.storageEnabled != null) "storageEnabled": request.storageEnabled!,
-      if (request.noticeEnabled != null) "noticeEnabled": request.noticeEnabled!,
+      if (request.visibility != null)
+        "visibility": request.visibility!.wireName,
+      if (request.joinPolicy != null)
+        "joinPolicy": request.joinPolicy!.wireName,
+      if (request.storageEnabled != null)
+        "storageEnabled": request.storageEnabled!,
+      if (request.noticeEnabled != null)
+        "noticeEnabled": request.noticeEnabled!,
     },
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleGroupMembershipApplyJoinCircleGroupGeneratedRequest(ApplyCircleGroupMembershipCommand request) {
+CloudOperationRequestPayload
+encodeCircleCircleGroupMembershipApplyJoinCircleGroupGeneratedRequest(
+  ApplyCircleGroupMembershipCommand request,
+) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
       "circleId": request.circleId,
@@ -3094,7 +4324,10 @@ CloudOperationRequestPayload encodeCircleCircleGroupMembershipApplyJoinCircleGro
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleGroupMembershipApproveCircleGroupMemberGeneratedRequest(DecideCircleGroupMembershipCommand request) {
+CloudOperationRequestPayload
+encodeCircleCircleGroupMembershipApproveCircleGroupMemberGeneratedRequest(
+  DecideCircleGroupMembershipCommand request,
+) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
       "circleId": request.circleId,
@@ -3104,7 +4337,10 @@ CloudOperationRequestPayload encodeCircleCircleGroupMembershipApproveCircleGroup
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleGroupMembershipGetMyCircleGroupMembershipGeneratedRequest(MyCircleGroupMembershipQuery request) {
+CloudOperationRequestPayload
+encodeCircleCircleGroupMembershipGetMyCircleGroupMembershipGeneratedRequest(
+  MyCircleGroupMembershipQuery request,
+) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
       "circleId": request.circleId,
@@ -3113,7 +4349,10 @@ CloudOperationRequestPayload encodeCircleCircleGroupMembershipGetMyCircleGroupMe
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleGroupMembershipLeaveCircleGroupGeneratedRequest(LeaveCircleGroupMembershipCommand request) {
+CloudOperationRequestPayload
+encodeCircleCircleGroupMembershipLeaveCircleGroupGeneratedRequest(
+  LeaveCircleGroupMembershipCommand request,
+) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
       "circleId": request.circleId,
@@ -3122,7 +4361,10 @@ CloudOperationRequestPayload encodeCircleCircleGroupMembershipLeaveCircleGroupGe
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleGroupMembershipListCircleGroupMembershipsGeneratedRequest(CircleGroupMembershipListQuery request) {
+CloudOperationRequestPayload
+encodeCircleCircleGroupMembershipListCircleGroupMembershipsGeneratedRequest(
+  CircleGroupMembershipListQuery request,
+) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
       "circleId": request.circleId,
@@ -3136,7 +4378,10 @@ CloudOperationRequestPayload encodeCircleCircleGroupMembershipListCircleGroupMem
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleGroupMembershipRejectCircleGroupMemberGeneratedRequest(DecideCircleGroupMembershipCommand request) {
+CloudOperationRequestPayload
+encodeCircleCircleGroupMembershipRejectCircleGroupMemberGeneratedRequest(
+  DecideCircleGroupMembershipCommand request,
+) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
       "circleId": request.circleId,
@@ -3146,7 +4391,10 @@ CloudOperationRequestPayload encodeCircleCircleGroupMembershipRejectCircleGroupM
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleGroupMembershipRemoveCircleGroupMemberGeneratedRequest(RemoveCircleGroupMembershipCommand request) {
+CloudOperationRequestPayload
+encodeCircleCircleGroupMembershipRemoveCircleGroupMemberGeneratedRequest(
+  RemoveCircleGroupMembershipCommand request,
+) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
       "circleId": request.circleId,
@@ -3156,20 +4404,24 @@ CloudOperationRequestPayload encodeCircleCircleGroupMembershipRemoveCircleGroupM
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleGroupMembershipUpdateCircleGroupMemberRoleGeneratedRequest(UpdateCircleGroupMembershipRoleCommand request) {
+CloudOperationRequestPayload
+encodeCircleCircleGroupMembershipUpdateCircleGroupMemberRoleGeneratedRequest(
+  UpdateCircleGroupMembershipRoleCommand request,
+) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
       "circleId": request.circleId,
       "groupId": request.groupId,
       "personaId": request.personaId,
     },
-    body: <String, Object?>{
-      "role": request.role.wireName,
-    },
+    body: <String, Object?>{"role": request.role.wireName},
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleMembershipApproveCircleMemberGeneratedRequest(DecideCircleMembershipCommand request) {
+CloudOperationRequestPayload
+encodeCircleCircleMembershipApproveCircleMemberGeneratedRequest(
+  DecideCircleMembershipCommand request,
+) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
       "circleId": request.circleId,
@@ -3178,35 +4430,39 @@ CloudOperationRequestPayload encodeCircleCircleMembershipApproveCircleMemberGene
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleMembershipGetMyCircleMembershipGeneratedRequest(MyCircleMembershipQuery request) {
+CloudOperationRequestPayload
+encodeCircleCircleMembershipGetMyCircleMembershipGeneratedRequest(
+  MyCircleMembershipQuery request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "circleId": request.circleId,
-    },
+    pathParameters: <String, String>{"circleId": request.circleId},
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleMembershipJoinCircleGeneratedRequest(JoinCircleMembershipCommand request) {
+CloudOperationRequestPayload
+encodeCircleCircleMembershipJoinCircleGeneratedRequest(
+  JoinCircleMembershipCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "circleId": request.circleId,
-    },
+    pathParameters: <String, String>{"circleId": request.circleId},
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleMembershipLeaveCircleGeneratedRequest(LeaveCircleMembershipCommand request) {
+CloudOperationRequestPayload
+encodeCircleCircleMembershipLeaveCircleGeneratedRequest(
+  LeaveCircleMembershipCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "circleId": request.circleId,
-    },
+    pathParameters: <String, String>{"circleId": request.circleId},
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleMembershipListCircleMembershipsGeneratedRequest(CircleMembershipListQuery request) {
+CloudOperationRequestPayload
+encodeCircleCircleMembershipListCircleMembershipsGeneratedRequest(
+  CircleMembershipListQuery request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "circleId": request.circleId,
-    },
+    pathParameters: <String, String>{"circleId": request.circleId},
     queryParameters: <String, String>{
       if (request.cursor != null) "cursor": request.cursor!,
       "limit": (request.limit).toString(),
@@ -3214,11 +4470,12 @@ CloudOperationRequestPayload encodeCircleCircleMembershipListCircleMembershipsGe
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleMembershipListPendingCircleMembershipsGeneratedRequest(PendingCircleMembershipListQuery request) {
+CloudOperationRequestPayload
+encodeCircleCircleMembershipListPendingCircleMembershipsGeneratedRequest(
+  PendingCircleMembershipListQuery request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "circleId": request.circleId,
-    },
+    pathParameters: <String, String>{"circleId": request.circleId},
     queryParameters: <String, String>{
       if (request.cursor != null) "cursor": request.cursor!,
       "limit": (request.limit).toString(),
@@ -3226,11 +4483,12 @@ CloudOperationRequestPayload encodeCircleCircleMembershipListPendingCircleMember
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleMembershipListPersonaCirclesGeneratedRequest(PersonaCircleListQuery request) {
+CloudOperationRequestPayload
+encodeCircleCircleMembershipListPersonaCirclesGeneratedRequest(
+  PersonaCircleListQuery request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "personaId": request.personaId,
-    },
+    pathParameters: <String, String>{"personaId": request.personaId},
     queryParameters: <String, String>{
       if (request.cursor != null) "cursor": request.cursor!,
       "limit": (request.limit).toString(),
@@ -3239,7 +4497,10 @@ CloudOperationRequestPayload encodeCircleCircleMembershipListPersonaCirclesGener
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleMembershipRejectCircleMemberGeneratedRequest(DecideCircleMembershipCommand request) {
+CloudOperationRequestPayload
+encodeCircleCircleMembershipRejectCircleMemberGeneratedRequest(
+  DecideCircleMembershipCommand request,
+) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
       "circleId": request.circleId,
@@ -3248,47 +4509,51 @@ CloudOperationRequestPayload encodeCircleCircleMembershipRejectCircleMemberGener
   );
 }
 
-CloudOperationRequestPayload encodeCircleCircleMembershipUpdateCircleMembershipRoleGeneratedRequest(UpdateCircleMembershipRoleCommand request) {
+CloudOperationRequestPayload
+encodeCircleCircleMembershipUpdateCircleMembershipRoleGeneratedRequest(
+  UpdateCircleMembershipRoleCommand request,
+) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
       "circleId": request.circleId,
       "personaId": request.personaId,
     },
-    body: <String, Object?>{
-      "role": request.role.wireName,
-    },
+    body: <String, Object?>{"role": request.role.wireName},
   );
 }
 
-CloudOperationRequestPayload encodeCircleCirclePostPlacementFeatureCirclePostGeneratedRequest(FeatureCirclePostCommand request) {
+CloudOperationRequestPayload
+encodeCircleCirclePostPlacementFeatureCirclePostGeneratedRequest(
+  FeatureCirclePostCommand request,
+) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
       "circleId": request.circleId,
       "placementId": request.placementId,
     },
-    body: <String, Object?>{
-      "enabled": request.enabled,
-    },
+    body: <String, Object?>{"enabled": request.enabled},
   );
 }
 
-CloudOperationRequestPayload encodeCircleCirclePostPlacementPinCirclePostGeneratedRequest(PinCirclePostCommand request) {
+CloudOperationRequestPayload
+encodeCircleCirclePostPlacementPinCirclePostGeneratedRequest(
+  PinCirclePostCommand request,
+) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
       "circleId": request.circleId,
       "placementId": request.placementId,
     },
-    body: <String, Object?>{
-      "enabled": request.enabled,
-    },
+    body: <String, Object?>{"enabled": request.enabled},
   );
 }
 
-CloudOperationRequestPayload encodeCircleCirclePostPlacementPlacePostInCircleGeneratedRequest(PlaceCirclePostCommand request) {
+CloudOperationRequestPayload
+encodeCircleCirclePostPlacementPlacePostInCircleGeneratedRequest(
+  PlaceCirclePostCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "circleId": request.circleId,
-    },
+    pathParameters: <String, String>{"circleId": request.circleId},
     body: <String, Object?>{
       "postId": request.postId,
       if (request.groupId != null) "groupId": request.groupId!,
@@ -3296,7 +4561,10 @@ CloudOperationRequestPayload encodeCircleCirclePostPlacementPlacePostInCircleGen
   );
 }
 
-CloudOperationRequestPayload encodeCircleCirclePostPlacementRemovePostFromCircleGeneratedRequest(RemoveCirclePostCommand request) {
+CloudOperationRequestPayload
+encodeCircleCirclePostPlacementRemovePostFromCircleGeneratedRequest(
+  RemoveCirclePostCommand request,
+) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
       "circleId": request.circleId,
@@ -3305,11 +4573,12 @@ CloudOperationRequestPayload encodeCircleCirclePostPlacementRemovePostFromCircle
   );
 }
 
-CloudOperationRequestPayload encodeCircleGatheringAcceptGatheringInvitationGeneratedRequest(GatheringParticipationVersionCommand request) {
+CloudOperationRequestPayload
+encodeCircleGatheringAcceptGatheringInvitationGeneratedRequest(
+  GatheringParticipationVersionCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "gatheringId": request.gatheringId,
-    },
+    pathParameters: <String, String>{"gatheringId": request.gatheringId},
     body: <String, Object?>{
       "expectedGatheringVersion": request.expectedGatheringVersion,
       "expectedParticipationVersion": request.expectedParticipationVersion,
@@ -3317,70 +4586,87 @@ CloudOperationRequestPayload encodeCircleGatheringAcceptGatheringInvitationGener
   );
 }
 
-CloudOperationRequestPayload encodeCircleGatheringApplyToGatheringGeneratedRequest(ApplyToGatheringCommand request) {
+CloudOperationRequestPayload
+encodeCircleGatheringApplyToGatheringGeneratedRequest(
+  ApplyToGatheringCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "gatheringId": request.gatheringId,
-    },
+    pathParameters: <String, String>{"gatheringId": request.gatheringId},
     body: <String, Object?>{
       "expectedGatheringVersion": request.expectedGatheringVersion,
       "expectedParticipationVersion": request.expectedParticipationVersion,
-      "answers": request.answers.map((value) => value.toWire()).toList(growable: false),
+      "answers": request.answers
+          .map((value) => value.toWire())
+          .toList(growable: false),
     },
   );
 }
 
-CloudOperationRequestPayload encodeCircleGatheringCancelGatheringGeneratedRequest(GatheringReasonCommand request) {
+CloudOperationRequestPayload
+encodeCircleGatheringCancelGatheringGeneratedRequest(
+  GatheringReasonCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "gatheringId": request.gatheringId,
-    },
+    pathParameters: <String, String>{"gatheringId": request.gatheringId},
     body: <String, Object?>{
       "reasonRef": request.reasonRef,
-      "evidenceRefs": request.evidenceRefs.map((value) => value.toWire()).toList(growable: false),
+      "evidenceRefs": request.evidenceRefs
+          .map((value) => value.toWire())
+          .toList(growable: false),
       "expectedGatheringVersion": request.expectedGatheringVersion,
     },
   );
 }
 
-CloudOperationRequestPayload encodeCircleGatheringChangeGatheringCapacityGeneratedRequest(ChangeGatheringCapacityCommand request) {
+CloudOperationRequestPayload
+encodeCircleGatheringChangeGatheringCapacityGeneratedRequest(
+  ChangeGatheringCapacityCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "gatheringId": request.gatheringId,
-    },
+    pathParameters: <String, String>{"gatheringId": request.gatheringId},
     body: <String, Object?>{
       "maxParticipants": request.maxParticipants,
       "expectedGatheringVersion": request.expectedGatheringVersion,
-      if (request.acknowledgementDeadlineAt != null) "acknowledgementDeadlineAt": request.acknowledgementDeadlineAt!.toUtc().toIso8601String(),
+      if (request.acknowledgementDeadlineAt != null)
+        "acknowledgementDeadlineAt": request.acknowledgementDeadlineAt!
+            .toUtc()
+            .toIso8601String(),
     },
   );
 }
 
-CloudOperationRequestPayload encodeCircleGatheringCompleteGatheringGeneratedRequest(GatheringVersionCommand request) {
+CloudOperationRequestPayload
+encodeCircleGatheringCompleteGatheringGeneratedRequest(
+  GatheringVersionCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "gatheringId": request.gatheringId,
-    },
+    pathParameters: <String, String>{"gatheringId": request.gatheringId},
     body: <String, Object?>{
       "expectedGatheringVersion": request.expectedGatheringVersion,
     },
   );
 }
 
-CloudOperationRequestPayload encodeCircleGatheringCompleteGatheringSelfGeneratedRequest(DeclareGatheringAttendanceCommand request) {
+CloudOperationRequestPayload
+encodeCircleGatheringCompleteGatheringSelfGeneratedRequest(
+  DeclareGatheringAttendanceCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "gatheringId": request.gatheringId,
-    },
+    pathParameters: <String, String>{"gatheringId": request.gatheringId},
     body: <String, Object?>{
-      "evidenceRefs": request.evidenceRefs.map((value) => value.toWire()).toList(growable: false),
+      "evidenceRefs": request.evidenceRefs
+          .map((value) => value.toWire())
+          .toList(growable: false),
       "expectedGatheringVersion": request.expectedGatheringVersion,
       "expectedParticipationVersion": request.expectedParticipationVersion,
     },
   );
 }
 
-CloudOperationRequestPayload encodeCircleGatheringCreateGatheringDraftGeneratedRequest(CreateGatheringDraftCommand request) {
+CloudOperationRequestPayload
+encodeCircleGatheringCreateGatheringDraftGeneratedRequest(
+  CreateGatheringDraftCommand request,
+) {
   return CloudOperationRequestPayload(
     body: <String, Object?>{
       "hostBinding": request.hostBinding.toWire(),
@@ -3393,11 +4679,12 @@ CloudOperationRequestPayload encodeCircleGatheringCreateGatheringDraftGeneratedR
   );
 }
 
-CloudOperationRequestPayload encodeCircleGatheringDeclineGatheringInvitationGeneratedRequest(GatheringParticipationVersionCommand request) {
+CloudOperationRequestPayload
+encodeCircleGatheringDeclineGatheringInvitationGeneratedRequest(
+  GatheringParticipationVersionCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "gatheringId": request.gatheringId,
-    },
+    pathParameters: <String, String>{"gatheringId": request.gatheringId},
     body: <String, Object?>{
       "expectedGatheringVersion": request.expectedGatheringVersion,
       "expectedParticipationVersion": request.expectedParticipationVersion,
@@ -3405,40 +4692,45 @@ CloudOperationRequestPayload encodeCircleGatheringDeclineGatheringInvitationGene
   );
 }
 
-CloudOperationRequestPayload encodeCircleGatheringEndGatheringEarlyGeneratedRequest(GatheringReasonCommand request) {
+CloudOperationRequestPayload
+encodeCircleGatheringEndGatheringEarlyGeneratedRequest(
+  GatheringReasonCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "gatheringId": request.gatheringId,
-    },
+    pathParameters: <String, String>{"gatheringId": request.gatheringId},
     body: <String, Object?>{
       "reasonRef": request.reasonRef,
-      "evidenceRefs": request.evidenceRefs.map((value) => value.toWire()).toList(growable: false),
+      "evidenceRefs": request.evidenceRefs
+          .map((value) => value.toWire())
+          .toList(growable: false),
       "expectedGatheringVersion": request.expectedGatheringVersion,
     },
   );
 }
 
-CloudOperationRequestPayload encodeCircleGatheringGetGatheringGeneratedRequest(GatheringIDQuery request) {
+CloudOperationRequestPayload encodeCircleGatheringGetGatheringGeneratedRequest(
+  GatheringIDQuery request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "gatheringId": request.gatheringId,
-    },
+    pathParameters: <String, String>{"gatheringId": request.gatheringId},
   );
 }
 
-CloudOperationRequestPayload encodeCircleGatheringGetPublicGatheringGeneratedRequest(GatheringIDQuery request) {
+CloudOperationRequestPayload
+encodeCircleGatheringGetPublicGatheringGeneratedRequest(
+  GatheringIDQuery request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "gatheringId": request.gatheringId,
-    },
+    pathParameters: <String, String>{"gatheringId": request.gatheringId},
   );
 }
 
-CloudOperationRequestPayload encodeCircleGatheringInviteToGatheringGeneratedRequest(InviteToGatheringCommand request) {
+CloudOperationRequestPayload
+encodeCircleGatheringInviteToGatheringGeneratedRequest(
+  InviteToGatheringCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "gatheringId": request.gatheringId,
-    },
+    pathParameters: <String, String>{"gatheringId": request.gatheringId},
     body: <String, Object?>{
       "participantPersonaId": request.participantPersonaId,
       "seatHoldUntil": request.seatHoldUntil.toUtc().toIso8601String(),
@@ -3448,11 +4740,12 @@ CloudOperationRequestPayload encodeCircleGatheringInviteToGatheringGeneratedRequ
   );
 }
 
-CloudOperationRequestPayload encodeCircleGatheringJoinOpenGatheringGeneratedRequest(GatheringParticipationVersionCommand request) {
+CloudOperationRequestPayload
+encodeCircleGatheringJoinOpenGatheringGeneratedRequest(
+  GatheringParticipationVersionCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "gatheringId": request.gatheringId,
-    },
+    pathParameters: <String, String>{"gatheringId": request.gatheringId},
     body: <String, Object?>{
       "expectedGatheringVersion": request.expectedGatheringVersion,
       "expectedParticipationVersion": request.expectedParticipationVersion,
@@ -3460,7 +4753,10 @@ CloudOperationRequestPayload encodeCircleGatheringJoinOpenGatheringGeneratedRequ
   );
 }
 
-CloudOperationRequestPayload encodeCircleGatheringListGatheringsByHostGeneratedRequest(GatheringListByHostQuery request) {
+CloudOperationRequestPayload
+encodeCircleGatheringListGatheringsByHostGeneratedRequest(
+  GatheringListByHostQuery request,
+) {
   return CloudOperationRequestPayload(
     queryParameters: <String, String>{
       "hostSubjectKind": (request.hostSubjectKind.wireName).toString(),
@@ -3471,7 +4767,10 @@ CloudOperationRequestPayload encodeCircleGatheringListGatheringsByHostGeneratedR
   );
 }
 
-CloudOperationRequestPayload encodeCircleGatheringListGatheringsBySourceGeneratedRequest(GatheringListBySourceQuery request) {
+CloudOperationRequestPayload
+encodeCircleGatheringListGatheringsBySourceGeneratedRequest(
+  GatheringListBySourceQuery request,
+) {
   return CloudOperationRequestPayload(
     queryParameters: <String, String>{
       "sourceObjectTypeRef": request.sourceObjectTypeRef,
@@ -3482,7 +4781,10 @@ CloudOperationRequestPayload encodeCircleGatheringListGatheringsBySourceGenerate
   );
 }
 
-CloudOperationRequestPayload encodeCircleGatheringListMyHostedGatheringsGeneratedRequest(GatheringMineListQuery request) {
+CloudOperationRequestPayload
+encodeCircleGatheringListMyHostedGatheringsGeneratedRequest(
+  GatheringMineListQuery request,
+) {
   return CloudOperationRequestPayload(
     queryParameters: <String, String>{
       if (request.cursor != null) "cursor": request.cursor!,
@@ -3491,35 +4793,39 @@ CloudOperationRequestPayload encodeCircleGatheringListMyHostedGatheringsGenerate
   );
 }
 
-CloudOperationRequestPayload encodeCircleGatheringPauseGatheringAdmissionGeneratedRequest(ChangeGatheringAdmissionCommand request) {
+CloudOperationRequestPayload
+encodeCircleGatheringPauseGatheringAdmissionGeneratedRequest(
+  ChangeGatheringAdmissionCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "gatheringId": request.gatheringId,
-    },
+    pathParameters: <String, String>{"gatheringId": request.gatheringId},
     body: <String, Object?>{
       if (request.reasonRef != null) "reasonRef": request.reasonRef!,
       "expectedGatheringVersion": request.expectedGatheringVersion,
-      "expectedAdmissionControlVersion": request.expectedAdmissionControlVersion,
+      "expectedAdmissionControlVersion":
+          request.expectedAdmissionControlVersion,
     },
   );
 }
 
-CloudOperationRequestPayload encodeCircleGatheringPublishGatheringGeneratedRequest(GatheringVersionCommand request) {
+CloudOperationRequestPayload
+encodeCircleGatheringPublishGatheringGeneratedRequest(
+  GatheringVersionCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "gatheringId": request.gatheringId,
-    },
+    pathParameters: <String, String>{"gatheringId": request.gatheringId},
     body: <String, Object?>{
       "expectedGatheringVersion": request.expectedGatheringVersion,
     },
   );
 }
 
-CloudOperationRequestPayload encodeCircleGatheringRemoveGatheringParticipantGeneratedRequest(TargetGatheringParticipationCommand request) {
+CloudOperationRequestPayload
+encodeCircleGatheringRemoveGatheringParticipantGeneratedRequest(
+  TargetGatheringParticipationCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "gatheringId": request.gatheringId,
-    },
+    pathParameters: <String, String>{"gatheringId": request.gatheringId},
     body: <String, Object?>{
       "participantPersonaId": request.participantPersonaId,
       if (request.reasonRef != null) "reasonRef": request.reasonRef!,
@@ -3529,24 +4835,27 @@ CloudOperationRequestPayload encodeCircleGatheringRemoveGatheringParticipantGene
   );
 }
 
-CloudOperationRequestPayload encodeCircleGatheringResumeGatheringAdmissionGeneratedRequest(ChangeGatheringAdmissionCommand request) {
+CloudOperationRequestPayload
+encodeCircleGatheringResumeGatheringAdmissionGeneratedRequest(
+  ChangeGatheringAdmissionCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "gatheringId": request.gatheringId,
-    },
+    pathParameters: <String, String>{"gatheringId": request.gatheringId},
     body: <String, Object?>{
       if (request.reasonRef != null) "reasonRef": request.reasonRef!,
       "expectedGatheringVersion": request.expectedGatheringVersion,
-      "expectedAdmissionControlVersion": request.expectedAdmissionControlVersion,
+      "expectedAdmissionControlVersion":
+          request.expectedAdmissionControlVersion,
     },
   );
 }
 
-CloudOperationRequestPayload encodeCircleGatheringReviewGatheringApplicationGeneratedRequest(ReviewGatheringApplicationCommand request) {
+CloudOperationRequestPayload
+encodeCircleGatheringReviewGatheringApplicationGeneratedRequest(
+  ReviewGatheringApplicationCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "gatheringId": request.gatheringId,
-    },
+    pathParameters: <String, String>{"gatheringId": request.gatheringId},
     body: <String, Object?>{
       "participantPersonaId": request.participantPersonaId,
       "decision": request.decision.wireName,
@@ -3557,24 +4866,28 @@ CloudOperationRequestPayload encodeCircleGatheringReviewGatheringApplicationGene
   );
 }
 
-CloudOperationRequestPayload encodeCircleGatheringSafetyTerminateGatheringGeneratedRequest(GatheringReasonCommand request) {
+CloudOperationRequestPayload
+encodeCircleGatheringSafetyTerminateGatheringGeneratedRequest(
+  GatheringReasonCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "gatheringId": request.gatheringId,
-    },
+    pathParameters: <String, String>{"gatheringId": request.gatheringId},
     body: <String, Object?>{
       "reasonRef": request.reasonRef,
-      "evidenceRefs": request.evidenceRefs.map((value) => value.toWire()).toList(growable: false),
+      "evidenceRefs": request.evidenceRefs
+          .map((value) => value.toWire())
+          .toList(growable: false),
       "expectedGatheringVersion": request.expectedGatheringVersion,
     },
   );
 }
 
-CloudOperationRequestPayload encodeCircleGatheringUpdateGatheringGeneratedRequest(UpdateGatheringCommand request) {
+CloudOperationRequestPayload
+encodeCircleGatheringUpdateGatheringGeneratedRequest(
+  UpdateGatheringCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "gatheringId": request.gatheringId,
-    },
+    pathParameters: <String, String>{"gatheringId": request.gatheringId},
     body: <String, Object?>{
       "expectedGatheringVersion": request.expectedGatheringVersion,
       "purpose": request.purpose.toWire(),
@@ -3582,16 +4895,20 @@ CloudOperationRequestPayload encodeCircleGatheringUpdateGatheringGeneratedReques
       "place": request.place.toWire(),
       "policySet": request.policySet.toWire(),
       "hostBinding": request.hostBinding.toWire(),
-      if (request.acknowledgementDeadlineAt != null) "acknowledgementDeadlineAt": request.acknowledgementDeadlineAt!.toUtc().toIso8601String(),
+      if (request.acknowledgementDeadlineAt != null)
+        "acknowledgementDeadlineAt": request.acknowledgementDeadlineAt!
+            .toUtc()
+            .toIso8601String(),
     },
   );
 }
 
-CloudOperationRequestPayload encodeCircleGatheringWatchGatheringAvailabilityGeneratedRequest(GatheringAvailabilityWatchCommand request) {
+CloudOperationRequestPayload
+encodeCircleGatheringWatchGatheringAvailabilityGeneratedRequest(
+  GatheringAvailabilityWatchCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "gatheringId": request.gatheringId,
-    },
+    pathParameters: <String, String>{"gatheringId": request.gatheringId},
     body: <String, Object?>{
       "expectedGatheringVersion": request.expectedGatheringVersion,
       "expectedWatchVersion": request.expectedWatchVersion,
@@ -3599,67 +4916,24 @@ CloudOperationRequestPayload encodeCircleGatheringWatchGatheringAvailabilityGene
   );
 }
 
-CloudOperationRequestPayload encodeCircleGatheringPlanCommitGatheringPlanProposalGeneratedRequest(CommitGatheringPlanProposalCommand request) {
+CloudOperationRequestPayload
+encodeCircleGatheringPlanGetGatheringPlanGeneratedRequest(
+  GatheringPlanByGatheringQuery request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "planId": request.planId,
-    },
-    body: <String, Object?>{
-      "proposalId": request.proposalId,
-      "expectedPlanVersion": request.expectedPlanVersion,
-      "expectedProposalDigest": request.expectedProposalDigest,
-      "expectedBaseRevisionDigest": request.expectedBaseRevisionDigest,
-    },
+    pathParameters: <String, String>{"gatheringId": request.gatheringId},
   );
 }
 
-CloudOperationRequestPayload encodeCircleGatheringPlanCreateGatheringPlanGeneratedRequest(CreateGatheringPlanCommand request) {
+CloudOperationRequestPayload
+encodeCircleGatheringPlanListGatheringPlanRevisionsGeneratedRequest(
+  GatheringPlanRevisionPageQuery request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "gatheringId": request.gatheringId,
-    },
-    body: <String, Object?>{
-      "items": request.items.map((value) => value.toWire()).toList(growable: false),
-      "acknowledgementPolicy": request.acknowledgementPolicy.toWire(),
-      "affectedParticipationRefs": request.affectedParticipationRefs.map((value) => value.toWire()).toList(growable: false),
-    },
-  );
-}
-
-CloudOperationRequestPayload encodeCircleGatheringPlanGetGatheringPlanGeneratedRequest(GatheringPlanByGatheringQuery request) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "gatheringId": request.gatheringId,
-    },
-  );
-}
-
-CloudOperationRequestPayload encodeCircleGatheringPlanListGatheringPlanRevisionsGeneratedRequest(GatheringPlanRevisionPageQuery request) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "planId": request.planId,
-    },
+    pathParameters: <String, String>{"planId": request.planId},
     queryParameters: <String, String>{
       if (request.cursor != null) "cursor": request.cursor!,
       if (request.limit != null) "limit": (request.limit!).toString(),
     },
   );
 }
-
-CloudOperationRequestPayload encodeCircleGatheringPlanProposeGatheringPlanGeneratedRequest(ProposeGatheringPlanCommand request) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "planId": request.planId,
-    },
-    body: <String, Object?>{
-      "expectedPlanVersion": request.expectedPlanVersion,
-      "baseRevisionId": request.baseRevisionId,
-      "baseRevisionNumber": request.baseRevisionNumber,
-      "baseRevisionDigest": request.baseRevisionDigest,
-      "items": request.items.map((value) => value.toWire()).toList(growable: false),
-      "acknowledgementPolicy": request.acknowledgementPolicy.toWire(),
-      "affectedParticipationRefs": request.affectedParticipationRefs.map((value) => value.toWire()).toList(growable: false),
-    },
-  );
-}
-

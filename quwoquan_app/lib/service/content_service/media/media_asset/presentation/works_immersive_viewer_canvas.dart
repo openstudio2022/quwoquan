@@ -558,35 +558,56 @@ class _WorksVideoEpisodeStageState extends State<_WorksVideoEpisodeStage> {
       children: [
         KeyedSubtree(
           key: ValueKey<String>('works-video-${widget.postId}-${widget.index}'),
-          child: VideoPlayerWidget(
-            key: ValueKey<String>(
-              'works-video-identity-${widget.postId}-${widget.identity}',
-            ),
-            deliveryReference: item.deliveryReference,
-            adaptiveDeliveryReference: item.adaptiveDeliveryReference,
-            adaptiveDescriptorVersion: item.adaptiveDescriptorVersion,
-            thumbnailReference: item.coverReference,
-            initialize: widget.initialize,
-            autoPlay: widget.autoPlay,
-            showControls: false,
-            // The immersive PageView must stay in Flutter's texture layer.
-            // Android inline players keep the factory's platform-view default.
-            viewType: VideoViewType.textureView,
-            verifiedDuration: item.verifiedDuration,
-            onTap: widget.tapEnabled
-                ? () => unawaited(_session.toggle())
-                : null,
-            playbackSession: _session,
-            onPlaybackSessionCreated: (registeredSession) =>
-                widget.onSessionReady(
-                  widget.index,
-                  widget.identity,
-                  registeredSession,
-                ),
+          child: mediaDeliveryVideo(
+            binding: item.videoBinding,
+            publicBuilder: (context, _) =>
+                item.deliveryReference == null
+                ? const SizedBox.shrink()
+                : _immersivePlayer(item: item, signedDelivery: null),
+            signedBuilder: (context, signedDelivery) =>
+                _immersivePlayer(item: item, signedDelivery: signedDelivery),
           ),
         ),
         _WorksPausedPlaybackOverlay(session: _session),
       ],
+    );
+  }
+
+  /// 沉浸播放器装配。公开路与私有路只在取址来源上不同，播放 chrome、
+  /// 会话注册与手势必须完全一致。
+  Widget _immersivePlayer({
+    required _WorksVideoDeliveryItem item,
+    required SignedVideoDelivery? signedDelivery,
+  }) {
+    return VideoPlayerWidget(
+      key: ValueKey<String>(
+        'works-video-identity-${widget.postId}-${widget.identity}',
+      ),
+      deliveryReference: signedDelivery == null
+          ? item.deliveryReference
+          : null,
+      signedDelivery: signedDelivery,
+      adaptiveDeliveryReference: signedDelivery == null
+          ? item.adaptiveDeliveryReference
+          : null,
+      adaptiveDescriptorVersion: signedDelivery == null
+          ? item.adaptiveDescriptorVersion
+          : 0,
+      thumbnailBinding: item.coverBinding,
+      initialize: widget.initialize,
+      autoPlay: widget.autoPlay,
+      showControls: false,
+      // The immersive PageView must stay in Flutter's texture layer.
+      // Android inline players keep the factory's platform-view default.
+      viewType: VideoViewType.textureView,
+      verifiedDuration: item.verifiedDuration,
+      onTap: widget.tapEnabled ? () => unawaited(_session.toggle()) : null,
+      playbackSession: _session,
+      onPlaybackSessionCreated: (registeredSession) => widget.onSessionReady(
+        widget.index,
+        widget.identity,
+        registeredSession,
+      ),
     );
   }
 }
@@ -674,6 +695,7 @@ class _WorksArticleCanvas extends StatelessWidget {
     this.onPageFlipCommitted,
     this.onPageCurlAborted,
     this.onEntityTap,
+    this.onImageTap,
     this.gestureIntentController,
     this.initialPage = 0,
     this.onOverflowPrevious,
@@ -693,6 +715,7 @@ class _WorksArticleCanvas extends StatelessWidget {
   final ValueChanged<WorksArticlePageFlipEvent>? onPageFlipCommitted;
   final ValueChanged<WorksArticlePageCurlAbortEvent>? onPageCurlAborted;
   final ValueChanged<ArticleInlineSpan>? onEntityTap;
+  final ValueChanged<ArticleDocumentAsset>? onImageTap;
   final ImmersiveGestureIntentController? gestureIntentController;
   final int initialPage;
   final VoidCallback? onOverflowPrevious;
@@ -714,6 +737,7 @@ class _WorksArticleCanvas extends StatelessWidget {
       onPageFlipCommitted: onPageFlipCommitted,
       onPageCurlAborted: onPageCurlAborted,
       onEntityTap: onEntityTap,
+      onImageTap: onImageTap,
       gestureIntentController: gestureIntentController,
       initialPage: initialPage,
       onOverflowPrevious: onOverflowPrevious,
@@ -728,14 +752,17 @@ class _WorksTextCanvas extends StatelessWidget {
     required this.title,
     required this.body,
     required this.reserveContentIntersection,
-    this.imageUrl,
+    this.backgroundBinding = const MediaDeliveryBinding.absent(),
   });
 
   final ImmersiveViewerStageLayoutSpec layoutSpec;
   final String title;
   final String body;
   final bool reserveContentIntersection;
-  final String? imageUrl;
+
+  /// 文本 moment 的背景封面 typed 绑定：私有封面同样必须换短签，
+  /// 背景是装饰但仍是私有媒体消费，不得绕过授权判定。
+  final MediaDeliveryBinding backgroundBinding;
 
   @override
   Widget build(BuildContext context) {
@@ -743,13 +770,19 @@ class _WorksTextCanvas extends StatelessWidget {
       fit: StackFit.expand,
       children: [
         Container(color: AppColors.worksBackground),
-        if ((imageUrl ?? '').isNotEmpty)
-          Positioned.fill(
-            child: Opacity(
-              opacity: 0.08,
-              child: AppCachedNetworkImage(
-                imageUrl: imageUrl!,
-                imageUrlCandidates: resolveContentMediaUrlCandidates(imageUrl!),
+        Positioned.fill(
+          child: Opacity(
+            opacity: 0.08,
+            child: mediaDeliveryImage(
+              binding: backgroundBinding,
+              kind: MediaDeliveryKind.image,
+              fit: BoxFit.cover,
+              placeholder: Container(color: AppColors.worksBackground),
+              errorWidget: Container(color: AppColors.worksBackground),
+              absentWidget: Container(color: AppColors.worksBackground),
+              publicBuilder: (context, publicUrl) => AppCachedNetworkImage(
+                imageUrl: publicUrl,
+                imageUrlCandidates: resolveContentMediaUrlCandidates(publicUrl),
                 cdnPreset: CdnImagePreset.thumbnail,
                 fit: BoxFit.cover,
                 placeholder: Container(color: AppColors.worksBackground),
@@ -757,6 +790,7 @@ class _WorksTextCanvas extends StatelessWidget {
               ),
             ),
           ),
+        ),
         Positioned.fill(
           child: DecoratedBox(
             decoration: BoxDecoration(
@@ -838,19 +872,28 @@ class _WorksTextCanvas extends StatelessWidget {
 class _WorksVideoDeliveryItem {
   const _WorksVideoDeliveryItem({
     required this.identity,
-    required this.deliveryReference,
+    required this.videoBinding,
+    this.deliveryReference,
     this.adaptiveDeliveryReference,
     this.adaptiveDescriptorVersion = 0,
-    this.coverReference,
+    this.coverBinding = const MediaDeliveryBinding.absent(),
     this.verifiedDuration,
     this.previewTrackDescriptor,
   });
 
   final String identity;
-  final MediaDeliveryReference deliveryReference;
+
+  /// 视频本体的 typed 交付绑定：私有资产由此换短签地址，公开资产走
+  /// [deliveryReference]。分流判据不在本类型里做，交给 MediaDeliveryVideo。
+  final MediaDeliveryBinding videoBinding;
+
+  /// 公开交付引用；私有资产缺席（公开 canonical 校验拒绝签名 query）。
+  final MediaDeliveryReference? deliveryReference;
   final MediaDeliveryReference? adaptiveDeliveryReference;
   final int adaptiveDescriptorVersion;
-  final MediaDeliveryReference? coverReference;
+  /// 封面的 typed 交付绑定：封面是独立资产，其资产身份取 coverAssetId，
+  /// 不复用视频自身的 mediaAssetId，也不以 post 标识兜底。
+  final MediaDeliveryBinding coverBinding;
   final Duration? verifiedDuration;
   final VideoPreviewTrackDescriptor? previewTrackDescriptor;
 }

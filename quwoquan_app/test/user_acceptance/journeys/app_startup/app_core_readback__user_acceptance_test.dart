@@ -13,6 +13,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:patrol/patrol.dart';
 import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
+import 'package:quwoquan_app/service/content_service/media/original_access_quota/presentation/signed_grant_image.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/runtime/testing/test_keys.dart';
@@ -424,18 +425,30 @@ Future<void> _expectReleaseCreatorProfile(PatrolIntegrationTester $) async {
     reason:
         'release avatar $_creatorAvatarAssetId must enter the trusted image pipeline',
   );
-  expect(
-    $.tester.widget<AppAvatarImage>(avatarFinder).imageUrl.trim(),
-    isNotEmpty,
-    reason:
-        'release avatar $_creatorAvatarAssetId must resolve to a public media URL',
+  // 资产身份按 typed 交付绑定核验，而不是在 URL 里做子串匹配：research 相位的
+  // 头像走短签，交付地址是 CAS 路径加签名 query，里面并不含 assetId，按 URL
+  // 断言会把「私有交付正确工作」误判成失败。
+  final signedAvatar = find.descendant(
+    of: avatarFinder,
+    matching: find.byType(SignedGrantImage),
   );
-  expect(
-    $.tester.widget<AppAvatarImage>(avatarFinder).imageUrl,
-    contains(_creatorAvatarAssetId),
-    reason:
-        'release creator profile must bind the exact avatar asset $_creatorAvatarAssetId',
-  );
+  if (signedAvatar.evaluate().isNotEmpty) {
+    expect(
+      $.tester.widget<SignedGrantImage>(signedAvatar.first).assetId,
+      _creatorAvatarAssetId,
+      reason:
+          'release creator profile must bind the exact avatar asset '
+          '$_creatorAvatarAssetId through the signed delivery atom',
+    );
+  } else {
+    expect(
+      $.tester.widget<AppAvatarImage>(avatarFinder).imageUrl,
+      contains(_creatorAvatarAssetId),
+      reason:
+          'public release creator profile must bind the exact avatar asset '
+          '$_creatorAvatarAssetId',
+    );
+  }
   expect(
     await _waitForAnyFinder($, <Finder>[
       find.descendant(

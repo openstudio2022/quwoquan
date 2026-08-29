@@ -33,7 +33,8 @@ final class StartupPhaseSnapshot {
     required this.phase,
     required this.attemptId,
     required this.runtimeEnv,
-    required this.launchMode,
+    required this.launchProvenance,
+    required this.runtimeConfigSupplyMode,
     required this.configurationState,
     required this.missingDefineKeys,
     required this.runAppMs,
@@ -56,7 +57,8 @@ final class StartupPhaseSnapshot {
   final String phase;
   final String attemptId;
   final String? runtimeEnv;
-  final String? launchMode;
+  final String? launchProvenance;
+  final String? runtimeConfigSupplyMode;
   final String? configurationState;
   final String missingDefineKeys;
   final int? runAppMs;
@@ -80,7 +82,8 @@ final class StartupPhaseSnapshot {
     'phase': phase,
     if (attemptId.isNotEmpty) 'attemptId': attemptId,
     'runtimeEnv': runtimeEnv,
-    'launchMode': launchMode,
+    'launchProvenance': launchProvenance,
+    'runtimeConfigSupplyMode': runtimeConfigSupplyMode,
     'configurationState': configurationState,
     if (missingDefineKeys.isNotEmpty) 'missingDefineKeys': missingDefineKeys,
     if (runAppMs != null) 'runAppMs': runAppMs,
@@ -684,7 +687,7 @@ final class AppStartupRuntime {
     // 启动身份维度只携带运行时真实在场的值；缺席以不发送表达，
     // 不得用零值/unknown 冒充（catalog enum 之外的值会被 ingest 拒绝）。
     final environment = CloudRuntimeConfig.appRuntimeEnv;
-    final launchProvenance = CloudRuntimeConfig.launchMode;
+    final launchProvenance = CloudRuntimeConfig.launchProvenance;
     final launchManifestDigest =
         CloudRuntimeConfig.effectiveLaunchManifestDigest;
     const buildMode = kReleaseMode
@@ -794,7 +797,8 @@ final class AppStartupRuntime {
       phase: phase,
       attemptId: _startupAttemptId,
       runtimeEnv: runtimeSummary['runtimeEnv'],
-      launchMode: runtimeSummary['launchMode'],
+      launchProvenance: runtimeSummary['launchProvenance'],
+      runtimeConfigSupplyMode: runtimeSummary['runtimeConfigSupplyMode'],
       configurationState: runtimeSummary['configurationState'],
       missingDefineKeys: runtimeSummary['missingKeys'] ?? '',
       runAppMs: _runAppMs,

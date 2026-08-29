@@ -20,7 +20,7 @@ import io
 import warnings
 from typing import Any
 
-from core.image_decode import ImageProbe, probe_image_bytes
+from core.image_decode import ImageProbe, oriented_raster, probe_image_bytes
 from core.image_decode import pil_available as decode_pil_available
 from core.media_asset_url import (
     IMAGE_VARIANT_POLICY_VERSION,
@@ -66,7 +66,7 @@ def build_local_variants(data: bytes, *, base_name: str) -> list[dict[str, Any]]
         with warnings.catch_warnings():
             warnings.simplefilter("error", Image.DecompressionBombWarning)
             with Image.open(io.BytesIO(data)) as im:
-                im = im.convert("RGB")
+                im = oriented_raster(im).convert("RGB")
                 src_w, src_h = im.width, im.height
                 out: list[dict[str, Any]] = []
                 for profile in LOCAL_VARIANT_PROFILES:
@@ -113,6 +113,98 @@ def build_local_variants(data: bytes, *, base_name: str) -> list[dict[str, Any]]
         return []
 
 
+def budget_compliant_profiles() -> tuple[str, ...]:
+    """已声明交付档，按宽度自宽到窄。
+
+    降采样只降到必要程度，因此补救必须先试最宽档；宽度相同的档按名字定序，
+    让同一份输入在任何机器上得到同一个变体。
+    """
+
+    return tuple(
+        sorted(
+            LOCAL_VARIANT_PROFILES,
+            key=lambda name: (-int(IMAGE_VARIANT_PROFILES[name]["width"]), name),
+        )
+    )
+
+
+def derive_budget_compliant_variant(
+    data: bytes,
+    *,
+    budget_bytes: int,
+) -> dict[str, Any] | None:
+    """把超预算源体降采样成最宽的、仍能装进预算的已声明交付档。
+
+    参数全部来自 ImageVariantPolicy 已声明的宽度与质量加 policy 的 `webpMethod`，
+    因此这条补救路径不引入任何未经声明的重编码参数——没有一个数值是为它现编的。
+    每档都装不进预算时返回 None：那是「换素材」，不是发布侧能代做的裁剪。
+
+    返回体带 `sha256`/`byteSize`/`width`/`height`，调用方据此按新字节身份重新登记
+    CAS 与权利快照摘要；旧摘要不得随派生体继续流转。
+    """
+
+    if int(budget_bytes) < 1:
+        raise ValueError("budget bytes must be positive")
+    probe: ImageProbe = probe_image_bytes(data)
+    if not _PIL_OK or not probe.succeeded:
+        return None
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            with Image.open(io.BytesIO(data)) as source:
+                oriented = oriented_raster(source).convert("RGB")
+                source_width, source_height = oriented.width, oriented.height
+                for profile in budget_compliant_profiles():
+                    cfg = IMAGE_VARIANT_PROFILES[profile]
+                    target_w = effective_delivery_width(
+                        profile, stored_width=source_width
+                    )
+                    if target_w < source_width:
+                        target_h = max(
+                            1, round(source_height * target_w / source_width)
+                        )
+                        candidate = oriented.resize(
+                            (target_w, target_h), Image.Resampling.LANCZOS
+                        )
+                    else:
+                        target_h = source_height
+                        candidate = oriented
+                    buffer = io.BytesIO()
+                    candidate.save(
+                        buffer,
+                        format="WEBP",
+                        quality=int(cfg["quality"]),
+                        method=WEBP_METHOD,
+                    )
+                    body = buffer.getvalue()
+                    if len(body) > int(budget_bytes):
+                        continue
+                    return {
+                        "profile": profile,
+                        "policyVersion": IMAGE_VARIANT_POLICY_VERSION,
+                        "sourceWidth": source_width,
+                        "sourceHeight": source_height,
+                        "width": target_w,
+                        "height": target_h,
+                        "format": "webp",
+                        "ext": ".webp",
+                        "mimeType": "image/webp",
+                        "quality": int(cfg["quality"]),
+                        "method": WEBP_METHOD,
+                        "bytes": body,
+                        "byteSize": len(body),
+                        "sha256": hashlib.sha256(body).hexdigest(),
+                    }
+                return None
+    except (
+        Image.DecompressionBombWarning,
+        Image.DecompressionBombError,
+        OSError,
+        ValueError,
+    ):
+        return None
+
+
 def build_center_square_cover_derivative(data: bytes) -> dict[str, Any] | None:
     """Build one deterministic square derivative from the canonical cover profile.
 
@@ -133,7 +225,7 @@ def build_center_square_cover_derivative(data: bytes) -> dict[str, Any] | None:
         with warnings.catch_warnings():
             warnings.simplefilter("error", Image.DecompressionBombWarning)
             with Image.open(io.BytesIO(data)) as source:
-                source = source.convert("RGB")
+                source = oriented_raster(source).convert("RGB")
                 source_width, source_height = source.size
                 square_size = min(source_width, source_height)
                 left = (source_width - square_size) // 2
@@ -184,8 +276,10 @@ def build_center_square_cover_derivative(data: bytes) -> dict[str, Any] | None:
 __all__ = [
     "LOCAL_VARIANT_PROFILES",
     "SQUARE_COVER_PROFILE",
+    "budget_compliant_profiles",
     "build_center_square_cover_derivative",
     "build_local_variants",
+    "derive_budget_compliant_variant",
     "image_dimensions",
     "pil_available",
 ]

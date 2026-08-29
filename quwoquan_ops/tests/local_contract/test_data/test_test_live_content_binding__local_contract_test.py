@@ -93,7 +93,9 @@ class TestLiveContentBindingContract(unittest.TestCase):
             "providerRuntimeDigest": _D,
             "portProfile": "alpha-local",
             "portBlock": {"start": 17000, "end": 17999},
-            "publishedPorts": {"api": 17443},
+            "publishedPorts": [
+                {"role": "api-edge", "hostPort": 17000, "protocol": "tcp"},
+            ],
             "tlsProfile": "local-managed",
             "resolverHandoffDigest": _E,
             "publicWebPackage": {

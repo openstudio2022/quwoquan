@@ -1,9 +1,9 @@
 """Immutable release payload → 环境媒体根增量同步（sha256 校验）。
 
-source_root 是 immutable release payload 根，只读取 manifest 选中的
-avatar/image/video public slice。private CAS key 不进入 release 或环境公开目录：
-媒体字节由 content library 单一持有，canonical publish 只记录寻址它们的摘要，
-因此环境同步的唯一入口就是 release 已经冻结的 public slice。
+source_root 是 immutable release payload 根，只读取 manifest 选中的交付 key：
+commercial release 交付 avatar/image/video public slice；research release 交付
+CAS objectKey（media/objects/sha256/...），字节只经短签 URL 服务，不产生公开
+slice。两种形态都以 release 冻结的 manifest 作为唯一同步入口。
 
 同步语义（fail closed）：
 - public slice 源对象内容必须等于 manifest 中对应 MediaAsset.sha256；
@@ -27,6 +27,9 @@ _PUBLIC_SLICE_PREFIXES = (
     "media/image/s/",
     "media/video/s/",
 )
+# research release 的交付 key 复用 CAS objectKey（DEC-031）；环境上传媒体共用
+# 该前缀，因此 prune 永不触及 CAS 根，只回收 public slice。
+_DELIVERY_KEY_PREFIXES = _PUBLIC_SLICE_PREFIXES + ("media/objects/sha256/",)
 _SHA256_RE = re.compile(r"^sha256:([0-9a-f]{64})$")
 
 
@@ -100,14 +103,14 @@ def sync_media_library(
             not key
             or candidate.is_absolute()
             or ".." in candidate.parts
-            or not key.startswith(_PUBLIC_SLICE_PREFIXES)
+            or not key.startswith(_DELIVERY_KEY_PREFIXES)
             or digest_match is None
         ):
-            report["issues"].append(f"unsafe selected public media slice: {key}")
+            report["issues"].append(f"unsafe selected media delivery key: {key}")
             continue
         source_file = source_root / candidate
         if not source_file.is_file() or source_file.name.endswith(".sync-tmp"):
-            report["issues"].append(f"selected public media slice missing: {key}")
+            report["issues"].append(f"selected media delivery body missing: {key}")
             continue
         selected.add(source_file)
         expected_by_source[source_file] = digest_match.group(1)

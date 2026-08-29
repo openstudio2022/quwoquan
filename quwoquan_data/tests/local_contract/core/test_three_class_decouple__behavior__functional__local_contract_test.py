@@ -27,6 +27,9 @@ from content.homepage.homepage_text import _homepage_source_priority  # noqa: E4
 from content.source.research.homepage_source_policy import _homepage_can_seed_base_draft  # noqa: E402
 from content.source.source_inputs import content_type_for_lane  # noqa: E402
 from core.carrier_contract import CARRIER_LANES  # noqa: E402
+from support.article_source_registry_fixture import (  # noqa: E402
+    article_registry_write_kwargs,
+)
 from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
 
 
@@ -93,14 +96,12 @@ def test_homepage_base_draft_seed_three_encyclopedia_closed_set():
 
 
 def test_non_open_encyclopedia_requires_factual_compression():
-    from content.source.handler_fetch import _requires_factual_compression
+    from content.source.handler_fetch_contract import requires_factual_compression
 
-    assert _requires_factual_compression({"sourceKind": "baidu_baike"})
-    assert _requires_factual_compression({"sourceKind": "toutiao_baike"})
+    assert requires_factual_compression({"sourceKind": "baidu_baike"})
+    assert requires_factual_compression({"sourceKind": "toutiao_baike"})
     # 第一权威维基（开放许可）不压缩。
-    assert not _requires_factual_compression(
-        {"sourceKind": "wikipedia"}
-    )
+    assert not requires_factual_compression({"sourceKind": "wikipedia"})
 
 
 def test_write_source_unit_persists_has_video_flag():
@@ -116,11 +117,12 @@ def test_write_source_unit_persists_has_video_flag():
         ordinal=1,
         source_id="article_with_video",
         source_md="---\ntitle: x\n---\n正文",
-        research_lane="article",
-        source_role="base",
-        url="https://example.com/a",
         title="含视频攻略",
         has_video=True,
+        **article_registry_write_kwargs(
+            url="https://travel.qunar.com/youji/with-video",
+            platform="qunar",
+        ),
     )
     assert manifest_video.get("hasVideo") is True
 
@@ -131,10 +133,11 @@ def test_write_source_unit_persists_has_video_flag():
         ordinal=2,
         source_id="article_plain",
         source_md="---\ntitle: y\n---\n正文",
-        research_lane="article",
-        source_role="base",
-        url="https://example.com/b",
         title="纯图文攻略",
+        **article_registry_write_kwargs(
+            url="https://travel.qunar.com/youji/plain",
+            platform="qunar",
+        ),
     )
     assert manifest_plain.get("hasVideo") is False
 

@@ -225,12 +225,17 @@ def append_image_plan_items(
     candidates: list[dict[str, Any]],
     items: list[dict[str, Any]],
 ) -> None:
+    from content.execution.planning.media_work_units import work_unit_object_binding
+
     single_image = len(candidates) == 1
     for index, candidate in enumerate(candidates, start=1):
-        work_unit_id = str(candidate.get("workUnitId") or "").strip()
+        # workUnit 模式下对象身份只在 projection 导出面物化一次；quota-only
+        # 模式没有 workUnit 声明，按序号编排 ref。
+        binding = work_unit_object_binding(candidate, carrier="image")
+        object_identity = {} if binding is None else binding.object_identity()
         ref = (
-            f"{target}_image_{work_unit_id.removeprefix('sha256:')[:12]}"
-            if work_unit_id
+            binding.object_ref(target=target)
+            if binding is not None
             else f"{target}_image"
             if single_image
             else f"{target}_image_{index}"
@@ -262,9 +267,8 @@ def append_image_plan_items(
             "caption": caption,
             "publishSchedule": publish_schedule,
             **creator_assignment,
+            **object_identity,
         }
-        if work_unit_id:
-            brief["workUnitId"] = work_unit_id
         write_brief_object(ctx.execution_id, ref, brief, content_type="image")
         item = {
             "ref": ref,
@@ -285,7 +289,6 @@ def append_image_plan_items(
             "assetRefs": [candidate["assetRef"]],
             "publishSchedule": publish_schedule,
             **creator_assignment,
+            **object_identity,
         }
-        if work_unit_id:
-            item["workUnitId"] = work_unit_id
         items.append(item)

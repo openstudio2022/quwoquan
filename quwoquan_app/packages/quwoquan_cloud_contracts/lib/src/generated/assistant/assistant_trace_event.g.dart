@@ -37,20 +37,20 @@ class AssistantTraceEventWire {
   final String createdAt;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'traceEventId': traceEventId,
-        'sessionId': sessionId,
-        'turnId': turnId,
-        'traceId': traceId,
-        'phaseId': phaseId,
-        'eventType': eventType,
-        'seq': seq,
-        'status': status,
-        'visibility': visibility.wireName,
-        'summary': summary,
-        'payload': payload,
-        'runtimeFailure': runtimeFailure?.toJson(),
-        'createdAt': createdAt,
-      };
+    'traceEventId': traceEventId,
+    'sessionId': sessionId,
+    'turnId': turnId,
+    'traceId': traceId,
+    'phaseId': phaseId,
+    'eventType': eventType,
+    'seq': seq,
+    'status': status,
+    'visibility': visibility.wireName,
+    'summary': summary,
+    'payload': payload,
+    'runtimeFailure': runtimeFailure?.toJson(),
+    'createdAt': createdAt,
+  };
 
   factory AssistantTraceEventWire.fromJson(Map<String, dynamic> json) {
     const allowedFields = <String>{
@@ -72,46 +72,100 @@ class AssistantTraceEventWire {
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('AssistantTraceEventWire response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'AssistantTraceEventWire response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (!json.containsKey('traceEventId') || json['traceEventId'] == null || (json['traceEventId'] is! String)) {
-      throw const FormatException('AssistantTraceEventWire field traceEventId has an invalid wire value');
+    if (!json.containsKey('traceEventId') ||
+        json['traceEventId'] == null ||
+        (json['traceEventId'] is! String)) {
+      throw const FormatException(
+        'AssistantTraceEventWire field traceEventId has an invalid wire value',
+      );
     }
-    if (!json.containsKey('sessionId') || json['sessionId'] == null || (json['sessionId'] is! String)) {
-      throw const FormatException('AssistantTraceEventWire field sessionId has an invalid wire value');
+    if (!json.containsKey('sessionId') ||
+        json['sessionId'] == null ||
+        (json['sessionId'] is! String)) {
+      throw const FormatException(
+        'AssistantTraceEventWire field sessionId has an invalid wire value',
+      );
     }
-    if (!json.containsKey('turnId') || json['turnId'] == null || (json['turnId'] is! String)) {
-      throw const FormatException('AssistantTraceEventWire field turnId has an invalid wire value');
+    if (!json.containsKey('turnId') ||
+        json['turnId'] == null ||
+        (json['turnId'] is! String)) {
+      throw const FormatException(
+        'AssistantTraceEventWire field turnId has an invalid wire value',
+      );
     }
-    if (json.containsKey('traceId') && json['traceId'] != null && (json['traceId'] is! String)) {
-      throw const FormatException('AssistantTraceEventWire field traceId has an invalid wire value');
+    if (json.containsKey('traceId') &&
+        json['traceId'] != null &&
+        (json['traceId'] is! String)) {
+      throw const FormatException(
+        'AssistantTraceEventWire field traceId has an invalid wire value',
+      );
     }
-    if (json.containsKey('phaseId') && json['phaseId'] != null && (json['phaseId'] is! String)) {
-      throw const FormatException('AssistantTraceEventWire field phaseId has an invalid wire value');
+    if (json.containsKey('phaseId') &&
+        json['phaseId'] != null &&
+        (json['phaseId'] is! String)) {
+      throw const FormatException(
+        'AssistantTraceEventWire field phaseId has an invalid wire value',
+      );
     }
-    if (!json.containsKey('eventType') || json['eventType'] == null || (json['eventType'] is! String)) {
-      throw const FormatException('AssistantTraceEventWire field eventType has an invalid wire value');
+    if (!json.containsKey('eventType') ||
+        json['eventType'] == null ||
+        (json['eventType'] is! String)) {
+      throw const FormatException(
+        'AssistantTraceEventWire field eventType has an invalid wire value',
+      );
     }
-    if (!json.containsKey('seq') || json['seq'] == null || (json['seq'] is! num)) {
-      throw const FormatException('AssistantTraceEventWire field seq has an invalid wire value');
+    if (!json.containsKey('seq') ||
+        json['seq'] == null ||
+        (json['seq'] is! num)) {
+      throw const FormatException(
+        'AssistantTraceEventWire field seq has an invalid wire value',
+      );
     }
-    if (json.containsKey('status') && json['status'] != null && (json['status'] is! String)) {
-      throw const FormatException('AssistantTraceEventWire field status has an invalid wire value');
+    if (json.containsKey('status') &&
+        json['status'] != null &&
+        (json['status'] is! String)) {
+      throw const FormatException(
+        'AssistantTraceEventWire field status has an invalid wire value',
+      );
     }
-    if (json.containsKey('visibility') && json['visibility'] != null && (json['visibility'] is! String)) {
-      throw const FormatException('AssistantTraceEventWire field visibility has an invalid wire value');
+    if (json.containsKey('visibility') &&
+        json['visibility'] != null &&
+        (json['visibility'] is! String)) {
+      throw const FormatException(
+        'AssistantTraceEventWire field visibility has an invalid wire value',
+      );
     }
-    if (json.containsKey('summary') && json['summary'] != null && (json['summary'] is! String)) {
-      throw const FormatException('AssistantTraceEventWire field summary has an invalid wire value');
+    if (json.containsKey('summary') &&
+        json['summary'] != null &&
+        (json['summary'] is! String)) {
+      throw const FormatException(
+        'AssistantTraceEventWire field summary has an invalid wire value',
+      );
     }
-    if (json.containsKey('payload') && json['payload'] != null && (json['payload'] is! Map)) {
-      throw const FormatException('AssistantTraceEventWire field payload has an invalid wire value');
+    if (json.containsKey('payload') &&
+        json['payload'] != null &&
+        (json['payload'] is! Map)) {
+      throw const FormatException(
+        'AssistantTraceEventWire field payload has an invalid wire value',
+      );
     }
-    if (json.containsKey('runtimeFailure') && json['runtimeFailure'] != null && (json['runtimeFailure'] is! Map)) {
-      throw const FormatException('AssistantTraceEventWire field runtimeFailure has an invalid wire value');
+    if (json.containsKey('runtimeFailure') &&
+        json['runtimeFailure'] != null &&
+        (json['runtimeFailure'] is! Map)) {
+      throw const FormatException(
+        'AssistantTraceEventWire field runtimeFailure has an invalid wire value',
+      );
     }
-    if (!json.containsKey('createdAt') || json['createdAt'] == null || (json['createdAt'] is! String)) {
-      throw const FormatException('AssistantTraceEventWire field createdAt has an invalid wire value');
+    if (!json.containsKey('createdAt') ||
+        json['createdAt'] == null ||
+        (json['createdAt'] is! String)) {
+      throw const FormatException(
+        'AssistantTraceEventWire field createdAt has an invalid wire value',
+      );
     }
     return AssistantTraceEventWire(
       traceEventId: (json['traceEventId'] as String?)?.trim() ?? "",
@@ -122,14 +176,21 @@ class AssistantTraceEventWire {
       eventType: (json['eventType'] as String?)?.trim() ?? "",
       seq: (json['seq'] as num?)?.toInt() ?? 0,
       status: (json['status'] as String?)?.trim() ?? "",
-      visibility: parseTraceVisibilityStrict((json['visibility'] as String?)?.trim() ?? "user_visible"),
+      visibility: parseTraceVisibilityStrict(
+        (json['visibility'] as String?)?.trim() ?? "user_visible",
+      ),
       summary: (json['summary'] as String?)?.trim() ?? "",
-      payload: (json['payload'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
-      runtimeFailure: json['runtimeFailure'] is Map ? RuntimeFailureWire.fromJson((json['runtimeFailure'] as Map).cast<String, dynamic>()) : null,
+      payload:
+          (json['payload'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{},
+      runtimeFailure: json['runtimeFailure'] is Map
+          ? RuntimeFailureWire.fromJson(
+              (json['runtimeFailure'] as Map).cast<String, dynamic>(),
+            )
+          : null,
       createdAt: (json['createdAt'] as String?)?.trim() ?? "",
     );
   }
-
 }
 
 class AssistantTraceEventWireFields {

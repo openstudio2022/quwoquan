@@ -82,7 +82,12 @@ def test_first_round_pool_is_the_policy_oversample_of_the_quota() -> None:
 def test_replenishment_reaches_a_quota_one_shot_oversampling_would_miss() -> None:
     # A 1.8 oversample of 10 draws 18 candidates. At the yields below the
     # single-draw engine would deliver 6 objects and report success.
-    plan = QuotaPursuitPlan(approved_quota=10, initial_pool=18, policy=_policy())
+    plan = QuotaPursuitPlan(
+        approved_quota=10,
+        initial_pool=18,
+        frozen_target_ceiling=200,
+        policy=_policy(),
+    )
     draw = _ScriptedDraw(supply=200, yields=[6, 2, 1, 1])
     progress = pursue_quota(plan, draw=draw, ref="region")
 
@@ -94,7 +99,12 @@ def test_replenishment_reaches_a_quota_one_shot_oversampling_would_miss() -> Non
 
 
 def test_consecutive_zero_yield_rounds_stop_the_loop_as_a_typed_failure() -> None:
-    plan = QuotaPursuitPlan(approved_quota=10, initial_pool=18, policy=_policy(stall=2))
+    plan = QuotaPursuitPlan(
+        approved_quota=10,
+        initial_pool=18,
+        frozen_target_ceiling=500,
+        policy=_policy(stall=2),
+    )
     draw = _ScriptedDraw(supply=500, yields=[4, 0, 0, 9, 9])
 
     with pytest.raises(DataIssueError) as excinfo:
@@ -114,6 +124,7 @@ def test_round_budget_is_a_hard_ceiling_even_while_yield_continues() -> None:
     plan = QuotaPursuitPlan(
         approved_quota=100,
         initial_pool=180,
+        frozen_target_ceiling=10_000,
         policy=_policy(max_rounds=3, stall=2),
     )
     draw = _ScriptedDraw(supply=10_000, yields=[1, 1, 1, 1, 1])
@@ -128,7 +139,12 @@ def test_round_budget_is_a_hard_ceiling_even_while_yield_continues() -> None:
 
 
 def test_exhausted_supply_stops_before_the_round_budget() -> None:
-    plan = QuotaPursuitPlan(approved_quota=10, initial_pool=18, policy=_policy())
+    plan = QuotaPursuitPlan(
+        approved_quota=10,
+        initial_pool=18,
+        frozen_target_ceiling=100,
+        policy=_policy(),
+    )
     draw = _ScriptedDraw(supply=18, yields=[5, 0])
 
     with pytest.raises(DataIssueError) as excinfo:
@@ -139,7 +155,12 @@ def test_exhausted_supply_stops_before_the_round_budget() -> None:
 
 
 def test_pursuit_rounds_are_append_only_and_contiguous() -> None:
-    plan = QuotaPursuitPlan(approved_quota=5, initial_pool=9, policy=_policy())
+    plan = QuotaPursuitPlan(
+        approved_quota=5,
+        initial_pool=9,
+        frozen_target_ceiling=9,
+        policy=_policy(),
+    )
     progress = QuotaPursuitProgress(plan=plan, rounds=())
 
     with pytest.raises(ValueError):
@@ -155,7 +176,12 @@ def test_pursuit_rounds_are_append_only_and_contiguous() -> None:
 
 
 def test_ledger_round_trip_preserves_progress_without_widening_the_promise() -> None:
-    plan = QuotaPursuitPlan(approved_quota=10, initial_pool=18, policy=_policy())
+    plan = QuotaPursuitPlan(
+        approved_quota=10,
+        initial_pool=18,
+        frozen_target_ceiling=18,
+        policy=_policy(),
+    )
     progress = QuotaPursuitProgress(plan=plan, rounds=()).with_round(
         QuotaPursuitRound(
             ordinal=1,
@@ -204,6 +230,7 @@ def test_target_qualification_replenishes_until_the_quota_is_filled() -> None:
     pool = pursue_qualified_target_pool(
         _rows(200),
         quota=10,
+        frozen_target_ceiling=200,
         discovery_ref="region/ref",
         source_qualifier=_every_third_candidate,
     )
@@ -214,11 +241,50 @@ def test_target_qualification_replenishes_until_the_quota_is_filled() -> None:
     assert pool.report()["approvedQuota"] == 10
 
 
+def test_declared_count_bounds_the_frozen_target_set_not_the_examined_pool() -> None:
+    # 请求声明 --count 1，策略 oversample 抽 2 条且两条都合格。冻结集只能是 1 条，
+    # 否则 retryOf 会因为「继承池 2 超过 --count 1」永久判否；而第 2 条仍要留在
+    # 合格报告里——它被看过，只是不属于这次执行的目标。
+    pool = pursue_qualified_target_pool(
+        [
+            {"name": "entity-0", "entityType": "地点/景区", "geoTagRef": "geo/x"},
+            {"name": "entity-3", "entityType": "地点/景区", "geoTagRef": "geo/x"},
+        ],
+        quota=1,
+        frozen_target_ceiling=1,
+        discovery_ref="region/ref",
+        source_qualifier=lambda candidate: TargetSourceQualification(
+            accepted=True,
+            qualified_source=_QualifiedSource(),
+        ),
+    )
+
+    assert [row["name"] for row in pool.targets] == ["entity-0"]
+    assert pool.progress.drawn_count == 2, "候选抽取不受目标上限约束"
+    assert pool.report()["acceptedCount"] == 2, "余量留在报告里，不被抹掉"
+
+
+def test_unqualified_leading_candidates_do_not_exhaust_a_count_one_request() -> None:
+    # --count 1 时若把声明当成候选上限，第一条不合格就会直接判 exhausted，
+    # 后面本来合格的实体永远轮不到——这正是补采存在的理由。
+    pool = pursue_qualified_target_pool(
+        _rows(9)[1:],  # entity-1 / entity-2 不合格，第一个合格的是 entity-3
+        quota=1,
+        frozen_target_ceiling=1,
+        discovery_ref="region/ref",
+        source_qualifier=_every_third_candidate,
+    )
+
+    assert [row["name"] for row in pool.targets] == ["entity-3"]
+    assert pool.progress.drawn_count > 1
+
+
 def test_target_qualification_shortfall_is_a_failure_not_a_smaller_pool() -> None:
     with pytest.raises(DataIssueError) as excinfo:
         pursue_qualified_target_pool(
             _rows(12),
             quota=10,
+            frozen_target_ceiling=12,
             discovery_ref="region/ref",
             source_qualifier=_every_third_candidate,
         )

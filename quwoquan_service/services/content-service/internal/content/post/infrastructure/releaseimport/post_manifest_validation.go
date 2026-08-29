@@ -306,7 +306,9 @@ func BindPostAssetURLs(
 			asset.Kind = kind
 			asset.Version = resolved.Version
 			asset.PublicSliceKey = resolved.PublicSliceKey
-			asset.CDNURL = resolved.PublicURL
+			// DEC-031: research bindings carry the relative CAS key instead
+			// of an anonymous public URL.
+			asset.CDNURL = resolved.DeliveryRef
 			asset.ObjectKey = ""
 			byID[asset.AssetID] = asset
 		}

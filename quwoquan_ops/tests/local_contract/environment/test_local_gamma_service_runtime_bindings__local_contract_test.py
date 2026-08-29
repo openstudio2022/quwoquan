@@ -113,8 +113,8 @@ class LocalGammaServiceRuntimeBindingsTest(unittest.TestCase):
         service_block = service_compose("content-service")
 
         for binding in (
-            "MONGO_URI:",
-            "REPORT_DATABASE_URL:",
+            "CONTENT_MONGO_URI:",
+            "CONTENT_POSTGRES_REPORT_DSN:",
             "CONTENT_REDIS_REC_ADDR:",
             "CONTENT_REDIS_GENERAL_ADDR:",
             "CONTENT_REDIS_REALTIME_ADDR:",
@@ -128,12 +128,12 @@ class LocalGammaServiceRuntimeBindingsTest(unittest.TestCase):
             "CONTENT_CDN_SIGN_KEY:",
             "SEARCH_ES_ENABLED:",
             "SEARCH_ES_ENDPOINTS:",
-            "REC_MODEL_SERVICE_ENABLED:",
-            "REC_MODEL_SERVICE_URL:",
+            "CONTENT_REC_MODEL_SERVICE_ENABLED:",
+            "CONTENT_REC_MODEL_SERVICE_URL:",
         ):
             self.assertIn(binding, service_block)
         self.assertIn(
-            'REC_MODEL_SERVICE_ENABLED: "${QWQ_COMPOSE_REC_MODEL_SERVICE_ENABLED:-true}"',
+            'CONTENT_REC_MODEL_SERVICE_ENABLED: "${QWQ_COMPOSE_REC_MODEL_SERVICE_ENABLED:-true}"',
             service_block,
         )
 
@@ -377,7 +377,7 @@ class LocalGammaServiceRuntimeBindingsTest(unittest.TestCase):
     def test_user_service_compose_injects_protected_nonprod_provider_material(self) -> None:
         service_block = service_compose("user-service")
         user_main = (
-            ROOT / "quwoquan_service/services/user-service/cmd/api/main.go"
+            ROOT / "quwoquan_service/services/user-service/cmd/api/bootstrap.go"
         ).read_text(encoding="utf-8")
         for key in (
             "ALIYUN_DYPNS_ENDPOINT:",
@@ -412,8 +412,10 @@ class LocalGammaServiceRuntimeBindingsTest(unittest.TestCase):
         assistant_compose = service_compose("assistant-service")
 
         self.assertIn("case logsink.ElasticsearchAdapterID:", product_runtime_config)
-        self.assertIn('case "alpha", "beta", "gamma", "prod":', product_runtime_config)
-        self.assertIn("POSTGRES_DSN:", assistant_compose)
+        # 环境合法性（alpha|beta|gamma|prod）与配置身份校验由 servicekit 的
+        # ResolveIdentity 统一承担，服务侧只声明通用段并内嵌 BaseConfig。
+        self.assertIn("servicekit.BaseConfig", product_runtime_config)
+        self.assertIn("ASSISTANT_POSTGRES_DSN:", assistant_compose)
         self.assertIn(
             "postgres:\n        condition: service_healthy",
             assistant_compose,

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -13,6 +14,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[4]
 EMITTER = ROOT / "quwoquan_ops/gate/emit_gate_repo_summary.py"
 GATE_REPO_SH = ROOT / "quwoquan_ops/gate/gate_repo.sh"
+
+
+def _hermetic_env() -> dict[str, str]:
+    """剥离宿主的 GATE_* 变量：本合约验证的是显式入参行为，
+    不得随调用方（如 CI 分片 job）注入的门禁阶段配置漂移。"""
+    return {
+        key: value
+        for key, value in os.environ.items()
+        if not key.startswith("GATE_")
+    }
 
 
 def _run_emitter(repo_root: Path, *args: str) -> subprocess.CompletedProcess:
@@ -97,6 +108,7 @@ class GateRepoSummaryContractTest(unittest.TestCase):
         result = subprocess.run(
             ["bash", str(GATE_REPO_SH), "--scope", "../escaped"],
             cwd=ROOT,
+            env=_hermetic_env(),
             capture_output=True,
             text=True,
             check=False,

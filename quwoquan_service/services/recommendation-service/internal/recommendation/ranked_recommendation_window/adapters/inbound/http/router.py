@@ -70,6 +70,7 @@ def _wire_page(page: DomainPage) -> RankedRecommendationPage:
     return RankedRecommendationPage(
         windowId=page.window_id,
         scenario=page.scenario,
+        experimentBucket=page.experiment_bucket,
         modelBucket=page.model_bucket,
         modelChannel=page.model_channel,
         modelReleaseId=page.model_release_id,

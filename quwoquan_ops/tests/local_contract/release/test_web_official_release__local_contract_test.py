@@ -15,16 +15,16 @@ from quwoquan_ops.cli.commands.dev_session_public_web import (
 from quwoquan_ops.cli.lib.web_official_release import (
     ACTIVE_POINTER_NAME,
     ACTIVE_POINTER_SCHEMA,
-    WebOfficialReleaseError,
     WEB_RUNTIME_CONFIG_FILENAMES,
+    WebOfficialReleaseError,
     _tree_sha256,
     _trusted_web_origin,
     _verify_font_manifest,
-    _verify_runtime_config_is_external,
     _verify_web_build,
     _web_build_command,
     materialize_web_runtime_config,
     package_web_official_release,
+    validate_web_official_artifact,
 )
 
 
@@ -187,7 +187,7 @@ class WebOfficialReleaseContractTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._write_minimal_build(root)
-            _verify_web_build(root)
+            validate_web_official_artifact(root)
             self.assertNotIn(
                 'content="noindex,nofollow"',
                 (root / "index.html").read_text(encoding="utf-8"),
@@ -279,7 +279,7 @@ class WebOfficialReleaseContractTest(unittest.TestCase):
                 WebOfficialReleaseError,
                 "must not contain hosting runtime configuration",
             ):
-                _verify_runtime_config_is_external(root)
+                validate_web_official_artifact(root)
 
     def test_build_contract_requires_exactly_one_noto_sans_sc(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -577,7 +577,7 @@ class WebOfficialReleaseContractTest(unittest.TestCase):
             "required_web_outputs = (", web_product_start
         )
         web_product_command = product_writer[web_product_start:web_product_end]
-        self.assertIn('"flutter",', web_product_command)
+        self.assertIn("flutter_executable,", web_product_command)
         self.assertIn('"web",', web_product_command)
         self.assertNotIn("--dart-define", web_product_command)
         for forbidden in (

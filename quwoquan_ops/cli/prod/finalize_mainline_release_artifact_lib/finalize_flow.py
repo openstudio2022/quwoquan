@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
+    DISTRIBUTION_EVIDENCE_PATHS,
     ENVIRONMENTS,
     PRE_PROD_ENVIRONMENTS,
     RECEIPT_SOURCE_FIELDS,
@@ -114,6 +115,11 @@ def _apply_candidate_evidence(
     evidence: dict[str, dict[str, Any]],
 ) -> None:
     manifest["applicationPackages"] = evidence["applicationPackages"]
+    for evidence_key in DISTRIBUTION_EVIDENCE_PATHS:
+        manifest[evidence_key] = {
+            "path": evidence[evidence_key]["path"],
+            "digest": evidence[evidence_key]["digest"],
+        }
     manifest["opsPortal"] = evidence["opsPortal"]
     manifest["contractGraphDigest"] = evidence["contractGraph"]["digest"]
     provider = evidence["providerEvidence"]

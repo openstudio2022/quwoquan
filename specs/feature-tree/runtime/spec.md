@@ -192,7 +192,9 @@ runtime 作为跨端云机制领域服务，治理共享 runtime 包和 integrat
 - Service：`quwoquan_service`（跨域基础设施、生成链与未被更具体 L1 路径认领的 Service 工程根）、`quwoquan_service/contracts`
 - Service：`quwoquan_service/services/integration-service`（外部能力机制进程）
 - Service（协作引用，不用于代码归属）：`quwoquan_service/runtime`、`quwoquan_ops`
-- Agent：`.agents`（跨 harness 工作流技能真相源）、`.claude`、`.codex`、`.cursor`（各 harness 触发加速器、规则与生成产物载体；语义归 `development-workflow-governance`）
+- Agent：`.agents`（Cursor/Codex 工作流与 Reviewer 中性真相源）、`.codex`、`.cursor`（两宿主 adapter 与命令薄壳；语义归 `development-workflow-governance`）
+- Agent：`quwoquan_ops/policies/agent_governance_contract.yaml`、`quwoquan_ops/cli/feature_tree.py`、`quwoquan_ops/cli/lib/feature_tree`、`quwoquan_ops/cli/lib/agent_governance_contract.py`、`quwoquan_ops/cli/review_dispatch.py`、`quwoquan_ops/gate/verify_agent_context_budget.py`、`quwoquan_ops/tools/generate_agent_adapters.py`
+- Agent：`quwoquan_ops/tests/local_contract/gate/test_feature_tree__directory_native__local_contract_test.py`、`quwoquan_ops/tests/local_contract/gate/test_feature_tree__clause_binding__local_contract_test.py`、`quwoquan_ops/tests/local_contract/gate/test_review_dispatch__cli__local_contract_test.py`、`quwoquan_ops/tests/local_contract/gate/test_agent_context_budget__gate__local_contract_test.py`、`quwoquan_ops/tests/local_contract/gate/test_agent_adapter_generator__tool__local_contract_test.py`
 - 测试：
   - `local_contract`：`quwoquan_service/runtime`、`quwoquan_app/test/local_contract/journeys/connector_management`
   - `api_integration`：`quwoquan_ops/tests`

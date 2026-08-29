@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import tempfile
@@ -11,56 +10,35 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import yaml
 from content.release.canonical.release_header import validate_release_header
+# 策略快照、契约可用性与由其派生的 blocker 归 research_isolation_policy；此处按
+# 原有内部名 re-export，既保持调用点不变，也让错误类型对既有消费者仍从本模块可见。
+from content.release.environment.research_isolation_policy import (
+    IDENTITY_CONTRACT as _IDENTITY_CONTRACT,
+    ResearchIsolationVerificationError,
+    SIGNED_MEDIA_CONTRACT as _SIGNED_MEDIA_CONTRACT,
+    blocker as _blocker,
+    digest_bytes as _digest_bytes,
+    identity_contract_available as _identity_contract_available,
+    json_object as _object,
+    policy_snapshot as _policy_snapshot,
+    repository_ref as _repository_ref,
+    safe_segment as _safe_segment,
+    signed_media_contract_available as _signed_media_contract_available,
+)
 from content.release.environment.research_isolation_proof import (
     ResearchIsolationProofError,
     validate_research_isolation_pass_proof,
 )
-from core.io import read_json
 from core.paths import REPO_ROOT
 from core.release_layout import payload_digest, payload_file
 from core.schema import assert_valid
 
 _ENVIRONMENTS = frozenset({"alpha", "beta", "gamma", "prod"})
-_IDENTITY_CONTRACT = (
-    REPO_ROOT / "quwoquan_service/services/user-service/contracts/account/"
-    "account_session/operations.yaml"
-)
-_SIGNED_MEDIA_CONTRACT = (
-    REPO_ROOT / "quwoquan_service/services/content-service/contracts/media/"
-    "original_access_quota/operations.yaml"
-)
-_SIGNED_MEDIA_POLICY = (
-    REPO_ROOT / "quwoquan_service/services/content-service/contracts/media/"
-    "original_access_quota/original_access_policy.yaml"
-)
-_REQUIRED_IDENTITY_OPERATION = "IssueWhitelistedResearchSession"
-_REQUIRED_SIGNED_MEDIA_OPERATION = "ReserveOriginalImageAccessGrant"
-_REQUIRED_TRUE = (
-    "identityWhitelistRequired",
-    "sharingDisabled",
-    "exportDisabled",
-    "internalAppSignatureRequired",
-    "researchBadgeRequired",
-    "shortLivedSignedMediaUrlsRequired",
-    "mediaAccessAuditLogRequired",
-)
-_REQUIRED_FALSE = (
-    "anonymousContentAccess",
-    "anonymousMediaAccess",
-    "publicContentDistribution",
-    "searchIndexingDisabled",
-)
 _SECRET_KEY_PARTS = ("token", "authorization", "credential", "password", "secret")
-
-
-class ResearchIsolationVerificationError(ValueError):
-    """Research isolation evidence is unsafe, drifted, or not canonical."""
-
-
-def _digest_bytes(value: bytes) -> str:
-    return "sha256:" + hashlib.sha256(value).hexdigest()
+# DEC-034：proof 复用的新鲜度上限。策略快照覆盖不了环境栈重建，
+# 超过该时效的 PASS proof 不得复用，必须重新实测。
+_PROOF_REUSE_MAX_AGE_SECONDS = 24 * 60 * 60
 
 
 def _document_checksum(value: Mapping[str, Any]) -> str:
@@ -121,176 +99,6 @@ def research_isolation_file_digest(path: Path) -> str:
     return _digest_bytes(path.read_bytes())
 
 
-def _safe_segment(value: str, *, label: str) -> str:
-    text = str(value or "").strip()
-    candidate = Path(text)
-    if (
-        not text
-        or text in {".", ".."}
-        or candidate.is_absolute()
-        or len(candidate.parts) != 1
-        or "/" in text
-        or "\\" in text
-    ):
-        raise ResearchIsolationVerificationError(f"{label} must be one safe segment")
-    return text
-
-
-def _object(path: Path, *, label: str) -> dict[str, Any]:
-    try:
-        value = read_json(path)
-    except (OSError, TypeError, ValueError) as exc:
-        raise ResearchIsolationVerificationError(
-            f"{label} is unreadable: {path}"
-        ) from exc
-    if not isinstance(value, Mapping):
-        raise ResearchIsolationVerificationError(f"{label} must be an object: {path}")
-    return dict(value)
-
-
-def _yaml_object(path: Path, *, label: str) -> dict[str, Any]:
-    try:
-        value = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError) as exc:
-        raise ResearchIsolationVerificationError(
-            f"{label} is unreadable: {path}"
-        ) from exc
-    if not isinstance(value, Mapping):
-        raise ResearchIsolationVerificationError(f"{label} must be an object: {path}")
-    return dict(value)
-
-
-def _repository_ref(path: Path) -> str:
-    try:
-        return path.resolve().relative_to(REPO_ROOT.resolve()).as_posix()
-    except ValueError as exc:
-        raise ResearchIsolationVerificationError(
-            f"research isolation evidence must be repository-owned: {path}"
-        ) from exc
-
-
-def _policy_snapshot(
-    environment: str,
-) -> tuple[Path, str, list[str], int | None]:
-    path = REPO_ROOT / "quwoquan_ops/environments" / environment / "runtime.yaml"
-    payload = _yaml_object(path, label="research runtime policy")
-    issues: list[str] = []
-    if payload.get("productLifecycleState") != "research":
-        issues.append("productLifecycleState must be research")
-    isolation = payload.get("researchContentIsolation")
-    if not isinstance(isolation, Mapping):
-        issues.append("researchContentIsolation must be an object")
-        isolation = {}
-    issues.extend(
-        f"researchContentIsolation.{field} must be true"
-        for field in _REQUIRED_TRUE
-        if isolation.get(field) is not True
-    )
-    issues.extend(
-        f"researchContentIsolation.{field} must be false"
-        for field in _REQUIRED_FALSE
-        if isolation.get(field) is not False
-    )
-    ttl = isolation.get("signedMediaUrlMaxTtlSeconds")
-    if not isinstance(ttl, int) or isinstance(ttl, bool) or not 1 <= ttl <= 900:
-        issues.append(
-            "researchContentIsolation.signedMediaUrlMaxTtlSeconds must be 1..900"
-        )
-        ttl = None
-    return path, _digest_bytes(path.read_bytes()), issues, ttl
-
-
-def _identity_contract_available() -> bool:
-    payload = _yaml_object(_IDENTITY_CONTRACT, label="account session operations")
-    routes = payload.get("api_routes")
-    if not isinstance(routes, list):
-        return False
-    for raw in routes:
-        if not isinstance(raw, Mapping):
-            continue
-        security = raw.get("security")
-        response_fields = raw.get("response_fields")
-        if (
-            raw.get("operation") == _REQUIRED_IDENTITY_OPERATION
-            and raw.get("method") == "POST"
-            and isinstance(security, Mapping)
-            and security.get("auth_mode") == "required"
-            and security.get("anonymous_policy") == "deny"
-            and isinstance(response_fields, list)
-            and {"subjectHash", "attestationId"}.issubset(response_fields)
-        ):
-            return True
-    return False
-
-
-def _signed_media_contract_available() -> bool:
-    payload = _yaml_object(_SIGNED_MEDIA_CONTRACT, label="signed media operations")
-    policy = _yaml_object(_SIGNED_MEDIA_POLICY, label="signed media policy")
-    routes = payload.get("api_routes")
-    ttl = policy.get("grant_ttl_seconds")
-    if not isinstance(routes, list) or not isinstance(ttl, int) or not 1 <= ttl <= 900:
-        return False
-    for raw in routes:
-        if not isinstance(raw, Mapping):
-            continue
-        security = raw.get("security")
-        fields = raw.get("response_fields")
-        if (
-            raw.get("operation") == _REQUIRED_SIGNED_MEDIA_OPERATION
-            and isinstance(security, Mapping)
-            and security.get("auth_mode") == "required"
-            and security.get("anonymous_policy") == "deny"
-            and isinstance(fields, list)
-            and {"originalUrl", "ttlSeconds", "auditId"}.issubset(fields)
-        ):
-            return True
-    return False
-
-
-def _blocker(
-    *,
-    policy_issues: list[str],
-) -> tuple[str, str, list[str]]:
-    if policy_issues:
-        return (
-            "DATA.RESEARCH.ISOLATION_POLICY_INVALID",
-            "; ".join(policy_issues),
-            [],
-        )
-    if not _identity_contract_available():
-        return (
-            "DATA.RESEARCH.IDENTITY_ADAPTER_UNAVAILABLE",
-            (
-                "No canonical whitelisted research identity issuance/attestation "
-                "operation is available"
-            ),
-            [_repository_ref(_IDENTITY_CONTRACT)],
-        )
-    if not _signed_media_contract_available():
-        return (
-            "DATA.RESEARCH.SIGNED_MEDIA_ADAPTER_UNAVAILABLE",
-            (
-                "No canonical authenticated short-lived signed-media operation "
-                "with audit identity is available"
-            ),
-            [
-                _repository_ref(_SIGNED_MEDIA_CONTRACT),
-                _repository_ref(_SIGNED_MEDIA_POLICY),
-            ],
-        )
-    return (
-        "DATA.RESEARCH.RUNTIME_PROOF_INCOMPLETE",
-        (
-            "Runtime identity, internal App, anonymous denial, egress denial and "
-            "exact release readback probes are not implemented"
-        ),
-        [
-            _repository_ref(_IDENTITY_CONTRACT),
-            _repository_ref(_SIGNED_MEDIA_CONTRACT),
-        ],
-    )
-
-
 def _assert_no_secret_keys(value: object, *, path: str = "receipt") -> None:
     if isinstance(value, Mapping):
         for raw_key, child in value.items():
@@ -312,10 +120,17 @@ def _validate_research_isolation_document(
     *,
     environment: str,
     release_id: str,
-    verify_run_id: str,
+    verify_run_id: str | None,
     manifest_digest: str,
     require_pass: bool,
 ) -> dict[str, Any]:
+    """Validate one isolation document.
+
+    ``verify_run_id=None`` keeps the release/environment/digest binding strict
+    while allowing a proof produced by a prior verify run of the same release
+    to be revalidated for reuse.
+    """
+
     _assert_no_secret_keys(payload)
     try:
         assert_valid(
@@ -336,11 +151,12 @@ def _validate_research_isolation_document(
     expected = {
         "environment": environment,
         "releaseId": release_id,
-        "verifyRunId": verify_run_id,
         "manifestDigest": manifest_digest,
         "releaseClass": "research",
         "productLifecycleState": "research",
     }
+    if verify_run_id is not None:
+        expected["verifyRunId"] = verify_run_id
     if any(payload.get(key) != value for key, value in expected.items()):
         raise ResearchIsolationVerificationError(
             "research isolation release/environment identity drift"
@@ -416,7 +232,7 @@ def _load_runtime_proof(
     *,
     environment: str,
     release_id: str,
-    verify_run_id: str,
+    verify_run_id: str | None,
     manifest_digest: str,
 ) -> tuple[dict[str, Any], bytes]:
     if path.is_symlink() or not path.is_file():
@@ -445,6 +261,73 @@ def _load_runtime_proof(
     return proof, proof_bytes
 
 
+def _proof_is_stale(proof: Mapping[str, Any]) -> bool:
+    """A PASS proof past the DEC-034 max-age must be re-observed, not reused."""
+    try:
+        verified_at = datetime.fromisoformat(str(proof.get("verifiedAt") or ""))
+    except ValueError:
+        return True
+    if verified_at.tzinfo is None:
+        verified_at = verified_at.replace(tzinfo=timezone.utc)
+    age = (datetime.now(timezone.utc) - verified_at).total_seconds()
+    return age > _PROOF_REUSE_MAX_AGE_SECONDS
+
+
+def _discover_prior_runtime_proof(
+    *,
+    release_runs_root: Path,
+    current_run_dir: Path,
+    environment: str,
+    release_id: str,
+    manifest_digest: str,
+) -> tuple[dict[str, Any] | None, int, str]:
+    """Find the newest reusable PASS proof from prior verify runs.
+
+    Reuse binds release identity, manifest digest, policy snapshot and the
+    DEC-034 max-age; only the verify-run binding is relaxed, so a verify retry
+    does not force a full probe rerun while the release and its runtime policy
+    are unchanged. Invalid, drifted or stale candidates are skipped, never
+    repaired; the skip tally feeds blocker diagnostics.
+    """
+
+    if not release_runs_root.is_dir():
+        return None, 0, ""
+    skipped = 0
+    first_skip_reason = ""
+    candidates: list[tuple[str, dict[str, Any]]] = []
+    for candidate in sorted(
+        release_runs_root.glob("*/research-isolation-runtime-proof.json")
+    ):
+        if candidate.parent == current_run_dir:
+            continue
+        try:
+            proof, _proof_bytes = _load_runtime_proof(
+                candidate,
+                environment=environment,
+                release_id=release_id,
+                verify_run_id=None,
+                manifest_digest=manifest_digest,
+            )
+        except ResearchIsolationVerificationError as exc:
+            skipped += 1
+            if not first_skip_reason:
+                first_skip_reason = f"drifted: {exc}"
+            continue
+        if _proof_is_stale(proof):
+            skipped += 1
+            if not first_skip_reason:
+                first_skip_reason = (
+                    "stale: proof verifiedAt exceeds the "
+                    f"{_PROOF_REUSE_MAX_AGE_SECONDS}s reuse max-age"
+                )
+            continue
+        candidates.append((str(proof.get("verifiedAt") or ""), proof))
+    if not candidates:
+        return None, skipped, first_skip_reason
+    candidates.sort(key=lambda item: item[0])
+    return candidates[-1][1], skipped, first_skip_reason
+
+
 def write_research_isolation_verification(
     *,
     environment: str,
@@ -457,9 +340,12 @@ def write_research_isolation_verification(
 ) -> Path:
     """Freeze a validated runtime proof, or write the current typed blocker.
 
-    PASS is accepted only from an explicitly supplied, create-once environment
-    owner proof in the same canonical verify run.  Static policy, environment
-    variables and test fixtures are never used as positive evidence.
+    PASS is accepted only from a create-once environment owner proof bound to
+    the same release, manifest digest and runtime policy snapshot: either the
+    proof of the current verify run, or a revalidated PASS proof from a prior
+    verify run of the same release rebound to the current run id.  Static
+    policy, environment variables and test fixtures are never used as
+    positive evidence.
     """
 
     environment = _safe_segment(environment, label="environment")
@@ -510,6 +396,8 @@ def write_research_isolation_verification(
             "research isolation requires the exact immutable research release"
         )
     manifest_digest = payload_digest(release_root)
+    skipped_priors = 0
+    first_skip_reason = ""
     if runtime_proof_path is not None:
         expected_runtime_proof = expected_output.with_name(
             "research-isolation-runtime-proof.json"
@@ -529,11 +417,46 @@ def write_research_isolation_verification(
             )
             _write_create_once(output_path, proof_bytes)
             return output_path
+        prior, skipped_priors, first_skip_reason = _discover_prior_runtime_proof(
+            release_runs_root=expected_output.parent.parent,
+            current_run_dir=expected_output.parent,
+            environment=environment,
+            release_id=release_id,
+            manifest_digest=manifest_digest,
+        )
+        if prior is not None:
+            rebound = dict(prior)
+            rebound["verifyRunId"] = verify_run_id
+            rebound["reusedFromVerifyRunId"] = str(prior.get("verifyRunId") or "")
+            rebound.pop("verificationChecksum", None)
+            rebound["verificationChecksum"] = _document_checksum(rebound)
+            _assert_no_secret_keys(rebound)
+            try:
+                assert_valid(
+                    rebound,
+                    "release",
+                    "research_isolation_verification",
+                    label="research isolation verification",
+                )
+            except (FileNotFoundError, TypeError, ValueError) as exc:
+                raise ResearchIsolationVerificationError(str(exc)) from exc
+            print(
+                "[research-isolation] reusing PASS runtime proof from verify run "
+                f"{prior.get('verifyRunId')} for {verify_run_id} "
+                f"(release={release_id})"
+            )
+            _write_create_once(output_path, _json_bytes(rebound))
+            return output_path
 
     policy_path, policy_digest, policy_issues, _policy_ttl = _policy_snapshot(
         environment
     )
     code, message, evidence_refs = _blocker(policy_issues=policy_issues)
+    if skipped_priors:
+        message = (
+            f"{message}; skipped {skipped_priors} prior proof candidate(s), "
+            f"first: {first_skip_reason}"
+        )
     if not evidence_refs:
         evidence_refs = [_repository_ref(policy_path)]
     document: dict[str, Any] = {

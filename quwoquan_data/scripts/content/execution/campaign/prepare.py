@@ -434,7 +434,6 @@ def _handle_envelopes(args: argparse.Namespace) -> None:
         _resolved_scale(args, requested_workloads),
         workloads=requested_workloads,
         target_names=tuple(args.target_names or ()),
-        source_providers=tuple(args.source_providers or ()),
         day=str(args.run_date),
         sequence=int(args.sequence),
         semantic_selection_id=str(args.semantic_selection_id),
@@ -534,9 +533,6 @@ def register_prepare_campaign_parser(sub: argparse._SubParsersAction) -> None:
     )
     parser.add_argument(
         "--target", dest="target_names", action="append", default=[]
-    )
-    parser.add_argument(
-        "--source-provider", dest="source_providers", action="append", default=[]
     )
     parser.add_argument(
         "--semantic-selection-id",

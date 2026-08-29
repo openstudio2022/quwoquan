@@ -1,8 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+// spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-020
+// spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-020.t1
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/content_repository_contract.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
 import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 import '../../../../../support/service/content_service/content/post/test_content_app_config.dart';
@@ -48,6 +51,64 @@ void main() {
     expect(state.isEnabled('enable_article_book_reader'), isTrue);
     expect(state.isEnabled('enable_article_page_curl'), isTrue);
     expect(state.isEnabled('enable_assistant_content_identity_index'), isTrue);
+  });
+
+  test('page curl 远端字段缺席保留 metadata 默认，显式 false 才关闭', () {
+    final fallback = buildProductionContentRuntimeConfigDefaults();
+    final absent = ContentRuntimeConfigState.fromAppConfig(
+      _remoteConfig(<String, Object?>{
+        'content': <String, Object?>{'feature_flags': <String, Object?>{}},
+      }).content,
+      fallback: fallback,
+    );
+    final disabled = ContentRuntimeConfigState.fromAppConfig(
+      _remoteConfig(<String, Object?>{
+        'content': <String, Object?>{
+          'feature_flags': <String, Object?>{'enable_article_page_curl': false},
+        },
+      }).content,
+      fallback: fallback,
+    );
+
+    expect(fallback.isEnabled('enable_article_page_curl'), isTrue);
+    expect(
+      absent.isEnabled('enable_article_page_curl'),
+      isTrue,
+      reason: '远端字段缺席必须保留 ui_config.yaml 的默认开启值',
+    );
+    expect(
+      disabled.isEnabled('enable_article_page_curl'),
+      isFalse,
+      reason: '只有显式 runtime override=false 才能关闭 page curl',
+    );
+  });
+
+  test('page curl typed provider 从 canonical runtime state 投影 bool', () {
+    final enabled = ProviderContainer(
+      overrides: [
+        contentRuntimeConfigProvider.overrideWithValue(
+          buildProductionContentRuntimeConfigDefaults(),
+        ),
+      ],
+    );
+    addTearDown(enabled.dispose);
+    expect(enabled.read(articlePageCurlFeatureFlagProvider), isTrue);
+
+    final disabledState = ContentRuntimeConfigState.fromAppConfig(
+      _remoteConfig(<String, Object?>{
+        'content': <String, Object?>{
+          'feature_flags': <String, Object?>{'enable_article_page_curl': false},
+        },
+      }).content,
+      fallback: buildProductionContentRuntimeConfigDefaults(),
+    );
+    final disabled = ProviderContainer(
+      overrides: [
+        contentRuntimeConfigProvider.overrideWithValue(disabledState),
+      ],
+    );
+    addTearDown(disabled.dispose);
+    expect(disabled.read(articlePageCurlFeatureFlagProvider), isFalse);
   });
 
   test('remote app config 覆盖 feature flags 与 canary matrix', () async {

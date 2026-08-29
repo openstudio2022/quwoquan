@@ -9,16 +9,18 @@ them with offline/enforce-lockfile and ``pod install --deployment`` only.
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
 import os
 import re
-import shlex
 import shutil
 import sys
 from pathlib import Path
 
 import yaml
+
+sys.dont_write_bytecode = True
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -28,9 +30,22 @@ from quwoquan_ops.cli.lib.app_dependency_toolchain import (
     AppDependencyToolchainError,
     resolve_cocoapods_executable,
 )
+from quwoquan_ops.gate.local_dependency_purity.python_command_flow import (
+    reachable_subprocess_command_tokens,
+)
+from quwoquan_ops.gate.local_dependency_purity.shell_commands import (
+    ShellCommandParseError,
+    parse_shell_commands,
+)
+from quwoquan_ops.gate.local_dependency_purity.uat_static_analysis import (
+    verify_uat_static_analysis_coverage as _verify_uat_static_analysis_coverage,
+)
 
 GATE_REPO = ROOT / "quwoquan_ops/gate/gate_repo.sh"
 RUN_SH = ROOT / "quwoquan_app/run.sh"
+DEPENDENCY_PREPARE_HELPER = (
+    ROOT / "quwoquan_app/scripts/device/prepare_flutter_dependencies.py"
+)
 # 依赖解析仍归 run.sh，但调用 Flutter 工具链的是 canonical launch executor：
 # no-pub 守卫必须查真正发出 build/attach 命令的那一侧，否则守的是空壳。
 LAUNCH_EXECUTOR = ROOT / "quwoquan_app/scripts/device/run_app_instance.py"
@@ -41,12 +56,21 @@ PODFILE_LOCK = ROOT / "quwoquan_app/ios/Podfile.lock"
 PODS_MANIFEST_LOCK = ROOT / "quwoquan_app/ios/Pods/Manifest.lock"
 PODS_DIR = ROOT / "quwoquan_app/ios/Pods"
 IOS_PLUGIN_ROOT = ROOT / "quwoquan_app/ios/.symlinks/plugins"
+TEST_HOST_PODFILE_LOCK = ROOT / "quwoquan_app/test_host/patrol/ios/Podfile.lock"
 ANDROID_ARTIFACTS_DIR = ROOT / "quwoquan_app/vendor/android_artifacts"
-FLUTTER_WEBRTC_ANDROID = ROOT / "quwoquan_app/vendor/plugins/flutter_webrtc/android/build.gradle"
-LIVEKIT_ANDROID = ROOT / "quwoquan_app/vendor/plugins/livekit_client/android/build.gradle"
+FLUTTER_WEBRTC_ANDROID = (
+    ROOT / "quwoquan_app/vendor/plugins/flutter_webrtc/android/build.gradle"
+)
+LIVEKIT_ANDROID = (
+    ROOT / "quwoquan_app/vendor/plugins/livekit_client/android/build.gradle"
+)
 APP_ANDROID_BUILD = ROOT / "quwoquan_app/android/app/build.gradle.kts"
-FLUTTER_WEBRTC_CMAKE = ROOT / "quwoquan_app/vendor/plugins/flutter_webrtc/third_party/CMakeLists.txt"
-LIVEKIT_LINUX_CMAKE = ROOT / "quwoquan_app/vendor/plugins/livekit_client/linux/CMakeLists.txt"
+FLUTTER_WEBRTC_CMAKE = (
+    ROOT / "quwoquan_app/vendor/plugins/flutter_webrtc/third_party/CMakeLists.txt"
+)
+LIVEKIT_LINUX_CMAKE = (
+    ROOT / "quwoquan_app/vendor/plugins/livekit_client/linux/CMakeLists.txt"
+)
 PACKAGE_SWIFT_GLOB = "quwoquan_app/vendor/plugins/**/Package.swift"
 
 PRODUCTION_TEST_MARKERS = (
@@ -66,8 +90,12 @@ DISALLOWED_VENDOR_PATTERNS = {
     re.compile(r"file\s*\(\s*DOWNLOAD", re.IGNORECASE): "CMake file(DOWNLOAD)",
     re.compile(r"FetchContent_Declare", re.IGNORECASE): "CMake FetchContent_Declare",
     re.compile(r"https://jitpack\.io", re.IGNORECASE): "JitPack repository",
-    re.compile(r"io\.github\.webrtc-sdk:android:144\.7559\.01"): "remote webrtc-sdk Maven coordinate",
-    re.compile(r"com\.github\.davidliu:audioswitch:89582c47c9a04c62f90aa5e57251af4800a62c9a"): "remote audioswitch Maven coordinate",
+    re.compile(
+        r"io\.github\.webrtc-sdk:android:144\.7559\.01"
+    ): "remote webrtc-sdk Maven coordinate",
+    re.compile(
+        r"com\.github\.davidliu:audioswitch:89582c47c9a04c62f90aa5e57251af4800a62c9a"
+    ): "remote audioswitch Maven coordinate",
     re.compile(r"io\.livekit:noise:2\.0\.0"): "remote livekit-noise Maven coordinate",
 }
 
@@ -89,7 +117,9 @@ def _check_contains(
 ) -> None:
     text = _read_text(path)
     if needle not in text:
-        _fail(failures, f"{path.relative_to(ROOT)} must contain {description}: {needle}")
+        _fail(
+            failures, f"{path.relative_to(ROOT)} must contain {description}: {needle}"
+        )
 
 
 def _check_not_contains(
@@ -101,39 +131,223 @@ def _check_not_contains(
 ) -> None:
     text = _read_text(path)
     if needle in text:
-        _fail(failures, f"{path.relative_to(ROOT)} must not contain {description}: {needle}")
+        _fail(
+            failures,
+            f"{path.relative_to(ROOT)} must not contain {description}: {needle}",
+        )
+
+
+_SHELL_COMMAND_PREFIXES = {
+    "if",
+    "then",
+    "elif",
+    "while",
+    "until",
+    "!",
+    "env",
+    "command",
+    "exec",
+}
+_SHELL_ASSIGNMENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*")
+_SHELL_VARIABLE_RE = re.compile(
+    r"\$(?:\{(?P<braced>[A-Za-z_][A-Za-z0-9_]*)\}|(?P<plain>[A-Za-z_][A-Za-z0-9_]*))"
+)
+
+
+def _is_flutter_executable_token(token: str) -> bool:
+    if token == "flutter" or token.endswith("/flutter"):
+        return True
+    match = _SHELL_VARIABLE_RE.fullmatch(token)
+    if match is None:
+        return False
+    variable = match.group("braced") or match.group("plain") or ""
+    return "flutter" in variable.casefold()
+
+
+def _verify_locked_offline_flutter_pub_get(
+    failures: list[str],
+    *,
+    path: Path,
+) -> int:
+    """Require each real Flutter pub-get command to carry both offline locks."""
+
+    display = _display_path(path)
+    try:
+        shell_commands = parse_shell_commands(_read_text(path))
+    except ShellCommandParseError:
+        _fail(
+            failures,
+            f"{display} shell syntax cannot be parsed for Flutter pub-get verification",
+        )
+        return 0
+    commands: list[tuple[str, ...]] = []
+    for command in shell_commands:
+        segment = command.argv
+        for index in range(max(0, len(segment) - 2)):
+            if (
+                _is_flutter_executable_token(segment[index])
+                and segment[index + 1 : index + 3] == ("pub", "get")
+                and all(
+                    prefix in _SHELL_COMMAND_PREFIXES
+                    or _SHELL_ASSIGNMENT_RE.fullmatch(prefix) is not None
+                    for prefix in segment[:index]
+                )
+            ):
+                commands.append(segment[index + 3 :])
+    if not commands:
+        _fail(
+            failures,
+            f"{display} must execute Flutter pub get with --offline and --enforce-lockfile",
+        )
+        return 0
+    for arguments in commands:
+        missing = [
+            option
+            for option in ("--offline", "--enforce-lockfile")
+            if option not in arguments
+        ]
+        if missing:
+            _fail(
+                failures,
+                f"{display} Flutter pub get must include both --offline and "
+                f"--enforce-lockfile; missing {', '.join(missing)}",
+            )
+    return len(commands)
+
+
+def _call_name(call: ast.Call) -> str:
+    function = call.func
+    if isinstance(function, ast.Name):
+        return function.id
+    if isinstance(function, ast.Attribute):
+        return function.attr
+    return ""
+
+
+def _verify_launcher_dependency_helper(
+    failures: list[str],
+    *,
+    launcher: Path = RUN_SH,
+    helper: Path = DEPENDENCY_PREPARE_HELPER,
+) -> None:
+    """Follow the real launcher edge and validate the Python replay semantics."""
+
+    if not launcher.is_file() or not helper.is_file():
+        _fail(failures, "APP.DEPENDENCY.launcher_helper_missing")
+        return
+    launcher_code = "\n".join(
+        line
+        for line in _read_text(launcher).splitlines()
+        if not line.lstrip().startswith("#")
+    ).replace("\\\n", " ")
+    launcher_requirements = (
+        'python3 "$APP_DIR/scripts/device/prepare_flutter_dependencies.py"',
+        "--source-capsule-manifest",
+        "--projection-root",
+        "--private-state-root",
+        "--device",
+        "--flutter",
+        "--pod",
+        "DEPENDENCY_PATROL_ARGUMENT",
+        "QWQ_CANONICAL_LAUNCH_ACTOR",
+        "app-content-uat",
+        "--include-patrol",
+    )
+    missing_launcher = [
+        item for item in launcher_requirements if item not in launcher_code
+    ]
+    if missing_launcher:
+        _fail(
+            failures,
+            "APP.DEPENDENCY.launcher_helper_invalid: missing "
+            + ", ".join(missing_launcher),
+        )
+    try:
+        tree = ast.parse(_read_text(helper), filename=str(helper))
+    except (OSError, SyntaxError) as error:
+        _fail(failures, f"APP.DEPENDENCY.launcher_helper_invalid: {error}")
+        return
+    functions = {
+        node.name: node
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    pub = functions.get("_run_pub_get")
+    projected = functions.get("_run_projected_pub_gets")
+    main = functions.get("main")
+    parser = functions.get("_parser")
+    if any(node is None for node in (pub, projected, main, parser)):
+        _fail(
+            failures, "APP.DEPENDENCY.launcher_helper_invalid: replay interface missing"
+        )
+        return
+    pub_commands = reachable_subprocess_command_tokens(
+        pub,
+        executable_parameter="flutter",
+    )
+    if len(pub_commands) != 1 or not (
+        pub_commands[0][:3] == ("<flutter>", "pub", "get")
+        and {"--offline", "--enforce-lockfile"}.issubset(pub_commands[0][3:])
+    ):
+        _fail(
+            failures,
+            "APP.DEPENDENCY.launcher_helper_invalid: locked offline pub replay missing",
+        )
+    projected_calls = [
+        ast.unparse(node)
+        for node in ast.walk(projected)
+        if isinstance(node, ast.Call) and _call_name(node) == "_run_pub_get"
+    ]
+    if len(projected_calls) != 2 or not all(
+        marker in "\n".join(projected_calls)
+        for marker in (
+            "production_environment",
+            "patrol_environment",
+            "quwoquan_app",
+            "quwoquan_app/test_host/patrol",
+        )
+    ):
+        _fail(
+            failures, "APP.DEPENDENCY.launcher_helper_invalid: dual-host replay missing"
+        )
+    calls = [node for node in ast.walk(main) if isinstance(node, ast.Call)]
+    call_sources = {
+        name: ast.unparse(node) for node in calls for name in (_call_name(node),)
+    }
+    if any(
+        name not in call_sources
+        or "include_patrol=args.include_patrol" not in call_sources[name]
+        for name in (
+            "materialize_dependency_bundle_projection",
+            "_run_projected_pub_gets",
+        )
+    ):
+        _fail(
+            failures,
+            "APP.DEPENDENCY.launcher_helper_invalid: include-patrol handoff missing",
+        )
+    parser_source = ast.unparse(parser)
+    if "--include-patrol" not in parser_source or "store_true" not in parser_source:
+        _fail(
+            failures,
+            "APP.DEPENDENCY.launcher_helper_invalid: include-patrol CLI missing",
+        )
 
 
 def _verify_scripts(failures: list[str]) -> None:
-    _check_contains(
-        failures,
-        path=GATE_REPO,
-        needle="flutter pub get --offline",
-        description="offline Flutter package resolution",
-    )
+    _verify_locked_offline_flutter_pub_get(failures, path=GATE_REPO)
     _check_not_contains(
         failures,
         path=GATE_REPO,
         needle="npm install",
         description="implicit Node dependency installation",
     )
-    _check_contains(
-        failures,
-        path=RUN_SH,
-        needle="flutter pub get --offline",
-        description="offline Flutter package resolution",
-    )
+    _verify_launcher_dependency_helper(failures)
     _check_contains(
         failures,
         path=LAUNCH_EXECUTOR,
         needle="--no-pub",
         description="flutter build/attach no-pub guard",
-    )
-    _check_contains(
-        failures,
-        path=RUN_SH,
-        needle="cmp -s \"$PODFILE_LOCK\" \"$PODS_MANIFEST_LOCK\"",
-        description="CocoaPods lock drift guard",
     )
     _check_contains(
         failures,
@@ -146,10 +360,7 @@ def _verify_scripts(failures: list[str]) -> None:
 def _verify_pubspec(failures: list[str]) -> None:
     data = yaml.safe_load(PUBSPEC.read_text(encoding="utf-8"))
     sqlite_source = (
-        data.get("hooks", {})
-        .get("user_defines", {})
-        .get("sqlite3", {})
-        .get("source")
+        data.get("hooks", {}).get("user_defines", {}).get("sqlite3", {}).get("source")
     )
     if sqlite_source != "system":
         _fail(
@@ -158,9 +369,7 @@ def _verify_pubspec(failures: list[str]) -> None:
         )
 
     swiftpm_enabled = (
-        data.get("flutter", {})
-        .get("config", {})
-        .get("enable-swift-package-manager")
+        data.get("flutter", {}).get("config", {}).get("enable-swift-package-manager")
     )
     if swiftpm_enabled is not False:
         _fail(
@@ -206,7 +415,9 @@ def _verify_ios_pods(
     if not pods_manifest_lock.exists():
         _fail(failures, f"Missing {_display_path(pods_manifest_lock)}")
         return
-    if podfile_lock.read_text(encoding="utf-8") != pods_manifest_lock.read_text(encoding="utf-8"):
+    if podfile_lock.read_text(encoding="utf-8") != pods_manifest_lock.read_text(
+        encoding="utf-8"
+    ):
         _fail(
             failures,
             "quwoquan_app/ios/Pods/Manifest.lock must match quwoquan_app/ios/Podfile.lock so local iOS builds never need implicit pod graph repair",
@@ -225,7 +436,11 @@ def _verify_ios_pods(
 def _pod_version(lock_data: dict[object, object], pod_name: str) -> str:
     prefix = f"{pod_name} ("
     for declaration in lock_data.get("PODS", []):
-        value = next(iter(declaration), "") if isinstance(declaration, dict) else declaration
+        value = (
+            next(iter(declaration), "")
+            if isinstance(declaration, dict)
+            else declaration
+        )
         text = str(value)
         if text.startswith(prefix) and text.endswith(")"):
             return text[len(prefix) : -1]
@@ -261,9 +476,9 @@ def _verify_ios_cross_lock(
         projected = ""
         if projected_pubspec.is_file():
             projected = str(
-                (yaml.safe_load(projected_pubspec.read_text(encoding="utf-8")) or {}).get(
-                    "version", ""
-                )
+                (
+                    yaml.safe_load(projected_pubspec.read_text(encoding="utf-8")) or {}
+                ).get("version", "")
             ).strip()
         drifted = not declared or declared != locked_pod
         if plugin_tree_present and declared != projected:
@@ -305,7 +520,8 @@ def _verify_ios_cross_lock(
             failures,
             "APP.DEPENDENCY.lock_drift: Firebase pods disagree: "
             + ", ".join(
-                f"{name}={version or '<missing>'}" for name, version in firebase_pods.items()
+                f"{name}={version or '<missing>'}"
+                for name, version in firebase_pods.items()
             ),
         )
     if pods_manifest_lock.exists() and (
@@ -314,6 +530,50 @@ def _verify_ios_cross_lock(
         _fail(
             failures,
             "APP.DEPENDENCY.lock_drift: Pods/Manifest.lock differs from Podfile.lock",
+        )
+
+
+def _verify_test_host_cross_lock(
+    failures: list[str],
+    *,
+    pubspec_lock: Path = PUBSPEC_LOCK,
+    podfile_lock: Path = PODFILE_LOCK,
+    test_host_podfile_lock: Path = TEST_HOST_PODFILE_LOCK,
+) -> None:
+    """UAT test host 与生产工程必须锁同一套 Flutter 插件 pod 版本。
+
+    test host 是物理隔离的验收宿主，跑的是同一份 App 代码与同一份
+    `pubspec.lock` 依赖声明；两侧 Podfile.lock 都受版本控制，因此该一致性
+    在任何 checkout 上都可判定。插件版本一旦分叉，验收结果就不再代表生产
+    行为，且真实编译会在 pod 依赖解析处失败。只约束 pubspec 派生的插件
+    pod：patrol / integration_test 等 test-only pod 与 vendored 支付分享 SDK
+    本就只存在于一侧，间接原生 pod 的版本由 CocoaPods 依赖解析决定，不在
+    pubspec 真相源内。
+    """
+    missing = [
+        path
+        for path in (pubspec_lock, podfile_lock, test_host_podfile_lock)
+        if not path.is_file()
+    ]
+    if missing:
+        for path in missing:
+            _fail(
+                failures,
+                f"APP.DEPENDENCY.lock_drift: missing {_display_path(path)}",
+            )
+        return
+    pub_lock = yaml.safe_load(pubspec_lock.read_text(encoding="utf-8")) or {}
+    production_lock = yaml.safe_load(podfile_lock.read_text(encoding="utf-8")) or {}
+    host_lock = yaml.safe_load(test_host_podfile_lock.read_text(encoding="utf-8")) or {}
+    for plugin in sorted(pub_lock.get("packages") or {}):
+        production_pod = _pod_version(production_lock, plugin)
+        host_pod = _pod_version(host_lock, plugin)
+        if not production_pod or not host_pod or production_pod == host_pod:
+            continue
+        _fail(
+            failures,
+            "APP.DEPENDENCY.lock_drift: "
+            f"{plugin} production={production_pod} test_host={host_pod}",
         )
 
 
@@ -447,13 +707,12 @@ def _verify_production_test_dependency_purity(
     )
     if len(set(wrapper_targets)) != len(canonical_targets):
         leak(canonical_uat_root, "canonical UAT wrapper target collision")
-    copied_uats = tuple(sorted((host_dir / "test").rglob("*_user_acceptance_test.dart")))
+    copied_uats = tuple(
+        sorted((host_dir / "test").rglob("*_user_acceptance_test.dart"))
+    )
     for copied in copied_uats:
         leak(copied, "canonical UAT copy in test host")
-    wrapper_source = (
-        ROOT
-        / "quwoquan_ops/cli/smoke/environment_patrol_smoke/wrapper.py"
-    )
+    wrapper_source = ROOT / "quwoquan_ops/cli/smoke/environment_patrol_smoke/wrapper.py"
     if app_dir != ROOT / "quwoquan_app":
         wrapper_source = app_dir / "test_host_wrapper.py"
     if not wrapper_source.is_file():
@@ -469,158 +728,6 @@ def _verify_production_test_dependency_purity(
         ):
             if marker not in wrapper_text:
                 leak(wrapper_source, f"coverage enumeration missing {marker}")
-
-
-def _verify_uat_static_analysis_coverage(
-    failures: list[str],
-    *,
-    app_dir: Path = ROOT / "quwoquan_app",
-    gate_script: Path = ROOT / "quwoquan_ops/gate/gate_repo.sh",
-) -> None:
-    """Prove the main-App exclusion never silently drops a canonical UAT.
-
-    生产 pubspec 不含 patrol，因此 canonical UAT 与 Patrol support 只能在
-    test host 的 package context 下静态分析。主 App 的排除因此必须与 test host
-    的分析集合严格互补：每一个 canonical UAT 都要经 test/canonical symlink
-    落进 test host 的分析根，否则排除就是假绿。
-    """
-
-    def uncovered(path: Path, reason: str) -> None:
-        _fail(
-            failures,
-            "APP.PACKAGE.uat_static_analysis_uncovered: "
-            f"{_display_path(path)} {reason}",
-        )
-
-    canonical_uat_root = app_dir / "test/user_acceptance"
-    patrol_support_root = app_dir / "test/support/runtime/patrol"
-    host_dir = app_dir / "test_host/patrol"
-    canonical_link = host_dir / "test/canonical"
-
-    production_options = app_dir / "analysis_options.yaml"
-    if not production_options.is_file():
-        uncovered(production_options, "is missing")
-        return
-    production_excludes = (
-        (yaml.safe_load(production_options.read_text(encoding="utf-8")) or {})
-        .get("analyzer", {})
-        .get("exclude")
-        or []
-    )
-    for required_exclude in (
-        "test/user_acceptance/**",
-        "test/support/runtime/patrol/**",
-    ):
-        if required_exclude not in production_excludes:
-            uncovered(
-                production_options,
-                f"must exclude {required_exclude} from the main-App analysis",
-            )
-    excluded_test_prefixes = tuple(
-        sorted(
-            {
-                _excluded_test_prefix(str(pattern))
-                for pattern in production_excludes
-                if str(pattern).startswith("test/")
-            }
-        )
-    )
-
-    # canonical UAT 只允许被 symlink 引用；复制会立刻产生第二个真相源。
-    if not canonical_link.is_symlink():
-        uncovered(canonical_link, "must be a symlink to the main App test tree")
-        return
-    if canonical_link.resolve() != (app_dir / "test").resolve():
-        uncovered(canonical_link, "must resolve to the main App test tree")
-        return
-
-    host_options = host_dir / "analysis_options.yaml"
-    if host_options.is_file():
-        host_excludes = (
-            (yaml.safe_load(host_options.read_text(encoding="utf-8")) or {})
-            .get("analyzer", {})
-            .get("exclude")
-            or []
-        )
-        for host_exclude in host_excludes:
-            if str(host_exclude).startswith("test/canonical"):
-                uncovered(host_options, f"must not exclude {host_exclude}")
-
-    if not gate_script.is_file():
-        uncovered(gate_script, "is missing")
-        return
-    # 覆盖面只能从 test host 真实的 analyze 参数表派生：全文 substring 匹配会让
-    # 一行注释就满足判据。
-    analyzed_prefixes = _test_host_analysis_prefixes(
-        gate_script.read_text(encoding="utf-8")
-    )
-    for analysis_root in ("user_acceptance", "support/runtime/patrol"):
-        if not _prefix_is_analyzed(analysis_root, analyzed_prefixes):
-            uncovered(
-                gate_script,
-                f"must analyze test/canonical/{analysis_root} in the test host",
-            )
-
-    # 主 App 每一条 test/** 排除都必须有等价证人。硬编码白名单挡不住第三条新增
-    # 排除，集合互补才挡得住。
-    for prefix in excluded_test_prefixes:
-        if not _prefix_is_analyzed(prefix, analyzed_prefixes):
-            uncovered(
-                production_options,
-                f"excludes test/{prefix}/** from the main-App analysis with no "
-                "matching test host analysis root",
-            )
-
-    covered_sources = tuple(
-        sorted(canonical_uat_root.rglob("*_test.dart"))
-    ) + tuple(sorted(patrol_support_root.rglob("*.dart")))
-    if not covered_sources:
-        uncovered(canonical_uat_root, "exposes no canonical UAT to analyze")
-    for source in covered_sources:
-        relative = source.relative_to(app_dir / "test").as_posix()
-        if not _prefix_is_analyzed(relative, analyzed_prefixes):
-            uncovered(source, "is not reachable from the test host analysis root")
-
-
-def _excluded_test_prefix(pattern: str) -> str:
-    """Return the ``test/``-relative directory an analyzer exclude covers."""
-
-    prefix = pattern[len("test/") :]
-    for suffix in ("/**", "/*", "/**/*"):
-        if prefix.endswith(suffix):
-            prefix = prefix[: -len(suffix)]
-            break
-    return prefix.rstrip("/")
-
-
-def _test_host_analysis_prefixes(gate_text: str) -> tuple[str, ...]:
-    """Return the ``test/``-relative roots the test host actually analyzes."""
-
-    match = re.search(
-        r"test_host/patrol\s+&&\s+flutter\s+analyze\s+"
-        r"((?:[^\n\\]*\\\n)*[^\n)]*)",
-        gate_text,
-    )
-    if match is None:
-        return ()
-    try:
-        arguments = shlex.split(match.group(1).replace("\\\n", " "))
-    except ValueError:
-        return ()
-    prefixes: list[str] = []
-    for argument in arguments:
-        if argument == "test/canonical":
-            prefixes.append("")
-        elif argument.startswith("test/canonical/"):
-            prefixes.append(argument[len("test/canonical/") :].rstrip("/"))
-    return tuple(prefixes)
-
-
-def _prefix_is_analyzed(relative: str, analyzed_prefixes: tuple[str, ...]) -> bool:
-    return any(
-        prefix == "" or relative == prefix or relative.startswith(f"{prefix}/")
-        for prefix in analyzed_prefixes
-    )
 
 
 def _verify_android_vendoring(failures: list[str]) -> None:
@@ -728,6 +835,7 @@ def main() -> int:
     _verify_pubspec(failures)
     _verify_ios_pods(failures)
     _verify_ios_cross_lock(failures)
+    _verify_test_host_cross_lock(failures)
     _verify_cocoapods_toolchain(
         failures,
         pod_executable=os.environ.get("QWQ_COCOAPODS_EXECUTABLE", ""),

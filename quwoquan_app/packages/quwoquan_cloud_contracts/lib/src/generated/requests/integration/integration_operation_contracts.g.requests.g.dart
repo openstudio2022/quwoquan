@@ -1,8 +1,7 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 05b1683f93feb5234ad8184f318b5d32e9f340e4d7e36d1e833581cfc400702c
+// ContractGraph SHA256: 2ba8995ae51f9f431ebc75e30f64d31285cc4cfb724f0ef1d8473c11011a5469
 
 part of '../../../integration/integration_operation_contracts.g.dart';
-
 
 void _generatedRequestRejectUnknownFields(
   Map<String, Object?> map,
@@ -16,24 +15,20 @@ void _generatedRequestRejectUnknownFields(
   }
 }
 
-
 String _generatedRequestString(Object? value, String path) {
   if (value is String) return value;
   throw FormatException('$path must be a string');
 }
-
 
 int _generatedRequestInt(Object? value, String path) {
   if (value is int) return value;
   throw FormatException('$path must be an integer');
 }
 
-
 double _generatedRequestDouble(Object? value, String path) {
   if (value is num) return value.toDouble();
   throw FormatException('$path must be a number');
 }
-
 
 List<Object?> _generatedRequestList(Object? value, String path) {
   if (value is List) return List<Object?>.from(value);
@@ -49,10 +44,18 @@ final class CreateConnectorConnectionRequest {
        requestedCapabilities = List.unmodifiable(requestedCapabilities),
        grantReceiptRef = grantReceiptRef {
     if (this.connectorId.isEmpty) {
-      throw ArgumentError.value(this.connectorId, "connectorId", 'must not be blank');
+      throw ArgumentError.value(
+        this.connectorId,
+        "connectorId",
+        'must not be blank',
+      );
     }
     if (this.grantReceiptRef.isEmpty) {
-      throw ArgumentError.value(this.grantReceiptRef, "grantReceiptRef", 'must not be blank');
+      throw ArgumentError.value(
+        this.grantReceiptRef,
+        "grantReceiptRef",
+        'must not be blank',
+      );
     }
   }
 
@@ -60,37 +63,73 @@ final class CreateConnectorConnectionRequest {
   final List<String> requestedCapabilities;
   final String grantReceiptRef;
 
-  factory CreateConnectorConnectionRequest.fromWire(Map<String, Object?> map, [String path = "CreateConnectorConnectionRequest"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"connectorId", "requestedCapabilities", "grantReceiptRef"}, path);
+  factory CreateConnectorConnectionRequest.fromWire(
+    Map<String, Object?> map, [
+    String path = "CreateConnectorConnectionRequest",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "connectorId",
+      "requestedCapabilities",
+      "grantReceiptRef",
+    }, path);
     return CreateConnectorConnectionRequest(
-      connectorId: _generatedRequestString(map["connectorId"], '$path.connectorId'),
-      requestedCapabilities: List<String>.unmodifiable(_generatedRequestList(map["requestedCapabilities"], '$path.requestedCapabilities').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.requestedCapabilities' + '[${entry.key}]'))),
-      grantReceiptRef: _generatedRequestString(map["grantReceiptRef"], '$path.grantReceiptRef'),
+      connectorId: _generatedRequestString(
+        map["connectorId"],
+        '$path.connectorId',
+      ),
+      requestedCapabilities: List<String>.unmodifiable(
+        _generatedRequestList(
+          map["requestedCapabilities"],
+          '$path.requestedCapabilities',
+        ).asMap().entries.map(
+          (entry) => _generatedRequestString(
+            entry.value,
+            '$path.requestedCapabilities' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      grantReceiptRef: _generatedRequestString(
+        map["grantReceiptRef"],
+        '$path.grantReceiptRef',
+      ),
     );
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
     "connectorId": this.connectorId,
-    "requestedCapabilities": this.requestedCapabilities.map((value) => value).toList(growable: false),
+    "requestedCapabilities": this.requestedCapabilities
+        .map((value) => value)
+        .toList(growable: false),
     "grantReceiptRef": this.grantReceiptRef,
   };
 }
 
 final class GetConnectorConnectionQuery {
-  GetConnectorConnectionQuery({
-    required String connectionId,
-  }) : connectionId = connectionId {
+  GetConnectorConnectionQuery({required String connectionId})
+    : connectionId = connectionId {
     if (this.connectionId.isEmpty) {
-      throw ArgumentError.value(this.connectionId, "connectionId", 'must not be blank');
+      throw ArgumentError.value(
+        this.connectionId,
+        "connectionId",
+        'must not be blank',
+      );
     }
   }
 
   final String connectionId;
 
-  factory GetConnectorConnectionQuery.fromWire(Map<String, Object?> map, [String path = "GetConnectorConnectionQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"connectionId"}, path);
+  factory GetConnectorConnectionQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "GetConnectorConnectionQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "connectionId",
+    }, path);
     return GetConnectorConnectionQuery(
-      connectionId: _generatedRequestString(map["connectionId"], '$path.connectionId'),
+      connectionId: _generatedRequestString(
+        map["connectionId"],
+        '$path.connectionId',
+      ),
     );
   }
 
@@ -100,20 +139,31 @@ final class GetConnectorConnectionQuery {
 }
 
 final class GetConnectorDefinitionQuery {
-  GetConnectorDefinitionQuery({
-    required String connectorId,
-  }) : connectorId = connectorId {
+  GetConnectorDefinitionQuery({required String connectorId})
+    : connectorId = connectorId {
     if (this.connectorId.isEmpty) {
-      throw ArgumentError.value(this.connectorId, "connectorId", 'must not be blank');
+      throw ArgumentError.value(
+        this.connectorId,
+        "connectorId",
+        'must not be blank',
+      );
     }
   }
 
   final String connectorId;
 
-  factory GetConnectorDefinitionQuery.fromWire(Map<String, Object?> map, [String path = "GetConnectorDefinitionQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"connectorId"}, path);
+  factory GetConnectorDefinitionQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "GetConnectorDefinitionQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "connectorId",
+    }, path);
     return GetConnectorDefinitionQuery(
-      connectorId: _generatedRequestString(map["connectorId"], '$path.connectorId'),
+      connectorId: _generatedRequestString(
+        map["connectorId"],
+        '$path.connectorId',
+      ),
     );
   }
 
@@ -123,20 +173,31 @@ final class GetConnectorDefinitionQuery {
 }
 
 final class GetConnectorInvocationQuery {
-  GetConnectorInvocationQuery({
-    required String invocationId,
-  }) : invocationId = invocationId {
+  GetConnectorInvocationQuery({required String invocationId})
+    : invocationId = invocationId {
     if (this.invocationId.isEmpty) {
-      throw ArgumentError.value(this.invocationId, "invocationId", 'must not be blank');
+      throw ArgumentError.value(
+        this.invocationId,
+        "invocationId",
+        'must not be blank',
+      );
     }
   }
 
   final String invocationId;
 
-  factory GetConnectorInvocationQuery.fromWire(Map<String, Object?> map, [String path = "GetConnectorInvocationQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"invocationId"}, path);
+  factory GetConnectorInvocationQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "GetConnectorInvocationQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "invocationId",
+    }, path);
     return GetConnectorInvocationQuery(
-      invocationId: _generatedRequestString(map["invocationId"], '$path.invocationId'),
+      invocationId: _generatedRequestString(
+        map["invocationId"],
+        '$path.invocationId',
+      ),
     );
   }
 
@@ -146,9 +207,7 @@ final class GetConnectorInvocationQuery {
 }
 
 final class ListConnectorConnectionsQuery {
-  ListConnectorConnectionsQuery({
-    int? limit,
-  }) : limit = limit {
+  ListConnectorConnectionsQuery({int? limit}) : limit = limit {
     if (this.limit != null && this.limit! <= 0) {
       throw ArgumentError.value(this.limit, "limit", "must be positive");
     }
@@ -159,10 +218,15 @@ final class ListConnectorConnectionsQuery {
 
   final int? limit;
 
-  factory ListConnectorConnectionsQuery.fromWire(Map<String, Object?> map, [String path = "ListConnectorConnectionsQuery"]) {
+  factory ListConnectorConnectionsQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "ListConnectorConnectionsQuery",
+  ]) {
     _generatedRequestRejectUnknownFields(map, const <String>{"limit"}, path);
     return ListConnectorConnectionsQuery(
-      limit: map["limit"] == null ? null : _generatedRequestInt(map["limit"], '$path.limit'),
+      limit: map["limit"] == null
+          ? null
+          : _generatedRequestInt(map["limit"], '$path.limit'),
     );
   }
 
@@ -172,11 +236,9 @@ final class ListConnectorConnectionsQuery {
 }
 
 final class ListConnectorDefinitionsQuery {
-  ListConnectorDefinitionsQuery({
-    String? capability,
-    int? limit,
-  }) : capability = capability,
-       limit = limit {
+  ListConnectorDefinitionsQuery({String? capability, int? limit})
+    : capability = capability,
+      limit = limit {
     if (this.limit != null && this.limit! <= 0) {
       throw ArgumentError.value(this.limit, "limit", "must be positive");
     }
@@ -188,11 +250,21 @@ final class ListConnectorDefinitionsQuery {
   final String? capability;
   final int? limit;
 
-  factory ListConnectorDefinitionsQuery.fromWire(Map<String, Object?> map, [String path = "ListConnectorDefinitionsQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"capability", "limit"}, path);
+  factory ListConnectorDefinitionsQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "ListConnectorDefinitionsQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "capability",
+      "limit",
+    }, path);
     return ListConnectorDefinitionsQuery(
-      capability: map["capability"] == null ? null : _generatedRequestString(map["capability"], '$path.capability'),
-      limit: map["limit"] == null ? null : _generatedRequestInt(map["limit"], '$path.limit'),
+      capability: map["capability"] == null
+          ? null
+          : _generatedRequestString(map["capability"], '$path.capability'),
+      limit: map["limit"] == null
+          ? null
+          : _generatedRequestInt(map["limit"], '$path.limit'),
     );
   }
 
@@ -203,11 +275,9 @@ final class ListConnectorDefinitionsQuery {
 }
 
 final class ListConnectorInvocationsQuery {
-  ListConnectorInvocationsQuery({
-    String? connectionId,
-    int? limit,
-  }) : connectionId = connectionId,
-       limit = limit {
+  ListConnectorInvocationsQuery({String? connectionId, int? limit})
+    : connectionId = connectionId,
+      limit = limit {
     if (this.limit != null && this.limit! <= 0) {
       throw ArgumentError.value(this.limit, "limit", "must be positive");
     }
@@ -219,11 +289,21 @@ final class ListConnectorInvocationsQuery {
   final String? connectionId;
   final int? limit;
 
-  factory ListConnectorInvocationsQuery.fromWire(Map<String, Object?> map, [String path = "ListConnectorInvocationsQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"connectionId", "limit"}, path);
+  factory ListConnectorInvocationsQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "ListConnectorInvocationsQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "connectionId",
+      "limit",
+    }, path);
     return ListConnectorInvocationsQuery(
-      connectionId: map["connectionId"] == null ? null : _generatedRequestString(map["connectionId"], '$path.connectionId'),
-      limit: map["limit"] == null ? null : _generatedRequestInt(map["limit"], '$path.limit'),
+      connectionId: map["connectionId"] == null
+          ? null
+          : _generatedRequestString(map["connectionId"], '$path.connectionId'),
+      limit: map["limit"] == null
+          ? null
+          : _generatedRequestInt(map["limit"], '$path.limit'),
     );
   }
 
@@ -252,14 +332,31 @@ final class LocationSearchQueryParams {
   final double? longitude;
   final int limit;
 
-  factory LocationSearchQueryParams.fromWire(Map<String, Object?> map, [String path = "LocationSearchQueryParams"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"q", "cityCode", "lat", "lng", "limit"}, path);
+  factory LocationSearchQueryParams.fromWire(
+    Map<String, Object?> map, [
+    String path = "LocationSearchQueryParams",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "q",
+      "cityCode",
+      "lat",
+      "lng",
+      "limit",
+    }, path);
     return LocationSearchQueryParams(
       query: _generatedRequestString(map["q"], '$path.q'),
-      cityCode: map["cityCode"] == null ? null : _generatedRequestString(map["cityCode"], '$path.cityCode'),
-      latitude: map["lat"] == null ? null : _generatedRequestDouble(map["lat"], '$path.lat'),
-      longitude: map["lng"] == null ? null : _generatedRequestDouble(map["lng"], '$path.lng'),
-      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 20,
+      cityCode: map["cityCode"] == null
+          ? null
+          : _generatedRequestString(map["cityCode"], '$path.cityCode'),
+      latitude: map["lat"] == null
+          ? null
+          : _generatedRequestDouble(map["lat"], '$path.lat'),
+      longitude: map["lng"] == null
+          ? null
+          : _generatedRequestDouble(map["lng"], '$path.lng'),
+      limit: map.containsKey("limit")
+          ? _generatedRequestInt(map["limit"], '$path.limit')
+          : 20,
     );
   }
 
@@ -288,13 +385,29 @@ final class NearbyLocationQueryParams {
   final int? radiusMeters;
   final int limit;
 
-  factory NearbyLocationQueryParams.fromWire(Map<String, Object?> map, [String path = "NearbyLocationQueryParams"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"lat", "lng", "radiusMeters", "limit"}, path);
+  factory NearbyLocationQueryParams.fromWire(
+    Map<String, Object?> map, [
+    String path = "NearbyLocationQueryParams",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "lat",
+      "lng",
+      "radiusMeters",
+      "limit",
+    }, path);
     return NearbyLocationQueryParams(
-      latitude: map["lat"] == null ? null : _generatedRequestDouble(map["lat"], '$path.lat'),
-      longitude: map["lng"] == null ? null : _generatedRequestDouble(map["lng"], '$path.lng'),
-      radiusMeters: map["radiusMeters"] == null ? null : _generatedRequestInt(map["radiusMeters"], '$path.radiusMeters'),
-      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 20,
+      latitude: map["lat"] == null
+          ? null
+          : _generatedRequestDouble(map["lat"], '$path.lat'),
+      longitude: map["lng"] == null
+          ? null
+          : _generatedRequestDouble(map["lng"], '$path.lng'),
+      radiusMeters: map["radiusMeters"] == null
+          ? null
+          : _generatedRequestInt(map["radiusMeters"], '$path.radiusMeters'),
+      limit: map.containsKey("limit")
+          ? _generatedRequestInt(map["limit"], '$path.limit')
+          : 20,
     );
   }
 
@@ -313,21 +426,41 @@ final class RevokeConnectorConnectionRequest {
   }) : connectionId = connectionId,
        expectedRevision = expectedRevision {
     if (this.connectionId.isEmpty) {
-      throw ArgumentError.value(this.connectionId, "connectionId", 'must not be blank');
+      throw ArgumentError.value(
+        this.connectionId,
+        "connectionId",
+        'must not be blank',
+      );
     }
     if (this.expectedRevision <= 0) {
-      throw ArgumentError.value(this.expectedRevision, "expectedRevision", "must be positive");
+      throw ArgumentError.value(
+        this.expectedRevision,
+        "expectedRevision",
+        "must be positive",
+      );
     }
   }
 
   final String connectionId;
   final int expectedRevision;
 
-  factory RevokeConnectorConnectionRequest.fromWire(Map<String, Object?> map, [String path = "RevokeConnectorConnectionRequest"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"connectionId", "expectedRevision"}, path);
+  factory RevokeConnectorConnectionRequest.fromWire(
+    Map<String, Object?> map, [
+    String path = "RevokeConnectorConnectionRequest",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "connectionId",
+      "expectedRevision",
+    }, path);
     return RevokeConnectorConnectionRequest(
-      connectionId: _generatedRequestString(map["connectionId"], '$path.connectionId'),
-      expectedRevision: _generatedRequestInt(map["expectedRevision"], '$path.expectedRevision'),
+      connectionId: _generatedRequestString(
+        map["connectionId"],
+        '$path.connectionId',
+      ),
+      expectedRevision: _generatedRequestInt(
+        map["expectedRevision"],
+        '$path.expectedRevision',
+      ),
     );
   }
 
@@ -337,25 +470,34 @@ final class RevokeConnectorConnectionRequest {
   };
 }
 
-CloudOperationRequestPayload encodeIntegrationConnectorConnectionCreateConnectorConnectionGeneratedRequest(CreateConnectorConnectionRequest request) {
+CloudOperationRequestPayload
+encodeIntegrationConnectorConnectionCreateConnectorConnectionGeneratedRequest(
+  CreateConnectorConnectionRequest request,
+) {
   return CloudOperationRequestPayload(
     body: <String, Object?>{
       "connectorId": request.connectorId,
-      "requestedCapabilities": request.requestedCapabilities.map((value) => value).toList(growable: false),
+      "requestedCapabilities": request.requestedCapabilities
+          .map((value) => value)
+          .toList(growable: false),
       "grantReceiptRef": request.grantReceiptRef,
     },
   );
 }
 
-CloudOperationRequestPayload encodeIntegrationConnectorConnectionGetConnectorConnectionGeneratedRequest(GetConnectorConnectionQuery request) {
+CloudOperationRequestPayload
+encodeIntegrationConnectorConnectionGetConnectorConnectionGeneratedRequest(
+  GetConnectorConnectionQuery request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "connectionId": request.connectionId,
-    },
+    pathParameters: <String, String>{"connectionId": request.connectionId},
   );
 }
 
-CloudOperationRequestPayload encodeIntegrationConnectorConnectionListConnectorConnectionsGeneratedRequest(ListConnectorConnectionsQuery request) {
+CloudOperationRequestPayload
+encodeIntegrationConnectorConnectionListConnectorConnectionsGeneratedRequest(
+  ListConnectorConnectionsQuery request,
+) {
   return CloudOperationRequestPayload(
     queryParameters: <String, String>{
       if (request.limit != null) "limit": (request.limit!).toString(),
@@ -363,26 +505,29 @@ CloudOperationRequestPayload encodeIntegrationConnectorConnectionListConnectorCo
   );
 }
 
-CloudOperationRequestPayload encodeIntegrationConnectorConnectionRevokeConnectorConnectionGeneratedRequest(RevokeConnectorConnectionRequest request) {
+CloudOperationRequestPayload
+encodeIntegrationConnectorConnectionRevokeConnectorConnectionGeneratedRequest(
+  RevokeConnectorConnectionRequest request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "connectionId": request.connectionId,
-    },
-    body: <String, Object?>{
-      "expectedRevision": request.expectedRevision,
-    },
+    pathParameters: <String, String>{"connectionId": request.connectionId},
+    body: <String, Object?>{"expectedRevision": request.expectedRevision},
   );
 }
 
-CloudOperationRequestPayload encodeIntegrationConnectorDefinitionGetConnectorDefinitionGeneratedRequest(GetConnectorDefinitionQuery request) {
+CloudOperationRequestPayload
+encodeIntegrationConnectorDefinitionGetConnectorDefinitionGeneratedRequest(
+  GetConnectorDefinitionQuery request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "connectorId": request.connectorId,
-    },
+    pathParameters: <String, String>{"connectorId": request.connectorId},
   );
 }
 
-CloudOperationRequestPayload encodeIntegrationConnectorDefinitionListConnectorDefinitionsGeneratedRequest(ListConnectorDefinitionsQuery request) {
+CloudOperationRequestPayload
+encodeIntegrationConnectorDefinitionListConnectorDefinitionsGeneratedRequest(
+  ListConnectorDefinitionsQuery request,
+) {
   return CloudOperationRequestPayload(
     queryParameters: <String, String>{
       if (request.capability != null) "capability": request.capability!,
@@ -391,15 +536,19 @@ CloudOperationRequestPayload encodeIntegrationConnectorDefinitionListConnectorDe
   );
 }
 
-CloudOperationRequestPayload encodeIntegrationConnectorInvocationGetConnectorInvocationGeneratedRequest(GetConnectorInvocationQuery request) {
+CloudOperationRequestPayload
+encodeIntegrationConnectorInvocationGetConnectorInvocationGeneratedRequest(
+  GetConnectorInvocationQuery request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "invocationId": request.invocationId,
-    },
+    pathParameters: <String, String>{"invocationId": request.invocationId},
   );
 }
 
-CloudOperationRequestPayload encodeIntegrationConnectorInvocationListConnectorInvocationsGeneratedRequest(ListConnectorInvocationsQuery request) {
+CloudOperationRequestPayload
+encodeIntegrationConnectorInvocationListConnectorInvocationsGeneratedRequest(
+  ListConnectorInvocationsQuery request,
+) {
   return CloudOperationRequestPayload(
     queryParameters: <String, String>{
       if (request.connectionId != null) "connectionId": request.connectionId!,
@@ -408,18 +557,25 @@ CloudOperationRequestPayload encodeIntegrationConnectorInvocationListConnectorIn
   );
 }
 
-CloudOperationRequestPayload encodeIntegrationLocationGetNearbyLocationsGeneratedRequest(NearbyLocationQueryParams request) {
+CloudOperationRequestPayload
+encodeIntegrationLocationGetNearbyLocationsGeneratedRequest(
+  NearbyLocationQueryParams request,
+) {
   return CloudOperationRequestPayload(
     queryParameters: <String, String>{
       if (request.latitude != null) "lat": (request.latitude!).toString(),
       if (request.longitude != null) "lng": (request.longitude!).toString(),
-      if (request.radiusMeters != null) "radiusMeters": (request.radiusMeters!).toString(),
+      if (request.radiusMeters != null)
+        "radiusMeters": (request.radiusMeters!).toString(),
       "limit": (request.limit).toString(),
     },
   );
 }
 
-CloudOperationRequestPayload encodeIntegrationLocationSearchLocationsGeneratedRequest(LocationSearchQueryParams request) {
+CloudOperationRequestPayload
+encodeIntegrationLocationSearchLocationsGeneratedRequest(
+  LocationSearchQueryParams request,
+) {
   return CloudOperationRequestPayload(
     queryParameters: <String, String>{
       "q": request.query,
@@ -430,4 +586,3 @@ CloudOperationRequestPayload encodeIntegrationLocationSearchLocationsGeneratedRe
     },
   );
 }
-

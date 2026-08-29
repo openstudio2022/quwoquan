@@ -14,23 +14,55 @@ final class RecoveryVersionRequest {
 
 enum RecoveryUpdateState { none, available, required }
 
+enum RecoveryVersionPlatform {
+  android('android'),
+  ios('ios'),
+  web('web');
+
+  const RecoveryVersionPlatform(this.wireName);
+
+  final String wireName;
+}
+
+enum RecoveryVersionChannel { nativeUpdate, webOnly }
+
+bool hasCanonicalRecoveryVersionTarget({
+  required RecoveryVersionPlatform platform,
+  required RecoveryVersionChannel channel,
+  required String? updateUrl,
+}) {
+  final normalizedUpdateUrl = updateUrl?.trim();
+  return switch (platform) {
+    RecoveryVersionPlatform.ios =>
+      channel == RecoveryVersionChannel.webOnly && normalizedUpdateUrl == null,
+    RecoveryVersionPlatform.android || RecoveryVersionPlatform.web =>
+      channel == RecoveryVersionChannel.nativeUpdate &&
+          normalizedUpdateUrl != null &&
+          normalizedUpdateUrl.isNotEmpty,
+  };
+}
+
 final class RecoveryVersionResponse {
   const RecoveryVersionResponse({
+    required this.platform,
     required this.latestVersion,
     required this.latestBuild,
     required this.minimumSupportedVersion,
     required this.minimumSupportedBuild,
     required this.updateState,
+    required this.updateChannel,
     required this.updateUrl,
     required this.recoveryUrl,
   });
 
+  final RecoveryVersionPlatform platform;
   final String latestVersion;
   final int latestBuild;
   final String minimumSupportedVersion;
   final int minimumSupportedBuild;
   final RecoveryUpdateState updateState;
-  final String updateUrl;
+  final RecoveryVersionChannel updateChannel;
+  final String? updateUrl;
   final String recoveryUrl;
 }
 
@@ -67,8 +99,9 @@ abstract interface class RecoveryRuntimeOperations {
   Future<void> reportFailure(RecoveryFailurePayload payload);
 }
 
-typedef RecoveryRuntimeOperationsFactory =
-    RecoveryRuntimeOperations Function(RecoveryRuntimeBinding binding);
+typedef RecoveryRuntimeOperationsFactory = RecoveryRuntimeOperations Function(
+  RecoveryRuntimeBinding binding,
+);
 
 /// 由 runtime/di 在普通 runtime config hydration 前安装 production factory。
 final class RecoveryRuntimeOperationsRegistry {

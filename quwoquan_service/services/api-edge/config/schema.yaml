@@ -289,14 +289,14 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-- key: sys.api-edge.user_service.account_security.base_url
+- key: sys.api-edge.user_account_security_authority.base_url
   type: string
   scope: workload
   reload: restart
   rollout: progressive
   sensitive: false
   default: http://user-service:18081
-- key: sys.api-edge.user_service.account_security.timeout_ms
+- key: sys.api-edge.user_account_security_authority.timeout_ms
   type: int
   scope: workload
   reload: restart

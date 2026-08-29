@@ -12,8 +12,24 @@ const String patrolRuntimeInstallId = String.fromEnvironment(
   defaultValue: 'patrol-local-remote-acceptance',
 );
 
+/// Runner-provisioned Chat identities consumed by one Patrol UAT process.
+///
+/// The private constructor keeps the canonical target from synthesizing a
+/// fallback conversation. Only the ephemeral host wrapper can install this
+/// value, before the production App mounts.
+final class PatrolTestDataConversation {
+  PatrolTestDataConversation._({
+    required this.conversationId,
+    required this.initialMessageIds,
+  });
+
+  final String conversationId;
+  final List<String> initialMessageIds;
+}
+
 bool _patrolAppLaunchStarted = false;
 AuthSessionState? _runnerInstalledAcceptanceSession;
+PatrolTestDataConversation? _runnerInstalledTestDataConversation;
 
 /// Whether the Patrol target has already started mounting the production App.
 bool get patrolAppLaunchStarted => _patrolAppLaunchStarted;
@@ -21,6 +37,10 @@ bool get patrolAppLaunchStarted => _patrolAppLaunchStarted;
 /// The session installed by the host-side runner, absent until it hands one off.
 AuthSessionState? get patrolRunnerInstalledAcceptanceSession =>
     _runnerInstalledAcceptanceSession;
+
+/// The typed conversation installed by the host runner, if handed off.
+PatrolTestDataConversation? get patrolRunnerInstalledTestDataConversation =>
+    _runnerInstalledTestDataConversation;
 
 /// Records that the App launch has begun so late session installs fail closed.
 void markPatrolAppLaunchStarted() {
@@ -53,12 +73,68 @@ AuthSessionState installPatrolAcceptanceSessionForRunner({
   return session;
 }
 
-/// Clears the runtime handoff between local-contract cases.
+/// Installs the typed conversation created by the stackctl TestDataSession.
+///
+/// This does not provision data or replace a production Provider. It only
+/// transfers opaque object identities from the runner-owned ephemeral wrapper
+/// into the canonical UAT process and never emits their values to output.
+PatrolTestDataConversation installPatrolTestDataConversationForRunner({
+  required String conversationId,
+  required List<String> initialMessageIds,
+}) {
+  if (_patrolAppLaunchStarted) {
+    throw StateError(
+      'Patrol test-data conversation must be installed before App launch',
+    );
+  }
+  if (_runnerInstalledAcceptanceSession == null) {
+    throw StateError(
+      'Patrol test-data conversation requires a runner-installed actor session',
+    );
+  }
+  if (_runnerInstalledTestDataConversation != null) {
+    throw StateError('Patrol test-data conversation is already installed');
+  }
+
+  final normalizedConversationId = conversationId.trim();
+  final normalizedMessageIds = initialMessageIds
+      .map((messageId) => messageId.trim())
+      .toList(growable: false);
+  if (normalizedConversationId.isEmpty ||
+      normalizedMessageIds.isEmpty ||
+      normalizedMessageIds.any((messageId) => messageId.isEmpty) ||
+      normalizedMessageIds.toSet().length != normalizedMessageIds.length) {
+    throw StateError(
+      'Patrol test-data conversation handoff must be complete and unique',
+    );
+  }
+
+  final conversation = PatrolTestDataConversation._(
+    conversationId: normalizedConversationId,
+    initialMessageIds: List<String>.unmodifiable(normalizedMessageIds),
+  );
+  _runnerInstalledTestDataConversation = conversation;
+  return conversation;
+}
+
+/// Returns the exact runner handoff or fails instead of synthesizing data.
+PatrolTestDataConversation requirePatrolTestDataConversationForRunner() {
+  final conversation = _runnerInstalledTestDataConversation;
+  if (conversation == null) {
+    throw StateError(
+      'Patrol message UAT requires a runner-installed typed conversation',
+    );
+  }
+  return conversation;
+}
+
+/// Clears runner handoffs between local-contract cases.
 void resetPatrolAcceptanceSessionForTest() {
   if (_patrolAppLaunchStarted) {
     throw StateError('Patrol App has already launched');
   }
   _runnerInstalledAcceptanceSession = null;
+  _runnerInstalledTestDataConversation = null;
 }
 
 AuthSessionState buildPatrolAcceptanceSession({

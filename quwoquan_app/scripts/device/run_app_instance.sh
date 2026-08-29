@@ -12,6 +12,7 @@ TARGET_NAME=""
 DEVICE_ID=""
 RUN_MODE="content-live"
 ARTIFACT_MANIFEST=""
+LAUNCHER_HANDOFF=""
 LAUNCH_RECEIPT=""
 LAUNCH_LOG_REF=""
 INSTANCE_NAMESPACE="${APP_INSTANCE_NAMESPACE:-manual}"
@@ -29,7 +30,8 @@ usage() {
   cat <<'EOF'
 Usage:
   run_app_instance.sh --env <alpha|beta|gamma|prod> --target <target> \
-    --device-id <id> [--mode content-live|ui-only] [--artifact-manifest <path>]
+    --device-id <id> [--mode content-live|ui-only] [--artifact-manifest <path>] \
+    [--launcher-handoff <path>]
 
 Non-Prod delegates to quwoquan_app/run.sh. Android prod-sim requires the exact
 stackctl Release emulator manifest. iOS Release/Profile simulator is unsupported;
@@ -47,6 +49,7 @@ while [[ $# -gt 0 ]]; do
     --device-id) DEVICE_ID="${2:-}"; shift 2 ;;
     --mode) RUN_MODE="${2:-}"; shift 2 ;;
     --artifact-manifest) ARTIFACT_MANIFEST="${2:-}"; shift 2 ;;
+    --launcher-handoff) LAUNCHER_HANDOFF="${2:-}"; shift 2 ;;
     --launch-receipt) LAUNCH_RECEIPT="${2:-}"; shift 2 ;;
     --launch-log-ref) LAUNCH_LOG_REF="${2:-}"; shift 2 ;;
     --gateway-base-url) GATEWAY_BASE_URL="${2:-}"; shift 2 ;;
@@ -88,6 +91,14 @@ if [[ "$TARGET_NAME" == "prod-sim" && -z "$ARTIFACT_MANIFEST" ]]; then
   echo "APP.LAUNCH.prod_artifact_required: prod-sim requires --artifact-manifest from stackctl package --kind app-artifact." >&2
   exit 2
 fi
+if [[ "$TARGET_NAME" == "prod-sim" && -z "$LAUNCHER_HANDOFF" ]]; then
+  echo "APP.LAUNCH.prod_artifact_invalid: prod-sim requires --launcher-handoff bound to the exact external runtime package." >&2
+  exit 2
+fi
+if [[ "$ENV_NAME" == "prod" && -n "$ROLLOUT_MODE" ]]; then
+  echo "GATE_BLOCK: Prod artifact startup does not execute rollout or canary." >&2
+  exit 2
+fi
 
 DEVICE_PLATFORM="$({
   PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 - "$DEVICE_ID" <<'PY'
@@ -125,6 +136,7 @@ if [[ "$TARGET_NAME" == "prod-sim" ]]; then
   command=(
     python3 "$APP_DIR/scripts/device/launch_release_artifact.py"
     --manifest "$ARTIFACT_MANIFEST"
+    --launcher-handoff "$LAUNCHER_HANDOFF"
     --device "$DEVICE_ID"
     --platform "$DEVICE_PLATFORM"
     --receipt "$LAUNCH_RECEIPT"

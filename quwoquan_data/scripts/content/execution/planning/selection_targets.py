@@ -228,6 +228,7 @@ def select_targets(
             pool = pursue_qualified_target_pool(
                 candidate_rows,
                 quota=quota,
+                frozen_target_ceiling=limit,
                 discovery_ref=str(discovery_path),
                 source_qualifier=source_qualifier,
                 qualification_source_key=qualification_source_key,

@@ -38,10 +38,11 @@
 ### REQ-002 统一目录结构：default/ + alpha/ + beta/ + gamma/ + prod/
 
 - 统一目录结构：`default/` + `alpha/` + `beta/` + `gamma/` + `prod/`
-- 统一覆盖顺序：默认配置 -> 环境配置 -> 环境变量覆盖。
+- 统一覆盖顺序：默认配置 -> 环境配置 -> 仅对 schema 明确列入低风险 allowlist 的服务端字段做环境变量覆盖。`CONFIG_VERSION` 只在合并前选择并断言一份不可变配置版本，不提供配置值，也不是第三个覆盖层。
 - 统一部署映射：`environments -> deploy process -> domains`
 - 统一 environment topology：受支持环境分别由 `<env>/runtime.yaml` 声明运行策略，workload 从各服务环境部署目录推导；四环境 App composition 均为 Remote，alpha 只通过容量、endpoint、访问控制、release 与第三方 sandbox 策略差异化。
 - 统一环境包策略：App/Service 包的 host allowlist、secret scope 与 purity gate 由环境 runtime 驱动；production App composition 固定 Remote，不作为环境可切换字段。
+- App endpoint、认证 authority/Provider binding、runtime config package、trust envelope 与 active package pointer 明确排除在环境变量覆盖面之外。它们只能来自 target-scoped 已签名 runtime package，并经 canonical activation 验签和原子 readback 后生效；环境变量只能对已激活身份做相等断言，不能选择、替换或回退这些值。
 - 统一自动化入口：环境打包、校验、健康检查与巡检统一经 `stackctl` 暴露机器可读报告。
 - `alpha` 的 topology 字段必须完整，不能通过缺字段表达“简化环境”。
 - `prod` 只允许 `artifactPolicy.app.runtimeEnv=prod`，禁止任何 `prod-gray` 目录或枚举。
@@ -57,7 +58,8 @@
 ### REQ-005 配置目录统一：default/alpha/beta/gamma/prod
 
 - 配置目录统一：default/alpha/beta/gamma/prod。
-- 覆盖规则统一：default -> APP_ENV -> env var。
+- 覆盖规则统一：default -> APP_ENV 对应环境配置 -> schema allowlist 内低风险 service env var。`CONFIG_VERSION` 只能选择合并前的不可变版本，不参与字段覆盖。
+- App endpoint、认证配置与 runtime package 不进入上述 env var 层，仍只走 signed package activation 单轨。
 - 生产挂载统一：`CONFIG_ROOT=/etc/qwq-config`
 - `APP_ENV` 仅允许 `alpha|beta|gamma|prod`
 - 版本配置文件不可变，发布后禁止覆盖写入。
@@ -79,8 +81,9 @@
 ### REQ-008 热更新仅适用于低风险配置字段，禁止覆盖高风险连接/鉴权类字段
 
 - 热更新仅适用于低风险配置字段，禁止覆盖高风险连接/鉴权类字段。
+- App endpoint、认证 authority/Provider binding、runtime config package、trust envelope 与 active pointer 均属于不可热更新的高风险字段，任何 env override 声明都必须 fail closed。
 - 公共库抽象必须保持现有服务启动语义兼容。
-- 任何演进项必须保持 `default -> env -> version -> env vars` 基线不变。
+- 任何演进项必须保持单一覆盖链 `default -> env -> allowlisted service env vars` 不变。`CONFIG_VERSION` 仅作为该链读取前的不可变版本选择/断言，不得被实现成覆盖层或热更新通道。
 
 ## 4. 契约引用
 
@@ -106,6 +109,7 @@
 - GIVEN 从受控配置真相源生成任一环境的部署快照。
 - WHEN 删除可重建输出后重新生成 alpha、beta、gamma 与 prod 快照。
 - THEN 每个环境的配置、deploymentRef 与 workload topology 一致，且不产生第五环境或 prod-gray。
+- AND 注入 App endpoint、认证或 runtime package 相关环境变量不会改变 effective App 配置，并以 typed blocker 证明 signed activation 仍是唯一写路径。
 
 ## 6. 依赖
 
@@ -124,8 +128,6 @@
 - 影响或价值：尚缺少能够证明“配置 Provider 分层”已满足当前规格的真实测试证据。
 - 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
 
-<a id="open-002"></a>
-<a id="open-003"></a>
 <a id="open-004"></a>
 ### OPEN-004 四环境配置与拓扑无漂移
 

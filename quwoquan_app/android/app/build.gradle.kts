@@ -190,66 +190,10 @@ fun escapedBuildConfigValue(value: String): String {
 }
 fun escapedBuildConfigString(name: String): String =
     escapedBuildConfigValue(System.getenv(name)?.trim().orEmpty())
-val configuredAndroidRuntimeConfigAssetRoot =
-    System.getenv("QWQ_ANDROID_RUNTIME_CONFIG_ASSET_ROOT")?.trim().orEmpty()
-val externalAndroidRuntimeConfigAssetRoot =
-    configuredAndroidRuntimeConfigAssetRoot.takeIf { it.isNotEmpty() }?.let { configured ->
-        val root = File(configured)
-        check(root.isAbsolute) {
-            "GATE_BLOCK: Android runtime configuration asset root must be absolute"
-        }
-        val canonicalRoot = root.canonicalFile
-        val repositoryRoot = projectDir.resolve("../../..").canonicalFile
-        check(!canonicalRoot.toPath().startsWith(repositoryRoot.toPath())) {
-            "GATE_BLOCK: Android runtime configuration asset root must stay outside the source tree"
-        }
-        check(
-            canonicalRoot.isDirectory &&
-                !Files.isSymbolicLink(root.toPath()) &&
-                canonicalRoot.listFiles()?.map { it.name }?.toSet() == setOf("qwq_runtime"),
-        ) {
-            "GATE_BLOCK: Android runtime configuration asset root must contain only qwq_runtime"
-        }
-        val runtimeRoot = canonicalRoot.resolve("qwq_runtime")
-        val trustFile = runtimeRoot.resolve("runtime-config-trust.json")
-        val packageFile = runtimeRoot.resolve("runtime-config-package.json")
-        check(
-            runtimeRoot.isDirectory &&
-                !Files.isSymbolicLink(runtimeRoot.toPath()) &&
-                runtimeRoot.listFiles()?.map { it.name }?.toSet() ==
-                setOf("runtime-config-trust.json"),
-        ) {
-            "GATE_BLOCK: target runtime package must not enter Android assets"
-        }
-        check(
-            Files.isRegularFile(trustFile.toPath(), LinkOption.NOFOLLOW_LINKS) &&
-                !Files.isSymbolicLink(trustFile.toPath()) &&
-                trustFile.length() in 1..(1024 * 1024) &&
-                !packageFile.exists(),
-        ) {
-            "GATE_BLOCK: Android build-profile trust asset is missing or invalid"
-        }
-        @Suppress("UNCHECKED_CAST")
-        val trust = JsonSlurper().parse(trustFile) as? Map<String, Any?>
-        val selectedBuildProfile = System.getenv("QWQ_APP_BUILD_PROFILE")?.trim().orEmpty()
-        check(
-            trust != null &&
-                trust.keys ==
-                setOf(
-                    "schema",
-                    "buildProfile",
-                    "signatureAlgorithm",
-                    "trustedPublicKeys",
-                ) &&
-                trust["schema"] == "app-runtime-config-trust" &&
-                trust["buildProfile"] == selectedBuildProfile &&
-                trust["signatureAlgorithm"] == "ed25519" &&
-                (trust["trustedPublicKeys"] as? Map<*, *>)?.isNotEmpty() == true,
-        ) {
-            "GATE_BLOCK: Android runtime trust envelope conflicts with the selected build profile"
-        }
-        canonicalRoot
-    }
+// trust envelope 的 assets 准入校验与 Patrol UAT test host 共用同一份脚本，宿主与生产
+// 因此受同一组判否约束。
+apply(from = rootProject.file("gradle/runtime-config-assets.gradle.kts"))
+val externalAndroidRuntimeConfigAssetRoot = extra["qwqRuntimeConfigAssetRoot"] as File?
 androidComponents {
     beforeVariants { variantBuilder ->
         val buildProfile =
@@ -284,6 +228,11 @@ android {
     externalAndroidRuntimeConfigAssetRoot?.let { externalAssetRoot ->
         sourceSets.getByName("main").assets.srcDir(externalAssetRoot)
     }
+
+    // runtime config 供给面被隔离在独立 source root，由本工程与 Patrol UAT test host
+    // 共同编译。宿主必须读到与生产 App 同一实现产出的 package，否则页面 suite 证明不了
+    // 生产启动路径；隔离成独立目录使宿主能只纳入这一闭包，而不牵入本工程其余依赖。
+    sourceSets.getByName("main").java.srcDir("src/runtimeConfigShared/java")
 
     flavorDimensions += "buildProfile"
     productFlavors {
@@ -436,7 +385,12 @@ afterEvaluate {
 }
 
 val vendoredAndroidArtifactsDir =
-    rootProject.file("../vendor/android_artifacts")
+    rootProject.file(
+        requireNotNull(rootProject.findProperty("qwq.vendor.androidArtifactsRoot")) {
+            "Missing gradle property qwq.vendor.androidArtifactsRoot; " +
+                "the vendored artifact root must be declared by this Gradle root, not inferred."
+        }
+    )
 
 dependencies {
     implementation("androidx.core:core-splashscreen:1.0.1")

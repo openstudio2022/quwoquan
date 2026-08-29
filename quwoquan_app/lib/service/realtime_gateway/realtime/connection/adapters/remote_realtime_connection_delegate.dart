@@ -12,31 +12,31 @@ import 'package:quwoquan_app/runtime/di/realtime_message_handler.dart';
 import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/adapters/longpoll_transport.dart';
 import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/adapters/websocket_transport.dart';
 
-typedef RemoteRealtimeLongPollFactory =
-    LongPollTransport Function({
-      required RealtimeConfig config,
-      required CloudAuthTokenProvider authTokenProvider,
-      required LongPollEventCallback onEvents,
-    });
+typedef RemoteRealtimeLongPollFactory = LongPollTransport Function({
+  required RealtimeConfig config,
+  required CloudAuthTokenProvider authTokenProvider,
+  required LongPollActiveConversationIdResolver activeConversationIdResolver,
+  required LongPollEventCallback onEvents,
+});
 
-typedef RemoteRealtimeWebSocketFactory =
-    WebSocketTransport Function({
-      required RealtimeConfig config,
-      required CloudAuthTokenProvider authTokenProvider,
-      required RealtimeEventCallback onEvent,
-      required VoidCallback onDisconnect,
-    });
+typedef RemoteRealtimeWebSocketFactory = WebSocketTransport Function({
+  required RealtimeConfig config,
+  required CloudAuthTokenProvider authTokenProvider,
+  required RealtimeEventCallback onEvent,
+  required VoidCallback onDisconnect,
+});
 
-typedef RealtimeConnectTelemetryRecorder =
-    Future<void> Function({
-      required String transport,
-      required String result,
-      required int durationMs,
-      String? failReasonCode,
-    });
+typedef RealtimeConnectTelemetryRecorder = Future<void> Function({
+  required String transport,
+  required String result,
+  required int durationMs,
+  String? failReasonCode,
+});
 
-typedef RealtimeReconnectDelayResolver =
-    Duration Function({required int attempt, required RealtimeConfig config});
+typedef RealtimeReconnectDelayResolver = Duration Function({
+  required int attempt,
+  required RealtimeConfig config,
+});
 
 /// Remote 实现：WebSocket + LongPoll，行为与 refactor 前 [RealtimeConnectionManager] 一致。
 class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
@@ -105,9 +105,12 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
   Timer? _reconnectTimer;
   String? _activeConversationId;
   bool _wsHadDisconnect = false;
+  bool _disposed = false;
+  int _webSocketGeneration = 0;
 
   @override
   void onAppForeground() {
+    if (_disposed) return;
     if (_state == TransportState.disconnected) {
       _transitionTo(
         _activeConversationId == null
@@ -119,6 +122,7 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
 
   @override
   void onAppBackground() {
+    if (_disposed) return;
     // 后台断开同样是断连窗口：回到前台重建传输后必须触发与 WS 断线重连
     // 同等的 Reconnected 补洞（realtime-push-and-offline-sync REQ-008），
     // 否则后台期间的消息在下一次全量刷新前不可见。
@@ -130,6 +134,7 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
 
   @override
   void onEnterConversation(String conversationId) {
+    if (_disposed) return;
     _activeConversationId = conversationId;
     _cancelIdleTimer();
     _transitionTo(TransportState.active);
@@ -137,6 +142,7 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
 
   @override
   void onLeaveConversation() {
+    if (_disposed) return;
     _activeConversationId = null;
     if (_state != TransportState.active) {
       _cancelIdleTimer();
@@ -147,6 +153,9 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
 
   @override
   void dispose() {
+    if (_disposed) return;
+    _disposed = true;
+    _handler.dispose();
     _teardownAll();
   }
 
@@ -157,6 +166,7 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
   }
 
   void _transitionTo(TransportState target) {
+    if (_disposed) return;
     if (_state == target) return;
 
     switch (target) {
@@ -179,8 +189,11 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
   }
 
   Future<void> _connectWebSocket() async {
+    if (_disposed) return;
     final startedAt = DateTime.now();
     _teardownWebSocket();
+    if (_disposed) return;
+    final generation = _webSocketGeneration;
 
     final topics = <String>['inbox'];
     final conversationId = _activeConversationId;
@@ -194,22 +207,35 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
     }
 
     final factory = _webSocketFactory;
-    _ws = factory != null
+    late final WebSocketTransport transport;
+    void onEvent(Map<String, dynamic> event) {
+      if (_ownsWebSocket(generation, transport)) {
+        _handler.handle(event);
+      }
+    }
+
+    void onDisconnect() {
+      _onWebSocketDisconnect(generation, transport);
+    }
+
+    transport = factory != null
         ? factory(
             config: _config,
             authTokenProvider: authTokenProvider,
-            onEvent: _onRealtimeEvent,
-            onDisconnect: _onWebSocketDisconnect,
+            onEvent: onEvent,
+            onDisconnect: onDisconnect,
           )
         : WebSocketTransport(
             config: _config,
             authTokenProvider: authTokenProvider,
             operations: _requiredOperations(),
-            onEvent: _onRealtimeEvent,
-            onDisconnect: _onWebSocketDisconnect,
+            onEvent: onEvent,
+            onDisconnect: onDisconnect,
           );
-    await _ws!.connect(topics: topics);
-    final connected = _ws?.isConnected.value ?? false;
+    _ws = transport;
+    await transport.connect(topics: topics);
+    if (!_ownsWebSocket(generation, transport)) return;
+    final connected = transport.isConnected.value;
     if (connected) {
       // A completed authenticated connection, not a reconnect invocation,
       // starts a new retry budget.
@@ -235,13 +261,23 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
     );
   }
 
-  void _onWebSocketDisconnect() {
-    if (_state != TransportState.active) return;
+  bool _ownsWebSocket(int generation, WebSocketTransport transport) {
+    return !_disposed &&
+        generation == _webSocketGeneration &&
+        identical(_ws, transport);
+  }
+
+  void _onWebSocketDisconnect(int generation, WebSocketTransport transport) {
+    if (!_ownsWebSocket(generation, transport) ||
+        _state != TransportState.active) {
+      return;
+    }
     _wsHadDisconnect = true;
     _scheduleReconnect();
   }
 
   void _scheduleReconnect() {
+    if (_disposed) return;
     if (_reconnectAttempt >= _config.maxReconnectAttempts) {
       debugPrint(
         'RemoteRealtimeConnectionDelegate: max reconnect attempts, falling back to long-poll',
@@ -258,32 +294,37 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
     _reconnectAttempt++;
 
     _reconnectTimer = Timer(delay, () {
-      if (_state == TransportState.active) {
+      if (!_disposed && _state == TransportState.active) {
         unawaited(_connectWebSocket());
       }
     });
   }
 
   void _teardownWebSocket() {
+    _webSocketGeneration++;
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
-    _ws?.dispose();
+    final transport = _ws;
     _ws = null;
+    transport?.dispose();
   }
 
   void _startLongPoll() {
+    if (_disposed) return;
     _teardownLongPoll();
     final factory = _longPollFactory;
     _longPoll = factory != null
         ? factory(
             config: _config,
             authTokenProvider: authTokenProvider,
+            activeConversationIdResolver: () => _activeConversationId,
             onEvents: _onLongPollEvents,
           )
         : LongPollTransport(
             config: _config,
             authTokenProvider: authTokenProvider,
             operations: _requiredOperations(),
+            activeConversationIdResolver: () => _activeConversationId,
             onEvents: _onLongPollEvents,
           );
     _longPoll!.onFirstTransportFailure = (reasonCode) {
@@ -297,16 +338,6 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
       );
     };
     _longPoll!.start();
-    if (_wsHadDisconnect) {
-      // WS 重试预算耗尽降级 LongPoll、或后台恢复直接进入 idle 时，
-      // 断连窗口的消息同样只能由 seq 补洞收敛；LongPoll 游标不承载
-      // 断连期间的会话消息回放。
-      _wsHadDisconnect = false;
-      _handler.handle(<String, dynamic>{
-        'type': 'Reconnected',
-        'conversationId': ?_activeConversationId,
-      });
-    }
     unawaited(
       _recordConnectResult(
         transport: 'long_poll',
@@ -316,9 +347,12 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
     );
   }
 
-  void _onLongPollEvents(List<Map<String, dynamic>> events) {
+  Future<void> _onLongPollEvents(List<Map<String, dynamic>> events) async {
     for (final event in events) {
-      _onRealtimeEvent(event);
+      await _handler.handleAndWait(event);
+      if (event['type'] == 'Reconnected') {
+        _wsHadDisconnect = false;
+      }
     }
   }
 
@@ -337,14 +371,11 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
     return gateway;
   }
 
-  void _onRealtimeEvent(Map<String, dynamic> event) {
-    _handler.handle(event);
-  }
-
   void _startIdleTimer() {
+    if (_disposed) return;
     _cancelIdleTimer();
     _idleTimer = Timer(Duration(seconds: _config.wsIdleTimeoutSec), () {
-      if (_state == TransportState.active) {
+      if (!_disposed && _state == TransportState.active) {
         _transitionTo(TransportState.idle);
       }
     });
@@ -367,6 +398,7 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
     required int durationMs,
     String? failReasonCode,
   }) async {
+    if (_disposed) return;
     final recorder = telemetryRecorder;
     if (recorder == null) return;
     await recorder(

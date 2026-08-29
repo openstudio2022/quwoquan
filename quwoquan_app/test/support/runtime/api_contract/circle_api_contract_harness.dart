@@ -11,6 +11,7 @@ import 'package:quwoquan_app/service/circle_service/circle_management/circle_gro
 import 'package:quwoquan_app/service/circle_service/circle_management/circle_group_membership/application/public/circle_group_membership_ports.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle_membership/application/public/circle_membership_ports.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle_file/application/public/circle_file_ports.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/gathering_plan/adapters/gathering_plan_remote.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle_post_placement/application/public/circle_post_placement_commands.dart';
 import 'package:quwoquan_app/service/user_service/account/account_session/adapters/account_session_remote.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/adapters/account_lifecycle_remote.dart';
@@ -49,6 +50,7 @@ final class CircleApiContractHarness {
     required this.groupMembershipCommands,
     required this.groupMembershipQueries,
     required this.postPlacement,
+    required this.gatheringPlans,
   });
 
   static Future<CircleApiContractHarness> create() async {
@@ -191,7 +193,33 @@ final class CircleApiContractHarness {
                   idempotencyKey,
                 ),
           ),
+      gatheringPlans: RemoteGatheringPlanFacet(
+        client: client,
+        invocationContext: (clientPageId, {idempotencyKey}) =>
+            harness._gatheringPlanInvocationContext(clientPageId),
+      ),
     );
+    return harness;
+  }
+
+  static Future<CircleApiContractHarness> createManaged({
+    required String accessToken,
+    required String accountId,
+    required String personaId,
+  }) async {
+    final token = accessToken.trim();
+    final account = accountId.trim();
+    final persona = personaId.trim();
+    if (_apiContractEnv != 'gamma') {
+      throw StateError('managed Circle API contract runner requires gamma');
+    }
+    if (token.isEmpty || account.isEmpty || persona.isEmpty) {
+      throw StateError('managed Circle actor identity is incomplete');
+    }
+    final harness = await create();
+    harness._tokenProvider.accessToken = token;
+    harness._ownerId = account;
+    harness._personaId = persona;
     return harness;
   }
 
@@ -213,6 +241,7 @@ final class CircleApiContractHarness {
   final CircleGroupMembershipCommands groupMembershipCommands;
   final CircleGroupMembershipQueries groupMembershipQueries;
   final CirclePostPlacementCommands postPlacement;
+  final RemoteGatheringPlanFacet gatheringPlans;
 
   AuthSessionGrant? _session;
   String? _ownerId;
@@ -323,6 +352,24 @@ final class CircleApiContractHarness {
       routeId: surface.routeId,
       clientPageId: clientPageId,
       idempotencyKey: idempotencyKey,
+      actor: CloudOperationActorContext(
+        accountId: _ownerId,
+        personaId: _personaId,
+        deviceActorId: circleApiContractDeviceId,
+      ),
+    );
+  }
+
+  CloudOperationInvocationContext _gatheringPlanInvocationContext(
+    String clientPageId,
+  ) {
+    if (clientPageId != CircleRequestPageIds.getGatheringPlan) {
+      throw StateError('Unsupported GatheringPlan clientPageId: $clientPageId');
+    }
+    return CloudOperationInvocationContext(
+      surfaceId: AppUiSurfaces.gatheringBoard.id,
+      routeId: AppUiSurfaces.gatheringBoard.routeId,
+      clientPageId: clientPageId,
       actor: CloudOperationActorContext(
         accountId: _ownerId,
         personaId: _personaId,

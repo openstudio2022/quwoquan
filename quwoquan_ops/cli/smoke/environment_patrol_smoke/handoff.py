@@ -5,10 +5,14 @@
 from __future__ import annotations
 
 import argparse
+import atexit
 import json
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
+from pathlib import Path
 from typing import Any
 
 from quwoquan_app.scripts.device.verify_flutter_run_defines import (
@@ -18,6 +22,13 @@ from quwoquan_ops.cli.lib.environment_topology import (
     get_target,
     load_environment_topology,
 )
+from quwoquan_ops.cli.lib.generated.app_launch_contract import (
+    APP_EFFECTIVE_LAUNCH_MANIFEST_REQUIRED_FIELDS,
+    APP_LAUNCHER_HANDOFF_REQUIRED_FIELDS,
+    LAUNCH_PROVENANCES,
+    RUNTIME_CONFIG_SUPPLY_MODES,
+)
+
 # 原入口的历史 import，运行时无调用点；保留在此供测试 patch 断言其不被调用。
 from quwoquan_ops.cli.lib.test_live_startup_attempt_receipt import (  # noqa: F401
     load_test_live_startup_attempt,
@@ -107,7 +118,12 @@ def _test_host_dart_defines(handoff: dict[str, Any]) -> dict[str, str]:
     if not isinstance(values, dict):
         raise ValueError("canonical launcher handoff runtime values are invalid")
     defines: dict[str, str] = {
-        "QWQ_APP_LAUNCH_MODE": str(handoff.get("launchMode") or ""),
+        "QWQ_APP_LAUNCH_PROVENANCE": str(
+            handoff.get("launchProvenance") or ""
+        ),
+        "QWQ_RUNTIME_CONFIG_SUPPLY_MODE": str(
+            handoff.get("runtimeConfigSupplyMode") or ""
+        ),
         "APP_LAUNCH_POLICY": str(handoff.get("launchPolicy") or ""),
     }
     projected = {**RUNTIME_VALUE_DEFINE_KEYS, **_PATROL_HOST_DEFINE_KEYS}
@@ -133,17 +149,43 @@ def _canonical_handoff_projection(
 
     if handoff.get("schema") != "app-launcher-handoff":
         raise ValueError("canonical launcher handoff schema is invalid")
+    handoff_field_drift = sorted(
+        set(APP_LAUNCHER_HANDOFF_REQUIRED_FIELDS) ^ handoff.keys()
+    )
+    if handoff_field_drift:
+        raise ValueError(
+            "canonical launcher handoff fields do not match generated contract: "
+            + ", ".join(handoff_field_drift)
+        )
     effective = handoff.get("effectiveLaunchManifest")
     if not isinstance(effective, dict) or effective.get("schema") != (
         "app-effective-launch-manifest"
     ):
         raise ValueError("canonical effective launch manifest is invalid")
+    effective_field_drift = sorted(
+        set(APP_EFFECTIVE_LAUNCH_MANIFEST_REQUIRED_FIELDS) ^ effective.keys()
+    )
+    if effective_field_drift:
+        raise ValueError(
+            "canonical effective launch manifest fields do not match generated contract: "
+            + ", ".join(effective_field_drift)
+        )
     for field, value in effective.items():
         if field != "schema" and handoff.get(field) != value:
             raise ValueError(
                 "canonical launcher handoff/effective manifest mismatch: "
                 f"{field}"
             )
+    launch_provenance = str(handoff.get("launchProvenance") or "")
+    if launch_provenance not in LAUNCH_PROVENANCES:
+        raise ValueError("canonical launcher handoff launchProvenance is invalid")
+    runtime_config_supply_mode = str(
+        handoff.get("runtimeConfigSupplyMode") or ""
+    )
+    if runtime_config_supply_mode not in RUNTIME_CONFIG_SUPPLY_MODES:
+        raise ValueError(
+            "canonical launcher handoff runtimeConfigSupplyMode is invalid"
+        )
     for field in (
         "runtimeConfigPackageDigest",
         "runtimeConfigTrustEnvelopeDigest",
@@ -161,7 +203,8 @@ def _canonical_handoff_projection(
     build_environment = {
         "QWQ_APP_RUNTIME_ENV": str(handoff["environment"]),
         "QWQ_LAUNCH_TARGET": str(handoff["target"]),
-        "QWQ_APP_LAUNCH_MODE": str(handoff["launchMode"]),
+        "QWQ_APP_LAUNCH_PROVENANCE": launch_provenance,
+        "QWQ_RUNTIME_CONFIG_SUPPLY_MODE": runtime_config_supply_mode,
         "QWQ_APP_LAUNCH_POLICY": str(handoff["launchPolicy"]),
         "QWQ_APP_BUILD_CONTEXT": "runtime",
         "QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST": str(
@@ -186,6 +229,23 @@ def _canonical_handoff_projection(
     return defines, build_environment
 
 
+def _materialized_runtime_config_trust_root() -> Path:
+    """在源码树外开一个只放 trust envelope 的 assets 根。
+
+    与 run.sh 的 canonical 启动链同构：宿主原生侧要验签 runtime config package 就必须在
+    构建产物里带上 trust envelope，而 target runtime package 不得随构建进入产物——目录里
+    因此只允许出现 trust envelope 一个文件，这条判否由两个工程共用的 Gradle 校验脚本执行。
+    """
+
+    root = Path(tempfile.mkdtemp(prefix="qwq-patrol-runtime-config."))
+    root.chmod(0o700)
+    runtime_root = root / "qwq_runtime"
+    runtime_root.mkdir()
+    runtime_root.chmod(0o700)
+    atexit.register(shutil.rmtree, root, True)
+    return root
+
+
 def _canonical_test_live_launcher_handoff(
     args: argparse.Namespace,
     device: dict[str, Any],
@@ -199,14 +259,18 @@ def _canonical_test_live_launcher_handoff(
     target_name = _local_target_for_environment_alias(args.env_name)
     get_target(load_environment_topology(), target_name)
     base_urls = _effective_base_urls_for_device(args, device)
+    trust_root = _materialized_runtime_config_trust_root()
+    trust_path = trust_root / "qwq_runtime" / "runtime-config-trust.json"
     command = [
         sys.executable,
         str(APP_LAUNCHER_HANDOFF_BUILDER),
+        "--runtime-config-trust-output",
+        str(trust_path),
         "--env",
         runtime_env,
         "--target",
         target_name,
-        "--launch-mode",
+        "--launch-provenance",
         "canonical_launcher",
         "--launch-policy",
         "test_live",
@@ -291,7 +355,8 @@ def _canonical_test_live_launcher_handoff(
     expected_identity = {
         "environment": runtime_env,
         "target": target_name,
-        "launchMode": "canonical_launcher",
+        "launchProvenance": "canonical_launcher",
+        "runtimeConfigSupplyMode": RUNTIME_CONFIG_SUPPLY_MODES[0],
         "launchPolicy": "test_live",
     }
     mismatched = sorted(
@@ -337,6 +402,21 @@ def _canonical_test_live_launcher_handoff(
                 raise ValueError(
                     f"Android test_live launcher transport mismatch: {field}"
                 )
+    if not trust_path.is_file() or trust_path.stat().st_size <= 0:
+        raise ValueError(
+            "canonical test_live launcher handoff did not materialize the trust envelope"
+        )
+    build_profile = str(payload.get("buildProfile") or "").strip()
+    if not build_profile:
+        raise ValueError(
+            "canonical test_live launcher handoff is missing buildProfile"
+        )
+    # 宿主构建期的 trust 供给，与 run.sh 对生产 App 的注入同名同义：Android 走 assets 根，
+    # iOS 走 bundle 资源复制。buildProfile 必须一并交出，否则 Gradle 侧无法判定 envelope
+    # 是否属于当前构建产物。
+    command_env["QWQ_APP_BUILD_PROFILE"] = build_profile
+    command_env["QWQ_ANDROID_RUNTIME_CONFIG_ASSET_ROOT"] = str(trust_root)
+    command_env["QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH"] = str(trust_path)
     return payload
 
 

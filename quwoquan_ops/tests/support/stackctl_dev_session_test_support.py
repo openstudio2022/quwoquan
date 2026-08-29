@@ -8,6 +8,8 @@ from __future__ import annotations
 import argparse
 import contextlib
 import json
+import os
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -55,6 +57,101 @@ def _runtime_started(
     }
 
 
+def _mutable_unfinalized_runtime_plan(
+    environment: str = "alpha",
+    target: str = "alpha-local",
+) -> dict[str, object]:
+    return {
+        "schema": "stackctl.mutable_test_live_runtime",
+        "environment": environment,
+        "target": target,
+        "composeProject": f"quwoquan_{environment}_test_live",
+        "composeDigest": "sha256:" + "1" * 64,
+        "configurationDigest": "sha256:" + "2" * 64,
+        "portProfile": target,
+    }
+
+
+def _mutable_compose_model(environment: str = "alpha") -> dict[str, object]:
+    target = f"{environment}-local"
+    ports = stackctl.profile_ports(stackctl.load_port_manifest(), target)
+    return {
+        "services": {
+            "product-ops-service": {
+                "ports": [
+                    {
+                        "target": 18086,
+                        "published": str(ports["product-ops-service"]),
+                        "protocol": "tcp",
+                    }
+                ]
+            }
+        }
+    }
+
+
+def _mutable_compose_config_json(environment: str = "alpha") -> str:
+    return json.dumps(_mutable_compose_model(environment))
+
+
+def _mutable_teardown_receipt(
+    run_root: Path,
+    *,
+    status: str = "running",
+) -> dict[str, object]:
+    return {
+        "schema": "stackctl.mutable_test_live_startup_attempt",
+        "launchPolicy": "test_live",
+        "nonPromotable": True,
+        "contentBindingState": "unbound",
+        "attemptId": "alpha-test-live-attempt-1",
+        "environment": "alpha",
+        "target": "alpha-local",
+        "status": status,
+        "workload": "full",
+        "composeProject": "quwoquan_alpha_test_live",
+        "composeDigest": "sha256:" + "1" * 64,
+        "configurationDigest": "sha256:" + "2" * 64,
+        "providerRuntimeDigest": "sha256:" + "3" * 64,
+        "portProfile": "alpha-local",
+        "portBlock": {"start": 17000, "end": 17999},
+        "publishedPorts": [
+            {"role": "api-edge", "hostPort": 17000, "protocol": "tcp"}
+        ],
+        "tlsProfile": "local-managed",
+        "resolverHandoffDigest": "sha256:" + "4" * 64,
+        "publicWebPackage": {
+            "environment": "alpha",
+            "packageVersion": "web-release-alpha",
+            "manifestDigest": "sha256:" + "7" * 64,
+            "contentDigest": "sha256:" + "8" * 64,
+            "publicOrigin": "https://alpha.quwoquan.com:17000",
+        },
+        "sourceRevision": "a" * 40,
+        "workspaceStatusDigest": "sha256:" + "5" * 64,
+        "mutableStateDigest": "sha256:" + "6" * 64,
+        "runRoot": str(run_root),
+        "startedAt": "2026-08-10T12:00:00Z",
+        "updatedAt": "2026-08-10T12:00:01Z",
+        "failure": None,
+    }
+
+
+def _mutable_teardown_down_args(
+    report_dir: Path,
+    *,
+    target: str = "alpha-local",
+) -> argparse.Namespace:
+    return argparse.Namespace(
+        target=target,
+        workload="full",
+        formal_release=False,
+        release_manifest="",
+        purge_rebuildable_state=False,
+        report_dir=str(report_dir),
+    )
+
+
 def _runtime_started_with_identity(report_dir: Path) -> dict[str, object]:
     plan: dict[str, object] = {
         "schema": "stackctl.mutable_test_live_runtime",
@@ -66,7 +163,13 @@ def _runtime_started_with_identity(report_dir: Path) -> dict[str, object]:
         "providerRuntimeDigest": "sha256:" + "3" * 64,
         "portProfile": "alpha-local",
         "portBlock": {"start": 17000, "end": 17999},
-        "publishedPorts": {"api-edge": 17000},
+        "publishedPorts": [
+            {
+                "role": "product-ops-service",
+                "hostPort": 17250,
+                "protocol": "tcp",
+            }
+        ],
         "tlsProfile": "local-managed",
         "resolverHandoffDigest": "sha256:" + "4" * 64,
         "publicWebPackage": {
@@ -126,6 +229,18 @@ def _runtime_started_with_identity(report_dir: Path) -> dict[str, object]:
     }
 
 
+
+
+class StackctlMutableTeardownTestBase(unittest.TestCase):
+    def setUp(self) -> None:
+        isolated_output_root = tempfile.mkdtemp(prefix="qwq-teardown-test-output-")
+        self.addCleanup(shutil.rmtree, isolated_output_root, ignore_errors=True)
+        environment = mock.patch.dict(
+            os.environ,
+            {"QWQ_OUTPUT_ROOT": isolated_output_root},
+        )
+        environment.start()
+        self.addCleanup(environment.stop)
 
 
 class StackctlDevSessionTestBase(unittest.TestCase):

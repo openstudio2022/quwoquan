@@ -12,12 +12,15 @@ from pathlib import Path
 import sys
 from typing import Any
 
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
     APPLICATION_PACKAGES,
+    DISTRIBUTION_EVIDENCE_PATHS,
     OCI_DIGEST_REF_PATTERN,
     OPS_PORTAL_SCHEMA,
     RELEASE_CLOSURE_PATHS,
@@ -50,8 +53,7 @@ APPLICATION_SOURCE_TARGETS: dict[str, str] = {}
 APPLICATION_PACKAGE_KEYS = frozenset(APPLICATION_PACKAGES)
 GENERIC_APPLICATION_KEYS = APPLICATION_PACKAGE_KEYS
 EVIDENCE_DESTINATIONS = {
-    "publicWeb": "evidence/distribution/public-web-manifest.json",
-    "androidOfficialRelease": "evidence/distribution/android-release-manifest.json",
+    **DISTRIBUTION_EVIDENCE_PATHS,
     "opsPortal": "packages/opsPortal/provenance.json",
     "contractGraph": "evidence/contractGraph.json",
     "providerEvidence": "evidence/providerEvidence.json",

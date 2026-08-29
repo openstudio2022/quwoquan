@@ -19,7 +19,7 @@ BEHAVIOR_FINGERPRINT_SCHEMA = "qwq.startup-behavior-fingerprint"
 # 指纹显式排除的入口/身份/时序维度；出现在这里的键改变不得影响指纹。
 EXCLUDED_ENTRY_DIMENSIONS = frozenset(
     {
-        "launchMode",
+        "launchProvenance",
         "deviceKind",
         "deviceId",
         "attemptId",
@@ -100,7 +100,7 @@ def fingerprint_equivalence_issues(
         group = by_platform.setdefault(platform, {})
         entry = (
             f"run-{index + 1:02d}"
-            f"(launchMode={sample.get('launchMode')},"
+            f"(launchProvenance={sample.get('launchProvenance')},"
             f"deviceKind={sample.get('deviceKind')})"
         )
         if fingerprint not in group:

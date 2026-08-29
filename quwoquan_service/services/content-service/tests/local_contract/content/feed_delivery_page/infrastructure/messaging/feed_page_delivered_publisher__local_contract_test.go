@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/spec.md#sit-001.t2
 package messaging_test
 
 import (
@@ -24,6 +25,7 @@ func TestFeedPageDeliveredPublisherEmitsCanonicalEnvelope(t *testing.T) {
 		PersonaID:             "persona-1",
 		Scenario:              "content_feed",
 		WindowID:              "window-1",
+		ExperimentBucket:      "rule",
 		ModelBucket:           "rule",
 		RankingSnapshotDigest: "ranking-digest",
 		FeatureSnapshotAt:     now.Add(-time.Second),
@@ -60,7 +62,7 @@ func TestFeedPageDeliveredPublisherEmitsCanonicalEnvelope(t *testing.T) {
 	if err := json.Unmarshal([]byte(values["payload"]), &payload); err != nil {
 		t.Fatalf("decode payload: %v", err)
 	}
-	if payload.Items[0].ContentID != "post-1" || payload.OccurredAt != now {
+	if payload.ExperimentBucket != "rule" || payload.Items[0].ContentID != "post-1" || payload.OccurredAt != now {
 		t.Fatalf("payload=%+v", payload)
 	}
 }

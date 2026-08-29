@@ -20,6 +20,8 @@ class IosDirectFlutterRetryContractTest(unittest.TestCase):
                     "expected 3 hot-restart Dart startup attempts, got 0"
                 ],
                 "flutterRunLog": str(flutter_log),
+                "flutterProcessGroupStoppedBySigint": True,
+                "flutterRunExitCode": 0,
                 "attempts": [
                     {
                         "hotRestart": False,
@@ -37,6 +39,11 @@ class IosDirectFlutterRetryContractTest(unittest.TestCase):
                 stackctl._ios_direct_flutter_log_reader_retryable(evidence)
             )
             evidence["attempts"][0]["nativeReceivedSafeTerminalMs"] = 6001
+            self.assertFalse(
+                stackctl._ios_direct_flutter_log_reader_retryable(evidence)
+            )
+            evidence["attempts"][0]["nativeReceivedSafeTerminalMs"] = 4867
+            evidence["flutterProcessGroupStoppedBySigint"] = False
             self.assertFalse(
                 stackctl._ios_direct_flutter_log_reader_retryable(evidence)
             )

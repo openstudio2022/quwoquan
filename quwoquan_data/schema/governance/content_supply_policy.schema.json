@@ -24,9 +24,12 @@
         "homepageMinimumFactCount": { "type": "integer", "minimum": 1 },
         "homepageMinimumFactChars": { "type": "integer", "minimum": 1 },
         "homepageMinimumSectionChars": { "type": "integer", "minimum": 1 },
-        "homepageSourceOutlineSectionChars": { "type": "integer", "minimum": 1 }
+        "homepageSourceOutlineSectionChars": { "type": "integer", "minimum": 1 },
+        "homepageMaxSourceParagraphOverlap": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "homepageMaxIntraBodyParagraphSimilarity": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "homepageDerivationParagraphMinimumChars": { "type": "integer", "minimum": 1 }
       },
-      "required": ["nonEmptyRateMinimum", "duplicateExposureRateMaximum", "homepageMaxSourceFidelity", "homepageMinimumBodyChars", "homepageMinimumFactCount", "homepageMinimumFactChars", "homepageMinimumSectionChars", "homepageSourceOutlineSectionChars"],
+      "required": ["nonEmptyRateMinimum", "duplicateExposureRateMaximum", "homepageMaxSourceFidelity", "homepageMinimumBodyChars", "homepageMinimumFactCount", "homepageMinimumFactChars", "homepageMinimumSectionChars", "homepageSourceOutlineSectionChars", "homepageMaxSourceParagraphOverlap", "homepageMaxIntraBodyParagraphSimilarity", "homepageDerivationParagraphMinimumChars"],
       "additionalProperties": false
     },
     "mediaSubject": {

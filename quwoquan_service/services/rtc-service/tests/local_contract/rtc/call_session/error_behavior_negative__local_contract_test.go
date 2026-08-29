@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"quwoquan_service/services/rtc-service/internal/rtc/call_session/application/commandmeta"
 	rterr "quwoquan_service/runtime/errors"
 	application "quwoquan_service/services/rtc-service/internal/rtc/call_session/application"
+	"quwoquan_service/services/rtc-service/internal/rtc/call_session/application/commandmeta"
 	model "quwoquan_service/services/rtc-service/internal/rtc/call_session/domain/model"
 )
 
@@ -81,13 +81,14 @@ func (allowAllRelationshipGate) GetCapability(
 	return application.RelationshipCapability{IsMutual: true}, nil
 }
 
-// blockedRelationshipGate 返回拉黑关系，驱动 blocked。
-type blockedRelationshipGate struct{}
+type blockedRelationshipGate struct {
+	capability application.RelationshipCapability
+}
 
-func (blockedRelationshipGate) GetCapability(
+func (gate blockedRelationshipGate) GetCapability(
 	context.Context, string, string,
 ) (application.RelationshipCapability, error) {
-	return application.RelationshipCapability{IsBlocked: true}, nil
+	return gate.capability, nil
 }
 
 func negativeOrchestrator(
@@ -179,13 +180,34 @@ func TestInitiateWhileActiveEmitsAlreadyInCall(t *testing.T) {
 
 func TestInitiateBlockedRelationshipEmitsBlocked(t *testing.T) {
 	t.Parallel()
-	orchestrator := negativeOrchestrator(
-		t, &queryCallStore{}, nil, blockedRelationshipGate{}, nil,
-	)
-	_, err := orchestrator.InitiateCall(
-		negativeCallContext("neg-key"), directCallRequest("caller", "callee"),
-	)
-	assertCallAppError(t, err, "RTC.USER.blocked", http.StatusForbidden)
+	for _, testCase := range []struct {
+		name       string
+		capability application.RelationshipCapability
+	}{
+		{
+			name:       "caller_blocks_callee",
+			capability: application.RelationshipCapability{IsBlocked: true},
+		},
+		{
+			name:       "callee_blocks_caller",
+			capability: application.RelationshipCapability{IsBlockedBy: true},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			orchestrator := negativeOrchestrator(
+				t,
+				&queryCallStore{},
+				nil,
+				blockedRelationshipGate{capability: testCase.capability},
+				nil,
+			)
+			_, err := orchestrator.InitiateCall(
+				negativeCallContext("neg-key-"+testCase.name),
+				directCallRequest("caller", "callee"),
+			)
+			assertCallAppError(t, err, "RTC.USER.blocked", http.StatusForbidden)
+		})
+	}
 }
 
 func TestInitiateWithoutMutualFollowEmitsNotMutual(t *testing.T) {

@@ -119,6 +119,7 @@ def _source_attribution() -> dict[str, object]:
         "propertyReleaseStatus": "not_required",
         "collectedAt": "2026-08-08T00:00:00Z",
         "takedownPolicy": "quwoquan_standard_notice_and_takedown",
+        "derivedModifications": [],
     }
 
 

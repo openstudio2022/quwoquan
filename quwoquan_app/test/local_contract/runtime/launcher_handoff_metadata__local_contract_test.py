@@ -1,16 +1,14 @@
 # spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-002
 
-import argparse
 import os
 import subprocess
 import sys
 import tempfile
 import unittest
-from unittest import mock
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-
+from unittest import mock
 
 APP_DIR = Path(__file__).resolve().parents[3]
 ROOT = APP_DIR.parent
@@ -19,9 +17,6 @@ sys.path.insert(0, str(APP_DIR / "scripts/device"))
 sys.path.insert(0, str(APP_DIR / "test/support/runtime/launcher"))
 
 import build_launcher_handoff as launcher
-from quwoquan_ops.cli.lib.app_runtime_config_signing import (
-    TRUSTED_PUBLIC_KEYS_FILE_ENV,
-)
 from build_launcher_handoff import (
     effective_launch_manifest_digest,
 )
@@ -29,8 +24,8 @@ from launcher_package_fixture import (
     build_test_handoff_fixture,
     shared_nonprod_launcher_authority,
 )
+
 from quwoquan_ops.cli.lib.app_launch_manifest_contract import (
-    LAUNCH_MANIFEST_METADATA,
     LaunchManifestContractError,
     build_runtime_config_activation_request,
     load_launch_manifest_contract,
@@ -41,6 +36,9 @@ from quwoquan_ops.cli.lib.app_launch_manifest_contract import (
     validate_runtime_config_activation_receipt,
     validate_runtime_config_activation_request,
     validate_runtime_config_package,
+)
+from quwoquan_ops.cli.lib.app_runtime_config_signing import (
+    TRUSTED_PUBLIC_KEYS_FILE_ENV,
 )
 
 
@@ -70,13 +68,13 @@ def _build_handoff(
     environment: str,
     target: str,
     *extra_arguments: str,
-    launch_mode: str = "metadata_contract_test",
+    launch_provenance: str = "canonical_launcher",
 ) -> _HandoffFixture:
     handoff, envelope = build_test_handoff_fixture(
         launcher,
         environment,
         target,
-        launch_mode=launch_mode,
+        launch_provenance=launch_provenance,
         extra_arguments=tuple(extra_arguments),
     )
     return _HandoffFixture(handoff, envelope)
@@ -113,19 +111,14 @@ def _validate_package(
 
 
 class LauncherHandoffMetadataContractTest(unittest.TestCase):
-    def test_metadata_rejects_reintroduced_content_binding_contract(self) -> None:
-        metadata = LAUNCH_MANIFEST_METADATA.read_text(encoding="utf-8") + (
-            "\ncontent_binding_contract:\n"
-            "  content_binding_modes: [unbound, run_bound]\n"
-        )
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            path = Path(temporary_directory) / "app_launch_manifest.yaml"
-            path.write_text(metadata, encoding="utf-8")
-            with self.assertRaisesRegex(
-                LaunchManifestContractError,
-                "must not declare content binding",
-            ):
-                load_launch_manifest_contract(path)
+    def test_runtime_consumer_rejects_metadata_override(self) -> None:
+        with self.assertRaisesRegex(
+            LaunchManifestContractError,
+            "runtime launch-manifest overrides are forbidden",
+        ):
+            load_launch_manifest_contract(
+                {"content_binding_contract": {"content_binding_modes": ["bound"]}}
+            )
 
     def test_metadata_loads_without_site_packages_for_xcode_builds(self) -> None:
         result = subprocess.run(
@@ -187,9 +180,10 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
         self.assertIn("export QWQ_APP_LAUNCH_POLICY=test_live", launcher)
         self.assertIn("--launch-policy test_live", launcher)
         self.assertIn(
-            "GATE_BLOCK: content-live requires a runtime consumer lease.",
+            '"runtime consumer lease is unavailable; test_live remains nonPromotable."',
             launcher,
         )
+        self.assertIn("record_prelaunch_warning", launcher)
         self.assertIn('bash "$APP_DIR/run.sh"', app_instance)
         self.assertNotIn("app-debug-preflight", app_instance)
         self.assertNotIn("flutter run", app_instance)
@@ -331,7 +325,7 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
                 launcher,
                 "alpha",
                 "alpha-local",
-                launch_mode="canonical_launcher",
+                launch_provenance="canonical_launcher",
                 extra_arguments=("--runtime-config-trust-output", str(output)),
             )
             self.assertEqual(
@@ -368,18 +362,49 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
         self.assertNotIn("--dart-define=APP_RUNTIME_ENV", source)
         self.assertNotIn("--dart-define=CLOUD_GATEWAY_BASE_URL", source)
         self.assertIn('scripts/device/run_app_instance.py"', source)
-        self.assertNotIn("flutter run", source)
+        self.assertNotIn('"$QWQ_REAL_FLUTTER" run', source)
+        self.assertIn("workspace literal `flutter run`", source)
 
     def test_android_debug_mounts_only_external_profile_trust_asset(self) -> None:
-        gradle = (APP_DIR / "android/app/build.gradle.kts").read_text(
-            encoding="utf-8"
+        # assets 准入校验落在共享脚本，生产 App 与 Patrol UAT test host 两个 Gradle 工程
+        # apply 同一份；主脚本只负责把校验结果挂成 assets srcDir。
+        shared_validation = (
+            APP_DIR / "android/gradle/runtime-config-assets.gradle.kts"
+        ).read_text(encoding="utf-8")
+        for host_gradle in (
+            APP_DIR / "android/app/build.gradle.kts",
+            APP_DIR / "test_host/patrol/android/app/build.gradle.kts",
+        ):
+            with self.subTest(gradle=host_gradle.name):
+                gradle = host_gradle.read_text(encoding="utf-8")
+                self.assertIn("runtime-config-assets.gradle.kts", gradle)
+                self.assertIn(
+                    'sourceSets.getByName("main").assets.srcDir',
+                    gradle,
+                )
+        self.assertIn("QWQ_ANDROID_RUNTIME_CONFIG_ASSET_ROOT", shared_validation)
+        self.assertIn("runtime-config-trust.json", shared_validation)
+        self.assertIn("runtime-config-package.json", shared_validation)
+        self.assertIn("must stay outside the source tree", shared_validation)
+        self.assertIn(
+            "target runtime package must not enter Android assets",
+            shared_validation,
         )
-        self.assertIn("QWQ_ANDROID_RUNTIME_CONFIG_ASSET_ROOT", gradle)
-        self.assertIn('sourceSets.getByName("main").assets.srcDir', gradle)
-        self.assertIn("runtime-config-trust.json", gradle)
-        self.assertIn("runtime-config-package.json", gradle)
-        self.assertIn("must stay outside the source tree", gradle)
-        self.assertIn("target runtime package must not enter Android assets", gradle)
+
+    def test_ios_production_and_patrol_projects_are_cocoapods_only(self) -> None:
+        forbidden_spm_tokens = (
+            "FlutterGeneratedPluginSwiftPackage",
+            "XCLocalSwiftPackageReference",
+            "XCSwiftPackageProductDependency",
+        )
+        for project in (
+            APP_DIR / "ios/Runner.xcodeproj/project.pbxproj",
+            APP_DIR / "test_host/patrol/ios/Runner.xcodeproj/project.pbxproj",
+        ):
+            with self.subTest(project=project):
+                source = project.read_text(encoding="utf-8")
+                for token in forbidden_spm_tokens:
+                    self.assertNotIn(token, source)
 
     def test_activation_request_and_receipt_bind_manifest_package_trust_and_cas(
         self,
@@ -388,7 +413,7 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
         handoff = _build_handoff(
             "alpha",
             "alpha-local",
-            launch_mode="canonical_launcher",
+            launch_provenance="canonical_launcher",
         )
         previous_active_digest = "sha256:" + "0" * 64
         request = build_runtime_config_activation_request(
@@ -431,6 +456,8 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
             "environment": "alpha",
             "buildProfile": "nonprod",
             "target": "alpha-local",
+            "launchProvenance": handoff["launchProvenance"],
+            "runtimeConfigSupplyMode": handoff["runtimeConfigSupplyMode"],
             "packageDigest": handoff["runtimeConfigPackageDigest"],
             "trustEnvelopeDigest": handoff["runtimeConfigTrustEnvelopeDigest"],
             "effectiveLaunchManifestDigest": handoff[
@@ -466,11 +493,19 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
             APP_DIR
             / "android/app/src/main/java/com/quwoquan/quwoquan_app/StartupGateActivity.java"
         ).read_text(encoding="utf-8")
+        # runtime config 供给面落在 runtimeConfigShared 源集：生产 App 与 Patrol UAT
+        # test host 两个 Gradle 工程编译同一份，宿主读到的取值因此与生产同源。
         android_coordinator = (
             APP_DIR
-            / "android/app/src/main/java/com/quwoquan/quwoquan_app/RuntimeConfigActivationCoordinator.java"
+            / "android/app/src/runtimeConfigShared/java/com/quwoquan/quwoquan_app"
+            / "RuntimeConfigActivationCoordinator.java"
         ).read_text(encoding="utf-8")
         ios = (APP_DIR / "ios/Runner/AppDelegate.swift").read_text(encoding="utf-8")
+        # iOS 侧的 runtime config 供给面同样共享给 test host 工程，回执落盘在供给面而非
+        # AppDelegate。
+        ios_runtime_config_supply = (
+            APP_DIR / "ios/Runner/NativeRuntimeConfigSupply.swift"
+        ).read_text(encoding="utf-8")
         activation = (
             APP_DIR
             / "scripts/device/canonical_app_instance/activation.py"
@@ -491,7 +526,10 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
             ios.index("consumePendingActivationRequest"),
             ios.index("return super.application("),
         )
-        self.assertIn("runtime-config-activation-receipt.json", ios)
+        self.assertIn(
+            "runtime-config-activation-receipt.json",
+            ios_runtime_config_supply,
+        )
         self.assertIn('self._emit_phase("configuring")', activation)
         self.assertIn('self._emit_phase("configured")', activation)
         self.assertIn("flutter attach", runner)
@@ -584,16 +622,14 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
         with mock.patch.dict(
             os.environ,
             {TRUSTED_PUBLIC_KEYS_FILE_ENV: ""},
-        ):
-            with self.assertRaisesRegex(ValueError, "Prod.*required"):
-                launcher._runtime_config_trust_envelope(build_profile)
+        ), self.assertRaisesRegex(ValueError, "Prod.*required"):
+            launcher._runtime_config_trust_envelope(build_profile)
         repository_keyring = APP_DIR / "repository-trusted-keyring.json"
         with mock.patch.dict(
             os.environ,
             {TRUSTED_PUBLIC_KEYS_FILE_ENV: str(repository_keyring)},
-        ):
-            with self.assertRaisesRegex(ValueError, "outside repository"):
-                launcher._runtime_config_trust_envelope(build_profile)
+        ), self.assertRaisesRegex(ValueError, "outside repository"):
+            launcher._runtime_config_trust_envelope(build_profile)
 
         with tempfile.TemporaryDirectory(prefix="qwq-runtime-trust-") as temporary:
             external_keyring = Path(temporary) / "trusted-keyring.json"
@@ -602,9 +638,8 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
             with mock.patch.dict(
                 os.environ,
                 {TRUSTED_PUBLIC_KEYS_FILE_ENV: str(external_keyring)},
-            ):
-                with self.assertRaisesRegex(ValueError, "permissions are unsafe"):
-                    launcher._runtime_config_trust_envelope(build_profile)
+            ), self.assertRaisesRegex(ValueError, "permissions are unsafe"):
+                launcher._runtime_config_trust_envelope(build_profile)
 
     def test_explicit_source_identity_must_match_audited_git(self) -> None:
         script = APP_DIR / "scripts/env/print_app_env_dart_defines.py"
@@ -724,7 +759,7 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
         test_live = _build_handoff(
             "alpha",
             "alpha-local",
-            launch_mode="direct_flutter_run",
+            launch_provenance="workspace_flutter_run",
         )
         self.assertEqual(test_live["launchPolicy"], "test_live")
         self.assertNotIn("contentBindingState", test_live)
@@ -734,7 +769,7 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
         prod = _build_handoff(
             "prod",
             "prod-hosted",
-            launch_mode="canonical_launcher",
+            launch_provenance="canonical_launcher",
         )
         self.assertEqual(
             prod["launchPolicy"], launcher.PROD_RELEASE_LAUNCH_POLICY
@@ -755,7 +790,7 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
                 digest,
                 "--content-readiness-receipt-digest",
                 digest,
-                launch_mode="canonical_launcher",
+                launch_provenance="canonical_launcher",
             )
 
     def test_validator_rejects_reintroduced_content_fields(self) -> None:
@@ -768,7 +803,7 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
         )
 
     def test_metadata_is_the_only_target_environment_authority(self) -> None:
-        contract = load_launch_manifest_contract(LAUNCH_MANIFEST_METADATA)
+        contract = load_launch_manifest_contract()
         handoff = _build_handoff("alpha", "alpha-local")
         changed_contract = deepcopy(contract)
         changed_contract["target_environment"]["alpha-local"] = "beta"
@@ -807,7 +842,7 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
         handoff = _build_handoff("prod", "prod-hosted")
         effective = handoff["effectiveLaunchManifest"]
         self.assertIsInstance(effective, dict)
-        effective["launchMode"] = "tampered"
+        effective["launchProvenance"] = "tampered"
 
         self.assertIn(
             "effectiveLaunchManifestDigest does not match canonical metadata",

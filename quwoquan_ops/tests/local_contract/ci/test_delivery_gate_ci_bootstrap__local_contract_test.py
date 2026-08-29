@@ -10,6 +10,8 @@ import subprocess
 import textwrap
 from pathlib import Path
 
+import yaml
+
 
 ROOT = Path(__file__).resolve().parents[4]
 GATE_REPO_PATH = ROOT / "quwoquan_ops/gate/gate_repo.sh"
@@ -455,10 +457,21 @@ def test_pull_request_jobs_checkout_and_diff_the_exact_event_head() -> None:
     workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
 
     exact_checkout = (
-        "ref: ${{ inputs.checkout_ref || "
+        "${{ inputs.checkout_ref || "
         "github.event.pull_request.head.sha || github.sha }}"
     )
-    assert workflow.count(exact_checkout) == 13
+    # 按 job 逐个判，而不是数 checkout 总数：计数写死时新增一个 job 就得改数字，
+    # 而改数字的人未必检查了新 job 是否真的钉了 exact ref。
+    document = yaml.safe_load(workflow)
+    checkouts = [
+        (job_name, (step.get("with") or {}).get("ref"))
+        for job_name, job in document["jobs"].items()
+        for step in job.get("steps") or []
+        if str(step.get("uses", "")).startswith("actions/checkout@")
+    ]
+    assert checkouts, "Delivery Gate 必须有 checkout 步骤"
+    drifted = [job_name for job_name, ref in checkouts if ref != exact_checkout]
+    assert not drifted, f"这些 job 的 checkout 没钉到事件 head：{drifted}"
     assert "PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}" in workflow
     assert "PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}" in workflow
     assert "PUSH_BEFORE_SHA: ${{ github.event.before || '' }}" in workflow
@@ -529,12 +542,20 @@ def test_delivery_gate_has_bounded_jobs() -> None:
         "quwoquan_app_serial": 40,
         "quwoquan_service_coverage": 40,
         "quwoquan_app_coverage": 40,
-        "quwoquan_app": 10,
+        "quwoquan_app": 30,
         "quwoquan_data": 10,
+        "quwoquan_data_tests": 25,
         "ops_portal": 10,
         "release_evidence": 10,
         "delivery_gate_summary": 5,
     }
+    # 清单写死时，新增的 job 落在清单外——它的 timeout 是多少、有没有 timeout，
+    # 这条测试都不会过问。先钉住清单本身覆盖全部 job。
+    declared = set(yaml.safe_load(workflow)["jobs"])
+    assert declared == set(expected_timeouts), (
+        f"清单与 workflow 的 job 集合不一致：只在 workflow={sorted(declared - set(expected_timeouts))}，"
+        f"只在清单={sorted(set(expected_timeouts) - declared)}"
+    )
     for job, minutes in expected_timeouts.items():
         job_start = workflow.index(f"  {job}:\n")
         next_job = re.search(
@@ -613,8 +634,16 @@ def test_hosted_delivery_budgets_match_observed_parallel_shape() -> None:
         "quwoquan_service_packaging, quwoquan_service_coverage, "
         "search_contract_smoke, "
         "quwoquan_app_static, quwoquan_app_tests, "
-        "quwoquan_app_serial, quwoquan_app_coverage, quwoquan_data, ops_portal)"
+        "quwoquan_app_serial, quwoquan_app_coverage, quwoquan_data, ops_portal); "
+        "pull_request sources quwoquan_app_* from verified push evidence while "
+        "calendar still ends at its own verifier completion"
     )
+    assert set(delivery["phaseBudgetsSeconds"]) >= {
+        "quwoquan_app_static",
+        "quwoquan_app_tests",
+        "quwoquan_app_serial",
+        "quwoquan_app_coverage",
+    }
 
 
 def test_app_test_phase_executes_shared_contracts_only_on_shard_zero(
@@ -706,6 +735,35 @@ def test_app_test_phase_rejects_invalid_shards_before_execution(
         )
         assert "or unset both for unsharded execution" in completed.stderr
         assert not log_path.exists()
+
+
+def test_delivery_pr_reuses_push_owned_app_evidence_without_merging_ranges() -> None:
+    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(
+        encoding="utf-8"
+    )
+    local_app_if = (
+        "github.event_name != 'pull_request' && (github.event_name == "
+        "'workflow_call' || needs.topology_regression.outputs.candidate_app == 'true')"
+    )
+    assert workflow.count(local_app_if) == 4
+    assert "name: Detect candidate-level App scope" in workflow
+    assert "git merge-base origin/main \"$HEAD_SHA\"" in workflow
+    assert "--scope-receipt" in workflow
+    assert "SCOPE_ARGS+=(--required-scope app)" in workflow
+    assert '${SCOPE_ARGS[@]+"${SCOPE_ARGS[@]}"}' in workflow
+    assert "name: Verify push-owned App evidence" in workflow
+    assert "make verify-delivery-app-evidence" in workflow
+    assert "job_closure_digest: ${{ steps.external.outputs.job_closure_digest }}" in workflow
+    assert "if: ${{ github.event_name == 'pull_request' }}" in workflow
+    assert 'if [[ "${{ github.event_name }}" != "pull_request" ]]; then' in workflow
+    assert "if: ${{ github.event_name != 'pull_request' }}" in workflow
+    assert "--external-phase \"app_static=$APP_STATIC_EXTERNAL\"" in workflow
+    assert "--external-phase \"app_coverage=$APP_COVERAGE_EXTERNAL\"" in workflow
+    assert '--candidate-job "Delivery Gate — App (L1)"' not in workflow
+    concurrency = workflow[workflow.index("concurrency:") : workflow.index("\non:")]
+    assert "github.event_name" in concurrency
+    assert "github.ref" in concurrency
+    assert "head.sha" not in concurrency
 
 
 def test_delivery_gate_keeps_cross_platform_jobs_on_linux_and_visual_phases_on_controlled_macos() -> None:

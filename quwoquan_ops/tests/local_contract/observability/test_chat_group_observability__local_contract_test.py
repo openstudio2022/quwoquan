@@ -18,7 +18,7 @@ DASHBOARD = (
     ROOT / "quwoquan_ops/observability/monitoring/dashboards/l2_business_journey.json"
 )
 SYNC_METRICS = ROOT / "quwoquan_service/runtime/sync/metrics.go"
-CHAT_MAIN = ROOT / "quwoquan_service/services/chat-service/cmd/api/main.go"
+CHAT_MAIN = ROOT / "quwoquan_service/services/chat-service/cmd/api/bootstrap.go"
 CHAT_COMMERCIAL_METRICS = (
     ROOT
     / "quwoquan_service/services/chat-service/internal/chat/conversation/application/commercial_metrics.go"

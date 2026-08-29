@@ -61,6 +61,28 @@ def article_plan_media_rejection(
     return None
 
 
+def article_media_mode_converges_to_text_only(
+    *,
+    source_publish_media_mode: object,
+    publish_media_mode: object,
+    asset_count: int,
+) -> bool:
+    """Return whether one item is the source's illustrated claim losing its basis.
+
+    Source ``illustrated`` is itself derived from「同源可发布图 >= 2」at freeze time.
+    Publish-time asset assessment can drop those images below two, at which point
+    the derived claim no longer holds and re-deriving it is the same rule applied
+    again — not a second media policy. Only this one direction, and only with an
+    empty asset set, is a convergence; the reverse would be inventing images.
+    """
+
+    return (
+        str(source_publish_media_mode or "").strip() == "illustrated"
+        and str(publish_media_mode or "").strip() == "text_only"
+        and asset_count == 0
+    )
+
+
 def article_plan_media_binding_issues(
     *,
     ref: str,
@@ -76,7 +98,11 @@ def article_plan_media_binding_issues(
     rejection = article_plan_media_rejection(mode, len(asset_refs))
     if rejection is not None:
         issues.append(f"item[{ref}]: {rejection[1]}")
-    if mode != source_mode:
+    if mode != source_mode and not article_media_mode_converges_to_text_only(
+        source_publish_media_mode=source_mode,
+        publish_media_mode=mode,
+        asset_count=len(asset_refs),
+    ):
         issues.append(
             f"item[{ref}]: publishMediaMode {mode or '<missing>'!r} does not match "
             f"source meta {source_mode or '<missing>'!r}"
@@ -486,6 +512,7 @@ __all__ = [
     "ARTICLE_MEDIA_CLOSURE_SCHEMA",
     "ARTICLE_SOURCE_ASSET_RECEIPT_REF",
     "article_media_contract_issues",
+    "article_media_mode_converges_to_text_only",
     "article_plan_media_binding_issues",
     "article_plan_media_rejection",
     "article_source_asset_counts",

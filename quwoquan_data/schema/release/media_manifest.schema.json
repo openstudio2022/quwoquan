@@ -31,11 +31,14 @@
           "kind",
           "version",
           "contentType",
-          "publicSliceKey",
           "sha256",
           "bytes",
           "ownerRefs",
           "rightsSnapshotRefs"
+        ],
+        "oneOf": [
+          {"required": ["publicSliceKey"]},
+          {"required": ["privateObjectKey"]}
         ],
         "properties": {
           "assetId": {
@@ -62,6 +65,10 @@
           "publicSliceKey": {
             "type": "string",
             "pattern": "^media/(avatar|image|video)/s/asset/[A-Za-z0-9][A-Za-z0-9._-]*/v[1-9][0-9]*/source\\.[a-z0-9]+$"
+          },
+          "privateObjectKey": {
+            "type": "string",
+            "pattern": "^media/objects/sha256/[0-9a-f]{2}/[0-9a-f]{2}/[0-9a-f]{64}(\\.[a-z0-9]+)?$"
           },
           "sha256": {
             "type": "string",

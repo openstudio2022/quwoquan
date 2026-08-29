@@ -28,16 +28,18 @@ class AssistantJourneyEntry {
   final AssistantJourneyProvenance provenance;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'entryId': entryId,
-        'stageId': stageId.wireName,
-        'kind': kind.wireName,
-        'status': status.wireName,
-        'order': order,
-        'headline': headline,
-        'detail': detail,
-        'references': references.map((item) => item.toJson()).toList(growable: false),
-        'provenance': provenance.toJson(),
-      };
+    'entryId': entryId,
+    'stageId': stageId.wireName,
+    'kind': kind.wireName,
+    'status': status.wireName,
+    'order': order,
+    'headline': headline,
+    'detail': detail,
+    'references': references
+        .map((item) => item.toJson())
+        .toList(growable: false),
+    'provenance': provenance.toJson(),
+  };
 
   factory AssistantJourneyEntry.fromJson(Map<String, dynamic> json) {
     const allowedFields = <String>{
@@ -55,48 +57,105 @@ class AssistantJourneyEntry {
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('AssistantJourneyEntry response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'AssistantJourneyEntry response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (!json.containsKey('entryId') || json['entryId'] == null || (json['entryId'] is! String)) {
-      throw const FormatException('AssistantJourneyEntry field entryId has an invalid wire value');
+    if (!json.containsKey('entryId') ||
+        json['entryId'] == null ||
+        (json['entryId'] is! String)) {
+      throw const FormatException(
+        'AssistantJourneyEntry field entryId has an invalid wire value',
+      );
     }
-    if (json.containsKey('stageId') && json['stageId'] != null && (json['stageId'] is! String)) {
-      throw const FormatException('AssistantJourneyEntry field stageId has an invalid wire value');
+    if (json.containsKey('stageId') &&
+        json['stageId'] != null &&
+        (json['stageId'] is! String)) {
+      throw const FormatException(
+        'AssistantJourneyEntry field stageId has an invalid wire value',
+      );
     }
-    if (json.containsKey('kind') && json['kind'] != null && (json['kind'] is! String)) {
-      throw const FormatException('AssistantJourneyEntry field kind has an invalid wire value');
+    if (json.containsKey('kind') &&
+        json['kind'] != null &&
+        (json['kind'] is! String)) {
+      throw const FormatException(
+        'AssistantJourneyEntry field kind has an invalid wire value',
+      );
     }
-    if (json.containsKey('status') && json['status'] != null && (json['status'] is! String)) {
-      throw const FormatException('AssistantJourneyEntry field status has an invalid wire value');
+    if (json.containsKey('status') &&
+        json['status'] != null &&
+        (json['status'] is! String)) {
+      throw const FormatException(
+        'AssistantJourneyEntry field status has an invalid wire value',
+      );
     }
-    if (json.containsKey('order') && json['order'] != null && (json['order'] is! num)) {
-      throw const FormatException('AssistantJourneyEntry field order has an invalid wire value');
+    if (json.containsKey('order') &&
+        json['order'] != null &&
+        (json['order'] is! num)) {
+      throw const FormatException(
+        'AssistantJourneyEntry field order has an invalid wire value',
+      );
     }
-    if (json.containsKey('headline') && json['headline'] != null && (json['headline'] is! String)) {
-      throw const FormatException('AssistantJourneyEntry field headline has an invalid wire value');
+    if (json.containsKey('headline') &&
+        json['headline'] != null &&
+        (json['headline'] is! String)) {
+      throw const FormatException(
+        'AssistantJourneyEntry field headline has an invalid wire value',
+      );
     }
-    if (json.containsKey('detail') && json['detail'] != null && (json['detail'] is! String)) {
-      throw const FormatException('AssistantJourneyEntry field detail has an invalid wire value');
+    if (json.containsKey('detail') &&
+        json['detail'] != null &&
+        (json['detail'] is! String)) {
+      throw const FormatException(
+        'AssistantJourneyEntry field detail has an invalid wire value',
+      );
     }
-    if (json.containsKey('references') && json['references'] != null && (json['references'] is! List || (json['references'] as List).any((item) => item is! Map))) {
-      throw const FormatException('AssistantJourneyEntry field references has an invalid wire value');
+    if (json.containsKey('references') &&
+        json['references'] != null &&
+        (json['references'] is! List ||
+            (json['references'] as List).any((item) => item is! Map))) {
+      throw const FormatException(
+        'AssistantJourneyEntry field references has an invalid wire value',
+      );
     }
-    if (json.containsKey('provenance') && json['provenance'] != null && (json['provenance'] is! Map)) {
-      throw const FormatException('AssistantJourneyEntry field provenance has an invalid wire value');
+    if (json.containsKey('provenance') &&
+        json['provenance'] != null &&
+        (json['provenance'] is! Map)) {
+      throw const FormatException(
+        'AssistantJourneyEntry field provenance has an invalid wire value',
+      );
     }
     return AssistantJourneyEntry(
       entryId: (json['entryId'] as String?)?.trim() ?? "",
-      stageId: parseJourneyStageIdStrict((json['stageId'] as String?)?.trim() ?? ""),
-      kind: parseJourneyEntryKindStrict((json['kind'] as String?)?.trim() ?? ""),
-      status: parseJourneyStageStatusStrict((json['status'] as String?)?.trim() ?? "active"),
+      stageId: parseJourneyStageIdStrict(
+        (json['stageId'] as String?)?.trim() ?? "",
+      ),
+      kind: parseJourneyEntryKindStrict(
+        (json['kind'] as String?)?.trim() ?? "",
+      ),
+      status: parseJourneyStageStatusStrict(
+        (json['status'] as String?)?.trim() ?? "active",
+      ),
       order: (json['order'] as num?)?.toInt() ?? 0,
       headline: (json['headline'] as String?)?.trim() ?? "",
       detail: (json['detail'] as String?)?.trim() ?? "",
-      references: (json['references'] as List?)?.whereType<Map>().map((item) => AssistantJourneyReference.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantJourneyReference>[],
-      provenance: json['provenance'] is Map ? AssistantJourneyProvenance.fromJson((json['provenance'] as Map).cast<String, dynamic>()) : const AssistantJourneyProvenance(),
+      references:
+          (json['references'] as List?)
+              ?.whereType<Map>()
+              .map(
+                (item) => AssistantJourneyReference.fromJson(
+                  item.cast<String, dynamic>(),
+                ),
+              )
+              .toList(growable: false) ??
+          const <AssistantJourneyReference>[],
+      provenance: json['provenance'] is Map
+          ? AssistantJourneyProvenance.fromJson(
+              (json['provenance'] as Map).cast<String, dynamic>(),
+            )
+          : const AssistantJourneyProvenance(),
     );
   }
-
 }
 
 class AssistantJourneyEntryFields {
@@ -123,39 +182,54 @@ class AssistantJourneyReference {
   final String source;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'title': title,
-        'destination': destination.toJson(),
-        'source': source,
-      };
+    'title': title,
+    'destination': destination.toJson(),
+    'source': source,
+  };
 
   factory AssistantJourneyReference.fromJson(Map<String, dynamic> json) {
-    const allowedFields = <String>{
-      'title',
-      'destination',
-      'source',
-    };
+    const allowedFields = <String>{'title', 'destination', 'source'};
     final unknownFields = json.keys
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('AssistantJourneyReference response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'AssistantJourneyReference response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (json.containsKey('title') && json['title'] != null && (json['title'] is! String)) {
-      throw const FormatException('AssistantJourneyReference field title has an invalid wire value');
+    if (json.containsKey('title') &&
+        json['title'] != null &&
+        (json['title'] is! String)) {
+      throw const FormatException(
+        'AssistantJourneyReference field title has an invalid wire value',
+      );
     }
-    if (!json.containsKey('destination') || json['destination'] == null || (json['destination'] is! Map)) {
-      throw const FormatException('AssistantJourneyReference field destination has an invalid wire value');
+    if (!json.containsKey('destination') ||
+        json['destination'] == null ||
+        (json['destination'] is! Map)) {
+      throw const FormatException(
+        'AssistantJourneyReference field destination has an invalid wire value',
+      );
     }
-    if (json.containsKey('source') && json['source'] != null && (json['source'] is! String)) {
-      throw const FormatException('AssistantJourneyReference field source has an invalid wire value');
+    if (json.containsKey('source') &&
+        json['source'] != null &&
+        (json['source'] is! String)) {
+      throw const FormatException(
+        'AssistantJourneyReference field source has an invalid wire value',
+      );
     }
     return AssistantJourneyReference(
       title: (json['title'] as String?)?.trim() ?? "",
-      destination: json['destination'] is Map ? CitationDestination.fromJson((json['destination'] as Map).cast<String, dynamic>()) : (throw FormatException('required object field destination is missing')),
+      destination: json['destination'] is Map
+          ? CitationDestination.fromJson(
+              (json['destination'] as Map).cast<String, dynamic>(),
+            )
+          : (throw FormatException(
+              'required object field destination is missing',
+            )),
       source: (json['source'] as String?)?.trim() ?? "",
     );
   }
-
 }
 
 class AssistantJourneyReferenceFields {
@@ -180,12 +254,12 @@ class AssistantJourneyProvenance {
   final String source;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'phaseId': phaseId.wireName,
-        'actionCode': actionCode.wireName,
-        'reasonCode': reasonCode.wireName,
-        'toolName': toolName,
-        'source': source,
-      };
+    'phaseId': phaseId.wireName,
+    'actionCode': actionCode.wireName,
+    'reasonCode': reasonCode.wireName,
+    'toolName': toolName,
+    'source': source,
+  };
 
   factory AssistantJourneyProvenance.fromJson(Map<String, dynamic> json) {
     const allowedFields = <String>{
@@ -199,27 +273,55 @@ class AssistantJourneyProvenance {
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('AssistantJourneyProvenance response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'AssistantJourneyProvenance response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (json.containsKey('phaseId') && json['phaseId'] != null && (json['phaseId'] is! String)) {
-      throw const FormatException('AssistantJourneyProvenance field phaseId has an invalid wire value');
+    if (json.containsKey('phaseId') &&
+        json['phaseId'] != null &&
+        (json['phaseId'] is! String)) {
+      throw const FormatException(
+        'AssistantJourneyProvenance field phaseId has an invalid wire value',
+      );
     }
-    if (json.containsKey('actionCode') && json['actionCode'] != null && (json['actionCode'] is! String)) {
-      throw const FormatException('AssistantJourneyProvenance field actionCode has an invalid wire value');
+    if (json.containsKey('actionCode') &&
+        json['actionCode'] != null &&
+        (json['actionCode'] is! String)) {
+      throw const FormatException(
+        'AssistantJourneyProvenance field actionCode has an invalid wire value',
+      );
     }
-    if (json.containsKey('reasonCode') && json['reasonCode'] != null && (json['reasonCode'] is! String)) {
-      throw const FormatException('AssistantJourneyProvenance field reasonCode has an invalid wire value');
+    if (json.containsKey('reasonCode') &&
+        json['reasonCode'] != null &&
+        (json['reasonCode'] is! String)) {
+      throw const FormatException(
+        'AssistantJourneyProvenance field reasonCode has an invalid wire value',
+      );
     }
-    if (json.containsKey('toolName') && json['toolName'] != null && (json['toolName'] is! String)) {
-      throw const FormatException('AssistantJourneyProvenance field toolName has an invalid wire value');
+    if (json.containsKey('toolName') &&
+        json['toolName'] != null &&
+        (json['toolName'] is! String)) {
+      throw const FormatException(
+        'AssistantJourneyProvenance field toolName has an invalid wire value',
+      );
     }
-    if (json.containsKey('source') && json['source'] != null && (json['source'] is! String)) {
-      throw const FormatException('AssistantJourneyProvenance field source has an invalid wire value');
+    if (json.containsKey('source') &&
+        json['source'] != null &&
+        (json['source'] is! String)) {
+      throw const FormatException(
+        'AssistantJourneyProvenance field source has an invalid wire value',
+      );
     }
     return AssistantJourneyProvenance(
-      phaseId: parsePlannerPhaseIdStrict((json['phaseId'] as String?)?.trim() ?? ""),
-      actionCode: parsePlannerActionCodeStrict((json['actionCode'] as String?)?.trim() ?? ""),
-      reasonCode: parsePlannerReasonCodeStrict((json['reasonCode'] as String?)?.trim() ?? ""),
+      phaseId: parsePlannerPhaseIdStrict(
+        (json['phaseId'] as String?)?.trim() ?? "",
+      ),
+      actionCode: parsePlannerActionCodeStrict(
+        (json['actionCode'] as String?)?.trim() ?? "",
+      ),
+      reasonCode: parsePlannerReasonCodeStrict(
+        (json['reasonCode'] as String?)?.trim() ?? "",
+      ),
       toolName: (json['toolName'] as String?)?.trim() ?? "",
       source: (json['source'] as String?)?.trim() ?? "",
     );
@@ -252,13 +354,13 @@ class AssistantJourneyReadiness {
   final bool needExpansion;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'nextAction': nextAction.wireName,
-        'finalAnswerMode': finalAnswerMode.wireName,
-        'answerEligibility': answerEligibility.wireName,
-        'finalAnswerReady': finalAnswerReady,
-        'clarificationNeeded': clarificationNeeded,
-        'needExpansion': needExpansion,
-      };
+    'nextAction': nextAction.wireName,
+    'finalAnswerMode': finalAnswerMode.wireName,
+    'answerEligibility': answerEligibility.wireName,
+    'finalAnswerReady': finalAnswerReady,
+    'clarificationNeeded': clarificationNeeded,
+    'needExpansion': needExpansion,
+  };
 
   factory AssistantJourneyReadiness.fromJson(Map<String, dynamic> json) {
     const allowedFields = <String>{
@@ -273,30 +375,62 @@ class AssistantJourneyReadiness {
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('AssistantJourneyReadiness response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'AssistantJourneyReadiness response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (json.containsKey('nextAction') && json['nextAction'] != null && (json['nextAction'] is! String)) {
-      throw const FormatException('AssistantJourneyReadiness field nextAction has an invalid wire value');
+    if (json.containsKey('nextAction') &&
+        json['nextAction'] != null &&
+        (json['nextAction'] is! String)) {
+      throw const FormatException(
+        'AssistantJourneyReadiness field nextAction has an invalid wire value',
+      );
     }
-    if (json.containsKey('finalAnswerMode') && json['finalAnswerMode'] != null && (json['finalAnswerMode'] is! String)) {
-      throw const FormatException('AssistantJourneyReadiness field finalAnswerMode has an invalid wire value');
+    if (json.containsKey('finalAnswerMode') &&
+        json['finalAnswerMode'] != null &&
+        (json['finalAnswerMode'] is! String)) {
+      throw const FormatException(
+        'AssistantJourneyReadiness field finalAnswerMode has an invalid wire value',
+      );
     }
-    if (json.containsKey('answerEligibility') && json['answerEligibility'] != null && (json['answerEligibility'] is! String)) {
-      throw const FormatException('AssistantJourneyReadiness field answerEligibility has an invalid wire value');
+    if (json.containsKey('answerEligibility') &&
+        json['answerEligibility'] != null &&
+        (json['answerEligibility'] is! String)) {
+      throw const FormatException(
+        'AssistantJourneyReadiness field answerEligibility has an invalid wire value',
+      );
     }
-    if (json.containsKey('finalAnswerReady') && json['finalAnswerReady'] != null && (json['finalAnswerReady'] is! bool)) {
-      throw const FormatException('AssistantJourneyReadiness field finalAnswerReady has an invalid wire value');
+    if (json.containsKey('finalAnswerReady') &&
+        json['finalAnswerReady'] != null &&
+        (json['finalAnswerReady'] is! bool)) {
+      throw const FormatException(
+        'AssistantJourneyReadiness field finalAnswerReady has an invalid wire value',
+      );
     }
-    if (json.containsKey('clarificationNeeded') && json['clarificationNeeded'] != null && (json['clarificationNeeded'] is! bool)) {
-      throw const FormatException('AssistantJourneyReadiness field clarificationNeeded has an invalid wire value');
+    if (json.containsKey('clarificationNeeded') &&
+        json['clarificationNeeded'] != null &&
+        (json['clarificationNeeded'] is! bool)) {
+      throw const FormatException(
+        'AssistantJourneyReadiness field clarificationNeeded has an invalid wire value',
+      );
     }
-    if (json.containsKey('needExpansion') && json['needExpansion'] != null && (json['needExpansion'] is! bool)) {
-      throw const FormatException('AssistantJourneyReadiness field needExpansion has an invalid wire value');
+    if (json.containsKey('needExpansion') &&
+        json['needExpansion'] != null &&
+        (json['needExpansion'] is! bool)) {
+      throw const FormatException(
+        'AssistantJourneyReadiness field needExpansion has an invalid wire value',
+      );
     }
     return AssistantJourneyReadiness(
-      nextAction: parseAssistantNextActionStrict((json['nextAction'] as String?)?.trim() ?? ""),
-      finalAnswerMode: parseFinalAnswerModeStrict((json['finalAnswerMode'] as String?)?.trim() ?? "blocked"),
-      answerEligibility: parseAnswerEligibilityStrict((json['answerEligibility'] as String?)?.trim() ?? "unknown"),
+      nextAction: parseAssistantNextActionStrict(
+        (json['nextAction'] as String?)?.trim() ?? "",
+      ),
+      finalAnswerMode: parseFinalAnswerModeStrict(
+        (json['finalAnswerMode'] as String?)?.trim() ?? "blocked",
+      ),
+      answerEligibility: parseAnswerEligibilityStrict(
+        (json['answerEligibility'] as String?)?.trim() ?? "unknown",
+      ),
       finalAnswerReady: json['finalAnswerReady'] == true,
       clarificationNeeded: json['clarificationNeeded'] == true,
       needExpansion: json['needExpansion'] == true,
@@ -323,30 +457,49 @@ class AssistantJourneyReferenceSummary {
   final List<AssistantJourneyReference> references;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'count': count,
-        'references': references.map((item) => item.toJson()).toList(growable: false),
-      };
+    'count': count,
+    'references': references
+        .map((item) => item.toJson())
+        .toList(growable: false),
+  };
 
   factory AssistantJourneyReferenceSummary.fromJson(Map<String, dynamic> json) {
-    const allowedFields = <String>{
-      'count',
-      'references',
-    };
+    const allowedFields = <String>{'count', 'references'};
     final unknownFields = json.keys
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('AssistantJourneyReferenceSummary response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'AssistantJourneyReferenceSummary response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (json.containsKey('count') && json['count'] != null && (json['count'] is! num)) {
-      throw const FormatException('AssistantJourneyReferenceSummary field count has an invalid wire value');
+    if (json.containsKey('count') &&
+        json['count'] != null &&
+        (json['count'] is! num)) {
+      throw const FormatException(
+        'AssistantJourneyReferenceSummary field count has an invalid wire value',
+      );
     }
-    if (json.containsKey('references') && json['references'] != null && (json['references'] is! List || (json['references'] as List).any((item) => item is! Map))) {
-      throw const FormatException('AssistantJourneyReferenceSummary field references has an invalid wire value');
+    if (json.containsKey('references') &&
+        json['references'] != null &&
+        (json['references'] is! List ||
+            (json['references'] as List).any((item) => item is! Map))) {
+      throw const FormatException(
+        'AssistantJourneyReferenceSummary field references has an invalid wire value',
+      );
     }
     return AssistantJourneyReferenceSummary(
       count: (json['count'] as num?)?.toInt() ?? 0,
-      references: (json['references'] as List?)?.whereType<Map>().map((item) => AssistantJourneyReference.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantJourneyReference>[],
+      references:
+          (json['references'] as List?)
+              ?.whereType<Map>()
+              .map(
+                (item) => AssistantJourneyReference.fromJson(
+                  item.cast<String, dynamic>(),
+                ),
+              )
+              .toList(growable: false) ??
+          const <AssistantJourneyReference>[],
     );
   }
 }
@@ -372,12 +525,12 @@ class AssistantJourneyStage {
   final int referenceCount;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'stageId': stageId.wireName,
-        'status': status.wireName,
-        'order': order,
-        'summary': summary,
-        'referenceCount': referenceCount,
-      };
+    'stageId': stageId.wireName,
+    'status': status.wireName,
+    'order': order,
+    'summary': summary,
+    'referenceCount': referenceCount,
+  };
 
   factory AssistantJourneyStage.fromJson(Map<String, dynamic> json) {
     const allowedFields = <String>{
@@ -391,26 +544,52 @@ class AssistantJourneyStage {
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('AssistantJourneyStage response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'AssistantJourneyStage response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (json.containsKey('stageId') && json['stageId'] != null && (json['stageId'] is! String)) {
-      throw const FormatException('AssistantJourneyStage field stageId has an invalid wire value');
+    if (json.containsKey('stageId') &&
+        json['stageId'] != null &&
+        (json['stageId'] is! String)) {
+      throw const FormatException(
+        'AssistantJourneyStage field stageId has an invalid wire value',
+      );
     }
-    if (json.containsKey('status') && json['status'] != null && (json['status'] is! String)) {
-      throw const FormatException('AssistantJourneyStage field status has an invalid wire value');
+    if (json.containsKey('status') &&
+        json['status'] != null &&
+        (json['status'] is! String)) {
+      throw const FormatException(
+        'AssistantJourneyStage field status has an invalid wire value',
+      );
     }
-    if (json.containsKey('order') && json['order'] != null && (json['order'] is! num)) {
-      throw const FormatException('AssistantJourneyStage field order has an invalid wire value');
+    if (json.containsKey('order') &&
+        json['order'] != null &&
+        (json['order'] is! num)) {
+      throw const FormatException(
+        'AssistantJourneyStage field order has an invalid wire value',
+      );
     }
-    if (json.containsKey('summary') && json['summary'] != null && (json['summary'] is! String)) {
-      throw const FormatException('AssistantJourneyStage field summary has an invalid wire value');
+    if (json.containsKey('summary') &&
+        json['summary'] != null &&
+        (json['summary'] is! String)) {
+      throw const FormatException(
+        'AssistantJourneyStage field summary has an invalid wire value',
+      );
     }
-    if (json.containsKey('referenceCount') && json['referenceCount'] != null && (json['referenceCount'] is! num)) {
-      throw const FormatException('AssistantJourneyStage field referenceCount has an invalid wire value');
+    if (json.containsKey('referenceCount') &&
+        json['referenceCount'] != null &&
+        (json['referenceCount'] is! num)) {
+      throw const FormatException(
+        'AssistantJourneyStage field referenceCount has an invalid wire value',
+      );
     }
     return AssistantJourneyStage(
-      stageId: parseJourneyStageIdStrict((json['stageId'] as String?)?.trim() ?? ""),
-      status: parseJourneyStageStatusStrict((json['status'] as String?)?.trim() ?? "pending"),
+      stageId: parseJourneyStageIdStrict(
+        (json['stageId'] as String?)?.trim() ?? "",
+      ),
+      status: parseJourneyStageStatusStrict(
+        (json['status'] as String?)?.trim() ?? "pending",
+      ),
       order: (json['order'] as num?)?.toInt() ?? 0,
       summary: (json['summary'] as String?)?.trim() ?? "",
       referenceCount: (json['referenceCount'] as num?)?.toInt() ?? 0,
@@ -442,12 +621,12 @@ class AssistantJourney {
   final AssistantJourneyReadiness readiness;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'stages': stages.map((item) => item.toJson()).toList(growable: false),
-        'entries': entries.map((item) => item.toJson()).toList(growable: false),
-        'summary': summary,
-        'referenceSummary': referenceSummary.toJson(),
-        'readiness': readiness.toJson(),
-      };
+    'stages': stages.map((item) => item.toJson()).toList(growable: false),
+    'entries': entries.map((item) => item.toJson()).toList(growable: false),
+    'summary': summary,
+    'referenceSummary': referenceSummary.toJson(),
+    'readiness': readiness.toJson(),
+  };
 
   factory AssistantJourney.fromJson(Map<String, dynamic> json) {
     const allowedFields = <String>{
@@ -461,32 +640,81 @@ class AssistantJourney {
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('AssistantJourney response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'AssistantJourney response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (json.containsKey('stages') && json['stages'] != null && (json['stages'] is! List || (json['stages'] as List).any((item) => item is! Map))) {
-      throw const FormatException('AssistantJourney field stages has an invalid wire value');
+    if (json.containsKey('stages') &&
+        json['stages'] != null &&
+        (json['stages'] is! List ||
+            (json['stages'] as List).any((item) => item is! Map))) {
+      throw const FormatException(
+        'AssistantJourney field stages has an invalid wire value',
+      );
     }
-    if (json.containsKey('entries') && json['entries'] != null && (json['entries'] is! List || (json['entries'] as List).any((item) => item is! Map))) {
-      throw const FormatException('AssistantJourney field entries has an invalid wire value');
+    if (json.containsKey('entries') &&
+        json['entries'] != null &&
+        (json['entries'] is! List ||
+            (json['entries'] as List).any((item) => item is! Map))) {
+      throw const FormatException(
+        'AssistantJourney field entries has an invalid wire value',
+      );
     }
-    if (json.containsKey('summary') && json['summary'] != null && (json['summary'] is! String)) {
-      throw const FormatException('AssistantJourney field summary has an invalid wire value');
+    if (json.containsKey('summary') &&
+        json['summary'] != null &&
+        (json['summary'] is! String)) {
+      throw const FormatException(
+        'AssistantJourney field summary has an invalid wire value',
+      );
     }
-    if (json.containsKey('referenceSummary') && json['referenceSummary'] != null && (json['referenceSummary'] is! Map)) {
-      throw const FormatException('AssistantJourney field referenceSummary has an invalid wire value');
+    if (json.containsKey('referenceSummary') &&
+        json['referenceSummary'] != null &&
+        (json['referenceSummary'] is! Map)) {
+      throw const FormatException(
+        'AssistantJourney field referenceSummary has an invalid wire value',
+      );
     }
-    if (json.containsKey('readiness') && json['readiness'] != null && (json['readiness'] is! Map)) {
-      throw const FormatException('AssistantJourney field readiness has an invalid wire value');
+    if (json.containsKey('readiness') &&
+        json['readiness'] != null &&
+        (json['readiness'] is! Map)) {
+      throw const FormatException(
+        'AssistantJourney field readiness has an invalid wire value',
+      );
     }
     return AssistantJourney(
-      stages: (json['stages'] as List?)?.whereType<Map>().map((item) => AssistantJourneyStage.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantJourneyStage>[],
-      entries: (json['entries'] as List?)?.whereType<Map>().map((item) => AssistantJourneyEntry.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantJourneyEntry>[],
+      stages:
+          (json['stages'] as List?)
+              ?.whereType<Map>()
+              .map(
+                (item) => AssistantJourneyStage.fromJson(
+                  item.cast<String, dynamic>(),
+                ),
+              )
+              .toList(growable: false) ??
+          const <AssistantJourneyStage>[],
+      entries:
+          (json['entries'] as List?)
+              ?.whereType<Map>()
+              .map(
+                (item) => AssistantJourneyEntry.fromJson(
+                  item.cast<String, dynamic>(),
+                ),
+              )
+              .toList(growable: false) ??
+          const <AssistantJourneyEntry>[],
       summary: (json['summary'] as String?)?.trim() ?? "",
-      referenceSummary: json['referenceSummary'] is Map ? AssistantJourneyReferenceSummary.fromJson((json['referenceSummary'] as Map).cast<String, dynamic>()) : const AssistantJourneyReferenceSummary(),
-      readiness: json['readiness'] is Map ? AssistantJourneyReadiness.fromJson((json['readiness'] as Map).cast<String, dynamic>()) : const AssistantJourneyReadiness(),
+      referenceSummary: json['referenceSummary'] is Map
+          ? AssistantJourneyReferenceSummary.fromJson(
+              (json['referenceSummary'] as Map).cast<String, dynamic>(),
+            )
+          : const AssistantJourneyReferenceSummary(),
+      readiness: json['readiness'] is Map
+          ? AssistantJourneyReadiness.fromJson(
+              (json['readiness'] as Map).cast<String, dynamic>(),
+            )
+          : const AssistantJourneyReadiness(),
     );
   }
-
 }
 
 class AssistantJourneyFields {

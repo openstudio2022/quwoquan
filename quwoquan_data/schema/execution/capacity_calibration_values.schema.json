@@ -36,6 +36,61 @@
         }
       }
     },
+    "frozenLiveness": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "来源发现阶段存活判定面的冻结阈值。与 frozenCapacity 分块声明：容量上限与单对象 wall-clock 回答「能同时跑多少、单对象最多跑多久」，本块回答「多久没心跳算失去心跳」，两者不得互相挪用取值。",
+      "required": [
+        "sourceDiscoveryHeartbeatIntervalSeconds",
+        "sourceDiscoveryHeartbeatStaleAfterSeconds"
+      ],
+      "properties": {
+        "sourceDiscoveryHeartbeatIntervalSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "来源发现阶段运行中写入进度面的间隔。由标定的心跳写入开销与单实体耗时分布共同决定：写入开销占比可忽略，且远小于单实体耗时，使一个实体尚未得出终态时静默也能被区分。"
+        },
+        "sourceDiscoveryHeartbeatStaleAfterSeconds": {
+          "type": "integer",
+          "minimum": 2,
+          "description": "超过该静默秒数即判为失去心跳。取值为心跳间隔乘以标定时显式声明的可容忍漏拍数，严格大于心跳间隔。"
+        }
+      }
+    },
+    "frozenPrescreen": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "目标集冻结前来源预筛面的冻结阈值与探测预算。与 frozenCapacity、frozenLiveness 分块声明：容量上限回答「能同时跑多少」，存活面回答「多久没心跳算失去心跳」，本块回答「一个实体的供给算不算够、单实体最多探多久」，三者不得互相挪用取值。整段可以缺席，缺席即本 receipt 未标定预筛面，消费方据此判否而不是回落到默认常量；一旦在场则字段必须齐全。成稿最小字数、matchConfidence 与首轮 oversampleFactor 都不是本块任一取值的合法来源。",
+      "required": [
+        "articleBodyMinCharacters",
+        "entityAnchorMinConfidence",
+        "perEntityProbeBudget",
+        "imageSupplyMinCandidates"
+      ],
+      "properties": {
+        "articleBodyMinCharacters": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "判定正文在场是否够用的最小字符数。由标定样本上「达到该篇幅的来源最终成稿通过率」得出，回答的是「这份来源够不够写」，与成稿自身的最小字数门槛是两个截面，不得互相取值。"
+        },
+        "entityAnchorMinConfidence": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "description": "判定一份来源确实锚定到本实体的最低置信度。由标定样本上人工确认的锚定正误分布得出；低于该值即「不是本实体」而不是「篇幅不足」。"
+        },
+        "perEntityProbeBudget": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "单实体在预筛阶段允许的探测次数上限，正文与图片两条供给共用同一预算。预算耗尽而未得出结论的实体判定未完成，不判缺席。"
+        },
+        "imageSupplyMinCandidates": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "判定图片供给在场是否够用的最小可物化候选数。由标定样本上「该候选数下最终物化成功率」得出，使图片落空在目标集冻结前就可判，而不是等到物化期。"
+        }
+      }
+    },
     "applicabilityScope": {
       "type": "object",
       "additionalProperties": false,

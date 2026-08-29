@@ -121,10 +121,21 @@ class RuntimeLogSpoolWiringContractTest(unittest.TestCase):
             for service in self.render.RUNTIME_LOG_EXPORT_SERVICES
         }
         self.assertEqual(
-            set(platform["CONFIG_ACK_REQUIRED_INSTANCES"].split(",")),
+            set(platform["PLATFORM_OPS_CONFIG_ACK_REQUIRED_INSTANCES"].split(",")),
             expected,
         )
-        self.assertEqual(platform["CONFIG_ACK_MAX_AGE_SECONDS"], "120")
+        self.assertEqual(platform["PLATFORM_OPS_CONFIG_ACK_MAX_AGE_SECONDS"], "120")
+        # 无前缀键已退役：platform-ops 在进程环境里见到它就启动失败。
+        self.assertNotIn("CONFIG_ACK_REQUIRED_INSTANCES", platform)
+        self.assertNotIn("CONFIG_ACK_MAX_AGE_SECONDS", platform)
+        self.assertNotIn("POSTGRES_DSN", platform)
+        self.assertTrue(
+            platform["PLATFORM_OPS_POSTGRES_DSN"].startswith("postgres://"),
+            platform["PLATFORM_OPS_POSTGRES_DSN"],
+        )
+        # outbox 的 typed event 总线必须指向本次数据面的实际 redis，而不是
+        # compose 基线里只在 isolated 面成立的 redis:6379。
+        self.assertNotEqual(platform["PLATFORM_OPS_REDIS_GENERAL_ADDR"], "redis:6379")
 
 
 if __name__ == "__main__":

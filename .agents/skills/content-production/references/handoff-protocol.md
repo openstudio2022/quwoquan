@@ -39,7 +39,7 @@
 ```bash
 python3 quwoquan_data/scripts/cli.py task stage-record \
   --execution-id <id> --stage <stage> --verdict pass|blocked \
-  --actor-host <cursor|codex|claude-code|...> \
+  --actor-host <cursor|codex> \
   --actor-model-family <族名，auto 路由时记实际族> \
   --actor-session <会话标识> \
   --artifact <相对路径> [--artifact ...] \

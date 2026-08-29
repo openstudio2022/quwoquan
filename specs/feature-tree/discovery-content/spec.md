@@ -237,6 +237,7 @@
 ## 7. 工程归属
 
 - App：`quwoquan_app/lib/service/content_service`
+- App（翻页几何基础设施）：`quwoquan_app/lib/design_system/pageflip`
 - Contracts：`quwoquan_service/services/content-service/contracts`
 - Contracts（协作引用，不用于代码归属）：`quwoquan_service/services/integration-service/contracts`
 - Service：`quwoquan_data`、`quwoquan_service/services/content-service`

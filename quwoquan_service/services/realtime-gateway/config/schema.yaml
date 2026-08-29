@@ -13,7 +13,6 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-  default: standalone
 - key: sys.realtime-gateway.redis.realtime.addr
   type: string
   scope: workload
@@ -34,13 +33,13 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: true
-- key: sys.realtime-gateway.user_service.account_security.base_url
+- key: sys.realtime-gateway.user_account_security_authority.base_url
   type: string
   scope: workload
   reload: restart
   rollout: progressive
   sensitive: false
-- key: sys.realtime-gateway.user_service.account_security.timeout_ms
+- key: sys.realtime-gateway.user_account_security_authority.timeout_ms
   type: int
   scope: workload
   reload: restart

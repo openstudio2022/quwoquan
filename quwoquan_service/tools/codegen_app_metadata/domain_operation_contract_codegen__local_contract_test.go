@@ -10,6 +10,65 @@ import (
 	"quwoquan_service/internal/testsupport/contractsview"
 )
 
+func TestNormalizeRequestEnumUnknownMemberKeepsAbsenceDistinct(t *testing.T) {
+	for name, input := range map[string]any{
+		"array declaration":          []any{"active"},
+		"object without declaration": map[string]any{"values": []any{"active"}},
+		"explicit null": map[string]any{
+			"values":                []any{"active"},
+			"client_unknown_member": nil,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got := normalizeRequestEnumUnknownMember(input); got != "" {
+				t.Fatalf("unknown member = %q, want absent", got)
+			}
+		})
+	}
+	if got := normalizeRequestEnumUnknownMember(map[string]any{
+		"values":                []any{"active"},
+		"client_unknown_member": "unknown",
+	}); got != "unknown" {
+		t.Fatalf("explicit unknown member = %q, want unknown", got)
+	}
+}
+
+func TestRenderDomainWireEnumHonorsExplicitClientUnknownMember(t *testing.T) {
+	members := []canonicalRequestEnumMember{
+		{WireValue: "agenda", DartMember: "agenda"},
+		{WireValue: "note", DartMember: "note"},
+	}
+	var output strings.Builder
+	renderDomainWireEnum(&output, "PlanItemKind", members, "unknown")
+	payload := output.String()
+	for _, expected := range []string{
+		`unknown("")`,
+		`String() => PlanItemKind.unknown`,
+		`_ => throw FormatException('$path has an invalid enum value')`,
+		`PlanItemKind.unknown => throw StateError`,
+	} {
+		if !strings.Contains(payload, expected) {
+			t.Fatalf("opt-in enum output missing %q:\n%s", expected, payload)
+		}
+	}
+	if strings.Contains(payload, `_ => PlanItemKind.unknown`) {
+		t.Fatalf("opt-in enum accepts malformed non-string wire values:\n%s", payload)
+	}
+
+	output.Reset()
+	renderDomainWireEnum(&output, "PlanAcknowledgementMode", members, "")
+	strictPayload := output.String()
+	if !strings.Contains(
+		strictPayload,
+		`_ => throw FormatException('$path has an invalid enum value')`,
+	) {
+		t.Fatalf("non-opt-in enum does not reject unknown wire values:\n%s", strictPayload)
+	}
+	if strings.Contains(strictPayload, `unknown("")`) {
+		t.Fatalf("non-opt-in enum gained an implicit unknown member:\n%s", strictPayload)
+	}
+}
+
 func TestCrossDomainCanonicalEnumHasOneGeneratedOwner(t *testing.T) {
 	metadataDir := contractsview.Build(t)
 	if err := initializeMetadataSourceForServiceOutput(metadataDir); err != nil {
@@ -372,6 +431,12 @@ func TestCircleAppSurfaceUsesCanonicalResponseEntitiesAndOneGeneratedOwner(t *te
 		"final class CircleGroupPageSlice {",
 		"final class CircleMembershipPageSlice {",
 		"CircleStatsWire decodeCircleStatsWire(Object? response)",
+		`unknown("")`,
+		`String() => PlanItemKind.unknown`,
+		`PlanItemKind.unknown => throw StateError`,
+		`String() => PlanTravelMode.unknown`,
+		`PlanTravelMode.unknown => throw StateError`,
+		`_ => throw FormatException('$path has an invalid enum value')`,
 	} {
 		if !strings.Contains(ownerPayload, expected) {
 			t.Fatalf("Circle owner is missing %q", expected)

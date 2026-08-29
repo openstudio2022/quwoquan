@@ -25,6 +25,8 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+sys.dont_write_bytecode = True
+
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _DATA_SCRIPTS = _REPO_ROOT / "quwoquan_data" / "scripts"
 if str(_DATA_SCRIPTS) not in sys.path:

@@ -17,7 +17,7 @@
 ### In Scope
 
 - Android、iOS、Web 各平台唯一的 latest 与 minimum supported 已发布版本事实。
-- 公开版本查询、通用官网下载页、Android APK、iOS 官方更新通道和 Web 强制刷新/恢复入口。
+- 公开版本查询、通用官网下载页、Android APK、公众 iOS 官方 Web/PWA 恢复入口和 Web 强制刷新/恢复入口；App Store 安装渠道事实独立登记，不复用公众启动恢复的 `updateUrl`。
 - User-Agent 平台识别、Build 数值比较、受信 URL 校验和下载失败终态。
 - Android APK 生产签名、不可变 CDN 对象、SHA-256 与 latest 指针发布门禁。
 - Apple App Store/TestFlight 与已登记 Android 受信市场（华为、小米、OPPO、vivo、应用宝）的渠道事实：channelId、store product 标识、当前 version/build、上架状态与回退方式。
@@ -37,7 +37,7 @@
 ### REQ-001 版本查询只返回平台当前发布事实
 
 - 查询只接收 canonical contract 声明的 platform、App Version 与 Build，其中 platform 只允许 `android`、`ios` 或 `web`，Build 必须是正十进制整数。
-- 响应使用 canonical contract 返回平台、latest Version/Build、minimum supported Version/Build、`updateState`、官方更新与恢复 URL；不得返回领域模型版本或兼容协商信息。
+- 响应使用 canonical contract 返回平台、latest Version/Build、minimum supported Version/Build、`updateState`、平台允许的官方更新与恢复 URL；公众 iOS 的 `updateUrl` 必须为 `null` 且 `recoveryUrl` 只能指向官方 Web/PWA，App Store 渠道地址不得借该字段下发。不得返回领域模型版本或兼容协商信息。
 - 当前 Build 大于或等于 latest Build 时 `updateState=none`。
 - 当前 Build 不低于 minimum 且低于 latest 时 `updateState=available`；低于 minimum 时 `updateState=required`。
 - 请求失败或响应非法不得生成版本结论。
@@ -73,8 +73,8 @@
 
 - 最低支持 Build 按 Android、iOS、Web 平台独立配置，是平台级兼容政策；不得按领域对象、用户、stable/candidate 服务池或灰度阶段分别配置。
 - 低于 minimum 的普通业务请求由 API Edge 返回 HTTP 426 和 canonical `client_upgrade_required` failure；版本查询、更新下载、恢复页、官网及完成更新所必需的认证入口必须保持可访问。
-- `available` 时 Android 提示或使用官方 flexible update，iOS 跳转 App Store，Web 提示刷新；`required` 时 Android/iOS 进入阻断更新页，Web 清除旧 service-worker/cache 并强制加载当前发布，仍不满足时进入恢复页。
-- iOS 更新必须服从系统和 App Store 能力，不得承诺或实现绕过系统的静默安装；Android 只有在平台和用户设置允许时才可执行静默更新。
+- `available` 时 Android 提示或使用官方 flexible update，公众 iOS 启动恢复只提供官方 Web/PWA，Web 提示刷新；`required` 时 Android 进入阻断更新页，公众 iOS 进入只提供官方 Web/PWA 的恢复页，Web 清除旧 service-worker/cache 并强制加载当前发布，仍不满足时进入恢复页。
+- 独立登记且已就绪的 iOS App Store 渠道只可用于普通安装/更新引导，不得进入公众启动恢复 `updateUrl`；其更新必须服从系统和 App Store 能力，不得承诺或实现绕过系统的静默安装。Android 只有在平台和用户设置允许时才可执行静默更新。
 
 <a id="req-006"></a>
 ### REQ-006 Minimum 提升门禁与原子投影
@@ -87,7 +87,7 @@
 ### REQ-007 受信分发渠道事实单一真相源
 
 - 每个平台的受信安装渠道集合只由 `app_release` 发布事实声明。
-- iOS 受信安装渠道为 Apple App Store，TestFlight 仅用于内测轨。
+- iOS 受信原生安装渠道为 Apple App Store，TestFlight 仅用于内测轨；公众启动恢复通道固定为官方 Web/PWA，且不返回原生安装地址。
 - Android 受信安装渠道为官网 CDN APK 与已登记受信市场（华为、小米、OPPO、vivo、应用宝）。
 - Web 受信安装渠道为官方 PWA。
 - 未在发布事实登记的渠道不得出现在任何查询响应或页面。
@@ -133,7 +133,7 @@
 - WHEN 客户端或官网查询平台安装/更新路由，或发布流水线登记某渠道的上传、审核与发布回执。
 - THEN 查询只返回该平台已登记且就绪的受信渠道，并遵循以下路由。
   - Android 更新引导按本机安装来源匹配市场渠道，恢复页下载仍固定官网 CDN。
-  - iOS 更新只跳转 App Store。
+  - 独立的 iOS 原生安装/更新引导只跳转 App Store；公众启动恢复查询的 `updateUrl` 为 `null`，只返回官方 Web/PWA recovery URL。
 - AND 每个渠道的上传、审核、发布与真机安装回执独立登记；未就绪渠道显式保持 `GATE_BLOCK/OPEN`，不阻塞其他渠道，也不得由其他渠道回执替代。
 
 ## 6. 依赖
@@ -151,7 +151,7 @@
 - 优先级：`P0`
 - 准出影响：`block`
 - 影响或价值：仓库已禁止 Android release 回退 debug signing，但当前仍没有生产 keystore Secret、经正式域名/CDN 上传并校验的 APK 对象以及四环境 Web DNS/TLS，无法形成可对外宣称的正式下载事实。
-- 完成判定：`GWT-002` 使用生产签名和官方 CDN 真文件通过，iOS 官方更新通道由真实 iPhone 完成更新，Web PWA 由正式浏览器安装并以 standalone 模式启动；`GWT-004` 的 App Store 与五个 Android 受信市场渠道分别绑定真实上传、审核、发布与真机安装回执，未就绪渠道保持显式阻断。
+- 完成判定：`GWT-002` 使用生产签名和官方 CDN 真文件通过，公众 iOS 恢复通道由真实 iPhone 打开官方 Web/PWA，Web PWA 由正式浏览器安装并以 standalone 模式启动；`GWT-004` 的独立 App Store 与五个 Android 受信市场渠道分别绑定真实上传、审核、发布与真机安装回执，未就绪渠道保持显式阻断且不得改变公众 iOS `updateUrl=null` 的事实。
 - 依赖：移动端发布 Secret、官方 CDN、Web 部署与 DNS/TLS、各市场开发者账号与审核。
 
 <a id="open-002"></a>
@@ -162,3 +162,13 @@
 - 准出影响：`block`
 - 影响或价值：当前实现尚未证明 Android、iOS、Web 使用同一权威 latest/minimum 投影形成 `none/available/required`，也未形成 426 例外、`would_block`、支持窗口和真实更新/恢复闭环证据；不得把本次规格刷新宣称为已支持。
 - 完成判定：`GWT-001`、`GWT-003` 的对应行为满足，复合结果子句均由真实 `local_contract`、`api_integration` 与 `user_acceptance` 精确绑定。
+
+<a id="open-003"></a>
+### OPEN-003 应用市场渠道查询与回执契约缺口
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：当前 canonical `app_release` 只有公众版本恢复投影，没有 install-channel 查询、channelId/store product、渠道状态或上传/审核/发布/真机安装回执 contract，也没有对应 readiness case；因此不得宣称 App Store、TestFlight 或五个 Android 市场的渠道路由与回执已经具备。该缺口不改变公众 iOS `updateUrl=null` 与官方 Web/PWA 恢复的单轨行为。
+- 完成判定：`GWT-004` 的每条结果子句都有所属 canonical install-channel authoring contract、真实 operation/receipt schema、逐渠道 readiness case 与上传、审核、发布、真机安装回执；公众恢复投影继续不暴露 iOS 原生安装地址。
+- 依赖：应用市场产品标识与账号、渠道发布流水线、审核 API/回执、Android/iPhone 实体设备。

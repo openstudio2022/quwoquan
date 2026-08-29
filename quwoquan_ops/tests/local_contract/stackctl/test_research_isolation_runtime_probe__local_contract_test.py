@@ -47,10 +47,21 @@ ASSET_ID = "asset-0001"
 POST_ID = "post-0001"
 AUDIT_ID = "audit-0001"
 ORIGINAL_PATH = f"/media/image/original/{ASSET_ID}"
+ORIGINAL_SIGN = "d" * 64
+ORIGINAL_EXPIRY = "1767226200"
 ORIGINAL_URL = (
-    f"https://cdn.alpha.quwoquan.com:18444{ORIGINAL_PATH}?sig=deadbeef&exp=900"
+    f"https://cdn.alpha.quwoquan.com:18444{ORIGINAL_PATH}"
+    f"?sign={ORIGINAL_SIGN}&t={ORIGINAL_EXPIRY}"
 )
 UNSIGNED_ORIGINAL_URL = f"https://cdn.alpha.quwoquan.com:18444{ORIGINAL_PATH}"
+FORGED_SIGNATURE_URL = (
+    f"https://cdn.alpha.quwoquan.com:18444{ORIGINAL_PATH}"
+    f"?sign={'0' * 64}&t={ORIGINAL_EXPIRY}"
+)
+TAMPERED_EXPIRY_URL = (
+    f"https://cdn.alpha.quwoquan.com:18444{ORIGINAL_PATH}"
+    f"?sign={ORIGINAL_SIGN}&t={int(ORIGINAL_EXPIRY) + 1}"
+)
 ANONYMOUS_MEDIA_URL = f"{MEDIA_BASE}/{ASSET_ID}"
 
 
@@ -81,6 +92,9 @@ class FakeResearchEnvironment:
         anonymous_media_status: int = 403,
         unsigned_original_status: int = 403,
         signed_access_status: int = 200,
+        range_access_status: int = 206,
+        forged_signature_status: int = 403,
+        tampered_expiry_status: int = 403,
         readback_view: dict[str, object] | None = None,
         ttl_seconds: int = 600,
     ) -> None:
@@ -89,6 +103,9 @@ class FakeResearchEnvironment:
         self.anonymous_media_status = anonymous_media_status
         self.unsigned_original_status = unsigned_original_status
         self.signed_access_status = signed_access_status
+        self.range_access_status = range_access_status
+        self.forged_signature_status = forged_signature_status
+        self.tampered_expiry_status = tampered_expiry_status
         self.readback_view = readback_view or _readback_view()
         self.ttl_seconds = ttl_seconds
         self.request_header_log: list[dict[str, str]] = []
@@ -190,7 +207,13 @@ class FakeResearchEnvironment:
             return self.anonymous_media_status
         if url == UNSIGNED_ORIGINAL_URL:
             return self.unsigned_original_status
+        if url == FORGED_SIGNATURE_URL:
+            return self.forged_signature_status
+        if url == TAMPERED_EXPIRY_URL:
+            return self.tampered_expiry_status
         if url == ORIGINAL_URL:
+            if headers.get("Range") == "bytes=0-1":
+                return self.range_access_status
             return self.signed_access_status
         raise AssertionError(f"unexpected media fetch {url}")
 
@@ -301,6 +324,9 @@ def _all_operations(document: dict[str, object]) -> list[dict[str, object]]:
         denied["export"]["operation"],
         signed["issuanceOperation"],
         signed["accessOperation"],
+        signed["rangeAccessOperation"],
+        signed["forgedSignatureOperation"],
+        signed["tamperedExpiryOperation"],
         signed["auditReadbackOperation"],
         document["positiveReadback"]["operation"],
     ]
@@ -462,17 +488,26 @@ def test_all_green_probes_assemble_a_schema_valid_checksummed_pass_proof(
     assert document["policyRef"] == "quwoquan_ops/environments/alpha/runtime.yaml"
 
     operations = _all_operations(document)
-    assert len(operations) == 12
+    assert len(operations) == 15
     request_ids = [operation["requestId"] for operation in operations]
     trace_ids = [operation["traceId"] for operation in operations]
-    assert len(set(request_ids)) == 12
-    assert len(set(trace_ids)) == 12
+    assert len(set(request_ids)) == 15
+    assert len(set(trace_ids)) == 15
     page_ids = {operation["pageId"] for operation in operations}
-    assert len(page_ids) == 12
+    assert len(page_ids) == 15
     assert all(page.startswith("ops.research_isolation.") for page in page_ids)
 
-    assert result["operationCount"] == 12
+    assert result["operationCount"] == 15
     assert result["subjectHash"] == SUBJECT_HASH
+
+    # 边缘复算负例（DEC-031 / OPEN-015 运维加固面）：伪签名与篡改到期
+    # 必须以真实私有 key 的 URL 变体被拒绝，Range 段请求逐段复算后放行。
+    signed = document["signedMedia"]
+    assert signed["forgedSignatureOperation"]["status"] in {401, 403}
+    assert signed["tamperedExpiryOperation"]["status"] in {401, 403}
+    assert signed["rangeAccessOperation"]["status"] in {200, 206}
+    assert signed["forgedSignatureOperation"]["path"] == ORIGINAL_PATH
+    assert signed["tamperedExpiryOperation"]["path"] == ORIGINAL_PATH
 
 
 @pytest.mark.parametrize(
@@ -493,6 +528,18 @@ def test_all_green_probes_assemble_a_schema_valid_checksummed_pass_proof(
         ),
         (
             {"signed_access_status": 403},
+            "OPS.RESEARCH.PROBE_UNEXPECTED_STATUS",
+        ),
+        (
+            {"range_access_status": 403},
+            "OPS.RESEARCH.PROBE_UNEXPECTED_STATUS",
+        ),
+        (
+            {"forged_signature_status": 200},
+            "OPS.RESEARCH.PROBE_UNEXPECTED_STATUS",
+        ),
+        (
+            {"tampered_expiry_status": 200},
             "OPS.RESEARCH.PROBE_UNEXPECTED_STATUS",
         ),
         ({"ttl_seconds": 2000}, "OPS.RESEARCH.PROBE_RESPONSE_INVALID"),

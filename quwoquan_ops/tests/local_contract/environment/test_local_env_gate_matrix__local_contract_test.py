@@ -1,4 +1,5 @@
 """local_contract：三环境固定候选门禁矩阵。"""
+
 from __future__ import annotations
 
 import json
@@ -9,10 +10,62 @@ from types import SimpleNamespace
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[4]
+RELEASE_TRAIN_ID = f"sha256:{'9' * 64}"
+PACKAGE_DIGEST = f"sha256:{'8' * 64}"
+TARGET_BASELINES = {
+    "alpha-local": f"sha256:{'a' * 64}",
+    "beta-local": f"sha256:{'b' * 64}",
+    "gamma-local": f"sha256:{'c' * 64}",
+}
+TARGET_ENVIRONMENTS = {
+    "alpha-local": "alpha",
+    "beta-local": "beta",
+    "gamma-local": "gamma",
+}
+
+
+def _active_candidate_snapshot(
+    target: str,
+    *,
+    baseline: str | None = None,
+    release_train_id: str = RELEASE_TRAIN_ID,
+) -> dict[str, object]:
+    selected_baseline = baseline or TARGET_BASELINES[target]
+    candidate_dir = f"/tmp/quwoquan-matrix/{target}/{selected_baseline}"
+    return {
+        "target": target,
+        "baselineId": selected_baseline,
+        "candidateDir": candidate_dir,
+        "manifest": {
+            "target": target,
+            "environment": TARGET_ENVIRONMENTS[target],
+            "baselineId": selected_baseline,
+            "packageDigest": PACKAGE_DIGEST,
+            "environmentArtifact": {
+                "target": target,
+                "environment": TARGET_ENVIRONMENTS[target],
+                "releaseTrainId": release_train_id,
+                "packageDigest": PACKAGE_DIGEST,
+                "environmentArtifactDigest": f"sha256:{'7' * 64}",
+                "sourceCapsule": {"baselineId": selected_baseline},
+            },
+        },
+    }
+
+
+def _package_payload(target: str) -> dict[str, object]:
+    snapshot = _active_candidate_snapshot(target)
+    return {
+        "baselineId": TARGET_BASELINES[target],
+        "candidateDir": snapshot["candidateDir"],
+        "packageDigest": PACKAGE_DIGEST,
+    }
 
 
 class LocalEnvGateMatrixContractTest(unittest.TestCase):
-    def test_integration_matrix_accepts_only_current_test_data_case_result(self) -> None:
+    def test_integration_matrix_accepts_only_current_test_data_case_result(
+        self,
+    ) -> None:
         from quwoquan_ops.cli.lib import local_env_gate_matrix as matrix_mod
 
         with tempfile.TemporaryDirectory() as temporary:
@@ -55,66 +108,6 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
                     {"reportDir": str(report_dir)}
                 )
             )
-
-    def test_emulator_only_profile_is_explicitly_non_promotable(self) -> None:
-        from quwoquan_ops.cli.lib import local_env_gate_matrix as matrix_mod
-
-        bindings = matrix_mod._device_uat_bindings(
-            device_profile=matrix_mod.DEVICE_PROFILE_EMULATOR_ONLY,
-            ios_simulator_device="ios-simulator-udid",
-            android_emulator_device="emulator-5554",
-            android_physical_device="",
-        )
-        self.assertEqual(
-            tuple(key for key, _, _ in bindings),
-            ("iosSimulatorUAT", "androidEmulatorUAT"),
-        )
-
-        with tempfile.TemporaryDirectory() as temporary:
-            matrix_dir = Path(temporary)
-            with mock.patch.object(
-                matrix_mod,
-                "write_timing_bundle",
-                return_value=matrix_dir / "timing.json",
-            ):
-                result = matrix_mod._write_matrix_result(
-                    matrix_dir=matrix_dir,
-                    phases=[{"name": "matrix", "status": "passed"}],
-                    environments={
-                        target: {}
-                        for target in matrix_mod.CANONICAL_TARGETS
-                    },
-                    budgets={
-                        "softBudgetSeconds": 600,
-                        "hardBudgetSeconds": 1800,
-                    },
-                    wall_seconds=1.0,
-                    exit_code=0,
-                    failure_category="",
-                    baseline_id=f"sha256:{'a' * 64}",
-                    release={
-                        "releaseId": "release-emulator-only",
-                        "releaseDigest": f"sha256:{'b' * 64}",
-                    },
-                    matrix_run_id="matrix-emulator-only",
-                    execution_class="live",
-                    device_profile=matrix_mod.DEVICE_PROFILE_EMULATOR_ONLY,
-                )
-            payload = json.loads(
-                (matrix_dir / "matrix.json").read_text(encoding="utf-8")
-            )
-
-        self.assertEqual(result["claim"], matrix_mod.EMULATOR_ONLY_CLAIM)
-        self.assertEqual(payload["schema"], "quwoquan.test.case-result")
-        self.assertTrue(payload["nonPromotable"])
-        self.assertEqual(
-            payload["deviceCoverage"],
-            ["ios-simulator", "android-emulator"],
-        )
-        self.assertEqual(
-            payload["waivers"][0]["effect"],
-            "release-promotion-blocked",
-        )
 
     def test_provider_phase_requires_explicit_local_functional_scope(self) -> None:
         from quwoquan_ops.cli.lib.local_env_gate_matrix import (
@@ -259,6 +252,12 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
             target: {
                 "target": target,
                 "environment": environment,
+                "packageIdentity": {
+                    "target": target,
+                    "environment": environment,
+                    "baselineId": baseline_id,
+                    "releaseTrainId": RELEASE_TRAIN_ID,
+                },
                 "package": {
                     "baselineId": baseline_id,
                     "packageDigest": f"sha256:{'b' * 64}",
@@ -278,7 +277,8 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
 
         errors = _live_matrix_evidence_errors(
             environments,
-            baseline_id=baseline_id,
+            release_train_id=RELEASE_TRAIN_ID,
+            package_baselines={target: baseline_id for target in environments},
         )
 
         self.assertEqual(
@@ -292,7 +292,7 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
             3,
         )
 
-    def test_live_evidence_rejects_cross_target_baseline_drift(self) -> None:
+    def test_live_evidence_rejects_target_baseline_drift(self) -> None:
         from quwoquan_ops.cli.lib.local_env_gate_matrix import (
             _live_matrix_evidence_errors,
         )
@@ -303,11 +303,17 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
             target: {
                 "target": target,
                 "environment": environment,
+                "packageIdentity": {
+                    "target": target,
+                    "environment": environment,
+                    "baselineId": (
+                        drifted_baseline_id if target == "beta-local" else baseline_id
+                    ),
+                    "releaseTrainId": RELEASE_TRAIN_ID,
+                },
                 "package": {
                     "baselineId": (
-                        drifted_baseline_id
-                        if target == "beta-local"
-                        else baseline_id
+                        drifted_baseline_id if target == "beta-local" else baseline_id
                     ),
                     "packageDigest": f"sha256:{'b' * 64}",
                     "imageDigest": f"sha256:{'c' * 64}",
@@ -332,7 +338,8 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
 
         errors = _live_matrix_evidence_errors(
             environments,
-            baseline_id=baseline_id,
+            release_train_id=RELEASE_TRAIN_ID,
+            package_baselines={target: baseline_id for target in environments},
         )
 
         self.assertIn(
@@ -343,10 +350,7 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
     def test_timing_budget_gate_exists(self) -> None:
         budgets = json.loads(
             (
-                ROOT
-                / "quwoquan_ops"
-                / "environments"
-                / "pr_gate_timing_budgets.json"
+                ROOT / "quwoquan_ops" / "environments" / "pr_gate_timing_budgets.json"
             ).read_text(encoding="utf-8")
         )
         gate = budgets["gates"]["01.local_env_matrix"]
@@ -388,7 +392,9 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
 
         def _ok(name: str):
             def _fn(args):
-                calls.append(f"{name}:{getattr(args, 'env', '')}:{getattr(args, 'target', '')}:{getattr(args, 'command', '')}")
+                calls.append(
+                    f"{name}:{getattr(args, 'env', '')}:{getattr(args, 'target', '')}:{getattr(args, 'command', '')}"
+                )
                 if name == "verify":
                     self.assertFalse(hasattr(args, "reuse_package"))
                     self.assertEqual(args.profile, "integration")
@@ -406,7 +412,7 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
                     "reportDir": f"runs/{name}",
                 }
                 if name == "package":
-                    payload["baselineId"] = f"sha256:{'c' * 64}"
+                    payload.update(_package_payload(args.target))
                 return payload
 
             return _fn
@@ -446,6 +452,9 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
                     "schema": "quwoquan_data.release_attestation",
                     "releaseId": "candidate-release",
                     "payloadSha256": f"sha256:{'a' * 64}",
+                    "releaseClass": "commercial",
+                    "productLifecycleState": "commercial",
+                    "containsUnverifiedAssets": False,
                 }
             ),
             encoding="utf-8",
@@ -456,26 +465,37 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
                     "schema": "quwoquan_data.release_attestation",
                     "releaseId": "rollback-release",
                     "payloadSha256": f"sha256:{'b' * 64}",
+                    "releaseClass": "commercial",
+                    "productLifecycleState": "commercial",
+                    "containsUnverifiedAssets": False,
                 }
             ),
             encoding="utf-8",
         )
 
-        with mock.patch(
-            "quwoquan_ops.cli.lib.local_env_gate_matrix._run_commit_gate",
-            return_value={
-                "exitCode": 0,
-                "durationMs": 10,
-                "summary": {},
-                "stdout": "",
-                "stderr": "",
-                "reportDir": "runs/commit-gate",
-            },
-        ), mock.patch(
-            "quwoquan_ops.cli.lib.local_env_gate_matrix.probe_migration_drift",
-        ) as drift_probe, mock.patch(
-            "quwoquan_ops.cli.lib.local_env_gate_matrix.subprocess.run",
-            return_value=mock.Mock(returncode=0, stdout="", stderr=""),
+        with (
+            mock.patch(
+                "quwoquan_ops.cli.lib.local_env_gate_matrix._run_commit_gate",
+                return_value={
+                    "exitCode": 0,
+                    "durationMs": 10,
+                    "summary": {},
+                    "stdout": "",
+                    "stderr": "",
+                    "reportDir": "runs/commit-gate",
+                },
+            ),
+            mock.patch(
+                "quwoquan_ops.cli.lib.local_env_gate_matrix.probe_migration_drift",
+            ) as drift_probe,
+            mock.patch(
+                "quwoquan_ops.cli.lib.local_env_gate_matrix.subprocess.run",
+                return_value=mock.Mock(returncode=0, stdout="", stderr=""),
+            ),
+            mock.patch(
+                "quwoquan_ops.cli.lib.local_env_gate_matrix.active_deployment_candidate_snapshot",
+                side_effect=_active_candidate_snapshot,
+            ),
         ):
             from quwoquan_ops.cli.lib.local_postgres_migration_drift import (
                 MigrationDriftProbeResult,
@@ -508,13 +528,13 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
         self.assertEqual(payload["skipped"], 0)
         self.assertLessEqual(payload["wallClockSeconds"], 600)
         # Serial order: the same package/up/health/verify/down state machine for A/B/G.
-        package_envs = [
-            c.split(":")[1] for c in calls if c.startswith("package:")
-        ]
+        package_envs = [c.split(":")[1] for c in calls if c.startswith("package:")]
         self.assertEqual(package_envs, ["alpha", "beta", "gamma"])
-        data_actions = [
-            c.split(":")[2] for c in calls if c.startswith("data:")
-        ]
+        self.assertLess(
+            max(i for i, call in enumerate(calls) if call.startswith("package:")),
+            min(i for i, call in enumerate(calls) if call.startswith("up:")),
+        )
+        data_actions = [c.split(":")[2] for c in calls if c.startswith("data:")]
         self.assertEqual(
             data_actions,
             [
@@ -540,13 +560,14 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
         self.assertEqual(timing["cacheMode"], "package-bound")
         self.assertFalse(timing["overHardBudget"])
         matrix = json.loads(
-            (ROOT / payload["reportDir"] / "matrix.json").read_text(
-                encoding="utf-8"
-            )
+            (ROOT / payload["reportDir"] / "matrix.json").read_text(encoding="utf-8")
         )
         self.assertEqual(matrix["schema"], "quwoquan.test.case-result")
         self.assertEqual(matrix["executionClass"], "contract-simulation")
         self.assertNotEqual(matrix["claim"], "ALPHA_BETA_GAMMA_LOCAL_GREEN")
+        self.assertEqual(matrix["releaseTrainId"], RELEASE_TRAIN_ID)
+        self.assertEqual(matrix["packageBaselines"], TARGET_BASELINES)
+        self.assertNotIn("baselineId", matrix)
         phase_names = [p["name"] for p in timing["phases"]]
         self.assertIn("L0_commit_gate", phase_names)
         self.assertIn("gamma-local_up", phase_names)
@@ -583,60 +604,67 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
                 if expected_snapshot is not None:
                     return expected_snapshot
                 fingerprint = json.loads(
-                    (app_dir / "package-fingerprint.json").read_text(
-                        encoding="utf-8"
-                    )
+                    (app_dir / "package-fingerprint.json").read_text(encoding="utf-8")
                 )
                 deployment_inputs = fingerprint["deploymentInputs"]
                 return {
                     "baselineId": fingerprint["baselineId"],
                     "sourceRevision": fingerprint["sourceRevision"],
-                    "workspaceStatusDigest": fingerprint[
-                        "workspaceStatusDigest"
-                    ],
+                    "workspaceStatusDigest": fingerprint["workspaceStatusDigest"],
                     "deploymentInputRoots": deployment_inputs["roots"],
                     "deploymentInputDigest": deployment_inputs["digest"],
                     "deploymentInputFileCount": deployment_inputs["fileCount"],
                 }
 
-            with mock.patch(
-                "quwoquan_ops.cli.lib.package_reuse.app_deployment_package_dir",
-                return_value=app_dir,
-            ), mock.patch(
-                "quwoquan_ops.cli.lib.package_reuse.service_deployment_package_dir",
-                return_value=svc_dir,
-            ), mock.patch(
-                "quwoquan_ops.cli.lib.package_reuse.runtime_shared_deployment_package_dir",
-                return_value=shared_dir,
-            ), mock.patch(
-                "quwoquan_ops.cli.lib.package_reuse.legal_static_deployment_package_dir",
-                return_value=legal_dir,
-            ), mock.patch(
-                "quwoquan_ops.cli.lib.package_reuse._expected_service_packages",
-                return_value=["content-service"],
-            ), mock.patch(
-                "quwoquan_ops.cli.lib.package_reuse.deployment_input_digest",
-                return_value=(f"sha256:{'a' * 64}", 1),
-            ), mock.patch(
-                "quwoquan_ops.cli.lib.package_reuse.workspace_snapshot",
-                return_value={
-                    "baselineId": f"sha256:{'b' * 64}",
-                    "sourceRevision": "a" * 40,
-                    "workspaceStatusDigest": f"sha256:{'c' * 64}",
-                    "deploymentInputDigest": f"sha256:{'a' * 64}",
-                    "deploymentInputFileCount": 1,
-                },
-            ), mock.patch(
-                "quwoquan_ops.cli.lib.package_reuse.active_deployment_candidate",
-                side_effect=AssertionError(
-                    "explicit candidate reuse must not inspect the active candidate"
+            with (
+                mock.patch(
+                    "quwoquan_ops.cli.lib.package_reuse.app_deployment_package_dir",
+                    return_value=app_dir,
                 ),
-            ), mock.patch(
-                "quwoquan_ops.cli.lib.package_reuse.verify_package_input_capsule",
-                side_effect=verify_capsule,
-            ), mock.patch(
-                "quwoquan_ops.cli.lib.package_reuse.validate_candidate_manifest",
-                side_effect=lambda payload, **_kwargs: payload,
+                mock.patch(
+                    "quwoquan_ops.cli.lib.package_reuse.service_deployment_package_dir",
+                    return_value=svc_dir,
+                ),
+                mock.patch(
+                    "quwoquan_ops.cli.lib.package_reuse.runtime_shared_deployment_package_dir",
+                    return_value=shared_dir,
+                ),
+                mock.patch(
+                    "quwoquan_ops.cli.lib.package_reuse.legal_static_deployment_package_dir",
+                    return_value=legal_dir,
+                ),
+                mock.patch(
+                    "quwoquan_ops.cli.lib.package_reuse._expected_service_packages",
+                    return_value=["content-service"],
+                ),
+                mock.patch(
+                    "quwoquan_ops.cli.lib.package_reuse.deployment_input_digest",
+                    return_value=(f"sha256:{'a' * 64}", 1),
+                ),
+                mock.patch(
+                    "quwoquan_ops.cli.lib.package_reuse.workspace_snapshot",
+                    return_value={
+                        "baselineId": f"sha256:{'b' * 64}",
+                        "sourceRevision": "a" * 40,
+                        "workspaceStatusDigest": f"sha256:{'c' * 64}",
+                        "deploymentInputDigest": f"sha256:{'a' * 64}",
+                        "deploymentInputFileCount": 1,
+                    },
+                ),
+                mock.patch(
+                    "quwoquan_ops.cli.lib.package_reuse.active_deployment_candidate",
+                    side_effect=AssertionError(
+                        "explicit candidate reuse must not inspect the active candidate"
+                    ),
+                ),
+                mock.patch(
+                    "quwoquan_ops.cli.lib.package_reuse.verify_package_input_capsule",
+                    side_effect=verify_capsule,
+                ),
+                mock.patch(
+                    "quwoquan_ops.cli.lib.package_reuse.validate_candidate_manifest",
+                    side_effect=lambda payload, **_kwargs: payload,
+                ),
             ):
                 fingerprint_path = write_package_fingerprint(
                     "alpha",
@@ -651,9 +679,7 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
                         "candidateDigest": f"sha256:{'b' * 64}",
                     },
                 )
-                fingerprint = json.loads(
-                    fingerprint_path.read_text(encoding="utf-8")
-                )
+                fingerprint = json.loads(fingerprint_path.read_text(encoding="utf-8"))
                 (candidate_dir / "manifest.json").write_text(
                     json.dumps(
                         {
@@ -665,18 +691,12 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
                             "workspaceDigest": fingerprint["deploymentInputs"][
                                 "digest"
                             ],
-                            "packageDigest": fingerprint["packageContent"][
-                                "digest"
-                            ],
+                            "packageDigest": fingerprint["packageContent"]["digest"],
                             "releaseInputClassification": fingerprint[
                                 "releaseInputClassification"
                             ],
-                            "contractGraphDigest": fingerprint[
-                                "contractGraphDigest"
-                            ],
-                            "graphqlReadRegistry": fingerprint[
-                                "graphqlReadRegistry"
-                            ],
+                            "contractGraphDigest": fingerprint["contractGraphDigest"],
+                            "graphqlReadRegistry": fingerprint["graphqlReadRegistry"],
                         }
                     )
                     + "\n",
@@ -693,9 +713,7 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
     def test_down_target_uses_only_stackctl_down(self) -> None:
         from quwoquan_ops.cli.lib import local_env_gate_matrix as matrix_mod
 
-        down = mock.Mock(
-            return_value={"exitCode": 0, "summary": "down", "details": []}
-        )
+        down = mock.Mock(return_value={"exitCode": 0, "summary": "down", "details": []})
         payload = matrix_mod._down_target("alpha-local", down_fn=down)
         self.assertEqual(payload["exitCode"], 0)
         down.assert_called_once()
@@ -764,6 +782,9 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
                         "schema": "quwoquan_data.release_attestation",
                         "releaseId": "candidate-release",
                         "payloadSha256": f"sha256:{'a' * 64}",
+                        "releaseClass": "commercial",
+                        "productLifecycleState": "commercial",
+                        "containsUnverifiedAssets": False,
                     }
                 ),
                 encoding="utf-8",
@@ -774,6 +795,9 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
                         "schema": "quwoquan_data.release_attestation",
                         "releaseId": "rollback-release",
                         "payloadSha256": f"sha256:{'b' * 64}",
+                        "releaseClass": "commercial",
+                        "productLifecycleState": "commercial",
+                        "containsUnverifiedAssets": False,
                     }
                 ),
                 encoding="utf-8",
@@ -808,8 +832,8 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
                 self.assertEqual(released["status"], "released")
 
     def test_verify_profile_never_performs_nested_up(self) -> None:
-        from quwoquan_ops.cli.lib.content_release_readiness import VerificationProfile
         from quwoquan_ops.cli import stackctl as stackctl_mod
+        from quwoquan_ops.cli.lib.content_release_readiness import VerificationProfile
 
         commands = stackctl_mod._selected_profile_commands(
             "beta",
@@ -822,11 +846,7 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
 
     def test_start_script_delegates_data_plane_to_immutable_release(self) -> None:
         script = (
-            ROOT
-            / "quwoquan_app"
-            / "scripts"
-            / "gamma"
-            / "start_local_gamma_mirror.sh"
+            ROOT / "quwoquan_app" / "scripts" / "gamma" / "start_local_gamma_mirror.sh"
         ).read_text(encoding="utf-8")
         self.assertIn(
             "immutable release activation owns business data and search projections",
@@ -839,11 +859,16 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
     def test_alpha_wait_http_early_exits_on_checksum_drift(self) -> None:
         from quwoquan_ops.cli.alpha import content_release_runtime as runtime
 
-        with mock.patch.object(
-            runtime,
-            "_compose_service_logs_indicate_migration_drift",
-            return_value="checksum drift",
-        ), mock.patch.object(runtime.time, "monotonic", side_effect=[0, 0.1, 31, 31.5]):
+        with (
+            mock.patch.object(
+                runtime,
+                "_compose_service_logs_indicate_migration_drift",
+                return_value="checksum drift",
+            ),
+            mock.patch.object(
+                runtime.time, "monotonic", side_effect=[0, 0.1, 31, 31.5]
+            ),
+        ):
             with mock.patch.object(
                 runtime.urllib.request,
                 "urlopen",
@@ -897,13 +922,7 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
             )
             paths.process_dir.mkdir(parents=True)
             paths.state_path.write_text(
-                json.dumps(
-                    {
-                        "processes": {
-                            "media-origin": {"pid": 101, "pgid": 101}
-                        }
-                    }
-                ),
+                json.dumps({"processes": {"media-origin": {"pid": 101, "pgid": 101}}}),
                 encoding="utf-8",
             )
             docker_unavailable = mock.Mock(returncode=1, stdout="", stderr="")

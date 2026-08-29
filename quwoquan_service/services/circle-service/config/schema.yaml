@@ -88,21 +88,27 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: true
-- key: sys.circle-service.redis.addr
+- key: sys.circle-service.redis.general.mode
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+- key: sys.circle-service.redis.general.addr
   type: string
   scope: workload
   reload: restart
   rollout: progressive
   sensitive: false
   default: ''
-- key: sys.circle-service.redis.db
+- key: sys.circle-service.redis.general.db
   type: int
   scope: workload
   reload: restart
   rollout: progressive
   sensitive: false
   default: 0
-- key: sys.circle-service.redis.password
+- key: sys.circle-service.redis.general.password
   type: string
   scope: workload
   reload: restart

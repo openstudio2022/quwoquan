@@ -366,7 +366,9 @@ class StackctlGammaOperationLockContractTest(
                 mock.patch.object(
                     stackctl,
                     "_local_stack_operation_lock",
-                    side_effect=RuntimeError(
+                    # 锁被占用是生产上的具名判否类型；替身若退回裸 RuntimeError，
+                    # 就把「操作自身失败」的恢复动作误当成「等 lease 结束」验收。
+                    side_effect=stackctl.LocalOperationLockBusyError(
                         "local stack operation is already running: "
                         "pid=42 target=beta-local purpose=environment-patrol-smoke"
                     ),

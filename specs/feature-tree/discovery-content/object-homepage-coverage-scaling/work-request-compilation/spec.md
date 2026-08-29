@@ -44,7 +44,8 @@
 - 来源发现之前的按需 demand 事实（lifecycle、scope、canonical topic refs、按载体 sourceSelection、逐载体数量意图）只由 confirmed pre-acquisition handoff 拥有；WorkRequest 与下游任何对象不得独立接受这些字段的调用方输入，只能持有 handoff 的 ref+digest 与确定性投影。
 - scope 是严格 discriminated 值，四类条件必填互斥：`vertical` 不携带 region/topic，`region` 只需 region，`topic` 只需 primary topic，`region_topic` 两者都需。`relatedTopicRefs` 只允许 canonical taxonomy 引用、不含 primary、不由同义展开自动生成。未知或歧义映射返回 `needs_input`，不得合成自由文本主题身份。
 - vertical 是显式输入：缺失时只允许 preview 给出显式建议并要求确认，任何路径不得静默默认到固定垂类。
-- `sourceSelection` 只引用现有 content source registry 的闭集标识；声明的 provider 必须在 preview/confirm 阶段按所选垂类 provider 闭集 fail closed，不得推迟到执行阶段才校验。
+- `sourceSelection` 只引用现有 content source registry 的闭集标识，闭集按 `(lane, vertical)` 取。声明的 provider 在 handoff 冻结与 preview/confirm 阶段点名 fail closed，不得推迟到执行阶段才校验；执行阶段不得携带针对另一份闭集的第二次 provider 判定。
+- WorkRequest 与 carrier envelope 的 `sourceProviders` 只是 `handoff.sourceSelection` 的逐载体确定性投影：编译输入不接受该字段，envelope builder 也不接受调用方传入的 provider 列表，缺失或空 providers 在投影处判否。
 
 <a id="req-003"></a>
 ### REQ-003 数量三轴单义与 execution authority 互斥
@@ -84,8 +85,8 @@
 - THEN 四类 scope 分别按各自的条件必填校验通过或返回 `needs_input`，不存在同时携带互斥维度仍通过的路径。
 - THEN 缺 vertical 的请求得到显式建议并要求确认，任何阶段不出现静默默认垂类；未确认前 handoff revision 数为零。
 - THEN 无法映射 canonical taxonomy 的相关主题返回 `needs_input` 并点名该主题，不合成自由文本主题身份。
-- THEN 闭集之外的来源在 preview/confirm 即 fail closed 并点名该 provider，不推迟到执行阶段。
-- THEN confirmed handoff 的 ref+digest 是 WorkRequest 派生的唯一 demand 输入；对同一字段的独立调用方输入路径为零。
+- THEN 闭集之外的来源在 handoff 冻结与 preview/confirm 即 fail closed 并点名该 provider，不推迟到执行阶段；跨 lane 借用另一 lane 的闭集同样判否。
+- THEN confirmed handoff 的 ref+digest 是 WorkRequest 派生的唯一 demand 输入；对同一字段的独立调用方输入路径为零，`sourceProviders` 只作为逐载体投影出现在 envelope 上。
 
 ## 6. 依赖
 
@@ -102,8 +103,8 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：当前真实 CLI 产出的 envelope 尚未以同一 WorkRequest/compile receipt 身份贯穿现有 submit/freeze/retry 链，仍不能证明一份意图沿现有单轨真实推进。canonical WorkRequest、carrier execution policy、`compile-intent` typed port/CLI 与整批原子 writer 已实现，local_contract 已覆盖 preview、修改、取消、needs-input/blocked、confirm、同摘要重放和持久化失败零可见。
-- 完成判定：`GWT-001.t1..t5` 由 local_contract 覆盖 preview、四态结果、确定性摘要、owner 禁写边界与 all-or-nothing；`GWT-001.t6` 由真实 CLI api_integration 覆盖现有 submit/freeze/retry 链。
+- 影响或价值：当前真实 CLI 产出的 envelope 尚未以同一 WorkRequest/compile receipt 身份贯穿现有 submit/freeze/retry 链，仍不能证明一份意图沿现有单轨真实推进。canonical WorkRequest、carrier execution policy、`compile-intent` typed port/CLI 与整批原子 writer 已实现；编译面自身的 preview、修改、取消、needs_input/blocked、确定性摘要、同 ID 异字节写前失败、编译结果自解释、owner 禁写边界、all-or-nothing 与修复后回到 preview 已由 local_contract 逐子句覆盖，缺口收缩为「真实阶段终态与精确 `retryOf` 恢复」一项。
+- 完成判定：`GWT-001.t1..t10` 由 local_contract 逐子句覆盖编译面；`GWT-001.t11..t12` 由真实 CLI api_integration 覆盖现有 submit/freeze/retry 链上的真实阶段终态保留、`retryOf` 消费精确 receipt 与其它 carrier 既有合格对象不被撤销。`t13..t14` 归 [`OPEN-002`](#open-002)，不在本 OPEN 判定内。
 - 依赖：Data owner 以真实 source-ready 输入完成 confirm 后的 submit/freeze；入池与环境后缀分别由 [`on-demand-content-pool-admission`](../on-demand-content-pool-admission/spec.md) 与 [`multi-carrier-release`](../multi-carrier-release/spec.md) 的 OPEN 承接。
 
 <a id="open-002"></a>
@@ -113,15 +114,5 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：当前 2 秒 preview、5 秒 confirm 的 p95 仍是设计 SLO，通用性能门禁没有覆盖 WorkRequest；每日 1,000 次确认、平均每份 artifact 16 KiB 与 180 天保留也是容量基线而非实测，不能据此宣称编译面已稳定或成本已闭合。
-- 完成判定：`GWT-001.t7` 由同一 immutable candidate 的专项 benchmark 直接覆盖。1-carrier 与 4-carrier 每个成功场景至少 20 个样本并证明 preview/confirm p95 分别不超过 2,000/5,000 ms，blocked/collision 全部零 envelope 发布。报告同时给出 WorkRequest/compile receipt 的 p50/p95 bytes、每日 1,000 请求的 30/180 天未压缩投影，并验证 schema 256 KiB 单 artifact 上限与引用保护归档。
+- 完成判定：`GWT-001.t13..t14` 由同一 immutable candidate 的专项 benchmark 直接覆盖。1-carrier 与 4-carrier 每个成功场景至少 20 个样本并证明 preview/confirm p95 分别不超过 2,000/5,000 ms，blocked/collision 全部零 envelope 发布。报告同时给出 WorkRequest/compile receipt 的 p50/p95 bytes、每日 1,000 请求的 30/180 天未压缩投影，并验证 schema 256 KiB 单 artifact 上限与引用保护归档。
 - 依赖：Data owner 在编译面契约收敛后补 benchmark runner 与 canonical report；缺样本、候选 SHA/源摘要漂移或任一场景失败均保持本 OPEN，不得用通用 App/feed 性能门禁替代。
-
-<a id="open-003"></a>
-### OPEN-003 handoff 扩展、派生 WorkRequest 与 authority 互斥尚未实现
-
-- 类型：`capability_gap`
-- 优先级：`P0`
-- 准出影响：`block`
-- 影响或价值：当前 handoff CLI 硬编码固定垂类、compiler 存在静默垂类回退、`topic` 是无 taxonomy 约束的自由字符串、`sourceProviders` 校验推迟到执行阶段、envelope 必填 capacity calibration 使 M1 无法启动、SourcePool 绑定误传 quota；这些输入合同缺口使按需请求无法在不改引擎的情况下表达与执行。
-- 完成判定：`GWT-002` 全部结果子句由 local_contract 直接 `spec_ref`，且 `REQ-002`/`REQ-003` 声明的派生单轨、三轴单义与 authority 互斥在 schema 与编译器上以 fail-closed 证据成立。
-- 依赖：先冻结 [L2 DEC-024](../design.md#dec-024)、[DEC-025](../design.md#dec-025)；实现为原子替换，不留双字段、fallback 或 shim。

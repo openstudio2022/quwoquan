@@ -24,9 +24,9 @@ services:
       OTP_CODE_REF_ACTIVE_KEY_VERSION: "${OTP_CODE_REF_ACTIVE_KEY_VERSION:?OTP_CODE_REF_ACTIVE_KEY_VERSION is required}"
       OTP_CODE_REF_KEYS_JSON: "${OTP_CODE_REF_KEYS_JSON:?OTP_CODE_REF_KEYS_JSON is required}"
       QWQ_PUSH_TOKEN_ENCRYPTION_KEY: "${QWQ_PUSH_TOKEN_ENCRYPTION_KEY:?QWQ_PUSH_TOKEN_ENCRYPTION_KEY is required}"
-      POSTGRES_DSN: postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable
-      MONGODB_URI: mongodb://mongodb:27017
-      REDIS_ADDR: redis:6379
+      USER_POSTGRES_DSN: postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable
+      USER_MONGO_URI: mongodb://mongodb:27017
+      USER_REDIS_GENERAL_ADDR: redis:6379
       CHAT_SERVICE_BASE_URL: http://chat-service:18081
       CONTENT_SERVICE_BASE_URL: http://content-service:18080
       TAG_SERVICE_BASE_URL: http://tag-service:18092

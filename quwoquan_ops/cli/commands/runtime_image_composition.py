@@ -917,15 +917,12 @@ def _load_gamma_runtime_image_composition(
     compose_project = str(receipt.get("composeProject") or "").strip()
     if not compose_project:
         raise ValueError("runtime image composition receipt has no Compose project")
-    expected_project_prefix = f"quwoquan_{expected_environment}_release"
-    if (
-        re.fullmatch(
-            re.escape(expected_project_prefix) + r"(?:_[a-zA-Z0-9_-]+)?",
-            compose_project,
-        )
-        is None
-    ):
-        raise ValueError("runtime image composition receipt Compose project mismatch")
+    try:
+        _stackctl.require_formal_release_compose_project(target_name, compose_project)
+    except ValueError as exc:
+        raise ValueError(
+            "runtime image composition receipt Compose project mismatch"
+        ) from exc
     composition = receipt.get("imageComposition")
     if not isinstance(composition, dict):
         raise ValueError("runtime image composition receipt has no image composition")

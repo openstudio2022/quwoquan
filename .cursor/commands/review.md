@@ -1,6 +1,6 @@
 ---
 name: /review
-description: 按工作流、交付件与 profile 派发角色并行评审并汇总准入准出
+description: 先执行去重命名 evidence，再有界派发主审与唯一专审
 ---
 
 按 `.agents/skills/review/SKILL.md` 执行。

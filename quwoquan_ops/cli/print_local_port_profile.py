@@ -6,6 +6,8 @@ import json
 import sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -87,6 +89,7 @@ ENV_EXPORTS = {
         "LOCAL_GAMMA_MONGO_PORT": "mongodb",
         "LOCAL_GAMMA_REDIS_PORT": "redis",
         "LOCAL_GAMMA_ES_PORT": "elasticsearch",
+        "LOCAL_GAMMA_ADMIN_PORT": "caddy-admin",
     },
     "prod-sim": {
         "PROD_SIM_GATEWAY_PORT": "api-edge",

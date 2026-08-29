@@ -125,6 +125,13 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--external-aut-canonical-binding-b64",
+        default=os.environ.get(
+            "QWQ_EXTERNAL_AUT_CANONICAL_BINDING_B64", ""
+        ).strip(),
+        help=argparse.SUPPRESS,
+    )
     return parser.parse_args()
 
 

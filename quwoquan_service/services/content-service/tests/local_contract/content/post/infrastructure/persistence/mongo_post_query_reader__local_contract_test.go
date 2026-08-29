@@ -61,10 +61,16 @@ func TestPostFeedProjectionReadsOnlyAdaptiveMediaBindingFields(t *testing.T) {
 			t.Fatalf("feed presentation projection %q = %#v, want explicit inclusion", field, got)
 		}
 	}
+	// DEC-033 逐媒体交付绑定：url/coverUrl 与 accessMode/coverAssetId 成对进入
+	// feed 投影，App 才能按 signed_grant 以资产标识换短签消费。
 	for _, field := range []string{
 		"mediaItems.kind",
 		"mediaItems.mediaAssetId",
 		"mediaItems.mediaAssetVersion",
+		"mediaItems.accessMode",
+		"mediaItems.url",
+		"mediaItems.coverUrl",
+		"mediaItems.coverAssetId",
 		"mediaItems.hlsCmafMasterManifestUrl",
 		"mediaItems.hlsCmafDescriptorVersion",
 	} {
@@ -74,8 +80,6 @@ func TestPostFeedProjectionReadsOnlyAdaptiveMediaBindingFields(t *testing.T) {
 	}
 	for _, field := range []string{
 		"mediaItems",
-		"mediaItems.url",
-		"mediaItems.coverUrl",
 		"mediaItems.previewTrackManifestUrl",
 		"mediaItems.title",
 	} {

@@ -13,6 +13,12 @@ configs:
   rollout: progressive
   sensitive: false
   default: :18088
+- key: sys.platform-ops-service.redis.general.mode
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
 - key: sys.platform-ops-service.redis.general.addr
   type: string
   scope: workload

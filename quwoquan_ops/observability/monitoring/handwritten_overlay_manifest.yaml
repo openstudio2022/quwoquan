@@ -506,6 +506,16 @@ rules:
     reason: service_outside_contract_graph
     justification: "服务 'platform-ops-service' 不在 ContractGraph 运行分母内；该服务没有 contracts/domain.yaml，ContractGraph 无法为它派生 operation 级 SLO 告警。"
   - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_ops_objects
+    rule: ConfigSyncInstanceStale
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['qwq_config_sync_last_success_timestamp_seconds']：servicekit RegisterConfigSync 自注册的运行时 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_ops_objects
+    rule: ConfigSyncOutOfSyncSustained
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['qwq_config_sync_in_sync']：servicekit RegisterConfigSync 自注册的运行时 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
     group: quwoquan_l4_infrastructure
     rule: HighGoroutineCount
     reason: infrastructure_exporter_series

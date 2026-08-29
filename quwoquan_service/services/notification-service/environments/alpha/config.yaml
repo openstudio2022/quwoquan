@@ -1,7 +1,8 @@
 overrides:
-  sys.notification-service.accountSecurityAuthority.baseUrl: http://user-service:18081
-  sys.notification-service.accountSecurityAuthority.timeoutMs: 300
+  sys.notification-service.user_account_security_authority.base_url: http://user-service:18081
+  sys.notification-service.user_account_security_authority.timeout_ms: 300
 secretRefs:
   sys.notification-service.mongo.uri: NOTIFICATION_MONGO_URI
-  sys.notification-service.redis.password: REDIS_PASSWORD
+  sys.notification-service.redis.general.password: NOTIFICATION_REDIS_GENERAL_PASSWORD
+  sys.notification-service.redis.realtime.password: NOTIFICATION_REDIS_REALTIME_PASSWORD
 externalBindings:

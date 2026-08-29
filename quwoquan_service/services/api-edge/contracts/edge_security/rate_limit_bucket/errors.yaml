@@ -39,3 +39,16 @@ errors:
   user_message:
     zh: 服务暂不可用，请稍后重试
     en: Service is temporarily unavailable
+- code: GATEWAY.MIDDLEWARE.upstream_timeout
+  reason: upstream_timeout
+  http_status: 504
+  emitted_by:
+  - {surface: gateway}
+  recovery_action: retry
+  recovery_after_seconds: 1
+  disruption_level: snackbar
+  dart_const: upstreamTimeout
+  go_const: ErrUpstreamTimeout
+  user_message:
+    zh: 服务响应超时，请稍后重试
+    en: Service response timed out

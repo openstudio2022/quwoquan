@@ -29,6 +29,7 @@ def write(path: Path, content: str) -> None:
 
 def go_files(service: str, domain: str, context: str, object_name: str) -> dict[str, str]:
     root_import = f"quwoquan_service/services/{service}/internal/{context}/{object_name}"
+    service_env_prefix = service.upper().replace("-", "_").removesuffix("_SERVICE")
     return {
         "domain/object.go": f'''package domain
 
@@ -73,20 +74,64 @@ type Clock struct{}
 
 func (Clock) Now() time.Time { return time.Now().UTC() }
 ''',
-        "cmd/api/main.go": f'''package main
+        "cmd/api/bootstrap.go": f'''// Package bootstrap 是 {service} 的组合根：本包只声明配置与领域装配，
+// 通用启动语义（身份、快照、env 覆盖、观测、auth、基础设施、HTTP 三件套、
+// 健康探针、config sync、生命周期）全部由 servicekit 承担（DEC-027/DEC-028）。
+package bootstrap
 
 import (
-\t"log"
-\t"net/http"
+\toperationsecurity "quwoquan_service/generated/operationsecurity"
+\t"quwoquan_service/runtime/servicekit"
 
 \thttpadapter "{root_import}/adapters/inbound/http"
 \t"{root_import}/application"
 )
 
+// config 是 {service} 的声明式运行配置。通用段由内嵌 BaseConfig 提供
+// （config.version、service.http.addr、账号安全 authority）。新增基础设施
+// 只需在这里声明字段——出现 servicekit.MongoConfig / PostgresConfig /
+// RedisSceneConfig 即自动连接、注册健康检查与清理，不要手写连接代码。
+type config struct {{
+\tservicekit.BaseConfig `yaml:",inline"`
+}}
+
+// DeclaredEnvKeys 暴露声明派生的 env 覆盖键全集，供等价断言测试锁定键集
+// 不随重构漂移，也供部署面注入键对账。
+func DeclaredEnvKeys() ([]string, error) {{
+\treturn servicekit.EnvOverrideKeys(
+\t\tservicekit.DefaultEnvPrefix("{service}"), &config{{}},
+\t)
+}}
+
+// NewModule assembles {service} without binding a listener, starting
+// workers, admitting traffic, or owning process signals.
+func NewModule() (*servicekit.Module, error) {{
+\treturn servicekit.Bootstrap("{service}", servicekit.BootstrapSpec[config]{{
+\t\tOperationDescriptors: operationsecurity.ForDomain("{domain}"),
+\t\tAuthorityScopes:      []string{{"user.account.security.read"}},
+\t\tAssemble:             assembleDomain,
+\t}})
+}}
+
+// assembleDomain 只做领域装配：仓储、用例、路由、worker 与领域健康检查。
+// asm 已带好 Mongo/Redis/Postgres/auth/观测/Mux/Workers/Cleanups。
+func assembleDomain(asm *servicekit.Assembly, _ *config) error {{
+\tasm.Mux.Handle("/", httpadapter.Handler(application.NewService()))
+\treturn nil
+}}
+''',
+        "cmd/standalone-api/main.go": f'''package main
+
+import (
+\t"quwoquan_service/runtime/servicehost"
+\t"quwoquan_service/runtime/servicekit"
+\tbootstrap "quwoquan_service/services/{service}/cmd/api"
+)
+
 func main() {{
-\tif err := http.ListenAndServe(":8080", httpadapter.Handler(application.NewService())); err != nil {{
-\t\tlog.Fatal(err)
-\t}}
+\tservicekit.RunStandalone("{service}", func() (servicehost.Module, error) {{
+\t\treturn bootstrap.NewModule()
+\t}})
 }}
 ''',
         f"tests/local_contract/{context}/{object_name}/object__local_contract_test.go": f'''package localcontract
@@ -126,7 +171,7 @@ WORKDIR /build/quwoquan_service
 COPY quwoquan_service/go.mod quwoquan_service/go.sum ./
 RUN go mod download
 COPY quwoquan_service/ ./
-RUN CGO_ENABLED=0 go build -o /out/api ./services/{service}/cmd/api
+RUN CGO_ENABLED=0 go build -o /out/api ./services/{service}/cmd/standalone-api
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=builder /out/api /app/api
@@ -202,6 +247,7 @@ cache_dir = "../../../.qwq_output/env/repo/local/tests/cache/pytest/{service}"
 
 
 def autonomous_service_files(service: str, domain: str, language: str) -> dict[str, str]:
+    service_env_prefix = service.upper().replace("-", "_").removesuffix("_SERVICE")
     makefile = (
         f'''SERVICE_ROOT := $(abspath ../..)
 SERVICE_PACKAGE := ./services/{service}/...
@@ -231,6 +277,12 @@ gate: build test
 - 人工源码只放 `internal/<context>/<object>/<layer>`。
 - 配置、资源、部署和四环境入口均由本服务自治；环境之间禁止继承。
 - 禁止导入其他服务的 `internal` 或 `generated`。
+- 启动样板不要在本服务重写：`cmd/api/bootstrap.go` 只声明 config 结构与
+  `Assemble` 领域装配，身份/快照/env 覆盖/观测/auth/Mongo/Redis/Postgres/
+  探针/config sync 由 `runtime/servicekit` 承担（DEC-027/DEC-028）。需要新的
+  基础设施就在 config 里声明对应 servicekit 字段，不要手写连接与健康检查。
+- `operationsecurity.ForDomain("{domain}")` 为空时启动即失败：先在
+  `contracts/**/operations.yaml` 声明 operation 并跑 codegen。
 ''',
         "Makefile": makefile,
         "config/schema.yaml": f'''description: {service} 自治运行配置定义；环境只维护差异和引用。
@@ -300,6 +352,27 @@ spec:
               mountPath: /etc/qwq/config/{service}.yaml
               subPath: {service}.yaml
               readOnly: true
+          # 探针语义由 servicekit 骨架保证：/healthz 只回答进程存活，
+          # /readyz 回答依赖是否就绪。readiness 用 /readyz 才能在依赖抖动时
+          # 摘流而不重启；liveness/startup 用 /healthz 才不会因下游抖动误杀。
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            failureThreshold: 30
+            periodSeconds: 5
       volumes:
         - name: runtime-config
           configMap:
@@ -329,10 +402,20 @@ spec:
       CONFIG_ROOT: /etc/qwq-config
       CONFIG_VERSION: "${{QWQ_COMPOSE_{service.upper().replace('-', '_')}_CONFIG_VERSION:?config version is required}}"
       IMAGE_VERSION: "${{QWQ_COMPOSE_IMAGE_VERSION:?immutable image identity is required}}"
+      {service_env_prefix}_SERVICE_ADDR: ":8080"
     volumes:
       - ${{QWQ_COMPOSE_CONFIG_ROOT:?config root is required}}:/etc/qwq-config:ro
     ports:
       - "${{QWQ_COMPOSE_SERVICE_PORT:-8080}}:8080"
+    # compose 的 healthy 会被别的服务 depends_on: service_healthy 消费，
+    # 所以这里只能探浅层 /healthz；探 /readyz 会在 start_period 窗口内
+    # 级联阻塞整条启动链。环境就绪判定用 /readyz。
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 3s
+      start_period: 60s
+      retries: 10
 ''',
     }
     for environment in ("alpha", "beta", "gamma", "prod"):

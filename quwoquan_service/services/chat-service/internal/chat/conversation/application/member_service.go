@@ -771,7 +771,7 @@ func (s *MemberService) LeaveConversation(ctx context.Context, req LeaveConversa
 			"only group conversations support leaving",
 		)
 	}
-	if conv.Status != "" && conv.Status != model.ConversationStatusActive {
+	if conv.Status != model.ConversationStatusActive {
 		return chatConversationDissolved("conversation is not active")
 	}
 	if err := rejectSourceManagedConversation(conv, "LeaveConversation"); err != nil {

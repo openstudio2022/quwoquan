@@ -10,6 +10,8 @@ from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
     APPLICATION_DESCRIPTOR_FIELDS,
     APPLICATION_PACKAGES,
     DIGEST_PATTERN,
+    DISTRIBUTION_DESCRIPTOR_FIELDS,
+    DISTRIBUTION_EVIDENCE_PATHS,
     ENVIRONMENT_RECEIPT_SCHEMA,
     ENVIRONMENTS,
     FORBIDDEN_FIELDS,
@@ -172,6 +174,20 @@ def _validate_application_packages(value: Any) -> dict[str, dict[str, Any]]:
     return value
 
 
+def _validate_distribution_descriptors(manifest: dict[str, Any]) -> None:
+    for evidence_key, canonical_path in DISTRIBUTION_EVIDENCE_PATHS.items():
+        descriptor = manifest.get(evidence_key)
+        if (
+            not isinstance(descriptor, dict)
+            or set(descriptor) != DISTRIBUTION_DESCRIPTOR_FIELDS
+        ):
+            raise ValueError(f"{evidence_key} descriptor is not canonical")
+        if descriptor.get("path") != canonical_path:
+            raise ValueError(f"{evidence_key} path is not canonical")
+        if DIGEST_PATTERN.fullmatch(str(descriptor.get("digest") or "")) is None:
+            raise ValueError(f"{evidence_key}.digest is not immutable")
+
+
 def _validate_images(
     value: Any,
     *,
@@ -324,6 +340,7 @@ def _forbidden_field_paths(value: Any, prefix: str = "") -> list[str]:
 
 def _validate_candidate_evidence(manifest: dict[str, Any]) -> None:
     applications = _validate_application_packages(manifest.get("applicationPackages"))
+    _validate_distribution_descriptors(manifest)
     _validate_content_descriptor(manifest.get("opsPortal"), label="opsPortal")
     application_evidence_refs = {
         descriptor["sourceRef"] for descriptor in applications.values()
@@ -527,7 +544,13 @@ def _expected_gaps(manifest: dict[str, Any], status: str) -> tuple[list[str], li
             for build_product_id in APPLICATION_PACKAGES
         )
         missing.extend(
-            ("opsPortal", "contractGraphDigest", "providerEvidence", "testEvidence")
+            (
+                *DISTRIBUTION_EVIDENCE_PATHS,
+                "opsPortal",
+                "contractGraphDigest",
+                "providerEvidence",
+                "testEvidence",
+            )
         )
     present_environments = set(manifest.get("environmentReceipts") or {})
     missing.extend(
@@ -647,6 +670,10 @@ def validate_manifest(
     if status in {"build-input", "component-ready"}:
         if manifest.get("applicationPackages") != {}:
             raise ValueError("applicationPackages must remain empty before candidate-ready")
+        if any(manifest.get(key) is not None for key in DISTRIBUTION_EVIDENCE_PATHS):
+            raise ValueError(
+                "distribution evidence must remain absent before candidate-ready"
+            )
         if manifest.get("opsPortal") is not None:
             raise ValueError("opsPortal must remain absent before candidate-ready")
         if manifest.get("contractGraphDigest") is not None:

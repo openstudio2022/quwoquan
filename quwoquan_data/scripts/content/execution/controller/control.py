@@ -402,23 +402,24 @@ def _download_auto_research_progress_callback(ctx: ExecutionContext) -> Callable
         state.status = ExecutionStateStatus.RUNNING
         state.waiting_checkpoint = None
         state.heartbeat_at = store.now_iso()
-        completed_count = int(progress.get("completedCount") or 0)
-        entity_count = int(progress.get("entityCount") or 0)
+        terminal_count = int(progress["terminalEntityCount"])
+        candidate_count = int(progress["candidateEntityCount"])
         state.next_action = (
-            f"download_plan auto_research {completed_count}/{entity_count}: "
-            f"{progress.get('message') or progress.get('status') or 'running'}"
+            f"download_plan auto_research {terminal_count}/{candidate_count}: "
+            f"{progress.get('message') or progress['status']}"
         )
         state.active_auto_research = {
             "stage": "download_plan",
-            "status": progress.get("status"),
-            "entityId": progress.get("entityId"),
-            "entityCount": entity_count,
-            "completedCount": completed_count,
-            "remainingCount": progress.get("remainingCount"),
-            "workers": progress.get("workers"),
-            "entitiesPerMinute": progress.get("entitiesPerMinute"),
+            "status": progress["status"],
+            "lastTerminalEntityId": progress.get("lastTerminalEntityId"),
+            "candidateEntityCount": candidate_count,
+            "terminalEntityCount": terminal_count,
+            "runningEntityIds": list(progress["runningEntityIds"]),
+            "frozenMaxConcurrentWorkers": progress["frozenMaxConcurrentWorkers"],
+            "lastHeartbeatAt": progress["lastHeartbeatAt"],
+            "runFacts": dict(progress["runFacts"]),
             "progressPath": str(execution_root(ctx.execution_id) / "_shared" / "auto_research_progress.json"),
-            "updatedAt": progress.get("updatedAt"),
+            "updatedAt": progress["updatedAt"],
         }
         save_execution_state(state)
         print(f"[task execute] {state.next_action}", flush=True)

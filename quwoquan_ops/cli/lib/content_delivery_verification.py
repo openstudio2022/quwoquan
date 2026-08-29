@@ -115,9 +115,11 @@ def verify_content_delivery(
             ),
             label="content import",
         )
-        expected_import_status = "imported" if consumer_readiness else "active"
+        # content_import_report schema 的 status 闭集是 {dry-run, imported}；
+        # 「active」只属于 creator import report。release 是否 active 由
+        # active-release 指针与 readiness 身份共同证明，不由 import 回执表达。
         if (
-            import_report.get("status") != expected_import_status
+            import_report.get("status") != "imported"
             or import_report.get("environment") != environment
             or import_report.get("releaseId") != release_id
             or import_report.get("manifestDigest") != manifest_digest

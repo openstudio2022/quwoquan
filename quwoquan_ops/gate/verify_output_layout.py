@@ -47,9 +47,15 @@ OPAQUE_DISPOSABLE_CACHE_DIRS = frozenset(
         "node_modules",
         "python-test-deps",
         "site-packages",
+        "tmp",
         "toolchains",
     }
 )
+# runtime_artifact_identity_mount 在每次 stackctl up 时把服务 config/ 与
+# environments/<env>/ 投影进 run 目录，作为容器 /app 的只读挂载材料，属于
+# 同一执行阶段消费的运行投影而非可复用配置残留；其中 secretRefs 的值是
+# 环境变量名（真实秘密只存在于宿主 env），因此整棵子树豁免配置/秘密扫描。
+RUNTIME_MOUNT_PROJECTION_DIRS = frozenset({"platform-ops-facts"})
 FORBIDDEN_LOCAL_TARGETS = frozenset({"python-envs", "python-test-deps", "toolchains"})
 FORBIDDEN_OUTPUT_FILE_NAME = re.compile(
     r"(?i)(?:(?:^|\.)env(?:\.|$)|(?:^|[._-])(?:config|configuration|secret|credential|certificate|tls|pki)(?:[._-]|$)|caddyfile$|(?:\.pem|\.key|\.crt|\.p12|\.pfx)$)"
@@ -180,8 +186,12 @@ def output_layout_issues(root: Path | None = None) -> list[str]:
                     # local/ 一级的 cache/ 与 process/ 是共享形态:AGENTS 把
                     # bytecode/pytest 等缓存统一重定向到 env/repo/local/cache/**,
                     # 其内容是 opaque disposable,不再套用 <target>/{process,cache}
-                    # 结构;secret/名字纪律仍由后续全树扫描承担。
-                    if target.name in {"cache", "process"}:
+                    # 结构;secret/名字纪律仍由后续全树扫描承担。pycache/ 是
+                    # PYTHONPYCACHEPREFIX 的绝对路径镜像缓存,tmp/ 是重定向进
+                    # 输出根的 TMPDIR(如 pytest tmp_path 工厂),两者与
+                    # reconciliation 的 LOCAL_CACHE_HINTS 同语义,按 opaque
+                    # disposable 放行。
+                    if target.name in {"cache", "process", "pycache", "tmp"}:
                         continue
                     for child in sorted(target.iterdir()):
                         if not child.is_dir() or child.name not in {"process", "cache"}:
@@ -343,6 +353,8 @@ def output_source_truth_issues(
                 )
                 continue
             if name in OPAQUE_DISPOSABLE_CACHE_DIRS:
+                continue
+            if name in RUNTIME_MOUNT_PROJECTION_DIRS:
                 continue
             retained.append(name)
         dirnames[:] = retained

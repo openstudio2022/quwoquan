@@ -8,7 +8,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import shutil
 import stat
 import subprocess
 import tempfile
@@ -22,6 +21,13 @@ from .constants import (
     _CAPSULE_FIELDS,
     PACKAGE_INPUT_CAPSULE_SCHEMA,
 )
+from .dependency_bundle_capsule import (
+    copy_dependency_bundle_to_capsule,
+    load_managed_dependency_snapshots,
+    verify_dependency_bundle_capsule,
+)
+from .dependency_fs import remove_private_tree
+from .pub_cache_capsule import dependency_required
 
 
 def _digest_record(
@@ -233,6 +239,11 @@ def materialize_package_input_capsule(
     """Copy one source closure into a read-only, content-addressed capsule."""
 
     normalized_roots, source_entries = _enumerated_deployment_inputs(roots)
+    dependency_snapshots = (
+        load_managed_dependency_snapshots(repo_root=_pkg.ROOT)
+        if dependency_required(_pkg.ROOT, normalized_roots)
+        else None
+    )
     capsule_root = capsule_root.expanduser()
     if not capsule_root.is_absolute() or capsule_root.exists() or capsule_root.is_symlink():
         raise ValueError("package input capsule root must be a new absolute path")
@@ -272,6 +283,18 @@ def materialize_package_input_capsule(
                     "mode": mode,
                 }
             )
+        if dependency_snapshots is not None:
+            dependency_records = copy_dependency_bundle_to_capsule(
+                snapshots=dependency_snapshots,
+                capsule_root=staging,
+            )
+            for record in dependency_records:
+                marker_path = staging / str(record["capsulePath"])
+                content = marker_path.read_bytes()
+                digest_entries.append(
+                    (str(record["logicalPath"]), "file", content)
+                )
+                records.append(record)
         input_digest, input_count = _digest_record(digest_entries)
         revision = subprocess.run(
             ["git", "rev-parse", "HEAD"],
@@ -338,7 +361,7 @@ def materialize_package_input_capsule(
         return {**manifest, "capsuleRoot": str(capsule_root)}
     finally:
         if not published and staging.exists():
-            shutil.rmtree(staging, ignore_errors=True)
+            remove_private_tree(staging)
 
 
 def _read_capsule_manifest(capsule_root: Path) -> dict[str, object]:
@@ -398,6 +421,19 @@ def verify_package_input_capsule(
         ):
             raise ValueError("package input capsule entry CAS mismatch")
         entries.append((str(raw.get("logicalPath") or ""), kind, content))
+    app_lock = capsule_root / "repo/quwoquan_app/pubspec.lock"
+    dependency_entries = [
+        item
+        for item in raw_entries
+        if str(item.get("logicalPath") or "").startswith("dependency:")
+    ]
+    if app_lock.exists():
+        verify_dependency_bundle_capsule(
+            capsule_root=capsule_root,
+            manifest_entries=raw_entries,
+        )
+    elif dependency_entries or (capsule_root / "dependencies").exists():
+        raise ValueError("App dependency capsule exists without App pubspec.lock")
     digest, count = _digest_record(entries)
     identity = _capsule_identity_payload(
         roots=_normalized_input_roots(

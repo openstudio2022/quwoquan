@@ -18,7 +18,7 @@ services:
       IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:?immutable image version is required}"
       ENTITY_MONGO_URI: mongodb://mongodb:27017
       ENTITY_MONGO_DATABASE: quwoquan_entity
-      ENTITY_REDIS_ADDR: redis:6379
+      ENTITY_REDIS_GENERAL_ADDR: redis:6379
       AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"
       AUTH_JWT_ISSUER: "${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}"
       AUTH_JWT_AUDIENCE: "${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}"

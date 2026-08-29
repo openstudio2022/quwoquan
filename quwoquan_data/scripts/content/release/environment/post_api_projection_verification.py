@@ -1,29 +1,49 @@
 """Verify release-owned feed and search public projections."""
 from __future__ import annotations
 
+import time
 from collections.abc import Mapping
-from functools import lru_cache
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any
 
-import yaml
 from content.release.environment.post_api_media_verification import (
     PostApiCase,
     PostApiVerificationError,
     _object,
 )
 from content.release.environment.post_api_release_cases import CreatorProfileCase
-from content.release.environment.public_api_client import PublicApiClient
-from core.io import read_json
-from core.paths import REPO_ROOT
-
-CONTENT_POST_PROJECTION_PATH = REPO_ROOT / (
-    "quwoquan_service/services/content-service/contracts/content/post/projections/"
-    "content_post_projection.yaml"
+from content.release.environment.post_api_search_contract import (
+    _CANONICAL_ERROR_CODE,
+    SEARCH_PAGE_ID,
+    _content_post_projection_fields,
+    _search_content_type,
+    _search_retry_policy,
+    _SearchRetryableError,
+    _SearchRetryPolicy,
 )
-SEARCH_PAGE_ID = "search.global"
-_SEARCH_CONTENT_TYPES = frozenset({"article", "image", "video"})
+from content.release.environment.public_api_client import (
+    PublicApiClient,
+    PublicApiClientError,
+    PublicApiRequestIdentity,
+)
+from core.io import read_json
+
+
+def _monotonic_seconds() -> float:
+    return time.monotonic()
+
+
+def _sleep_seconds(seconds: float) -> None:
+    time.sleep(seconds)
+
+
+class SearchProjectionVerificationError(PostApiVerificationError):
+    """Search readiness blocker retaining bounded physical-attempt evidence."""
+
+    def __init__(self, message: str, *, operation_attempts: list[dict[str, Any]]):
+        super().__init__(message)
+        self.operation_attempts = tuple(dict(row) for row in operation_attempts)
 
 
 def _operation_payload(response: Any, *, endpoint: str) -> dict[str, Any]:
@@ -31,45 +51,6 @@ def _operation_payload(response: Any, *, endpoint: str) -> dict[str, Any]:
     if operation is None:
         raise PostApiVerificationError(f"{endpoint} lacks request trace evidence")
     return operation.as_payload()
-
-
-@lru_cache(maxsize=1)
-def _content_post_projection_fields() -> frozenset[str]:
-    """Load the public feed-item keys from the canonical projection contract."""
-    try:
-        document = yaml.safe_load(
-            CONTENT_POST_PROJECTION_PATH.read_text(encoding="utf-8")
-        )
-    except (OSError, yaml.YAMLError) as exc:
-        raise PostApiVerificationError(
-            "canonical ContentPostProjection contract is unreadable: "
-            f"{CONTENT_POST_PROJECTION_PATH}"
-        ) from exc
-    if (
-        not isinstance(document, Mapping)
-        or document.get("read_model") != "ContentPostProjection"
-    ):
-        raise PostApiVerificationError(
-            "canonical ContentPostProjection contract has invalid read_model"
-        )
-    raw_fields = document.get("fields")
-    if not isinstance(raw_fields, list) or not raw_fields:
-        raise PostApiVerificationError(
-            "canonical ContentPostProjection contract fields must be a non-empty array"
-        )
-    fields: set[str] = set()
-    for index, raw_field in enumerate(raw_fields):
-        if not isinstance(raw_field, Mapping):
-            raise PostApiVerificationError(
-                f"canonical ContentPostProjection field {index} must be an object"
-            )
-        name = str(raw_field.get("name") or "").strip()
-        if not name or name in fields:
-            raise PostApiVerificationError(
-                f"canonical ContentPostProjection field {index} has invalid name"
-            )
-        fields.add(name)
-    return frozenset(fields)
 
 
 def reject_unknown_content_post_projection_fields(
@@ -85,14 +66,6 @@ def reject_unknown_content_post_projection_fields(
         )
 
 
-def _search_content_type(content_type: str) -> str:
-    if content_type not in _SEARCH_CONTENT_TYPES:
-        raise PostApiVerificationError(
-            f"unsupported Content search projection type: {content_type}"
-        )
-    return content_type
-
-
 def _safe_evidence_value(value: object, *, default: str = "none") -> str:
     candidate = str(value or "").strip()
     if not candidate or len(candidate) > 128:
@@ -100,6 +73,119 @@ def _safe_evidence_value(value: object, *, default: str = "none") -> str:
     if not all(character.isalnum() or character in "._:-" for character in candidate):
         return default
     return candidate
+
+
+def _canonical_error_code(response: Any) -> str:
+    payload = getattr(response, "payload", {})
+    raw_code = payload.get("code") if isinstance(payload, Mapping) else None
+    candidate = _safe_evidence_value(raw_code)
+    if _CANONICAL_ERROR_CODE.fullmatch(candidate) is None:
+        return "none"
+    return candidate
+
+
+def _recovery_action(response: Any) -> str:
+    payload = getattr(response, "payload", {})
+    recovery = payload.get("recovery") if isinstance(payload, Mapping) else None
+    action = (
+        str(recovery.get("action") or "").strip()
+        if isinstance(recovery, Mapping)
+        else ""
+    )
+    if action not in {
+        "retry",
+        "surface",
+        "absorb",
+        "fallback",
+        "escalate",
+        "compensate",
+    }:
+        return "none"
+    return action
+
+
+def _recovery_after_seconds(response: Any) -> int:
+    payload = getattr(response, "payload", {})
+    recovery = payload.get("recovery") if isinstance(payload, Mapping) else None
+    if not isinstance(recovery, Mapping) or "afterSeconds" not in recovery:
+        return 0
+    value = recovery.get("afterSeconds")
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return -1
+    return value
+
+
+def _retry_after_seconds(response: Any) -> int:
+    headers = getattr(response, "headers", {})
+    if not isinstance(headers, Mapping):
+        return -1
+    raw_value = next(
+        (
+            value
+            for key, value in headers.items()
+            if str(key).strip().lower() == "retry-after"
+        ),
+        None,
+    )
+    if raw_value is None:
+        return 0
+    candidate = str(raw_value).strip()
+    if not candidate.isascii() or not candidate.isdecimal():
+        return -1
+    value = int(candidate)
+    return value if value <= 86400 else -1
+
+
+def _search_attempt_payload(
+    response: Any,
+    *,
+    attempt: int,
+    request_identity: PublicApiRequestIdentity,
+) -> dict[str, Any]:
+    operation = _operation_payload(response, endpoint="search")
+    if (
+        operation["requestId"] != request_identity.request_id
+        or operation["traceId"] != request_identity.trace_id
+    ):
+        raise PostApiVerificationError(
+            "search operation evidence drifted from its logical request identity"
+        )
+    return {
+        "attempt": attempt,
+        "canonicalErrorCode": _canonical_error_code(response),
+        "recoveryAction": _recovery_action(response),
+        "recoveryAfterSeconds": max(0, _recovery_after_seconds(response)),
+        "retryAfterSeconds": max(0, _retry_after_seconds(response)),
+        "operation": operation,
+    }
+
+
+def _search_retry_directive(
+    response: Any,
+    *,
+    policy: _SearchRetryPolicy,
+) -> _SearchRetryableError | None:
+    status = int(getattr(response, "status", 0) or 0)
+    code = _canonical_error_code(response)
+    after_seconds = _recovery_after_seconds(response)
+    retry_after_seconds = _retry_after_seconds(response)
+    if (
+        _recovery_action(response) != "retry"
+        or after_seconds < 0
+        or retry_after_seconds < 0
+        or retry_after_seconds != after_seconds
+    ):
+        return None
+    return next(
+        (
+            row
+            for row in policy.retryable_errors
+            if row.code == code
+            and row.http_status == status
+            and row.recovery_after_seconds == after_seconds
+        ),
+        None,
+    )
 
 
 def _search_failure_message(
@@ -112,9 +198,7 @@ def _search_failure_message(
     if operation is None:
         raise PostApiVerificationError("search lacks request trace evidence")
     status = int(getattr(response, "status", 0) or 0)
-    payload = getattr(response, "payload", {})
-    raw_code = payload.get("code") if isinstance(payload, Mapping) else None
-    canonical_error_code = _safe_evidence_value(raw_code)
+    canonical_error_code = _canonical_error_code(response)
     outcome = "http_error" if status != HTTPStatus.OK else "empty"
     target_types = ",".join(
         _safe_evidence_value(value, default="invalid") for value in object_types
@@ -123,6 +207,31 @@ def _search_failure_message(
         "Search verification failed: "
         f"outcome={outcome} status={status} "
         f"canonicalErrorCode={canonical_error_code} "
+        f"requestId={_safe_evidence_value(operation.request_id)} "
+        f"traceId={_safe_evidence_value(operation.trace_id)} "
+        "requestSummary="
+        f"method=POST,path=/search,pageId={SEARCH_PAGE_ID},"
+        f"queryChars={len(query)},objectTypes={target_types},idsCount=1,limit=20"
+    )
+
+
+def _search_deadline_failure_message(
+    response: Any,
+    *,
+    query: str,
+    object_types: list[str],
+) -> str:
+    operation = getattr(response, "operation", None)
+    if operation is None:
+        raise PostApiVerificationError("search lacks request trace evidence")
+    target_types = ",".join(
+        _safe_evidence_value(value, default="invalid") for value in object_types
+    )
+    return (
+        "Search verification failed: "
+        "outcome=deadline_exhausted "
+        f"status={int(getattr(response, 'status', 0) or 0)} "
+        f"canonicalErrorCode={_canonical_error_code(response)} "
         f"requestId={_safe_evidence_value(operation.request_id)} "
         f"traceId={_safe_evidence_value(operation.trace_id)} "
         "requestSummary="
@@ -148,39 +257,106 @@ def _search_hits(
     }
     if content_types:
         request_body["contentTypes"] = content_types
-    response = client.post_json(
-        "search",
-        page_id=SEARCH_PAGE_ID,
-        body=request_body,
-        session_header_name="X-Session-Id",
+    policy = _search_retry_policy()
+    attempt_limit = (
+        policy.max_attempts if policy.retry_mode == "idempotent" else 1
     )
-    hits = response.payload.get("hits")
-    matched = (
-        sorted(
-            {
-                str(row.get("objectId") or "").strip()
-                for row in hits or []
-                if isinstance(row, Mapping)
-                and str(row.get("objectId") or "").strip()
-            }
-        )
-        if isinstance(hits, list)
-        else []
+    deadline = _monotonic_seconds() + (
+        policy.total_timeout_ms(attempt_limit=attempt_limit) / 1000
     )
-    if response.status != HTTPStatus.OK or object_id not in matched:
-        raise PostApiVerificationError(
-            _search_failure_message(
-                response,
-                query=query,
-                object_types=object_types,
+    request_identity = client.new_request_identity(page_id=SEARCH_PAGE_ID)
+    attempts: list[dict[str, Any]] = []
+    first_failure_message = ""
+    for attempt in range(1, attempt_limit + 1):
+        remaining_seconds = deadline - _monotonic_seconds()
+        if remaining_seconds <= 0:
+            raise SearchProjectionVerificationError(
+                first_failure_message or "Search verification deadline exhausted",
+                operation_attempts=attempts,
             )
+        try:
+            response = client.post_json(
+                "search",
+                page_id=SEARCH_PAGE_ID,
+                body=request_body,
+                session_header_name="X-Session-Id",
+                request_identity=request_identity,
+                timeout_seconds=min(
+                    policy.timeout_ms / 1000,
+                    remaining_seconds,
+                ),
+            )
+            response_received_at = _monotonic_seconds()
+            attempts.append(
+                _search_attempt_payload(
+                    response,
+                    attempt=attempt,
+                    request_identity=request_identity,
+                )
+            )
+        except (PublicApiClientError, PostApiVerificationError) as exc:
+            if first_failure_message:
+                raise SearchProjectionVerificationError(
+                    first_failure_message,
+                    operation_attempts=attempts,
+                ) from exc
+            raise
+        if response_received_at >= deadline:
+            if not first_failure_message:
+                first_failure_message = _search_deadline_failure_message(
+                    response,
+                    query=query,
+                    object_types=object_types,
+                )
+            raise SearchProjectionVerificationError(
+                first_failure_message,
+                operation_attempts=attempts,
+            )
+        hits = response.payload.get("hits")
+        matched = (
+            sorted(
+                {
+                    str(row.get("objectId") or "").strip()
+                    for row in hits or []
+                    if isinstance(row, Mapping)
+                    and str(row.get("objectId") or "").strip()
+                }
+            )
+            if isinstance(hits, list)
+            else []
         )
-    return {
-        "query": query,
-        "status": response.status,
-        "matchedObjectIds": matched,
-        "request": _operation_payload(response, endpoint="search"),
-    }
+        if response.status == HTTPStatus.OK and object_id in matched:
+            return {
+                "query": query,
+                "status": response.status,
+                "matchedObjectIds": matched,
+                "attempts": attempts,
+            }
+        failure_message = _search_failure_message(
+            response,
+            query=query,
+            object_types=object_types,
+        )
+        if not first_failure_message:
+            first_failure_message = failure_message
+        retry_directive = _search_retry_directive(response, policy=policy)
+        if attempt >= attempt_limit or retry_directive is None:
+            raise SearchProjectionVerificationError(
+                first_failure_message,
+                operation_attempts=attempts,
+            )
+        retry_after_seconds = retry_directive.recovery_after_seconds
+        if _monotonic_seconds() + retry_after_seconds >= deadline:
+            raise SearchProjectionVerificationError(
+                first_failure_message,
+                operation_attempts=attempts,
+            )
+        if retry_after_seconds:
+            _sleep_seconds(retry_after_seconds)
+    raise SearchProjectionVerificationError(
+        first_failure_message,
+        operation_attempts=attempts,
+    )
 
 
 def verify_search_projection(

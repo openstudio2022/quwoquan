@@ -133,6 +133,7 @@ type engineWindow struct {
 }
 
 type testWindowMetadata struct {
+	experimentBucket      string
 	modelBucket           string
 	modelChannel          string
 	modelReleaseID        string
@@ -283,6 +284,7 @@ func testRankedPage(
 	page := transport.RankedRecommendationPage{
 		WindowId:              windowID,
 		Scenario:              strings.TrimSpace(scenario),
+		ExperimentBucket:      metadata.experimentBucket,
 		ModelBucket:           metadata.modelBucket,
 		PolicyDigest:          metadata.policyDigest,
 		RankingSnapshotDigest: metadata.rankingSnapshotDigest,
@@ -339,6 +341,9 @@ func newTestWindowMetadata(
 		modelBucket = "rule"
 	}
 	metadata := testWindowMetadata{
+		// This deterministic test gateway has no forced scorer degradation, so
+		// its server-side assignment equals the actual model execution track.
+		experimentBucket:      modelBucket,
 		modelBucket:           modelBucket,
 		policyDigest:          policyDigest,
 		rankingSnapshotDigest: hex.EncodeToString(rankingDigest[:]),

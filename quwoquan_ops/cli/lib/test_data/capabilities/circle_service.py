@@ -44,6 +44,38 @@ class CircleGatheringResult:
 
 
 @dataclass(frozen=True)
+class CircleGatheringPlanParams:
+    gathering: OutputRef[CircleGatheringResult]
+    actors: OutputRef[AcceptanceActorSet]
+    organizer_role: ActorRole
+    participant_role: ActorRole
+
+    def __post_init__(self) -> None:
+        if self.organizer_role is self.participant_role:
+            raise ValueError(
+                "gathering plan requires distinct organizer and participant"
+            )
+
+
+@dataclass(frozen=True)
+class CircleGatheringPlanResult:
+    plan: BusinessObjectRef
+    gathering: BusinessObjectRef
+    current_revision: BusinessObjectRef
+    current_revision_number: int
+    current_revision_digest: str
+    plan_version: int
+    organizer_role: ActorRole
+    participant_role: ActorRole
+
+    def __post_init__(self) -> None:
+        if self.current_revision_number < 1 or self.plan_version < 1:
+            raise ValueError("gathering plan requires positive version identities")
+        if not self.current_revision_digest.strip():
+            raise ValueError("gathering plan requires a current revision digest")
+
+
+@dataclass(frozen=True)
 class CirclePendingApprovalParams:
     actors: OutputRef[AcceptanceActorSet]
     owner_role: ActorRole
@@ -77,6 +109,13 @@ CIRCLE_GATHERING = CapabilityRef(
     owner_service="circle_service",
 )
 
+CIRCLE_GATHERING_PLAN = CapabilityRef(
+    key=CapabilityKey("circle.gathering_plan.canonical_plan"),
+    params_type=CircleGatheringPlanParams,
+    result_type=CircleGatheringPlanResult,
+    owner_service="circle_service",
+)
+
 CIRCLE_PENDING_APPROVAL = CapabilityRef(
     key=CapabilityKey("circle.circle_membership.pending_approval"),
     params_type=CirclePendingApprovalParams,
@@ -86,9 +125,12 @@ CIRCLE_PENDING_APPROVAL = CapabilityRef(
 
 __all__ = (
     "CIRCLE_GATHERING",
+    "CIRCLE_GATHERING_PLAN",
     "CIRCLE_PENDING_APPROVAL",
     "CIRCLE_WITH_MEMBERS",
     "CircleGatheringParams",
+    "CircleGatheringPlanParams",
+    "CircleGatheringPlanResult",
     "CircleGatheringResult",
     "CirclePendingApprovalParams",
     "CirclePendingApprovalResult",

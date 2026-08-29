@@ -1,5 +1,9 @@
 services:
-  mongodb:
+  # service 名必须是 role 名：canonical port manifest 把 publisher 身份建模成
+  # `(composeService, containerPort, protocol, hostPort)`，而目标 runtime 的 backing 栈
+  # 也有名为 `mongodb`/`redis`、容器口同为 27017/6379 的 service。撞名会让 fleet 的发布口
+  # 被归因给 `mongodb`/`redis` 这两个 role（它们是目标 runtime 自有的、canonical 端口不同）。
+  data-execution-mongodb:
     image: "${QWQ_DATA_FLEET_MONGO_IMAGE:-docker.io/library/mongo:7-jammy}"
     command:
       - --replSet
@@ -7,6 +11,14 @@ services:
       - --bind_ip_all
       - --wiredTigerCacheSizeGB
       - "${QWQ_DATA_FLEET_MONGO_CACHE_SIZE_GB:-0.25}"
+    networks:
+      default:
+        # rs0 的成员主机名 `mongodb:27017` 持久化在 volume 里的副本集配置中，不随
+        # service 改名而变。别名让它继续解析：解析不到时 mongod 认不出配置里的「自己」，
+        # 节点停在 STARTUP/REMOVED 而无法选主，写入全失败。别名不参与 publisher 身份
+        # 判定（判定读 service key），因此不会把撞名问题带回来。
+        aliases:
+          - mongodb
     ports:
       - "127.0.0.1:${QWQ_DATA_FLEET_MONGO_PORT:?QWQ_DATA_FLEET_MONGO_PORT is required}:27017"
     volumes:
@@ -21,8 +33,11 @@ services:
   mongo-init:
     image: "${QWQ_DATA_FLEET_MONGO_IMAGE:-docker.io/library/mongo:7-jammy}"
     depends_on:
-      mongodb:
+      data-execution-mongodb:
         condition: service_healthy
+    # 这里刻意用别名 `mongodb` 而不是 service 名：`rs.initiate` 写进副本集配置的成员主机名
+    # 会持久化在 volume 里。全仓统一用别名，则新装与既有安装的持久化状态只有一种；改成
+    # service 名会让两者分叉，而别名为了既有安装无论如何都得留着。
     entrypoint:
       - bash
       - -lc
@@ -34,7 +49,7 @@ services:
         '
     restart: "no"
 
-  redis:
+  data-execution-redis:
     image: "${QWQ_DATA_FLEET_REDIS_IMAGE:-docker.io/library/redis:7.2-alpine}"
     command: ["redis-server", "--appendonly", "yes"]
     ports:

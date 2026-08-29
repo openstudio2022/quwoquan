@@ -1,11 +1,9 @@
 """Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
-import time
-
 from content.execution.coverage import coverage_entity_type, coverage_entity_type_for_entity
-from content.execution.planning.capacity_calibration import remaining_batch_seconds
 from content.execution.support import Any, ExecutionContext, Mapping, _active_spec, read_json, store, write_json
 from content.source.research.auto_plan_report import AUTO_RESEARCH_MERGE_ROW_KEYS
+from content.source.research.source_discovery_scheduler import SINGLE_RUN_OBSERVATION
 
 def _aggregate_auto_research_throughput(waves: list[Mapping[str, Any]]) -> dict[str, Any]:
     entity_count = sum(int(wave.get("entityCount") or 0) for wave in waves)
@@ -20,6 +18,8 @@ def _aggregate_auto_research_throughput(waves: list[Mapping[str, Any]]) -> dict[
         default=0,
     )
     return {
+        # 聚合出来的仍然是若干次运行的观测事实，不是稳态吞吐或容量结论。
+        "factKind": SINGLE_RUN_OBSERVATION,
         "frozenMaxConcurrentWorkers": ceiling,
         "peakConcurrentWorkers": peak,
         "entityCount": entity_count,
@@ -223,6 +223,7 @@ def _run_download_auto_research(
                 "ineligibleTargetCount": 0,
             },
             "throughput": {
+                "factKind": SINGLE_RUN_OBSERVATION,
                 "frozenMaxConcurrentWorkers": 0,
                 "peakConcurrentWorkers": 0,
                 "entityCount": 0,
@@ -238,8 +239,6 @@ def _run_download_auto_research(
     )
     execution_policy = ctx.spec.execution_policy
     worker_count = execution_policy.auto_research_max_concurrent_workers
-    # 规模增长只增加 wave 数，不增加同时运行的进程数：一个 wave 就是一次满并发。
-    wave_size = max(1, min(len(ids), worker_count))
     existing_wave_count = 0
     completed_entity_ids: list[str] = []
     existing: dict[str, Any] = {}
@@ -298,91 +297,66 @@ def _run_download_auto_research(
             result["completedEntityIds"] = completed_entity_ids
             result["completedEntityCount"] = len(completed_entity_ids)
             return result
-    latest: dict[str, Any] = {}
     completed_this_run = list(completed_entity_ids)
-    for index in range(0, len(ids), wave_size):
-        wave_ids = ids[index:index + wave_size]
-        wave_index = index // wave_size + 1
-        wave_count = (len(ids) + wave_size - 1) // wave_size
-        aggregate_wave_index = existing_wave_count + wave_index
-        wave_scope = scope if aggregate_wave_index == 1 else f"{scope}_wave_{aggregate_wave_index}"
-        print(
-            f"[task execute] download_plan auto_research wave {wave_index}/{wave_count}: "
-            f"{len(wave_ids)} entities",
-            flush=True,
-        )
-        aggregate_path = _auto_research_plan_path(ctx)
-        previous_aggregate: dict[str, Any] | None = None
-        if aggregate_path.is_file():
-            try:
-                previous_aggregate = read_json(aggregate_path)
-            except (OSError, ValueError, TypeError):
-                previous_aggregate = None
-        # The research writer resolves the canonical type for each entity from the
-        # frozen target set. Splitting heterogeneous targets here serializes small
-        # groups and defeats the configured research worker pool.
-        auto_report = write_auto_research_plans(
-            ctx.execution_id,
-            wave_ids,
-            entity_type=entity_type,
-            force=force,
-            lanes=selected_lanes,
-            max_workers=worker_count,
-            progress_callback=_download_auto_research_progress_callback(ctx),
-            external_input_context=external_input_context,
-        )
-        if previous_aggregate is not None:
-            write_json(aggregate_path, previous_aggregate)
-        unstarted_ids = ids[index + wave_size:]
-        writer_remaining_ids = [
-            str(entity_id).strip()
-            for entity_id in (auto_report.get("remainingEntityIds") or [])
-            if str(entity_id or "").strip() in wave_ids
-        ]
-        for entity_id in wave_ids:
-            if entity_id not in writer_remaining_ids and entity_id not in completed_this_run:
-                completed_this_run.append(entity_id)
-        auto_report["completedEntityIds"] = list(completed_this_run)
-        auto_report["completedEntityCount"] = len(completed_this_run)
-        deadline_exhausted = bool(
-            unstarted_ids
-            and remaining_batch_seconds(
-                execution_policy.capacity_calibration,
-                now_epoch_seconds=int(time.time()),
-            )
-            <= 0
-        )
-        if auto_report.get("partialRun") or deadline_exhausted:
-            remaining_ids = list(writer_remaining_ids)
-            for entity_id in unstarted_ids:
-                if entity_id not in remaining_ids:
-                    remaining_ids.append(entity_id)
-            auto_report["partialRun"] = True
-            if deadline_exhausted:
-                auto_report["partialReason"] = "fleet_batch_deadline_exhausted"
-                auto_report["fleetBatchDeadlineEpochSeconds"] = (
-                    execution_policy.fleet_batch_deadline_epoch_seconds
-                )
-            auto_report["remainingEntityIds"] = remaining_ids
-            auto_report["remainingEntityCount"] = len(remaining_ids)
-        else:
-            auto_report["partialRun"] = False
-            auto_report["remainingEntityIds"] = []
-            auto_report["remainingEntityCount"] = 0
-        latest = _write_auto_research_report(
-            ctx,
-            auto_report,
-            scope=wave_scope,
-            entity_ids=wave_ids,
-        )
-        outage = auto_report.get("networkOutage")
-        if isinstance(outage, Mapping) and not (auto_report.get("updated") or []):
-            # 出口故障且本 wave 零有效产出：立刻停止后续 wave，
-            # 把 networkOutage 透传给 stage 层做网络类可自愈失败。
-            latest["networkOutage"] = dict(outage)
-            break
-        if auto_report.get("partialRun"):
-            break
+    # 本次待处理实体一次性交给来源发现调度器：并发上限由调度器按冻结额度约束，
+    # 规模增长只增加排队长度。这里再切一层批会形成额外栅栏，让先完成的额度
+    # 空等本批最慢的实体，失败或超时释放的额度也无法被下一个实体接管。
+    aggregate_index = existing_wave_count + 1
+    dispatch_scope = scope if aggregate_index == 1 else f"{scope}_wave_{aggregate_index}"
+    print(
+        f"[task execute] download_plan auto_research dispatch: {len(ids)} entities "
+        f"at a frozen ceiling of {worker_count}",
+        flush=True,
+    )
+    aggregate_path = _auto_research_plan_path(ctx)
+    previous_aggregate: dict[str, Any] | None = None
+    if aggregate_path.is_file():
+        try:
+            previous_aggregate = read_json(aggregate_path)
+        except (OSError, ValueError, TypeError):
+            previous_aggregate = None
+    # The research writer resolves the canonical type for each entity from the
+    # frozen target set. Splitting heterogeneous targets here serializes small
+    # groups and defeats the configured research worker pool.
+    auto_report = write_auto_research_plans(
+        ctx.execution_id,
+        ids,
+        entity_type=entity_type,
+        force=force,
+        lanes=selected_lanes,
+        max_workers=worker_count,
+        progress_callback=_download_auto_research_progress_callback(ctx),
+        external_input_context=external_input_context,
+    )
+    if previous_aggregate is not None:
+        write_json(aggregate_path, previous_aggregate)
+    writer_remaining_ids = [
+        str(entity_id).strip()
+        for entity_id in (auto_report.get("remainingEntityIds") or [])
+        if str(entity_id or "").strip() in ids
+    ]
+    for entity_id in ids:
+        if entity_id not in writer_remaining_ids and entity_id not in completed_this_run:
+            completed_this_run.append(entity_id)
+    auto_report["completedEntityIds"] = list(completed_this_run)
+    auto_report["completedEntityCount"] = len(completed_this_run)
+    if auto_report.get("partialRun"):
+        auto_report["remainingEntityIds"] = writer_remaining_ids
+        auto_report["remainingEntityCount"] = len(writer_remaining_ids)
+    else:
+        auto_report["partialRun"] = False
+        auto_report["remainingEntityIds"] = []
+        auto_report["remainingEntityCount"] = 0
+    latest = _write_auto_research_report(
+        ctx,
+        auto_report,
+        scope=dispatch_scope,
+        entity_ids=ids,
+    )
+    outage = auto_report.get("networkOutage")
+    if isinstance(outage, Mapping) and not (auto_report.get("updated") or []):
+        # 出口故障且本次零有效产出：把 networkOutage 透传给 stage 层做网络类可自愈失败。
+        latest["networkOutage"] = dict(outage)
     return latest
 
 def _download_auto_research_lanes(ctx: ExecutionContext) -> frozenset[str]:

@@ -1,0 +1,39 @@
+{
+  "schema": "quwoquan_data.evidence_index",
+  "stage": "5.review",
+  "executionId": "20260825--travel-homepage-m1-first--sichuan--pilot-004",
+  "executionBinding": "frozen",
+  "objectRef": "/entity/地点/景区/青城山",
+  "evidence": [
+    {
+      "kind": "deterministic_gate",
+      "ref": "5.review/deterministic_gate.json",
+      "sha256": "sha256:1c03c9efaa1921bd2d4d5ac833dea649f89ce9814e24ad443a7c4532717ff2c0"
+    },
+    {
+      "kind": "media_ref_review",
+      "ref": "5.review/media_ref_review.json",
+      "sha256": "sha256:bc8569c90fbbb4b1abe8253d442e8f1f16fdff35af0852ec0762692927d73c7e"
+    },
+    {
+      "kind": "review",
+      "ref": "5.review/review.json",
+      "sha256": "sha256:6cb28ad391142ac16581da5bcbd53c1714eed015c6f64b7df8232eb3b68c0804"
+    },
+    {
+      "kind": "provenance",
+      "ref": "5.review/provenance.json",
+      "sha256": "sha256:6eae66702fee43b68b937fb86d096611bb6b1545ce0f823a634b5f4de3ef3e15"
+    },
+    {
+      "kind": "finalization",
+      "ref": "5.review/finalization_report.json",
+      "sha256": "sha256:57c07b51eb76539c453b77b25566eb0ea7873768f4fbbb612090b67616acd7ea"
+    },
+    {
+      "kind": "independent_reviewer_result",
+      "ref": "5.review/reviewer_result.json",
+      "sha256": "sha256:00956542eb48570d04b082d7b9a59616d4de837ebfff71157fa9de18b936c2a6"
+    }
+  ]
+}

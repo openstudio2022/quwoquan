@@ -60,6 +60,9 @@ if os.environ.get("QWQ_PYTEST_ALLOW_ENV_ROOTS") != "1":
     os.environ["QWQ_DATA_ROOT"] = _ISOLATED_ROOT
     os.environ["QWQ_OUTPUT_ROOT"] = str(Path(_ISOLATED_ROOT) / "output")
     os.environ["QWQ_PUBLISH_ROOT"] = str(Path(_ISOLATED_ROOT) / "publish")
+    # 随体媒体根是发布事务的写入目标，且按设计落在仓内受版本控制目录。任何执行
+    # apply 的测试都会往那里写字节，因此隔离与 publish 根同级必需。
+    os.environ["QWQ_CARRIED_MEDIA_ROOT"] = str(Path(_ISOLATED_ROOT) / "carried_media")
     # startup probe cache 是运行期降本缓存；pytest 默认关闭，避免环境预检类测试
     # 误把 cache 写入真实 .qwq_output/data/local/workspace/runtime/env。
     os.environ.setdefault("QWQ_CURSOR_STARTUP_PROBE_CACHE_TTL_SECONDS", "0")
@@ -68,6 +71,7 @@ _ROOT_ENV_KEYS = (
     "QWQ_DATA_ROOT",
     "QWQ_OUTPUT_ROOT",
     "QWQ_PUBLISH_ROOT",
+    "QWQ_CARRIED_MEDIA_ROOT",
 )
 _ISOLATED_ROOT_ENV = {
     key: os.environ[key]
@@ -139,6 +143,9 @@ def pytest_configure(config):
         str(root): _snapshot_files(root) for root in _REAL_DATA_OUTPUT_ROOTS
     }
     config._qwq_publish_baseline = _snapshot_files(DATA_ROOT / "publish")
+    config._qwq_carried_media_baseline = _snapshot_files(
+        DATA_ROOT / "reference" / "golden_media"
+    )
 
 
 _PATHS_ROOT_CONSTANTS = ("DATA_ROOT", "OUTPUT_ROOT", "PUBLISH_ROOT")
@@ -176,6 +183,9 @@ def _isolation_breach_evidence(paths_module, isolated_env: dict) -> list[str]:
         value = Path(getattr(paths_module, name)).resolve()
         if not value.is_relative_to(isolated_base):
             breaches.append(f"core.paths.{name} escaped the isolated root: {value}")
+    carried = Path(paths_module.carried_media_root()).resolve()
+    if not carried.is_relative_to(isolated_base):
+        breaches.append(f"carried media root escaped the isolated root: {carried}")
     return breaches
 
 
@@ -254,6 +264,18 @@ def pytest_unconfigure(config):
     if publish_details:
         failures.append(
             f"{DATA_ROOT / 'publish'} changed files ({', '.join(publish_details)})"
+        )
+
+    # 随体媒体根与 publish 同为仓内受版本控制真相源：发布事务按契约往那里落字节，
+    # 因此一次测试运行留下的字节会被误当成生产资产提交。
+    carried_root = DATA_ROOT / "reference" / "golden_media"
+    carried_details = _snapshot_diff(
+        _snapshot_files(carried_root),
+        getattr(config, "_qwq_carried_media_baseline", {}),
+    )
+    if carried_details:
+        failures.append(
+            f"{carried_root} changed files ({', '.join(carried_details)})"
         )
 
     for message in warnings:

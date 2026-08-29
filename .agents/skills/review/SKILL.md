@@ -1,6 +1,6 @@
 ---
 name: review
-description: Dispatch role-based parallel review for a given workflow, deliverable, and derived profiles, run the deduplicated test/gate evidence plan, then consolidate findings into GATE_BLOCK / PR_WARN / advisory. Called automatically at each workflow's PRE and POST, and whenever the user asks for 评审, 审核, 检视, plan review, code review, 验证, or 准出检查 in this repository.
+description: Build a bounded evidence-first Review plan from the shared owner manifest, dispatch one workflow primary and at most one profile specialist at POST, and consolidate typed GATE_BLOCK / PR_WARN / advisory results. Use whenever the user asks for 评审, 审核, 检视, plan review, code review, 验证, or 准出检查.
 metadata:
   kind: workflow
   command: /review
@@ -8,132 +8,53 @@ metadata:
 
 # review
 
-按 `(workflow, deliverable, profiles)` 装配角色 checklist bundle，执行去重后的证据计划，
-并行派发只读 reviewer，汇总后交回调用方。**board 自己不做技术判断**，
-只负责装配、取证、派发、汇总。五段执行契约见根 `AGENTS.md`。
+## 触发与输入
 
-## 触发
+用户要求评审/验证/准出，或有自动 Review 的工作流进入 POST 时使用。PRE 只用主会话检查 owner、scope、验收和 evidence 可执行性，不派 Reviewer。
 
-- 每个工作流的 PRE 与 POST 自动调用（参数由该工作流 SKILL.md 的「内置评审」段固定给出）。
-- 显式命令 `/review`，或用户说评审、审核、检视、验证、准出检查——按其描述推断
-  workflow 与 deliverable，推断不出就问，不要默认全角色。
+必要输入：
 
-## 输入
+- `workflow`、`segment=PRE|POST`、`deliverable`、`scope`。
+- `make feature-context TARGET=<path>` 生成的当前 context manifest。
+- 排序去重的 `changed_paths`，包含 tracked、untracked 和已删除目标。
+- re-review 时额外给 initial `plan.json` 和 1–2 个 `finding-owner`。
 
-缺 `workflow` 或 `segment` 不开工，先补齐：
-
-```yaml
-workflow: dev                 # explore|prd|design|dev|plan-next|commit|environment-ops|content-production|incident-inspection
-segment: POST                 # PRE|POST
-deliverable: implementation   # 见 registry.yaml 的 deliverables
-scope:
-  in: 内容详情页新增收藏按钮
-  out: 收藏列表页、收藏推送
-changed_paths:                # POST 必填，PRE 可为计划中的路径
-  - quwoquan_app/lib/service/content_service/.../content_detail_page.dart
-```
-
-## 角色
-
-- **board**（本文件）：解析请求 → 派生 profile → 查 `references/registry.yaml` 装配 bundle →
-  执行证据计划 → 并行派发 → 汇总。
-- **reviewer**：通用只读执行体（`.claude/agents/reviewer.md`），同一定义启动多个实例，
-  人设与 checklist 由派发 prompt 注入。只评价交付件，不执行生产、修复、发布或环境操作。
-- 角色库：`references/roles/<role>/`，`ROLE.md` 定职责与盲区，
-  `checklists/<workflow>/{base,<profile>}.md` 放带分级的可执行判定，
-  `references/` 放该角色拥有的未分级知识。
+registry 唯一声明 workflow primary、profile specialist、预算和命名 evidence：
+`.agents/skills/review/references/registry.yaml`。Reviewer 的中性执行语义来自
+`references/reviewer-executor.md`。manifest、plan、terminal 和 tracked projection schema 来自
+`quwoquan_ops/policies/agent_governance_contract.yaml`，Cursor/Codex adapter 仅是生成投影。
 
 ## 执行
 
-自由度：低（装配与派发是固定序列）。
-
-1. 运行编排脚本生成派发清单——装配的唯一执行体，board 不手工解析注册表：
+1. **解析 owner**：Review POST 必须消费与开发 PRE 相同的 manifest；profile 只选 specialist/evidence，不重新定义 Feature owner。
+2. **生成 plan**：
 
    ```bash
    python3 quwoquan_ops/cli/review_dispatch.py \
-     --workflow <workflow> --segment <segment> --changed-paths <路径...> \
-     --out .qwq_output/env/repo/runs/review/<UTC时间戳>-<workflow>-<segment>
+     --workflow <workflow> --segment <PRE|POST> \
+     --deliverable <deliverable> --scope <scope> \
+     --context-manifest <manifest.json> \
+     --changed-paths <path...> --out <run-dir>
    ```
 
-2. `plan.json` 即派发清单（profile 派生 + `when` 求值 + gate 保序去重的结果）；
-   board 按清单派发，不增删角色。评审收口后把汇总结论写同目录 `summary.md`，
-   供轮次交接单与下一轮 RESOLVE 引用。
-3. **POST 先取证再评审**：按 `plan.json` 的 `gates` 逐条执行一次，
-   形成 evidence map；测试结果是证据，文档状态不是。`parameterized_gates`
-   里的命令含 `<...>` 占位符，board 必须绑定本轮实参后执行，或逐条显式判
-   N/A 并写明理由（如本轮无 release 对象），[MUST NOT] 无参直跑或静默跳过。
-   任何失败先归因四选一：
-   `本计划引入 / 并行会话中间态 / 存量债 / 环境 flaky`，归因需基线对照证据
-   （HEAD 重跑、`git log --follow`、复跑）。并行中间态如实交接，**不修不掩盖**。
-   环境阻塞（URL、token、容器、凭证缺失）如实报告并说明影响的证据层，
-   [MUST NOT] 静默跳过或用静态声明代替执行。
-4. 按「先规格符合性、再质量」两阶段并行派发只读 reviewer（`concurrency.max_parallel` 分批）。
-   **派发 prompt 必须自包含**：子代理不继承主会话技能与推理历史，只拿交付件、
-   显式文件路径与共享 evidence。模板：
+   PRE 的 `reviewers`/`evidence` 必须为空。POST 只选 workflow primary 和数值 priority 最高的一名 specialist，同优先级按 registry 顺序裁决；`explore/plan-next/continue/review/commit` 作为控制型 workflow 默认为零。
+3. **先取证**：主会话按 `plan.evidence` 的 ID 去重执行每条命令一次，记录退出码与当前指纹。required evidence 失败时立即停止，不启动 Reviewer。
+4. **派审**：并行与调用预算只读取 registry 的 `limits`。每个 Reviewer 只获得 plan 列出的 contexts、角色视角、当前 workflow checklist、grading 和已有 evidence；不加载未选 profile/功能规则。Reviewer 不修复、不发布、不自行补跑 gate；证据缺失时返回 incomplete。
+5. **汇总**：按 `grading.md` 合并重复 finding，保留最高等级、精确 path/anchor、finding owner 和恢复动作。不自动进行第二轮复审或超时重试。
+6. **定向复审**：修复后只能直接引用 initial plan，为首次 Reviewer 中的 finding owner 生成 `--round rereview --finding-owner <role>`。initial、复审与累计调用上限均读取 registry `limits`；不允许 rereview chain。
 
-   ```text
-   你是 quwoquan 仓库的评审角色 <role>。只读评审，不要修改任何文件。
+## 完成证据
 
-   依据文件（请先全部读完，这是你本次评审的全部依据）：
-   - .agents/skills/review/references/roles/<role>/ROLE.md
-   - .agents/skills/review/references/roles/<role>/checklists/<workflow>/<checklist>.md
-   - .agents/skills/review/references/grading.md
+完整 `plan.json` 必须符合 canonical agent governance contract。交付每条 evidence 的实际结果、每个已启动角色的完成/不完整状态、去重 finding 与最终 typed 等级。
 
-   评审请求：
-   - workflow: <workflow> / segment: <segment> / deliverable: <deliverable>
-   - scope in: <...> / scope out: <...>
-   - 变更范围：<changed_paths 逐行>
-   - 共享 gate 证据：<evidence id 与结果摘要；证据已由 board 执行，不要重复跑>
-
-   要求：
-   1. 只评审 checklist 里 <segment> 段的条目，逐条给结论。
-   2. 每条 finding 必须带证据（文件:行，或引用共享 evidence id）。拿不出证据的不要提交。
-   3. 条目带 gate: 且共享证据未覆盖的，实际把该命令跑一遍再下结论。
-   4. 不要评审 ROLE.md「已知盲区」里的内容。
-   5. 按 grading.md 的格式输出，最后给一行汇总计数。
-   ```
-
-## 交付件
-
-**评审报告**：evidence map（含失败归因）、逐条带证据 finding、冲突与未完成角色、
-整体准入/准出结论。汇总格式：
-
-```text
-review | workflow=dev segment=POST | profiles=dart-app,flutter-page | 角色 4 个
-GATE_BLOCK 2 条 | PR_WARN 3 条 | 提示 1 条
-
-[GATE_BLOCK] architect dev#3 — ...
-[PR_WARN]   ux dev#2 — ...
-```
-
-送审前自检：evidence map 覆盖 bundle 内全部 gate；无证据 finding 已剔除；
-未完成角色已如实列出。
-
-## 内置评审
-
-本工作流即评审本体，不嵌套评审自身；`grading.md` 与 registry 的结构正确性由
-`make verify-agent-context-budget` 门禁守护。
+只有 required evidence 全部通过、required Reviewer 完成、指纹仍匹配且无 `GATE_BLOCK` finding 时才可准出。optional specialist incomplete 可产生 `PR_WARN`，但不得记为它已通过。
 
 ## 失败与停止
 
-- 有 `GATE_BLOCK` → 整体 `GATE_BLOCK`，调用方必须先修复再继续。
-- 只有 `PR_WARN` → 调用方逐条显式裁决「修复 / 转 `OPEN-###` / 判 Out of Scope」，不允许静默略过。
-- 角色结论冲突 → board 不自行裁决，原样并列呈报并标注冲突点。
-- 角色执行失败或超时 → 如实报告未完成，不得用其他角色结论替代，也不得因此判整体通过。
-- evidence 缺失或失败 → [MUST NOT] 包装为通过；board 不吞 finding。
+- evidence、Reviewer、取消、指纹与 scope 失败只按 canonical contract 的 `terminal_codes` 返回等级、自动重试许可与唯一恢复动作；未知 terminal fail-closed。
+- 不自动重试 incomplete Reviewer，不复用 stale evidence，不把 optional incomplete 或 cancelled 包装为完整通过。
+- 无效 finding owner、复审链或角色调用超出 registry limits 时 typed 拒绝，不扩大 reviewer 集合。
 
-## HANDOFF
+## 条件性交接
 
-- **完成判据**：见 [completion-criteria](references/completion-criteria.md) 本工作流段；证据链条目带命令+退出码+时间戳+SHA，下游过期即复跑。
-- **产出物**：评审报告，回填调用方工作流的 HANDOFF。
-- **未决项去向**：PR_WARN 裁决结果与未完成角色由调用方承接。
-- **唯一合法下游**：调用方工作流（`GATE_BLOCK` 时调用方停在 DURING）。
-- **证据链**：`.qwq_output/env/repo/runs/review/<run>/` 下的 `plan.json` 与
-  `summary.md`、evidence map、各 reviewer 原始输出。
-
-## 扩展
-
-- 加角色：建 `references/roles/<role>/ROLE.md` 与所需 `checklists/<workflow>/<profile>.md`，
-  在 `registry.yaml` 注册 binding。
-- 加 profile：在 registry 的 `profiles` 声明路径规则，为相关角色补 checklist。
-- 改完跑 `make verify-agent-context-budget` 校验分级、gate 存在性、映射与可达性。
+普通闭环 Review 只交付 plan 身份、证据、finding 和未决项。只有跨会话未完成、环境/发布、多人并行、外部阻断或证据需复用时，才持久化 `plan.json`、evidence 回执、finding-owner、指纹、incomplete 终态和唯一恢复动作。

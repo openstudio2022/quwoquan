@@ -1,7 +1,0 @@
----
-description: 四环境 Remote、canonical release 与 test-only double 的物理隔离
-alwaysApply: true
----
-
-新增数据源、Provider/页面数据依赖、任何测试替身，或涉及 Mock/fixture/seed 时，先读
-`.agents/skills/review/references/roles/architect/references/production-wiring-and-test-doubles.md`。

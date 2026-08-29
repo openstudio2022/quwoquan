@@ -139,9 +139,11 @@ class EnvironmentPatrolSmokeCaseBase(unittest.TestCase):
         effective = {
             "schema": "app-effective-launch-manifest",
             "environment": environment,
+            "buildProfile": "nonprod",
             "target": target,
             "entrypoint": "lib/main_prod.dart",
-            "launchMode": "canonical_launcher",
+            "launchProvenance": "canonical_launcher",
+            "runtimeConfigSupplyMode": "external_runtime_package",
             "launchPolicy": "test_live",
             "runtimeConfigPackageDigest": "sha256:" + "1" * 64,
             "runtimeConfigTrustEnvelopeDigest": "sha256:" + "3" * 64,
@@ -151,6 +153,10 @@ class EnvironmentPatrolSmokeCaseBase(unittest.TestCase):
         return {
             **effective,
             "schema": "app-launcher-handoff",
+            "compileDiagnostics": {
+                "launchProvenance": "canonical_launcher",
+                "runtimeConfigSupplyMode": "external_runtime_package",
+            },
             "runtimeConfigPackage": {
                 "schema": "app-runtime-config-package",
                 "environment": environment,
@@ -190,6 +196,12 @@ class EnvironmentPatrolSmokeCaseBase(unittest.TestCase):
                     "providerRuntimeDigest": provider_runtime_digest,
                 },
             ),
+            # 角色闭包现在会同时读 test-live 回执来裁决两栈互斥，这里显式声明「没有
+            # test-live 栈」，否则断言会随开发机上残留的回执飘。
+            mock.patch.object(
+                stackctl,
+                "load_test_live_startup_attempt",
+                return_value=None,
+            ),
         ):
             return stackctl._expected_local_roles(target_name)
-

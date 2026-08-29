@@ -38,13 +38,13 @@
 
 
 
-- [`commercial-remote-only-message-system`](./commercial-remote-only-message-system/spec.md)：商用主路径的消息、通知和交集消费继续由 metadata 与真实服务契约驱动。
-- [`contact-home-commercial-ia`](./contact-home-commercial-ia/spec.md)：页面入口和联系首页数据消费继续由消息域 metadata 真相源驱动。
-- [`contact-home-relationship-projection`](./contact-home-relationship-projection/spec.md)：联系首页 read model 与交集摘要字段均有稳定契约来源。
-- [`group-home-chat-info-contract`](./group-home-chat-info-contract/spec.md)：群聊天页和聊天信息页都能从同一 GroupHome metadata / DTO 来源取数。
-- [`interaction-notification-inbox`](./interaction-notification-inbox/spec.md)：统一互动通知的渲染、跳转、已读状态与曝光/点击事件。
-- [`message-home-commercial-ia`](./message-home-commercial-ia/spec.md)：页面入口和首页数据消费继续由消息域 metadata 真相源驱动。
-- [`message-home-filter-contract`](./message-home-filter-contract/spec.md)：五类筛选、通知 inbox 和已读同步都可映射到 metadata 契约与真实服务投影。
+- [`commercial-remote-only-message-system`](./commercial-remote-only-message-system/spec.md)：商用主路径的消息、通知和交集消费继续由 metadata 与真实服务契约驱动；未完成失败语义只由其 [`OPEN-001`](./commercial-remote-only-message-system/spec.md#open-001) 跟踪。
+- [`contact-home-commercial-ia`](./contact-home-commercial-ia/spec.md)：页面入口和联系首页数据消费继续由消息域 metadata 真相源驱动；未完成页面验收只由其 [`OPEN-001`](./contact-home-commercial-ia/spec.md#open-001) 跟踪。
+- [`contact-home-relationship-projection`](./contact-home-relationship-projection/spec.md)：联系首页 read model 与交集摘要字段均有稳定契约来源；未完成投影验收只由其 [`OPEN-001`](./contact-home-relationship-projection/spec.md#open-001) 跟踪。
+- [`group-home-chat-info-contract`](./group-home-chat-info-contract/spec.md)：群聊天页和聊天信息页都能从同一 GroupHome metadata / DTO 来源取数；未完成 GroupHome 验收只由其 [`OPEN-001`](./group-home-chat-info-contract/spec.md#open-001) 跟踪。
+- [`interaction-notification-inbox`](./interaction-notification-inbox/spec.md)：统一互动通知的渲染、跳转、已读状态与曝光/点击事件；Push 外送与 Gathering invitation 缺口只由其 [`OPEN-001/002`](./interaction-notification-inbox/spec.md#open-001) 跟踪。
+- [`message-home-commercial-ia`](./message-home-commercial-ia/spec.md)：页面入口和首页数据消费继续由消息域 metadata 真相源驱动；同一候选真实账号页面验收只由其 [`OPEN-001`](./message-home-commercial-ia/spec.md#open-001) 阻断。
+- [`message-home-filter-contract`](./message-home-filter-contract/spec.md)：五类筛选、通知 inbox 和已读同步都可映射到 metadata 契约与真实服务投影；未完成筛选验收只由其 [`OPEN-001`](./message-home-filter-contract/spec.md#open-001) 跟踪。
 
 ## 5. 能力要求
 
@@ -184,70 +184,14 @@
 
 ## 8. 开放事项
 
-<a id="open-001"></a>
-### OPEN-001 消息与联系双首页 IA 成立
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：底栏仍为首页/精品/添加/消息/我，消息模块内可进入独立消息页和联系页状态。
-- 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
-
-<a id="open-002"></a>
-### OPEN-002 消息首页五类筛选由真实收件箱与通知 inbox 驱动
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：全部、未读、群聊、私聊筛选来自 ChatInbox 或 MessageHomeProjection。
-- 完成判定：`SIT-002` 对应行为满足且真实测试 `spec_ref` 有效
-
-<a id="open-003"></a>
-### OPEN-003 联系首页聚合真实关系、圈子、群和交集
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：全部混排用户和群，按最近互动时间倒序。
-- 完成判定：`SIT-003` 对应行为满足且真实测试 `spec_ref` 有效
-
-<a id="open-004"></a>
-### OPEN-004 群聊天和聊天信息页使用同一 GroupHome 真相源
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：消息列表点击群直接进入聊天页，不先进入群主页。
-- 完成判定：`SIT-004` 对应行为满足且真实测试 `spec_ref` 有效
-
-<a id="open-005"></a>
-### OPEN-005 商用路径无 Mock、占位和本地业务拼接
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：生产包默认 Remote，无 Mock/Remote 切换入口。
-- 完成判定：`SIT-005` 对应行为满足且真实测试 `spec_ref` 有效
-
-<a id="open-006"></a>
-### OPEN-006 metadata/codegen/Remote DTO 与商用消息体系一致
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：MessageHome、ContactHome、GroupHome、IntersectionSummary、AppMessage 均有 metadata 真相源。
-- 完成判定：`SIT-006` 对应行为满足——MessageHome、ContactHome、GroupHome、IntersectionSummary、AppMessage 均有 metadata 真相源。
-- App RemoteRepository 只使用 codegen path/operation/surface/header。
-- 对象级 typed double 仅存在测试树，并与 Remote 返回同结构 DTO；环境 artifact 不可达。
-
 <a id="open-007"></a>
 ### OPEN-007 业务事件到设备通知的完整投递链
 
 - 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：业务事件、持久 inbox 和设备 push 任一断点都会造成用户看不到或重复看到通知。
-- 完成判定：`SIT-002` 对应通知 inbox 行为满足，且 [`message-reliability-foundation` SIT-003](../message-reliability-foundation/spec.md#sit-003) 的真实设备投递与打开直达证据有效。
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：仍缺 APNs/FCM 正式投递终态、失败重试/DLQ、同一候选 readback 和 Android/iPhone 物理设备打开直达。站内持久 inbox 已有实现与局部证据，但该外部链未确认时必须与直属 [`interaction-notification-inbox OPEN-001`](./interaction-notification-inbox/spec.md#open-001) 及 [`AppRoot OPEN-008`](../../spec.md#open-008) 同时保持阻断，不能用站内可读、模拟器或 local/API Green 改写为商用可达。
+- 完成判定：`SIT-002` 对应通知 inbox 行为满足，且 [`message-reliability-foundation` SIT-003](../message-reliability-foundation/spec.md#sit-003) 与 [AppRoot 消息可靠 user_acceptance](../../spec.md#uat-010) 的真实 Provider、双账号、双物理设备投递和打开直达证据绑定同一 source/candidate/package ResultBundle；外部 Provider 或任一物理设备缺失时继续 block。
 
 <a id="open-008"></a>
 ### OPEN-008 群空间首页四宫格剩共享 Skill 挂载
@@ -263,3 +207,13 @@
   已闭合部分（证据见 `chat_group_space_entries__local_contract_test.dart`）：活动群（gatheringId 绑定）能力宫格展示「活动」格直达 Gathering Board；
   普通群不展示活动格（三类群差异化）；成员网格新增搜索入口格直达成员搜索页；`gatheringBoard` 与 `chatMemberSearch` 两个无入口路由已消灭。
 - 完成判定：`SIT-004` 对应行为满足（含相册/文件承接与三类群差异化展示）且真实测试 `spec_ref` 有效。
+
+<a id="open-009"></a>
+### OPEN-009 商用消息体系跨 Story 集成准出
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：尚缺把消息/联系双首页、五类筛选、关系投影、GroupHome、Remote-only 失败语义与 metadata/codegen 结果绑定到同一候选的跨 Story 集成证据。本 OPEN 只拥有 L2 `SIT-001..SIT-006` 的组合准出，不复制各 L3 的实现缺口或完成状态。
+- 完成判定：`SIT-001`、`SIT-002`、`SIT-003`、`SIT-004`、`SIT-005` 与 `SIT-006` 的全部结果子句由同一候选的真实 api_integration/user_acceptance 直接 `spec_ref`，且下列最低 owner 的 OPEN 均按各自完成判定关闭。
+- 依赖：[`message-home-commercial-ia OPEN-001`](./message-home-commercial-ia/spec.md#open-001)、[`contact-home-commercial-ia OPEN-001`](./contact-home-commercial-ia/spec.md#open-001)、[`message-home-filter-contract OPEN-001`](./message-home-filter-contract/spec.md#open-001)、[`contact-home-relationship-projection OPEN-001`](./contact-home-relationship-projection/spec.md#open-001)、[`group-home-chat-info-contract OPEN-001`](./group-home-chat-info-contract/spec.md#open-001) 与 [`commercial-remote-only-message-system OPEN-001`](./commercial-remote-only-message-system/spec.md#open-001)。Push 外送仍由本层 `OPEN-007` 与直属 Story 独立阻断，不并入本 OPEN 重复登记。

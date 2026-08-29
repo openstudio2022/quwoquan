@@ -12,6 +12,10 @@ fields:
   - {name: authorId, type: string, nullable: true}
   - {name: authorDisplayName, type: string, nullable: true}
   - {name: authorAvatarUrl, type: string, nullable: true}
+  # 作者头像的媒体资产标识与交付访问模式（DEC-033）：signed_grant 时 App 以
+  # avatarAssetId 换取短签，禁止以 authorId 冒充媒体资产标识。
+  - {name: authorAvatarAssetId, type: string, nullable: true}
+  - {name: authorAvatarAccessMode, type: enum, enum_ref: MediaDeliveryAccessMode, nullable: true}
   - {name: authorBackgroundUrl, type: string, nullable: true}
   - {name: authorRoleLabel, type: string, nullable: true}
   - {name: authorIdentityTags, type: '[]string', nullable: true}
@@ -26,6 +30,9 @@ fields:
   - {name: videoUrl, type: string, nullable: true}
   - {name: mediaAssetId, type: string, nullable: true}
   - {name: mediaAssetVersion, type: int, nullable: true}
+  # 逐媒体交付绑定（DEC-033）：每条媒体（含逐图与 video 主媒体/poster）携带
+  # 资产标识与 accessMode；为空时端按 mediaUrls/videoUrl 派生 public 单一序列。
+  - {name: mediaItems, type: '[]PostMediaItem', nullable: true}
   - {name: hlsCmafMasterManifestUrl, type: string, nullable: true}
   - {name: hlsCmafDescriptorVersion, type: int, nullable: true}
   - {name: thumbnailUrl, type: string, nullable: true}

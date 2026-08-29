@@ -639,7 +639,7 @@ _PLATFORM_CONFIG_JSON = r'''{
     },
     {
       "default": "http://user-service:18081",
-      "key": "sys.api-edge.user_service.account_security.base_url",
+      "key": "sys.api-edge.user_account_security_authority.base_url",
       "reload": "restart",
       "rollout": "progressive",
       "scope": "workload",
@@ -648,23 +648,7 @@ _PLATFORM_CONFIG_JSON = r'''{
     },
     {
       "default": 500,
-      "key": "sys.api-edge.user_service.account_security.timeout_ms",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "int"
-    },
-    {
-      "key": "sys.assistant-service.account_security_authority.base_url",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "key": "sys.assistant-service.account_security_authority.timeout_ms",
+      "key": "sys.api-edge.user_account_security_authority.timeout_ms",
       "reload": "restart",
       "rollout": "progressive",
       "scope": "workload",
@@ -911,7 +895,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "int"
     },
     {
-      "default": "standalone",
       "key": "sys.assistant-service.redis.general.mode",
       "reload": "restart",
       "rollout": "progressive",
@@ -1009,7 +992,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "int"
     },
     {
-      "default": "standalone",
       "key": "sys.assistant-service.redis.rec.mode",
       "reload": "restart",
       "rollout": "progressive",
@@ -1124,6 +1106,22 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "string"
     },
     {
+      "key": "sys.assistant-service.user_account_security_authority.base_url",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.assistant-service.user_account_security_authority.timeout_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
       "default": "",
       "key": "sys.assistant-service.user_profile.base_url",
       "reload": "restart",
@@ -1197,7 +1195,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "string"
     },
     {
-      "default": "standalone",
       "key": "sys.chat-service.redis.general.mode",
       "reload": "restart",
       "rollout": "progressive",
@@ -1215,7 +1212,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "string"
     },
     {
-      "default": "standalone",
       "key": "sys.chat-service.redis.realtime.mode",
       "reload": "restart",
       "rollout": "progressive",
@@ -1233,21 +1229,12 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "string"
     },
     {
-      "default": "standalone",
       "key": "sys.chat-service.redis.reliable_task.mode",
       "reload": "restart",
       "rollout": "progressive",
       "scope": "workload",
       "sensitive": false,
       "type": "string"
-    },
-    {
-      "key": "sys.chat-service.runtime.auth.account_security_authority.timeout_ms",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "int"
     },
     {
       "key": "sys.chat-service.runtime.media.group_avatar_cdn_base_url",
@@ -1357,6 +1344,22 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "string"
     },
     {
+      "key": "sys.chat-service.user_account_security_authority.base_url",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.chat-service.user_account_security_authority.timeout_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
       "default": 0,
       "key": "sys.circle-service.es.embeddingDims",
       "reload": "restart",
@@ -1456,7 +1459,7 @@ _PLATFORM_CONFIG_JSON = r'''{
     },
     {
       "default": "",
-      "key": "sys.circle-service.redis.addr",
+      "key": "sys.circle-service.redis.general.addr",
       "reload": "restart",
       "rollout": "progressive",
       "scope": "workload",
@@ -1465,7 +1468,7 @@ _PLATFORM_CONFIG_JSON = r'''{
     },
     {
       "default": 0,
-      "key": "sys.circle-service.redis.db",
+      "key": "sys.circle-service.redis.general.db",
       "reload": "restart",
       "rollout": "progressive",
       "scope": "workload",
@@ -1473,7 +1476,15 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "int"
     },
     {
-      "key": "sys.circle-service.redis.password",
+      "key": "sys.circle-service.redis.general.mode",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.circle-service.redis.general.password",
       "reload": "restart",
       "rollout": "progressive",
       "scope": "workload",
@@ -1592,22 +1603,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "scope": "environment",
       "type": "int",
       "ui_editable": false
-    },
-    {
-      "key": "sys.content-service.accountSecurityAuthority.baseUrl",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "key": "sys.content-service.accountSecurityAuthority.timeoutMs",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "int"
     },
     {
       "default": 500,
@@ -2138,7 +2133,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "int"
     },
     {
-      "default": "standalone",
       "key": "sys.content-service.redis.general.mode",
       "reload": "restart",
       "rollout": "progressive",
@@ -2236,7 +2230,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "int"
     },
     {
-      "default": "standalone",
       "key": "sys.content-service.redis.realtime.mode",
       "reload": "restart",
       "rollout": "progressive",
@@ -2334,7 +2327,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "int"
     },
     {
-      "default": "standalone",
       "key": "sys.content-service.redis.rec.mode",
       "reload": "restart",
       "rollout": "progressive",
@@ -2438,6 +2430,22 @@ _PLATFORM_CONFIG_JSON = r'''{
       "scope": "workload",
       "sensitive": false,
       "type": "string"
+    },
+    {
+      "key": "sys.content-service.user_account_security_authority.base_url",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.content-service.user_account_security_authority.timeout_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
     },
     {
       "default": 120,
@@ -2605,7 +2613,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "int"
     },
     {
-      "default": "standalone",
       "key": "sys.entity-service.redis.general.mode",
       "reload": "restart",
       "rollout": "progressive",
@@ -2676,104 +2683,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "bool"
     },
     {
-      "default": "",
-      "key": "sys.entity-service.redis.rec.addr",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": [],
-      "key": "sys.entity-service.redis.rec.addrs",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "list"
-    },
-    {
-      "default": 0,
-      "key": "sys.entity-service.redis.rec.db",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "int"
-    },
-    {
-      "default": "standalone",
-      "key": "sys.entity-service.redis.rec.mode",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "key": "sys.entity-service.redis.rec.password",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": true,
-      "type": "string"
-    },
-    {
-      "default": 500,
-      "key": "sys.entity-service.redis.rec.pool.dial_timeout_ms",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "int"
-    },
-    {
-      "default": 0,
-      "key": "sys.entity-service.redis.rec.pool.min_idle",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "int"
-    },
-    {
-      "default": 100,
-      "key": "sys.entity-service.redis.rec.pool.read_timeout_ms",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "int"
-    },
-    {
-      "default": 0,
-      "key": "sys.entity-service.redis.rec.pool.size",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "int"
-    },
-    {
-      "default": 100,
-      "key": "sys.entity-service.redis.rec.pool.write_timeout_ms",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "int"
-    },
-    {
-      "default": false,
-      "key": "sys.entity-service.redis.rec.tls",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "bool"
-    },
-    {
       "default": ":18084",
       "key": "sys.entity-service.service.http.addr",
       "reload": "restart",
@@ -2810,22 +2719,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "scope": "environment",
       "type": "string",
       "ui_editable": false
-    },
-    {
-      "key": "sys.integration-service.account_security_authority.base_url",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "key": "sys.integration-service.account_security_authority.timeout_ms",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "int"
     },
     {
       "default": 30.6586,
@@ -3025,7 +2918,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "int"
     },
     {
-      "default": "standalone",
       "key": "sys.integration-service.redis.general.mode",
       "reload": "restart",
       "rollout": "progressive",
@@ -3123,7 +3015,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "int"
     },
     {
-      "default": "standalone",
       "key": "sys.integration-service.redis.rec.mode",
       "reload": "restart",
       "rollout": "progressive",
@@ -3203,6 +3094,22 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "string"
     },
     {
+      "key": "sys.integration-service.user_account_security_authority.base_url",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.integration-service.user_account_security_authority.timeout_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
       "key": "sys.intersection_text",
       "key_namespace": true,
       "owner": "platform-ops",
@@ -3212,22 +3119,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "scope": "environment",
       "type": "string",
       "ui_editable": false
-    },
-    {
-      "key": "sys.notification-service.accountSecurityAuthority.baseUrl",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "key": "sys.notification-service.accountSecurityAuthority.timeoutMs",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "int"
     },
     {
       "default": 500,
@@ -3272,6 +3163,15 @@ _PLATFORM_CONFIG_JSON = r'''{
       "scope": "workload",
       "sensitive": true,
       "type": "string"
+    },
+    {
+      "default": true,
+      "key": "sys.notification-service.notification.chat_offline_push.enabled",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "bool"
     },
     {
       "default": "notification-user-account-closed-projector",
@@ -3347,7 +3247,7 @@ _PLATFORM_CONFIG_JSON = r'''{
     },
     {
       "default": "redis:6379",
-      "key": "sys.notification-service.redis.addr",
+      "key": "sys.notification-service.redis.general.addr",
       "reload": "restart",
       "rollout": "progressive",
       "scope": "workload",
@@ -3356,7 +3256,7 @@ _PLATFORM_CONFIG_JSON = r'''{
     },
     {
       "default": 1,
-      "key": "sys.notification-service.redis.general_db",
+      "key": "sys.notification-service.redis.general.db",
       "reload": "restart",
       "rollout": "progressive",
       "scope": "workload",
@@ -3364,7 +3264,15 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "int"
     },
     {
-      "key": "sys.notification-service.redis.password",
+      "key": "sys.notification-service.redis.general.mode",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.notification-service.redis.general.password",
       "reload": "restart",
       "rollout": "progressive",
       "scope": "workload",
@@ -3372,13 +3280,56 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "string"
     },
     {
+      "default": false,
+      "key": "sys.notification-service.redis.general.tls",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "bool"
+    },
+    {
+      "default": "redis:6379",
+      "key": "sys.notification-service.redis.realtime.addr",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
       "default": 4,
-      "key": "sys.notification-service.redis.realtime_db",
+      "key": "sys.notification-service.redis.realtime.db",
       "reload": "restart",
       "rollout": "progressive",
       "scope": "workload",
       "sensitive": false,
       "type": "int"
+    },
+    {
+      "key": "sys.notification-service.redis.realtime.mode",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.notification-service.redis.realtime.password",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": true,
+      "type": "string"
+    },
+    {
+      "default": false,
+      "key": "sys.notification-service.redis.realtime.tls",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "bool"
     },
     {
       "default": ":18087",
@@ -3388,6 +3339,22 @@ _PLATFORM_CONFIG_JSON = r'''{
       "scope": "workload",
       "sensitive": false,
       "type": "string"
+    },
+    {
+      "key": "sys.notification-service.user_account_security_authority.base_url",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.notification-service.user_account_security_authority.timeout_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
     },
     {
       "default": "http://user-service:18081",
@@ -3409,6 +3376,14 @@ _PLATFORM_CONFIG_JSON = r'''{
     {
       "default": "redis:6379",
       "key": "sys.platform-ops-service.redis.general.addr",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.platform-ops-service.redis.general.mode",
       "reload": "restart",
       "rollout": "progressive",
       "scope": "workload",
@@ -3490,22 +3465,6 @@ _PLATFORM_CONFIG_JSON = r'''{
     {
       "default": 3000,
       "key": "sys.product-ops-service.account_enforcement.request_timeout_ms",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "int"
-    },
-    {
-      "key": "sys.product-ops-service.account_security_authority.base_url",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "key": "sys.product-ops-service.account_security_authority.timeout_ms",
       "reload": "restart",
       "rollout": "progressive",
       "scope": "workload",
@@ -3861,7 +3820,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "int"
     },
     {
-      "default": "standalone",
       "key": "sys.product-ops-service.redis.general.mode",
       "reload": "restart",
       "rollout": "progressive",
@@ -3959,7 +3917,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "int"
     },
     {
-      "default": "standalone",
       "key": "sys.product-ops-service.redis.rec.mode",
       "reload": "restart",
       "rollout": "progressive",
@@ -4066,6 +4023,22 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "string"
     },
     {
+      "key": "sys.product-ops-service.user_account_security_authority.base_url",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.product-ops-service.user_account_security_authority.timeout_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
       "default": "redis:6379",
       "key": "sys.realtime-gateway.redis.realtime.addr",
       "reload": "restart",
@@ -4084,7 +4057,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "list"
     },
     {
-      "default": "standalone",
       "key": "sys.realtime-gateway.redis.realtime.mode",
       "reload": "restart",
       "rollout": "progressive",
@@ -4110,7 +4082,7 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "string"
     },
     {
-      "key": "sys.realtime-gateway.user_service.account_security.base_url",
+      "key": "sys.realtime-gateway.user_account_security_authority.base_url",
       "reload": "restart",
       "rollout": "progressive",
       "scope": "workload",
@@ -4118,7 +4090,7 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "string"
     },
     {
-      "key": "sys.realtime-gateway.user_service.account_security.timeout_ms",
+      "key": "sys.realtime-gateway.user_account_security_authority.timeout_ms",
       "reload": "restart",
       "rollout": "progressive",
       "scope": "workload",
@@ -4180,7 +4152,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "int"
     },
     {
-      "default": "standalone",
       "key": "sys.recommendation-service.redis.general.mode",
       "reload": "restart",
       "rollout": "progressive",
@@ -4278,7 +4249,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "int"
     },
     {
-      "default": "standalone",
       "key": "sys.recommendation-service.redis.rec.mode",
       "reload": "restart",
       "rollout": "progressive",
@@ -4445,7 +4415,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "int"
     },
     {
-      "default": "standalone",
       "key": "sys.rtc-service.redis.general.mode",
       "reload": "restart",
       "rollout": "progressive",
@@ -4472,7 +4441,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "int"
     },
     {
-      "default": "standalone",
       "key": "sys.rtc-service.redis.realtime.mode",
       "reload": "restart",
       "rollout": "progressive",
@@ -4499,22 +4467,6 @@ _PLATFORM_CONFIG_JSON = r'''{
     },
     {
       "key": "sys.rtc-service.user_account_security_authority.timeout_ms",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "int"
-    },
-    {
-      "key": "sys.search-service.accountSecurityAuthority.baseUrl",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "key": "sys.search-service.accountSecurityAuthority.timeoutMs",
       "reload": "restart",
       "rollout": "progressive",
       "scope": "workload",
@@ -4612,6 +4564,23 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "list"
     },
     {
+      "default": "quwoquan",
+      "key": "sys.search-service.mongo.database",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.search-service.mongo.uri",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": true,
+      "type": "string"
+    },
+    {
       "default": 1.5,
       "key": "sys.search-service.ranking.termHeatBoost",
       "reload": "restart",
@@ -4648,7 +4617,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "int"
     },
     {
-      "default": "standalone",
       "key": "sys.search-service.redis.general.mode",
       "reload": "restart",
       "rollout": "progressive",
@@ -4746,7 +4714,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "int"
     },
     {
-      "default": "standalone",
       "key": "sys.search-service.redis.rec.mode",
       "reload": "restart",
       "rollout": "progressive",
@@ -4826,6 +4793,66 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "string"
     },
     {
+      "default": 256,
+      "key": "sys.search-service.serving.max_inflight",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 1024,
+      "key": "sys.search-service.serving.related_terms_cache_max",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 2000,
+      "key": "sys.search-service.serving.related_terms_cache_ttl_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "key": "sys.search-service.user_account_security_authority.base_url",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.search-service.user_account_security_authority.timeout_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": "quwoquan_tag",
+      "key": "sys.tag-service.mongo.database",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.tag-service.mongo.uri",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": true,
+      "type": "string"
+    },
+    {
       "default": "",
       "key": "sys.tag-service.redis.general.addr",
       "reload": "restart",
@@ -4853,7 +4880,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "int"
     },
     {
-      "default": "standalone",
       "key": "sys.tag-service.redis.general.mode",
       "reload": "restart",
       "rollout": "progressive",
@@ -4951,7 +4977,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "int"
     },
     {
-      "default": "standalone",
       "key": "sys.tag-service.redis.rec.mode",
       "reload": "restart",
       "rollout": "progressive",
@@ -5226,7 +5251,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "int"
     },
     {
-      "default": "standalone",
       "key": "sys.user-service.redis.general.mode",
       "reload": "restart",
       "rollout": "progressive",

@@ -219,7 +219,7 @@ package；Prod 只执行 fail-closed contract、artifact isolation、OCI evidenc
 | **PROD_{EDGE,SERVICE}_SSH_KEY_ISSUER**（Environment variable） | 凭据签发方标识 |
 | **PROD_{EDGE,SERVICE}_SSH_KEY_EXPIRES_AT**（Environment variable） | 带时区的凭据到期时间；过期或缺失会阻断 hosted soak receipt |
 | **PROD_SERVICE_NETWORK**（prod-hosted 主机变量） | Prometheus/Alertmanager/OTel Collector 加入的 service plane 共享 rootless network 名称 |
-| **OTEL_EXPORTER_OTLP_ENDPOINT**（prod-hosted 主机变量，可选） | 服务 trace 的 OTLP/HTTP 接收端（`host:port`）；未设置时使用共享网络内 `otel-collector:4318` |
+| **OTEL_EXPORTER_OTLP_ENDPOINT**（prod-hosted 主机变量，可选） | 服务 trace 的 OTLP/HTTP 接收端，必须是带 scheme 的绝对 URL（`http://host:port` 或 `https://host:port`，scheme 决定是否加密传输，缺 scheme 服务判否）；未设置时使用共享网络内 `http://otel-collector:4318` |
 | **PROD_OPS_OIDC_ISSUER**（Environment variable） | 运维运营 Portal 的生产 OIDC issuer（`build_portal_release.py` 构建期注入） |
 | **PROD_OPS_OIDC_CLIENT_ID**（Environment variable） | Portal 生产 OIDC 公共 client id（SPA，非机密） |
 | **PROD_OPS_OIDC_AUDIENCE**（Environment variable） | Portal 与 `product-ops-service` / `platform-ops-service` 共用的生产控制面 API audience |

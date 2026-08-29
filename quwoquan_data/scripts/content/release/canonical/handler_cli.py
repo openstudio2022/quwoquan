@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 
 from content.release.canonical import handler as owner
+from core.control_types import PoolObjectRetirementReason
 
 
 def register_parser(subparsers: argparse._SubParsersAction) -> None:
@@ -59,6 +60,29 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     pool_build.add_argument("--publish-root")
     pool_build.add_argument("--release-root")
     pool_build.set_defaults(handler=owner.handle_pool_release_build)
+
+    pool_precheck = commands.add_parser(
+        "pool-precheck",
+        help="只读复用 pool-build 真实判据链判定可选中集；不写任何 release 产物",
+    )
+    pool_precheck.add_argument(
+        "--milestone",
+        choices=("M100", "M1000", "M10000"),
+        required=True,
+    )
+    pool_precheck.add_argument(
+        "--release-class",
+        choices=("research", "commercial"),
+        default="research",
+        help="载体判据段的发布类别；milestone 段按契约恒为 research",
+    )
+    pool_precheck.add_argument(
+        "--details",
+        action="store_true",
+        help="输出逐条可选中 postRef 与全部 typed 排除原因",
+    )
+    pool_precheck.add_argument("--publish-root")
+    pool_precheck.set_defaults(handler=owner.handle_pool_precheck)
 
     pool_inspect = commands.add_parser(
         "pool-inspect",
@@ -227,6 +251,47 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     pool_backfill_repair.set_defaults(
         handler=owner.handle_pool_attribution_repair
     )
+
+    pool_object = commands.add_parser(
+        "pool-object",
+        help="对池内单个对象的逐对象操作",
+    )
+    pool_object_actions = pool_object.add_subparsers(
+        dest="pool_object_action", required=True
+    )
+    pool_object_retire = pool_object_actions.add_parser(
+        "retire",
+        help=(
+            "为已被 discovery 层判否且无入池事务回执的历史对象写 create-once "
+            "退役回执；只写回执，不改写 manifest、generator 与审核回执"
+        ),
+    )
+    pool_object_retire.add_argument(
+        "--object-type", choices=("homepage", "content"), required=True
+    )
+    pool_object_retire.add_argument(
+        "--object-ref",
+        required=True,
+        help="对象在 posts/ 或 entities/ 下的相对 ref",
+    )
+    pool_object_retire.add_argument(
+        "--reason",
+        choices=tuple(member.value for member in PoolObjectRetirementReason),
+        required=True,
+    )
+    pool_object_retire.add_argument(
+        "--retired-at",
+        required=True,
+        metavar="YYYY-MM-DDTHH:MM:SSZ",
+        help="显式退役时刻；create-once 重入必须复算出同一份回执，故不读进程时钟",
+    )
+    pool_object_retire.add_argument("--publish-root")
+    pool_object_retire.add_argument(
+        "--apply",
+        action="store_true",
+        help="显式写入；省略时只校验判据并输出 plan 结果",
+    )
+    pool_object_retire.set_defaults(handler=owner.handle_pool_object_retire)
 
     object_transaction = commands.add_parser(
         "object-transaction",
@@ -475,6 +540,20 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     gc_apply.add_argument("--publish-root")
     gc_apply.add_argument("--release-root")
     gc_apply.set_defaults(handler=owner.handle_gc_apply)
+    gc_backfill = gc_actions.add_parser(
+        "backfill-tombstones",
+        help="为墓碑协议之前已被移除的被引用 execution 补写终态墓碑",
+    )
+    gc_backfill.add_argument("--backfill-id", required=True)
+    gc_backfill.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="只列出无终态的 execution 引用，不写任何墓碑",
+    )
+    gc_backfill.add_argument("--output-root")
+    gc_backfill.add_argument("--publish-root")
+    gc_backfill.add_argument("--release-root")
+    gc_backfill.set_defaults(handler=owner.handle_gc_backfill_tombstones)
 
     scale_evidence = commands.add_parser(
         "campaign-scale-evidence",

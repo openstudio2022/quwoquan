@@ -16,31 +16,41 @@ class AssistantRunStreamStateWire {
   final String resumeToken;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'lastSeq': lastSeq,
-        'completed': completed,
-        'resumeToken': resumeToken,
-      };
+    'lastSeq': lastSeq,
+    'completed': completed,
+    'resumeToken': resumeToken,
+  };
 
   factory AssistantRunStreamStateWire.fromJson(Map<String, dynamic> json) {
-    const allowedFields = <String>{
-      'lastSeq',
-      'completed',
-      'resumeToken',
-    };
+    const allowedFields = <String>{'lastSeq', 'completed', 'resumeToken'};
     final unknownFields = json.keys
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('AssistantRunStreamStateWire response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'AssistantRunStreamStateWire response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (json.containsKey('lastSeq') && json['lastSeq'] != null && (json['lastSeq'] is! num)) {
-      throw const FormatException('AssistantRunStreamStateWire field lastSeq has an invalid wire value');
+    if (json.containsKey('lastSeq') &&
+        json['lastSeq'] != null &&
+        (json['lastSeq'] is! num)) {
+      throw const FormatException(
+        'AssistantRunStreamStateWire field lastSeq has an invalid wire value',
+      );
     }
-    if (json.containsKey('completed') && json['completed'] != null && (json['completed'] is! bool)) {
-      throw const FormatException('AssistantRunStreamStateWire field completed has an invalid wire value');
+    if (json.containsKey('completed') &&
+        json['completed'] != null &&
+        (json['completed'] is! bool)) {
+      throw const FormatException(
+        'AssistantRunStreamStateWire field completed has an invalid wire value',
+      );
     }
-    if (json.containsKey('resumeToken') && json['resumeToken'] != null && (json['resumeToken'] is! String)) {
-      throw const FormatException('AssistantRunStreamStateWire field resumeToken has an invalid wire value');
+    if (json.containsKey('resumeToken') &&
+        json['resumeToken'] != null &&
+        (json['resumeToken'] is! String)) {
+      throw const FormatException(
+        'AssistantRunStreamStateWire field resumeToken has an invalid wire value',
+      );
     }
     return AssistantRunStreamStateWire(
       lastSeq: (json['lastSeq'] as num?)?.toInt() ?? 0,
@@ -84,18 +94,18 @@ class AssistantRunEnvelopeWire {
   final String completedAt;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'runId': runId,
-        'sessionId': sessionId,
-        'status': status,
-        'reasoningProfile': reasoningProfile,
-        'goal': goal,
-        'terminalSnapshot': terminalSnapshot?.toJson(),
-        'traceId': traceId,
-        'revision': revision,
-        'streamState': streamState.toJson(),
-        'createdAt': createdAt,
-        'completedAt': completedAt,
-      };
+    'runId': runId,
+    'sessionId': sessionId,
+    'status': status,
+    'reasoningProfile': reasoningProfile,
+    'goal': goal,
+    'terminalSnapshot': terminalSnapshot?.toJson(),
+    'traceId': traceId,
+    'revision': revision,
+    'streamState': streamState.toJson(),
+    'createdAt': createdAt,
+    'completedAt': completedAt,
+  };
 
   factory AssistantRunEnvelopeWire.fromJson(Map<String, dynamic> json) {
     const allowedFields = <String>{
@@ -115,56 +125,110 @@ class AssistantRunEnvelopeWire {
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('AssistantRunEnvelopeWire response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'AssistantRunEnvelopeWire response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (!json.containsKey('runId') || json['runId'] == null || (json['runId'] is! String)) {
-      throw const FormatException('AssistantRunEnvelopeWire field runId has an invalid wire value');
+    if (!json.containsKey('runId') ||
+        json['runId'] == null ||
+        (json['runId'] is! String)) {
+      throw const FormatException(
+        'AssistantRunEnvelopeWire field runId has an invalid wire value',
+      );
     }
-    if (!json.containsKey('sessionId') || json['sessionId'] == null || (json['sessionId'] is! String)) {
-      throw const FormatException('AssistantRunEnvelopeWire field sessionId has an invalid wire value');
+    if (!json.containsKey('sessionId') ||
+        json['sessionId'] == null ||
+        (json['sessionId'] is! String)) {
+      throw const FormatException(
+        'AssistantRunEnvelopeWire field sessionId has an invalid wire value',
+      );
     }
-    if (json.containsKey('status') && json['status'] != null && (json['status'] is! String)) {
-      throw const FormatException('AssistantRunEnvelopeWire field status has an invalid wire value');
+    if (json.containsKey('status') &&
+        json['status'] != null &&
+        (json['status'] is! String)) {
+      throw const FormatException(
+        'AssistantRunEnvelopeWire field status has an invalid wire value',
+      );
     }
-    if (json.containsKey('reasoningProfile') && json['reasoningProfile'] != null && (json['reasoningProfile'] is! String)) {
-      throw const FormatException('AssistantRunEnvelopeWire field reasoningProfile has an invalid wire value');
+    if (json.containsKey('reasoningProfile') &&
+        json['reasoningProfile'] != null &&
+        (json['reasoningProfile'] is! String)) {
+      throw const FormatException(
+        'AssistantRunEnvelopeWire field reasoningProfile has an invalid wire value',
+      );
     }
-    if (json.containsKey('goal') && json['goal'] != null && (json['goal'] is! String)) {
-      throw const FormatException('AssistantRunEnvelopeWire field goal has an invalid wire value');
+    if (json.containsKey('goal') &&
+        json['goal'] != null &&
+        (json['goal'] is! String)) {
+      throw const FormatException(
+        'AssistantRunEnvelopeWire field goal has an invalid wire value',
+      );
     }
-    if (json.containsKey('terminalSnapshot') && json['terminalSnapshot'] != null && (json['terminalSnapshot'] is! Map)) {
-      throw const FormatException('AssistantRunEnvelopeWire field terminalSnapshot has an invalid wire value');
+    if (json.containsKey('terminalSnapshot') &&
+        json['terminalSnapshot'] != null &&
+        (json['terminalSnapshot'] is! Map)) {
+      throw const FormatException(
+        'AssistantRunEnvelopeWire field terminalSnapshot has an invalid wire value',
+      );
     }
-    if (json.containsKey('traceId') && json['traceId'] != null && (json['traceId'] is! String)) {
-      throw const FormatException('AssistantRunEnvelopeWire field traceId has an invalid wire value');
+    if (json.containsKey('traceId') &&
+        json['traceId'] != null &&
+        (json['traceId'] is! String)) {
+      throw const FormatException(
+        'AssistantRunEnvelopeWire field traceId has an invalid wire value',
+      );
     }
-    if (json.containsKey('revision') && json['revision'] != null && (json['revision'] is! num)) {
-      throw const FormatException('AssistantRunEnvelopeWire field revision has an invalid wire value');
+    if (json.containsKey('revision') &&
+        json['revision'] != null &&
+        (json['revision'] is! num)) {
+      throw const FormatException(
+        'AssistantRunEnvelopeWire field revision has an invalid wire value',
+      );
     }
-    if (json.containsKey('streamState') && json['streamState'] != null && (json['streamState'] is! Map)) {
-      throw const FormatException('AssistantRunEnvelopeWire field streamState has an invalid wire value');
+    if (json.containsKey('streamState') &&
+        json['streamState'] != null &&
+        (json['streamState'] is! Map)) {
+      throw const FormatException(
+        'AssistantRunEnvelopeWire field streamState has an invalid wire value',
+      );
     }
-    if (!json.containsKey('createdAt') || json['createdAt'] == null || (json['createdAt'] is! String)) {
-      throw const FormatException('AssistantRunEnvelopeWire field createdAt has an invalid wire value');
+    if (!json.containsKey('createdAt') ||
+        json['createdAt'] == null ||
+        (json['createdAt'] is! String)) {
+      throw const FormatException(
+        'AssistantRunEnvelopeWire field createdAt has an invalid wire value',
+      );
     }
-    if (json.containsKey('completedAt') && json['completedAt'] != null && (json['completedAt'] is! String)) {
-      throw const FormatException('AssistantRunEnvelopeWire field completedAt has an invalid wire value');
+    if (json.containsKey('completedAt') &&
+        json['completedAt'] != null &&
+        (json['completedAt'] is! String)) {
+      throw const FormatException(
+        'AssistantRunEnvelopeWire field completedAt has an invalid wire value',
+      );
     }
     return AssistantRunEnvelopeWire(
       runId: (json['runId'] as String?)?.trim() ?? "",
       sessionId: (json['sessionId'] as String?)?.trim() ?? "",
       status: (json['status'] as String?)?.trim() ?? "queued",
-      reasoningProfile: (json['reasoningProfile'] as String?)?.trim() ?? "balanced",
+      reasoningProfile:
+          (json['reasoningProfile'] as String?)?.trim() ?? "balanced",
       goal: (json['goal'] as String?)?.trim() ?? "",
-      terminalSnapshot: json['terminalSnapshot'] is Map ? AssistantRunTerminalSnapshotView.fromJson((json['terminalSnapshot'] as Map).cast<String, dynamic>()) : null,
+      terminalSnapshot: json['terminalSnapshot'] is Map
+          ? AssistantRunTerminalSnapshotView.fromJson(
+              (json['terminalSnapshot'] as Map).cast<String, dynamic>(),
+            )
+          : null,
       traceId: (json['traceId'] as String?)?.trim() ?? "",
       revision: (json['revision'] as num?)?.toInt() ?? 0,
-      streamState: json['streamState'] is Map ? AssistantRunStreamStateWire.fromJson((json['streamState'] as Map).cast<String, dynamic>()) : const AssistantRunStreamStateWire(),
+      streamState: json['streamState'] is Map
+          ? AssistantRunStreamStateWire.fromJson(
+              (json['streamState'] as Map).cast<String, dynamic>(),
+            )
+          : const AssistantRunStreamStateWire(),
       createdAt: (json['createdAt'] as String?)?.trim() ?? "",
       completedAt: (json['completedAt'] as String?)?.trim() ?? "",
     );
   }
-
 }
 
 class AssistantRunEnvelopeWireFields {
@@ -181,10 +245,11 @@ class AssistantRunEnvelopeWireFields {
   static const String completedAt = 'completedAt';
 }
 
-
 AssistantRunEnvelopeWire decodeAssistantRunEnvelopeWire(Object? response) {
   if (response is! Map) {
-    throw const FormatException('AssistantRunEnvelopeWire response must be an object');
+    throw const FormatException(
+      'AssistantRunEnvelopeWire response must be an object',
+    );
   }
   return AssistantRunEnvelopeWire.fromJson(response.cast<String, dynamic>());
 }

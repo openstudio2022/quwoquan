@@ -55,6 +55,14 @@ def _frozen_capacity() -> dict[str, int]:
     }
 
 
+def _frozen_liveness() -> dict[str, int]:
+    """存活阈值与容量数值同源冻结，各自取值互不挪用。"""
+    return {
+        "sourceDiscoveryHeartbeatIntervalSeconds": 30,
+        "sourceDiscoveryHeartbeatStaleAfterSeconds": 90,
+    }
+
+
 def _receipt(**overrides: Any) -> dict[str, Any]:
     receipt: dict[str, Any] = {
         "schema": "quwoquan_data.governed_capacity_calibration_receipt",
@@ -67,6 +75,7 @@ def _receipt(**overrides: Any) -> dict[str, Any]:
             "providerTier": _PROVIDER_TIER,
         },
         "frozenCapacity": _frozen_capacity(),
+        "frozenLiveness": _frozen_liveness(),
         "calibratedAt": "2026-08-16T00:00:00Z",
     }
     receipt.update(overrides)
@@ -184,6 +193,7 @@ class CapacityCalibrationLoaderTest(unittest.TestCase):
         binding = self._binding()
 
         self.assertEqual(binding["frozenCapacity"], self.receipt["frozenCapacity"])
+        self.assertEqual(binding["frozenLiveness"], self.receipt["frozenLiveness"])
         self.assertEqual(binding["applicability"], self.receipt["applicability"])
         self.assertEqual(binding["calibrationId"], self.receipt["calibrationId"])
         self.assertEqual(
@@ -249,6 +259,29 @@ class CapacityCalibrationLoaderTest(unittest.TestCase):
             lease_deadline_epoch_seconds(binding, now_epoch_seconds=late),
             deadline,
         )
+
+    def test_missing_frozen_liveness_fails_closed(self) -> None:
+        """存活阈值缺席即拒绝冻结，不从容量上限或单对象窗口挪一个数出来。"""
+        receipt = _receipt()
+        del receipt["frozenLiveness"]
+        receipt["receiptDigest"] = _self_digest(receipt)
+
+        with self.assertRaises(CapacityCalibrationError) as caught:
+            self._binding(receipt=receipt)
+
+        self.assertIn("frozenLiveness", str(caught.exception))
+
+    def test_stale_after_must_exceed_the_heartbeat_interval(self) -> None:
+        """过期阈值不严格大于心跳间隔时判否：否则一次正常间隔就会被读成失联。"""
+        receipt = _receipt(
+            frozenLiveness={
+                "sourceDiscoveryHeartbeatIntervalSeconds": 30,
+                "sourceDiscoveryHeartbeatStaleAfterSeconds": 30,
+            }
+        )
+
+        with self.assertRaises(CapacityCalibrationError):
+            self._binding(receipt=receipt)
 
     def test_receipt_ref_must_stay_inside_the_evidence_tree(self) -> None:
         for ref in ("/etc/passwd", "../../escape.json", ""):

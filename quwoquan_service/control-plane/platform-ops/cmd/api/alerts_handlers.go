@@ -3,56 +3,46 @@ package main
 import (
 	"crypto/subtle"
 	"net/http"
-	"os"
 	"strings"
 
-	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
 )
 
-func writeControlPlaneUnauthorized(w http.ResponseWriter, r *http.Request, debugMessage string) {
-	rterr.WriteHTTPError(
-		w,
-		rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleGateway, rterr.KindUser, "unauthorized"),
-			"请先登录",
-			debugMessage,
-		),
-		rterr.HTTPWriteOptionsFromRequest(r),
-	)
-}
-
 const alertIngestTokenHeader = "X-Alert-Ingest-Token"
 
-// requireControlPlanePrincipal 是控制面对象完成 ContractGraph 登记前的迁移期
-// 底线：除 Alertmanager ingest（以专用 token 认证的机器推送）外，任何控制面
-// 路径都必须携带已验证 principal，禁止匿名触达。
-func requireControlPlanePrincipal(next http.Handler) http.Handler {
+// requireAlertIngestToken 是 Alertmanager webhook 的专用机器凭据边界。
+// 该 operation 的契约声明的是 service principal，但对侧只能携带静态 header
+// token，因此它留在 generated operation guard 之外并在此 fail-closed：
+// 未配置 token 直接拒绝，token 不匹配按未授权拒绝，绝不匿名放行。
+func (s *platformService) requireAlertIngestToken(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && r.URL.Path == "/control-plane/platform/alerts/ingest" {
-			expected := strings.TrimSpace(os.Getenv("ALERT_INGEST_TOKEN"))
-			if expected == "" {
-				rterr.WriteHTTPError(
-					w,
-					rterr.NewAppError(
-						rterr.NewCode(rterr.ModuleOps, rterr.KindSystem, "internal_error"),
-						"请求处理失败",
-						"ALERT_INGEST_TOKEN is not configured",
-					),
-					rterr.HTTPWriteOptionsFromRequest(r),
-				)
-				return
-			}
-			provided := strings.TrimSpace(r.Header.Get(alertIngestTokenHeader))
-			if subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) != 1 {
-				writeControlPlaneUnauthorized(w, r, "alert ingest token mismatch")
-				return
-			}
-			next.ServeHTTP(w, r)
+		if r.Method != http.MethodPost {
+			writeRuntimeNotFound(w, r)
 			return
 		}
-		if _, ok := rtauth.PrincipalFromContext(r.Context()); !ok {
-			writeControlPlaneUnauthorized(w, r, "verified operator principal is required")
+		if s.alertIngestToken == "" {
+			rterr.WriteHTTPError(
+				w,
+				rterr.NewAppError(
+					rterr.NewCode(rterr.ModuleOps, rterr.KindSystem, "internal_error"),
+					"请求处理失败",
+					"ALERT_INGEST_TOKEN is not configured",
+				),
+				rterr.HTTPWriteOptionsFromRequest(r),
+			)
+			return
+		}
+		provided := strings.TrimSpace(r.Header.Get(alertIngestTokenHeader))
+		if subtle.ConstantTimeCompare([]byte(provided), []byte(s.alertIngestToken)) != 1 {
+			rterr.WriteHTTPError(
+				w,
+				rterr.NewAppError(
+					rterr.NewCode(rterr.ModuleGateway, rterr.KindUser, "unauthorized"),
+					"请先登录",
+					"alert ingest token mismatch",
+				),
+				rterr.HTTPWriteOptionsFromRequest(r),
+			)
 			return
 		}
 		next.ServeHTTP(w, r)

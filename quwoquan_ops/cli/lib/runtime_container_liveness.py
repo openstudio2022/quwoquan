@@ -11,10 +11,10 @@ Health，把「启动过」和「现在还活着」分成两件事。真相源�
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
 import json
 import re
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from typing import Any
 
 # 必需容器退出或 unhealthy 时，App 编译安装前必须以该 typed blocker 阻断。
@@ -28,6 +28,8 @@ _PROJECT_LABEL = "com.docker.compose.project"
 _SERVICE_LABEL = "com.docker.compose.service"
 _DEPENDS_ON_LABEL = "com.docker.compose.depends_on"
 _ONE_SHOT_CONDITION = "service_completed_successfully"
+RUNTIME_ONE_SHOT_LABEL = "com.quwoquan.runtime.one-shot"
+RUNTIME_ONE_SHOT_LABEL_VALUE = "true"
 
 
 class ComposeProjectAbsent(ValueError):
@@ -123,8 +125,10 @@ class RuntimeLivenessReport:
     def issues(self) -> list[str]:
         if not self.containers:
             return [
-                f"Compose project {self.compose_project} owns no container; the "
-                "running startup receipt no longer describes anything alive"
+                (
+                    f"Compose project {self.compose_project} owns no container; the "
+                    "running startup receipt no longer describes anything alive"
+                )
             ]
         return [
             f"required container is not live: {item.describe()}"
@@ -141,7 +145,7 @@ def _parse_container_rows(payload: str) -> list[dict[str, Any]]:
             continue
         parsed = json.loads(candidate)
         if not isinstance(parsed, dict):
-            raise ValueError("docker ps row is not an object")
+            raise ValueError("docker ps row is not an object")  # noqa: TRY004
         rows.append(parsed)
     return rows
 
@@ -168,10 +172,10 @@ def _exit_code_from_status(status: str) -> int | None:
 def _declared_one_shot_containers(project: str, *, runner: Any) -> frozenset[str]:
     """取出被拓扑声明为一次性任务的容器名集合。
 
-    判据是 Compose 原生的 `condition: service_completed_successfully`：谁被
-    这样依赖，谁就是跑完即退的 init job。Compose 把这份依赖声明写进依赖方
-    容器的标签，所以真相源仍是 Docker 自身，不必再去加载 Compose 文件，也
-    不新增第二份运行台账。
+    判据同时消费容器自身的 canonical one-shot label 与 Compose 原生的
+    `condition: service_completed_successfully`。前者覆盖 `--no-deps` 只拉起
+    init job、现场没有依赖方容器的恢复路径；后者保留完整拓扑的原生声明。
+    两者都来自 Docker 容器标签，不加载 Compose 文件，也不新增运行台账。
 
     声明按服务名给出，这里就地映射回容器名，让调用方只需比对 `docker ps`
     一定会填的 `Names`。服务名取自标签而不是 `docker ps` 的 `Service` 派生
@@ -188,9 +192,12 @@ def _declared_one_shot_containers(project: str, *, runner: Any) -> frozenset[str
             "--filter",
             f"label={_PROJECT_LABEL}={project}",
             "--format",
-            "{{.Names}}\t"
-            f'{{{{.Label "{_SERVICE_LABEL}"}}}}\t'
-            f'{{{{.Label "{_DEPENDS_ON_LABEL}"}}}}',
+            (
+                "{{.Names}}\t"
+                f'{{{{.Label "{_SERVICE_LABEL}"}}}}\t'
+                f'{{{{.Label "{_DEPENDS_ON_LABEL}"}}}}\t'
+                f'{{{{.Label "{RUNTIME_ONE_SHOT_LABEL}"}}}}'
+            ),
         ],
         timeout_seconds=30,
     )
@@ -201,11 +208,21 @@ def _declared_one_shot_containers(project: str, *, runner: Any) -> frozenset[str
         )
     containers_by_service: dict[str, set[str]] = {}
     one_shot_services: set[str] = set()
+    one_shot_containers: set[str] = set()
     for line in str(getattr(result, "stdout", "")).splitlines():
         columns = line.split("\t")
         if len(columns) < 3:
             continue
         name, service, declaration = (item.strip() for item in columns[:3])
+        self_declaration = columns[3] if len(columns) >= 4 else ""
+        if self_declaration not in {"", RUNTIME_ONE_SHOT_LABEL_VALUE}:
+            raise ValueError(
+                f"container {name or '<unnamed>'} has invalid canonical one-shot "
+                f"label {RUNTIME_ONE_SHOT_LABEL}={self_declaration!r}; expected "
+                f"{RUNTIME_ONE_SHOT_LABEL_VALUE!r} or absence"
+            )
+        if self_declaration == RUNTIME_ONE_SHOT_LABEL_VALUE:
+            one_shot_containers.add(name)
         if service:
             containers_by_service.setdefault(service, set()).add(name)
         for token in declaration.split(","):
@@ -213,11 +230,12 @@ def _declared_one_shot_containers(project: str, *, runner: Any) -> frozenset[str
             parts = token.strip().split(":")
             if len(parts) >= 2 and parts[1] == _ONE_SHOT_CONDITION:
                 one_shot_services.add(parts[0])
-    return frozenset(
+    one_shot_containers.update(
         name
         for service in one_shot_services
         for name in containers_by_service.get(service, ())
     )
+    return frozenset(one_shot_containers)
 
 
 def inspect_compose_project_liveness(

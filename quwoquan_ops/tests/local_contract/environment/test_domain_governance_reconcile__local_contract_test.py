@@ -21,6 +21,9 @@ class _RecordingProvider:
             if str(item["name"]) == name and str(item["type"]) == record_type
         ]
 
+    def list_zone_records(self) -> list[dict[str, object]]:
+        return list(self.existing)
+
     def create_record(self, record: dict[str, object]) -> str:
         self.created.append(record)
         return f"new-{len(self.created)}"
@@ -321,6 +324,45 @@ class DnsApplyReconciliationLocalContractTest(unittest.TestCase):
                 if change["name"] == "quwoquan.com" and change["type"] == "A"
             },
         )
+
+    def test_zone_audit_reports_names_outside_the_plan(self) -> None:
+        """控制台手工新增的计划外入口必须被看见，而不是静默通过；
+        服务商自带的 NS/SOA 归入已知豁免，与未登记入口分列。
+
+        spec_ref: environment-topology-and-packaging GWT-001（zone 内不存在未登记记录）
+        """
+        provider = _RecordingProvider(
+            [
+                {
+                    "type": "A",
+                    "name": "shadow.quwoquan.com",
+                    "content": "203.0.113.66",
+                    "ttl": 600,
+                    "providerRecordId": "shadow-entry",
+                },
+                {
+                    "type": "NS",
+                    "name": "quwoquan.com",
+                    "content": "ns1.alidns.com",
+                    "ttl": 86400,
+                    "providerRecordId": "vendor-ns",
+                },
+            ]
+        )
+        receipt = self._apply_with(provider)
+        self.assertIn(
+            {"type": "A", "name": "shadow.quwoquan.com", "value": "203.0.113.66"},
+            receipt["observedUnmanaged"],
+        )
+        exempt_entry = {
+            "type": "NS",
+            "name": "quwoquan.com",
+            "value": "ns1.alidns.com",
+        }
+        self.assertIn(exempt_entry, receipt["observedExempt"])
+        self.assertNotIn(exempt_entry, receipt["observedUnmanaged"])
+        # 审计只报告，不得清理计划外入口。
+        self.assertEqual(provider.deleted, [])
 
     def test_ttl_only_drift_is_retuned_in_place(self) -> None:
         """spec_ref: environment-topology-and-packaging GWT-001（TTL 漂移就地纠正）"""

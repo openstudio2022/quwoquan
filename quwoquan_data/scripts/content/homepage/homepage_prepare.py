@@ -16,7 +16,7 @@ from content.homepage.homepage import (
     _safe_ref,
     _write_entity_quality_stage,
 )
-from content.homepage.homepage_assets import select_homepage_assets
+from content.homepage.homepage_media_freeze import frozen_publishable_images
 from content.homepage.quality_policy import (
     homepage_body_char_minimum,
     homepage_section_char_minimum,
@@ -35,6 +35,75 @@ from core.paths import (
     execution_root,
 )
 from governance.coverage.entity_extract import entity_ref
+
+_SHARED_STRUCTURE_INSTRUCTION = (
+    "结构尊重底稿真实内容——规范化章节只作参考（用于章节命名与归类对齐），"
+    "不是必须逐节填满的清单：仅『概况』必备，其余章节有真实内容才写、无内容直接省略、禁止硬凑，"
+    "只允许增减或合并不在 baseDraft.sectionOutline 必需清单中的章节；"
+    "清单内标题必须原文、原层级保留。章节语义须正确（如『历史沿革』必须是真实历史，否则省略）。"
+    "多级目录硬要求：底稿（百科类来源）有多级标题层级时，必须保留为 `##` / `###` 多级小标题，"
+    "baseDraft.sectionOutline 列出的有实质内容的关键章节（如『技术变革』『相关古迹』）"
+    "必须保留为对应级别小标题，禁止静默丢弃、拍平为单层或并入其它段落。"
+    "章节均衡硬要求：任何单个章节去空白字数不得超过正文总量的一半。"
+    "时间线归并硬要求：底稿把同一实体多条并列时间线分段罗列时，必须按真实时间顺序归并为单一连贯叙事，"
+    "禁止首尾拼接造成时间倒错，同章节年份应大致单调推进。"
+)
+
+_LICENSED_ADAPTATION_INSTRUCTION = (
+    "本篇 sourceUseMode=licensed_adaptation：署名与许可证据在场，允许以底稿为骨架轻改，"
+    "保留底稿信息顺序与关键事实细节；首稿主动改写约 20%-30% 的句子，不得连续逐句照搬。"
+    "执行时先按原顺序恢复完整底稿的必需标题、全部正文段落和每个图片占位符，"
+    "再只对约四分之一句子做局部润色；每个底稿段落至少保留三分之二原句骨架，"
+    "禁止摘要、合并或省略后半部分。"
+)
+
+
+def _factual_reference_instruction() -> str:
+    """指令数值直接取自准出门常量，杜绝两侧各写一个阈值。"""
+    from content.homepage.commercial_gate import (
+        FACTUAL_COMPRESSION_TIERS,
+        FACTUAL_REFERENCE_MAX_FIDELITY,
+    )
+
+    long_source_threshold, long_source_max_ratio = FACTUAL_COMPRESSION_TIERS[0]
+    return (
+        "本篇 sourceUseMode=factual_reference_only：底稿只是事实来源，没有沿用原文的许可。"
+        "必须先做事实抽取（年份、尺度、机构、事件、地理与票务等），再用自己的话重写成连贯叙述；"
+        "禁止按段落顺序逐句润色式沿用。两条准出硬门决定写法："
+        f"一是 5-gram 字符重合率必须低于 {FACTUAL_REFERENCE_MAX_FIDELITY}，"
+        "任何超过十余字的原文长串都会把重合率顶上去，必须换成自己的句式与语序；"
+        f"二是底稿超过 {long_source_threshold} 字时，成稿去空白字数不得超过底稿的 "
+        f"{long_source_max_ratio} 倍，目标压到约一半——"
+        "按信息价值取舍是必需动作：保留关键事实节点，删去逐条罗列的次要细节、重复表述与冗长边界描述。"
+        "事实必须准确，不得编造或改动数字；压缩与改写针对表达方式，不针对事实真实性。"
+    )
+
+
+def homepage_editing_instruction(source_use_mode: str) -> str:
+    """按版权模式下发创作指令。
+
+    两种模式的准出门本就不同（``copyright_mode_issues``：licensed_adaptation 不设
+    fidelity 上限，factual_reference_only 有 fidelity 与压缩双硬门），指令必须随之
+    分叉。历史上两模式共用一条「保留原句骨架、禁止摘要」指令，与压缩门正面冲突，
+    无人值守放量时通过率恒为 0。
+    """
+    mode = str(source_use_mode or "").strip()
+    if mode == "licensed_adaptation":
+        mode_instruction = _LICENSED_ADAPTATION_INSTRUCTION
+    elif mode == "factual_reference_only":
+        mode_instruction = _factual_reference_instruction()
+    else:
+        raise ValueError(
+            f"未知 sourceUseMode {mode!r}（fail-closed，允许值见 source_inputs）"
+        )
+    return (
+        "把 primaryEvidenceRef 作为**唯一**底稿骨架与主题锚点（单底稿零参考，禁止引用其它来源）。"
+        "在底稿基础上做事实校正、PII/平台痕迹清理与人设适配。"
+        + mode_instruction
+        + "不得脱离底稿从零另写，也不得整篇零加工照搬。"
+        + _SHARED_STRUCTURE_INSTRUCTION
+    )
+
 
 def prepare_entity_pages(execution_id: str, spec: dict[str, Any]) -> tuple[Path, list[str]]:
     """为 coverage 实体下发实体主页产出契约（inputs + prompt + 占位草稿 + assistant_tasks）。"""
@@ -55,20 +124,10 @@ def prepare_entity_pages(execution_id: str, spec: dict[str, Any]) -> tuple[Path,
             execution_id, domain, etype, name, aliases=target_aliases
         )
         creator_assignment = _entity_creator_assignment(domain, etype, name, spec=spec)
-        primary_ref = str(
-            (base_draft or {}).get("primaryEvidenceRef")
-            or (base_draft or {}).get("sourceRef")
-            or ""
-        ).strip()
-        selection = select_homepage_assets(
-            execution_id,
-            domain,
-            etype,
-            name,
-            primary_ref=primary_ref,
-        )
+        # 预排版只读 `1.download` 的冻结处置（DEC-029）：下发给创作方的占位符必须与
+        # 物化落盘的那一组图完全同源，这里再算一次就等于给同一事实开第二个决策点。
         available_images = _homepage_available_images(
-            [dict(image) for image in selection.publishable]
+            frozen_publishable_images(execution_id, domain, etype, name)
         )
         image_placeholder_bindings = _homepage_image_placeholder_bindings(available_images)
         if base_draft:
@@ -106,26 +165,8 @@ def prepare_entity_pages(execution_id: str, spec: dict[str, Any]) -> tuple[Path,
             "imagePlaceholderBindings": image_placeholder_bindings,
             "regionMenu": _condition_menu(spec, "region", "region_catalog", "regions"),
             "seasonMenu": _condition_menu(spec, "season", "season_catalog", "seasons"),
-            "editingInstruction": (
-                "把 primaryEvidenceRef 作为**唯一**底稿骨架与主题锚点（单底稿零参考，禁止引用其它来源）。"
-                "在底稿基础上做适度润色、事实校正、PII/平台痕迹清理与人设适配（licensed_adaptation 与 "
-                "factual_reference_only 同等以底稿为骨架轻改、保留底稿信息顺序与关键事实细节；"
-                "首稿主动改写约 20%-30% 的句子，不得连续逐句照搬）；"
-                "执行时先按原顺序恢复完整底稿的必需标题、全部正文段落和每个图片占位符，"
-                "再只对约四分之一句子做局部润色；每个底稿段落至少保留三分之二原句骨架，"
-                "禁止摘要、合并或省略后半部分；"
-                "不得脱离底稿从零另写，也不得整篇零加工照搬。"
-                "结构尊重底稿真实内容——规范化章节只作参考（用于章节命名与归类对齐），"
-                "不是必须逐节填满的清单：仅『概况』必备，其余章节有真实内容才写、无内容直接省略、禁止硬凑，"
-                "只允许增减或合并不在 baseDraft.sectionOutline 必需清单中的章节；"
-                "清单内标题必须原文、原层级保留。章节语义须正确（如『历史沿革』必须是真实历史，否则省略）。"
-                "多级目录硬要求：底稿（百科类来源）有多级标题层级时，必须保留为 `##` / `###` 多级小标题，"
-                "baseDraft.sectionOutline 列出的有实质内容的关键章节（如『技术变革』『相关古迹』）"
-                "必须保留为对应级别小标题，禁止静默丢弃、拍平为单层或并入其它段落。"
-                "章节均衡硬要求：任何单个章节去空白字数不得超过正文总量的一半；底稿某主题（如历史沿革）"
-                "篇幅极长时必须按比例压缩为精炼概述（提炼关键节点，压缩属合法轻编辑，保真针对不另写/不编造而非不许删减）。"
-                "时间线归并硬要求：底稿把同一实体多条并列时间线分段罗列时，必须按真实时间顺序归并为单一连贯叙事，"
-                "禁止首尾拼接造成时间倒错，同章节年份应大致单调推进。"
+            "editingInstruction": homepage_editing_instruction(
+                str((base_draft or {}).get("sourceUseMode") or "factual_reference_only")
             ),
             "imageRequirement": (
                 "正文只写文字与多级标题：底稿材料中形如 `[[IMG:fig_NN]]` 的整行"

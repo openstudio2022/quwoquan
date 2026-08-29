@@ -20,7 +20,7 @@ services:
       RELEASE_MANIFEST_DIGEST: "${QWQ_COMPOSE_RELEASE_MANIFEST_DIGEST:-}"
       PLATFORM_OPS_SERVICE_ADDR: ":18088"
       REPO_ROOT: /app
-      POSTGRES_DSN: postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable
+      PLATFORM_OPS_POSTGRES_DSN: postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable
       # ConfigInstanceReport transactional outbox 的 typed event 总线。
       PLATFORM_OPS_REDIS_GENERAL_ADDR: redis:6379
       AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"

@@ -212,8 +212,6 @@ const ArticleReaderStageSpec _kUnifiedArticleReaderStageSpec =
       spineShadowWidth: 15,
     );
 
-const double _kArticleLandscapeSpreadMinWidth = 920;
-
 ArticlePaperSpec resolveUnifiedArticlePaperSpec() {
   return _kUnifiedArticlePaperSpec;
 }
@@ -440,7 +438,7 @@ double resolveArticlePaperStageWidth(
     return availableWidth;
   }
   if (!allowLandscapeSpread ||
-      availableWidth < _kArticleLandscapeSpreadMinWidth) {
+      availableWidth < AppSpacing.articleLandscapeSpreadMinWidth) {
     return availableWidth;
   }
   return ((availableWidth - resolveArticleReaderStageSpec().spineShadowWidth) /
@@ -473,10 +471,9 @@ ArticleCanvasMetrics resolveArticleCanvasMetrics(
   }
   final paperSpec = resolveUnifiedArticlePaperSpec();
   if (variant == ArticleCanvasVariant.immersive) {
-    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
-    final horizontalInset =
-        AppSpacing.containerLg +
-        AppSpacing.appChromeBottomSafeSideInset(context, bottomInset);
+    // 与沉浸浏览器底部 chrome 共用同一对齐轨道（REQ-019）：
+    // 不叠加底部安全区侧向保护，避免正文与 caption/工具栏左右漂移。
+    final horizontalInset = AppSpacing.containerLg;
     final basePadding = paperSpec.contentPadding;
     return ArticleCanvasMetrics(
       aspectRatio: paperSpec.aspectRatio,
@@ -493,8 +490,8 @@ ArticleCanvasMetrics resolveArticleCanvasMetrics(
           ? AppSpacing.containerMd
           : AppSpacing.containerSm,
       wrapImageMaxWidth: width >= AppSpacing.articleWrapImageBreakpoint
-        ? AppSpacing.articleWrapImageMaxWidthWide
-        : AppSpacing.articleWrapImageMaxWidthCompact,
+          ? AppSpacing.articleWrapImageMaxWidthWide
+          : AppSpacing.articleWrapImageMaxWidthCompact,
       fullWidthImageAspectRatio: 4 / 3,
       journalImageAspectRatio: 1,
       inlineImageSpacing: articleParagraphSpacing(),
@@ -516,4 +513,41 @@ ArticleCanvasMetrics resolveArticleCanvasMetrics(
     journalImageAspectRatio: 1,
     inlineImageSpacing: articleParagraphSpacing(),
   );
+}
+
+/// 元数据派生比例的版式区间（REQ-017）：竖图下限 3:4、横图上限 2:1，
+/// 超界部分由框内 cover 吸收。
+const double articleFigureMetadataAspectMin = 3 / 4;
+const double articleFigureMetadataAspectMax = 2.0;
+
+/// 文章图片占位比例的唯一决定函数（REQ-017 / GWT-016）。
+///
+/// - 资产元数据（像素宽高）优先，并 clamp 到版式区间；
+/// - 元数据缺席时按布局取后备比例（fullWidth 4:3、journalCard 由 metrics 声明），
+///   分页与渲染同取同值；
+/// - 分页测量与阅读渲染都必须经此函数取比例，运行时解码尺寸不得进入分页输入。
+double resolveArticleFigureAspectRatio({
+  required ArticleCanvasMetrics metrics,
+  required ArticleDocumentAsset asset,
+}) {
+  final metadata = asset.metadataAspectRatio;
+  if (metadata != null) {
+    return metadata
+        .clamp(articleFigureMetadataAspectMin, articleFigureMetadataAspectMax)
+        .toDouble();
+  }
+  return asset.imageLayout == 'journalCard'
+      ? metrics.journalImageAspectRatio
+      : metrics.fullWidthImageAspectRatio;
+}
+
+/// wrap 图缺席（引用未解析出交付 URL）时的降级正文（REQ-017/GWT-016）：
+/// 图旁与图下文字合并为全宽顺序正文；分页测量与渲染必须同用此函数，
+/// 防止缺席图把整段文字一并丢失。
+String articleWrapAbsentFallbackText(ArticleLayoutFragment fragment) {
+  return <String>[
+    fragment.leadingText,
+    fragment.text,
+    fragment.trailingText,
+  ].map((value) => value.trim()).where((value) => value.isNotEmpty).join('\n');
 }

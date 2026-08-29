@@ -7,6 +7,8 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
+from core import paths
+from core.dependency_ref import resolve_dependency_path
 from core.io import read_json
 from core.content_library import link_from_library
 from core.schema import assert_valid
@@ -301,6 +303,58 @@ def bind_external_input_refs(
     return sorted(refs, key=lambda row: (row["kind"], row["receiptRef"]))
 
 
+def frozen_acquisition_root_ref(envelope: Mapping[str, Any] | None) -> str:
+    """Read the acquisition base an envelope froze, or `""` when it declared none.
+
+    Absence is only legitimate for an envelope without external inputs; the
+    schema enforces that pairing, so callers may carry this value forward
+    verbatim instead of substituting a default of their own.
+    """
+    return str((envelope or {}).get("acquisitionRootRef") or "").strip()
+
+
+def lane_acquisition_root(
+    lane: Mapping[str, Any], *, default: Path
+) -> Path:
+    """Resolve one lane's frozen acquisition base, falling back to `default`.
+
+    A lane without external inputs never declares a base, so the default stands
+    in only where nothing has to resolve against it.
+    """
+    declared = str(lane.get("acquisitionRootRef") or "").strip()
+    if not declared:
+        return default
+    frozen = resolve_dependency_path(declared)
+    if not frozen.is_dir() or frozen.is_symlink():
+        raise _typed("MISSING", f"acquisitionRootRef is missing: {declared}")
+    return frozen
+
+
+def envelope_acquisition_root(
+    envelope: Mapping[str, Any], *, override: Path | None = None
+) -> Path:
+    """Resolve the base that every external input ref in `envelope` hangs off.
+
+    A descriptor only carries its kind sub-root (`.` / `video`); the base comes
+    from whoever resolves it. Reading the base back from the frozen envelope is
+    what keeps the compile-time and execution-time resolutions identical, and an
+    override that disagrees is refused rather than allowed to win — a CLI flag
+    must not be able to repoint frozen bytes at a different tree.
+    """
+    declared = str(envelope.get("acquisitionRootRef") or "").strip()
+    if not declared:
+        return (override or paths.SOURCE_ACQUISITION_ROOT).resolve()
+    frozen = resolve_dependency_path(declared)
+    if override is not None and override.resolve() != frozen:
+        raise _typed(
+            "IDENTITY_DRIFT",
+            "acquisitionRootRef differs from the immutable campaign envelope",
+        )
+    if not frozen.is_dir() or frozen.is_symlink():
+        raise _typed("MISSING", f"acquisitionRootRef is missing: {declared}")
+    return frozen
+
+
 def verify_external_input_refs(
     carrier: str,
     refs: Iterable[Mapping[str, Any]],
@@ -437,7 +491,10 @@ __all__ = [
     "CampaignExternalInputError",
     "bind_external_input_refs",
     "content_source_revision",
+    "envelope_acquisition_root",
+    "lane_acquisition_root",
     "external_inputs_digest",
+    "frozen_acquisition_root_ref",
     "file_digest",
     "materialize_external_input_bundle",
     "payload_digest",

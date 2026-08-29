@@ -31,7 +31,7 @@ from content.source.research.image_provider_compliance import (  # noqa: E402
     professional_library_compliance_summary,
 )
 from content.source.research.source_quality import _collection_gate  # noqa: E402
-from core.asset_placement import _caption_is_degraded, caption_semantic_issues  # noqa: E402
+from core.asset_placement import caption_is_degraded, caption_semantic_issues  # noqa: E402
 from core.localization import simplified_chinese_publish_issues  # noqa: E402
 
 
@@ -144,9 +144,9 @@ def test_p4b_release_class_is_not_inferred_from_vertical_name():
 
 def test_p4c_non_chinese_image_caption_blocked():
     # 英文/拉丁主导 caption 退化（须先译简体中文）。
-    assert _caption_is_degraded("Jiuzhaigou Valley National Park scenic area")
+    assert caption_is_degraded("Jiuzhaigou Valley National Park scenic area")
     # 中文 caption 合格。
-    assert not _caption_is_degraded("九寨沟五花海清晨的倒影")
+    assert not caption_is_degraded("九寨沟五花海清晨的倒影")
 
     issues = caption_semantic_issues(
         [{"assetId": "a1", "caption": "Jiuzhaigou Valley National Park", "fileName": "x.jpg"}]

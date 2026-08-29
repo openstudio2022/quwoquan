@@ -21,15 +21,172 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import org.json.JSONObject;
+import java.util.function.Predicate;
+
+final class NativeRecoveryVersionResponse {
+  private static final Set<String> CANONICAL_FIELDS =
+      Set.of(
+          "platform",
+          "latestVersion",
+          "latestBuild",
+          "minimumSupportedVersion",
+          "minimumSupportedBuild",
+          "updateState",
+          "updateUrl",
+          "recoveryUrl");
+
+  enum UpdateState {
+    NONE("none"),
+    AVAILABLE("available"),
+    REQUIRED("required");
+
+    final String wireName;
+
+    UpdateState(String wireName) {
+      this.wireName = wireName;
+    }
+
+    static UpdateState fromWire(String raw) {
+      for (UpdateState value : values()) {
+        if (value.wireName.equals(raw)) {
+          return value;
+        }
+      }
+      throw new IllegalArgumentException("unknown update state");
+    }
+  }
+
+  final String platform;
+  final String latestVersion;
+  final long latestBuild;
+  final String minimumSupportedVersion;
+  final long minimumSupportedBuild;
+  final UpdateState updateState;
+  final String updateUrl;
+  final String recoveryUrl;
+
+  private NativeRecoveryVersionResponse(
+      String platform,
+      String latestVersion,
+      long latestBuild,
+      String minimumSupportedVersion,
+      long minimumSupportedBuild,
+      UpdateState updateState,
+      String updateUrl,
+      String recoveryUrl) {
+    this.platform = platform;
+    this.latestVersion = latestVersion;
+    this.latestBuild = latestBuild;
+    this.minimumSupportedVersion = minimumSupportedVersion;
+    this.minimumSupportedBuild = minimumSupportedBuild;
+    this.updateState = updateState;
+    this.updateUrl = updateUrl;
+    this.recoveryUrl = recoveryUrl;
+  }
+
+  boolean offersNativeUpdate() {
+    return updateState != UpdateState.NONE && updateUrl != null;
+  }
+
+  static NativeRecoveryVersionResponse parse(
+      String responseBody,
+      String expectedPlatform,
+      long currentBuild,
+      Predicate<String> isTrustedUrl) {
+    JsonElement root = JsonParser.parseString(responseBody);
+    if (!root.isJsonObject() || currentBuild <= 0 || isTrustedUrl == null) {
+      throw new IllegalArgumentException("invalid version response root");
+    }
+    JsonObject payload = root.getAsJsonObject();
+    if (!payload.keySet().equals(CANONICAL_FIELDS)) {
+      throw new IllegalArgumentException("version response field mismatch");
+    }
+    String platform = requiredString(payload, "platform");
+    if (!platform.equals(expectedPlatform)) {
+      throw new IllegalArgumentException("version response platform mismatch");
+    }
+    String latestVersion = requiredString(payload, "latestVersion");
+    long latestBuild = positiveDecimal(payload, "latestBuild");
+    String minimumSupportedVersion = requiredString(payload, "minimumSupportedVersion");
+    long minimumSupportedBuild = positiveDecimal(payload, "minimumSupportedBuild");
+    if (minimumSupportedBuild > latestBuild) {
+      throw new IllegalArgumentException("version response minimum exceeds latest");
+    }
+    UpdateState updateState = UpdateState.fromWire(requiredString(payload, "updateState"));
+    UpdateState expectedUpdateState =
+        currentBuild < minimumSupportedBuild
+            ? UpdateState.REQUIRED
+            : currentBuild < latestBuild ? UpdateState.AVAILABLE : UpdateState.NONE;
+    if (updateState != expectedUpdateState) {
+      throw new IllegalArgumentException("version response update state mismatch");
+    }
+    String recoveryUrl = requiredString(payload, "recoveryUrl");
+    if (!isTrustedUrl.test(recoveryUrl)) {
+      throw new IllegalArgumentException("version response recovery URL rejected");
+    }
+
+    JsonElement rawUpdateUrl = payload.get("updateUrl");
+    String updateUrl;
+    if ("android".equals(expectedPlatform)) {
+      updateUrl = requiredString(payload, "updateUrl");
+      if (!isTrustedUrl.test(updateUrl)) {
+        throw new IllegalArgumentException("version response update URL rejected");
+      }
+    } else if ("ios".equals(expectedPlatform) && rawUpdateUrl.isJsonNull()) {
+      updateUrl = null;
+    } else {
+      throw new IllegalArgumentException("version response update URL mismatch");
+    }
+    return new NativeRecoveryVersionResponse(
+        platform,
+        latestVersion,
+        latestBuild,
+        minimumSupportedVersion,
+        minimumSupportedBuild,
+        updateState,
+        updateUrl,
+        recoveryUrl);
+  }
+
+  private static String requiredString(JsonObject payload, String field) {
+    JsonElement value = payload.get(field);
+    if (value == null
+        || !value.isJsonPrimitive()
+        || !value.getAsJsonPrimitive().isString()
+        || value.getAsString().trim().isEmpty()) {
+      throw new IllegalArgumentException("version response string invalid: " + field);
+    }
+    return value.getAsString().trim();
+  }
+
+  private static long positiveDecimal(JsonObject payload, String field) {
+    String raw = requiredString(payload, field);
+    if (!raw.matches("^[1-9][0-9]*$")) {
+      throw new IllegalArgumentException("version response decimal invalid: " + field);
+    }
+    try {
+      long value = Long.parseLong(raw);
+      if (value <= 0) {
+        throw new IllegalArgumentException("version response decimal invalid: " + field);
+      }
+      return value;
+    } catch (NumberFormatException error) {
+      throw new IllegalArgumentException("version response decimal invalid: " + field, error);
+    }
+  }
+}
 
 /**
  * Flutter Engine 之前的唯一 Android 启动 gate。
@@ -433,32 +590,26 @@ public final class StartupGateActivity extends Activity {
                 || connection.getResponseCode() >= 300) {
               throw new IllegalStateException("version service unavailable");
             }
-            JSONObject payload = new JSONObject(readLimitedResponse(connection));
-            if (payload.length() != 4) {
-              throw new IllegalStateException("version response field mismatch");
-            }
-            int latestBuild = Integer.parseInt(payload.getString("latestBuild"));
-            String updateUrl = payload.getString("updateUrl");
-            String recoveryUrl = payload.getString("recoveryUrl");
-            if (!TrustedRecoveryUrls.isTrusted(recoveryUrl, recoveryRuntime)
-                || (latestBuild > BuildConfig.VERSION_CODE
-                    && !TrustedRecoveryUrls.isTrusted(updateUrl, recoveryRuntime))) {
-              throw new IllegalStateException("version response url rejected");
-            }
+            NativeRecoveryVersionResponse version =
+                NativeRecoveryVersionResponse.parse(
+                    readLimitedResponse(connection),
+                    "android",
+                    BuildConfig.VERSION_CODE,
+                    rawUrl -> TrustedRecoveryUrls.isTrusted(rawUrl, recoveryRuntime));
             mainHandler.post(
                 () -> {
                   if (!canUpdateRecoveryUi()) {
                     return;
                   }
-                  if (latestBuild > BuildConfig.VERSION_CODE) {
+                  if (version.offersNativeUpdate()) {
                     title.setText("当前版本需要更新");
                     message.setText("更新后即可正常启动");
                     configureRecoveryButton(primary, "前往更新", true, true);
                     primary.setOnClickListener(
                         ignored ->
                             openRecoveryTarget(
-                                updateUrl,
-                                recoveryUrl,
+                                version.updateUrl,
+                                version.recoveryUrl,
                                 "暂时无法打开更新页面，请稍后再试",
                                 true));
                     web.setVisibility(View.VISIBLE);
@@ -471,7 +622,7 @@ public final class StartupGateActivity extends Activity {
                       ignored ->
                           openRecoveryTarget(
                               recoveryRuntime.get("publicWebBaseUrl"),
-                              recoveryUrl,
+                              version.recoveryUrl,
                               "网页暂时无法打开，请稍后再试"));
                   web.setVisibility(View.GONE);
                 });

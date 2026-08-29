@@ -1,9 +1,0 @@
----
-description: Pageflip 前后翻几何军规，防止死分支、诊断分叉与视觉证据缺失
-globs: quwoquan_app/lib/design_system/pageflip/**,quwoquan_app/lib/service/content_service/content/post/presentation/article_reader/pageflip/**,quwoquan_app/test/**/pageflip/**
-alwaysApply: false
----
-
-改动 pageflip 几何前，先读
-`.agents/skills/review/references/roles/pageflip/ROLE.md` 及其 `references/geometry.md`。
-BACK 方向另有强收紧版，见 [12-pageflip-backward-mainline](12-pageflip-backward-mainline.mdc)。

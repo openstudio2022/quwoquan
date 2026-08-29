@@ -41,12 +41,14 @@ ContentPostViewData _articlePost(String postId) => contentPostViewDataBuilder(
 InMemoryContentPostDetailReader _articleReader(
   ContentPostViewData post, {
   String? markdown,
+  List<PostArticleAsset> articleAssets = const <PostArticleAsset>[],
 }) {
   final detail = contentPostDetailPayloadBuilder(
     post: post,
     articleMarkdown:
         markdown ??
         '# ${post.title}\n\n## 测试章节\n\n${post.body}\n\n用于验证 typed detail hydration。',
+    articleAssets: articleAssets,
   );
   return InMemoryContentPostDetailReader(
     InMemoryContentPostStore(
@@ -127,6 +129,9 @@ void main() {
 
     test('Mock getPost 覆盖上文下三图文章详情', () async {
       final post = _articlePost('article-top-three-images');
+      // canonical 真实供稿形态：正文以 asset:// 引用，交付 URL 由
+      // articleAssetManifest 的 publicSliceKey 解析（GWT-016 缺席语义下，
+      // 非 canonical 直链不再被伪装为可加载 URL）。
       final reader = _articleReader(
         post,
         markdown: '''
@@ -134,12 +139,27 @@ void main() {
 
 这里是图片之前的正文。
 
-![图片一](https://media.example.com/image/one.jpg)
+![图片一](asset://one)
 
-![图片二](https://media.example.com/image/two.jpg)
+![图片二](asset://two)
 
-![图片三](https://media.example.com/image/three.jpg)
+![图片三](asset://three)
 ''',
+        articleAssets: const <PostArticleAsset>[
+          PostArticleAsset(
+            assetId: 'one',
+            publicSliceKey: 'media/image/s/archived-image/post/p1/v1/one.webp',
+          ),
+          PostArticleAsset(
+            assetId: 'two',
+            publicSliceKey: 'media/image/s/archived-image/post/p1/v1/two.webp',
+          ),
+          PostArticleAsset(
+            assetId: 'three',
+            publicSliceKey:
+                'media/image/s/archived-image/post/p1/v1/three.webp',
+          ),
+        ],
       );
       final detail = await reader.getPost(postId: post.id);
       final view = projectArticleDetailViewFromPayload(

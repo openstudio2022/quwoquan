@@ -69,13 +69,9 @@ def _article_source_quality_sort_key(row: Mapping[str, Any]) -> tuple[int, int, 
     length_score = min(max(text_len, 0), ARTICLE_MIN_BASE_DRAFT_CHARS)
     source_id = str(row.get("sourceId") or "")
     return (
-        -title_anchor,
-        -anchor_bucket,
-        -focus_bucket,
-        freshness_rank,
-        -source_quality,
-        -length_score,
-        -image_count,
+        # 先按实体锚定强弱，再按内容质量，最后用 sourceId 定死同分顺序。
+        -title_anchor, -anchor_bucket, -focus_bucket,
+        freshness_rank, -source_quality, -length_score, -image_count,
         source_id,
     )
 
@@ -176,6 +172,13 @@ def _content_capacity_gate_for_entity(
     image_raw_count = 0
     article_rejects: dict[str, int] = defaultdict(int)
     article_image_soft_warnings: dict[str, int] = defaultdict(int)
+    article_image_soft_warning_sources: dict[str, list[str]] = defaultdict(list)
+
+    def _soft_warn(kind: str, source_id: str) -> None:
+        """软警告的计数与归因必须同时落，否则对账时数得出却查不到是谁。"""
+        article_image_soft_warnings[kind] += 1
+        article_image_soft_warning_sources[kind].append(source_id)
+
     image_rejects: dict[str, int] = defaultdict(int)
     # 其它覆盖目标：用于多地点环线判定（底稿突出提及 >=2 个兄弟目标 → 单实体弃稿）。
     sibling_target_names = tuple(
@@ -286,7 +289,7 @@ def _content_capacity_gate_for_entity(
                     article_text=base_body,
                 )
                 if semantic_issue:
-                    article_image_soft_warnings["asset_semantic_mismatch"] += 1
+                    _soft_warn("asset_semantic_mismatch", source_id)
                     continue
                 admitted_rows.append(row)
             candidate = {
@@ -324,12 +327,18 @@ def _content_capacity_gate_for_entity(
                 candidate,
             )
             media_mode = str(candidate.get("publishMediaMode") or "").strip()
+            if media_mode == "illustrated" and len(asset_refs) < 2:
+                # 冻结期的 illustrated 由「同源可发布图 >= 2」派生；发布评估把图剔到不足
+                # 两张后该派生失去依据，按同一条规则收敛为 text_only，而不是连合格正文一起丢弃。
+                _soft_warn("no_publishable_source_asset", source_id)
+                media_mode = "text_only"
+                candidate["publishMediaMode"] = media_mode
+                refs, shas, collections, asset_refs = [], [], [], []
             media_rejection = article_plan_media_rejection(media_mode, len(asset_refs))
             if media_rejection is not None:
                 article_rejects[media_rejection[0]] += 1
                 continue
             if media_mode == "text_only":
-                article_image_soft_warnings["no_publishable_source_asset"] += 1
                 candidate["rows"] = []
             candidate["assetClaimRefs"] = refs
             candidate["assetClaimShas"] = shas
@@ -467,6 +476,9 @@ def _content_capacity_gate_for_entity(
         ),
         "articleRejects": dict(sorted(article_rejects.items())),
         "articleImageSoftWarnings": dict(sorted(article_image_soft_warnings.items())),
+        "articleImageSoftWarningSources": {
+            k: sorted(v) for k, v in sorted(article_image_soft_warning_sources.items())
+        },
         "imageRejects": dict(sorted(image_rejects.items())),
     }
     issues: list[str] = []

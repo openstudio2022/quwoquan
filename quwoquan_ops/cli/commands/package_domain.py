@@ -270,7 +270,13 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
                 package_input_roots,
                 capsule_root=capsule_staging_root,
             )
-        except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as exc:
+        except (
+            OSError,
+            TypeError,
+            UnicodeError,
+            ValueError,
+            json.JSONDecodeError,
+        ) as exc:
             shutil.rmtree(staging_dir, ignore_errors=True)
             return {
                 "exitCode": 2,

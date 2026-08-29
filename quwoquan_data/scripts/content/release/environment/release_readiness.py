@@ -430,13 +430,18 @@ def write_environment_release_readiness(
         )
     media_manifest_digest = f"sha256:{hashlib.sha256(media_manifest_path.read_bytes()).hexdigest()}"
     if research_isolation is not None:
+        # readback（GetResearchReleaseReadback）是 post 域对象闭包：
+        # entityRefs 为 posts 关联实体的 runtime 规范形态并集，
+        # mediaAssetIds 为 post 拥有媒体的并集（avatar/homepage 专属媒体
+        # 属于 user/entity 域回读，不在该口径内）。
         readback = research_isolation.get("positiveReadback")
         if not isinstance(readback, Mapping) or any(
             (
                 readback.get("releaseId") != release_id,
-                readback.get("entityRefs") != entity_refs,
+                readback.get("entityRefs") != sorted(closure["postEntityRefs"]),
                 readback.get("postIds") != post_ids,
-                readback.get("mediaAssetIds") != media_asset_ids,
+                readback.get("mediaAssetIds")
+                != sorted(closure["postMediaAssetIds"]),
             )
         ):
             raise EnvironmentReleaseReadinessError(
@@ -559,6 +564,12 @@ def write_environment_release_readiness(
         )
         document["researchIsolationVerificationDigest"] = (
             research_isolation_verification_digest
+        )
+        # post 域对象闭包口径（与 runtime readback 同源），供 ops 复核
+        # runtime proof 时精确比对；entityRefs/mediaAssetIds 保持全量口径。
+        document["researchReadbackEntityRefs"] = sorted(closure["postEntityRefs"])
+        document["researchReadbackMediaAssetIds"] = sorted(
+            closure["postMediaAssetIds"]
         )
     else:
         document["guestActorHash"] = guest_actor_hash

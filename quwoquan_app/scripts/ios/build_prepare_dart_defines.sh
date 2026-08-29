@@ -3,10 +3,7 @@ set -euo pipefail
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 STACKCTL_PYTHON_RESOLVER="$APP_DIR/scripts/ios/build_resolve_stackctl_python.sh"
-RUNTIME_PYTHON="$(bash "$STACKCTL_PYTHON_RESOLVER")" || {
-  echo "[ios-runtime-config] GATE_BLOCK: build requires Python 3.10+ with PyYAML." >&2
-  exit 2
-}
+TRUST_BLOCKER="APP.LAUNCH.runtime_config_trust_missing"
 
 case "${CONFIGURATION:-}" in
   Debug-nonprod) BUILD_PROFILE="nonprod"; BUILD_MODE="debug" ;;
@@ -31,6 +28,24 @@ if [[ "$QWQ_APP_BUILD_PROFILE" != "$BUILD_PROFILE" ]]; then
   echo "[ios-runtime-config] GATE_BLOCK: QWQ_APP_BUILD_PROFILE conflicts with ${CONFIGURATION:-}." >&2
   exit 2
 fi
+
+# trust 是 AppArtifact 的第一道制品门：先于 Python/toolchain、Flutter backend 与
+# 任何编译动作判否，确保 raw Xcode 也得到与 canonical executor 相同的 typed blocker。
+RUNTIME_TRUST_PATH="${QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH:-}"
+if [[ -z "$RUNTIME_TRUST_PATH" ]]; then
+  echo "[ios-runtime-config] GATE_BLOCK: $TRUST_BLOCKER: build-profile runtime trust envelope is required for every iOS AppArtifact." >&2
+  echo "[ios-runtime-config] launch through ./quwoquan_app/run.sh -d <device>, or run 'make app-activate-flutter-facade', Reload Window, then use a new workspace terminal whose 'command -v flutter' resolves to the workspace facade; both canonical paths materialize the trust envelope." >&2
+  exit 2
+fi
+if [[ -z "${TARGET_BUILD_DIR:-}" || -z "${UNLOCALIZED_RESOURCES_FOLDER_PATH:-}" ]]; then
+  echo "[ios-runtime-config] GATE_BLOCK: $TRUST_BLOCKER: Xcode resource output is required to materialize the trust envelope." >&2
+  exit 2
+fi
+
+RUNTIME_PYTHON="$(bash "$STACKCTL_PYTHON_RESOLVER")" || {
+  echo "[ios-runtime-config] GATE_BLOCK: build requires Python 3.10+ with PyYAML." >&2
+  exit 2
+}
 
 VALIDATION_EXPORTS="$($RUNTIME_PYTHON - "${DART_DEFINES:-}" "${FLUTTER_TARGET:-}" "$APP_DIR" <<'PY'
 import base64
@@ -121,77 +136,13 @@ if [[ -n "${QWQ_APP_RUNTIME_TRUSTED_PUBLIC_KEYS_JSON:-}" ]]; then
   exit 2
 fi
 
-RUNTIME_TRUST_PATH="${QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH:-}"
-if [[ -z "$RUNTIME_TRUST_PATH" ]]; then
-  echo "[ios-runtime-config] GATE_BLOCK: build-profile runtime trust envelope is required for every iOS AppArtifact." >&2
-  exit 2
-fi
-if [[ -z "${TARGET_BUILD_DIR:-}" || -z "${UNLOCALIZED_RESOURCES_FOLDER_PATH:-}" ]]; then
-  echo "[ios-runtime-config] GATE_BLOCK: Xcode resource output is required to materialize the trust envelope." >&2
-  exit 2
-fi
-
-"$RUNTIME_PYTHON" - \
+# trust 嵌入与 Patrol UAT test host 共用同一份实现，宿主与生产因此受同一组判否约束。
+if ! "$RUNTIME_PYTHON" "$APP_DIR/scripts/ios/build_embed_runtime_config_trust.py" \
   "$RUNTIME_TRUST_PATH" "$BUILD_PROFILE" \
-  "$TARGET_BUILD_DIR" "$UNLOCALIZED_RESOURCES_FOLDER_PATH" <<'PY'
-import base64
-import json
-import os
-import re
-import shutil
-import sys
-from pathlib import Path
-
-trust_path = Path(sys.argv[1]).expanduser()
-build_profile = sys.argv[2]
-if not trust_path.is_absolute() or trust_path.is_symlink() or not trust_path.is_file():
-    raise SystemExit("runtime trust envelope must be an absolute regular non-symlink file")
-if trust_path.stat().st_size <= 0 or trust_path.stat().st_size > 1024 * 1024:
-    raise SystemExit("runtime trust envelope size is invalid")
-try:
-    trust = json.loads(trust_path.read_text(encoding="utf-8"))
-except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-    raise SystemExit(f"runtime trust envelope is malformed: {exc}")
-required = {
-    "schema",
-    "buildProfile",
-    "signatureAlgorithm",
-    "trustedPublicKeys",
-}
-if not isinstance(trust, dict) or set(trust) != required:
-    raise SystemExit("runtime trust envelope fields do not match the canonical schema")
-if (
-    trust.get("schema") != "app-runtime-config-trust"
-    or trust.get("buildProfile") != build_profile
-    or trust.get("signatureAlgorithm") != "ed25519"
-):
-    raise SystemExit("runtime trust envelope identity conflicts with Xcode configuration")
-keyring = trust.get("trustedPublicKeys")
-if not isinstance(keyring, dict) or not keyring:
-    raise SystemExit("runtime trust envelope keyring is missing")
-key_id_pattern = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
-for key_id, encoded_key in keyring.items():
-    if not isinstance(key_id, str) or key_id_pattern.fullmatch(key_id) is None:
-        raise SystemExit("runtime trust envelope contains an invalid key id")
-    if not isinstance(encoded_key, str):
-        raise SystemExit("runtime trust envelope public key must be base64 text")
-    try:
-        raw_key = base64.b64decode(encoded_key, validate=True)
-    except ValueError as exc:
-        raise SystemExit("runtime trust envelope public key is not strict base64") from exc
-    if len(raw_key) != 32 or base64.b64encode(raw_key).decode("ascii") != encoded_key:
-        raise SystemExit("runtime trust envelope public key is not canonical Ed25519")
-resource_root = Path(sys.argv[3]) / sys.argv[4] / "qwq_runtime"
-resource_root.mkdir(parents=True, exist_ok=True)
-package_destination = resource_root / "runtime-config-package.json"
-if package_destination.exists() or package_destination.is_symlink():
-    package_destination.unlink()
-destination = resource_root / "runtime-config-trust.json"
-temporary = destination.with_suffix(destination.suffix + ".tmp")
-shutil.copyfile(trust_path, temporary)
-os.chmod(temporary, 0o600)
-temporary.replace(destination)
-PY
+  "$TARGET_BUILD_DIR" "$UNLOCALIZED_RESOURCES_FOLDER_PATH"; then
+  echo "[ios-runtime-config] GATE_BLOCK: $TRUST_BLOCKER: build-profile runtime trust envelope is invalid." >&2
+  exit 2
+fi
 
 export FLUTTER_TARGET DART_DEFINES
 export QWQ_IOS_DART_DEFINES_READY=1

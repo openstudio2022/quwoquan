@@ -16,6 +16,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -32,6 +34,8 @@ from quwoquan_ops.cli.prod.render_prod_plane_stack_lib.constants import (  # noq
     OBSERVABILITY_SOURCE_ROOT,
     PREVALIDATION_AUTH_SECRET_KEYS,
     PROD_CADDY_IMAGE,
+    PROD_PLANE_ADMIN_PORTS,
+    PROD_PLANE_CADDY_ADMIN_CONTAINER_PORT,
     RUNTIME_LOG_EXPORT_SERVICES,
 )
 from quwoquan_ops.cli.prod.render_prod_plane_stack_lib.package_inputs import (  # noqa: F401
@@ -66,6 +70,37 @@ from quwoquan_ops.cli.prod.render_prod_plane_stack_lib.volume_layout import (  #
     _rewrite_volume_with_layout,
     _runtime_credential_source,
 )
+from quwoquan_ops.cli.prod.render_prod_plane_stack_lib.data_plane_wiring import (
+    _wire_redis_scene,
+)
+
+
+def _prod_plane_admin_publish(instance: str) -> str:
+    """按声明位渲染一条 prod 平面 admin 发布口，并就地锁住该端口的所有权边界。
+
+    admin 只绑回环，不对外暴露。三实例编号必须互异，且不得落进任何 local port profile
+    的 canonical block —— 一旦落进去，local teardown 的端口所有权判定会把 prod 平面的
+    端口误认成目标 runtime 自有，从而在恢复路径上做出错误归因。
+    """
+    from quwoquan_ops.cli.lib.port_manifest import load_port_manifest
+
+    if len(set(PROD_PLANE_ADMIN_PORTS.values())) != len(PROD_PLANE_ADMIN_PORTS):
+        raise SystemExit("FAIL: prod plane admin ports must stay distinct per instance")
+    host_port = PROD_PLANE_ADMIN_PORTS.get(instance)
+    if host_port is None:
+        raise SystemExit(f"FAIL: prod plane instance has no admin port: {instance}")
+    profiles = load_port_manifest().get("profiles") or {}
+    for profile_name, profile in profiles.items():
+        start = profile.get("blockStart")
+        end = profile.get("blockEnd")
+        if not isinstance(start, int) or not isinstance(end, int):
+            continue
+        if start <= host_port <= end:
+            raise SystemExit(
+                "FAIL: prod plane admin port must stay outside local port profile "
+                f"{profile_name} block {start}-{end}: {host_port}"
+            )
+    return f"127.0.0.1:{host_port}:{PROD_PLANE_CADDY_ADMIN_CONTAINER_PORT}"
 
 
 def _rewrite_service(
@@ -120,7 +155,7 @@ def _rewrite_service(
             }
         )
         if instance == "prod":
-            updated["ports"] = ["80:80", "443:443", "127.0.0.1:12019:2019"]
+            updated["ports"] = ["80:80", "443:443", _prod_plane_admin_publish("prod")]
             updated["healthcheck"] = {
                 "test": [
                     "CMD-SHELL",
@@ -134,7 +169,7 @@ def _rewrite_service(
                 "retries": 10,
             }
         elif instance == "prevalidate":
-            updated["ports"] = ["39000:80", "127.0.0.1:32019:2019"]
+            updated["ports"] = ["39000:80", _prod_plane_admin_publish("prevalidate")]
             updated["healthcheck"] = {
                 "test": [
                     "CMD-SHELL",
@@ -146,7 +181,7 @@ def _rewrite_service(
                 "retries": 10,
             }
         else:
-            updated["ports"] = ["29000:80", "127.0.0.1:22019:2019"]
+            updated["ports"] = ["29000:80", _prod_plane_admin_publish("gray")]
             updated["healthcheck"] = {
                 "test": [
                     "CMD-SHELL",
@@ -180,8 +215,10 @@ def _rewrite_service(
             environment["RELEASE_EVIDENCE_DIGEST"] = release_evidence_digest
         if instance == "prevalidate":
             environment["QWQ_NONPROMOTABLE_PREVALIDATION"] = "first-party"
+        # scheme 必须写出来：服务端按 scheme 决定 trace 是否加密传输，缺 scheme
+        # 判否。collector 在共享网络内明文接收，所以这里声明 http://。
         environment["OTEL_EXPORTER_OTLP_ENDPOINT"] = (
-            "${OTEL_EXPORTER_OTLP_ENDPOINT:-otel-collector:4318}"
+            "${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}"
         )
         if name in RUNTIME_LOG_EXPORT_SERVICES:
             # 所有受管服务在成功读取、校验当前发布包配置后，以服务+环境绑定的
@@ -194,11 +231,11 @@ def _rewrite_service(
                 f"{name}-{cluster_name}-0"
             )
             if name == "platform-ops-service":
-                environment["CONFIG_ACK_REQUIRED_INSTANCES"] = ",".join(
+                environment["PLATFORM_OPS_CONFIG_ACK_REQUIRED_INSTANCES"] = ",".join(
                     f"{service}-{cluster_name}-0"
                     for service in sorted(RUNTIME_LOG_EXPORT_SERVICES)
                 )
-                environment["CONFIG_ACK_MAX_AGE_SECONDS"] = "120"
+                environment["PLATFORM_OPS_CONFIG_ACK_MAX_AGE_SECONDS"] = "120"
         if name in RUNTIME_LOG_EXPORT_SERVICES:
             # 云侧服务日志上云：stdout 镜像批量推送到 product-ops 内部
             # runtime log ingest（机器凭据）并先写持久 spool。product-ops
@@ -239,6 +276,7 @@ def _rewrite_service(
             if isolated_local
             else (39420 if edge_prevalidation else EXTERNAL_REDIS_PORT)
         )
+        redis_addr = f"{redis_host}:{redis_port}"
         postgres_host = "postgres" if isolated_local else EXTERNAL_DATA_HOST
         postgres_port = (
             5432
@@ -248,9 +286,9 @@ def _rewrite_service(
         if name == "recommendation-service":
             environment["MONGODB_URI"] = mongo_uri
         if name == "content-service":
-            environment["MONGO_URI"] = mongo_uri
-            environment["CONTENT_REDIS_REC_ADDR"] = f"{redis_host}:{redis_port}"
-            environment["CONTENT_REDIS_GENERAL_ADDR"] = f"{redis_host}:{redis_port}"
+            environment["CONTENT_MONGO_URI"] = mongo_uri
+            for scene in ("REC", "GENERAL", "REALTIME"):
+                _wire_redis_scene(environment, f"CONTENT_REDIS_{scene}", redis_addr)
             environment["SEARCH_ES_ENABLED"] = "true"
             if data_mode == "isolated":
                 if (
@@ -272,24 +310,24 @@ def _rewrite_service(
                     "endpoint is required}"
                 )
         if name == "chat-service":
-            environment["MONGO_URI"] = mongo_uri
-        if name == "chat-service":
-            environment["REDIS_ADDR"] = f"{redis_host}:{redis_port}"
-            environment["CHAT_REDIS_REALTIME_ADDR"] = f"{redis_host}:{redis_port}"
-            environment["CHAT_REDIS_GENERAL_ADDR"] = f"{redis_host}:{redis_port}"
-            environment["CHAT_REDIS_RELIABLE_TASK_ADDR"] = f"{redis_host}:{redis_port}"
+            environment["CHAT_MONGO_URI"] = mongo_uri
+            # chat 的三个 scene 各自注入物理地址，不存在需要兜底的 scene，
+            # 因此不再注入无前缀的共享 REDIS_ADDR。
+            for scene in ("REALTIME", "GENERAL", "RELIABLE_TASK"):
+                _wire_redis_scene(environment, f"CHAT_REDIS_{scene}", redis_addr)
         if name == "user-service":
-            environment["POSTGRES_DSN"] = (
+            environment["USER_POSTGRES_DSN"] = (
                 f"postgres://quwoquan:quwoquan@{postgres_host}:{postgres_port}/"
                 "quwoquan?sslmode=disable"
             )
-            environment["MONGODB_URI"] = mongo_uri
-        if name == "user-service":
-            environment["REDIS_ADDR"] = f"{redis_host}:{redis_port}"
+            environment["USER_MONGO_URI"] = mongo_uri
+            # realtime scene 在 user-service 的装配里从 general 继承地址，因此
+            # 只注入 general。
+            _wire_redis_scene(environment, "USER_REDIS_GENERAL", redis_addr)
         if name == "assistant-service":
-            environment["MONGODB_URI"] = mongo_uri
-            environment["REDIS_GENERAL_ADDR"] = f"{redis_host}:{redis_port}"
-            environment["REDIS_REC_ADDR"] = f"{redis_host}:{redis_port}"
+            environment["ASSISTANT_MONGO_URI"] = mongo_uri
+            for scene in ("GENERAL", "REC"):
+                _wire_redis_scene(environment, f"ASSISTANT_REDIS_{scene}", redis_addr)
             if instance == "prevalidate":
                 environment.update(
                     {
@@ -302,13 +340,13 @@ def _rewrite_service(
                     }
                 )
         if name == "product-ops-service":
-            environment["POSTGRES_DSN"] = (
+            environment["PRODUCT_OPS_POSTGRES_DSN"] = (
                 f"postgres://quwoquan:quwoquan@{postgres_host}:{postgres_port}/"
                 "quwoquan?sslmode=disable"
             )
-            environment["MONGO_URI"] = mongo_uri
-            environment["PRODUCT_OPS_REDIS_REC_ADDR"] = f"{redis_host}:{redis_port}"
-            environment["PRODUCT_OPS_REDIS_GENERAL_ADDR"] = f"{redis_host}:{redis_port}"
+            environment["PRODUCT_OPS_MONGO_URI"] = mongo_uri
+            for scene in ("REC", "GENERAL"):
+                _wire_redis_scene(environment, f"PRODUCT_OPS_REDIS_{scene}", redis_addr)
             environment["PROMETHEUS_URL"] = "${PRODUCT_OPS_PROMETHEUS_URL:-http://prometheus:9090}"
             # 云侧服务日志上云内部通道的服务端校验密钥（fail-closed）。
             environment["RUNTIME_LOG_INGEST_TOKEN"] = (
@@ -324,11 +362,15 @@ def _rewrite_service(
                 "${OPS_OIDC_JWKS_URL:?OPS_OIDC_JWKS_URL is required}"
             )
         if name == "platform-ops-service":
-            environment["POSTGRES_DSN"] = (
+            environment.pop("POSTGRES_DSN", None)
+            environment["PLATFORM_OPS_POSTGRES_DSN"] = (
                 f"postgres://quwoquan:quwoquan@{postgres_host}:{postgres_port}/"
                 "quwoquan?sslmode=disable"
             )
-            environment["PROMETHEUS_URL"] = "${PLATFORM_OPS_PROMETHEUS_URL:-http://prometheus:9090}"
+            # ConfigInstanceReport transactional outbox 的 typed event 总线。
+            # compose 基线里的 redis:6379 只在 isolated 数据面成立，hosted 面
+            # 必须指向外部数据主机，否则 outbox 起不来。
+            _wire_redis_scene(environment, "PLATFORM_OPS_REDIS_GENERAL", redis_addr)
             # Alertmanager 告警回流 ingest 的机器凭据；缺失时服务端 fail-closed。
             environment["ALERT_INGEST_TOKEN"] = "${ALERT_INGEST_TOKEN:?ALERT_INGEST_TOKEN is required}"
             environment["OPS_OIDC_ISSUER"] = (
@@ -341,10 +383,14 @@ def _rewrite_service(
                 "${OPS_OIDC_JWKS_URL:?OPS_OIDC_JWKS_URL is required}"
             )
         if name == "tag-service":
-            environment["REDIS_ADDR"] = f"{redis_host}:{redis_port}"
+            # tag-service 只读 scene 专属键。
+            _wire_redis_scene(environment, "TAG_REDIS_GENERAL", redis_addr)
             environment["TAG_MONGO_URI"] = mongo_uri
         if name == "entity-service":
             environment["ENTITY_MONGO_URI"] = mongo_uri
+            # general 是本服务 message transport binding 的必需 scene：homepage
+            # 的跨服务事实流建立在跨副本可见的前提上，缺地址会回落进程内存。
+            _wire_redis_scene(environment, "ENTITY_REDIS_GENERAL", redis_addr)
             # prod-hosted 首波 service plane 不含 elasticsearch（search-service 未迁入），
             # 关闭 write-time 索引投影；主页读写主链路（Mongo homepages 权威集合）不受影响。
             if data_mode == "isolated":
@@ -355,6 +401,9 @@ def _rewrite_service(
                 environment.pop("SEARCH_ES_ENDPOINTS", None)
         if name == "integration-service":
             environment["INTEGRATION_MONGO_URI"] = mongo_uri
+            # Redis 是 integration 的启动必需依赖（外部交互幂等与限流），此前
+            # 本平面没有任何注入轨，环境快照只留了一个未兑现的占位符地址。
+            _wire_redis_scene(environment, "INTEGRATION_REDIS_GENERAL", redis_addr)
             environment["INTEGRATION_PUSH_USER_SERVICE_BASE_URL"] = (
                 "http://user-service:18082"
             )
@@ -365,6 +414,11 @@ def _rewrite_service(
             environment["INTEGRATION_PUSH_FCM_SERVICE_ACCOUNT_FILE"] = (
                 "/run/secrets/quwoquan/integration/fcm-service-account.json"
             )
+        if name == "search-service":
+            # rec scene 的快照声明是云上 cluster；general 未声明物理组网，按
+            # 「本环境不接真实 Redis」保持原样。
+            for scene in ("REC", "GENERAL"):
+                _wire_redis_scene(environment, f"SEARCH_REDIS_{scene}", redis_addr)
         if instance == "prevalidate" and name == "user-service":
             environment.update(
                 {
@@ -392,9 +446,9 @@ def _rewrite_service(
             environment["CONTENT_EMBEDDING_API_KEY"] = "provider-unavailable"
         if name == "notification-service":
             environment["NOTIFICATION_MONGO_URI"] = mongo_uri
-            environment["NOTIFICATION_REDIS_ADDR"] = (
-                f"{redis_host}:{redis_port}"
-            )
+            # notification-service 只读 scene 专属键。
+            for scene in ("GENERAL", "REALTIME"):
+                _wire_redis_scene(environment, f"NOTIFICATION_REDIS_{scene}", redis_addr)
             environment["NOTIFICATION_REDIS_GENERAL_DB"] = "1"
             environment["NOTIFICATION_REDIS_REALTIME_DB"] = "4"
             environment["NOTIFICATION_REALTIME_BASE_URL"] = (
@@ -402,14 +456,17 @@ def _rewrite_service(
                 "${LOCAL_GAMMA_REALTIME_PORT:?realtime port is required}"
             )
         if name == "realtime-gateway":
-            environment["REALTIME_REDIS_ADDR"] = (
-                f"{redis_host}:{redis_port}"
+            _wire_redis_scene(
+                environment, "REALTIME_GATEWAY_REDIS_REALTIME", redis_addr
             )
         if name == "rtc-service":
-            environment["MONGO_URI"] = mongo_uri
-            environment["REDIS_ADDR"] = (
-                f"{redis_host}:{redis_port}"
-            )
+            environment["RTC_MONGO_URI"] = mongo_uri
+            # rtc 的 rec scene 在装配里复用 general，因此只需接 general 与
+            # realtime 两个 scene；共享兜底键 RTC_REDIS_ADDR 保留为该服务部署面
+            # 的既有契约，scene 专属键优先。
+            environment["RTC_REDIS_ADDR"] = redis_addr
+            for scene in ("GENERAL", "REALTIME"):
+                _wire_redis_scene(environment, f"RTC_REDIS_{scene}", redis_addr)
             environment["RTC_MEDIA_CONNECTION_URL"] = (
                 "${PROD_RTC_MEDIA_CONNECTION_URL:?PROD_RTC_MEDIA_CONNECTION_URL is required}"
             )

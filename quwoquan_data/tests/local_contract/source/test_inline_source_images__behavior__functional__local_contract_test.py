@@ -210,6 +210,7 @@ def test_inline_candidate_flows_through_gates_with_placeholder():
             object_dir=Path(tempfile.mkdtemp(prefix="inline_obj_")),
             ordinal=1,
             vertical="travel",
+            research_lane="article",
             extra_candidates=build_inline_image_candidates(
                 [
                     {

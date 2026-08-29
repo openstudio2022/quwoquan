@@ -71,20 +71,21 @@ type PostReference struct {
 // hydrates only these identities under current visibility and never substitutes
 // a different candidate.
 type Page struct {
-	DeliveryPageID string          `json:"deliveryPageId"`
-	ScopeHash      string          `json:"scopeHash"`
-	FeedRequestID  string          `json:"feedRequestId"`
-	PageSize       int             `json:"pageSize"`
-	Depth          int             `json:"depth"`
-	PreviousPageID string          `json:"previousPageId,omitempty"`
-	Items          []PostReference `json:"items"`
-	ObjectCards    []ObjectCard    `json:"objectCards,omitempty"`
-	OutboundCursor string          `json:"outboundCursor,omitempty"`
-	ReleaseID      string          `json:"releaseId,omitempty"`
-	ManifestDigest string          `json:"manifestDigest,omitempty"`
-	PolicyDigest   string          `json:"policyDigest,omitempty"`
-	CreatedAt      time.Time       `json:"createdAt"`
-	ExpiresAt      time.Time       `json:"expiresAt"`
+	DeliveryPageID   string          `json:"deliveryPageId"`
+	ScopeHash        string          `json:"scopeHash"`
+	FeedRequestID    string          `json:"feedRequestId"`
+	PageSize         int             `json:"pageSize"`
+	Depth            int             `json:"depth"`
+	PreviousPageID   string          `json:"previousPageId,omitempty"`
+	Items            []PostReference `json:"items"`
+	ObjectCards      []ObjectCard    `json:"objectCards,omitempty"`
+	OutboundCursor   string          `json:"outboundCursor,omitempty"`
+	ReleaseID        string          `json:"releaseId,omitempty"`
+	ManifestDigest   string          `json:"manifestDigest,omitempty"`
+	PolicyDigest     string          `json:"policyDigest,omitempty"`
+	ExperimentBucket string          `json:"experimentBucket,omitempty"`
+	CreatedAt        time.Time       `json:"createdAt"`
+	ExpiresAt        time.Time       `json:"expiresAt"`
 }
 
 func NewID() (string, error) {
@@ -129,7 +130,14 @@ func (p Page) Validate(now time.Time) error {
 		!validBoundedText(p.ReleaseID, MaximumReleaseIDBytes, false) ||
 		!validBoundedText(p.ManifestDigest, MaximumDigestBytes, false) ||
 		!validBoundedText(p.PolicyDigest, MaximumDigestBytes, false) ||
+		!validBoundedText(p.ExperimentBucket, MaximumAttributionBytes, false) ||
 		(strings.TrimSpace(p.PolicyDigest) != "" && !validSHA256Digest(p.PolicyDigest)) {
+		return ErrInvalid
+	}
+	policyDigest := strings.TrimSpace(p.PolicyDigest)
+	experimentBucket := strings.TrimSpace(p.ExperimentBucket)
+	if (policyDigest == "") != (experimentBucket == "") ||
+		(experimentBucket != "" && experimentBucket != "model" && experimentBucket != "rule") {
 		return ErrInvalid
 	}
 	seen := make(map[string]struct{}, len(p.Items))

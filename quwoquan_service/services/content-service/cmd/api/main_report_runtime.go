@@ -32,11 +32,8 @@ func buildReportRuntime(
 	postQueryReader *persistence.MongoPostQueryReader,
 	authoritativeSignalSink *recinfra.AuthoritativeSignalSink,
 ) (*reportpersistence.PGReportStore, func(), error) {
-	reportDSN := resolveReportDSN(cfg)
-	if reportDSN == "" {
-		return nil, nil, nil
-	}
-	db, err := sql.Open("postgres", reportDSN)
+	// DSN 的在场由声明式 required 校验保证，举报事实存储是启动必需依赖。
+	db, err := sql.Open("postgres", cfg.Postgres.ReportDSN)
 	if err != nil {
 		return nil, nil, fmt.Errorf("content-service report postgres open failed: %w", err)
 	}

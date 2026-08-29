@@ -1,0 +1,74 @@
+# promtool test rules：配置同步一致性告警的表达式求值回归。
+# 运行：make verify-prometheus-rule-tests
+# 范围：ConfigSyncInstanceStale（time() 差值 + for 窗口）、ConfigSyncOutOfSyncSustained（for 窗口持续性）。
+rule_files:
+  - ../alerts/quwoquan_alerts.yaml
+
+evaluation_interval: 1m
+
+tests:
+  # ── 失联开火：last_success 恒为 0，time()-0 自 10m 起 >600，for 5m 后于 15m 开火 ──
+  - interval: 1m
+    input_series:
+      - series: 'qwq_config_sync_last_success_timestamp_seconds{service="circle-service"}'
+        values: '0x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: ConfigSyncInstanceStale
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              layer: l2
+              domain: platform-ops
+              service: circle-service
+            exp_annotations:
+              summary: "实例配置同步失联（service=circle-service）"
+              description: "该实例超过 10 分钟没有一次成功的 config resolve（同步周期 30s），收敛结论不可信；检查实例存活、PLATFORM_OPS_BASE_URL 连通性与 platform-ops /control-plane/platform/triage/summary 的 staleInstances 列表。"
+
+  # ── 失联 for 窗口边界不开火：条件自 10m 起成立，14m 时仅持续 4m < for 5m ──
+  - interval: 1m
+    input_series:
+      - series: 'qwq_config_sync_last_success_timestamp_seconds{service="circle-service"}'
+        values: '0x30'
+    alert_rule_test:
+      - eval_time: 14m
+        alertname: ConfigSyncInstanceStale
+        exp_alerts: []
+
+  # ── 失联不开火：last_success 持续跟进当前时间，差值恒为 0 ──
+  - interval: 1m
+    input_series:
+      - series: 'qwq_config_sync_last_success_timestamp_seconds{service="circle-service"}'
+        values: '0+60x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: ConfigSyncInstanceStale
+        exp_alerts: []
+
+  # ── 未收敛开火：in_sync 恒为 0 持续超过 for 15m ──
+  - interval: 1m
+    input_series:
+      - series: 'qwq_config_sync_in_sync{service="tag-service"}'
+        values: '0x30'
+    alert_rule_test:
+      - eval_time: 16m
+        alertname: ConfigSyncOutOfSyncSustained
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              layer: l2
+              domain: platform-ops
+              service: tag-service
+            exp_annotations:
+              summary: "实例配置持续未收敛（service=tag-service）"
+              description: "该实例连续 15 分钟 effectiveHash 与 desiredHash 不一致或同步失败；对照 /platform/config/drift 的 outOfSyncInstances，推动实例重新对齐或回滚配置发布。"
+
+  # ── 未收敛中途恢复不开火：10m 后 in_sync 回到 1，for 15m 不满足 ──
+  - interval: 1m
+    input_series:
+      - series: 'qwq_config_sync_in_sync{service="tag-service"}'
+        values: '0x10 1x20'
+    alert_rule_test:
+      - eval_time: 16m
+        alertname: ConfigSyncOutOfSyncSustained
+        exp_alerts: []

@@ -18,7 +18,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from quwoquan_app.scripts.device.verify_flutter_run_defines import (
+sys.dont_write_bytecode = True
+
+# 同目录顶层 import：本脚本既被直跑（sys.path[0]=scripts/device）也被
+# 测试经 sys.path 注入同目录后 import，包路径写法在两种场景下均不可达。
+from verify_flutter_run_defines import (
     RUNTIME_VALUE_DEFINE_KEYS,
 )
 
@@ -248,8 +252,8 @@ def _launcher_handoff(environment: str, target: str) -> dict[str, Any]:
             environment,
             "--target",
             target,
-            "--launch-mode",
-            "matrix_uat",
+            "--launch-provenance",
+            "canonical_launcher",
         ],
         cwd=str(APP),
         text=True,

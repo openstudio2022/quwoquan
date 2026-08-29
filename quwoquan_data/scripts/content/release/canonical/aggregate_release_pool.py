@@ -329,18 +329,22 @@ def prepare_pool_release(
                             "DATA.POOL.MEDIA_IDENTITY_CONFLICT: "
                             f"postRef={post_ref} assetId={asset_id}"
                         )
-                    old_asset = public_slices.get(public_slice)
-                    if old_asset is not None and old_asset != asset_id:
-                        raise ObjectTransactionError(
-                            "DATA.POOL.MEDIA_SLICE_CONFLICT: "
-                            f"postRef={post_ref} publicSliceKey={public_slice}"
-                        )
+                    # Derived public slices are exclusive; research CAS keys are
+                    # content-addressed and may be shared (DEC-031).
+                    if public_slice:
+                        old_asset = public_slices.get(public_slice)
+                        if old_asset is not None and old_asset != asset_id:
+                            raise ObjectTransactionError(
+                                "DATA.POOL.MEDIA_SLICE_CONFLICT: "
+                                f"postRef={post_ref} publicSliceKey={public_slice}"
+                            )
                 closure_cache[post_ref] = closure
                 for asset in closure[3]:
                     asset_id = str(asset.get("assetId") or "").strip()
                     public_slice = str(asset.get("publicSliceKey") or "").strip()
                     media_identities[asset_id] = media_identity(asset)
-                    public_slices[public_slice] = asset_id
+                    if public_slice:
+                        public_slices[public_slice] = asset_id
             except (OSError, TypeError, ValueError, ObjectTransactionError) as exc:
                 rejected.add(post_ref)
                 excluded.append(_exclusion(post_ref, exc))

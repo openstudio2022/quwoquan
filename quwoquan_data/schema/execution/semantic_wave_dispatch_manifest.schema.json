@@ -108,7 +108,7 @@
       "additionalProperties": false,
       "required": [
         "familyRef", "regionRef", "selector", "count", "quota",
-        "capacityCalibration",
+        "executionAuthority",
         "workerHostSetBinding", "topic", "sourceProviders", "targetNames",
         "scaleSourcePool", "sourcePoolEvidenceRootRef", "sourcePoolSelection"
       ],
@@ -118,9 +118,7 @@
         "selector": {"enum": ["all", "source-ready-priority"]},
         "count": {"type": "integer", "minimum": 1, "maximum": 12},
         "quota": {"type": "integer", "minimum": 1, "maximum": 12},
-        "capacityCalibration": {
-          "$ref": "governed_capacity_calibration_receipt.schema.json#/$defs/sourceBinding"
-        },
+        "executionAuthority": {"$ref": "execution_authority.schema.json"},
         "workerHostSetBinding": {"type": "null"},
         "topic": {"type": "string", "minLength": 1},
         "sourceProviders": {"type": "array", "maxItems": 0},

@@ -506,6 +506,7 @@ type telemetryEventDef struct {
 	OptionalExtensions []string `yaml:"optional_extensions"`
 	NormalSampleRate   float64  `yaml:"normal_sample_rate"`
 	SlowThresholdMS    int      `yaml:"slow_threshold_ms"`
+	AlwaysKeepResults  []string `yaml:"always_keep_results"`
 	InternalPriority   string   `yaml:"internal_priority"`
 }
 

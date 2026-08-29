@@ -13,6 +13,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+sys.dont_write_bytecode = True
+
 # launcher 从 run.sh 直接执行，进程不带仓库根；identity 与 manifest 契约的
 # 唯一 owner 在 ops 树，按仓内绝对包名导入前先把根接上。
 _REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -60,7 +62,7 @@ def _parser(contract: dict[str, Any]) -> argparse.ArgumentParser:
     parser.add_argument(
         "--target", choices=tuple(contract["target_environment"]), required=True
     )
-    parser.add_argument("--launch-mode", required=True)
+    parser.add_argument("--launch-provenance", required=True)
     parser.add_argument(
         "--launch-policy",
         choices=(TEST_LIVE_LAUNCH_POLICY, PROD_RELEASE_LAUNCH_POLICY),
@@ -194,8 +196,6 @@ def _load_runtime_config_package(args: argparse.Namespace) -> dict[str, Any]:
         args.target,
         "--format",
         "json",
-        "--launch-mode",
-        args.launch_mode,
         "--launch-policy",
         args.launch_policy,
     ]
@@ -307,7 +307,8 @@ def build_handoff(
         "buildProfile": build_profile,
         "target": args.target,
         "entrypoint": entrypoint,
-        "launchMode": args.launch_mode,
+        "launchProvenance": args.launch_provenance,
+        "runtimeConfigSupplyMode": contract["runtime_config_supply_modes"][0],
         "launchPolicy": args.launch_policy,
         "runtimeConfigPackageDigest": package_digest,
         "runtimeConfigTrustEnvelopeDigest": trust_envelope_digest,
@@ -318,7 +319,10 @@ def build_handoff(
         },
     }
     effective_digest = effective_launch_manifest_digest(effective_manifest, contract)
-    compile_diagnostics = {"launchMode": args.launch_mode}
+    compile_diagnostics = {
+        "launchProvenance": args.launch_provenance,
+        "runtimeConfigSupplyMode": contract["runtime_config_supply_modes"][0],
+    }
     handoff = {
         **effective_manifest,
         "schema": handoff_schema["schema_value"],

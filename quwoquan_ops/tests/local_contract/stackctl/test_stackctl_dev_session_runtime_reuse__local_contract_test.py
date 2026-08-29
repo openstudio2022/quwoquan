@@ -372,9 +372,12 @@ class StackctlDevSessionRuntimeReuseTest(StackctlDevSessionTestBase):
 
     def test_all_nonprod_is_serial_and_failure_stops_later_targets(self) -> None:
         visited: list[str] = []
+        target_report_dirs: list[Path] = []
+
         def run_target(**kwargs: object) -> dict[str, object]:
             target = str(kwargs["target"])
             visited.append(target)
+            target_report_dirs.append(Path(str(kwargs["report_dir"])))
             if target == "beta-local":
                 return {
                     "exitCode": 2,
@@ -407,7 +410,22 @@ class StackctlDevSessionRuntimeReuseTest(StackctlDevSessionTestBase):
             mock.patch.object(
                 stackctl,
                 "resolve_report_dir",
-                return_value=Path(temporary),
+                return_value=Path(temporary) / "repo-aggregate",
+            ),
+            mock.patch.object(
+                stackctl,
+                "artifact_run_dir",
+                side_effect=lambda environment, command, *, target: (
+                    Path(temporary)
+                    / environment
+                    / "runs"
+                    / f"{command}-{target}"
+                ),
+            ),
+            mock.patch.object(
+                stackctl,
+                "local_runtime_capacity_evidence",
+                return_value={"issues": []},
             ),
             mock.patch.object(
                 stackctl,
@@ -424,8 +442,103 @@ class StackctlDevSessionRuntimeReuseTest(StackctlDevSessionTestBase):
             result = stackctl.command_dev_session(args)
 
         self.assertEqual(visited, ["alpha-local", "beta-local"])
+        self.assertEqual(
+            target_report_dirs,
+            [
+                Path(temporary) / "alpha/runs/dev-session-alpha-local",
+                Path(temporary) / "beta/runs/dev-session-beta-local",
+            ],
+        )
         self.assertEqual(result["exitCode"], 2)
         self.assertEqual(result["blockerKind"], "runtime_health_failed")
+        self.assertEqual(
+            [session["reportDir"] for session in result["sessions"]],
+            [
+                str(Path(temporary) / "alpha/runs/dev-session-alpha-local"),
+                str(Path(temporary) / "beta/runs/dev-session-beta-local"),
+            ],
+        )
+
+    def test_all_nonprod_aggregate_references_three_environment_run_roots(
+        self,
+    ) -> None:
+        args = argparse.Namespace(
+            command="dev-session",
+            all_nonprod=True,
+            env="",
+            target="",
+            device_id="",
+            launch_app=False,
+            report_dir="",
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            aggregate_root = Path(temporary) / "repo-aggregate"
+            environment_roots = {
+                environment: (
+                    Path(temporary)
+                    / environment
+                    / "runs"
+                    / f"dev-session-{environment}-local"
+                )
+                for environment in ("alpha", "beta", "gamma")
+            }
+            with (
+                mock.patch.object(
+                    stackctl,
+                    "resolve_report_dir",
+                    return_value=aggregate_root,
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "artifact_run_dir",
+                    side_effect=lambda environment, _command, *, target: (
+                        environment_roots[environment]
+                    ),
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "local_runtime_capacity_evidence",
+                    return_value={"issues": []},
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_local_stack_operation_lock",
+                    return_value=contextlib.nullcontext(),
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_run_dev_session_target",
+                    return_value={
+                        "exitCode": 0,
+                        "status": "passed",
+                        "sessionKind": "mutable",
+                        "blockerKind": "",
+                        "details": [],
+                        "warnings": [],
+                        "fullRuntimeSelected": True,
+                        "phases": [],
+                    },
+                ),
+            ):
+                result = stackctl.command_dev_session(args)
+            aggregate = json.loads(
+                (aggregate_root / "report.json").read_text(encoding="utf-8")
+            )
+
+        expected_refs = [
+            str(environment_roots[environment])
+            for environment in ("alpha", "beta", "gamma")
+        ]
+        self.assertEqual(result["exitCode"], 0)
+        self.assertEqual(result["reportDir"], str(aggregate_root))
+        self.assertEqual(
+            [session["reportDir"] for session in result["sessions"]],
+            expected_refs,
+        )
+        self.assertEqual(
+            [session["reportDir"] for session in aggregate["sessions"]],
+            expected_refs,
+        )
 
     def test_all_nonprod_cross_target_bounded_conflict_preserves_runtime(self) -> None:
         bounded_attempt = {
@@ -770,4 +883,3 @@ class StackctlDevSessionRuntimeReuseTest(StackctlDevSessionTestBase):
 
         self.assertEqual(result["exitCode"], 2)
         self.assertEqual(result["blockerKind"], "runtime_health_failed")
-

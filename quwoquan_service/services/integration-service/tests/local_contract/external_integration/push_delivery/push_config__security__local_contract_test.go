@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"gopkg.in/yaml.v3"
+
 	serviceclients "quwoquan_service/generated/serviceclients"
 	externalprovider "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/provider"
 	integrationconfig "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/runtimeconfig"
@@ -82,8 +84,8 @@ func validBaseConfigForPushTest() integrationconfig.Config {
 	cfg := integrationconfig.Config{}
 	cfg.MongoDB.URI = "mongodb://127.0.0.1:27017"
 	cfg.MongoDB.Database = "integration_test"
-	cfg.AccountSecurityAuthority.BaseURL = "http://user-service:18081"
-	cfg.AccountSecurityAuthority.TimeoutMs = 300
+	cfg.UserAccountSecurityAuthority.BaseURL = "http://user-service:18081"
+	cfg.UserAccountSecurityAuthority.TimeoutMs = 300
 	return cfg
 }
 
@@ -99,8 +101,15 @@ func loadPushEnvironmentConfigForTest(t *testing.T, appEnv string) integrationco
 	if combined, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("render %s canonical config: %v\n%s", appEnv, err, combined)
 	}
-	if err := integrationconfig.MergeFile(&cfg, output); err != nil {
-		t.Fatalf("load %s canonical config %s: %v", appEnv, output, err)
+	raw, err := os.ReadFile(output)
+	if err != nil {
+		t.Fatalf("read %s canonical config %s: %v", appEnv, output, err)
+	}
+	if err := integrationconfig.SnapshotGuard(raw); err != nil {
+		t.Fatalf("%s canonical config rejected: %v", appEnv, err)
+	}
+	if err := yaml.Unmarshal(raw, &cfg); err != nil {
+		t.Fatalf("parse %s canonical config %s: %v", appEnv, output, err)
 	}
 	integrationconfig.NormalizeDefaults(&cfg)
 	cfg.MongoDB.URI, cfg.MongoDB.Database = "mongodb://127.0.0.1:27017", "integration_test"

@@ -4,107 +4,174 @@
 >
 > Journey / Scenario：不直接参与用户 Journey；支撑全部 Scenario 的一致实施与审核约束
 >
-> 设计归属：[L2 DEC-002](../design.md#dec-002)、[L2 DEC-003](../design.md#dec-003)
+> 设计归属：[L2 DEC-002](../design.md#dec-002)、[L2 DEC-003](../design.md#dec-003)、[L2 DEC-004](../design.md#dec-004)、[L2 DEC-005](../design.md#dec-005)
 
 ## 1. 用户价值
 
-作为编程 Agent 或审核者，我希望顶层技能只描述可执行的完整工作流、评审只装配与改动影响面匹配的检查项，从而在 Cursor / Codex / Claude Code 任一 harness 中都以最小上下文获得同一套准入、执行与准出约束。
+作为使用 Cursor 或 Codex 的编程 Agent、审核者和仓库维护者，我希望每次任务只加载当前路径、
+工作流和风险真正需要的约束，并让 Review 在固定角色预算内消费同一份 owner 与证据事实，
+从而减少上下文追链、重复 gate、模型额度放大和卡顿，同时保持失败可见、证据可复查。
 
 ## 2. 范围与非目标
 
 ### In Scope
 
-- `.agents/skills/` 顶层工作流技能的准入、统一八段模板与命令映射。
-- 评审注册表按 `(workflow, deliverable, profiles)` 的条件装配、gate 去重与可达性。
-- 原则页迁入唯一 owner 角色 reference；命令薄壳只描述当前执行入口。
+- 根与子树 `AGENTS.md`、Workflow Skill、Feature spec/design/contracts、Review role/checklist 和
+  Cursor/Codex adapter 的单轨职责与渐进加载顺序。
+- `feature-context` 的紧凑 manifest，以及开发 PRE 与 Review POST 共用的 owner resolver。
+- Review 的主审、唯一专审、命名 evidence、脏工作树指纹、定向复审和角色调用预算。
+- Cursor/Codex 两个 harness 的 Skill/Reviewer 发现与生成物一致性。
 
 ### Out of Scope
 
-- 各业务领域自身的规格内容与 gate 实现细节。
-- tracked workflow manifest、技能状态台账或评审历史记录。
+- 各业务领域自身的产品决定、wire schema 和 gate 实现细节。
+- 自动清理 Cursor 本地数据库、改写历史 immutable receipt 或保留评审历史台账。
+- 把 feature owner、执行状态或上下文正文复制进新的 tracked registry。
 
 ## 3. 行为要求
 
 <a id="req-001"></a>
-### REQ-001 工作流技能统一模板
+### REQ-001 规则按唯一职责分层并渐进加载
 
-- 顶层 SKILL.md 必须 `metadata.kind: workflow` 且八段齐全（触发/输入/角色/执行/交付件/内置评审/失败与停止/HANDOFF）。
-- 交付件与内置评审段不得为空。
-- HANDOFF 必须声明唯一合法下游。
+- 根 `AGENTS.md` 只拥有全仓安全、真相源顺序、工作流选择、证据诚实性、共享工作树与 Git 不变量。
+- 最近子树 `AGENTS.md` 只拥有该子树每次变更都成立的不变量和入口；功能、页面、算法或错误事实不得进入全局规则。
+- Workflow Skill 只拥有触发与输入、执行、完成证据、失败停止、条件性交接五段；完成判据就地声明，不再经共享 completion/interaction 文档二次跳转。
+- Feature spec/design/contracts 拥有功能行为、设计约束与验收；Review role 只拥有职责和盲区，checklist 只拥有分级判定并引用命名 evidence。
+- Cursor/Codex adapter 与 Cursor command 只做发现和格式转换，不承载规范正文。
 
 <a id="req-002"></a>
-### REQ-002 命令与技能双向映射
+### REQ-002 开发与 Review 共用精确 owner manifest
 
-- 声明 `metadata.command` 的技能必须存在同名 `.cursor/commands/*.md` 薄壳，反向亦然；薄壳只描述当前执行入口，不含历史、迁移或多 harness 说明。
+- `feature-context` 默认只输出紧凑 manifest；展开父链正文必须显式请求 expanded 格式。
+- manifest 必须遵守 canonical agent governance contract 的 `feature_context_manifest` schema，
+  指向唯一 owner 与直接 canonical 锚点；不得把整条父链正文拼入默认输出。
+- 路径先由 L1 最长工程根确定领域 owner，再由该 L1 下 L2 DEC 的适用工程根与唯一影响 Story
+  精确下钻；同优先级多 owner 或无 owner时 fail-closed。
+- 开发 PRE 与 Review POST 必须消费同一 manifest；Review profile 只补 specialist 与 evidence，
+  不复制 feature owner 或 design 内容。
+- 上下文装配顺序固定为 Skill-first：Skill body 先于 feature-context 被加载，(workflow, profile)
+  与所需 owner kind 的选择先于 manifest 请求、由已选中的唯一 Skill 决定；自然语言与显式命令一旦
+  RESOLVE 完成即消费同一顺序。
 
 <a id="req-003"></a>
-### REQ-003 profile 精确派发
+### REQ-003 Review 固定为主审加最多一名专审
 
-- 评审装配必须先由 changed_paths 与 deliverable 派生 profile，再按条件选择角色 checklist。
-- 未匹配 profile 的角色与 gate 不得加载。
-- 选中 bundle 内相同 gate 只执行一次。
+- PRE 只由主会话完成 owner、范围、验收和 evidence 预检；POST 按 registry 先执行命名 evidence，再装配唯一 primary 与最高优先级 specialist。计划形态和预算必须遵守 canonical contract 与 registry limits。
+- `explore`、`plan-next`、`continue`、`review` 与 `commit` 是零 Reviewer 的控制型 workflow：前两者不产生送审交付件，后三者分别复用被恢复 workflow、禁止递归自审、消费已评审增量；其他 workflow 禁止关闭 automatic review。显式 Review 仍受同一两角色上限。
+- 修复后只允许 finding owner 定向复审；禁止第二次自动复审、超时自动重试或绕过 registry limits。
+
+<a id="req-004"></a>
+### REQ-004 Evidence 与复用身份单轨
+
+- evidence 的定义只由 registry 拥有；checklist 的 MUST 只能绑定 `evidence: <id>` 或客观
+  `check:`，不得保存命令。
+- board 每个 evidence ID 只执行一次并把结果共享给 Reviewer；Reviewer 缺 evidence 时报告
+  incomplete，禁止自行补跑命令。
+- 复用指纹必须消费 canonical contract 声明的全部输入；tracked、untracked、删除、symlink、
+  context 或 evidence 定义的变化都不得复用旧结论。
+- re-review 必须引用 initial plan，finding owner 必须来自首次 Reviewer；scope、profile 或路径集合变化时
+  返回 `NEW_REVIEW_REQUIRED`，不得把旧结论迁移到新范围。
+- 复用指纹的 digest 只覆盖 canonical contract 声明的 digestPayload；capturedAt 等 receipt
+  字段不得进入摘要，同一输入不同采集时间必须产生相同 digest。
+- digestPayload 的 serialization version、字段闭集、排序、缺席/空集合与 symlink 语义只由
+  canonical agent governance contract 拥有；消费者不得另行定义影子 freshness 字段。
+
+<a id="req-005"></a>
+### REQ-005 Cursor 与 Codex 使用一个中性真相源
+
+- `.agents/skills/` 是 Workflow Skill 真相源；Reviewer executor 以中性文件存在于 Review Skill 内。
+- 生成器按 canonical contract 从中性 executor 单向生成 tracked Cursor/Codex projection，并对缺失、漂移、孤儿和手改判否；这些随仓库分发的 projection 不属于 `.qwq_output` 运行产物。
+- 仓库不支持 Claude Code：不得存在 `CLAUDE.md`、`.claude/**` 或以 Claude Code 为当前 harness 的规格、门禁和命令示例。
+- 历史 receipt 的字符串值与模型族 `claude` 不属于 harness 支持，不得因本要求改写。
+
+<a id="req-006"></a>
+### REQ-006 Review 中断给出 typed 终态与唯一恢复动作
+
+- evidence 失败、required/optional Reviewer 未完成、用户取消、指纹或 scope 漂移必须分别落到 canonical contract 已声明的 terminal；未知失败 fail-closed。
+- Board 必须按该 terminal 的等级、自动重试许可与唯一恢复动作收敛，禁止把 incomplete/cancelled/stale 包装为通过。
 
 ## 4. 契约引用
 
-- 上下文门禁：`quwoquan_ops/gate/verify_agent_context_budget.py`
-- 注册表：`.agents/skills/review/references/registry.yaml`
-- 派发装配唯一执行体：`quwoquan_ops/cli/review_dispatch.py`（派发清单与去重 gate 计划落 `.qwq_output/env/repo/runs/review/`）
-- 子代理生成器：`quwoquan_ops/tools/generate_codex_agents.py`
+- canonical manifest schema：`quwoquan_ops/policies/agent_governance_contract.yaml#feature_context_manifest`
+- canonical Review plan schema：`quwoquan_ops/policies/agent_governance_contract.yaml#review_plan`
+- canonical typed terminal：`quwoquan_ops/policies/agent_governance_contract.yaml#terminal_codes`
+- canonical tracked projection：`quwoquan_ops/policies/agent_governance_contract.yaml#tracked_projections`
+- workflow/profile/evidence 路由：`.agents/skills/review/references/registry.yaml`
+- 实现消费者：`quwoquan_ops/cli/feature_tree.py`、`quwoquan_ops/cli/review_dispatch.py`
 
 ## 5. 验收场景
 
 <a id="gwt-001"></a>
-### GWT-001 命令薄壳与技能一一对应
+### GWT-001 规则分层与上下文预算
 
-- GIVEN `.cursor/commands/` 与 `.agents/skills/` 处于当前态。
-- WHEN 门禁校验命令映射与薄壳措辞。
-- THEN 每个命令有同名 workflow 技能且反向唯一；薄壳含历史或迁移叙述、或存在无技能对应的命令时被阻断。
+- GIVEN 根/子树 AGENTS、Workflow Skill、角色/checklist、Feature 设计和 harness adapter 处于当前态。
+- WHEN 运行 Agent 上下文治理门禁。
+- THEN 根加最近子树 AGENTS 不超过 16KiB，单 Reviewer 规则上下文不超过 24KiB，默认 manifest 不超过 8KiB。
+- AND 角色 reference、规范性 Cursor rule、共享 completion/interaction 跳转或 harness 规范副本出现时门禁判否并指出唯一迁移层。
 
 <a id="gwt-002"></a>
-### GWT-002 顶层只有完整工作流技能
+### GWT-002 Owner manifest 精确且开发与 Review 同源
 
-- GIVEN `.agents/skills/` 顶层目录。
-- WHEN 门禁校验每个技能的 frontmatter 与章节结构。
-- THEN 全部技能 `metadata.kind: workflow` 且八段齐全；原则、标准或检查项出现在顶层时被阻断。
+- GIVEN 一个被稳定 L1 根认领、并被 L2 DEC 适用工程根精确声明的代码路径。
+- WHEN 以默认格式生成 feature context，并为同一路径生成 Review plan。
+- THEN manifest 与 plan 指向相同的 AppRoot/L1/L2/L3、DEC/REQ/GWT 锚点和适用 AGENTS，不含父链全文。
+- AND 同优先级多 DEC/Story、越界路径或无 owner 时返回 typed `GATE_BLOCK`。
 
 <a id="gwt-003"></a>
-### GWT-003 PRD 可条件跳过 Design
+### GWT-003 PRE 零 Reviewer 且 POST 至多两名
 
-- GIVEN 一次未达到设计门槛的规格增量。
-- WHEN `prd` 完成 POST 评审并交接。
-- THEN HANDOFF 的合法下游允许直达 `dev` 而不经 `design`；达到门槛时必须先经 `design`。
+- GIVEN pageflip、纯 Python gate、无 profile 的普通实现和默认不自动评审的 workflow 四种请求。
+- WHEN 分别生成 PRE 与 POST Review plan。
+- THEN 全部 PRE 的 reviewers/evidence 为空；pageflip POST 只有 Developer 与 UX，纯 Python gate 只有 Developer 与 Ops。
+- AND 无 profile 的自动 workflow 只有 primary，上述五个控制型 workflow 为零 Reviewer，任一 initial plan 的 Reviewer 不超过两名。
 
 <a id="gwt-004"></a>
-### GWT-004 无关 gate 零加载
+### GWT-004 命名 Evidence、指纹与定向复审
 
-- GIVEN 一次只触及单一技术栈的改动（如纯 Go contract 或纯 Python gate）。
-- WHEN 评审注册表按 changed_paths 派生 profile 并装配 bundle。
-- THEN bundle 只含匹配 profile 的角色 checklist，并满足以下约束。
-  - 不匹配技术栈的 gate 不出现在证据计划中。
-  - 相同 gate 在计划内只出现一次。
-  - 含 `<...>` 占位符的参数化 gate 与可直跑 gate 分列两字段，执行方绑定实参后执行或显式判 N/A，不得混排派发。
+- GIVEN 一个 initial POST plan 含重复覆盖 evidence、tracked/untracked/删除文件及两个 Reviewer。
+- WHEN 生成计划、修改任一受管字节并按 finding owner 请求 re-review。
+- THEN evidence 按 ID 去重且覆盖项不重复执行，任一受管字节变化都会改变指纹。
+- AND re-review 只包含 finding owner，累计调用不超过 4；非法 owner、第三轮复审或 scope/profile/path 变化被明确拒绝。
 
 <a id="gwt-005"></a>
-### GWT-005 三家 harness 同源一致
+### GWT-005 Cursor 与 Codex adapter 同源且 Claude 不回潮
 
-- GIVEN `.agents/skills/` 真相源、`.claude/skills` 符号链接与 `.codex/agents` 生成物。
-- WHEN 三家 harness 分别发现技能与 reviewer 子代理。
-- THEN 加载到同一正文；生成物与真相源漂移或符号链接断裂时门禁阻断。
+- GIVEN 中性 Reviewer executor、Cursor adapter 与 Codex adapter。
+- WHEN 运行 adapter 生成器的 `--check` 与根布局门禁。
+- THEN 两个 adapter 的正文与权限语义均来自同一中性源，缺失、漂移和孤儿都会判否。
+- AND `CLAUDE.md`、`.claude/**` 或当前文档中的 Claude Code 支持入口回潮时门禁判否。
+
+<a id="gwt-006"></a>
+### GWT-006 Review 中断不被包装为成功
+
+- GIVEN evidence 失败、required Reviewer 模型/额度/连接不可用、optional specialist 不可用、用户取消或指纹漂移。
+- WHEN board 汇总该次评审状态。
+- THEN 每种输入分别得到 canonical terminal contract 声明的 typed 等级、用户可读原因、是否允许重试与唯一恢复动作。
+- AND 任何 incomplete、cancelled 或 stale plan 都不得产生整体通过结论，也不得自动无限重试。
 
 ## 6. 依赖
 
-- 前置要求：根 `AGENTS.md` 五段执行契约与 [`directory-native-sdd`](../directory-native-sdd/spec.md) 的目录原生规则。
-- 上游事实：`.agents/skills/**`、`.cursor/commands/**`、注册表与 Git diff。
-- 下游结果：评审 bundle、gate 证据计划或 GATE_BLOCK。
-- 父级设计：`DEC-002`、`DEC-003`
+- 前置要求：[`development-workflow-governance`](../spec.md) 的目录原生与共享脏树约束。
+- 上游事实：Feature Tree 目录、当前 Git 字节、Workflow Skill、Review registry 与中性 executor。
+- 下游结果：紧凑 context manifest、Review plan、Cursor/Codex adapters 与 typed Review 终态。
+- 父级设计：`DEC-002`、`DEC-003`、`DEC-004`、`DEC-005`。
 
 ## 7. 开放事项
 
-<a id="open-001"></a>
-### OPEN-001 工作流技能与精确派发尚未形成直接测试证据
+<a id="open-002"></a>
+### OPEN-002 EvidenceFingerprint 消费者尚未切换到 digestPayload 单轨身份
 
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：顶层技能统一模板、命令双向映射、profile 精确派发与三家 harness 同源加载全部由门禁与 local_contract 测试绑定。
-- 完成判定：`GWT-001`、`GWT-002`、`GWT-003`、`GWT-004`、`GWT-005` 均有真实门禁或 local_contract 测试 `spec_ref`，且不再依赖本 OPEN 代替证据。
+- 影响或价值：尚缺消费 `evidence_fingerprint` digestPayload 的实现与 `required_fixtures` 三项 contract fixture 证据——canonical contract 已声明该段（digestPayload 与 receipt 分离），但 Review 复用当前唯一 consumed 身份仍是 `review_plan.fingerprint_inputs`，迁移窗口内两段定义并存，若不收敛会形成第二身份算法。
+- 完成判定：`GWT-004` 的指纹复用子句由消费 `evidence_fingerprint` digestPayload 的实现与 `required_fixtures` 三项 contract fixture 绑定证据，且 `review_plan.fingerprint_inputs` 的身份职责被显式 supersede 或删除。
+
+<a id="open-001"></a>
+### OPEN-001 渐进上下文与轻量 Review 尚未全部绑定真实证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺绑定当前工作树字节的完整治理门、聚合 pageflip evidence，以及 Cursor/Codex 各一次 harness 发现 smoke；在这些证据齐备前不得把规格完成当作实现完成。
+- 完成判定：`GWT-001` 至 `GWT-006` 均具备职责匹配的真实 gate/local_contract；`GWT-005` 另具 Cursor 与 Codex 各一次发现 smoke，且上述证据绑定当前工作树字节。

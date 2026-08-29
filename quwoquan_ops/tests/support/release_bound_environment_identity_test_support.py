@@ -23,6 +23,7 @@ from quwoquan_ops.tests.support.app_artifact_manifest_test_support import (
 )
 from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
     APPLICATION_PACKAGES,
+    DISTRIBUTION_EVIDENCE_PATHS,
     ENVIRONMENTS,
     RELEASE_CLOSURE_PATHS,
     canonical_candidate_digest,
@@ -190,6 +191,24 @@ class Fixture:
                 "packageDigest": package_digest,
                 "sourceRef": application_source_ref,
             }
+        distribution_descriptors: dict[str, dict[str, str]] = {}
+        distribution_schemas = {
+            "publicWeb": "client-app.web.official-release",
+            "androidOfficialRelease": "client-app.android.official-release",
+        }
+        for evidence_key, relative in DISTRIBUTION_EVIDENCE_PATHS.items():
+            distribution_path = _write(
+                self.root / relative,
+                {
+                    "schema": distribution_schemas[evidence_key],
+                    "sourceGitSha": GIT_SHA,
+                    "sourceTreeDigest": TREE_DIGEST,
+                },
+            )
+            distribution_descriptors[evidence_key] = {
+                "path": relative,
+                "digest": _sha(distribution_path),
+            }
         manifest: dict[str, Any] = {
             "schema": "release-evidence-manifest",
             "releaseTrainId": None,
@@ -257,6 +276,10 @@ class Fixture:
                 for index, environment in enumerate(ENVIRONMENTS, start=1)
             },
             "applicationPackages": application_packages,
+            "publicWeb": distribution_descriptors["publicWeb"],
+            "androidOfficialRelease": distribution_descriptors[
+                "androidOfficialRelease"
+            ],
             "opsPortal": {
                 "path": "evidence/ops-portal/provenance.json",
                 "digest": DIGEST_A,
@@ -520,14 +543,16 @@ class Fixture:
         launch = {
             "schema": "app-effective-launch-manifest",
             "environment": self.environment,
+            "buildProfile": build_profile_for_environment(self.environment),
             "target": self.target,
             "entrypoint": "lib/main_prod.dart",
-            "launchMode": "matrix_uat",
-            "dartDefinesDigest": DIGEST_A,
-            "runtimeConfigDigest": DIGEST_B,
-            "recoveryBaseUrl": "https://api.example.com",
-            "publicWebBaseUrl": "https://example.com",
-            "appDownloadBaseUrl": "https://cdn.example.com/download",
+            "launchProvenance": "release_package",
+            "runtimeConfigSupplyMode": "external_runtime_package",
+            "launchPolicy": (
+                "prod_release" if self.environment == "prod" else "test_live"
+            ),
+            "runtimeConfigPackageDigest": DIGEST_A,
+            "runtimeConfigTrustEnvelopeDigest": DIGEST_B,
             "requiresLocalTransport": self.environment != "prod",
             "transport": transport,
         }
@@ -565,7 +590,8 @@ class Fixture:
                     "platform": platform,
                     "deviceKind": device_kind,
                     "sourceReport": f"evidence/startup/{attempt}.json",
-                    "launchMode": "matrix_uat",
+                    "launchProvenance": "release_package",
+                    "runtimeConfigSupplyMode": "external_runtime_package",
                     "hotRestart": False,
                     "runtimeConfigurationState": "complete",
                     "missingDefineKeys": [],

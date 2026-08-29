@@ -84,6 +84,9 @@ _PASS_KEYS = frozenset(
         "verificationChecksum",
     }
 )
+# DEC-034 证据复用溯源：复用先前 verify run 的 runtime proof 时 Data 侧回执
+# 携带来源 run id；字段可选（首跑不在场），在场时参与 checksum。
+_OPTIONAL_PASS_KEYS = frozenset({"reusedFromVerifyRunId"})
 
 
 def _sha256(value: bytes) -> str:
@@ -327,7 +330,7 @@ def _load_receipt(
         "verifyRunId": verify_run_id,
         "outcome": "PASS",
     }
-    if set(receipt) != _PASS_KEYS or any(
+    if (set(receipt) - _OPTIONAL_PASS_KEYS) != _PASS_KEYS or any(
         receipt.get(key) != value for key, value in expected.items()
     ):
         raise ValueError("research isolation PASS receipt fields/identity drift")
@@ -447,10 +450,13 @@ def _verify_runtime_proof(
         raise ValueError(
             "research isolation signed media TTL/audit evidence is invalid"
         )
+    # runtime readback 是 post 域对象闭包（posts 关联实体 runtime 形态并集、
+    # posts 拥有媒体并集），与 receipt 的全量 entityRefs/mediaAssetIds 口径
+    # 不同；receipt 的 researchReadback* 字段就是该口径的 Data 权威声明。
     expected_sets = {
-        "entityRefs": data_readiness.get("entityRefs"),
+        "entityRefs": data_readiness.get("researchReadbackEntityRefs"),
         "postIds": data_readiness.get("postIds"),
-        "mediaAssetIds": data_readiness.get("mediaAssetIds"),
+        "mediaAssetIds": data_readiness.get("researchReadbackMediaAssetIds"),
     }
     for field, expected in expected_sets.items():
         if _string_set(readback.get(field), label=field) != _string_set(
@@ -483,6 +489,21 @@ def _verify_runtime_proof(
         ),
         (signed.get("issuanceOperation"), "media issuance", frozenset({200})),
         (signed.get("accessOperation"), "media access", frozenset({200, 206})),
+        (
+            signed.get("rangeAccessOperation"),
+            "media range access",
+            frozenset({200, 206}),
+        ),
+        (
+            signed.get("forgedSignatureOperation"),
+            "forged signature denial",
+            frozenset({401, 403}),
+        ),
+        (
+            signed.get("tamperedExpiryOperation"),
+            "tampered expiry denial",
+            frozenset({401, 403}),
+        ),
         (signed.get("auditReadbackOperation"), "media audit", frozenset({200})),
         (readback.get("operation"), "positive readback", frozenset({200})),
     )
@@ -493,7 +514,7 @@ def _verify_runtime_proof(
     request_ids = [str(row.get("requestId") or "") for row in operations]
     trace_ids = [str(row.get("traceId") or "") for row in operations]
     if (
-        len(operations) != 13
+        len(operations) != len(specs)
         or len(request_ids) != len(set(request_ids))
         or len(trace_ids) != len(set(trace_ids))
     ):

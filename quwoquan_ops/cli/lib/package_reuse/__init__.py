@@ -37,6 +37,20 @@ from .constants import (  # noqa: F401
     PACKAGE_VALIDATION_PURPOSES,
     ROOT,
 )
+from .dependency_bundle import (  # noqa: F401
+    APP_DEPENDENCY_BUNDLE_ACTIVE_SCHEMA,
+    APP_DEPENDENCY_BUNDLE_RECEIPT_SCHEMA,
+    APP_DEPENDENCY_COMPONENTS,
+    AppDependencyBundle,
+    component_declaration,
+    load_active_dependency_bundle,
+    managed_dependency_bundle_root,
+)
+from .dependency_bundle_projection import (  # noqa: F401
+    AppDependencyProjection,
+    materialize_dependency_bundle_projection,
+    replay_ios_dependency_projections,
+)
 from .fingerprint_store import (  # noqa: F401
     _absolute_fingerprint_path,
     _atomic_write_fingerprint,
@@ -61,13 +75,41 @@ from .input_capsule import (  # noqa: F401
     materialize_package_input_capsule,
     verify_package_input_capsule,
 )
-from .workspace_inputs import (  # noqa: F401
-    _expected_service_packages,
-    _normalized_service_packages,
-    deployment_input_digest,
-    deployment_input_roots,
-    workspace_drift_details,
-    workspace_snapshot,
+from .native_dependency_inputs import (  # noqa: F401
+    NATIVE_RESOLUTION_INPUT_SCHEMA,
+    native_resolution_input_identity,
+    native_resolution_input_paths,
+)
+from .pub_cache_capsule import (  # noqa: F401
+    PUB_CACHE_ACTIVE_SCHEMA,
+    PUB_CACHE_DEPENDENCY_LOGICAL_PATH,
+    PUB_CACHE_DEPENDENCY_MANIFEST,
+    PUB_CACHE_DEPENDENCY_SCHEMA,
+    PUB_CACHE_DEPENDENCY_TREE,
+    PUB_CACHE_PROJECTION_RELATIVE,
+    PUB_CACHE_SYNC_MANIFEST_SCHEMA,
+    PubCacheFile,
+    PubCacheSnapshot,
+    build_pub_cache_snapshot,
+    copy_snapshot_tree_with_lock,
+    dependency_required,
+)
+from .pub_cache_projection import (  # noqa: F401
+    materialize_capsule_pub_cache,
+    materialize_verified_capsule_pub_cache,
+)
+from .pub_cache_store import (  # noqa: F401
+    build_sync_manifest,
+    capsule_dependency_snapshot,
+    current_flutter_identity,
+    load_managed_pub_cache_snapshot,
+    load_pub_cache_snapshot_at,
+    managed_snapshot_root,
+    pub_resolution_input_paths,
+    resolution_input_identity,
+    snapshot_for_package_inputs,
+    sync_manifest_bytes,
+    verify_snapshot_flutter_toolchain,
 )
 from .reuse_decision import (  # noqa: F401
     _candidate_service_packages,
@@ -76,4 +118,12 @@ from .reuse_decision import (  # noqa: F401
     can_reuse_package,
     package_content_digest,
     write_package_fingerprint,
+)
+from .workspace_inputs import (  # noqa: F401
+    _expected_service_packages,
+    _normalized_service_packages,
+    deployment_input_digest,
+    deployment_input_roots,
+    workspace_drift_details,
+    workspace_snapshot,
 )

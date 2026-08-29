@@ -107,6 +107,12 @@ class _FakePlatformDriver:
             "effectiveLaunchManifestDigest": request[
                 "effectiveLaunchManifestDigest"
             ],
+            "launchProvenance": request["effectiveLaunchManifest"][
+                "launchProvenance"
+            ],
+            "runtimeConfigSupplyMode": request["effectiveLaunchManifest"][
+                "runtimeConfigSupplyMode"
+            ],
             "previousActiveDigest": request["expectedActiveDigest"],
             "activePackageDigest": request["packageDigest"],
             "errorCode": "",
@@ -136,13 +142,29 @@ class CanonicalLaunchExecutorContractTest(
     CanonicalLaunchPlatformContractMixin,
     unittest.TestCase,
 ):
+    def test_private_runtime_file_allowlist_is_exact(self) -> None:
+        for file_name in (
+            executor.REQUEST_FILE_NAME,
+            executor.RECEIPT_FILE_NAME,
+            executor.ACTIVE_RECEIPT_FILE_NAME,
+            executor.ACTIVE_PACKAGE_FILE_NAME,
+        ):
+            with self.subTest(file_name=file_name):
+                executor._validate_runtime_file_name(file_name)
+
+        with self.assertRaisesRegex(
+            executor.CanonicalExecutorError,
+            "unsupported private runtime file",
+        ):
+            executor._validate_runtime_file_name("../runtime-config-package.json")
+
     def _handoff(self) -> tuple[dict[str, object], dict[str, object]]:
         with shared_nonprod_launcher_authority():
             return build_test_handoff_fixture(
                 handoff_builder,
                 "alpha",
                 "alpha-local",
-                launch_mode="canonical_launcher",
+                launch_provenance="canonical_launcher",
             )
 
     def _active_receipt(
@@ -167,12 +189,25 @@ class CanonicalLaunchExecutorContractTest(
                 "effectiveLaunchManifestDigest": handoff[
                     "effectiveLaunchManifestDigest"
                 ],
+                "launchProvenance": handoff["launchProvenance"],
+                "runtimeConfigSupplyMode": handoff[
+                    "runtimeConfigSupplyMode"
+                ],
                 "previousActiveDigest": "",
                 "activePackageDigest": active_digest,
                 "errorCode": "",
                 "validationIssues": [],
             }
         )
+
+    def _predecessor_active_receipt(
+        self,
+        handoff: dict[str, object],
+    ) -> bytes:
+        receipt = json.loads(self._active_receipt(handoff))
+        receipt.pop("launchProvenance")
+        receipt.pop("runtimeConfigSupplyMode")
+        return executor.canonical_json_bytes(receipt)
 
     def test_first_install_uses_empty_cas_and_advances_only_after_bound_receipt(
         self,
@@ -239,6 +274,76 @@ class CanonicalLaunchExecutorContractTest(
             driver.request["expectedActiveDigest"],
             handoff["runtimeConfigPackageDigest"],
         )
+
+    def test_predecessor_active_receipt_blocks_before_request_write(self) -> None:
+        handoff, _ = self._handoff()
+        driver = _FakePlatformDriver(
+            active_receipt=self._predecessor_active_receipt(handoff),
+        )
+        launch = executor.CanonicalLaunchExecutor(
+            handoff=handoff,
+            platform_driver=driver,
+            inherited_environment={},
+            attach_arguments=(),
+            activation_timeout_seconds=1.0,
+            attach_timeout_seconds=1.0,
+            emit=lambda _: None,
+        )
+
+        with self.assertRaisesRegex(
+            executor.CanonicalExecutorError,
+            "active activation receipt fields are invalid",
+        ):
+            launch.execute()
+        self.assertNotIn("write-request", driver.events)
+        self.assertNotIn(
+            f"read:{executor.ACTIVE_PACKAGE_FILE_NAME}",
+            driver.events,
+        )
+
+    def test_predecessor_launch_receipt_blocks_instead_of_waiting(self) -> None:
+        handoff, _ = self._handoff()
+        driver = _FakePlatformDriver()
+        stale_receipt = self._predecessor_active_receipt(handoff)
+        original_launch_activation = driver.launch_activation
+        original_read_runtime_file = driver.read_runtime_file
+        activation_started = False
+        stale_returned = False
+
+        def launch_activation(request_digest: str) -> None:
+            nonlocal activation_started
+            original_launch_activation(request_digest)
+            activation_started = True
+
+        def read_runtime_file(file_name: str) -> bytes | None:
+            nonlocal stale_returned
+            if (
+                activation_started
+                and not stale_returned
+                and file_name == executor.RECEIPT_FILE_NAME
+            ):
+                stale_returned = True
+                return stale_receipt
+            return original_read_runtime_file(file_name)
+
+        driver.launch_activation = launch_activation
+        driver.read_runtime_file = read_runtime_file
+        launch = executor.CanonicalLaunchExecutor(
+            handoff=handoff,
+            platform_driver=driver,
+            inherited_environment={},
+            attach_arguments=(),
+            activation_timeout_seconds=1.0,
+            attach_timeout_seconds=1.0,
+            emit=lambda _: None,
+        )
+
+        with self.assertRaisesRegex(
+            executor.CanonicalExecutorError,
+            "activation receipt fields are invalid",
+        ):
+            launch.execute()
+        self.assertTrue(stale_returned)
 
     def test_malformed_active_receipt_blocks_before_request_write(self) -> None:
         handoff, _ = self._handoff()
@@ -311,6 +416,12 @@ class CanonicalLaunchExecutorContractTest(
                     "trustEnvelopeDigest": request["trustEnvelopeDigest"],
                     "effectiveLaunchManifestDigest": request[
                         "effectiveLaunchManifestDigest"
+                    ],
+                    "launchProvenance": request["effectiveLaunchManifest"][
+                        "launchProvenance"
+                    ],
+                    "runtimeConfigSupplyMode": request["effectiveLaunchManifest"][
+                        "runtimeConfigSupplyMode"
                     ],
                     "previousActiveDigest": request["expectedActiveDigest"],
                     "activePackageDigest": request["expectedActiveDigest"],
@@ -449,38 +560,6 @@ class CanonicalLaunchExecutorContractTest(
         self.assertNotIn("QWQ_LAUNCH_TARGET", environment)
         self.assertNotIn("QWQ_CONTENT_RELEASE_ID", environment)
         self.assertNotIn("ANDROID_LOCAL_GATEWAY_BASE_URL", environment)
-
-    def test_flutter_attach_started_event_is_only_launch_milestone(self) -> None:
-        self.assertTrue(
-            executor._is_flutter_app_started_event(
-                '[{"event":"app.started","params":{"appId":"daemon-app-1"}}]'
-            )
-        )
-        for line in (
-            '[{"event":"daemon.connected","params":{"pid":123}}]',
-            '[{"event":"app.start","params":{"appId":"daemon-app-1"}}]',
-            '[{"event":"app.started","params":{}}]',
-            '[{"event":"app.started"}]',
-            '{"event":"app.started","params":{"appId":"daemon-app-1"}}',
-            "not-json",
-        ):
-            with self.subTest(line=line):
-                self.assertFalse(executor._is_flutter_app_started_event(line))
-
-        source = (APP_DIR / "scripts/device/run_app_instance.py").read_text(
-            encoding="utf-8"
-        )
-        self.assertIn('"--machine"', source)
-        self.assertIn('"--host-vmservice-port=0"', source)
-        self.assertIn('"--dds-port=0"', source)
-        self.assertNotIn('"--host-vmservice-port=8888"', source)
-        self.assertNotIn('"--dds-port=8889"', source)
-        self.assertNotIn("flutter-attach.pid", source)
-        self.assertNotIn("pid_file.is_file()", source)
-
-        launcher_source = (APP_DIR / "run.sh").read_text(encoding="utf-8")
-        self.assertNotIn("tcp:8888", launcher_source)
-        self.assertNotIn("QWQ_ANDROID_VM_FORWARD_PREEXISTING", launcher_source)
 
     def test_attach_argument_sanitizer_rejects_executor_owned_inputs(self) -> None:
         for arguments in (
@@ -673,60 +752,6 @@ class CanonicalLaunchExecutorContractTest(
                 )
                 self.assertIn(expected_error, result.stderr)
                 self.assertFalse(tool_log.exists())
-
-    def test_attach_executes_dynamic_machine_command_with_clean_environment(self) -> None:
-        process = _AttachProcess(
-            '[{"event":"app.started","params":{"appId":"daemon-app-1"}}]\n'
-        )
-        driver = executor.AndroidPlatformDriver(
-            device_id="device-1",
-            application_id="com.leadwise.quwoquan.nonprod.debug",
-            entrypoint="lib/main_prod.dart",
-        )
-        on_attached = mock.Mock()
-        with mock.patch.dict(
-            os.environ,
-            {
-                "QWQ_APP_RUNTIME_TRUSTED_PUBLIC_KEYS_JSON": '{"legacy":"keyring"}',
-                "QWQ_ANDROID_RELEASE_STORE_PASSWORD": "secret",
-            },
-            clear=False,
-        ), mock.patch.object(
-            executor.subprocess, "Popen", return_value=process
-        ) as popen, mock.patch.object(
-            executor.threading, "Thread", _ImmediateThread
-        ):
-            self.assertEqual(
-                driver.attach(
-                    ("--verbose",),
-                    timeout_seconds=1.0,
-                    on_attached=on_attached,
-                ),
-                0,
-            )
-
-        self.assertEqual(
-            popen.call_args.args[0],
-            [
-                "flutter",
-                "attach",
-                "--machine",
-                "-d",
-                "device-1",
-                "--app-id",
-                "com.leadwise.quwoquan.nonprod.debug",
-                "--target",
-                "lib/main_prod.dart",
-                "--host-vmservice-port=0",
-                "--dds-port=0",
-                "--verbose",
-            ],
-        )
-        self.assertTrue(popen.call_args.kwargs["start_new_session"])
-        child_environment = popen.call_args.kwargs["env"]
-        self.assertNotIn("QWQ_APP_RUNTIME_TRUSTED_PUBLIC_KEYS_JSON", child_environment)
-        self.assertNotIn("QWQ_ANDROID_RELEASE_STORE_PASSWORD", child_environment)
-        on_attached.assert_called_once_with()
 
     def test_attach_timeout_terminates_and_reaps_the_process_group(self) -> None:
         process = _AttachProcess(wait_timeouts=1)

@@ -1,40 +1,13 @@
 package main
 
 import (
-	"context"
-	"log/slog"
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
-
 	"quwoquan_service/runtime/servicehost"
+	"quwoquan_service/runtime/servicekit"
 	bootstrap "quwoquan_service/services/chat-service/cmd/api"
 )
 
 func main() {
-	if err := run(); err != nil {
-		slog.Error("chat-service stopped with failure", "error", err)
-		os.Exit(1)
-	}
-}
-
-func run() error {
-	module, err := bootstrap.NewModule()
-	if err != nil {
-		return err
-	}
-	host, err := servicehost.NewSupervisor(module)
-	if err != nil {
-		return err
-	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	if err := host.Start(ctx); err != nil {
-		return err
-	}
-	<-ctx.Done()
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	return host.Shutdown(shutdownCtx)
+	servicekit.RunStandalone("chat-service", func() (servicehost.Module, error) {
+		return bootstrap.NewModule()
+	})
 }

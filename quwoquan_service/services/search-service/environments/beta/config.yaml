@@ -1,8 +1,7 @@
 overrides:
-  sys.search-service.accountSecurityAuthority.baseUrl: http://user-service:18081
-  sys.search-service.accountSecurityAuthority.timeoutMs: 300
+  sys.search-service.user_account_security_authority.base_url: http://user-service:18081
+  sys.search-service.user_account_security_authority.timeout_ms: 300
   sys.search-service.es.enabled: true
-  sys.search-service.es.requestTimeoutMs: 5000
   sys.search-service.redis.rec.addr: redis:6379
 secretRefs:
   sys.search-service.redis.general.password: SEARCH_REDIS_GENERAL_PASSWORD

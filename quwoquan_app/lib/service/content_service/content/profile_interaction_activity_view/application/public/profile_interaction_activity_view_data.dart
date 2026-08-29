@@ -1,3 +1,6 @@
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show MediaDeliveryAccessMode;
+
 class ProfileInteractionActivityViewData {
   const ProfileInteractionActivityViewData({
     required this.activityId,
@@ -19,7 +22,8 @@ class ProfileInteractionActivityViewData {
     required this.targetContentType,
     required this.targetContentSummary,
     this.targetKind = 'record',
-    this.targetAvailability = 'active',
+    // 契约声明 NOT_NULL，wire 必然带这个取值；给默认值等于替云侧决定可用性。
+    required this.targetAvailability,
     this.targetReplyCount = 0,
     required this.displayPersonaId,
     required this.displayName,
@@ -30,6 +34,8 @@ class ProfileInteractionActivityViewData {
     required this.contextText,
     required this.previewMediaKind,
     required this.previewImageUrl,
+    this.previewImageAssetId,
+    this.previewImageAccessMode,
     required this.previewText,
     required this.previewUnavailable,
     required this.previewObjectId,
@@ -78,6 +84,11 @@ class ProfileInteractionActivityViewData {
   final String contextText;
   final String previewMediaKind;
   final String previewImageUrl;
+
+  /// 预览图的配对资产标识与交付访问模式（DEC-033）；research 相位的
+  /// previewImageUrl 是相对私有 CAS 引用，按 assetId 换短签。
+  final String? previewImageAssetId;
+  final MediaDeliveryAccessMode? previewImageAccessMode;
   final String previewText;
   final bool previewUnavailable;
   final String previewObjectId;

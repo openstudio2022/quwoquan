@@ -306,8 +306,7 @@ void main() {
     expect(
       find.byKey(const ValueKey<String>('media-pageflip-flipping-layer')),
       findsNothing,
-      reason:
-          'dynamic paper layers must not paint from placeholder snapshots before the image page is ready.',
+      reason: 'dynamic paper layers must not paint from placeholder snapshots before the image page is ready.',
     );
 
     harnessKey.currentState!.markReady(<int>{0, 1});
@@ -318,8 +317,7 @@ void main() {
     expect(
       find.byKey(const ValueKey<String>('media-pageflip-flipping-layer')),
       findsOneWidget,
-      reason:
-          'once real page textures are ready, the same held gesture should promote into dynamic paper layers.',
+      reason: 'once real page textures are ready, the same held gesture should promote into dynamic paper layers.',
     );
 
     await gesture.up();
@@ -371,8 +369,7 @@ void main() {
     expect(
       find.byKey(const ValueKey<String>('media-pageflip-flipping-layer')),
       findsOneWidget,
-      reason:
-          'image BACK must inherit the shared pageflip dynamic path while held.',
+      reason: 'image BACK must inherit the shared pageflip dynamic path while held.',
     );
 
     await gesture.up();
@@ -416,8 +413,7 @@ void main() {
     expect(
       find.byKey(const ValueKey<String>('media-pageflip-flipping-layer')),
       findsOneWidget,
-      reason:
-          'image book must render a held page curl from direct URL textures, not wait for release-only page changes.',
+      reason: 'image book must render a held page curl from direct URL textures, not wait for release-only page changes.',
     );
 
     await gesture.up();
@@ -691,7 +687,7 @@ void main() {
     await tester.pump();
   });
 
-  testWidgets('MediaPageFlipBook 后翻绑定 prev.front、prev.back、current.front', (
+  testWidgets('MediaPageFlipBook 后翻三面绑定不创建独立 previous.front 平面', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -734,8 +730,8 @@ void main() {
           'media-pageflip-backward-previous-front-replacement',
         ),
       ),
-      findsOneWidget,
-      reason: '后翻必须复刻文章的上一页正面 replacement 层。',
+      findsNothing,
+      reason: 'Route-B 后翻只能保留一张 moving sheet，不得额外复制 previous.front 平面。',
     );
     expect(
       find.byKey(const ValueKey<String>('media-pageflip-bottom-layer')),

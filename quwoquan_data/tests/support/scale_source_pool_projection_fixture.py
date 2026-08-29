@@ -10,6 +10,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+from collections.abc import Mapping
 from pathlib import Path
 
 from content.source.media_source_admission import MediaSourceAdmissionCommandWriter
@@ -342,7 +343,16 @@ def _media_probe() -> dict[str, object]:
     }
 
 
-def _media_popularity(provider: str, index: int) -> dict[str, object]:
+def _media_popularity(
+    provider: str, index: int, *, comparison_count: int = 18
+) -> dict[str, object]:
+    """One video's popularity signals inside a bucket of ``comparison_count`` peers.
+
+    The percentile is a position within the bucket it declares, so the bucket size
+    has to be the caller's real candidate count: a fixture minting 100 videos against
+    a hard-coded bucket of 18 emits percentiles above 1 and the receipt is refused.
+    """
+
     return {
         "playCount": 10000 + index,
         "likeCount": 500 + index,
@@ -354,19 +364,42 @@ def _media_popularity(provider: str, index: int) -> dict[str, object]:
         "topic": "旅行",
         "timeBucket": "2026-W32",
         "popularityScore": 10000 + index,
-        "popularityPercentile": round(index / 18, 6),
+        "popularityPercentile": round(index / max(comparison_count - 1, 1), 6),
         "rankingEligible": True,
         "ineligibleReason": "",
-        "comparisonCandidateCount": 18,
+        "comparisonCandidateCount": comparison_count,
     }
 
 
 def _media_admission_row(
-    *, evidence_root: Path, carrier: str, index: int, provider: str
+    *,
+    evidence_root: Path,
+    carrier: str,
+    index: int,
+    provider: str,
+    candidate_id: str | None = None,
+    object_ref: str | None = None,
+    identity: Mapping[str, str] | None = None,
+    comparison_count: int = 18,
 ) -> dict[str, object]:
-    candidate_id = f"{carrier}-{index:05d}"
+    """Write one media candidate's admission evidence and return the projected row.
+
+    ``candidate_id``/``object_ref`` are overridable because the pool revalidates the
+    receipt against the candidate that cites it: `objectRef`, `assetKind`,
+    `contentSha256`, `rightsStatus` and `distributionDecision` must agree. A caller
+    whose candidates carry a different object shape has to mint the receipt under
+    that same shape, or the projection drifts by construction.
+
+    ``identity`` is overridable for the same reason one level up: the receipt freezes
+    the source identity it was minted under, and a caller whose pool derives its own
+    revision at runtime would otherwise cite receipts frozen under this module's
+    constants — an identity drift that only surfaces during deep pool validation.
+    """
+
+    identity = dict(identity or IDENTITY)
+    candidate_id = candidate_id or f"{carrier}-{index:05d}"
     asset_id = f"{carrier}-asset-{index:05d}"
-    object_ref = f"posts/{carrier}/{candidate_id}"
+    object_ref = object_ref or f"posts/{carrier}/{candidate_id}"
     entity_id = candidate_id
     entity_ref = f"/entity/地点/景区/{entity_id}"
     source_url = f"https://source.example/{carrier}/{index}"
@@ -387,7 +420,11 @@ def _media_admission_row(
         "contentSha256": content_sha256,
     }
     probe = _media_probe() if carrier == "video" else None
-    popularity = _media_popularity(provider, index) if carrier == "video" else None
+    popularity = (
+        _media_popularity(provider, index, comparison_count=comparison_count)
+        if carrier == "video"
+        else None
+    )
     acquisition_asset = {
         **common,
         "provider": provider,
@@ -415,12 +452,12 @@ def _media_admission_row(
     evidence_documents = {
         "catalog": {
             "schema": "quwoquan_data.fixture_media_catalog",
-            **IDENTITY,
+            **identity,
             "candidates": [{**common, "provider": provider}],
         },
         "acquisition": {
             "schema": "quwoquan_data.fixture_media_acquisition",
-            **IDENTITY,
+            **identity,
             "assets": [acquisition_asset],
         },
         "media_probe": {
@@ -462,9 +499,9 @@ def _media_admission_row(
         asset_kind=carrier,
         asset_id=asset_id,
         object_ref=object_ref,
-        source_revision=IDENTITY["sourceRevision"],
-        source_digest=IDENTITY["sourceDigest"],
-        entity_catalog_digest=IDENTITY["entityCatalogDigest"],
+        source_revision=identity["sourceRevision"],
+        source_digest=identity["sourceDigest"],
+        entity_catalog_digest=identity["entityCatalogDigest"],
         evidence_refs=evidence_refs,
         recorded_at="2026-08-08T00:00:00Z",
     )
@@ -475,7 +512,7 @@ def _media_admission_row(
         "objectRef": object_ref,
         "entityRef": entity_ref,
         "observedEntityRef": entity_ref,
-        **IDENTITY,
+        **identity,
         "sourceAdmissionRef": receipt_ref,
         "sourceAdmissionDigest": receipt["receiptDigest"],
         "sourceAttribution": snapshot["sourceAttribution"],
@@ -502,7 +539,7 @@ def _media_admission_row(
                     "provider": provider,
                     "topic": "旅行",
                     "timeBucket": "2026-W32",
-                    "candidateCount": 18,
+                    "candidateCount": comparison_count,
                 },
             }
             if carrier == "video"

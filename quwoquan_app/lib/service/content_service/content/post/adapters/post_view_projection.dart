@@ -6,6 +6,7 @@ import 'package:quwoquan_app/runtime/transport/media/content_media_url.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/public/media_asset_manifest_resolver.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/article_detail_view.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/public/article_document_asset.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/article_document_models.dart';
 import 'package:quwoquan_app/service/content_service/content/post/domain/article_presentation_models.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/article_presentation_values.dart';
@@ -59,9 +60,12 @@ ContentArticleRender projectArticleDetailView(
   }
 
   final articleAssetManifestResolver = MediaAssetManifestResolver(
-    resolveReference:
-        (raw, {gatewayBaseUrl, imageCdnBaseUrl, videoCdnBaseUrl}) =>
-            resolveImage(raw),
+    resolveReference: (
+      raw, {
+      gatewayBaseUrl,
+      imageCdnBaseUrl,
+      videoCdnBaseUrl,
+    }) => resolveImage(raw),
   );
   final dto = contentPostViewDataFromReadModelMap(raw);
   final postTitle = dto.normalizedTitle;
@@ -262,7 +266,10 @@ List<ArticleLayoutFragment> _fragmentsFromDocument(
           offset: bodyCursor,
           imageUrl: node.imageUrl,
           imageLayout: node.imageLayout,
+          accessMode: node.accessMode,
           caption: node.caption,
+          width: node.imageWidth,
+          height: node.imageHeight,
         );
         fragments.add(
           ArticleLayoutFragment(

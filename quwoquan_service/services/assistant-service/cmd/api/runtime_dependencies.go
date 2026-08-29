@@ -71,13 +71,17 @@ type persistentDependencies struct {
 	skillPackageStore  *skillpackagepersistence.MongoStore
 	skillActivityStore *activitypersistence.MongoVisibilityStore
 	dataControlStore   *datacontrolpersistence.Store
-	mongoClient        *mongo.Client
-	postgresPool       *pgxpool.Pool
 	inner              *runtimewiring.PersistentDependencies
 }
 
-func openPersistentDependencies(ctx context.Context, cfg config) (*persistentDependencies, error) {
-	inner, err := runtimewiring.OpenPersistentDependencies(ctx, cfg, func(db *mongo.Database) (subscriptionports.Store, error) {
+// openPersistentDependencies 在骨架装配的 Mongo database 与 Postgres 池上
+// 打开领域仓储并完成 index/schema 就绪。连接释放归骨架 cleanup 栈。
+func openPersistentDependencies(
+	ctx context.Context,
+	database *mongo.Database,
+	postgresPool *pgxpool.Pool,
+) (*persistentDependencies, error) {
+	inner, err := runtimewiring.OpenPersistentDependencies(ctx, database, postgresPool, func(db *mongo.Database) (subscriptionports.Store, error) {
 		store := subscriptionpersistence.NewMongoStore(db)
 		if err := store.EnsureIndexes(ctx); err != nil {
 			return nil, err
@@ -93,10 +97,8 @@ func openPersistentDependencies(ctx context.Context, cfg config) (*persistentDep
 	if err != nil {
 		return nil, err
 	}
-	database := inner.MongoClient.Database(strings.TrimSpace(cfg.MongoDB.Database))
 	subscriptionReader, ok := inner.SubscriptionStore.(*subscriptionpersistence.MongoStore)
 	if !ok {
-		_ = inner.Close(ctx)
 		return nil, dependencyError(
 			"mongodb.skill_subscriptions",
 			"object_reader",
@@ -105,22 +107,18 @@ func openPersistentDependencies(ctx context.Context, cfg config) (*persistentDep
 	}
 	consentStore := consentpersistence.NewPgStore(inner.PostgresPool)
 	if err := consentStore.EnsureSchema(ctx); err != nil {
-		_ = inner.Close(ctx)
 		return nil, dependencyError("postgres.skill_consents", "schema", err)
 	}
 	settingStore := settingpersistence.NewPgStore(inner.PostgresPool)
 	if err := settingStore.EnsureSchema(ctx); err != nil {
-		_ = inner.Close(ctx)
 		return nil, dependencyError("postgres.skill_user_settings", "schema", err)
 	}
 	placementStore := placementpersistence.NewPgStore(inner.PostgresPool)
 	if err := placementStore.EnsureSchema(ctx); err != nil {
-		_ = inner.Close(ctx)
 		return nil, dependencyError("postgres.skill_surface_placements", "schema", err)
 	}
 	policyReleaseStore := policyreleasepersistence.NewMongoStore(database)
 	if err := policyReleaseStore.EnsureIndexes(ctx); err != nil {
-		_ = inner.Close(ctx)
 		return nil, dependencyError(
 			"mongodb.assistant_policy_releases",
 			"indexes",
@@ -129,7 +127,6 @@ func openPersistentDependencies(ctx context.Context, cfg config) (*persistentDep
 	}
 	policyRolloutStore := policyrolloutpersistence.NewMongoStore(database)
 	if err := policyRolloutStore.EnsureIndexes(ctx); err != nil {
-		_ = inner.Close(ctx)
 		return nil, dependencyError(
 			"mongodb.assistant_policy_rollouts",
 			"indexes",
@@ -138,7 +135,6 @@ func openPersistentDependencies(ctx context.Context, cfg config) (*persistentDep
 	}
 	learningFactStore := learningpersistence.NewMongoStore(database)
 	if err := learningFactStore.EnsureIndexes(ctx); err != nil {
-		_ = inner.Close(ctx)
 		return nil, dependencyError(
 			"mongodb.assistant_learning_facts",
 			"indexes",
@@ -147,7 +143,6 @@ func openPersistentDependencies(ctx context.Context, cfg config) (*persistentDep
 	}
 	learningProjector := learningprojection.NewMongoProjector(database)
 	if err := learningProjector.EnsureIndexes(ctx); err != nil {
-		_ = inner.Close(ctx)
 		return nil, dependencyError(
 			"mongodb.rm_assistant_learning_projection",
 			"indexes",
@@ -156,7 +151,6 @@ func openPersistentDependencies(ctx context.Context, cfg config) (*persistentDep
 	}
 	runRepository := runpersistence.NewMongoRunRepository(database)
 	if err := runRepository.EnsureIndexes(ctx); err != nil {
-		_ = inner.Close(ctx)
 		return nil, dependencyError(
 			"mongodb.assistant_runs",
 			"indexes",
@@ -165,7 +159,6 @@ func openPersistentDependencies(ctx context.Context, cfg config) (*persistentDep
 	}
 	turnViewStore := turnviewpersistence.NewMongoStore(database)
 	if err := turnViewStore.EnsureIndexes(ctx); err != nil {
-		_ = inner.Close(ctx)
 		return nil, dependencyError(
 			"mongodb.assistant_turn_views",
 			"indexes",
@@ -177,7 +170,6 @@ func openPersistentDependencies(ctx context.Context, cfg config) (*persistentDep
 		turnViewStore,
 	)
 	if err := turnViewProjector.CatchUp(ctx); err != nil {
-		_ = inner.Close(ctx)
 		return nil, dependencyError(
 			"mongodb.assistant_turn_views",
 			"projection",
@@ -186,7 +178,6 @@ func openPersistentDependencies(ctx context.Context, cfg config) (*persistentDep
 	}
 	publicWebEvidence := publicwebpersistence.NewMongoEvidenceStore(database)
 	if err := publicWebEvidence.EnsureIndexes(ctx); err != nil {
-		_ = inner.Close(ctx)
 		return nil, dependencyError(
 			"mongodb.assistant_run_web_evidence",
 			"indexes",
@@ -201,7 +192,6 @@ func openPersistentDependencies(ctx context.Context, cfg config) (*persistentDep
 		},
 	)
 	if err := publicWebBudget.EnsureIndexes(ctx); err != nil {
-		_ = inner.Close(ctx)
 		return nil, dependencyError(
 			"mongodb.assistant_run_web_budgets",
 			"indexes",
@@ -210,7 +200,6 @@ func openPersistentDependencies(ctx context.Context, cfg config) (*persistentDep
 	}
 	skillPackageStore := skillpackagepersistence.NewMongoStore(database)
 	if err := skillPackageStore.EnsureIndexes(ctx); err != nil {
-		_ = inner.Close(ctx)
 		return nil, dependencyError(
 			"mongodb.assistant_skill_packages",
 			"indexes",
@@ -219,7 +208,6 @@ func openPersistentDependencies(ctx context.Context, cfg config) (*persistentDep
 	}
 	skillActivityStore := activitypersistence.NewMongoVisibilityStore(database)
 	if err := skillActivityStore.EnsureIndexes(ctx); err != nil {
-		_ = inner.Close(ctx)
 		return nil, dependencyError(
 			"mongodb.skill_activity_visibility_controls",
 			"indexes",
@@ -228,7 +216,6 @@ func openPersistentDependencies(ctx context.Context, cfg config) (*persistentDep
 	}
 	dataControlStore := datacontrolpersistence.NewStore(database)
 	if err := dataControlStore.EnsureIndexes(ctx); err != nil {
-		_ = inner.Close(ctx)
 		return nil, dependencyError(
 			"mongodb.skill_data_control_requests",
 			"indexes",
@@ -237,7 +224,6 @@ func openPersistentDependencies(ctx context.Context, cfg config) (*persistentDep
 	}
 	entryViewReader := entrypersistence.NewMongoReader(database)
 	if err := entryViewReader.EnsureIndexes(ctx); err != nil {
-		inner.Close(ctx)
 		return nil, dependencyError("mongodb.assistant_entry_view", "indexes", err)
 	}
 	return &persistentDependencies{
@@ -264,20 +250,8 @@ func openPersistentDependencies(ctx context.Context, cfg config) (*persistentDep
 		skillPackageStore:  skillPackageStore,
 		skillActivityStore: skillActivityStore,
 		dataControlStore:   dataControlStore,
-		mongoClient:        inner.MongoClient,
-		postgresPool:       inner.PostgresPool,
 		inner:              inner,
 	}, nil
-}
-
-func (d *persistentDependencies) Close(ctx context.Context) error {
-	if d == nil {
-		return nil
-	}
-	if d.inner != nil {
-		return d.inner.Close(ctx)
-	}
-	return nil
 }
 
 func nonEmptyStrings(values []string) []string {

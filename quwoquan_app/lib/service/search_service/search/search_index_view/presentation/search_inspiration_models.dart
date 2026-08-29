@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/service/search_service/search/search_index_view/presentation/search_suggestion_models.dart';
+import 'package:quwoquan_app/runtime/di/media_delivery_composition.dart';
 
 class SearchInspirationChipView {
   const SearchInspirationChipView({
@@ -18,6 +19,7 @@ class SearchInspirationCardView {
     required this.title,
     required this.subtitle,
     this.coverUrl,
+    this.coverBinding = const MediaDeliveryBinding.absent(),
     this.query,
   });
 
@@ -25,6 +27,9 @@ class SearchInspirationCardView {
   final String title;
   final String subtitle;
   final String? coverUrl;
+
+  /// 封面的 typed 交付绑定（DEC-033）；缺席时退回 [coverUrl] 的公开路。
+  final MediaDeliveryBinding coverBinding;
   final String? query;
 }
 

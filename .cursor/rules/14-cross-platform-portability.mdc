@@ -1,8 +1,0 @@
----
-description: 跨平台可移植军规 · 鸿蒙(OpenHarmony) + Web 提前准备 · 能力优先平台后置
-globs: quwoquan_app/lib/**/*.dart
-alwaysApply: false
----
-
-新增平台相关能力、想写 `Platform.*`/`kIsWeb`/`dart:io`/`MethodChannel`，或新增依赖时，先读
-`.agents/skills/review/references/roles/architect/references/capability-portability.md`。

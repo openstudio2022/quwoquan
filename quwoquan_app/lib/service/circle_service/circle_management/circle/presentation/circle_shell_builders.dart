@@ -39,7 +39,9 @@ extension _CircleShellBuilders on _CircleShellState {
     required String circleName,
     required String? coverUrl,
   }) {
-    final circle = state.circleData;
+    // 调用点在 circleData 缺席的两个终态之后，宿主对象在此必然在场；
+    // 缺席不得在这里被某个属性默认值代偿。
+    final circle = state.circleData!;
     final statItems = _circleStatItems(state);
     final summarySurface = AppColors.iosProfileSurface(context);
     final summaryBorder = AppColors.iosCardBorder(context);
@@ -72,17 +74,17 @@ extension _CircleShellBuilders on _CircleShellState {
           children: [
             CircleHeader(
               isDark: isDark,
-              avatarUrl: circle?.iconUrl ?? coverUrl,
+              avatarUrl: circle.iconUrl ?? coverUrl,
               name: circleName,
-              identityTags: circle?.tags ?? const <String>[],
+              identityTags: circle.tags ?? const <String>[],
               // CircleStatus 只表达生命周期，不能推断官方认证事实。
               verified: false,
             ),
-            if ((circle?.description ?? '').trim().isNotEmpty) ...[
+            if ((circle.description ?? '').trim().isNotEmpty) ...[
               SizedBox(height: AppSpacing.containerSm),
               ObjectSloganCard(
                 isDark: isDark,
-                bio: circle?.description,
+                bio: circle.description,
                 cardKey: const ValueKey<String>('circle-slogan-card'),
               ),
             ],
@@ -99,11 +101,11 @@ extension _CircleShellBuilders on _CircleShellState {
               isDark: isDark,
               role: state.role,
               joinStatus: state.joinStatus,
-              joinPolicy: circle?.joinPolicy ?? CircleJoinPolicy.open,
+              joinPolicy: circle.joinPolicy,
               onJoinCircle:
                   _isMemberLike(state) ||
                       state.joinStatus == 'pending' ||
-                      circle?.joinPolicy == CircleJoinPolicy.inviteOnly
+                      circle.joinPolicy == CircleJoinPolicy.inviteOnly
                   ? null
                   : () => _gatedJoinCircle(context, notifier),
               onEnterDiscussion: () => _changeTab('discussion'),
@@ -116,22 +118,17 @@ extension _CircleShellBuilders on _CircleShellState {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         identityCard,
-        if (circle != null &&
-            ((circle.rulesText ?? '').trim().isNotEmpty ||
-                (_isMemberLike(state) &&
-                    (circle.welcomeMessage ?? '')
-                        .trim()
-                        .isNotEmpty))) ...<Widget>[
+        if ((circle.rulesText ?? '').trim().isNotEmpty ||
+            (_isMemberLike(state) &&
+                (circle.welcomeMessage ?? '').trim().isNotEmpty)) ...<Widget>[
           SizedBox(height: AppSpacing.containerSm),
           _buildGovernanceCard(state, isDark),
         ],
-        if (circle != null) ...<Widget>[
-          SizedBox(height: AppSpacing.containerSm),
-          _buildIntersectionCard(isDark),
-          SizedBox(height: AppSpacing.containerSm),
-          _buildCircleImpactCard(isDark),
-        ],
-        if (circle != null && state.loadError != null) ...<Widget>[
+        SizedBox(height: AppSpacing.containerSm),
+        _buildIntersectionCard(isDark),
+        SizedBox(height: AppSpacing.containerSm),
+        _buildCircleImpactCard(isDark),
+        if (state.loadError != null) ...<Widget>[
           SizedBox(height: AppSpacing.containerSm),
           AppSectionErrorCard(
             semantic: runtimeErrorSemantic(
@@ -542,7 +539,8 @@ extension _CircleShellBuilders on _CircleShellState {
     required bool isDark,
     required CircleState state,
   }) {
-    final circle = state.circleData;
+    // 同上：缺席已在调用点落终态，这里读到的是真实声明取值。
+    final circle = state.circleData!;
     final contentLocked = !_canAccessPrimaryContent(state);
     final memberLocked = !_canAccessMemberSpaces(state);
     final bodySlot = circleTabById(_activeTabId)?.bodySlot ?? 'creations';
@@ -568,7 +566,7 @@ extension _CircleShellBuilders on _CircleShellState {
             ? _buildGateCard(
                 context,
                 title: CommunityText.visibilityMembers,
-                description: _joinGateDescription(circle?.joinPolicy),
+                description: _joinGateDescription(circle.joinPolicy),
                 keySuffix: _activeTabId,
               )
             : _buildDiscussionBody(context, isDark: isDark, state: state),
@@ -577,7 +575,7 @@ extension _CircleShellBuilders on _CircleShellState {
             ? _buildGateCard(
                 context,
                 title: CommunityText.visibilityMembers,
-                description: _joinGateDescription(circle?.joinPolicy),
+                description: _joinGateDescription(circle.joinPolicy),
                 keySuffix: _activeTabId,
               )
             : Padding(

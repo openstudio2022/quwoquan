@@ -391,6 +391,29 @@ fields:
     api_exposure: read
     ops_exposure: read
     role: projection
+  # 预览图的配对媒体资产标识与交付访问模式（DEC-033）：research 相位的 post
+  # 封面是相对私有 CAS 引用，互动卡按 previewImageAssetId 换短签才渲染得出。
+  - name: previewImageAssetId
+    source: previewImageAssetId
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: projection
+  - name: previewImageAccessMode
+    source: previewImageAccessMode
+    type: enum
+    enum_ref: MediaDeliveryAccessMode
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: projection
   - name: previewText
     source: previewText
     type: string

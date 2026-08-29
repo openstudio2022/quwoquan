@@ -159,7 +159,10 @@ class StartupProbeParserContractTest(unittest.TestCase):
                             "nativeReceivedSafeTerminalMs": 1210,
                             "watchdogOutcome": "safe_terminal",
                             "canonicalTerminal": "routerShell",
-                            "launchMode": "release_package",
+                            "launchProvenance": "release_package",
+                            "runtimeConfigSupplyMode": (
+                                "external_runtime_package"
+                            ),
                             "runtimeConfigurationState": "complete",
                             "missingDefineKeys": "",
                             "failureCode": "",

@@ -12,7 +12,7 @@ func TestCircleProductionCompositionUsesCanonicalHostAuthorityOwners(t *testing.
 	root := gatheringCircleServiceRoot(t)
 	mainSource := readGatheringCompositionFile(
 		t,
-		filepath.Join(root, "cmd", "api", "main.go"),
+		filepath.Join(root, "cmd", "api", "bootstrap.go"),
 	)
 	for _, required := range []string{
 		"application.NewHostAuthorityEvaluator(",

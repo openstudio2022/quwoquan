@@ -81,6 +81,19 @@ def decode_keyring(encoded: bytes) -> dict[str, str]:
     return normalized
 
 
+def _openssl_identity() -> str:
+    """PATH 上解析到的 openssl 自述，用于把工具链问题指名道姓。"""
+
+    probe = subprocess.run(
+        ["openssl", "version"],
+        capture_output=True,
+        check=False,
+    )
+    if probe.returncode != 0:
+        return "openssl version 不可执行"
+    return (probe.stdout or b"").decode("utf-8", "replace").strip() or "未知实现"
+
+
 def _derive_public_key(private_key: bytes) -> bytes:
     result = subprocess.run(
         ["openssl", "pkey", "-pubout", "-outform", "DER"],
@@ -89,6 +102,15 @@ def _derive_public_key(private_key: bytes) -> bytes:
         check=False,
     )
     if result.returncode != 0:
+        # macOS 自带 /usr/bin/openssl 是 LibreSSL，不实现 Ed25519：它对一把
+        # 完全合法的密钥同样退非零。把这种情况报成「密钥非法」会把排查引向
+        # 密钥材料，而真正要换的是 PATH 上解析到的 openssl。
+        stderr = (result.stderr or b"").decode("utf-8", "replace")
+        if "unsupported" in stderr.lower():
+            raise ValueError(
+                "PATH 上的 openssl 不支持 Ed25519（macOS 自带的是 LibreSSL），"
+                f"无法派生 App runtime signing 公钥；实现: {_openssl_identity()}"
+            )
         raise ValueError("App runtime signing private key is not a valid Ed25519 PEM")
     if not result.stdout.startswith(_ED25519_SPKI_PREFIX) or len(result.stdout) != (
         len(_ED25519_SPKI_PREFIX) + _RAW_ED25519_PUBLIC_KEY_SIZE

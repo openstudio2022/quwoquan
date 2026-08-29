@@ -44,6 +44,7 @@ from content.release.canonical.pool_inspection_support import (
     _not_admitted_issue,
     _reason_summary,
     _resolved_admission,
+    _retirement_reported,
 )
 from content.release.canonical.pool_semantic_scheduling import (
     semantic_scheduling_projection,
@@ -107,6 +108,9 @@ def inspect_pool(
         else ("explicit" if requested_workloads is not None else "milestone_preset")
     )
     issues: list[dict[str, str]] = []
+    # 已退役对象既不进入可选集，也不再计入 quality/eligibility 判否；它与「未准入」
+    # 是两个独立结论，因此单独成一行报告而不是并进 issues。
+    retired: list[dict[str, str]] = []
     identity_query = CanonicalIdentityStateQuery(publish_root=publish_root)
     canonical_identity_states: list[dict[str, Any]] = []
     author_admission: dict[str, bool] = {}
@@ -124,6 +128,8 @@ def inspect_pool(
             )
             admitted = _author_admitted(record)
             author_admission[creator_root.name] = admitted
+            # 作者不在退役回执的 objectType 闭集内（`homepage|content`），因此
+            # 这里没有退役分支：作者未准入只有「补录准入」一条出路。
             if not admitted:
                 _not_admitted_issue(
                     issues,
@@ -182,12 +188,19 @@ def inspect_pool(
                 record is None and (path.parent / "attestation.json").is_file()
             )
             admission_missing["homepage"] += int(record_missing)
-            _not_admitted_issue(
+            if not _retirement_reported(
                 issues,
-                record=record,
-                admission_missing=record_missing,
-                ref=f"entities/{entity_ref}",
-            )
+                retired,
+                object_root=path.parent,
+                object_type="homepage",
+                object_ref=f"entities/{entity_ref}",
+            ):
+                _not_admitted_issue(
+                    issues,
+                    record=record,
+                    admission_missing=record_missing,
+                    ref=f"entities/{entity_ref}",
+                )
             continue
         admitted["homepage"] += 1
         scopes[str(record["usageScope"])] += 1
@@ -271,12 +284,19 @@ def inspect_pool(
                 record is None and manifest.get("reviewDecision") == "approved"
             )
             admission_missing[carrier] += int(record_missing)
-            _not_admitted_issue(
+            if not _retirement_reported(
                 issues,
-                record=record,
-                admission_missing=record_missing,
-                ref=f"posts/{post_ref}",
-            )
+                retired,
+                object_root=path.parent,
+                object_type="content",
+                object_ref=f"posts/{post_ref}",
+            ):
+                _not_admitted_issue(
+                    issues,
+                    record=record,
+                    admission_missing=record_missing,
+                    ref=f"posts/{post_ref}",
+                )
             continue
         admitted[carrier] += 1
         scopes[str(record["usageScope"])] += 1
@@ -350,6 +370,16 @@ def inspect_pool(
             for excluded in research_selection.excluded:
                 ref = f"posts/{excluded.post_ref}"
                 if any(row["ref"].split(":", 1)[0] == ref for row in issues):
+                    continue
+                if any(row["objectRef"] == ref for row in retired):
+                    continue
+                if _retirement_reported(
+                    issues,
+                    retired,
+                    object_root=publish_root / "posts" / excluded.post_ref,
+                    object_type="content",
+                    object_ref=ref,
+                ):
                     continue
                 _issue(
                     issues,
@@ -444,6 +474,13 @@ def inspect_pool(
         "environmentCapacity": environment_capacity,
         "reasons": _reason_summary(issues),
         "issueCount": len(issues),
+        "retired": {
+            "objectCount": len(retired),
+            "objects": sorted(
+                retired,
+                key=lambda row: (row["objectType"], row["objectRef"]),
+            ),
+        },
         "nextWave": next_wave,
         "canonicalIdentityStates": canonical_identity_states,
         "pendingDelivery": pending_delivery,

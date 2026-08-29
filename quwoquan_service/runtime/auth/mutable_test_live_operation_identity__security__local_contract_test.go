@@ -280,6 +280,74 @@ func TestOperationAuthorizationRejectsMutableExclusiveIdentityWithoutSchema(t *t
 	}
 }
 
+func TestEnforceOperationAuthorizationForRuntimeLetsTestLiveExerciseBlockedOperation(t *testing.T) {
+	t.Parallel()
+	guard, err := EnforceOperationAuthorizationForRuntime(
+		[]OperationSecurityDescriptor{blockedPublicTestLiveDescriptor()},
+		"gamma",
+		mapLookup(canonicalTestLiveEnvironment("gamma")),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	guard(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})).ServeHTTP(
+		response,
+		httptest.NewRequest(http.MethodGet, "/content/media-assets/asset-1", nil),
+	)
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("status=%d want=%d", response.Code, http.StatusNoContent)
+	}
+}
+
+func TestEnforceOperationAuthorizationForRuntimeKeepsPublicFailClosedAndPassThrough(t *testing.T) {
+	t.Parallel()
+	guard, err := EnforceOperationAuthorizationForRuntime(
+		[]OperationSecurityDescriptor{blockedPublicTestLiveDescriptor()},
+		"gamma",
+		mapLookup(map[string]string{}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blocked := httptest.NewRecorder()
+	guard(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("blocked operation reached handler without test-live identity")
+	})).ServeHTTP(
+		blocked,
+		httptest.NewRequest(http.MethodGet, "/content/media-assets/asset-1", nil),
+	)
+	if blocked.Code != http.StatusForbidden {
+		t.Fatalf("blocked status=%d want=%d", blocked.Code, http.StatusForbidden)
+	}
+
+	passedThrough := httptest.NewRecorder()
+	guard(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})).ServeHTTP(
+		passedThrough,
+		httptest.NewRequest(http.MethodGet, "/unregistered/migrating-route", nil),
+	)
+	if passedThrough.Code != http.StatusNoContent {
+		t.Fatalf("pass-through status=%d want=%d", passedThrough.Code, http.StatusNoContent)
+	}
+}
+
+func TestEnforceOperationAuthorizationForRuntimeFailsClosedOnDriftedIdentity(t *testing.T) {
+	t.Parallel()
+	values := canonicalTestLiveEnvironment("gamma")
+	values[runtimeImageVersionEnv] = "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+	if _, err := EnforceOperationAuthorizationForRuntime(
+		[]OperationSecurityDescriptor{blockedPublicTestLiveDescriptor()},
+		"gamma",
+		mapLookup(values),
+	); err == nil {
+		t.Fatal("drifted mutable test-live identity was accepted")
+	}
+}
+
 func TestOperationAuthorizationRejectsPartialProdAndDriftedIdentity(t *testing.T) {
 	t.Parallel()
 	for _, testCase := range []struct {

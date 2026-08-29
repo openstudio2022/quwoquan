@@ -394,6 +394,37 @@ def load_pre_acquisition_handoff(path: Path) -> dict[str, Any]:
     return handoff
 
 
+def carrier_source_providers(
+    handoff: Mapping[str, Any],
+    carrier: str,
+) -> list[str]:
+    """Project one carrier's declared source providers out of the handoff.
+
+    `sourceSelection` is the only owner of per-carrier provider intent, so this
+    projection is the single path from demand to envelope; callers never pass an
+    independent provider list.
+    """
+    selection = handoff.get("sourceSelection")
+    if not isinstance(selection, Mapping):
+        raise _typed(
+            "SOURCE_SELECTION_INVALID",
+            "handoff sourceSelection must be a carrier mapping",
+        )
+    row = selection.get(carrier)
+    if not isinstance(row, Mapping):
+        raise _typed(
+            "SOURCE_SELECTION_INVALID",
+            f"handoff sourceSelection has no entry for carrier {carrier}",
+        )
+    providers = [str(item or "").strip() for item in (row.get("providers") or [])]
+    if not providers or any(not item for item in providers):
+        raise _typed(
+            "SOURCE_SELECTION_INVALID",
+            f"handoff sourceSelection.{carrier}.providers must be non-empty",
+        )
+    return sorted(set(providers))
+
+
 def write_pre_acquisition_handoff(
     *,
     output_root: Path | None = None,

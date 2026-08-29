@@ -16,6 +16,7 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
+from core.control_types import OBJECT_STAGE_SEQUENCE, ReceiptStage
 from core.data_root import DataRoot
 
 # 代码仓库 data 根：schema 是受版本控制、不可手改的契约真相源，必须跟代码走，
@@ -96,6 +97,17 @@ LIBRARY_CAS_ROOT_BY_KIND = {
     "media": LIBRARY_MEDIA_CAS_ROOT,
     "source": LIBRARY_SOURCE_CAS_ROOT,
 }
+# carried media：canonical 引用字节的受版本控制随体，不是库镜像。库落在仓外且不可
+# 从版本控制重建，而 canonical 引用的编码视频、poster 与头像都是无上游可逐字节复现
+# 的派生物——库一丢，已 approved 的对象就永久不可交付，所以这个子集随树受控。
+# 按调用解析而非导入即冻结：它是发布事务的写入目标，冻结成模块常量会让「默认写真
+# 仓库」对任何执行 apply 的进程生效。QWQ_CARRIED_MEDIA_ROOT 把随体指向临时根。
+def carried_media_root() -> Path:
+    override = str(os.environ.get("QWQ_CARRIED_MEDIA_ROOT") or "").strip()
+    if override:
+        return Path(override).expanduser()
+    return _REPO_DATA_ROOT / "reference" / "golden_media"
+
 # canonical publish 根的逻辑身份。物理位置是环境事实（QWQ_PUBLISH_ROOT / DATA_ROOT），
 # 只由本模块解析；receipt 文档记录这个与位置无关的身份，不再内嵌仓库相对路径。
 CANONICAL_PUBLISH_ROOT_REF = "canonical-publish"
@@ -192,16 +204,18 @@ def now_iso() -> str:
 
 
 NOW_ISO = now_iso()
-EXECUTION_ROOT_ALLOWED_ENTRIES = frozenset({
-    "0.plan",
-    "sources",
+EXECUTION_ROOT_DIRECTORIES = (
+    ReceiptStage.PLAN.value,
+    ReceiptStage.SOURCES.value,
     "entities",
     "posts",
     "_shared",
     "evidence",
-    "execution_manifest.json",
-    "publish_ref.json",
-})
+)
+EXECUTION_ROOT_FILES = ("execution_manifest.json", "publish_ref.json")
+EXECUTION_ROOT_ALLOWED_ENTRIES = frozenset(
+    (*EXECUTION_ROOT_DIRECTORIES, *EXECUTION_ROOT_FILES)
+)
 
 # Discovery and deduplication facts remain execution evidence.  They are not
 # provider accounting and must stay distinct from any billing concern.
@@ -461,19 +475,13 @@ _INTENT_LABEL_MAX = 64
 # 实体对象 = tasks/{executionId}/entities/{domain}/{type}/{name}/
 # 内容对象 = tasks/{executionId}/posts/{contentType}/{angle}/{title}/{seq}/
 # 对象目录下过程阶段统一编号；成品落对象根（promote 时与 publish 同名直拷）。
-STAGE_DOWNLOAD = "1.download"
-STAGE_QUALITY = "2.quality"
-STAGE_COMPOSE = "3.compose"
-STAGE_DRAFT = "4.draft"
-STAGE_REVIEW = "5.review"
-# 对象过程阶段统一线性枚举；实体/内容共享同一阶段骨架，差异只体现在阶段产物内容。
-OBJECT_STAGES = (
-    STAGE_DOWNLOAD,
-    STAGE_QUALITY,
-    STAGE_COMPOSE,
-    STAGE_DRAFT,
-    STAGE_REVIEW,
-)
+STAGE_DOWNLOAD = ReceiptStage.DOWNLOAD.value
+STAGE_QUALITY = ReceiptStage.QUALITY.value
+STAGE_COMPOSE = ReceiptStage.COMPOSE.value
+STAGE_DRAFT = ReceiptStage.DRAFT.value
+STAGE_REVIEW = ReceiptStage.REVIEW.value
+# 实体/内容共享同一阶段骨架，差异只体现在阶段产物内容；阶段名来自 receipt 协议闭集。
+OBJECT_STAGES = tuple(stage.value for stage in OBJECT_STAGE_SEQUENCE)
 
 
 

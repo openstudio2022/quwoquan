@@ -18,7 +18,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.security.MessageDigest;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.List;
 import java.util.Map;
 import org.junit.Rule;
 import org.junit.Test;
@@ -147,6 +149,69 @@ public final class RuntimeConfigPackageStoreTest {
   }
 
   @Test
+  public void staleActivePackageKeepsIdentityReadableAndReplaceable() throws Exception {
+    TestMaterial material = TestMaterial.create("nonprod");
+    RuntimeConfigPackageStore installStore =
+        createStore(material, RuntimeConfigPackageStore.durableAtomicWriter());
+    RuntimeConfigPackageStore.ActivationResult first = installFirst(installStore, material);
+
+    // 同一磁盘状态，时钟推进到 active 包 expiresAt 之后。
+    Instant afterExpiry = Instant.parse("2026-08-25T00:00:00Z");
+    RuntimeConfigPackageStore staleStore =
+        createStoreAt(material, RuntimeConfigPackageStore.durableAtomicWriter(), afterExpiry);
+
+    // 消费路径必须继续 fail-closed。
+    RuntimeConfigPackageStore.ReadState staleState = staleStore.readState();
+    assertEquals(RuntimeConfigPackageStore.ReadKind.FAILURE, staleState.kind);
+    assertEquals("runtime_config_freshness_invalid", staleState.error.code);
+
+    // 激活身份读取豁免时间窗：CAS 前值 digest 必须仍可读，不得死锁。
+    assertEquals(first.packageDigest, staleStore.readCurrentActiveDigest());
+
+    // 同一 keyring 的新 fresh 包按 expected active digest 替换激活必须成功。
+    material.packageDocument.addProperty("issuedAt", "2026-08-24T23:00:00Z");
+    material.packageDocument.addProperty("expiresAt", "2026-08-25T23:00:00Z");
+    material.resign();
+    RuntimeConfigPackageStore.ActivationResult second =
+        staleStore.activate(
+            material.packageDocument,
+            material.packageDigest(),
+            material.trustDigest(),
+            first.packageDigest);
+
+    assertEquals(first.packageDigest, second.previousActiveDigest);
+    assertEquals(material.packageDigest(), second.packageDigest);
+    assertEquals(RuntimeConfigPackageStore.ReadKind.PRESENT, staleStore.readState().kind);
+  }
+
+  @Test
+  public void staleIdentityReadDoesNotRelaxSignatureOrTrustValidation() throws Exception {
+    TestMaterial material = TestMaterial.create("nonprod");
+    RuntimeConfigPackageStore installStore =
+        createStore(material, RuntimeConfigPackageStore.durableAtomicWriter());
+    installFirst(installStore, material);
+
+    // 篡改磁盘上的 active 包正文：即使在激活身份读取模式下也必须 fail-closed。
+    byte[] stored = Files.readAllBytes(activeFile().toPath());
+    JsonObject tampered = JsonParser.parseString(
+            new String(stored, StandardCharsets.UTF_8))
+        .getAsJsonObject();
+    tampered.getAsJsonObject("runtime")
+        .addProperty("gatewayBaseUrl", "https://attacker.example.test");
+    Files.write(
+        activeFile().toPath(),
+        RuntimeConfigPackageStore.canonicalJsonBytes(tampered));
+
+    Instant afterExpiry = Instant.parse("2026-08-25T00:00:00Z");
+    RuntimeConfigPackageStore staleStore =
+        createStoreAt(material, RuntimeConfigPackageStore.durableAtomicWriter(), afterExpiry);
+
+    RuntimeConfigPackageStore.RuntimeConfigException error =
+        expectFailure(staleStore::readCurrentActiveDigest);
+    assertEquals("runtime_config_payload_digest_mismatch", error.code);
+  }
+
+  @Test
   public void canonicalRfc3339FractionalUtcTimestampsAreAccepted() throws Exception {
     TestMaterial material = TestMaterial.create("nonprod");
     material.packageDocument.addProperty("issuedAt", "2026-08-22T23:55:00.125Z");
@@ -272,6 +337,21 @@ public final class RuntimeConfigPackageStoreTest {
   }
 
   @Test
+  public void canonicalJsonDoesNotHtmlEscapeSharedDigestAlphabet() throws Exception {
+    // 与执行体侧 Python json.dumps 的字节级一致性：base64 padding `=` 与
+    // URL 字符 `&<>'` 必须原样输出，HTML-safe 转义会造成激活 digest 漂移。
+    JsonObject document = new JsonObject();
+    document.addProperty("signature", "AbC+dEf=");
+    document.addProperty("url", "https://api.example.test/path?a=1&b=<2>'");
+
+    assertEquals(
+        "{\"signature\":\"AbC+dEf=\","
+            + "\"url\":\"https://api.example.test/path?a=1&b=<2>'\"}",
+        new String(
+            RuntimeConfigPackageStore.canonicalJsonBytes(document), StandardCharsets.UTF_8));
+  }
+
+  @Test
   public void trustDigestUsesCanonicalDocumentNotAssetWhitespace() throws Exception {
     TestMaterial material = TestMaterial.create("nonprod");
     byte[] paddedTrust =
@@ -308,6 +388,175 @@ public final class RuntimeConfigPackageStoreTest {
     assertEquals("runtime_config_activation_request_malformed", result.errorCode);
     assertTrue(result.validationIssues.contains(result.errorCode));
     assertFalse(activeFile().exists());
+
+    JsonObject malformedNestedPackage = activationRequest(material, "");
+    malformedNestedPackage.getAsJsonObject("package").remove("launchPolicy");
+    RuntimeConfigActivationCoordinator.ConsumeResult nestedResult =
+        coordinator.consumePendingRequest(writeActivationRequest(malformedNestedPackage));
+
+    assertEquals(RuntimeConfigActivationCoordinator.ConsumeKind.FAILED, nestedResult.kind);
+    assertEquals("runtime_config_activation_request_malformed", nestedResult.errorCode);
+  }
+
+  @Test
+  public void coordinatorSeparatesRequestMissingReadMalformedAndInternalFailures()
+      throws Exception {
+    TestMaterial material = TestMaterial.create("nonprod");
+    RuntimeConfigPackageStore store =
+        createStore(material, RuntimeConfigPackageStore.durableAtomicWriter());
+    RuntimeConfigActivationCoordinator coordinator =
+        new RuntimeConfigActivationCoordinator(temporaryFolder.getRoot(), store);
+
+    RuntimeConfigActivationCoordinator.ConsumeResult missing =
+        coordinator.consumePendingRequest(differentDigest());
+
+    assertEquals(RuntimeConfigActivationCoordinator.ConsumeKind.FAILED, missing.kind);
+    assertEquals("runtime_config_activation_request_missing", missing.errorCode);
+    JsonObject missingReceipt = readLaunchReceipt();
+    for (String field :
+        List.of(
+            "environment",
+            "buildProfile",
+            "target",
+            "launchProvenance",
+            "runtimeConfigSupplyMode",
+            "packageDigest",
+            "trustEnvelopeDigest",
+            "effectiveLaunchManifestDigest")) {
+      assertEquals("", missingReceipt.get(field).getAsString());
+    }
+
+    List<String> nativeLogs = new ArrayList<>();
+    Files.write(
+        new File(
+                temporaryFolder.getRoot(),
+                RuntimeConfigActivationCoordinator.REQUEST_FILE_NAME)
+            .toPath(),
+        "{}".getBytes(StandardCharsets.UTF_8));
+    RuntimeConfigActivationCoordinator readFailureCoordinator =
+        new RuntimeConfigActivationCoordinator(
+            temporaryFolder.getRoot(),
+            store,
+            RuntimeConfigPackageStore::writeDurablyAndReplace,
+            requestFile -> Files.deleteIfExists(requestFile.toPath()),
+            (requestFile, malformedCode) -> {
+              throw new IOException("injected request read failure");
+            },
+            (errorCode, error) -> nativeLogs.add(errorCode));
+
+    RuntimeConfigActivationCoordinator.ConsumeResult readFailure =
+        readFailureCoordinator.consumePendingRequest(differentDigest());
+
+    assertEquals("runtime_config_activation_request_read_failed", readFailure.errorCode);
+    assertTrue(nativeLogs.contains(readFailure.errorCode));
+
+    Files.write(
+        new File(
+                temporaryFolder.getRoot(),
+                RuntimeConfigActivationCoordinator.REQUEST_FILE_NAME)
+            .toPath(),
+        "{".getBytes(StandardCharsets.UTF_8));
+    RuntimeConfigActivationCoordinator.ConsumeResult malformed =
+        coordinator.consumePendingRequest(differentDigest());
+
+    assertEquals("runtime_config_activation_request_malformed", malformed.errorCode);
+
+    nativeLogs.clear();
+    Files.write(
+        new File(
+                temporaryFolder.getRoot(),
+                RuntimeConfigActivationCoordinator.REQUEST_FILE_NAME)
+            .toPath(),
+        "{}".getBytes(StandardCharsets.UTF_8));
+    RuntimeConfigActivationCoordinator internalFailureCoordinator =
+        new RuntimeConfigActivationCoordinator(
+            temporaryFolder.getRoot(),
+            store,
+            RuntimeConfigPackageStore::writeDurablyAndReplace,
+            requestFile -> Files.deleteIfExists(requestFile.toPath()),
+            (requestFile, malformedCode) -> {
+              throw new IllegalStateException("injected unexpected failure");
+            },
+            (errorCode, error) -> nativeLogs.add(errorCode));
+
+    RuntimeConfigActivationCoordinator.ConsumeResult internalFailure =
+        internalFailureCoordinator.consumePendingRequest(differentDigest());
+
+    assertEquals("runtime_config_internal_failure", internalFailure.errorCode);
+    assertTrue(nativeLogs.contains(internalFailure.errorCode));
+  }
+
+  @Test
+  public void coordinatorRejectsEveryInvalidEffectiveManifestTransportShape()
+      throws Exception {
+    TestMaterial material = TestMaterial.create("nonprod");
+    RuntimeConfigPackageStore store =
+        createStore(material, RuntimeConfigPackageStore.durableAtomicWriter());
+    RuntimeConfigActivationCoordinator coordinator =
+        new RuntimeConfigActivationCoordinator(temporaryFolder.getRoot(), store);
+    List<JsonObject> invalidRequests = new ArrayList<>();
+
+    JsonObject wrongTopology = activationRequest(material, "");
+    wrongTopology
+        .getAsJsonObject("effectiveLaunchManifest")
+        .addProperty("requiresLocalTransport", false);
+    invalidRequests.add(wrongTopology);
+
+    JsonObject wrongRequiredType = activationRequest(material, "");
+    wrongRequiredType
+        .getAsJsonObject("effectiveLaunchManifest")
+        .getAsJsonObject("transport")
+        .addProperty("required", "false");
+    invalidRequests.add(wrongRequiredType);
+
+    JsonObject mismatchedPorts = activationRequest(material, "");
+    JsonObject transport =
+        mismatchedPorts
+            .getAsJsonObject("effectiveLaunchManifest")
+            .getAsJsonObject("transport");
+    transport.addProperty("required", true);
+    transport.addProperty("reverseExpectedPorts", "8080,9090");
+    transport.addProperty("reverseActualPorts", "8080");
+    transport.addProperty("reverseReceiptDigest", differentDigest());
+    transport.addProperty("consumerLeaseId", differentDigest());
+    invalidRequests.add(mismatchedPorts);
+
+    for (JsonObject request : invalidRequests) {
+      refreshEffectiveManifestDigest(request);
+
+      RuntimeConfigActivationCoordinator.ConsumeResult result =
+          coordinator.consumePendingRequest(writeActivationRequest(request));
+
+      assertEquals(RuntimeConfigActivationCoordinator.ConsumeKind.FAILED, result.kind);
+      assertEquals("runtime_config_effective_manifest_malformed", result.errorCode);
+      assertFalse(activeFile().exists());
+    }
+  }
+
+  @Test
+  public void coordinatorAcceptsCompleteBoundLocalTransportManifest() throws Exception {
+    TestMaterial material = TestMaterial.create("nonprod");
+    RuntimeConfigPackageStore store =
+        createStore(material, RuntimeConfigPackageStore.durableAtomicWriter());
+    RuntimeConfigActivationCoordinator coordinator =
+        new RuntimeConfigActivationCoordinator(temporaryFolder.getRoot(), store);
+    JsonObject request = activationRequest(material, "");
+    JsonObject transport =
+        request
+            .getAsJsonObject("effectiveLaunchManifest")
+            .getAsJsonObject("transport");
+    transport.addProperty("required", true);
+    transport.addProperty("reverseExpectedPorts", "9090, 8080,8080");
+    transport.addProperty("reverseActualPorts", "8080,9090");
+    transport.addProperty("reverseReceiptDigest", differentDigest());
+    transport.addProperty("consumerLeaseId", differentDigest());
+    refreshEffectiveManifestDigest(request);
+
+    RuntimeConfigActivationCoordinator.ConsumeResult result =
+        coordinator.consumePendingRequest(writeActivationRequest(request));
+
+    assertEquals(RuntimeConfigActivationCoordinator.ConsumeKind.ACTIVATED, result.kind);
+    assertTrue(activeFile().isFile());
   }
 
   @Test
@@ -334,6 +583,8 @@ public final class RuntimeConfigPackageStoreTest {
     assertEquals(
         request.get("effectiveLaunchManifestDigest").getAsString(),
         envelope.get("effectiveLaunchManifestDigest"));
+    assertEquals("canonical_launcher", envelope.get("launchProvenance"));
+    assertEquals("external_runtime_package", envelope.get("runtimeConfigSupplyMode"));
     assertEquals(material.packageDigest(), envelope.get("runtimeConfigPackageDigest"));
     assertEquals(material.trustDigest(), envelope.get("runtimeConfigTrustEnvelopeDigest"));
     assertFalse(
@@ -481,6 +732,14 @@ public final class RuntimeConfigPackageStoreTest {
     assertEquals(
         "runtime_config_effective_manifest_digest_mismatch",
         receipt.get("errorCode").getAsString());
+    assertEquals("alpha", receipt.get("environment").getAsString());
+    assertEquals("nonprod", receipt.get("buildProfile").getAsString());
+    assertEquals("alpha-local", receipt.get("target").getAsString());
+    assertEquals("canonical_launcher", receipt.get("launchProvenance").getAsString());
+    assertEquals(
+        "external_runtime_package", receipt.get("runtimeConfigSupplyMode").getAsString());
+    assertEquals(material.packageDigest(), receipt.get("packageDigest").getAsString());
+    assertEquals(material.trustDigest(), receipt.get("trustEnvelopeDigest").getAsString());
     assertTrue(
         receipt
             .getAsJsonArray("validationIssues")
@@ -536,6 +795,33 @@ public final class RuntimeConfigPackageStoreTest {
         expectFailure(coordinator::readVerifiedFlutterEnvelope);
 
     assertEquals("runtime_config_activation_receipt_malformed", error.code);
+  }
+
+  @Test
+  public void coordinatorRejectsUnregisteredLaunchProvenanceInActiveReceipt() throws Exception {
+    TestMaterial material = TestMaterial.create("nonprod");
+    RuntimeConfigPackageStore store =
+        createStore(material, RuntimeConfigPackageStore.durableAtomicWriter());
+    RuntimeConfigActivationCoordinator coordinator =
+        new RuntimeConfigActivationCoordinator(temporaryFolder.getRoot(), store);
+    assertEquals(
+        RuntimeConfigActivationCoordinator.ConsumeKind.ACTIVATED,
+        coordinator
+            .consumePendingRequest(writeActivationRequest(activationRequest(material, "")))
+            .kind);
+    File activeReceipt =
+        new File(
+            temporaryFolder.getRoot(),
+            RuntimeConfigActivationCoordinator.ACTIVE_RECEIPT_FILE_NAME);
+    JsonObject receipt =
+        JsonParser.parseString(Files.readString(activeReceipt.toPath())).getAsJsonObject();
+    receipt.addProperty("launchProvenance", "legacy_unknown_launcher");
+    Files.write(activeReceipt.toPath(), RuntimeConfigPackageStore.canonicalJsonBytes(receipt));
+
+    RuntimeConfigPackageStore.RuntimeConfigException error =
+        expectFailure(coordinator::readVerifiedFlutterEnvelope);
+
+    assertEquals("runtime_config_activation_receipt_mismatch", error.code);
   }
 
   @Test
@@ -614,11 +900,12 @@ public final class RuntimeConfigPackageStoreTest {
     manifest.addProperty("buildProfile", "nonprod");
     manifest.addProperty("target", "alpha-local");
     manifest.addProperty("entrypoint", "lib/main_prod.dart");
-    manifest.addProperty("launchMode", "canonical_launcher");
+    manifest.addProperty("launchProvenance", "canonical_launcher");
+    manifest.addProperty("runtimeConfigSupplyMode", "external_runtime_package");
     manifest.addProperty("launchPolicy", "test_live");
     manifest.addProperty("runtimeConfigPackageDigest", material.packageDigest());
     manifest.addProperty("runtimeConfigTrustEnvelopeDigest", material.trustDigest());
-    manifest.addProperty("requiresLocalTransport", false);
+    manifest.addProperty("requiresLocalTransport", true);
     manifest.add("transport", transport);
 
     JsonObject request = new JsonObject();
@@ -637,6 +924,14 @@ public final class RuntimeConfigPackageStoreTest {
     return request;
   }
 
+  private void refreshEffectiveManifestDigest(JsonObject request) throws Exception {
+    request.addProperty(
+        "effectiveLaunchManifestDigest",
+        sha256(
+            RuntimeConfigPackageStore.canonicalJsonBytes(
+                request.getAsJsonObject("effectiveLaunchManifest"))));
+  }
+
   private String writeActivationRequest(JsonObject request) throws Exception {
     byte[] payload = RuntimeConfigPackageStore.canonicalJsonBytes(request);
     Files.write(
@@ -648,14 +943,30 @@ public final class RuntimeConfigPackageStoreTest {
     return sha256(payload);
   }
 
+  private JsonObject readLaunchReceipt() throws Exception {
+    return JsonParser.parseString(
+            Files.readString(
+                new File(
+                        temporaryFolder.getRoot(),
+                        RuntimeConfigActivationCoordinator.RECEIPT_FILE_NAME)
+                    .toPath()))
+        .getAsJsonObject();
+  }
+
   private RuntimeConfigPackageStore createStore(
       TestMaterial material, RuntimeConfigPackageStore.AtomicWriter writer) throws Exception {
+    return createStoreAt(material, writer, NOW);
+  }
+
+  private RuntimeConfigPackageStore createStoreAt(
+      TestMaterial material, RuntimeConfigPackageStore.AtomicWriter writer, Instant now)
+      throws Exception {
     File root = temporaryFolder.getRoot();
     byte[] trustBytes = material.trustBytes();
     return new RuntimeConfigPackageStore(
         root,
         () -> new ByteArrayInputStream(trustBytes),
-        () -> NOW,
+        () -> now,
         writer);
   }
 

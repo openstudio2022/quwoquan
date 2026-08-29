@@ -16,6 +16,8 @@ from typing import Any
 
 import yaml
 
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -235,6 +237,8 @@ def main() -> int:
             "artifactDigest": None,
             "environmentArtifacts": environment_artifacts,
             "applicationPackages": {},
+            "publicWeb": None,
+            "androidOfficialRelease": None,
             "opsPortal": None,
             "contractGraphDigest": None,
             "requiredEvidence": required_evidence,
@@ -257,6 +261,8 @@ def main() -> int:
                     f"applicationPackages.{build_product_id}"
                     for build_product_id in APPLICATION_PACKAGES
                 ),
+                "publicWeb",
+                "androidOfficialRelease",
                 "opsPortal",
                 "contractGraphDigest",
                 "providerEvidence",

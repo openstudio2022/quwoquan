@@ -8,80 +8,25 @@ metadata:
 
 # prd
 
-更新当前有效规格与验收锚点。**不做实现。** 五段执行契约见根 `AGENTS.md`。
+## 触发与输入
 
-## 触发
-
-- 显式命令 `/prd`。
-- 自然语言：写 PRD、冻结需求、明确规格、明确范围、明确验收，或改动需要先更新 spec。
-
-## 输入
-
-- `explore` 的 HANDOFF：目标父链、用户价值、范围、关键依赖（缺任一项回 `explore`）。
-- 现有 Journey / Scenario / REQ 与父链 `OPEN`。
-
-## 角色
-
-主会话扮演 **spec-owner**：只拥有规格与验收，不同时扮演评审者；评价交给内置评审的只读角色。
+用于新增/修改 Feature spec、冻结范围与可测验收，不实现代码。输入必须包含 owner manifest、用户价值、In/Out Scope、当前 OPEN 与验收层。
 
 ## 执行
 
-自由度：中（层级模板固定，表述自由）。
+1. 在最低可关闭节点更新 AppRoot Journey/UAT、L1 DOM、L2 SIT 或 L3 REQ/GWT；不跨层复制事实。
+2. 每条验收写成 GIVEN/WHEN/THEN/AND 可观察结果，声明 `local_contract/api_integration/user_acceptance` 证据层和可绑定的 `spec_ref`。
+3. 字段、枚举、operation、错误码只引用 canonical contracts。未实现事实进 `OPEN-###`，不写中央 backlog。
+4. 运行 `make verify-feature-tree`。PRE 由主会话自检输入，不派 Reviewer；POST 按 `review` Skill 执行命名 evidence 后至多派 Product 主审与一名专审。
 
-范围或验收未冻结时，先按
-[explore/references/decision-tree-interview.md](../explore/references/decision-tree-interview.md)
-把决策问穿再落笔。随后按 [`specs/feature-tree/README.md`](../../../specs/feature-tree/README.md)
-更新对应 `spec.md`。各层各写各的，不越层：
+## 完成证据
 
-| 层 | 写什么 |
-|---|---|
-| AppRoot | Journey / Scenario / UAT |
-| L1 | 领域边界 / REQ / DOM / 工程归属 |
-| L2 | 能力范围 / REQ / SIT |
-| L3 | 独立价值 / REQ / GWT |
-
-- 跨域 Journey 只在 AppRoot 写完整叙事，参与节点写自身职责与反向链接。
-- 字段、path、operation、surface、route、error、event、metric 只引用 metadata ID。
-- 验收只保留改变产品契约的代表场景；排列组合、路径、命令与结果留在测试代码与运行输出。
-- [MUST] 每条 GWT/SIT 满足：**GIVEN 可注入、WHEN 可触发、THEN 可断言**，且经导出面或对象级
-  typed port 观察。写不出观察方式的验收**当场改写**，不留给实现阶段发明旁路。
-- [MUST] 未完成能力、阻断、风险写到**最低可关闭节点**的 `OPEN-###`；完成判定必须引用验收锚点。
-  完成项直接成为当前 REQ，不保留完成状态。
-- [MUST NOT] 创建 acceptance YAML、registry、index、changelog、任务台账或成熟度矩阵。
-
-交互协议（[interaction-protocols](../review/references/interaction-protocols.md)）：
-改变规格的澄清决策按协议 2 就地落进本次 spec 增量；用户口令实质改变范围时按协议 3
-显式声明「vN→vN+1 及原因」再落笔。
-
-## 交付件
-
-**spec 增量**：规格 diff、验收锚点、OPEN 变化，以及「是否达到 design 门槛」的明确判定。
-
-送审前自检：
-
-- 无占位符、无自相矛盾；
-- 每条验收都能点名将绑定它的测试层；
-- 权限、生命周期、异常恢复、SLO、灰度回滚、canonical metadata 均已明确或已挂 OPEN。
-
-## 内置评审
-
-- PRE：调 `review`（workflow=`prd`，segment=PRE）确认 `explore` HANDOFF 输入齐全。
-- POST：调 `review`（workflow=`prd`，segment=POST，deliverable=`spec-node`），
-  典型角色 product + user + ux + test（验收可测性），gate 为 `make verify-feature-tree`；
-  同时跑 `make feature-tree-change-report` 确认影响面与预期一致。
+当前有效 spec 包含唯一父链、范围、REQ/验收锨点、证据层和 OPEN 去向；`verify-feature-tree` 与 POST Review 结果按当前指纹报告。
 
 ## 失败与停止
 
-- 不写 DEC、不实现。
-- 验收无法被真实测试绑定、或必答质量维度未明确且未挂 OPEN：`GATE_BLOCK`。
+用户价值、范围、owner、可测结果或 contract owner 不唯一时 `GATE_BLOCK`，回 `explore`。门禁或 required Review 失败时保留 typed blocker，不进 design/dev。
 
-## HANDOFF
+## 条件性交接
 
-- **完成判据**：见 [completion-criteria](../review/references/completion-criteria.md) 本工作流段；证据链条目带命令+退出码+时间戳+SHA，下游过期即复跑。
-- **产出物**：目标父链的 `spec.md` 增量；确有设计变化时附上层设计输入。
-- **未决项去向**：新增或变更的 `OPEN-###` 及其所在节点。
-- **唯一合法下游**：达到设计门槛（对象边界、跨域/跨服务、外部依赖、状态迁移、质量权衡、
-  观测或回滚分叉）交给 `design`；否则直接交给 `dev`。交接前确认基线可冻结——父链唯一、
-  REQ 与 UAT/DOM/SIT/GWT 均可被三层测试绑定、metadata owner 明确、与并行会话无未裁决冲突。
-- **证据链**：`make verify-feature-tree` 与 `make feature-tree-change-report` 输出。
-- **交接单**：轮次结束落 `.qwq_output/env/repo/runs/handoff/<轮次>/manifest.md` 并过 `make verify-handoff-manifest`。
+普通闭环只交付 spec、验证和未决项。只有跨会话、多人并行、外部阻断或下游需复用证据时，才持久化 owner/范围/验收/指纹，并交给 design 或 dev。

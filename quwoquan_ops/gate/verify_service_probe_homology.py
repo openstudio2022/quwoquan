@@ -9,6 +9,10 @@
 真相源是两侧的实际代码（Go 路由注册 + deploy 清单），实时扫描派生，
 不建立第二份探针注册表。
 
+服务可以自己注册 `/readyz`，也可以由 `servicekit.Bootstrap` 统一挂载——后者
+是骨架契约（`runtime/servicekit` 的白盒测试断言 `/healthz`、`/readyz`、
+`/metrics` 恒在），因此调用 `servicekit.Bootstrap(` 与自行注册路由等价。
+
 校验规则（双向）：
 1. 注册了 `/readyz` 的服务，其 `readinessProbe` 必须是 `/readyz`。
 2. 未注册 `/readyz` 的服务，其 `readinessProbe` 不得声明 `/readyz`（否则
@@ -20,6 +24,8 @@ from __future__ import annotations
 from pathlib import Path
 import re
 import sys
+
+sys.dont_write_bytecode = True
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
@@ -33,6 +39,8 @@ from quwoquan_ops.cli.lib.service_runtime_probes import (  # noqa: E402
 
 READINESS_PATH = "/readyz"
 _READYZ_ROUTE = re.compile(r'Handle(?:Func)?\(\s*"(?:GET\s+)?/readyz"')
+# 骨架装配等价于自行注册探针三件套；语义由 servicekit 白盒测试锁定。
+_SERVICEKIT_BOOTSTRAP = re.compile(r"servicekit\.Bootstrap\(")
 
 
 def _service_source_roots() -> dict[str, list[Path]]:
@@ -47,14 +55,18 @@ def _service_source_roots() -> dict[str, list[Path]]:
 
 
 def services_registering_readiness_route() -> set[str]:
-    """实际注册了 `/readyz` 路由的服务集合（排除测试树）。"""
+    """暴露独立 `/readyz` 路由的服务集合（排除测试树）。
+
+    命中任一即算暴露：服务自己注册该路由，或经 `servicekit.Bootstrap` 装配。
+    """
     registered: set[str] = set()
     for service, roots in _service_source_roots().items():
         for root in roots:
             for source in root.rglob("*.go"):
                 if "/tests/" in source.as_posix():
                     continue
-                if _READYZ_ROUTE.search(source.read_text(encoding="utf-8")):
+                text = source.read_text(encoding="utf-8")
+                if _READYZ_ROUTE.search(text) or _SERVICEKIT_BOOTSTRAP.search(text):
                     registered.add(service)
                     break
             if service in registered:

@@ -10,6 +10,8 @@ from pathlib import Path
 
 import yaml
 
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -49,6 +51,12 @@ PROMETHEUS_VEC_RE = re.compile(
 )
 REDIS_CONSTRUCTOR_RE = re.compile(
     r"\b(?:redis|rtredis)\.New(?:Client|ClusterClient|MemoryClient)\("
+)
+MESSAGE_TRANSPORT_ASSEMBLY_RE = re.compile(
+    r"CompiledBindingFor\(\s*(?:\w+\.)?RuntimeMessageTransportCapability"
+    r'|CompiledBindingFor\(\s*"' + re.escape(MESSAGE_TRANSPORT_CAPABILITY) + r'"'
+    r"|runtimemessaging\.MessageTransportRoot\{"
+    r"|servicekit\.MessageTransportSpec\{"
 )
 SERVICE_PRIVATE_IMPORT_RE = re.compile(
     r'"quwoquan_service/services/([^/]+)/(?:generated|internal)/'
@@ -193,8 +201,14 @@ def message_transport_observability_issues(
     return issues
 
 
-def message_transport_static_issues(registry: dict[object, object]) -> list[str]:
-    """Keep static composition roots on generated binding + typed transport."""
+def message_transport_static_issues(
+    registry: dict[object, object],
+    services_root: Path | None = None,
+) -> list[str]:
+    """Keep static composition roots on generated binding + typed transport.
+
+    ``services_root`` 仅供测试注入 fixture 树；生产扫描固定走真实服务树。
+    """
     issues: list[str] = []
     capabilities = registry.get("capabilities")
     if not isinstance(capabilities, list):
@@ -214,17 +228,37 @@ def message_transport_static_issues(registry: dict[object, object]) -> list[str]
         ]
 
     helpers_by_service: dict[str, list[Path]] = {}
-    services_root = ROOT / "quwoquan_service" / "services"
-    for helper in services_root.glob("*/cmd/**/message_transport.go"):
+    if services_root is None:
+        services_root = ROOT / "quwoquan_service" / "services"
+
+    def display_path(path: Path) -> str:
+        if path.is_relative_to(ROOT):
+            return path.relative_to(ROOT).as_posix()
+        return path.relative_to(services_root).as_posix()
+
+    # 装配点按内容特征识别，不按文件名：声明式装配（servicekit.Bootstrap）
+    # 把 transport preflight 收进了服务的 bootstrap.go，仍然消费同一份 generated
+    # descriptor。按 message_transport.go 这个文件名判定会把合规装配误判为缺失，
+    # 也会漏掉换了名字的旁路实现。锚点限定在 message transport capability 的
+    # binding 消费与 root 声明，避免把其他 capability（如 runtime.log.sink）
+    # 或错误消息里的同名字面量误抓进来。
+    for helper in sorted(services_root.glob("*/cmd/**/*.go")):
         if helper.name.endswith("_test.go"):
+            continue
+        source = helper.read_text(encoding="utf-8")
+        if not MESSAGE_TRANSPORT_ASSEMBLY_RE.search(source):
             continue
         service_id = helper.relative_to(services_root).parts[0]
         helpers_by_service.setdefault(service_id, []).append(helper)
-        source = helper.read_text(encoding="utf-8")
-        relative = helper.relative_to(ROOT).as_posix()
+        relative = display_path(helper)
         if "CompiledBindingFor(" not in source:
             issues.append(f"{relative}: message root must consume its generated binding")
-        if "RequireConfiguredRedisMessageTransport(" not in source:
+        # servicekit.NewMessageTransport 内部执行同一 RequireConfiguredRedis-
+        # MessageTransport preflight；两种形态都算合规。
+        if (
+            "RequireConfiguredRedisMessageTransport(" not in source
+            and "servicekit.NewMessageTransport(" not in source
+        ):
             issues.append(f"{relative}: message root must run generated-binding preflight")
         if REDIS_CONSTRUCTOR_RE.search(source):
             issues.append(f"{relative}: bare Redis client initialization bypasses typed transport")
@@ -252,7 +286,7 @@ def message_transport_static_issues(registry: dict[object, object]) -> list[str]
         if source_path.name.endswith("_test.go"):
             continue
         source = source_path.read_text(encoding="utf-8")
-        relative = source_path.relative_to(ROOT).as_posix()
+        relative = display_path(source_path)
         if "NewRedisMessageTransportForRoot(" in source or "NewRedisMessageTransport(" in source:
             if source_path.name != "message_transport.go":
                 issues.append(

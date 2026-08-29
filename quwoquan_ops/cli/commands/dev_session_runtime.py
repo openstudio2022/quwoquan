@@ -7,9 +7,9 @@
   `_dev_session_workload_conflict` / `_dev_session_compose_project`;
 - workspace 与身份: `_mutable_workspace_snapshot` /
   `_mutable_test_live_operation_identity_environment`;
-- compose 与输入: `_dev_session_source_compose_files` /
-  `_materialize_local_portal_root` / `_dev_session_materialize_compose_files` /
-  `_dev_session_target_media_root` / `_dev_session_render_runtime_inputs`。
+- compose 与输入: `_materialize_local_portal_root` /
+  `_dev_session_target_media_root` / `_dev_session_render_runtime_inputs`
+  （Compose 闭包解析与物化归 `dev_session_compose.py`）。
 
 测试经 ``mock.patch.object(stackctl, ...)`` patch 本模块符号与协作符号，
 因此函数体内一律经函数内延迟导入 `_stackctl` 属性访问（含本模块符号互调），
@@ -31,6 +31,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 from typing import Mapping
+from uuid import uuid4
 
 
 def _dev_session_child_args(
@@ -291,279 +292,6 @@ def _mutable_test_live_operation_identity_environment(
     }
 
 
-def _dev_session_source_compose_files(
-    *,
-    environment: str,
-    target: str,
-    provider_composition: Mapping[str, Any],
-) -> tuple[list[Path], list[str]]:
-    """Resolve the complete current-worktree Compose closure without packaging."""
-    import quwoquan_ops.cli.stackctl as _stackctl
-
-
-    _stackctl._dev_session_compose_project(environment, target)
-    services_root = _stackctl.ROOT / "quwoquan_service" / "services"
-    active_services = set(_stackctl.first_party_service_names(_stackctl.ROOT))
-    files = [
-        _stackctl.ROOT / "quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml"
-    ]
-    files.extend(
-        sorted(
-            path
-            for path in services_root.glob("*/deploy/compose.yaml")
-            if path.parents[1].name in active_services
-        )
-    )
-    files.extend(
-        sorted(
-            path
-            for path in services_root.glob(
-                f"*/environments/{environment}/deploy/compose.yaml"
-            )
-            if path.parents[3].name in active_services
-        )
-    )
-    files.extend(
-        (
-            _stackctl.ROOT
-            / "quwoquan_service/services/product-ops-service/deploy/local-elasticsearch.compose.yaml",
-            _stackctl.ROOT
-            / "quwoquan_service/control-plane/platform-ops/deploy/compose.yaml",
-        )
-    )
-    # 上面无条件把 control-plane/platform-ops 的 compose 选入闭包，而该文件用
-    # profile 门控 platform-ops-service。test_live 只有 full workload 一种形态，
-    # 因此这里必须与 immutable full workload 激活同一组 profile；漏掉
-    # control-plane 会让服务只存在于声明里而永不启动，运行态 roster 随之永久
-    # 判定漂移。
-    profiles = {
-        "assistant-runtime",
-        "commercial-observability",
-        "control-plane",
-        "edge-media",
-    }
-    validated_provider = _stackctl.validate_provider_runtime_composition(
-        dict(provider_composition),
-        expected_environment=environment,
-        expected_target=target,
-    )
-    for workload in validated_provider["workloads"]:
-        compose_ref = Path(str(workload["composeRef"]))
-        if compose_ref.is_absolute() or ".." in compose_ref.parts:
-            raise ValueError("mutable Provider Compose reference is unsafe")
-        compose_path = (_stackctl.ROOT / compose_ref).resolve()
-        if (
-            not compose_path.is_relative_to(_stackctl.ROOT)
-            or not compose_path.is_file()
-            or compose_path.is_symlink()
-            or _stackctl._sha256_file(compose_path) != str(workload["composeDigest"])
-        ):
-            raise ValueError(
-                f"mutable Provider Compose identity drifted: {workload['role']}"
-            )
-        files.append(compose_path)
-        profiles.update(str(item) for item in workload["composeProfiles"])
-
-    canonical_files: list[Path] = []
-    seen: set[Path] = set()
-    for raw_path in files:
-        path = raw_path.resolve()
-        if (
-            path in seen
-            or not path.is_relative_to(_stackctl.ROOT)
-            or not path.is_file()
-            or path.is_symlink()
-        ):
-            if path in seen:
-                continue
-            raise ValueError(f"mutable test_live Compose source is unsafe: {path}")
-        seen.add(path)
-        canonical_files.append(path)
-    if not canonical_files:
-        raise ValueError("mutable test_live Compose closure is empty")
-    return canonical_files, sorted(profiles)
-
-
-def _dev_session_materialize_compose_files(
-    source_files: Sequence[Path],
-    *,
-    destination_root: Path,
-) -> list[Path]:
-    """Create execution-only Compose copies with source-relative build contexts."""
-    import quwoquan_ops.cli.stackctl as _stackctl
-
-
-    def contains_symlink(path: Path) -> bool:
-        current = _stackctl.ROOT
-        for part in path.relative_to(_stackctl.ROOT).parts:
-            current /= part
-            if current.is_symlink():
-                return True
-        return False
-
-    destination_root.mkdir(parents=True, exist_ok=True)
-    execution_files: list[Path] = []
-    compose_base = (
-        Path(os.path.abspath(source_files[0].parent)) if source_files else _stackctl.ROOT
-    )
-    for index, source in enumerate(source_files):
-        payload = _stackctl.load_json_yaml(source)
-        services = payload.get("services")
-        if services is not None and not isinstance(services, dict):
-            raise ValueError(f"mutable Compose services must be an object: {source}")
-        try:
-            source_ref = source.relative_to(_stackctl.ROOT).as_posix()
-        except ValueError as exc:
-            raise ValueError(
-                f"mutable test_live Compose source escapes repository: {source}"
-            ) from exc
-        if source_ref == "quwoquan_service/services/content-service/deploy/compose.yaml":
-            content_service = (services or {}).get("content-service")
-            if not isinstance(content_service, dict):
-                raise ValueError(
-                    "mutable content-service Compose source has no service definition"
-                )
-            dependencies = content_service.get("depends_on")
-            if not isinstance(dependencies, dict):
-                raise ValueError(
-                    "mutable content-service Compose dependencies must be an object"
-                )
-            # Full test-live always enables the canonical Elasticsearch-backed
-            # feed/search projection.  Formal environment overlays retain their
-            # existing ownership; this execution-only copy closes the cold
-            # Alpha/Beta race without changing package/deploy semantics.
-            dependencies["elasticsearch"] = {"condition": "service_healthy"}
-            dependencies["postgres"] = {"condition": "service_healthy"}
-        if source_ref == "quwoquan_service/services/recommendation-service/deploy/compose.yaml":
-            recommendation_service = (services or {}).get("recommendation-service")
-            if not isinstance(recommendation_service, dict):
-                raise ValueError(
-                    "mutable recommendation-service Compose source has no service definition"
-                )
-            dependencies = recommendation_service.get("depends_on")
-            if dependencies is None:
-                dependencies = {}
-                recommendation_service["depends_on"] = dependencies
-            if not isinstance(dependencies, dict):
-                raise ValueError(
-                    "mutable recommendation-service Compose dependencies must be an object"
-                )
-            dependencies["redis"] = {"condition": "service_healthy"}
-        for service_name, service in (services or {}).items():
-            if not isinstance(service, dict):
-                raise ValueError(
-                    f"mutable Compose service must be an object: {source}:{service_name}"
-                )
-            volumes = service.get("volumes")
-            if volumes is not None:
-                if not isinstance(volumes, list):
-                    raise ValueError(
-                        f"mutable Compose volumes must be a list: {source}:{service_name}"
-                    )
-                rewritten_volumes: list[object] = []
-                for volume in volumes:
-                    if isinstance(volume, str) and volume.startswith("."):
-                        host_ref, separator, container_ref = volume.partition(":")
-                        host_path = Path(
-                            os.path.abspath(source.parent / Path(host_ref))
-                        )
-                        if (
-                            not separator
-                            or not host_path.is_relative_to(_stackctl.ROOT)
-                            or not host_path.exists()
-                            or contains_symlink(host_path)
-                        ):
-                            raise ValueError(
-                                "mutable Compose bind source is unsafe: "
-                                f"{source}:{service_name}:{host_ref}"
-                            )
-                        rewritten_volumes.append(
-                            str(host_path) + separator + container_ref
-                        )
-                        continue
-                    if (
-                        isinstance(volume, dict)
-                        and volume.get("type") == "bind"
-                        and str(volume.get("source") or "").startswith(".")
-                    ):
-                        host_ref = str(volume["source"])
-                        host_path = Path(
-                            os.path.abspath(source.parent / Path(host_ref))
-                        )
-                        if (
-                            not host_path.is_relative_to(_stackctl.ROOT)
-                            or not host_path.exists()
-                            or contains_symlink(host_path)
-                        ):
-                            raise ValueError(
-                                "mutable Compose bind source is unsafe: "
-                                f"{source}:{service_name}:{host_ref}"
-                            )
-                        rewritten_volumes.append(
-                            {**volume, "source": str(host_path)}
-                        )
-                        continue
-                    rewritten_volumes.append(volume)
-                service["volumes"] = rewritten_volumes
-            build = service.get("build")
-            if isinstance(build, str):
-                build = {"context": build}
-                service["build"] = build
-            elif build is None:
-                continue
-            elif not isinstance(build, dict):
-                raise ValueError(
-                    f"mutable Compose build must be a string or object: "
-                    f"{source}:{service_name}"
-                )
-            context_value = str(build.get("context") or "").strip()
-            if not context_value:
-                raise ValueError(
-                    f"mutable Compose build context is empty: {source}:{service_name}"
-                )
-            context_path = Path(context_value)
-            dockerfile_value = str(build.get("dockerfile") or "Dockerfile").strip()
-            dockerfile_path = Path(dockerfile_value)
-            if not dockerfile_value or dockerfile_path.is_absolute():
-                raise ValueError(
-                    f"mutable Compose Dockerfile is unsafe: {source}:{service_name}"
-                )
-            raw_candidates = (
-                [Path(os.path.abspath(context_path))]
-                if context_path.is_absolute()
-                else [
-                    Path(os.path.abspath(source.parent / context_path)),
-                    Path(os.path.abspath(compose_base / context_path)),
-                ]
-            )
-            candidates: list[Path] = []
-            for candidate in raw_candidates:
-                if candidate in candidates:
-                    continue
-                dockerfile = Path(os.path.abspath(candidate / dockerfile_path))
-                if (
-                    candidate.is_relative_to(_stackctl.ROOT)
-                    and candidate.is_dir()
-                    and not contains_symlink(candidate)
-                    and dockerfile.is_relative_to(candidate)
-                    and dockerfile.is_file()
-                    and not contains_symlink(dockerfile)
-                ):
-                    candidates.append(candidate)
-            if len(candidates) != 1:
-                raise ValueError(
-                    f"mutable Compose build context must resolve exactly once: "
-                    f"{source}:{service_name}:{context_value}"
-                )
-            resolved_context = candidates[0]
-            build["context"] = str(resolved_context)
-        payload = _stackctl.project_compose_document(payload)
-        destination = destination_root / f"{index:02d}-{source.stem}.json"
-        _stackctl.write_json(destination, payload)
-        execution_files.append(destination)
-    return execution_files
-
-
 def _dev_session_target_media_root(
     *,
     target: str,
@@ -605,6 +333,52 @@ def _dev_session_target_media_root(
             "mutable test_live dataRelease.mediaLocalRef escapes target-local root"
         ) from exc
     return media_local_ref, media_root
+
+
+def _dev_session_finalize_runtime_plan(
+    *,
+    runtime_plan: Mapping[str, Any],
+    compose_model: Mapping[str, object],
+    report_dir: Path,
+    manifest: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    plan = dict(runtime_plan)
+    if plan.get("schema") != "stackctl.mutable_test_live_runtime":
+        raise ValueError("mutable test_live runtime plan schema mismatch")
+    port_profile = str(plan.get("portProfile") or "").strip()
+    if not port_profile:
+        raise ValueError("mutable test_live runtime port profile is required")
+    if "publishedPorts" in plan:
+        raise ValueError(
+            "mutable test_live published ports must come from the Compose model"
+        )
+    resolved_manifest = manifest if manifest is not None else _stackctl.load_port_manifest()
+    published_endpoints = _stackctl.project_compose_published_endpoints(
+        port_profile=port_profile,
+        compose_model=compose_model,
+        manifest=resolved_manifest,
+    )
+    _stackctl.project_runtime_owned_ports(
+        port_profile=port_profile,
+        published_ports=published_endpoints,
+        manifest=resolved_manifest,
+    )
+    plan["publishedPorts"] = published_endpoints
+    plan_path = report_dir / "mutable-runtime-plan.json"
+    plan_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = plan_path.with_name(f".{plan_path.name}.{uuid4().hex}.tmp")
+    try:
+        with temporary_path.open("x", encoding="utf-8") as handle:
+            json.dump(plan, handle, ensure_ascii=False, indent=2, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_path, plan_path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
+    return plan
 
 
 def _dev_session_render_runtime_inputs(
@@ -702,9 +476,23 @@ def _dev_session_render_runtime_inputs(
         run_command=_stackctl.run,
     )
 
+    # mutable test-live 镜像由 compose build 从当前工作树构建，Dockerfile 依赖
+    # named build context `qwq_provider_bindings`（与 immutable package 同一
+    # 编译产物形态），因此 render 时从源码编译并物化 run-scoped overlay。
+    provider_binding_overlay_root, provider_binding_manifest_digest = (
+        _stackctl.materialize_mutable_provider_binding_overlay(
+            environment,
+            target,
+            source_root=_stackctl.ROOT,
+            output_root=render_root / "provider-binding-overlay",
+        )
+    )
+
     execution_compose_files = _stackctl._dev_session_materialize_compose_files(
         compose_files,
         destination_root=execution_compose_root,
+        provider_binding_overlay_context=provider_binding_overlay_root,
+        provider_binding_manifest_digest=provider_binding_manifest_digest,
     )
     portal_materialization = _stackctl._materialize_local_portal_root(
         topology, target, portal_root
@@ -814,7 +602,6 @@ def _dev_session_render_runtime_inputs(
             "LOCAL_GAMMA_COMPOSE_PROJECT_NAME": _stackctl._dev_session_compose_project(
                 environment, target
             ),
-            "LOCAL_GAMMA_ADMIN_PORT": str(block_end),
             "LOCAL_GAMMA_CADDYFILE": str(shared_root / "Caddyfile"),
             "LOCAL_GAMMA_LIVEKIT_CONFIG_FILE": str(shared_root / "livekit.yaml"),
             "LOCAL_GAMMA_OBJECT_STORAGE_LIFECYCLE_FILE": str(
@@ -930,7 +717,6 @@ def _dev_session_render_runtime_inputs(
         "composeProject": environment_values["LOCAL_GAMMA_COMPOSE_PROJECT_NAME"],
         "portProfile": profile_name,
         "portBlock": {"start": block_start, "end": block_end},
-        "publishedPorts": dict(sorted(ports.items())),
         "composeFiles": [_stackctl.relpath(path) for path in compose_files],
         "executionComposeFiles": [_stackctl.relpath(path) for path in execution_compose_files],
         "composeProfiles": compose_profiles,
@@ -946,7 +732,6 @@ def _dev_session_render_runtime_inputs(
         "publicWebPackage": dict(public_web_package),
         "serviceCoreModules": sorted(_stackctl.SERVICE_CORE_MODULE_SET),
     }
-    _stackctl.write_json(report_dir / "mutable-runtime-plan.json", plan)
     return {
         "plan": plan,
         "environment": environment_values,

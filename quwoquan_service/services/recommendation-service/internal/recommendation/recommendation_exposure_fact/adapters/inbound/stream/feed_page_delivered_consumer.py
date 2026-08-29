@@ -41,6 +41,7 @@ class FeedPageDeliveredEvent:
     persona_id: str | None
     scenario: str
     window_id: str
+    experiment_bucket: str
     model_bucket: str
     model_channel: str | None
     model_release_id: str | None
@@ -100,9 +101,12 @@ def decode_feed_page_delivered(values: dict[str, str]) -> FeedPageDeliveredEvent
         or len(set(content_ids)) != len(content_ids)
     ):
         raise ValueError("FeedPageDelivered item identity is invalid")
+    experiment_bucket = str(payload.get("experimentBucket") or "").strip()
     model_bucket = str(payload.get("modelBucket") or "").strip()
     model_channel = str(payload.get("modelChannel") or "").strip() or None
     model_release_id = str(payload.get("modelReleaseId") or "").strip() or None
+    if experiment_bucket not in {"model", "rule"}:
+        raise ValueError("FeedPageDelivered experimentBucket is invalid")
     if model_bucket not in {"model", "rule"}:
         raise ValueError("FeedPageDelivered modelBucket is invalid")
     if model_bucket == "model" and (not model_channel or not model_release_id):
@@ -138,6 +142,7 @@ def decode_feed_page_delivered(values: dict[str, str]) -> FeedPageDeliveredEvent
         persona_id=str(payload.get("personaId") or "").strip() or None,
         scenario=required["scenario"],
         window_id=required["windowId"],
+        experiment_bucket=experiment_bucket,
         model_bucket=model_bucket,
         model_channel=model_channel,
         model_release_id=model_release_id,
@@ -266,6 +271,7 @@ class FeedPageDeliveredConsumer:
                         target_type=str(item.get("contentType") or "").strip(),
                         target_id=content_id,
                         ordinal=ordinal,
+                        experiment_bucket=event.experiment_bucket,
                         model_bucket=event.model_bucket,
                         model_channel=event.model_channel,
                         model_release_id=event.model_release_id,

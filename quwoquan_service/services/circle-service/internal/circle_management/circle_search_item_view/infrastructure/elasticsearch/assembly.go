@@ -73,6 +73,9 @@ func ApplyEnvOverrides(config *Config) {
 	if config == nil {
 		return
 	}
+	// endpoints 只覆盖地址，不改写 Enabled：启用与否只由 SEARCH_ES_ENABLED 声明。
+	// 让地址在场顺带打开开关会让 Enabled 不再是它自己的真相源，注入顺序一变，
+	// 一个显式的 false 就被地址静默翻成 true。
 	if value := strings.TrimSpace(os.Getenv("SEARCH_ES_ENDPOINTS")); value != "" {
 		config.Endpoints = nil
 		for _, endpoint := range strings.Split(value, ",") {
@@ -80,7 +83,6 @@ func ApplyEnvOverrides(config *Config) {
 				config.Endpoints = append(config.Endpoints, endpoint)
 			}
 		}
-		config.Enabled = true
 	}
 	if value := strings.TrimSpace(os.Getenv("SEARCH_ES_USERNAME")); value != "" {
 		config.Username = value

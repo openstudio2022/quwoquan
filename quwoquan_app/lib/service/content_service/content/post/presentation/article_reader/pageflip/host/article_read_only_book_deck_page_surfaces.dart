@@ -82,6 +82,7 @@ extension _ArticleReadOnlyBookDeckPageSurfaces
         metrics: _deck.metrics,
         paperTexture: _deck.paperTexture,
         onEntityTap: _deck.onEntityTap,
+        onImageTap: _deck.onImageTap,
       ),
     );
   }

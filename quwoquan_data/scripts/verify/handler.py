@@ -24,6 +24,18 @@ from verify.gate import gate_verify
 from verify.verify_execution_readiness import READINESS_MODES
 
 
+_HOMEPAGE_MEDIA_HELP = {
+    "homepage-media-completeness": "校验实体主页图片枚举、下载与角色闭环（决策+兑现合并口径）",
+    "homepage-media-decision": "1.download 判据：每张下载图的处置已冻结且合法，不读 manifest",
+    "homepage-media-fulfillment": "物化后判据：manifest 与冻结处置双向对账",
+}
+_HOMEPAGE_MEDIA_VIEWS = {
+    "homepage-media-completeness": "combined",
+    "homepage-media-decision": "decision",
+    "homepage-media-fulfillment": "fulfillment",
+}
+
+
 # 无参 verify 门的统一转发表：cmd -> verify 模块名（模块必须暴露 main() -> int）。
 _NO_ARG_VERIFIER_MODULES = {
     "single-contract-source": "verify_single_contract_source",
@@ -124,10 +136,14 @@ def handle_verify(args: argparse.Namespace) -> None:
                 ]
             )
         )
-    if cmd == "homepage-media-completeness":
+    if cmd in _HOMEPAGE_MEDIA_VIEWS:
         from verify.verify_homepage_media_completeness import main as homepage_media_main
 
-        raise SystemExit(homepage_media_main(["--execution", str(args.execution)]))
+        raise SystemExit(
+            homepage_media_main(
+                ["--execution", str(args.execution), "--view", _HOMEPAGE_MEDIA_VIEWS[cmd]]
+            )
+        )
     if cmd == "homepage-draft":
         from verify.verify_homepage_draft import main as homepage_draft_main
 
@@ -513,8 +529,8 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     lifecycle_exit.add_argument("--original-release", required=True)
     lifecycle_exit.add_argument("--exit-run", required=True)
     sub.add_parser("cursor-credential-contract", help="校验只使用仓外受限 key file 且无旧 alias/secret")
-    phm = sub.add_parser("homepage-media-completeness", help="校验实体主页图片枚举、下载与角色闭环")
-    phm.add_argument("--execution", required=True)
+    for name, help_text in _HOMEPAGE_MEDIA_HELP.items():
+        sub.add_parser(name, help=help_text).add_argument("--execution", required=True)
     phd = sub.add_parser("homepage-draft", help="校验单个 Agent 主页草稿的结构与底稿贴合度")
     phd.add_argument("--execution", required=True)
     phd.add_argument("--entity", required=True)
@@ -532,7 +548,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     psa.add_argument("--trial", action="store_true", help="trial 允许 independent reviewer 尚未通过")
     psa.add_argument(
         "--through",
-        choices=("1.download", "2.quality", "3.compose", "4.draft", "5.review"),
+        choices=paths.OBJECT_STAGES,
         help="进行式校验：只要求到该阶段为止的产物齐全；缺省为完成型全量校验",
     )
     pri = sub.add_parser("release-integrity", help="校验 release 级证据链、一稿一用与跨作品资产溯源完整性")

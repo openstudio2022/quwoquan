@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-import fcntl
-from collections.abc import Iterator, Mapping
-from contextlib import contextmanager
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from core.io import read_json, write_json
+from core.io import read_json
 from core.schema import assert_valid
 
 from content.execution import store
@@ -26,6 +24,13 @@ from content.execution.campaign.publish_binding import (
 from content.execution.campaign.publish_binding import (
     receipt_error as _receipt_error,
 )
+from content.execution.campaign.lane_zero_qualified import (
+    ZERO_QUALIFIED_REASON_FIELD,
+    assert_lane_zero_qualified_reason,
+    publish_zero_qualified_reason,
+    review_zero_qualified_reason,
+)
+from content.execution.campaign.receipt_store import write_create_once_document
 from content.execution.campaign.submission import campaign_root
 from content.execution.campaign.workspace import CampaignRuntimePaths
 from content.execution.identity import parse_execution_id, validate_execution_id
@@ -35,18 +40,6 @@ from content.execution.closure.adoption_campaign_contract import (
 )
 
 _ADOPTION_PUBLISH_FIELDS = (CAMPAIGN_ADOPTION_FIELD, "adoptedObjectRefs")
-
-
-@contextmanager
-def _receipt_lock(path: Path) -> Iterator[None]:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    lock_path = path.parent / f".{path.name}.lock"
-    with lock_path.open("a+b") as handle:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 def _assert_phase_binding(payload: Mapping[str, Any], *, path: Path) -> None:
@@ -136,30 +129,20 @@ def lane_receipt_path(
 
 
 def _write_immutable_receipt(path: Path, payload: dict[str, Any]) -> Path:
+    label = f"campaign lane receipt:{path.name}"
     _assert_phase_binding(payload, path=path)
+    assert_lane_zero_qualified_reason(payload, label=label)
     assert_valid(
         payload,
         "execution",
         "content_campaign_lane_receipt",
-        label=f"campaign lane receipt:{path.name}",
+        label=label,
     )
-    with _receipt_lock(path):
-        if path.is_symlink():
-            raise _receipt_error(
-                "PATH_INVALID",
-                "campaign lane receipt cannot be a symlink",
-                evidence=path,
-            )
-        if path.is_file():
-            if read_json(path) != payload:
-                raise _receipt_error(
-                    "IMMUTABLE_COLLISION",
-                    "campaign lane receipt already differs",
-                    evidence=path,
-                )
-            return path
-        write_json(path, payload)
-    return path
+    return write_create_once_document(
+        path,
+        payload,
+        collision_detail="campaign lane receipt already differs",
+    )
 
 
 def _lane_status(*, qualified: int, approved: int) -> str:
@@ -265,6 +248,8 @@ def write_review_receipt(
     root_execution_id: str,
     execution_id: str,
 ) -> Path:
+    from content.execution.campaign.plan_identity import utc_now
+
     normalized = validate_execution_id(execution_id)
     carrier = parse_execution_id(normalized).content_type.value
     evidence = _review_evidence(normalized, carrier)
@@ -273,6 +258,20 @@ def write_review_receipt(
         or evidence.discarded_count != len(evidence.discards)
     ):
         raise ValueError("campaign review receipt selected/discard count drift")
+    zero_qualified_reason = (
+        review_zero_qualified_reason(
+            root_execution_id=root_execution_id,
+            execution_id=normalized,
+            carrier=carrier,
+            selected_count=evidence.selected_count,
+            discarded_count=evidence.discarded_count,
+            discards=evidence.discards,
+            determined_at=utc_now(),
+            root=None,
+        )
+        if evidence.qualified_count <= 0
+        else None
+    )
     payload = {
         "schema": "quwoquan_data.content_campaign_lane_receipt",
         "rootExecutionId": validate_execution_id(root_execution_id),
@@ -288,6 +287,8 @@ def write_review_receipt(
         "shortfallCount": evidence.shortfall_count,
         "discards": list(evidence.discards),
     }
+    if zero_qualified_reason is not None:
+        payload[ZERO_QUALIFIED_REASON_FIELD] = zero_qualified_reason
     return _write_immutable_receipt(
         lane_receipt_path(root_execution_id, carrier, "review"),
         payload,
@@ -341,6 +342,20 @@ def write_publish_receipt(
         if finalized_count >= approved_quota and not publish_discards
         else "partial"
     )
+    if status == "blocked":
+        from content.execution.campaign.plan_identity import utc_now
+
+        zero_qualified_reason = publish_zero_qualified_reason(
+            root_execution_id=root_execution_id,
+            execution_id=normalized,
+            carrier=carrier,
+            review_qualified_count=qualified_count,
+            publish_discards=publish_discards,
+            determined_at=utc_now(),
+            root=runtime.campaigns_root,
+        )
+    else:
+        zero_qualified_reason = None
     payload = {
         "schema": "quwoquan_data.content_campaign_lane_receipt",
         "rootExecutionId": validate_execution_id(root_execution_id),
@@ -359,6 +374,8 @@ def write_publish_receipt(
         "publishDiscards": publish_discards,
         **projection.binding,
     }
+    if zero_qualified_reason is not None:
+        payload[ZERO_QUALIFIED_REASON_FIELD] = zero_qualified_reason
     return _write_immutable_receipt(
         lane_receipt_path(
             root_execution_id,
@@ -451,6 +468,10 @@ def load_lane_receipt(
         # lower-level oneOf diagnostic.  The strict schema remains the next
         # gate and still rejects every other malformed shape.
         _assert_phase_binding(payload, path=path)
+        assert_lane_zero_qualified_reason(
+            payload,
+            label=f"campaign lane receipt:{path.name}",
+        )
     assert_valid(
         payload,
         "execution",

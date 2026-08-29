@@ -11,48 +11,32 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-SCHEMA = "app-launch-attempt"
-FORWARD_STATES = (
-    "prepared",
-    "compiling",
-    "compiled",
-    "installing",
-    "installed",
-    "configuring",
-    "configured",
-    "launching",
-    "launched",
+from .app_launch_manifest_schema import validate_schema_document
+from .generated.app_launch_contract import (
+    APP_LAUNCH_ATTEMPT_FORWARD_STATES,
+    APP_LAUNCH_ATTEMPT_REQUIRED_FIELDS,
+    APP_LAUNCH_ATTEMPT_STATUSES,
+    APP_LAUNCH_ATTEMPT_TERMINAL_STATES,
+    APP_LAUNCH_MANIFEST,
+    BUILD_PROFILE_ENVIRONMENTS,
+    LAUNCH_PROVENANCES,
+    RUNTIME_CONFIG_SUPPLY_MODES,
+    SCHEMA_VALUES,
+    TARGET_ENVIRONMENT,
 )
-TERMINAL_STATES = frozenset({"launched", "runtime_degraded", "failed", "stopped"})
-_ALL_STATES = frozenset((*FORWARD_STATES, "runtime_degraded", "failed", "stopped"))
+from .generated.app_launch_contract import (
+    LAUNCH_BLOCKERS as GENERATED_LAUNCH_BLOCKERS,
+)
 
-# 与 app_launch_manifest.yaml 的 launch_blockers 同源；launcher 侧 typed blocker
-# 不经过服务端请求，因此不进任何服务 errors.yaml。
-LAUNCH_BLOCKERS = frozenset(
-    {
-        "APP.LAUNCH.compile_failed",
-        "APP.LAUNCH.install_failed",
-        "APP.LAUNCH.launch_failed",
-        "APP.LAUNCH.prod_debug_forbidden",
-        "APP.LAUNCH.prod_artifact_required",
-        "APP.LAUNCH.prod_artifact_invalid",
-        "APP.LAUNCH.prod_hosted_flutter_forbidden",
-        "APP.LAUNCH.ios_release_simulator_unsupported",
-        "APP.LAUNCH.device_unavailable",
-        "APP.LAUNCH.platform_unsupported",
-        "APP.LAUNCH.receipt_absent",
-        "APP.LAUNCH.receipt_invalid",
-        "APP.LAUNCH.receipt_timeout",
-        "APP.LAUNCH.receipt_unreadable",
-        "APP.LAUNCH.runtime_dependency_unavailable",
-        "APP.LAUNCH.runtime_config_missing",
-        "APP.LAUNCH.runtime_config_activation_failed",
-        "APP.WEB.recovery_unavailable",
-    }
-)
-CONFIGURATION_STATES = ("unobserved", "pending_native", "complete", "invalid")
-RUNTIME_HEALTH_STATUSES = ("unobserved", "healthy", "degraded", "unavailable")
-RECOVERY_WEB_STATUSES = ("not_applicable", "unobserved", "available", "unavailable")
+SCHEMA = SCHEMA_VALUES["app_launch_attempt"]
+FORWARD_STATES = tuple(APP_LAUNCH_ATTEMPT_FORWARD_STATES)
+TERMINAL_STATES = frozenset(("launched", *APP_LAUNCH_ATTEMPT_TERMINAL_STATES))
+_ALL_STATES = frozenset(APP_LAUNCH_ATTEMPT_STATUSES)
+LAUNCH_BLOCKERS = frozenset(GENERATED_LAUNCH_BLOCKERS)
+_ATTEMPT_FIELDS = APP_LAUNCH_MANIFEST["schemas"]["app_launch_attempt"]["fields"]
+CONFIGURATION_STATES = tuple(_ATTEMPT_FIELDS["configurationState"]["allowed_values"])
+RUNTIME_HEALTH_STATUSES = tuple(_ATTEMPT_FIELDS["runtimeHealthStatus"]["allowed_values"])
+RECOVERY_WEB_STATUSES = tuple(_ATTEMPT_FIELDS["recoveryWebStatus"]["allowed_values"])
 
 
 def utc_now() -> str:
@@ -77,50 +61,35 @@ def read_app_launch_attempt(path: str | Path) -> dict[str, Any]:
 def validate_app_launch_attempt(value: object) -> dict[str, Any]:
     if not isinstance(value, dict) or value.get("schema") != SCHEMA:
         raise ValueError("App launch attempt schema mismatch")
-    required = {
-        "schema",
-        "attemptId",
-        "environment",
-        "target",
-        "platform",
-        "buildMode",
-        "runMode",
-        "artifactDigest",
-        "launchDigest",
-        "status",
-        "transitions",
-        "warnings",
-        "firstBlocker",
-        "configurationState",
-        "runtimeHealthStatus",
-        "recoveryWebStatus",
-        "recoveryWebEvidenceRef",
-        "deviceId",
-        "logRefs",
-        "updatedAt",
-        "nonPromotable",
-    }
+    required = set(APP_LAUNCH_ATTEMPT_REQUIRED_FIELDS)
     if set(value) != required:
         raise ValueError("App launch attempt fields mismatch")
+    schema_issues = validate_schema_document(
+        value,
+        "app_launch_attempt",
+        contract=APP_LAUNCH_MANIFEST,
+        field_path="appLaunchAttempt",
+    )
+    if schema_issues:
+        raise ValueError("App launch attempt schema invalid: " + "; ".join(schema_issues))
     environment = str(value.get("environment") or "")
     target = str(value.get("target") or "")
-    if environment not in {"alpha", "beta", "gamma", "prod"}:
-        raise ValueError("App launch attempt environment is invalid")
-    expected_target = f"{environment}-local" if environment != "prod" else target
-    if target != expected_target or target not in {
-        "alpha-local",
-        "beta-local",
-        "gamma-local",
-        "prod-sim",
-        "prod-hosted",
-    }:
+    if TARGET_ENVIRONMENT.get(target) != environment:
         raise ValueError("App launch attempt target is invalid")
-    if value.get("platform") not in {"android", "ios"}:
-        raise ValueError("App launch attempt platform is invalid")
-    if value.get("buildMode") not in {"debug", "profile", "release"}:
-        raise ValueError("App launch attempt build mode is invalid")
-    if value.get("runMode") not in {"content-live", "ui-only", "release-artifact"}:
-        raise ValueError("App launch attempt run mode is invalid")
+    expected_profile = next(
+        (
+            profile
+            for profile, environments in BUILD_PROFILE_ENVIRONMENTS.items()
+            if environment in environments
+        ),
+        "",
+    )
+    if value.get("buildProfile") != expected_profile:
+        raise ValueError("App launch attempt build profile is invalid")
+    if value.get("launchProvenance") not in LAUNCH_PROVENANCES:
+        raise ValueError("App launch attempt launch provenance is invalid")
+    if value.get("runtimeConfigSupplyMode") not in RUNTIME_CONFIG_SUPPLY_MODES:
+        raise ValueError("App launch attempt runtime config supply mode is invalid")
     status = str(value.get("status") or "")
     if status not in _ALL_STATES:
         raise ValueError("App launch attempt status is invalid")
@@ -133,6 +102,22 @@ def validate_app_launch_attempt(value: object) -> dict[str, Any]:
     forward_positions = [FORWARD_STATES.index(item) for item in observed if item in FORWARD_STATES]
     if forward_positions != sorted(set(forward_positions)):
         raise ValueError("App launch attempt transition order is invalid")
+    if "compiled" in observed and not str(value.get("artifactDigest") or ""):
+        raise ValueError(
+            "App launch attempt compiled transition requires artifactDigest"
+        )
+    terminal_identity = tuple(
+        str(value.get(field) or "")
+        for field in (
+            "startupTerminalAttemptId",
+            "startupTerminalEvidenceDigest",
+            "startupTerminalEvidenceRef",
+        )
+    )
+    if any(terminal_identity) and not all(terminal_identity):
+        raise ValueError("App launch attempt startup terminal identity is partial")
+    if all(terminal_identity) and "launching" not in observed:
+        raise ValueError("App launch attempt startup terminal requires launching")
     for field in ("warnings", "logRefs"):
         if not isinstance(value.get(field), list) or not all(
             isinstance(item, str) for item in value[field]
@@ -141,15 +126,6 @@ def validate_app_launch_attempt(value: object) -> dict[str, Any]:
     first_blocker = str(value.get("firstBlocker") or "")
     if first_blocker and first_blocker not in LAUNCH_BLOCKERS:
         raise ValueError(f"App launch attempt firstBlocker is invalid: {first_blocker}")
-    for field, allowed in (
-        ("configurationState", CONFIGURATION_STATES),
-        ("runtimeHealthStatus", RUNTIME_HEALTH_STATUSES),
-        ("recoveryWebStatus", RECOVERY_WEB_STATUSES),
-    ):
-        if value.get(field) not in allowed:
-            raise ValueError(f"App launch attempt {field} is invalid")
-    if not isinstance(value.get("recoveryWebEvidenceRef"), str):
-        raise TypeError("App launch attempt recoveryWebEvidenceRef is invalid")
     # 运行时健康只有真的启动过才可观测；否则 unobserved 是唯一诚实的取值。
     if value["runtimeHealthStatus"] != "unobserved" and "launched" not in observed:
         raise ValueError("App launch attempt runtime health requires launched")
@@ -163,6 +139,8 @@ def validate_app_launch_attempt(value: object) -> dict[str, Any]:
         raise ValueError("App launch attempt recovery web evidence is unexpected")
     if not isinstance(value.get("nonPromotable"), bool):
         raise TypeError("App launch attempt promotability is invalid")
+    if value["runMode"] in {"content-live", "ui-only"} and not value["nonPromotable"]:
+        raise ValueError("test_live App launch attempt must be nonPromotable")
     return dict(value)
 
 
@@ -172,8 +150,16 @@ def create_app_launch_attempt(
     environment: str,
     target: str,
     platform: str,
+    build_profile: str,
     build_mode: str,
     run_mode: str,
+    launch_provenance: str,
+    runtime_config_supply_mode: str,
+    runtime_config_trust_envelope_digest: str,
+    runtime_config_package_digest: str,
+    application_id: str,
+    flutter_version: str,
+    command_resolution_digest: str,
     device_id: str,
     artifact_digest: str = "",
     launch_digest: str = "",
@@ -189,10 +175,21 @@ def create_app_launch_attempt(
         "environment": environment,
         "target": target,
         "platform": platform,
+        "buildProfile": build_profile,
         "buildMode": build_mode,
         "runMode": run_mode,
+        "launchProvenance": launch_provenance,
+        "runtimeConfigSupplyMode": runtime_config_supply_mode,
         "artifactDigest": artifact_digest,
+        "runtimeConfigTrustEnvelopeDigest": runtime_config_trust_envelope_digest,
+        "runtimeConfigPackageDigest": runtime_config_package_digest,
+        "applicationId": application_id,
+        "flutterVersion": flutter_version,
+        "commandResolutionDigest": command_resolution_digest,
         "launchDigest": launch_digest,
+        "startupTerminalAttemptId": "",
+        "startupTerminalEvidenceDigest": "",
+        "startupTerminalEvidenceRef": "",
         "status": "prepared",
         "transitions": [{"status": "prepared", "at": now}],
         "warnings": list(dict.fromkeys(str(item) for item in warnings if str(item))),
@@ -245,7 +242,14 @@ def transition_app_launch_attempt(
     if warning and warning not in payload["warnings"]:
         payload["warnings"].append(warning)
     if artifact_digest is not None:
-        payload["artifactDigest"] = artifact_digest
+        incoming_artifact_digest = str(artifact_digest).strip()
+        current_artifact_digest = str(payload.get("artifactDigest") or "")
+        if (
+            current_artifact_digest
+            and incoming_artifact_digest != current_artifact_digest
+        ):
+            raise ValueError("App launch attempt artifactDigest is immutable")
+        payload["artifactDigest"] = incoming_artifact_digest
     if launch_digest is not None:
         payload["launchDigest"] = launch_digest
     now = utc_now()
@@ -282,6 +286,9 @@ def record_app_launch_attempt_observation(
     runtime_health_status: str | None = None,
     recovery_web_status: str | None = None,
     recovery_web_evidence_ref: str | None = None,
+    startup_terminal_attempt_id: str | None = None,
+    startup_terminal_evidence_digest: str | None = None,
+    startup_terminal_evidence_ref: str | None = None,
     warning: str = "",
     first_blocker: str = "",
 ) -> dict[str, Any]:
@@ -294,6 +301,9 @@ def record_app_launch_attempt_observation(
         ("runtimeHealthStatus", runtime_health_status),
         ("recoveryWebStatus", recovery_web_status),
         ("recoveryWebEvidenceRef", recovery_web_evidence_ref),
+        ("startupTerminalAttemptId", startup_terminal_attempt_id),
+        ("startupTerminalEvidenceDigest", startup_terminal_evidence_digest),
+        ("startupTerminalEvidenceRef", startup_terminal_evidence_ref),
     ):
         if incoming is not None:
             payload[field] = incoming

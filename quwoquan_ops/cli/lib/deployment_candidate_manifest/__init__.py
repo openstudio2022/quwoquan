@@ -112,6 +112,7 @@ from .log_sink_package import (  # noqa: F401
 from .provider_binding_overlay import (  # noqa: F401
     PROVIDER_BINDING_OVERLAY_SCHEMA,
     load_provider_binding_overlay,
+    materialize_mutable_provider_binding_overlay,
     materialize_provider_binding_overlay,
     provider_binding_overlay_build_inputs,
     validate_provider_binding_overlay,

@@ -19,6 +19,7 @@ from core.paths import (
     LIBRARY_CAS_ROOT_BY_KIND,
     LIBRARY_ROOT,
     OUTPUT_ROOT,
+    carried_media_root,
 )
 
 _DIGEST_RE = re.compile(r"^(?:sha256:)?([0-9a-f]{64})$")
@@ -34,7 +35,31 @@ _EXECUTABLE_ENTRY_MODE = 0o555
 
 
 class MediaHoldingError(ValueError):
-    """A recorded media reference cannot be honoured by the content library."""
+    """A recorded media reference cannot be honoured by the content library.
+
+    Kept as the base so that a caller which only needs "not honoured" stays
+    correct. Callers that act on the failure — a repair path, a closure report —
+    must distinguish the subclasses below, because the three reasons do not share
+    a recovery route.
+    """
+
+
+class ContentLibraryUnreachable(MediaHoldingError):
+    """The library itself is not reachable, so no reference can be judged.
+
+    This is a library-level fact and must not be reported once per reference:
+    a detached volume or a moved data directory would otherwise surface as
+    "every holding is absent", which reads as a content defect and sends the
+    reader looking for bytes object by object.
+    """
+
+
+class MediaHoldingAbsent(MediaHoldingError):
+    """The library is reachable but holds no entry for this digest."""
+
+
+class MediaHoldingDrift(MediaHoldingError):
+    """The library holds an entry for this digest whose size disagrees with the record."""
 
 
 def library_root_for_output(output_root: Path) -> Path:
@@ -179,6 +204,70 @@ def admit_library_bytes(
     return entry
 
 
+def carried_media_entry(sha256: str) -> Path | None:
+    """The version-controlled body carried for one digest, whatever container it took.
+
+    Absent means no body is carried for that digest, which is a legitimate state a
+    caller decides about — not a failure of this lookup.
+    """
+
+    digest = normalize_library_digest(sha256)
+    root = carried_media_root()
+    if not root.is_dir():
+        return None
+    for candidate in sorted(root.glob(f"{digest}.*")):
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def carry_media_reference(source: Path, *, sha256: str, suffix: str = "") -> Path:
+    """Carry one media body in version control beside the canonical tree.
+
+    The library that holds media bodies lives outside the working tree and cannot
+    be rebuilt from version control, so an approved object whose bytes exist only
+    there is not deliverable on any other checkout. Carrying the body here is what
+    makes the digest recorded in the object resolvable from the repository alone.
+
+    Carrying verifies bytes against ``sha256`` the same way admission does, so a
+    substituted body cannot be carried under a digest it does not hash to. An
+    already-carried digest is a no-op: bodies are immutable once carried.
+    """
+
+    digest = normalize_library_digest(sha256)
+    carried = carried_media_entry(digest)
+    if carried is not None:
+        return carried
+    extension = (suffix or Path(source).suffix or "").lstrip(".").lower() or "bin"
+    entry = carried_media_root() / f"{digest}.{extension}"
+    entry.parent.mkdir(parents=True, exist_ok=True)
+    staged = entry.with_name(f".{entry.name}.{os.getpid()}.staged")
+    try:
+        shutil.copyfile(source, staged)
+        observed = file_sha256(staged)
+        if observed != digest:
+            raise MediaHoldingError(
+                f"carried media drift: declared={digest} observed={observed}"
+            )
+        staged.replace(entry)
+    finally:
+        staged.unlink(missing_ok=True)
+    return entry
+
+
+def library_reachable(*, library_root: Path | None = None) -> bool:
+    """Whether the library itself can be consulted at all.
+
+    Judged on the library root rather than on a CAS subtree: a reachable library
+    that has never admitted this class of bytes has no CAS subtree yet, and every
+    reference in it is legitimately absent. An unreachable root is the other
+    thing entirely — no reference can be judged, so no reference is absent.
+    """
+
+    root = LIBRARY_ROOT if library_root is None else Path(library_root).expanduser()
+    return root.is_dir() and os.access(root, os.R_OK)
+
+
 def resolve_media_holding(
     sha256: str,
     *,
@@ -188,19 +277,25 @@ def resolve_media_holding(
     """Resolve one media reference record to the library entry that owns its bytes.
 
     A canonical object records a media body by digest instead of carrying it, so
-    every consumer that needs the bytes resolves them here. Absence of the entry
-    and a size that disagrees with the record are both failures: a caller asked
-    for bytes that the library cannot honour, and returning an empty or missing
-    path would turn that into a silent hole downstream.
+    every consumer that needs the bytes resolves them here. Each of the three ways
+    this can fail raises its own type: returning an empty or missing path would
+    turn a failure into a silent hole downstream, and collapsing the three into
+    one would hide that a detached library needs reattaching rather than a hunt
+    for individual bytes.
     """
 
     entry = library_cas_path(MEDIA_KIND, sha256, library_root=library_root)
     if not entry.is_file():
-        raise MediaHoldingError(
+        if not library_reachable(library_root=library_root):
+            raise ContentLibraryUnreachable(
+                "content library is not reachable: "
+                f"{LIBRARY_ROOT if library_root is None else library_root}"
+            )
+        raise MediaHoldingAbsent(
             f"media holding is not reachable in the content library: {sha256}"
         )
     if expected_bytes is not None and entry.stat().st_size != expected_bytes:
-        raise MediaHoldingError(
+        raise MediaHoldingDrift(
             f"media holding size drifted from its library entry: {sha256}"
         )
     return entry
@@ -316,9 +411,15 @@ def link_tree_from_library(
 
 __all__ = [
     "MEDIA_KIND",
+    "ContentLibraryUnreachable",
+    "MediaHoldingAbsent",
+    "MediaHoldingDrift",
     "MediaHoldingError",
+    "library_reachable",
     "admit_library_bytes",
     "admit_library_entry",
+    "carried_media_entry",
+    "carry_media_reference",
     "link_tree_from_library",
     "normalize_library_digest",
     "file_sha256",

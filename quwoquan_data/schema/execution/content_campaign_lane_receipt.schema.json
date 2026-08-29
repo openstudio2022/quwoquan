@@ -87,6 +87,10 @@
     "reviewedClosureAdoption": {
       "$ref": "reviewed_closure_adoption_campaign_binding.schema.json"
     },
+    "zeroQualifiedReason": {
+      "description": "本 lane 零合格终态的唯一 typed 原因。闭集只在 _common/zero_qualified_reason.schema.json 声明一次；lane 回执是它的唯一写者，campaign 报告与 fleet 运行回执只引用同一取值。",
+      "$ref": "../_common/zero_qualified_reason.schema.json#/$defs/zeroQualifiedReason"
+    },
     "adoptedObjectRefs": {
       "type": "array",
       "minItems": 1,
@@ -209,6 +213,14 @@
           "status": { "enum": ["finalized", "partial", "blocked"] }
         }
       }
+    },
+    {
+      "if": {
+        "properties": { "status": { "const": "blocked" } },
+        "required": ["status"]
+      },
+      "then": { "required": ["zeroQualifiedReason"] },
+      "else": { "not": { "required": ["zeroQualifiedReason"] } }
     }
   ]
 }

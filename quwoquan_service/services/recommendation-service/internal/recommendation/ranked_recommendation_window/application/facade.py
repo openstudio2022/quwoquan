@@ -66,6 +66,7 @@ class SubjectClosedError(RuntimeError):
 class RankedRecommendationPage:
     window_id: str
     scenario: str
+    experiment_bucket: str
     model_bucket: str
     model_channel: str | None
     model_release_id: str | None
@@ -221,6 +222,7 @@ class Facade:
         return RankedRecommendationPage(
             window_id=window.window_id,
             scenario=window.scenario,
+            experiment_bucket=window.experiment_bucket,
             model_bucket=window.model_bucket,
             model_channel=window.model_channel,
             model_release_id=window.model_release_id,

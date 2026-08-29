@@ -1,4 +1,6 @@
 # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-009
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/source-discovery-scale-reliability/spec.md#gwt-002.t1
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/source-discovery-scale-reliability/spec.md#gwt-002.t7
 """Capacity writer derives values from measured evidence and resumes create-once."""
 from __future__ import annotations
 
@@ -7,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from content.execution.planning import capacity_calibration_probe as probe
 from content.execution.planning import capacity_calibration_writer as writer
 from content.execution.planning.capacity_calibration import (
     load_capacity_calibration_receipt,
@@ -76,8 +79,8 @@ def test_writer_selects_highest_zero_failure_candidate_and_freezes_receipt(
 ) -> None:
     monkeypatch.setattr(core_paths, "REPO_ROOT", tmp_path)
     monkeypatch.setattr(core_paths, "OUTPUT_ROOT", tmp_path / "output")
-    monkeypatch.setattr(writer, "REPO_ROOT", tmp_path)
-    monkeypatch.setattr(writer, "OUTPUT_ROOT", tmp_path / "output")
+    monkeypatch.setattr(probe, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(probe, "OUTPUT_ROOT", tmp_path / "output")
     monkeypatch.setattr(writer, "_candidate_concurrencies", lambda: (8, 4, 2, 1))
     calls: list[int] = []
 
@@ -114,13 +117,13 @@ def test_writer_selects_highest_zero_failure_candidate_and_freezes_receipt(
             "samplesDigest": canonical_digest(samples_stable),
         }
         samples_path.write_text(json.dumps(samples), encoding="utf-8")
-        return writer._candidate_summary(
+        return probe.candidate_summary(
             candidate=candidate,
             report_path=report_path,
             samples_path=samples_path,
         )
 
-    monkeypatch.setattr(writer, "_run_probe_candidate", probe_candidate)
+    monkeypatch.setattr(writer, "run_probe_candidate", probe_candidate)
     output = (
         tmp_path
         / "quwoquan_data/control_plane/_shared/capacity_calibration/test-run"
@@ -134,6 +137,7 @@ def test_writer_selects_highest_zero_failure_candidate_and_freezes_receipt(
         fleet_report_paths=(fleet,),
         execution_state_paths=(state,),
         output_dir=output,
+        missed_heartbeat_tolerance=3,
     )
 
     assert calls == [8, 4]
@@ -145,6 +149,40 @@ def test_writer_selects_highest_zero_failure_candidate_and_freezes_receipt(
     }
     assert load_capacity_calibration_receipt(path) == receipt
     evidence = json.loads((output / "evidence.json").read_text())
+
+    # 心跳间隔与过期阈值来自本次标定的实测心跳写入开销与实测单实体耗时，
+    # 不是默认常量，也不从容量上限或单对象 wall-clock 挪用。
+    liveness = receipt["frozenLiveness"]
+    interval = liveness["sourceDiscoveryHeartbeatIntervalSeconds"]
+    stale_after = liveness["sourceDiscoveryHeartbeatStaleAfterSeconds"]
+    assert interval >= 1
+    assert stale_after == interval * 3
+    assert stale_after > interval
+    assert interval not in {
+        receipt["frozenCapacity"]["autoResearchMaxConcurrentWorkers"],
+        receipt["frozenCapacity"]["objectWallClockSeconds"],
+        receipt["frozenCapacity"]["completionGraceSeconds"],
+    }
+    assert stale_after not in {
+        receipt["frozenCapacity"]["objectWallClockSeconds"],
+        receipt["frozenCapacity"]["completionGraceSeconds"],
+    }
+    write_observations = evidence["heartbeatWriteObservations"]
+    assert write_observations
+    write_cost = max(float(row["maxSeconds"]) for row in write_observations)
+    detection_ceiling = (
+        min(float(row["p95Seconds"]) for row in evidence["objectTimingObservations"])
+        / 10
+    )
+    # 下界来自实测写入开销，上界来自实测单实体耗时；两端都能指回一处证据。
+    assert interval >= write_cost
+    assert interval <= detection_ceiling
+    assert evidence["decision"]["missedHeartbeatTolerance"] == 3
+    assert evidence["decision"]["sourceDiscoveryHeartbeatIntervalSeconds"] == interval
+    assert (
+        evidence["decision"]["sourceDiscoveryHeartbeatStaleAfterSeconds"] == stale_after
+    )
+    assert evidence["decision"]["livenessRule"] == writer._LIVENESS_RULE
     assert evidence["providerEvidenceCalibrationId"] == "test-run"
     assert [row["admitted"] for row in evidence["providerCandidates"]] == [
         False,
@@ -163,6 +201,7 @@ def test_writer_selects_highest_zero_failure_candidate_and_freezes_receipt(
         fleet_report_paths=(fleet,),
         execution_state_paths=(state,),
         output_dir=output,
+        missed_heartbeat_tolerance=3,
     )
     assert repeated == receipt
     assert repeated_path == path
@@ -177,6 +216,7 @@ def test_writer_selects_highest_zero_failure_candidate_and_freezes_receipt(
         fleet_report_paths=(fleet,),
         execution_state_paths=(state,),
         output_dir=copied_output,
+        missed_heartbeat_tolerance=3,
         provider_evidence_dir=output,
         provider_evidence_calibration_id="test-run",
     )
@@ -206,8 +246,8 @@ def test_writer_rejects_fleet_observation_without_measured_peak(
         ),
         encoding="utf-8",
     )
-    with pytest.raises(writer.CapacityCalibrationRunError, match="measured capacity"):
-        writer._fleet_observation(
+    with pytest.raises(probe.CapacityCalibrationRunError, match="measured capacity"):
+        probe.fleet_observation(
             path,
             output_dir=tmp_path / "snapshots",
             ordinal=1,

@@ -23,7 +23,6 @@ import concurrent
 import concurrent.futures
 import json
 import os
-import re
 
 from pathlib import Path
 from typing import Any
@@ -399,7 +398,11 @@ def _bind_formal_local_release_provider_environment(
     return None
 
 
-def _bind_gamma_down_parse_environment(environment: dict[str, str]) -> None:
+def _bind_gamma_down_parse_environment(
+    environment: dict[str, str],
+    *,
+    receipt_bound: bool = False,
+) -> None:
     """Satisfy non-identity Compose interpolation used only while tearing down."""
 
     storage_placeholders = {
@@ -464,6 +467,12 @@ def _bind_gamma_down_parse_environment(environment: dict[str, str]) -> None:
             "QWQ_COMPOSE_PLATFORM_OPS_FACTS_ROOT": "/tmp",
         }
     )
+    if receipt_bound:
+        if environment.get("LOCAL_GAMMA_SMS_SUBSTITUTE_PORT"):
+            environment["QWQ_COMPOSE_SMS_SUBSTITUTE_PORT"] = environment[
+                "LOCAL_GAMMA_SMS_SUBSTITUTE_PORT"
+            ]
+        return
     # compose 模板对每个服务强制声明 CONFIG_VERSION；down 只需确定性插值，
     # 优先取 active candidate provenance 真值，candidate 缺席时用占位。
     # 变量名以模板声明为准（目录名与变量名不同构，如 control-plane/platform-ops

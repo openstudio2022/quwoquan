@@ -4,19 +4,15 @@ import (
 	"context"
 	"fmt"
 	"os"
-	configrelease "quwoquan_service/runtime/configrelease"
-	"strconv"
 	"strings"
 	"time"
 
-	"gopkg.in/yaml.v3"
-
 	runtimeconfig "quwoquan_service/runtime/config"
-	"quwoquan_service/runtime/servicehost"
 	postapp "quwoquan_service/services/content-service/internal/content/post/application"
 	embeddingapp "quwoquan_service/services/content-service/internal/content/post/application/embedding"
 	"quwoquan_service/services/content-service/internal/content/post/application/ports"
 	embeddinginfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/embedding"
+	"quwoquan_service/services/content-service/internal/content/post/infrastructure/objectstorage"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/placeindex"
 	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
 	postruntimeconfig "quwoquan_service/services/content-service/internal/content/post/infrastructure/runtimeconfig"
@@ -27,97 +23,16 @@ func contentSliceWorkload() bool {
 	return postruntimeconfig.ContentSliceWorkload()
 }
 
-func resolveRuntimeIdentity() (serviceName, appEnv, configRoot, configVersion, imageVersion string, err error) {
-	serviceName = strings.TrimSpace(
-		servicehost.ModuleEnvironmentValue("content-service", "SERVICE_NAME"),
-	)
-	if serviceName == "" {
-		serviceName = "content-service"
-	}
-	appEnv = getenvOrDefault("APP_ENV", "alpha")
-	configRoot = os.Getenv("CONFIG_ROOT")
-	configVersion = servicehost.ModuleEnvironmentValue(
-		"content-service",
-		"CONFIG_VERSION",
-	)
-	imageVersion = os.Getenv("IMAGE_VERSION")
-
-	if !isValidAppEnv(appEnv) {
-		return "", "", "", "", "", fmt.Errorf("APP_ENV must be one of alpha|beta|gamma|prod, got %q", appEnv)
-	}
-	// Enforce explicit config version in prod so rollout always binds image+config.
-	if requiresConfigVersion(appEnv) && strings.TrimSpace(configVersion) == "" {
-		return "", "", "", "", "", fmt.Errorf("CONFIG_VERSION is required when APP_ENV=%s", appEnv)
-	}
-	return serviceName, appEnv, configRoot, configVersion, imageVersion, nil
-}
-
-func contentModuleEnvironmentValue(key string, fallback string) string {
-	value := strings.TrimSpace(
-		servicehost.ModuleEnvironmentValue("content-service", key),
-	)
-	if value == "" {
-		return fallback
-	}
-	return value
-}
-
-func isValidAppEnv(env string) bool {
-	switch env {
-	case "alpha", "beta", "gamma", "prod":
-		return true
-	default:
-		return false
-	}
-}
-
-func requiresConfigVersion(env string) bool {
-	switch env {
-	case "gamma", "prod":
-		return true
-	default:
-		return false
-	}
-}
-
-func getenvOrDefault(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
-}
-
-func mergeConfigFile(cfg *config, path string) error {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	if err := yaml.Unmarshal(raw, cfg); err != nil {
-		return fmt.Errorf("parse %s: %w", path, err)
-	}
-	return nil
-}
-
-func loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (config, error) {
-	cfg := config{}
-	path, err := configrelease.File(configRoot, serviceName, appEnv)
-	if err != nil {
-		return config{}, err
-	}
-	if err := mergeConfigFile(&cfg, path); err != nil {
-		return config{}, fmt.Errorf("read generated runtime config: %w", err)
-	}
-	return cfg, nil
-}
-
-func validateRuntimeConfigurationIdentity(cfg config, configVersion string) error {
-	if strings.TrimSpace(configVersion) != "" && strings.TrimSpace(cfg.Config.Version) != "" && cfg.Config.Version != configVersion {
-		return fmt.Errorf("CONFIG_VERSION mismatch: env=%s file=%s", configVersion, cfg.Config.Version)
-	}
-	return nil
-}
-
-func preflightConfig(cfg config, appEnv string) error {
+// validateContentConfig 承接迁移前 preflightConfig 的全部领域校验，在骨架完成
+// env 覆盖与 required 校验之后、任何基础设施连接之前执行：非法配置不产生外部
+// 副作用。分档口径仍按 cfg.Environment（骨架从进程身份写入）。
+func validateContentConfig(cfg *config) error {
+	appEnv := cfg.Environment
+	// SEARCH_ES_* 是 content 与 search 共用同一集群的跨服务注入键，不能声明成
+	// 本服务的 env tag（service-core 单进程内会与 search-service 抢同一个键）。
+	// 因此这一段保持显式覆盖，并放在校验的最前面：下面的 es.endpoints 在场判定
+	// 必须看到覆盖后的值。
+	searchindex.ApplyESEnvOverrides(&cfg.ES)
 	for _, scene := range []struct {
 		name string
 		cfg  redisSceneCfg
@@ -130,8 +45,28 @@ func preflightConfig(cfg config, appEnv string) error {
 			return fmt.Errorf("%s content runtime: %w", appEnv, err)
 		}
 	}
-	if resolveMongoURI(cfg) == "" {
-		return fmt.Errorf("%s content runtime requires mongo.uri/MONGO_URI", appEnv)
+	// 凭据与上游地址经 secretRefs/overrides 渲染进快照。渲染缺失时快照里留下
+	// 未展开的 `${KEY}` 字面量，它对 required 校验是「在场」，对上游客户端的
+	// 「url 为空则不装配」判据也是「在场」——服务于是带着一个假地址起来，
+	// 每次调用都失败，且失败表现为无效 URL 而不是配置缺失。迁移前
+	// resolveMongoURI/resolveReportDSN 对存储凭据保留了这条判据，此处把同一
+	// 强度覆盖到全部渲染型上游地址。
+	for _, item := range []struct {
+		name  string
+		value string
+	}{
+		{name: "mongo.uri", value: cfg.Mongo.URI},
+		{name: "postgres.report_dsn", value: cfg.Postgres.ReportDSN},
+		{name: "rec_model_service.url", value: cfg.RecModelService.URL},
+		{name: "tag_service.url", value: cfg.TagService.URL},
+		{name: "user_account_security_authority.base_url", value: cfg.UserAccountSecurityAuthority.BaseURL},
+	} {
+		if isUnrenderedConfigPlaceholder(item.value) {
+			return fmt.Errorf(
+				"%s content runtime %s is an unrendered placeholder %q",
+				appEnv, item.name, strings.TrimSpace(item.value),
+			)
+		}
 	}
 	if cfg.Feed.ActiveSupplyCacheTTLMS <= 0 ||
 		cfg.Feed.ActiveSupplyCacheJitterMS < 0 ||
@@ -152,14 +87,11 @@ func preflightConfig(cfg config, appEnv string) error {
 	if err := validateFeedQuotaPolicies(cfg.Feed); err != nil {
 		return fmt.Errorf("%s content runtime requires valid global feed admission: %w", appEnv, err)
 	}
-	if err := validateAccountSecurityAuthorityConfig(cfg, appEnv); err != nil {
+	if err := validateAuthorityConfig(cfg, appEnv); err != nil {
 		return err
 	}
 	if err := validateTagServiceConfig(cfg, appEnv); err != nil {
 		return err
-	}
-	if resolveReportDSN(cfg) == "" {
-		return fmt.Errorf("%s content runtime requires postgres.report_dsn/REPORT_DATABASE_URL", appEnv)
 	}
 	if err := validateCommentRateLimitConfig(cfg, appEnv); err != nil {
 		return err
@@ -167,20 +99,12 @@ func preflightConfig(cfg config, appEnv string) error {
 	if err := validateIPLocationConfig(cfg, appEnv, time.Now().UTC()); err != nil {
 		return err
 	}
-	requiredOSS := []struct {
-		name  string
-		value string
-	}{
-		{name: "oss.endpoint/CONTENT_OSS_ENDPOINT", value: getenvOrDefault("CONTENT_OSS_ENDPOINT", cfg.OSS.Endpoint)},
-		{name: "oss.bucket/CONTENT_OSS_BUCKET", value: getenvOrDefault("CONTENT_OSS_BUCKET", cfg.OSS.Bucket)},
-		{name: "oss.region/CONTENT_OSS_REGION", value: getenvOrDefault("CONTENT_OSS_REGION", cfg.OSS.Region)},
-		{name: "oss.access_key_id/CONTENT_OSS_ACCESS_KEY_ID", value: getenvOrDefault("CONTENT_OSS_ACCESS_KEY_ID", cfg.OSS.AccessKeyID)},
-		{name: "oss.access_key_secret/CONTENT_OSS_ACCESS_KEY_SECRET", value: getenvOrDefault("CONTENT_OSS_ACCESS_KEY_SECRET", cfg.OSS.AccessKeySecret)},
-	}
-	for _, item := range requiredOSS {
-		if strings.TrimSpace(item.value) == "" {
-			return fmt.Errorf("%s content runtime requires %s", appEnv, item.name)
-		}
+	// OSS endpoint 与 access key 只有 binding 一条读取轨：这里提前解析一次，
+	// 让缺 material 在任何连接之前 fail-closed，而不是等媒体装配阶段。
+	if _, err := objectstorage.LoadBinding(
+		appEnv, runtimeconfig.EnvRuntimeConfigProvider{},
+	); err != nil {
+		return fmt.Errorf("%s content runtime object storage binding: %w", appEnv, err)
 	}
 	if appEnv != "alpha" &&
 		strings.TrimSpace(os.Getenv(accountClosureSubjectHMACEnv)) == "" {
@@ -201,6 +125,13 @@ func preflightConfig(cfg config, appEnv string) error {
 	return nil
 }
 
+// isUnrenderedConfigPlaceholder 判定配置快照里的值是否为未展开的 `${KEY}`
+// 占位符。
+func isUnrenderedConfigPlaceholder(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	return strings.HasPrefix(trimmed, "${") && strings.HasSuffix(trimmed, "}")
+}
+
 func resolveContentEmbeddingGateway(
 	appEnv string,
 ) (embeddingapp.EmbeddingGateway, error) {
@@ -210,23 +141,25 @@ func resolveContentEmbeddingGateway(
 	)
 }
 
-func validateAccountSecurityAuthorityConfig(cfg config, appEnv string) error {
-	if strings.TrimSpace(cfg.AccountSecurityAuthority.BaseURL) == "" {
+// validateAuthorityConfig 保留迁移前对账号安全 authority 配置段的强度：骨架
+// 的 required 只覆盖 base_url 一类字符串，超时是正整数这条仍归领域校验。
+func validateAuthorityConfig(cfg *config, appEnv string) error {
+	if strings.TrimSpace(cfg.UserAccountSecurityAuthority.BaseURL) == "" {
 		return fmt.Errorf(
-			"%s content runtime requires accountSecurityAuthority.baseUrl",
+			"%s content runtime requires user_account_security_authority.base_url",
 			appEnv,
 		)
 	}
-	if cfg.AccountSecurityAuthority.TimeoutMS <= 0 {
+	if cfg.UserAccountSecurityAuthority.TimeoutMs <= 0 {
 		return fmt.Errorf(
-			"%s content runtime requires positive accountSecurityAuthority.timeoutMs",
+			"%s content runtime requires positive user_account_security_authority.timeout_ms",
 			appEnv,
 		)
 	}
 	return nil
 }
 
-func validateTagServiceConfig(cfg config, appEnv string) error {
+func validateTagServiceConfig(cfg *config, appEnv string) error {
 	if strings.TrimSpace(cfg.TagService.URL) == "" {
 		return fmt.Errorf(
 			"%s content runtime requires tag_service.url",
@@ -242,7 +175,7 @@ func validateTagServiceConfig(cfg config, appEnv string) error {
 	return nil
 }
 
-func validateCommentRateLimitConfig(cfg config, appEnv string) error {
+func validateCommentRateLimitConfig(cfg *config, appEnv string) error {
 	rateLimit := cfg.CommentRateLimit
 	if rateLimit.BurstWindowSeconds <= 0 ||
 		rateLimit.BurstMax <= 0 ||
@@ -268,7 +201,7 @@ func validateCommentRateLimitConfig(cfg config, appEnv string) error {
 	return nil
 }
 
-func validateIPLocationConfig(cfg config, appEnv string, now time.Time) error {
+func validateIPLocationConfig(cfg *config, appEnv string, now time.Time) error {
 	provider := strings.ToLower(strings.TrimSpace(cfg.IPLocation.Provider))
 	if appEnv == "alpha" {
 		if provider != "deterministic" {
@@ -348,90 +281,6 @@ func validateRemoteRedisScene(name string, cfg redisSceneCfg) error {
 	return nil
 }
 
-// applyEnvOverrides applies environment variable overrides to all config sections.
-// Env vars take precedence over config.yaml values — intended for CI/CD injection.
-//
-// Rec Redis overrides:
-//
-//	CONTENT_REDIS_REC_MODE         standalone | cluster
-//	CONTENT_REDIS_REC_ADDR         host:port  (standalone)
-//	CONTENT_REDIS_REC_ADDRS        host1:port,host2:port,...  (cluster)
-//	CONTENT_REDIS_REC_PASSWORD     password
-//	CONTENT_REDIS_REC_TLS          true | 1
-//
-// General Redis overrides:
-//
-//	CONTENT_REDIS_GENERAL_MODE, _ADDR, _ADDRS, _PASSWORD, _TLS  (same pattern)
-//
-// RecModelService overrides:
-//
-//	REC_MODEL_SERVICE_URL, REC_MODEL_SERVICE_ENABLED, REC_MODEL_SERVICE_TIMEOUT_MS
-//
-// Tag taxonomy endpoint material:
-//
-//	TAG_SERVICE_URL, TAG_SERVICE_TIMEOUT_MS
-//
-// IP location overrides:
-//
-//	CONTENT_IP_LOCATION_PROVIDER, CONTENT_IP_LOCATION_IPV4_DATABASE_PATH,
-//	CONTENT_IP_LOCATION_IPV6_DATABASE_PATH, CONTENT_IP_LOCATION_DATA_VERSION
-func applyEnvOverrides(cfg *config) {
-	applyRedisSceneEnv("CONTENT_REDIS_REC", &cfg.Redis.Rec)
-	applyRedisSceneEnv("CONTENT_REDIS_GENERAL", &cfg.Redis.General)
-	applyRedisSceneEnv("CONTENT_REDIS_REALTIME", &cfg.Redis.Realtime)
-	searchindex.ApplyESEnvOverrides(&cfg.ES)
-
-	// MongoDB
-	if v := os.Getenv("MONGO_URI"); v != "" {
-		cfg.Mongo.URI = v
-	}
-
-	// Comment IP location offline database.
-	if v := os.Getenv("CONTENT_IP_LOCATION_PROVIDER"); v != "" {
-		cfg.IPLocation.Provider = v
-	}
-	if v := os.Getenv("CONTENT_IP_LOCATION_IPV4_DATABASE_PATH"); v != "" {
-		cfg.IPLocation.IPv4DatabasePath = v
-	}
-	if v := os.Getenv("CONTENT_IP_LOCATION_IPV6_DATABASE_PATH"); v != "" {
-		cfg.IPLocation.IPv6DatabasePath = v
-	}
-	if v := os.Getenv("CONTENT_IP_LOCATION_DATA_VERSION"); v != "" {
-		cfg.IPLocation.DataVersion = v
-	}
-
-	postruntimeconfig.ApplyRecommendationModelEnvOverrides(&cfg.RecModelService)
-	if v := os.Getenv("TAG_SERVICE_URL"); v != "" {
-		cfg.TagService.URL = v
-	}
-	if v := os.Getenv("TAG_SERVICE_TIMEOUT_MS"); v != "" {
-		if ms, err := strconv.Atoi(v); err == nil && ms > 0 {
-			cfg.TagService.TimeoutMs = ms
-		}
-	}
-
-}
-
-// applyRedisSceneEnv reads env vars with the given prefix and writes them into cfg.
-// prefix example: "CONTENT_REDIS_REC" → reads CONTENT_REDIS_REC_MODE, _ADDR, etc.
-func applyRedisSceneEnv(prefix string, cfg *redisSceneCfg) {
-	if v := os.Getenv(prefix + "_MODE"); v != "" {
-		cfg.Mode = v
-	}
-	if v := os.Getenv(prefix + "_ADDR"); v != "" {
-		cfg.Addr = v
-	}
-	if v := os.Getenv(prefix + "_ADDRS"); v != "" {
-		cfg.Addrs = strings.Split(v, ",")
-	}
-	if v := os.Getenv(prefix + "_PASSWORD"); v != "" {
-		cfg.Password = v
-	}
-	if v := os.Getenv(prefix + "_TLS"); v == "true" || v == "1" {
-		cfg.TLS = true
-	}
-}
-
 func hostname() string {
 	h, _ := os.Hostname()
 	if h == "" {
@@ -477,25 +326,6 @@ func (a *projectorAdapter) Project(ctx context.Context, event ports.ProjectorEve
 	return nil
 }
 
-func resolveMongoURI(cfg config) string {
-	uri := strings.TrimSpace(cfg.Mongo.URI)
-	if uri == "" || uri == "${MONGO_URI}" {
-		return ""
-	}
-	return uri
-}
-
-func resolveReportDSN(cfg config) string {
-	if v := strings.TrimSpace(os.Getenv("REPORT_DATABASE_URL")); v != "" {
-		return v
-	}
-	dsn := strings.TrimSpace(cfg.Postgres.ReportDSN)
-	if dsn == "" || dsn == "${REPORT_DATABASE_URL}" {
-		return ""
-	}
-	return dsn
-}
-
 func contentOSSEndpoint(raw string, useSSL bool) string {
 	endpoint := strings.TrimRight(strings.TrimSpace(raw), "/")
 	if endpoint == "" || strings.Contains(endpoint, "://") {
@@ -531,11 +361,11 @@ func resolveStoryRuntimeConfig() postapp.StoryRuntimeConfig {
 				true,
 			),
 		},
-		ExperimentBucket: getenvOrDefault(
+		ExperimentBucket: envOrDefault(
 			"CONTENT_STORY_EXPERIMENT_BUCKET",
 			"local_story_enabled",
 		),
-		CurrentStage: getenvOrDefault("CONTENT_STORY_CURRENT_STAGE", "100%"),
+		CurrentStage: envOrDefault("CONTENT_STORY_CURRENT_STAGE", "100%"),
 		CanaryMatrix: []postapp.StoryCanaryStage{
 			{Stage: "5%", RolloutPercent: 5},
 			{Stage: "20%", RolloutPercent: 20},
@@ -543,6 +373,15 @@ func resolveStoryRuntimeConfig() postapp.StoryRuntimeConfig {
 			{Stage: "100%", RolloutPercent: 100},
 		},
 	}
+}
+
+// envOrDefault 只服务于 story 灰度这类「不进配置快照」的进程级实验开关：
+// 它们不是环境装配契约的一部分，因此不走声明式 config struct。
+func envOrDefault(key, fallback string) string {
+	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+		return value
+	}
+	return fallback
 }
 
 func parseBoolEnv(key string, fallback bool) bool {

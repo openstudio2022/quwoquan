@@ -1,46 +1,42 @@
 #!/usr/bin/env python3
-"""Agent 上下文治理门禁。
+"""渐进加载 Agent 上下文治理门禁。
 
-指令文件本身没有强制力（harness 只把它们当普通消息投递），所以规则体系的结构性
-约束必须由脚本兜住。本门禁只校验**可判定**的部分：
-
-1. 三家 harness 的上下文预算（Codex 32 KiB 合并上限、单文件行数、description 清单预算）
-2. 载体分配没有退化（真相源不落在 harness 专属目录、第三方 AGENTS.md 零容忍）
-3. 顶层技能全部是完整工作流：统一八段模板、kind=workflow、命令双向一一映射、
-   命令薄壳无历史叙述、HANDOFF 声明唯一合法下游
-4. SKILL.md frontmatter 只用开放规范字段
-5. 所有引用真实存在（globs、make target、脚本、skill 相对链接），且不引用已退役路径
-6. checklist 每条带分级，且 MUST 绑定 gate 或 check
-7. review registry 以工作流名为键做 profile 条件装配：binding/checklist/role 双向可达、
-   profile 路径真实存在、workflow+segment 与各 SKILL 的「内置评审」声明一致、
-   无条件 binding 之间 gate 不重复归属
-8. 技能正文无跨文件重复段落（第二真相源检测）
-
-触发范围：每次 gate 全仓无条件执行，不随变更文件裁剪。上下文预算与载体分配是全局
-    不变量，只看某次改了哪些文件无法判定。
-阻断条件：任一 issue 即 `main()` 返回 1。无 allowlist、无基线。
-接入点：`make verify-agent-context-budget`、`make gate`、`make verify`，
-    以及 `gate_repo.sh` 的无条件前置段。不进 L0 `commit_gate.sh`：该层禁止 `make gate`。
-修复方式：每条失败消息自带具体修法与文件位置。
+每次 ``make verify-agent-context-budget`` 都检查全仓 Agent 治理载体；任一预算、
+唯一 owner、Review v2、adapter 或退役入口约束不成立即以非零退出阻断。修复应落到
+报错指向的 canonical spec/design、registry/checklist、Skill 或中性 adapter 源，再重跑
+同一入口。功能事实和角色判断不在本 gate 复制。
 """
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
 import sys
-from collections import defaultdict
 from pathlib import Path
+from typing import Any
 
 import yaml
 
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[2]
+ORIGINAL_ROOT = ROOT
 
 sys.path.insert(0, str(ROOT / "quwoquan_ops/cli/lib"))
 from gate_output import emit_gate_result, finding  # noqa: E402
 
-# 依赖与构建缓存不参与治理，且全量遍历它们会让门禁从秒级退化到半分钟级。
+
+AGENTS_CHAIN_BYTE_BUDGET = 16 * 1024
+MANIFEST_BYTE_BUDGET = 8 * 1024
+REVIEWER_CONTEXT_BYTE_BUDGET = 24 * 1024
+SKILL_LINE_BUDGET = 500
+SKILL_DESCRIPTION_EACH_BUDGET = 500
+SKILL_DESCRIPTION_TOTAL_BUDGET = 8000
+COMMAND_FILE_LINE_BUDGET = 12
+HARNESS_STUB_LINE_BUDGET = 12
+
 PRUNED_DIR_NAMES = {
     ".git",
     ".qwq_output",
@@ -53,63 +49,6 @@ PRUNED_DIR_NAMES = {
     "build",
 }
 
-# ── 预算 ────────────────────────────────────────────────────────────────
-# Codex project_doc_max_bytes 默认 32 KiB，超出部分静默截断，所以按目录算合并总量。
-CODEX_MERGED_BYTE_BUDGET = 32 * 1024
-# 单个指令文件的行数上限。指令文件过长后模型开始忽略内容。
-AGENTS_LINE_BUDGET = 200
-# SKILL.md 一旦被调用即常驻至会话结束，重资料必须压到 references/。
-SKILL_LINE_BUDGET = 500
-# skill 清单（name + description）常驻在每个会话里。8000 字符约 2000 token。
-# 溢出会按使用频率静默丢弃 description，冷门技能将失去自动触发能力。
-SKILL_DESCRIPTION_TOTAL_BUDGET = 8000
-SKILL_DESCRIPTION_EACH_BUDGET = 500
-# 命令是薄壳：frontmatter + 一行指向 SKILL.md。超过说明命令又开始承载语义。
-COMMAND_FILE_LINE_BUDGET = 12
-# .cursor/.codex 宿主技能目录只放触发入口 stub：frontmatter + 指向 .agents/skills
-# 真相源的指针。超过行数上限说明 stub 又开始承载语义，形成第二真相源。
-# .claude/skills 是与真相源逐字一致的生成镜像，不适用本上限。
-HARNESS_STUB_LINE_BUDGET = 10
-HARNESS_STUB_SKILL_GLOBS = (".cursor/skills/*/SKILL.md", ".codex/skills/*/SKILL.md")
-
-SPEC_FRONTMATTER_FIELDS = {
-    "name",
-    "description",
-    "license",
-    "compatibility",
-    "metadata",
-    "allowed-tools",
-}
-
-REQUIRED_CONTEXT_SOURCES = (
-    "AGENTS.md",
-    "CLAUDE.md",
-    ".agents/README.md",
-    "specs/feature-tree/README.md",
-    "specs/feature-tree/spec.md",
-    "specs/feature-tree/design.md",
-    "quwoquan_ops/cli/feature_tree.py",
-    "quwoquan_app/AGENTS.md",
-    "quwoquan_service/AGENTS.md",
-    "quwoquan_data/AGENTS.md",
-    "quwoquan_ops/AGENTS.md",
-    "quwoquan_ops/portal/AGENTS.md",
-)
-
-# 五段执行契约必须在根 AGENTS.md 中成文，否则两种入口会退回各说各话。
-ROOT_AGENTS_REQUIRED_TOKENS = (
-    "RESOLVE",
-    "PRE",
-    "DURING",
-    "POST",
-    "HANDOFF",
-    "make feature-context",
-    "OPEN",
-    ".agents/skills",
-)
-
-# 顶层技能目录的封闭集合：每个都是有独立触发条件与交付件的完整工作流。
-# 原则、标准、检查清单一律下沉到 review/references/roles/**，不得回到顶层。
 WORKFLOW_SKILLS = (
     "explore",
     "prd",
@@ -124,8 +63,6 @@ WORKFLOW_SKILLS = (
     "incident-inspection",
     "distill",
 )
-
-# 有 Cursor 命令的工作流。命令文件与 metadata.command 必须双向一一映射。
 COMMAND_BOUND_WORKFLOWS = (
     "explore",
     "prd",
@@ -136,66 +73,73 @@ COMMAND_BOUND_WORKFLOWS = (
     "review",
     "commit",
 )
-
-# 统一八段模板。允许追加段（如 review 的「扩展」），但八段缺一不可。
+CONTROL_WORKFLOWS_WITHOUT_AUTOMATIC_REVIEW = {
+    "explore",
+    "continue",
+    "plan-next",
+    "review",
+    "commit",
+}
 REQUIRED_SKILL_SECTIONS = (
-    "## 触发",
-    "## 输入",
-    "## 角色",
-    "## 执行",
-    "## 交付件",
-    "## 内置评审",
-    "## 失败与停止",
-    "## HANDOFF",
+    "触发与输入",
+    "执行",
+    "完成证据",
+    "失败与停止",
+    "条件性交接",
 )
 
-RETIRED_GOVERNANCE_SOURCES = (
-    "agent_context_contract.md",
-    "agent_command_simulation_matrix.md",
-    "docs/codex_workflow.md",
-    "00_MASTER_DEVELOPMENT_FLOW.md",
+SPEC_FRONTMATTER_FIELDS = {
+    "name",
+    "description",
+    "license",
+    "compatibility",
+    "metadata",
+    "allowed-tools",
+}
+REQUIRED_SOURCES = (
+    "AGENTS.md",
+    ".agents/README.md",
+    "specs/feature-tree/README.md",
+    "specs/feature-tree/spec.md",
+    "specs/feature-tree/design.md",
+    "quwoquan_ops/cli/feature_tree.py",
+    "quwoquan_ops/cli/lib/feature_tree/commands.py",
+    "quwoquan_ops/cli/lib/agent_governance_contract.py",
+    "quwoquan_ops/policies/agent_governance_contract.yaml",
+    ".agents/skills/review/references/registry.yaml",
+    ".agents/skills/review/references/reviewer-executor.md",
+    "quwoquan_ops/tools/generate_agent_adapters.py",
+    ".cursor/agents/reviewer.md",
+    ".codex/agents/reviewer.toml",
 )
-
-# 已退役的技能路径。命中即说明有文件仍指向旧结构。
-RETIRED_SKILL_PATH_TOKENS = (
+FORBIDDEN_ACTIVE_PATHS = (
+    "CLAUDE.md",
+    ".claude",
+    "quwoquan_ops/tools/generate_codex_agents.py",
+    ".agents/skills/review/references/completion-criteria.md",
+    ".agents/skills/review/references/interaction-protocols.md",
+)
+RETIRED_REFERENCE_TOKENS = (
     "skills/review-board",
     "skills/stage-explore",
     "skills/stage-prd",
     "skills/stage-design",
-    "skills/stage-extend",
     "skills/stage-dev",
     "skills/stage-verify",
-    "skills/stage-plan-next",
-    "skills/absent-empty-failure",
-    "skills/app-layering",
-    "skills/auth-entry-no-loop",
-    "skills/cross-platform-portability",
-    "skills/dart-coding-standards",
-    "skills/flutter-design-system",
-    "skills/mock-data-isolation",
-    "skills/page-horizontal-quality",
-    "skills/pageflip-backward-mainline",
-    "skills/python-script-governance",
-    "skills/quwoquan-data-content",
-    "skills/quwoquan-exception-triage",
+    "completion-criteria.md",
+    "interaction-protocols.md",
+    "generate_codex_agents.py",
 )
-
-# 命令薄壳禁用的历史叙述措辞：命令只描述当前执行入口。
-COMMAND_HISTORICAL_TOKENS = ("迁移", "原先", "此前", "历史", "旧版", "已删除", "曾经")
-
-# 真相源不得落在 harness 专属目录。命中即说明载体分配退化。
 HARNESS_PRIVATE_TRUTH_MARKERS = (
-    ".cursor/skills/",
-    ".cursor/commands/crawl",
+    ".cursor/rules/",
+    ".cursor/skills/environment-ops/SKILL.md",
 )
-
-GRADE_TAGS = ("MUST NOT", "MUST", "SHOULD NOT", "SHOULD", "MAY", "ADVISORY")
+GRADE_TAGS = {"MUST NOT", "MUST", "SHOULD NOT", "SHOULD", "MAY", "ADVISORY"}
 CHECKLIST_ITEM_RE = re.compile(r"^-\s*\[(?P<tag>[A-Z ]+)\]")
-BINDING_RE = re.compile(r"^\s+(?:gate|check):\s*\S")
-GATE_COMMAND_RE = re.compile(r"^\s+gate:\s*(?P<cmd>.+?)\s*$", re.M)
-MAKE_TARGET_RE = re.compile(r"gate:\s*make\s+(?:-C\s+(?P<dir>\S+)\s+)?(?P<target>[a-z0-9][a-z0-9-]*)")
 MARKDOWN_LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
-EMBEDDED_REVIEW_CALL_RE = re.compile(r"workflow=`(?P<workflow>[a-z-]+)`，segment=(?P<segment>PRE|POST)")
+EVIDENCE_LINE_RE = re.compile(r"^\s*evidence:\s*(?P<id>[a-z0-9][a-z0-9-]*)\s*$", re.M)
+CHECK_LINE_RE = re.compile(r"^\s*check:\s*(?P<text>.+?)\s*$", re.M)
+GATE_LINE_RE = re.compile(r"^\s*gate:\s*", re.M)
 
 
 def _rel(path: Path) -> str:
@@ -205,10 +149,24 @@ def _rel(path: Path) -> str:
 def _find_agents_files() -> list[Path]:
     found: list[Path] = []
     for current, dirnames, filenames in os.walk(ROOT):
-        dirnames[:] = [d for d in dirnames if d not in PRUNED_DIR_NAMES]
+        dirnames[:] = [name for name in dirnames if name not in PRUNED_DIR_NAMES]
         if "AGENTS.md" in filenames:
             found.append(Path(current) / "AGENTS.md")
     return sorted(found)
+
+
+def _tracked_files() -> set[str] | None:
+    try:
+        result = subprocess.run(
+            ["git", "-c", "core.quotepath=false", "ls-files"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return set(result.stdout.splitlines())
 
 
 def _make_targets(makefile: Path) -> set[str]:
@@ -223,557 +181,536 @@ def _make_targets(makefile: Path) -> set[str]:
     )
 
 
-def _glob_exists(pattern: str) -> bool:
-    # 先用静态前缀短路：`**` 展开在本仓这种体量下代价很高。
-    static = pattern.split("*")[0].rstrip("/")
-    if static and (ROOT / static).exists():
-        return True
-    return next(ROOT.glob(pattern), None) is not None
+def _static_glob_prefix(pattern: str) -> str:
+    return pattern.split("*", 1)[0].rstrip("/")
 
 
-def _tracked_files() -> set[str] | None:
-    """受版本控制的文件集合；git 不可用时返回 None。
-
-    调用方必须把 None 当作失败而不是「跳过」——第一方判定一旦静默失效，
-    依赖缓存自带的 AGENTS.md 就会无声回流进上下文。
-    """
-    try:
-        out = subprocess.run(
-            ["git", "--work-tree=.", "ls-files"],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-    except (OSError, subprocess.CalledProcessError):
-        return None
-    return set(out.stdout.split())
+def _glob_can_match(pattern: str) -> bool:
+    prefix = _static_glob_prefix(pattern)
+    return bool(prefix and (ROOT / prefix).exists()) or next(ROOT.glob(pattern), None) is not None
 
 
-def _skill_frontmatter(text: str) -> dict | None:
-    match = re.match(r"---\n(?P<fm>.*?)\n---\n", text, re.S)
+def _frontmatter(text: str) -> tuple[dict[str, Any] | None, str | None]:
+    match = re.match(r"---\n(?P<body>.*?)\n---\n", text, re.S)
     if match is None:
-        return None
+        return None, "缺 YAML frontmatter"
     try:
-        parsed = yaml.safe_load(match.group("fm"))
-    except yaml.YAMLError:
-        return None
-    return parsed if isinstance(parsed, dict) else None
+        value = yaml.safe_load(match.group("body"))
+    except yaml.YAMLError as error:
+        return None, f"frontmatter 不是合法 YAML（{str(error).splitlines()[0]}）"
+    if not isinstance(value, dict):
+        return None, "frontmatter 不是键值映射"
+    return value, None
 
 
-def check_required_sources() -> list[str]:
-    return [
-        f"缺必需上下文源: {rel}"
-        for rel in REQUIRED_CONTEXT_SOURCES
-        if not (ROOT / rel).is_file()
-    ]
+def check_required_sources_and_carriers() -> list[str]:
+    issues = [f"缺必需上下文源: {rel}" for rel in REQUIRED_SOURCES if not (ROOT / rel).is_file()]
+    for rel in FORBIDDEN_ACTIVE_PATHS:
+        if (ROOT / rel).exists() or (ROOT / rel).is_symlink():
+            issues.append(f"退役载体仍是活跃入口: {rel}")
 
+    for path in sorted((ROOT / ".cursor/rules").glob("*.mdc")):
+        issues.append(f"{_rel(path)}: Cursor rule 不得承载规范；迁移到 owner spec/design/contract")
 
-def check_lifecycle_contract() -> list[str]:
-    issues: list[str] = []
-    text = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
-    for token in ROOT_AGENTS_REQUIRED_TOKENS:
-        if token not in text:
-            issues.append(f"AGENTS.md 缺五段执行契约标记 {token}")
-
-    readme = (ROOT / "specs/feature-tree/README.md").read_text(encoding="utf-8")
-    for token in ("目录结构就是树", "Agent 最小阅读链", "动态工具", "自动门禁"):
-        if token not in readme:
-            issues.append(f"specs/feature-tree/README.md 缺 {token}")
-
-    claude = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
-    if "@AGENTS.md" not in claude:
-        issues.append("CLAUDE.md 未用 @AGENTS.md 桥接根指令，Claude Code 将看不到全仓红线")
-    return issues
-
-
-def check_workflow_skills() -> list[str]:
-    """顶层技能封闭集合 + 八段模板 + 命令双向映射 + 命令薄壳。"""
-    issues: list[str] = []
-    skills_root = ROOT / ".agents/skills"
-    if not skills_root.is_dir():
-        return [".agents/skills 不存在，技能真相源缺失"]
-
-    on_disk = {p.name for p in skills_root.iterdir() if p.is_dir()}
-    for name in set(WORKFLOW_SKILLS) - on_disk:
-        issues.append(f"缺工作流技能: .agents/skills/{name}/SKILL.md")
-    for name in sorted(on_disk - set(WORKFLOW_SKILLS)):
-        issues.append(
-            f".agents/skills/{name}: 不在工作流封闭集合内。顶层只允许完整工作流；"
-            "原则/标准/检查清单请下沉 review/references/roles/**，"
-            "并在本门禁的 WORKFLOW_SKILLS 中登记新工作流"
-        )
-
-    commands_dir = ROOT / ".cursor/commands"
-    command_files = {p.stem for p in commands_dir.glob("*.md")} if commands_dir.is_dir() else set()
-    for name in set(COMMAND_BOUND_WORKFLOWS) - command_files:
-        issues.append(f"缺命令薄壳: .cursor/commands/{name}.md")
-    for name in sorted(command_files - set(COMMAND_BOUND_WORKFLOWS)):
-        issues.append(
-            f".cursor/commands/{name}.md: 没有同名工作流技能声明 metadata.command，"
-            "命令与技能必须双向一一映射"
-        )
-
-    for name in sorted(set(WORKFLOW_SKILLS) & on_disk):
-        skill = skills_root / name / "SKILL.md"
-        if not skill.is_file():
-            issues.append(f".agents/skills/{name}: 缺 SKILL.md")
-            continue
-        text = skill.read_text(encoding="utf-8")
-        rel = _rel(skill)
-
-        fields = _skill_frontmatter(text) or {}
-        metadata = fields.get("metadata") or {}
-        if not isinstance(metadata, dict) or metadata.get("kind") != "workflow":
-            issues.append(f"{rel}: metadata.kind 必须为 workflow")
-        declared_command = metadata.get("command") if isinstance(metadata, dict) else None
-
-        if name in COMMAND_BOUND_WORKFLOWS:
-            if declared_command != f"/{name}":
-                issues.append(
-                    f"{rel}: metadata.command={declared_command!r}，应为 '/{name}' 并与 "
-                    f".cursor/commands/{name}.md 双向映射"
-                )
-        elif declared_command:
-            issues.append(f"{rel}: 自动工作流不得声明 metadata.command={declared_command!r}")
-
-        for section in REQUIRED_SKILL_SECTIONS:
-            if not re.search(rf"^{re.escape(section)}\s*$", text, re.M):
-                issues.append(f"{rel}: 缺统一模板段 {section}")
-
-        handoff = text.split("## HANDOFF", 1)[-1]
-        for token in ("唯一合法下游", "证据链"):
-            if token not in handoff:
-                issues.append(f"{rel}: HANDOFF 段缺「{token}」声明")
-
-    for name in sorted(set(COMMAND_BOUND_WORKFLOWS) & command_files):
-        command = commands_dir / f"{name}.md"
-        text = command.read_text(encoding="utf-8")
-        rel = _rel(command)
-        lines = len(text.splitlines())
-        if lines > COMMAND_FILE_LINE_BUDGET:
-            issues.append(
-                f"{rel}: {lines} 行超过命令薄壳 {COMMAND_FILE_LINE_BUDGET} 行上限；"
-                "命令只指向 SKILL.md，语义写进技能"
-            )
-        if f".agents/skills/{name}/SKILL.md" not in text:
-            issues.append(f"{rel}: 未指向 .agents/skills/{name}/SKILL.md")
-        for token in COMMAND_HISTORICAL_TOKENS:
-            if token in text:
-                issues.append(f"{rel}: 含历史叙述措辞「{token}」；命令只描述当前执行入口")
+    roles_root = ROOT / ".agents/skills/review/references/roles"
+    if roles_root.is_dir():
+        for path in sorted(roles_root.glob("*/references/**/*")):
+            if path.is_file() or path.is_symlink():
+                issues.append(f"{_rel(path)}: role references 不得拥有或转引规范事实")
     return issues
 
 
 def check_agents_budget() -> list[str]:
     issues: list[str] = []
     agents = _find_agents_files()
-
     tracked = _tracked_files()
     if tracked is None:
-        return ["无法查询 git 索引，第一方 AGENTS.md 判定不可执行；请在 git 工作树内运行本门禁"]
+        return ["无法查询 git 索引，第一方 AGENTS.md 判定不可执行"]
 
     for path in agents:
         rel = _rel(path)
         if rel not in tracked:
-            issues.append(
-                f"{rel}: 非第一方 AGENTS.md（未受版本控制），会经嵌套拾取污染上下文；"
-                "请加入 .cursorignore 或删除"
-            )
-        lines = len(path.read_text(encoding="utf-8").splitlines())
-        if lines > AGENTS_LINE_BUDGET:
-            issues.append(f"{rel}: {lines} 行超过 {AGENTS_LINE_BUDGET} 行上限，请向嵌套目录分层")
+            issues.append(f"{rel}: 非第一方 AGENTS.md 会污染渐进上下文")
 
-    # Codex 在某目录下工作时会合并该路径上所有 AGENTS.md，按最深目录算最坏情况。
-    for path in agents:
-        total = 0
-        parts: list[str] = []
-        current = path.parent
+    for leaf in agents:
+        current = leaf.parent
+        chain: list[Path] = []
         while True:
             candidate = current / "AGENTS.md"
             if candidate.is_file():
-                size = len(candidate.read_bytes())
-                total += size
-                parts.append(f"{_rel(candidate)}={size}")
+                chain.append(candidate)
             if current == ROOT:
                 break
+            if not current.resolve().is_relative_to(ROOT.resolve()):
+                break
             current = current.parent
-        if total > CODEX_MERGED_BYTE_BUDGET:
+        size = sum(len(path.read_bytes()) for path in chain)
+        if size > AGENTS_CHAIN_BYTE_BUDGET:
+            detail = ", ".join(f"{_rel(path)}={len(path.read_bytes())}" for path in reversed(chain))
             issues.append(
-                f"{_rel(path.parent) or '.'}: AGENTS.md 合并 {total} 字节超过 Codex "
-                f"{CODEX_MERGED_BYTE_BUDGET} 字节上限（{', '.join(parts)}），超出部分会被静默截断"
+                f"{_rel(leaf.parent) or '.'}: 适用 AGENTS 链 {size} bytes 超过 "
+                f"{AGENTS_CHAIN_BYTE_BUDGET} bytes（{detail}）"
             )
     return issues
 
 
-def check_skills() -> list[str]:
+def _manifest_budget_nodes(nodes: list[Any]) -> list[Any]:
+    """返回全部 Feature 节点，禁止用抽样掩盖超预算 Story。"""
+
+    return list(nodes)
+
+
+def check_manifest_budget() -> list[str]:
     issues: list[str] = []
-    skills_root = ROOT / ".agents/skills"
-    if not skills_root.is_dir():
-        return [".agents/skills 不存在，技能真相源缺失"]
-
-    total_description = 0
-    for directory in sorted(p for p in skills_root.iterdir() if p.is_dir()):
-        skill = directory / "SKILL.md"
-        if not skill.is_file():
-            issues.append(f"{_rel(directory)}: 缺 SKILL.md")
-            continue
-
-        text = skill.read_text(encoding="utf-8")
-        rel = _rel(skill)
-
-        lines = len(text.splitlines())
-        if lines > SKILL_LINE_BUDGET:
-            issues.append(
-                f"{rel}: {lines} 行超过 {SKILL_LINE_BUDGET} 行上限，"
-                "重资料请压到 references/"
-            )
-
-        match = re.match(r"---\n(?P<fm>.*?)\n---\n", text, re.S)
-        if match is None:
-            issues.append(f"{rel}: 缺 YAML frontmatter")
-            continue
-
-        # 必须用真正的 YAML 解析器。手写的 `partition(":")` 会把
-        # `description: A: B` 读成合法值，而 harness 侧会整份解析失败——
-        # 结果是技能静默不可见，且门禁看不出来。
-        try:
-            parsed = yaml.safe_load(match.group("fm"))
-        except yaml.YAMLError as error:
-            reason = str(error).splitlines()[0]
-            issues.append(
-                f"{rel}: frontmatter 不是合法 YAML（{reason}）；"
-                "该技能在 harness 侧会静默不可见。值里含「冒号+空格」时必须加引号"
-            )
-            continue
-        if not isinstance(parsed, dict):
-            issues.append(f"{rel}: frontmatter 不是键值映射")
-            continue
-        fields = {str(key): value for key, value in parsed.items()}
-
-        extra = set(fields) - SPEC_FRONTMATTER_FIELDS
-        if extra:
-            issues.append(
-                f"{rel}: frontmatter 含非开放规范字段 {sorted(extra)}；"
-                f"只允许 {sorted(SPEC_FRONTMATTER_FIELDS)}"
-            )
-
-        if fields.get("name") != directory.name:
-            issues.append(f"{rel}: name={fields.get('name')!r} 与目录名 {directory.name!r} 不一致")
-
-        description = str(fields.get("description") or "")
-        if not description:
-            issues.append(f"{rel}: 缺 description，模型无法自动匹配该技能")
-        else:
-            total_description += len(description)
-            if len(description) > SKILL_DESCRIPTION_EACH_BUDGET:
-                issues.append(
-                    f"{rel}: description {len(description)} 字符超过单条 "
-                    f"{SKILL_DESCRIPTION_EACH_BUDGET} 字符上限"
-                )
-
-    if total_description > SKILL_DESCRIPTION_TOTAL_BUDGET:
+    commands_path = ROOT / "quwoquan_ops/cli/lib/feature_tree/commands.py"
+    cli_entry = ROOT / "quwoquan_ops/cli/lib/feature_tree/cli_entry.py"
+    contract_path = ROOT / "quwoquan_ops/policies/agent_governance_contract.yaml"
+    try:
+        contract = yaml.safe_load(contract_path.read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError) as error:
+        return [f"无法读取 agent governance contract：{error}"]
+    manifest_contract = contract.get("feature_context_manifest") or {}
+    configured = manifest_contract.get("max_bytes")
+    required_fields = manifest_contract.get("required_fields")
+    if configured != MANIFEST_BYTE_BUDGET:
         issues.append(
-            f".agents/skills: description 合计 {total_description} 字符超过 "
-            f"{SKILL_DESCRIPTION_TOTAL_BUDGET} 字符清单预算；"
-            "溢出会按使用频率静默丢弃 description，冷门技能将失去自动触发能力"
+            "agent governance contract 的 manifest max_bytes 必须精确为 8192，"
+            f"当前={configured!r}"
+        )
+    if not isinstance(required_fields, list) or not all(
+        isinstance(field, str) for field in required_fields
+    ):
+        issues.append("agent governance contract 的 manifest required_fields 必须为字符串列表")
+        required_fields = []
+    if cli_entry.is_file() and not re.search(r'default\s*=\s*["\']manifest["\']', cli_entry.read_text(encoding="utf-8")):
+        issues.append("feature-context --format 默认值必须是 manifest")
+
+    # 对每个 Feature 节点生成内存态 manifest；命令仍会对任意工程路径 fail-closed。
+    if ROOT == ORIGINAL_ROOT and commands_path.is_file():
+        cli_root = ROOT / "quwoquan_ops/cli"
+        if str(cli_root) not in sys.path:
+            sys.path.insert(0, str(cli_root))
+        try:
+            from lib.feature_tree.commands import _context_manifest
+            from lib.feature_tree.nodes import discover_nodes
+            from lib.feature_tree.ownership import resolve_target_details
+
+            nodes = discover_nodes()
+            for node in _manifest_budget_nodes(nodes):
+                target = node.spec.relative_to(ROOT).as_posix()
+                resolution = resolve_target_details(target, nodes)
+                payload = _context_manifest(target, resolution, nodes)
+                if set(payload) != set(required_fields):
+                    issues.append(
+                        f"{target}: manifest 字段与 agent governance contract 不一致"
+                    )
+                size = len((json.dumps(payload, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
+                if size > MANIFEST_BYTE_BUDGET:
+                    issues.append(f"{target}: 默认 manifest {size} bytes 超过 8192 bytes")
+        except (ImportError, OSError, ValueError) as error:
+            issues.append(f"无法生成默认 feature-context manifest：{error}")
+    return issues
+
+
+def check_workflow_skills() -> list[str]:
+    issues: list[str] = []
+    root = ROOT / ".agents/skills"
+    if not root.is_dir():
+        return [".agents/skills 不存在"]
+
+    on_disk = {path.name for path in root.iterdir() if path.is_dir()}
+    for name in sorted(set(WORKFLOW_SKILLS) - on_disk):
+        issues.append(f"缺 Workflow Skill: .agents/skills/{name}/SKILL.md")
+    for name in sorted(on_disk - set(WORKFLOW_SKILLS)):
+        issues.append(f".agents/skills/{name}: 顶层只允许完整 Workflow Skill")
+
+    descriptions = 0
+    for name in sorted(set(WORKFLOW_SKILLS) & on_disk):
+        path = root / name / "SKILL.md"
+        if not path.is_file():
+            issues.append(f".agents/skills/{name}: 缺 SKILL.md")
+            continue
+        text = path.read_text(encoding="utf-8")
+        rel = _rel(path)
+        fields, error = _frontmatter(text)
+        if error:
+            issues.append(f"{rel}: {error}")
+            continue
+        assert fields is not None
+        extra = sorted(set(fields) - SPEC_FRONTMATTER_FIELDS)
+        if extra:
+            issues.append(f"{rel}: frontmatter 含非开放字段 {extra}")
+        if fields.get("name") != name:
+            issues.append(f"{rel}: name={fields.get('name')!r} 与目录名不一致")
+        description = str(fields.get("description") or "")
+        descriptions += len(description)
+        if not description:
+            issues.append(f"{rel}: 缺 description")
+        elif len(description) > SKILL_DESCRIPTION_EACH_BUDGET:
+            issues.append(f"{rel}: description 超过 {SKILL_DESCRIPTION_EACH_BUDGET} 字符")
+        if len(text.splitlines()) > SKILL_LINE_BUDGET:
+            issues.append(f"{rel}: 超过 {SKILL_LINE_BUDGET} 行，重资料应按需放 references")
+
+        metadata = fields.get("metadata") or {}
+        if not isinstance(metadata, dict) or metadata.get("kind") != "workflow":
+            issues.append(f"{rel}: metadata.kind 必须为 workflow")
+            metadata = {}
+        declared = metadata.get("command")
+        expected = f"/{name}" if name in COMMAND_BOUND_WORKFLOWS else None
+        if declared != expected:
+            issues.append(f"{rel}: metadata.command={declared!r}，应为 {expected!r}")
+
+        headings = re.findall(r"^##\s+(.+?)\s*$", text, re.M)
+        if headings != list(REQUIRED_SKILL_SECTIONS):
+            issues.append(
+                f"{rel}: 二级段落必须且只能按顺序为 "
+                + " / ".join(REQUIRED_SKILL_SECTIONS)
+            )
+        if any(token in text for token in ("completion-criteria.md", "interaction-protocols.md")):
+            issues.append(f"{rel}: 完成与交互契约必须就地声明，不得跳转共享文档")
+
+    if descriptions > SKILL_DESCRIPTION_TOTAL_BUDGET:
+        issues.append(
+            f".agents/skills description 合计 {descriptions} 字符超过 "
+            f"{SKILL_DESCRIPTION_TOTAL_BUDGET}"
         )
     return issues
 
 
-def check_rule_pointers() -> list[str]:
+def check_commands_and_harness_stubs() -> list[str]:
     issues: list[str] = []
-    rules_dir = ROOT / ".cursor/rules"
-    if not rules_dir.is_dir():
+    commands = ROOT / ".cursor/commands"
+    command_files = {path.stem for path in commands.glob("*.md")} if commands.is_dir() else set()
+    for name in sorted(set(COMMAND_BOUND_WORKFLOWS) - command_files):
+        issues.append(f"缺 Cursor 命令薄壳: .cursor/commands/{name}.md")
+    for name in sorted(command_files - set(COMMAND_BOUND_WORKFLOWS)):
+        issues.append(f".cursor/commands/{name}.md: 没有同名 Workflow Skill")
+    for name in sorted(command_files):
+        path = commands / f"{name}.md"
+        text = path.read_text(encoding="utf-8")
+        _, error = _frontmatter(text)
+        if error:
+            issues.append(f"{_rel(path)}: {error}")
+        if len(text.splitlines()) > COMMAND_FILE_LINE_BUDGET:
+            issues.append(f"{_rel(path)}: 超过 {COMMAND_FILE_LINE_BUDGET} 行命令薄壳预算")
+        if f".agents/skills/{name}/SKILL.md" not in text:
+            issues.append(f"{_rel(path)}: 未指向 .agents/skills/{name}/SKILL.md")
+
+    for pattern in (".cursor/skills/*/SKILL.md", ".codex/skills/*/SKILL.md"):
+        for path in sorted(ROOT.glob(pattern)):
+            text = path.read_text(encoding="utf-8")
+            _, error = _frontmatter(text)
+            if error:
+                issues.append(f"{_rel(path)}: {error}")
+            if len(text.splitlines()) > HARNESS_STUB_LINE_BUDGET:
+                issues.append(f"{_rel(path)}: 超过 {HARNESS_STUB_LINE_BUDGET} 行 adapter stub 预算")
+            if ".agents/skills/" not in text:
+                issues.append(f"{_rel(path)}: 未指向 .agents/skills 真相源")
+    return issues
+
+
+def _load_registry() -> tuple[dict[str, Any] | None, list[str]]:
+    path = ROOT / ".agents/skills/review/references/registry.yaml"
+    if not path.is_file():
+        return None, ["缺 Review registry"]
+    try:
+        registry = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as error:
+        return None, [f"registry.yaml 不是合法 YAML：{error}"]
+    if not isinstance(registry, dict):
+        return None, ["registry.yaml 必须是映射"]
+    return registry, []
+
+
+def check_checklists_and_registry() -> list[str]:
+    registry, issues = _load_registry()
+    if registry is None:
         return issues
+    if registry.get("schema_version") != 2:
+        issues.append("registry.yaml: schema_version 必须为 2")
+    if any(key in registry for key in ("concurrency", "bindings")):
+        issues.append("registry.yaml: 不得保留 v1 concurrency/bindings")
 
-    for path in sorted(rules_dir.glob("*.mdc")):
-        text = path.read_text(encoding="utf-8")
-        rel = _rel(path)
-        match = re.match(r"---\n(?P<fm>.*?)\n---\n", text, re.S)
-        frontmatter = match.group("fm") if match else ""
+    limits = registry.get("limits") or {}
+    expected_limits = {
+        "max_parallel": 2,
+        "max_role_invocations": 4,
+        "reviewer_context_bytes": REVIEWER_CONTEXT_BYTE_BUDGET,
+    }
+    for key, expected in expected_limits.items():
+        if limits.get(key) != expected:
+            issues.append(f"registry.yaml: limits.{key} 必须为 {expected}")
+    timeout = limits.get("per_role_timeout_minutes")
+    if not isinstance(timeout, int) or timeout <= 0:
+        issues.append("registry.yaml: limits.per_role_timeout_minutes 必须为正整数")
 
-        globs = re.search(r"^globs:\s*(.+)$", frontmatter, re.M)
-        if globs:
-            for pattern in (p.strip() for p in globs.group(1).split(",")):
-                if pattern and not _glob_exists(pattern):
-                    issues.append(
-                        f"{rel}: globs 指向磁盘不存在的路径 {pattern}，该规则永不触发"
-                    )
-
-        always = re.search(r"^alwaysApply:\s*true\s*$", frontmatter, re.M)
-        if always and len(text) > 2500:
-            issues.append(
-                f"{rel}: alwaysApply 常驻规则 {len(text)} 字符过大；"
-                "常驻层只允许薄指针，正文请迁 .agents/skills"
-            )
-    return issues
-
-
-def check_references() -> list[str]:
-    """校验共享层与规则层引用的 make target、脚本、相对链接真实存在。"""
-    issues: list[str] = []
+    evidence = registry.get("evidence") or {}
+    if not isinstance(evidence, dict) or not evidence:
+        issues.append("registry.yaml: evidence 必须是非空映射")
+        evidence = {}
     root_targets = _make_targets(ROOT / "Makefile")
+    for evidence_id, config in evidence.items():
+        if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", str(evidence_id)):
+            issues.append(f"registry.yaml: 非法 evidence id {evidence_id!r}")
+        if not isinstance(config, dict):
+            issues.append(f"registry.yaml: evidence.{evidence_id} 必须是映射")
+            continue
+        for key in ("command", "segment", "required", "covers"):
+            if key not in config:
+                issues.append(f"registry.yaml: evidence.{evidence_id} 缺 {key}")
+        if config.get("segment") != "POST":
+            issues.append(f"registry.yaml: evidence.{evidence_id}.segment 必须为 POST")
+        if not isinstance(config.get("required"), bool):
+            issues.append(f"registry.yaml: evidence.{evidence_id}.required 必须为 bool")
+        if not isinstance(config.get("covers"), list):
+            issues.append(f"registry.yaml: evidence.{evidence_id}.covers 必须为 list")
+        command = str(config.get("command") or "")
+        make = re.fullmatch(r"make\s+([a-zA-Z0-9][a-zA-Z0-9_-]*)", command)
+        if make and make.group(1) not in root_targets:
+            issues.append(f"registry.yaml: evidence.{evidence_id} 引用不存在的 make target {make.group(1)}")
 
-    scan: list[Path] = [ROOT / "AGENTS.md"]
-    scan.extend(sorted((ROOT / ".agents/skills").rglob("*.md")))
-    scan.extend(sorted((ROOT / ".agents/skills").rglob("*.yaml")))
-    scan.extend(sorted((ROOT / ".cursor/rules").glob("*.mdc")))
-    scan.extend(sorted((ROOT / ".cursor/commands").glob("*.md")))
-    scan.extend(sorted((ROOT / ".claude/agents").glob("*.md")))
+    roles_root = ROOT / ".agents/skills/review/references/roles"
+    profiles = registry.get("profiles") or {}
+    if not isinstance(profiles, dict):
+        issues.append("registry.yaml: profiles 必须是映射")
+        profiles = {}
+    for profile, config in profiles.items():
+        if not isinstance(config, dict):
+            issues.append(f"registry.yaml: profiles.{profile} 必须是映射")
+            continue
+        paths = config.get("paths") or []
+        deliverables = config.get("deliverables") or []
+        if not paths and not deliverables:
+            issues.append(f"registry.yaml: profiles.{profile} 无 paths/deliverables，永不激活")
+        for pattern in paths:
+            if not _glob_can_match(str(pattern)):
+                issues.append(f"registry.yaml: profiles.{profile} 路径 {pattern} 永不命中")
+        specialist = config.get("specialist")
+        if not isinstance(specialist, dict):
+            issues.append(f"registry.yaml: profiles.{profile} 缺唯一 specialist")
+            continue
+        for key in ("role", "priority", "required", "checklists"):
+            if key not in specialist:
+                issues.append(f"registry.yaml: profiles.{profile}.specialist 缺 {key}")
+        if not isinstance(specialist.get("priority"), int):
+            issues.append(f"registry.yaml: profiles.{profile}.specialist.priority 必须为整数")
+        if not isinstance(specialist.get("required"), bool):
+            issues.append(f"registry.yaml: profiles.{profile}.specialist.required 必须为 bool")
+        role = str(specialist.get("role") or "")
+        if role and not (roles_root / role / "ROLE.md").is_file():
+            issues.append(f"registry.yaml: specialist 角色 {role} 缺 ROLE.md")
+        for workflow, checklist in (specialist.get("checklists") or {}).items():
+            if workflow not in WORKFLOW_SKILLS:
+                issues.append(f"registry.yaml: profiles.{profile} 引用未知 workflow {workflow}")
+            if not (ROOT / ".agents/skills/review/references" / str(checklist)).is_file():
+                issues.append(f"registry.yaml: profiles.{profile} checklist 不存在: {checklist}")
 
-    for path in scan:
+    workflows = registry.get("workflows") or {}
+    if not isinstance(workflows, dict):
+        issues.append("registry.yaml: workflows 必须是映射")
+        workflows = {}
+    for workflow in WORKFLOW_SKILLS:
+        if workflow not in workflows:
+            issues.append(f"registry.yaml: 缺 workflows.{workflow}")
+    for workflow, config in workflows.items():
+        if workflow not in WORKFLOW_SKILLS or not isinstance(config, dict):
+            continue
+        if config.get("segments") != ["PRE", "POST"]:
+            issues.append(f"registry.yaml: workflows.{workflow}.segments 必须为 [PRE, POST]")
+        automatic_review = config.get("automatic_review")
+        if automatic_review is False:
+            if workflow not in CONTROL_WORKFLOWS_WITHOUT_AUTOMATIC_REVIEW:
+                issues.append(
+                    f"registry.yaml: {workflow} 不是控制型 workflow，不得关闭 automatic review"
+                )
+            if config.get("primary"):
+                issues.append(f"registry.yaml: {workflow} 必须默认零 Reviewer，不得再配 primary")
+            continue
+        if workflow in CONTROL_WORKFLOWS_WITHOUT_AUTOMATIC_REVIEW:
+            issues.append(f"registry.yaml: {workflow} 控制型 workflow 必须默认零 Reviewer")
+            continue
+        primary = config.get("primary")
+        if not isinstance(primary, dict):
+            issues.append(f"registry.yaml: workflows.{workflow} 缺 primary")
+            continue
+        role = str(primary.get("role") or "")
+        checklist = str(primary.get("checklist") or "")
+        if primary.get("required") is not True:
+            issues.append(f"registry.yaml: workflows.{workflow}.primary.required 必须为 true")
+        if role and not (roles_root / role / "ROLE.md").is_file():
+            issues.append(f"registry.yaml: primary 角色 {role} 缺 ROLE.md")
+        if checklist and not (ROOT / ".agents/skills/review/references" / checklist).is_file():
+            issues.append(f"registry.yaml: workflows.{workflow} primary checklist 不存在: {checklist}")
+
+    # 检查全部 checklist，但不再要求磁盘文件反向注册成 inventory。
+    for path in sorted(roles_root.glob("*/checklists/*/*.md")):
         text = path.read_text(encoding="utf-8")
         rel = _rel(path)
-
-        for marker in HARNESS_PRIVATE_TRUTH_MARKERS:
-            if marker in text:
-                issues.append(f"{rel}: 引用已迁移的 harness 专属路径 {marker}")
-
-        for token in RETIRED_GOVERNANCE_SOURCES:
-            if token in text:
-                issues.append(f"{rel}: 引用已退役治理源 {token}")
-
-        for token in RETIRED_SKILL_PATH_TOKENS:
-            if token in text:
-                issues.append(f"{rel}: 引用已退役技能路径 {token}")
-
-        for match in MAKE_TARGET_RE.finditer(text):
-            target = match.group("target")
-            subdir = match.group("dir")
-            if subdir:
-                if target not in _make_targets(ROOT / subdir / "Makefile"):
-                    issues.append(f"{rel}: gate 引用不存在的 target make -C {subdir} {target}")
-            elif target not in root_targets:
-                issues.append(f"{rel}: gate 引用根 Makefile 中不存在的 target make {target}")
-
-        for script in re.findall(r"quwoquan_[A-Za-z0-9_\-/]+\.(?:py|sh|yaml|json)", text):
-            if not (ROOT / script).exists():
-                issues.append(f"{rel}: 引用不存在的文件 {script}")
-
-        if path.suffix == ".md" and ".agents/skills" in rel:
-            for target in MARKDOWN_LINK_RE.findall(text):
-                if target.startswith(("http://", "https://", "#")):
-                    continue
-                resolved = (path.parent / target.split("#")[0]).resolve()
-                if not resolved.exists():
-                    issues.append(f"{rel}: 相对链接断链 {target}")
-    return issues
-
-
-def check_checklist_grading() -> list[str]:
-    """每条 checklist 必须带分级；MUST 必须绑 gate 或 check。"""
-    issues: list[str] = []
-    roles_root = ROOT / ".agents/skills/review/references/roles"
-    if not roles_root.is_dir():
-        return ["review 角色目录缺失"]
-
-    for path in sorted(roles_root.glob("*/checklists/*/*.md")):
-        rel = _rel(path)
-        lines = path.read_text(encoding="utf-8").splitlines()
-
-        # HANDOFF 是交接契约（产出物 / 未决项去向 / 下一步 / 证据链），不是判定条目，
-        # 分级对它没有意义。只有 PRE / DURING / POST 三段要求分级。
-        in_handoff = False
-        for index, line in enumerate(lines):
-            if line.startswith("#"):
-                in_handoff = "HANDOFF" in line
-                continue
-            if in_handoff or not line.startswith("- "):
-                continue
+        if GATE_LINE_RE.search(text):
+            issues.append(f"{rel}: checklist 禁止 gate: 命令，只能引用命名 evidence 或 check")
+        lines = text.splitlines()
+        item_starts = [index for index, line in enumerate(lines) if line.startswith("- ")]
+        for position, index in enumerate(item_starts):
+            line_number = index + 1
+            line = lines[index]
             match = CHECKLIST_ITEM_RE.match(line)
             if match is None:
-                issues.append(f"{rel}:{index + 1}: checklist 条目缺分级标签 -> {line.strip()[:60]}")
+                issues.append(f"{rel}:{line_number}: checklist 条目缺分级标签")
                 continue
             tag = match.group("tag").strip()
             if tag not in GRADE_TAGS:
-                issues.append(f"{rel}:{index + 1}: 未知分级标签 [{tag}]")
+                issues.append(f"{rel}:{line_number}: 未知分级标签 [{tag}]")
                 continue
-            if tag not in ("MUST", "MUST NOT"):
-                continue
-            # MUST 的绑定允许写在同行或紧随的缩进行
-            bound = "gate:" in line or "check:" in line
-            for follow in lines[index + 1 :]:
-                if not follow.strip():
-                    break
-                if follow.startswith("- "):
-                    break
-                if BINDING_RE.match(follow):
-                    bound = True
-                    break
-            if not bound:
+
+            next_index = item_starts[position + 1] if position + 1 < len(item_starts) else len(lines)
+            item_text = "\n".join(lines[index:next_index])
+            evidence_ids = EVIDENCE_LINE_RE.findall(item_text)
+            checks = CHECK_LINE_RE.findall(item_text)
+            for evidence_id in evidence_ids:
+                if evidence_id not in evidence:
+                    issues.append(f"{rel}:{line_number}: 引用未注册 evidence: {evidence_id}")
+            for predicate in checks:
+                if "判失败" not in predicate:
+                    issues.append(
+                        f"{rel}:{line_number}: check 必须写明客观输入与“判失败”条件"
+                    )
+            if tag in {"MUST", "MUST NOT"} and not (evidence_ids or checks):
                 issues.append(
-                    f"{rel}:{index + 1}: [{tag}] 未绑定 gate 或 check，"
-                    "按 grading.md 必须降级为 SHOULD"
+                    f"{rel}:{line_number}: [{tag}] checklist 未绑定本条 evidence 或客观 check"
                 )
     return issues
 
 
-def check_review_registry() -> list[str]:
-    """registry 必须能真的派发出去，且与各 SKILL 的「内置评审」声明双向一致。
+def _agents_chain_bytes_for_prefix(prefix: str) -> int:
+    path = ROOT / prefix
+    current = path if path.is_dir() else path.parent
+    total = 0
+    while True:
+        agents = current / "AGENTS.md"
+        if agents.is_file():
+            total += len(agents.read_bytes())
+        if current == ROOT:
+            break
+        if not current.resolve().is_relative_to(ROOT.resolve()):
+            break
+        current = current.parent
+    return total
 
-    注册了却不存在的 checklist、存在却没人引用的 checklist、指向已消失路径的
-    profile，都会让评审静默少一整个维度。
-    """
-    issues: list[str] = []
-    board = ROOT / ".agents/skills/review"
-    registry_path = board / "references/registry.yaml"
-    if not registry_path.is_file():
-        return ["缺 .agents/skills/review/references/registry.yaml"]
 
-    registry = yaml.safe_load(registry_path.read_text(encoding="utf-8")) or {}
-    references_root = board / "references"
-    roles_root = references_root / "roles"
+def check_reviewer_context_budget() -> list[str]:
+    registry, issues = _load_registry()
+    if registry is None:
+        return issues
+    references = ROOT / ".agents/skills/review/references"
+    base_paths = [references / "reviewer-executor.md", references / "grading.md"]
+    if any(not path.is_file() for path in base_paths):
+        return ["Reviewer context 基础文件缺失"]
+    base_bytes = sum(len(path.read_bytes()) for path in base_paths)
+    profiles = registry.get("profiles") or {}
+    workflows = registry.get("workflows") or {}
+    evidence = registry.get("evidence") or {}
 
-    concurrency = registry.get("concurrency") or {}
-    for key in ("max_parallel", "per_role_timeout_minutes"):
-        if not isinstance(concurrency.get(key), int):
-            issues.append(f"registry.yaml: concurrency.{key} 缺失或不是整数")
-
-    profiles: dict[str, dict] = registry.get("profiles") or {}
-    for profile, config in profiles.items():
-        paths = (config or {}).get("paths") or []
-        if not paths and not (config or {}).get("deliverables"):
-            issues.append(f"registry.yaml: profiles.{profile} 既无 paths 也无 deliverables，永不激活")
-        for pattern in paths:
-            if not _glob_exists(pattern):
-                issues.append(
-                    f"registry.yaml: profiles.{profile} 路径 {pattern} 在磁盘不存在，永不命中"
-                )
-
-    workflows: dict[str, dict] = registry.get("workflows") or {}
-    if not workflows:
-        issues.append("registry.yaml: 缺 workflows 段，registry 必须以工作流名为键")
-
-    referenced_checklists: set[str] = set()
-    referenced_roles: set[str] = set()
-    registry_segments: dict[str, set[str]] = {}
-
+    cases: list[tuple[str, dict[str, Any], dict[str, Any], int]] = []
+    root_agents_bytes = len((ROOT / "AGENTS.md").read_bytes())
     for workflow, config in workflows.items():
-        config = config or {}
-        segments = set(config.get("segments") or [])
-        if not segments or not segments <= {"PRE", "POST"}:
-            issues.append(f"registry.yaml: workflows.{workflow}.segments 必须是 PRE/POST 的非空子集")
-        registry_segments[workflow] = segments
-        if not config.get("deliverable"):
-            issues.append(f"registry.yaml: workflows.{workflow} 缺 deliverable")
-
-        bindings = config.get("bindings") or []
-        if not bindings:
-            issues.append(f"registry.yaml: workflows.{workflow} 没有任何 binding")
-        seen: set[tuple[str, str]] = set()
-        unconditional_gates: dict[str, str] = {}
-        for binding in bindings:
-            role = (binding or {}).get("role")
-            checklist = (binding or {}).get("checklist")
-            when = (binding or {}).get("when")
-            if not role or not checklist:
-                issues.append(f"registry.yaml: workflows.{workflow} 存在缺 role/checklist 的 binding")
-                continue
-            key = (role, checklist)
-            if key in seen:
-                issues.append(f"registry.yaml: workflows.{workflow} 重复 binding {role} -> {checklist}")
-            seen.add(key)
-            referenced_roles.add(role)
-            referenced_checklists.add(checklist)
-            if not (roles_root / role / "ROLE.md").is_file():
-                issues.append(f"registry.yaml: 角色 {role} 已注册但缺 roles/{role}/ROLE.md")
-            checklist_path = references_root / checklist
-            if not checklist_path.is_file():
-                issues.append(
-                    f"registry.yaml: workflows.{workflow} 引用不存在的 checklist {checklist}"
-                )
-            if when is not None:
-                for profile in when:
-                    if profile not in profiles:
-                        issues.append(
-                            f"registry.yaml: workflows.{workflow} binding {role} 引用"
-                            f"未声明的 profile {profile}"
-                        )
-            elif checklist_path.is_file():
-                # 无条件 binding 之间同一 gate 只允许一个执行 owner；
-                # 条件 binding 的重叠由 board 在运行时按 evidence id 去重。
-                for match in GATE_COMMAND_RE.finditer(checklist_path.read_text(encoding="utf-8")):
-                    command = match.group("cmd")
-                    owner = unconditional_gates.setdefault(command, checklist)
-                    if owner != checklist:
-                        issues.append(
-                            f"registry.yaml: workflows.{workflow} 无条件 bundle 内 gate 重复归属"
-                            f"（{command} 同时出现在 {owner} 与 {checklist}）"
-                        )
-
-    # 反向可达：磁盘上的 checklist 与角色目录必须被 registry 引用，否则永不派发。
-    for path in sorted(roles_root.glob("*/checklists/*/*.md")):
-        rel_to_refs = path.relative_to(references_root).as_posix()
-        if rel_to_refs not in referenced_checklists:
-            issues.append(f"{_rel(path)}: 未被 registry 任何 binding 引用，永远不会被派发")
-    for directory in sorted(p for p in roles_root.iterdir() if p.is_dir()):
-        if directory.name not in referenced_roles:
-            issues.append(f"roles/{directory.name} 存在但未被 registry 引用，永远不会被派发")
-        for stray in sorted(directory.glob("*.md")):
-            if stray.name != "ROLE.md":
-                issues.append(
-                    f"{_rel(stray)}: checklist 必须放在 checklists/<workflow>/ 下，"
-                    "角色根目录只允许 ROLE.md"
-                )
-
-    # SKILL「内置评审」声明与 registry 双向一致。
-    skill_segments: dict[str, set[str]] = defaultdict(set)
-    for name in WORKFLOW_SKILLS:
-        skill = ROOT / ".agents/skills" / name / "SKILL.md"
-        if not skill.is_file():
+        primary = (config or {}).get("primary")
+        if isinstance(primary, dict):
+            cases.append((f"workflow:{workflow}", primary, {"workflow": config}, root_agents_bytes))
+    for profile, config in profiles.items():
+        specialist = (config or {}).get("specialist")
+        if not isinstance(specialist, dict):
             continue
-        text = skill.read_text(encoding="utf-8")
-        section = text.split("## 内置评审", 1)
-        if len(section) < 2:
-            continue
-        body = section[1].split("\n## ", 1)[0]
-        for match in EMBEDDED_REVIEW_CALL_RE.finditer(body):
-            skill_segments[match.group("workflow")].add(match.group("segment"))
-
-    for workflow, segments in sorted(skill_segments.items()):
-        missing = segments - registry_segments.get(workflow, set())
-        for segment in sorted(missing):
-            issues.append(
-                f"SKILL 声明了 review({workflow}, {segment}) 但 registry 无对应 "
-                f"workflows.{workflow}.segments 条目——死调用"
+        paths = config.get("paths") or []
+        chain_bytes = max(
+            (_agents_chain_bytes_for_prefix(_static_glob_prefix(str(pattern))) for pattern in paths),
+            default=root_agents_bytes,
+        )
+        for workflow, checklist in (specialist.get("checklists") or {}).items():
+            cases.append(
+                (
+                    f"profile:{profile}/{workflow}",
+                    {**specialist, "checklist": checklist},
+                    {"profile": config, "workflow": workflows.get(workflow)},
+                    chain_bytes,
+                )
             )
-    for workflow, segments in sorted(registry_segments.items()):
-        declared = skill_segments.get(workflow, set())
-        for segment in sorted(segments - declared):
+
+    for label, reviewer, registry_slice, agents_bytes in cases:
+        role = str(reviewer.get("role") or "")
+        checklist = str(reviewer.get("checklist") or "")
+        paths = [references / "roles" / role / "ROLE.md", references / checklist]
+        if any(not path.is_file() for path in paths):
+            continue
+        checklist_text = paths[1].read_text(encoding="utf-8")
+        used_evidence = {
+            evidence_id: evidence.get(evidence_id)
+            for evidence_id in EVIDENCE_LINE_RE.findall(checklist_text)
+        }
+        registry_bytes = len(
+            yaml.safe_dump(
+                {**registry_slice, "evidence": used_evidence},
+                allow_unicode=True,
+                sort_keys=False,
+            ).encode("utf-8")
+        )
+        total = agents_bytes + base_bytes + sum(len(path.read_bytes()) for path in paths) + registry_bytes
+        if total > REVIEWER_CONTEXT_BYTE_BUDGET:
             issues.append(
-                f"registry 注册了 workflows.{workflow} segment {segment}，"
-                f"但没有任何 SKILL 的「内置评审」声明该调用——死注册"
+                f"{label}: 单 Reviewer 规则/profile/checklist 上下文 {total} bytes 超过 "
+                f"{REVIEWER_CONTEXT_BYTE_BUDGET} bytes"
             )
     return issues
 
 
-def check_duplicate_body() -> list[str]:
-    """跨文件重复段落检测：同一段正文只允许一个 owner，其他位置引用。"""
+def check_references_and_duplicates() -> list[str]:
     issues: list[str] = []
+    scan = [ROOT / "AGENTS.md"]
+    scan.extend(_find_agents_files())
+    scan.extend(sorted((ROOT / ".agents/skills").rglob("*.md")))
+    scan.extend(sorted((ROOT / ".cursor/commands").glob("*.md")))
+    seen_paths: set[Path] = set()
     paragraphs: dict[str, str] = {}
-    scan = sorted((ROOT / ".agents/skills").rglob("*.md"))
     for path in scan:
+        if path in seen_paths or not path.is_file():
+            continue
+        seen_paths.add(path)
         rel = _rel(path)
         text = path.read_text(encoding="utf-8")
-        # 代码块内是模板/示例，不当正文比对。
-        text = re.sub(r"```.*?```", "", text, flags=re.S)
-        for block in text.split("\n\n"):
+        for token in RETIRED_REFERENCE_TOKENS:
+            if token in text:
+                issues.append(f"{rel}: 引用退役治理源 {token}")
+        for marker in HARNESS_PRIVATE_TRUTH_MARKERS:
+            if marker in text:
+                issues.append(f"{rel}: 规范不得引用 harness 私有载体 {marker}")
+        if path.suffix == ".md":
+            for target in MARKDOWN_LINK_RE.findall(text):
+                target_path = target.split("#", 1)[0]
+                if not target_path or target.startswith(("http://", "https://", "mailto:")):
+                    continue
+                if any(char in target_path for char in ("<", ">", "{")):
+                    continue
+                if not (path.parent / target_path).resolve().exists():
+                    issues.append(f"{rel}: 相对链接断链 {target}")
+
+        # 子服务 AGENTS 可以共享同一条稳定模板；重复正文只约束会被模型按工作流
+        # 同时发现的 SKILL，避免以“去重”为名破坏路径自治。
+        if "/SKILL.md" not in rel:
+            continue
+        body = re.sub(r"```.*?```", "", text, flags=re.S)
+        for block in body.split("\n\n"):
             normalized = re.sub(r"\s+", " ", block).strip()
-            if len(normalized) < 120 or normalized.startswith("#"):
+            if len(normalized) < 180 or normalized.startswith("#"):
                 continue
             owner = paragraphs.setdefault(normalized, rel)
             if owner != rel:
-                issues.append(
-                    f"{rel}: 段落与 {owner} 重复（{normalized[:40]}…）；"
-                    "正文只允许一个 owner，其余位置改为引用"
-                )
+                issues.append(f"{rel}: 长规范段落与 {owner} 重复，应改为单一 owner 引用")
     return issues
 
 
-def check_generated_subagents() -> list[str]:
-    generator = ROOT / "quwoquan_ops/tools/generate_codex_agents.py"
+def check_adapter_generation() -> list[str]:
+    generator = ROOT / "quwoquan_ops/tools/generate_agent_adapters.py"
     if not generator.is_file():
-        return ["缺 quwoquan_ops/tools/generate_codex_agents.py"]
+        return ["缺中性 adapter 生成器 quwoquan_ops/tools/generate_agent_adapters.py"]
     result = subprocess.run(
         [sys.executable, str(generator), "--check"],
         cwd=ROOT,
@@ -783,116 +720,24 @@ def check_generated_subagents() -> list[str]:
     if result.returncode == 0:
         return []
     detail = (result.stderr or result.stdout).strip().splitlines()
-    return [f"Codex 子代理生成物不是最新: {line.strip()}" for line in detail if line.strip()]
-
-
-COMPLETION_CRITERIA_REL = ".agents/skills/review/references/completion-criteria.md"
-
-
-def check_completion_criteria() -> list[str]:
-    """完成判据单轨：每个工作流的准出只有判据表一个定义。
-
-    表缺段、段缺 verify 行、SKILL 的 HANDOFF 不引用表，三者任一都意味着
-    「完成」退回口头宣称，代理指标就会重新冒充准出。
-    """
-    issues: list[str] = []
-    table = ROOT / COMPLETION_CRITERIA_REL
-    if not table.is_file():
-        return [f"缺完成判据表 {COMPLETION_CRITERIA_REL}"]
-    text = table.read_text(encoding="utf-8")
-    sections = re.findall(r"^##\s+([a-z-]+)\s*$", text, re.M)
-    for workflow in WORKFLOW_SKILLS:
-        if workflow not in sections:
-            issues.append(f"{COMPLETION_CRITERIA_REL}: 缺 workflow `{workflow}` 的判据段")
-    for match in re.finditer(r"^##\s+([a-z-]+)\s*$(.*?)(?=^##\s|\Z)", text, re.M | re.S):
-        if "- verify:" not in match.group(2):
-            issues.append(
-                f"{COMPLETION_CRITERIA_REL}: `{match.group(1)}` 段缺 `- verify:` 判据行"
-            )
-    for workflow in WORKFLOW_SKILLS:
-        skill = ROOT / f".agents/skills/{workflow}/SKILL.md"
-        if not skill.is_file():
-            continue  # 缺失由 check_workflow_skills 负责报
-        handoff = skill.read_text(encoding="utf-8").split("## HANDOFF", 1)
-        if len(handoff) == 2 and "completion-criteria" not in handoff[1]:
-            issues.append(
-                f".agents/skills/{workflow}/SKILL.md: HANDOFF 段未引用完成判据表 "
-                "completion-criteria.md"
-            )
-    return issues
-
-
-def _claude_skills_index_mode() -> tuple[str | None, str | None]:
-    """`.claude/skills` 在 git index 中的 mode。
-
-    返回 (mode, git_error) 四态：git 成功且有条目 → (mode, None)；git 成功但
-    未跟踪 → (None, None)；git 自身失败 → (None, 错误细节)——失败不得与
-    「未跟踪」混淆编码，错误细节必须留痕。
-    """
-    try:
-        out = subprocess.run(
-            ["git", "ls-files", "-s", ".claude/skills"],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-    except OSError as exc:
-        return None, str(exc)
-    except subprocess.CalledProcessError as exc:
-        return None, (exc.stderr or str(exc)).strip()
-    first = out.stdout.split()
-    return (first[0] if first else None), None
-
-
-def check_harness_stubs() -> list[str]:
-    issues: list[str] = []
-    # .claude/skills 必须以 symlink（git mode 120000）指向 .agents/skills 真相源；
-    # 物化为普通目录会形成随时间漂移的第二副本（reviewer 曾据物化视图误判）。
-    mode, git_error = _claude_skills_index_mode()
-    if git_error is not None:
-        issues.append(
-            f".claude/skills: 无法取得 git index 形态（git 失败：{git_error}）——"
-            "形态锁不得静默放过，修复 git 环境后复跑"
-        )
-    elif mode != "120000":
-        issues.append(
-            f".claude/skills: git index mode={mode or '未跟踪'}，应为 120000（symlink）；"
-            "物化副本会与 .agents/skills 真相源漂移，请恢复 symlink 后提交"
-        )
-    for pattern in HARNESS_STUB_SKILL_GLOBS:
-        for stub in sorted(ROOT.glob(pattern)):
-            if stub.is_symlink():
-                continue
-            rel = _rel(stub)
-            text = stub.read_text(encoding="utf-8")
-            lines = len(text.splitlines())
-            if lines > HARNESS_STUB_LINE_BUDGET:
-                issues.append(
-                    f"{rel}: {lines} 行超过 harness stub {HARNESS_STUB_LINE_BUDGET} 行上限；"
-                    "宿主目录只放触发入口，语义写回 .agents/skills/ 真相源"
-                )
-            if ".agents/skills/" not in text:
-                issues.append(
-                    f"{rel}: 未指向 .agents/skills/ 真相源；stub 必须只是指针"
-                )
-    return issues
+    if not detail:
+        return [
+            "Cursor/Codex adapter 与中性源不一致: "
+            f"generator 静默退出 {result.returncode}"
+        ]
+    return [f"Cursor/Codex adapter 与中性源不一致: {line.strip()}" for line in detail if line.strip()]
 
 
 CHECKS = (
-    ("必需上下文源", check_required_sources),
-    ("五段执行契约", check_lifecycle_contract),
-    ("工作流技能与命令映射", check_workflow_skills),
-    ("AGENTS.md 预算", check_agents_budget),
-    ("SKILL.md 规范与预算", check_skills),
-    ("Cursor 规则指针", check_rule_pointers),
-    ("引用有效性", check_references),
-    ("checklist 分级", check_checklist_grading),
-    ("review 派发表", check_review_registry),
-    ("重复正文", check_duplicate_body),
-    ("子代理生成物", check_generated_subagents),
-    ("harness stub 体量", check_harness_stubs),
-    ("完成判据单轨", check_completion_criteria),
+    ("载体分层", check_required_sources_and_carriers),
+    ("AGENTS 链预算", check_agents_budget),
+    ("默认 manifest 预算", check_manifest_budget),
+    ("Workflow Skill 五段", check_workflow_skills),
+    ("命令与 harness 薄壳", check_commands_and_harness_stubs),
+    ("Review registry/checklist", check_checklists_and_registry),
+    ("Reviewer 上下文预算", check_reviewer_context_budget),
+    ("引用与重复规范", check_references_and_duplicates),
+    ("两宿主 adapter", check_adapter_generation),
 )
 
 
@@ -905,11 +750,7 @@ def main() -> int:
 
     emit_gate_result(
         "verify-agent-context-budget",
-        [
-            finding(f"[{label}] {issue}")
-            for label, issues in failures
-            for issue in issues
-        ],
+        [finding(f"[{label}] {issue}") for label, issues in failures for issue in issues],
         ROOT,
     )
     if failures:
@@ -919,8 +760,9 @@ def main() -> int:
             for issue in issues:
                 print(f"    - {issue}", file=sys.stderr)
         return 1
-
-    print("[verify_agent_context_budget] OK: 上下文预算、工作流结构、派发表与分级均合规")
+    print(
+        "[verify_agent_context_budget] OK: 渐进上下文预算、五段技能、Review v2 与两宿主 adapter 合规"
+    )
     return 0
 
 

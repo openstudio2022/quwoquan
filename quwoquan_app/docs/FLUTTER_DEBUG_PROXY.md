@@ -18,21 +18,27 @@ http://127.0.0.1:xxxxx/... HttpException: Connection closed before full header w
 - **VM Service**：`127.0.0.1:8888`（调试/热重载）
 - **DDS**：`127.0.0.1:8889`（Dart Development Service）
 
-**在终端里**直接执行 `flutter run` 不会使用固定端口（端口由 Flutter 随机分配），所以必须二选一：
+本仓库的启动入口还负责 runtime trust、环境 binding、启动回执与设备 lease，不能绕过。
+请选择下列 canonical 入口之一：
 
 - **推荐**：在 `quwoquan_app` 目录下用脚本启动（固定端口）：
   ```bash
   cd quwoquan_app
-  ./run.sh
+  ./run.sh -d <device-id>
   ```
-  如需传参给 `flutter run`，可写在后面，如：`./run.sh -d "iPhone 16 Pro Max"`。
+  设备 ID 可由 `flutter devices` 查询；`run.sh` 要求显式 `-d`。
 
-- 或手动带参数：
+- **Cursor 工作区字面 `flutter run`**：先在仓库根执行：
   ```bash
-  flutter run --host-vmservice-port=8888 --dds-port=8889
+  make app-activate-flutter-facade
   ```
+  然后执行 **Reload Window**，打开一个全新的工作区终端，确认
+  `command -v flutter` 指向 `quwoquan_app/scripts/tools/flutter_facade/bin/flutter`，
+  再运行唯一允许的字面命令 `flutter run -d <device-id>`。facade 会转交 canonical
+  launcher；不要手工传 `--host-vmservice-port`、`--dds-port` 或 `--no-pub`。
 
-在 **Cursor/VS Code** 里用「运行」或「调试」按钮启动时，会读取 `.vscode/settings.json`，自动使用上述固定端口。
+在 **Cursor/VS Code** 里用「运行」或「调试」按钮启动时，同样必须先完成上述
+workspace activation 与 Reload Window，IDE profile 才会走受管入口。
 
 可选：在 `~/.zshrc` 加别名，以后在任意目录可打 `fr` 即用固定端口（需先在 quwoquan_app 下执行）：
 ```bash
@@ -75,5 +81,6 @@ export NO_PROXY="127.0.0.1,localhost,127.0.0.1:8888,127.0.0.1:8889"
 
 ## 检查是否生效
 
-1. 确认端口固定：运行 `flutter run --host-vmservice-port=8888 --dds-port=8889`，日志里应出现 `127.0.0.1:8888`。
+1. 确认入口和端口：新工作区终端先运行 `command -v flutter`，再运行
+   `flutter run -d <device-id>`；启动日志应出现受管入口及 `127.0.0.1:8888`。
 2. 确认绕过：开启代理的情况下，能正常连接并热重载、无 “Connection closed before full header” 即表示绕过生效。

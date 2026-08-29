@@ -66,11 +66,6 @@ from content.homepage.homepage_refs import (
     safe_ref as _safe_ref,
     same_source_unit as _same_source_unit,
 )
-from content.homepage.homepage_assets import (
-    copy_homepage_asset,
-    select_homepage_assets,
-    write_homepage_media_dispositions,
-)
 # 实体主页底稿下发上限：取消旧的 4000 截断（旧值会把维基百科页在中段截断，
 # Agent 看不到「技术变革 / 相关古迹」等后段章节，导致多级目录与章节缺失）。
 # 放宽到覆盖绝大多数百科页全文，仅兜底极端超长源避免 token 失控。
@@ -216,13 +211,15 @@ def _homepage_base_source_issues(execution_id: str, domain: str, etype: str, nam
         )
     return issues
 def _entity_base_source_line(base_ref: str, base_mode: str) -> str:
-    if base_ref:
-        return (
-            f"- **底稿来源**：`{base_ref}`（sourceUseMode=`{base_mode}`）作为本页表达骨架，"
-            "在其上做**适度润色 + 事实校正 + PII/平台痕迹清理 + 体裁适配**；"
-            "licensed_adaptation 与 factual_reference_only 同等以底稿为骨架轻改。"
-        )
-    return "- 当前无可用底稿（source 不足）；不要凭空编造，先回退到 source 修复。"
+    """底稿用法只从 sourceUseMode 派生，与准出门同源（避免第二套写作口径）。"""
+    if not base_ref:
+        return "- 当前无可用底稿（source 不足）；不要凭空编造，先回退到 source 修复。"
+    from content.homepage.homepage_prepare import homepage_editing_instruction
+
+    return (
+        f"- **底稿来源**：`{base_ref}`（sourceUseMode=`{base_mode}`）。"
+        + homepage_editing_instruction(base_mode)
+    )
 def _entity_section_outline_block(base: dict[str, Any]) -> str:
     outline_rows = base.get("sectionOutline") if isinstance(base.get("sectionOutline"), list) else []
     if not outline_rows:

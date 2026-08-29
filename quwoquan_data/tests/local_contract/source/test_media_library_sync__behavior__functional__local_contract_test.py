@@ -1,7 +1,8 @@
-"""Release public slice → 环境媒体根同步（WP5 环境通路）契约测试。
+"""Release 交付 key → 环境媒体根同步（WP5 环境通路）契约测试。
 
 覆盖：增量 copy/skip、声明摘要与内容不符时 fail closed、目标漂移 repaired、
-private CAS key 不得作为同步入口、topology CDN base 解析（prod invalid fallback 阻断）。
+research CAS 交付 key 同步（DEC-031）、prune 不触及 CAS 根、
+topology CDN base 解析（prod invalid fallback 阻断）。
 """
 from __future__ import annotations
 
@@ -144,25 +145,78 @@ class TestSyncMediaLibrary:
         assert (dest / selected_key).is_file()
         assert not (dest / unrelated_key).exists()
 
-    def test_private_cas_key_is_not_a_sync_entry(self, tmp_path: Path) -> None:
-        """媒体字节由 content library 单一持有：private CAS key 不得进入环境公开目录。"""
+    def test_research_cas_delivery_key_is_synced(self, tmp_path: Path) -> None:
+        """DEC-031：research release 以 CAS objectKey 为交付 key，字节须落进环境媒体根。"""
         source = tmp_path / "release-payload"
+        dest = tmp_path / "media-root"
         payload = b"private-body"
         digest = hashlib.sha256(payload).hexdigest()
-        private_key = f"media/objects/sha256/{digest[:2]}/{digest[2:4]}/{digest}.jpg"
-        private_object = source / private_key
-        private_object.parent.mkdir(parents=True, exist_ok=True)
-        private_object.write_bytes(payload)
+        cas_key = f"media/objects/sha256/{digest[:2]}/{digest[2:4]}/{digest}.jpg"
+        cas_object = source / cas_key
+        cas_object.parent.mkdir(parents=True, exist_ok=True)
+        cas_object.write_bytes(payload)
+
+        report = sync_media_library(
+            source,
+            dest,
+            object_digests={cas_key: f"sha256:{digest}"},
+        )
+
+        assert report["objects"] == 1
+        assert report["copied"] == 1
+        assert report["issues"] == []
+        assert (dest / cas_key).read_bytes() == payload
+
+    def test_non_delivery_prefix_key_is_rejected(self, tmp_path: Path) -> None:
+        """既非 public slice 也非 CAS objectKey 的 key 不得进入环境媒体根。"""
+        source = tmp_path / "release-payload"
+        payload = b"rogue-body"
+        digest = hashlib.sha256(payload).hexdigest()
+        rogue_key = "media/image/p/release-a/post-a/v1/cover.jpg"
+        rogue_object = source / rogue_key
+        rogue_object.parent.mkdir(parents=True, exist_ok=True)
+        rogue_object.write_bytes(payload)
 
         report = sync_media_library(
             source,
             tmp_path / "media-root",
-            object_digests={private_key: f"sha256:{digest}"},
+            object_digests={rogue_key: f"sha256:{digest}"},
         )
 
         assert report["objects"] == 0
         assert report["copied"] == 0
         assert any("unsafe" in issue for issue in report["issues"])
+
+    def test_full_sync_prune_never_touches_cas_root(self, tmp_path: Path) -> None:
+        """环境上传媒体共用 CAS 前缀：prune 只回收 public slice，不得删除 CAS 对象。"""
+        source = tmp_path / "release-payload"
+        dest = tmp_path / "media-root"
+        payload = b"research-cover"
+        digest = hashlib.sha256(payload).hexdigest()
+        cas_key = f"media/objects/sha256/{digest[:2]}/{digest[2:4]}/{digest}.webp"
+        cas_object = source / cas_key
+        cas_object.parent.mkdir(parents=True, exist_ok=True)
+        cas_object.write_bytes(payload)
+        uploaded = dest / "media/objects/sha256/aa/bb/aabb.jpg"
+        uploaded.parent.mkdir(parents=True, exist_ok=True)
+        uploaded.write_bytes(b"user-uploaded-body")
+        stale_slice = dest / "media/image/s/release-old/post-old/v1/cover.jpg"
+        stale_slice.parent.mkdir(parents=True, exist_ok=True)
+        stale_slice.write_bytes(b"prior-release-cover")
+
+        report = sync_media_library(
+            source,
+            dest,
+            object_digests={cas_key: f"sha256:{digest}"},
+            prune_unselected=True,
+        )
+
+        assert report["failed"] == 0
+        assert report["issues"] == []
+        assert report["pruned"] == 1
+        assert uploaded.read_bytes() == b"user-uploaded-body"
+        assert not stale_slice.exists()
+        assert (dest / cas_key).read_bytes() == payload
 
     def test_selected_release_closure_rejects_missing_or_unsafe_slices(self, tmp_path: Path) -> None:
         source = tmp_path / "release-payload"

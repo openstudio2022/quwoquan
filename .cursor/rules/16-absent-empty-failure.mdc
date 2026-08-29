@@ -1,9 +1,0 @@
----
-description: 缺席、空值与失败的单义表达：禁止用 null/nil 表示失败或空集合
-alwaysApply: true
----
-
-写任何返回值、解码器或错误路径前，先读
-`.agents/skills/review/references/roles/developer/references/result-state-semantics.md`。
-
-规格真相源：[`absent-empty-failure-nullability/spec.md`](specs/feature-tree/runtime/system-architecture-and-engineering-guide/absent-empty-failure-nullability/spec.md)，设计归属 [`DEC-025`](specs/feature-tree/runtime/system-architecture-and-engineering-guide/design.md#dec-025)。

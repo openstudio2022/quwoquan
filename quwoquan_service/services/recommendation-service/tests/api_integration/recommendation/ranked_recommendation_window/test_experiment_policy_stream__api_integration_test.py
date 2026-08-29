@@ -1,3 +1,5 @@
+# spec_ref: specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/spec.md#sit-001.t3
+
 from __future__ import annotations
 
 from datetime import datetime, timezone

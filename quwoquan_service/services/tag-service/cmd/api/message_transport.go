@@ -2,14 +2,16 @@ package bootstrap
 
 import (
 	"context"
-	"fmt"
-	"strings"
 
 	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
+	"quwoquan_service/runtime/servicekit"
 	bindingdescriptor "quwoquan_service/services/tag-service/generated/tag/tag_node_view"
 )
 
+// requireTagAPIMessageTransport 从本服务 generated descriptor 读出编译期
+// binding，交给 servicekit 完成 preflight 与传输构造。descriptor 读取必须留在
+// 服务侧：servicekit 不 import generated/**。
 func requireTagAPIMessageTransport(
 	ctx context.Context,
 	environment string,
@@ -17,45 +19,18 @@ func requireTagAPIMessageTransport(
 	sceneModes map[string]string,
 ) (*runtimemessaging.RedisMessageTransport, error) {
 	binding, found := bindingdescriptor.CompiledBindingFor(runtimemessaging.RuntimeMessageTransportCapability)
-	rootID := bindingdescriptor.ExternalProviderBindingObject
-	resolved, err := runtimemessaging.RequireConfiguredRedisMessageTransport(
-		ctx,
-		environment,
-		found,
-		runtimemessaging.MessageTransportBinding{
-			State:               binding.State,
-			AdapterID:           binding.AdapterID,
-			TimeoutMilliseconds: binding.TimeoutMilliseconds,
-		},
-		runtimemessaging.MessageTransportRoot{
-			RootID:              rootID,
+	return servicekit.NewMessageTransport(
+		ctx, environment,
+		servicekit.MessageTransportSpec{
+			RootID:       bindingdescriptor.ExternalProviderBindingObject,
+			BindingFound: found,
+			Binding: runtimemessaging.MessageTransportBinding{
+				State:               binding.State,
+				AdapterID:           binding.AdapterID,
+				TimeoutMilliseconds: binding.TimeoutMilliseconds,
+			},
 			RequiredRedisScenes: binding.RequiredRedisScenes,
 		},
-		router,
-		sceneModes,
-	)
-	if err != nil {
-		return nil, err
-	}
-	if len(binding.RequiredRedisScenes) != 1 {
-		return nil, fmt.Errorf(
-			"generated message transport root %s must declare exactly one Redis scene",
-			rootID,
-		)
-	}
-	sceneName := strings.TrimSpace(binding.RequiredRedisScenes[0])
-	scene, ok := resolved.Scene(sceneName)
-	if !ok {
-		return nil, fmt.Errorf(
-			"preflighted message transport root %s is missing scene %s",
-			rootID,
-			sceneName,
-		)
-	}
-	return runtimemessaging.NewRedisMessageTransportForRoot(
-		rootID,
-		binding.AdapterID,
-		scene,
-		scene,
+		router, sceneModes,
 	)
 }

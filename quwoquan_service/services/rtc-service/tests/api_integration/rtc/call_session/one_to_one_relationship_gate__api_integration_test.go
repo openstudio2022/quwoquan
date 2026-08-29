@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/spec.md#sit-002.t2
 // spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/spec.md#sit-004
 // spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-001
 // spec_ref: specs/feature-tree/chat-conversation/realtime-call/one-to-one-call/spec.md#gwt-001
@@ -83,31 +84,44 @@ func TestInitiateCall_OneToOne_RequiresMutual(t *testing.T) {
 	}
 }
 
-func TestInitiateCall_OneToOne_Blocked(t *testing.T) {
-	t.Cleanup(func() { cleanAll(t) })
-	orchestrator := newGateTestOrchestrator(
-		t,
-		rtcRelationshipGateForContractTest(
-			t,
-			application.RelationshipCapability{IsBlocked: true},
-		),
-	)
+func TestInitiateCall_OneToOne_BlockedInEitherDirection(t *testing.T) {
+	for _, testCase := range []struct {
+		name       string
+		capability application.RelationshipCapability
+	}{
+		{
+			name:       "initiator_blocks_invitee",
+			capability: application.RelationshipCapability{IsBlocked: true},
+		},
+		{
+			name:       "invitee_blocks_initiator",
+			capability: application.RelationshipCapability{IsBlockedBy: true},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Cleanup(func() { cleanAll(t) })
+			orchestrator := newGateTestOrchestrator(
+				t,
+				rtcRelationshipGateForContractTest(t, testCase.capability),
+			)
 
-	ctx := commandmeta.WithIdempotencyKey(
-		context.Background(),
-		"gate-reject-blocked",
-	)
-	_, err := orchestrator.InitiateCall(ctx, application.InitiateCallRequest{
-		InitiatorID:     "caller_c",
-		CallType:        "audio",
-		InviteeIDs:      []string{"caller_d"},
-		MaxParticipants: 2,
-	})
-	if err == nil {
-		t.Fatal("expected blocked gate error")
-	}
-	if got := rterr.NormalizeError(err).Code.String(); got != generated.ErrBlocked.Error() {
-		t.Fatalf("expected %s, got %s", generated.ErrBlocked.Error(), got)
+			ctx := commandmeta.WithIdempotencyKey(
+				context.Background(),
+				"gate-reject-blocked-"+testCase.name,
+			)
+			_, err := orchestrator.InitiateCall(ctx, application.InitiateCallRequest{
+				InitiatorID:     "caller_c",
+				CallType:        "audio",
+				InviteeIDs:      []string{"caller_d"},
+				MaxParticipants: 2,
+			})
+			if err == nil {
+				t.Fatal("expected blocked gate error")
+			}
+			if got := rterr.NormalizeError(err).Code.String(); got != generated.ErrBlocked.Error() {
+				t.Fatalf("expected %s, got %s", generated.ErrBlocked.Error(), got)
+			}
+		})
 	}
 }
 

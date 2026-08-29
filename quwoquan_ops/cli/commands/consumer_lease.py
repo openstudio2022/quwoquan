@@ -89,7 +89,15 @@ def command_consumer_lease(args: argparse.Namespace) -> dict[str, Any]:
                 if target.endswith("-local")
                 else "prod"
             )
-            with _stackctl._local_stack_operation_lock(target):
+            # lease 的获取/释放是「使用运行时」而非「操作栈」：持共享
+            # use lock 与 UAT 编排的共享锁兼容，只与 up/down 的排他锁
+            # 互斥。若持排他锁，UAT 内 run.sh 的 lease 获取会与外层
+            # use lock 自死锁。
+            use_lock = _stackctl.acquire_local_runtime_use_lock(
+                target=target,
+                purpose=f"consumer-lease-acquire:{device}",
+            )
+            try:
                 application_id = str(args.package_name).strip()
                 if platform in {"ios-simulator", "ios-physical"}:
                     application_id = str(getattr(args, "bundle_id", "") or "").strip()
@@ -118,6 +126,8 @@ def command_consumer_lease(args: argparse.Namespace) -> dict[str, Any]:
                     ),
                     build_grace_seconds=int(args.build_grace_seconds),
                 )
+            finally:
+                use_lock.close()
             return {
                 "exitCode": 0,
                 "summary": f"consumer lease acquired for {target}",
@@ -132,12 +142,18 @@ def command_consumer_lease(args: argparse.Namespace) -> dict[str, Any]:
                 "lease": lease,
             }
         if action == "release":
-            with _stackctl._local_stack_operation_lock(target):
+            use_lock = _stackctl.acquire_local_runtime_use_lock(
+                target=target,
+                purpose=f"consumer-lease-release:{device}",
+            )
+            try:
                 released = _stackctl.release_consumer_lease(
                     target=target,
                     device=device,
                     consumer=consumer,
                 )
+            finally:
+                use_lock.close()
             return {
                 "exitCode": 0,
                 "summary": f"consumer lease released for {target}",
@@ -147,7 +163,15 @@ def command_consumer_lease(args: argparse.Namespace) -> dict[str, Any]:
                     f"existed={str(released).lower()}",
                 ],
             }
-        leases = _stackctl.active_consumer_leases(target)
+        # status 是只读诊断面，必须能看见 released 回执：它不占用运行时，但携带
+        # device_bound 需要的代际证据，被过滤掉就无法解释 verify 的判定。
+        leases = _stackctl.inspect_consumer_leases(target)
+        occupying = [
+            lease
+            for lease in leases
+            if str(lease.get("state") or "")
+            not in _stackctl.OCCUPANCY_FREE_STATES
+        ]
         return {
             "exitCode": 0,
             "summary": f"consumer lease status for {target}",
@@ -155,12 +179,15 @@ def command_consumer_lease(args: argparse.Namespace) -> dict[str, Any]:
                 (
                     f"device={lease.get('device')} consumer={lease.get('consumer')} "
                     f"platform={lease.get('platform', 'android')} "
-                    f"state={lease.get('state')} detail={lease.get('detail')}"
+                    f"state={lease.get('state')} "
+                    f"occupies={str(lease in occupying).lower()} "
+                    f"detail={lease.get('detail')}"
                 )
                 for lease in leases
             ]
-            or ["no active consumer lease"],
+            or ["no consumer lease receipt"],
             "leases": leases,
+            "occupyingLeases": occupying,
         }
     except (RuntimeError, ValueError) as exc:
         return {

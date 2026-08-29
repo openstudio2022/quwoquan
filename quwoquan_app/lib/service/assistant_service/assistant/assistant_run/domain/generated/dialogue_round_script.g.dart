@@ -36,21 +36,21 @@ class DialogueRoundScriptDto {
   final String stateMachineExcerpt;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'domainId': domainId,
-        'enabled': enabled,
-        'currentStateId': currentStateId,
-        'detectedEvent': detectedEvent,
-        'suggestedNextStateId': suggestedNextStateId,
-        'nextStateCandidates': nextStateCandidates,
-        'requiredFieldsForNextState': requiredFieldsForNextState,
-        'totalSubTotalRequired': totalSubTotalRequired,
-        'optionalEnrichment': optionalEnrichment,
-        'maxQuestionsPerTurn': maxQuestionsPerTurn,
-        'hardFailCodes': hardFailCodes,
-        'passCriteriaRound': passCriteriaRound,
-        'statePromptExcerpt': statePromptExcerpt,
-        'stateMachineExcerpt': stateMachineExcerpt,
-      };
+    'domainId': domainId,
+    'enabled': enabled,
+    'currentStateId': currentStateId,
+    'detectedEvent': detectedEvent,
+    'suggestedNextStateId': suggestedNextStateId,
+    'nextStateCandidates': nextStateCandidates,
+    'requiredFieldsForNextState': requiredFieldsForNextState,
+    'totalSubTotalRequired': totalSubTotalRequired,
+    'optionalEnrichment': optionalEnrichment,
+    'maxQuestionsPerTurn': maxQuestionsPerTurn,
+    'hardFailCodes': hardFailCodes,
+    'passCriteriaRound': passCriteriaRound,
+    'statePromptExcerpt': statePromptExcerpt,
+    'stateMachineExcerpt': stateMachineExcerpt,
+  };
 
   factory DialogueRoundScriptDto.fromJson(Map<String, dynamic> json) {
     const allowedFields = <String>{
@@ -73,71 +73,145 @@ class DialogueRoundScriptDto {
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('DialogueRoundScriptDto response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'DialogueRoundScriptDto response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (json.containsKey('domainId') && json['domainId'] != null && (json['domainId'] is! String)) {
-      throw const FormatException('DialogueRoundScriptDto field domainId has an invalid wire value');
+    if (json.containsKey('domainId') &&
+        json['domainId'] != null &&
+        (json['domainId'] is! String)) {
+      throw const FormatException(
+        'DialogueRoundScriptDto field domainId has an invalid wire value',
+      );
     }
-    if (json.containsKey('enabled') && json['enabled'] != null && (json['enabled'] is! bool)) {
-      throw const FormatException('DialogueRoundScriptDto field enabled has an invalid wire value');
+    if (json.containsKey('enabled') &&
+        json['enabled'] != null &&
+        (json['enabled'] is! bool)) {
+      throw const FormatException(
+        'DialogueRoundScriptDto field enabled has an invalid wire value',
+      );
     }
-    if (json.containsKey('currentStateId') && json['currentStateId'] != null && (json['currentStateId'] is! String)) {
-      throw const FormatException('DialogueRoundScriptDto field currentStateId has an invalid wire value');
+    if (json.containsKey('currentStateId') &&
+        json['currentStateId'] != null &&
+        (json['currentStateId'] is! String)) {
+      throw const FormatException(
+        'DialogueRoundScriptDto field currentStateId has an invalid wire value',
+      );
     }
-    if (json.containsKey('detectedEvent') && json['detectedEvent'] != null && (json['detectedEvent'] is! String)) {
-      throw const FormatException('DialogueRoundScriptDto field detectedEvent has an invalid wire value');
+    if (json.containsKey('detectedEvent') &&
+        json['detectedEvent'] != null &&
+        (json['detectedEvent'] is! String)) {
+      throw const FormatException(
+        'DialogueRoundScriptDto field detectedEvent has an invalid wire value',
+      );
     }
-    if (json.containsKey('suggestedNextStateId') && json['suggestedNextStateId'] != null && (json['suggestedNextStateId'] is! String)) {
-      throw const FormatException('DialogueRoundScriptDto field suggestedNextStateId has an invalid wire value');
+    if (json.containsKey('suggestedNextStateId') &&
+        json['suggestedNextStateId'] != null &&
+        (json['suggestedNextStateId'] is! String)) {
+      throw const FormatException(
+        'DialogueRoundScriptDto field suggestedNextStateId has an invalid wire value',
+      );
     }
-    if (json.containsKey('nextStateCandidates') && json['nextStateCandidates'] != null && (json['nextStateCandidates'] is! List || (json['nextStateCandidates'] as List).any((item) => item is! String))) {
-      throw const FormatException('DialogueRoundScriptDto field nextStateCandidates has an invalid wire value');
+    if (json.containsKey('nextStateCandidates') &&
+        json['nextStateCandidates'] != null &&
+        (json['nextStateCandidates'] is! List ||
+            (json['nextStateCandidates'] as List).any(
+              (item) => item is! String,
+            ))) {
+      throw const FormatException(
+        'DialogueRoundScriptDto field nextStateCandidates has an invalid wire value',
+      );
     }
-    if (json.containsKey('requiredFieldsForNextState') && json['requiredFieldsForNextState'] != null && (json['requiredFieldsForNextState'] is! List || (json['requiredFieldsForNextState'] as List).any((item) => item is! String))) {
-      throw const FormatException('DialogueRoundScriptDto field requiredFieldsForNextState has an invalid wire value');
+    if (json.containsKey('requiredFieldsForNextState') &&
+        json['requiredFieldsForNextState'] != null &&
+        (json['requiredFieldsForNextState'] is! List ||
+            (json['requiredFieldsForNextState'] as List).any(
+              (item) => item is! String,
+            ))) {
+      throw const FormatException(
+        'DialogueRoundScriptDto field requiredFieldsForNextState has an invalid wire value',
+      );
     }
-    if (json.containsKey('totalSubTotalRequired') && json['totalSubTotalRequired'] != null && (json['totalSubTotalRequired'] is! bool)) {
-      throw const FormatException('DialogueRoundScriptDto field totalSubTotalRequired has an invalid wire value');
+    if (json.containsKey('totalSubTotalRequired') &&
+        json['totalSubTotalRequired'] != null &&
+        (json['totalSubTotalRequired'] is! bool)) {
+      throw const FormatException(
+        'DialogueRoundScriptDto field totalSubTotalRequired has an invalid wire value',
+      );
     }
-    if (json.containsKey('optionalEnrichment') && json['optionalEnrichment'] != null && (json['optionalEnrichment'] is! bool)) {
-      throw const FormatException('DialogueRoundScriptDto field optionalEnrichment has an invalid wire value');
+    if (json.containsKey('optionalEnrichment') &&
+        json['optionalEnrichment'] != null &&
+        (json['optionalEnrichment'] is! bool)) {
+      throw const FormatException(
+        'DialogueRoundScriptDto field optionalEnrichment has an invalid wire value',
+      );
     }
-    if (json.containsKey('maxQuestionsPerTurn') && json['maxQuestionsPerTurn'] != null && (json['maxQuestionsPerTurn'] is! num)) {
-      throw const FormatException('DialogueRoundScriptDto field maxQuestionsPerTurn has an invalid wire value');
+    if (json.containsKey('maxQuestionsPerTurn') &&
+        json['maxQuestionsPerTurn'] != null &&
+        (json['maxQuestionsPerTurn'] is! num)) {
+      throw const FormatException(
+        'DialogueRoundScriptDto field maxQuestionsPerTurn has an invalid wire value',
+      );
     }
-    if (json.containsKey('hardFailCodes') && json['hardFailCodes'] != null && (json['hardFailCodes'] is! List || (json['hardFailCodes'] as List).any((item) => item is! String))) {
-      throw const FormatException('DialogueRoundScriptDto field hardFailCodes has an invalid wire value');
+    if (json.containsKey('hardFailCodes') &&
+        json['hardFailCodes'] != null &&
+        (json['hardFailCodes'] is! List ||
+            (json['hardFailCodes'] as List).any((item) => item is! String))) {
+      throw const FormatException(
+        'DialogueRoundScriptDto field hardFailCodes has an invalid wire value',
+      );
     }
-    if (json.containsKey('passCriteriaRound') && json['passCriteriaRound'] != null && (json['passCriteriaRound'] is! Map)) {
-      throw const FormatException('DialogueRoundScriptDto field passCriteriaRound has an invalid wire value');
+    if (json.containsKey('passCriteriaRound') &&
+        json['passCriteriaRound'] != null &&
+        (json['passCriteriaRound'] is! Map)) {
+      throw const FormatException(
+        'DialogueRoundScriptDto field passCriteriaRound has an invalid wire value',
+      );
     }
-    if (json.containsKey('statePromptExcerpt') && json['statePromptExcerpt'] != null && (json['statePromptExcerpt'] is! String)) {
-      throw const FormatException('DialogueRoundScriptDto field statePromptExcerpt has an invalid wire value');
+    if (json.containsKey('statePromptExcerpt') &&
+        json['statePromptExcerpt'] != null &&
+        (json['statePromptExcerpt'] is! String)) {
+      throw const FormatException(
+        'DialogueRoundScriptDto field statePromptExcerpt has an invalid wire value',
+      );
     }
-    if (json.containsKey('stateMachineExcerpt') && json['stateMachineExcerpt'] != null && (json['stateMachineExcerpt'] is! String)) {
-      throw const FormatException('DialogueRoundScriptDto field stateMachineExcerpt has an invalid wire value');
+    if (json.containsKey('stateMachineExcerpt') &&
+        json['stateMachineExcerpt'] != null &&
+        (json['stateMachineExcerpt'] is! String)) {
+      throw const FormatException(
+        'DialogueRoundScriptDto field stateMachineExcerpt has an invalid wire value',
+      );
     }
     return DialogueRoundScriptDto(
       domainId: (json['domainId'] as String?)?.trim() ?? "",
       enabled: json['enabled'] == true,
       currentStateId: (json['currentStateId'] as String?)?.trim() ?? "",
       detectedEvent: (json['detectedEvent'] as String?)?.trim() ?? "",
-      suggestedNextStateId: (json['suggestedNextStateId'] as String?)?.trim() ?? "",
+      suggestedNextStateId:
+          (json['suggestedNextStateId'] as String?)?.trim() ?? "",
       nextStateCandidates: _assistantStringList(json['nextStateCandidates']),
-      requiredFieldsForNextState: _assistantStringList(json['requiredFieldsForNextState']),
+      requiredFieldsForNextState: _assistantStringList(
+        json['requiredFieldsForNextState'],
+      ),
       totalSubTotalRequired: json['totalSubTotalRequired'] == true,
       optionalEnrichment: json['optionalEnrichment'] == true,
       maxQuestionsPerTurn: (json['maxQuestionsPerTurn'] as num?)?.toInt() ?? 0,
       hardFailCodes: _assistantStringList(json['hardFailCodes']),
-      passCriteriaRound: (json['passCriteriaRound'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
+      passCriteriaRound:
+          (json['passCriteriaRound'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{},
       statePromptExcerpt: (json['statePromptExcerpt'] as String?)?.trim() ?? "",
-      stateMachineExcerpt: (json['stateMachineExcerpt'] as String?)?.trim() ?? "",
+      stateMachineExcerpt:
+          (json['stateMachineExcerpt'] as String?)?.trim() ?? "",
     );
   }
 
   static List<String> _assistantStringList(Object? value) {
     if (value is List) {
-      return value.map((item) => item.toString().trim()).where((item) => item.isNotEmpty).toList(growable: false);
+      return value
+          .map((item) => item.toString().trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
     }
     return const <String>[];
   }

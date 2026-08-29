@@ -28,12 +28,85 @@ class ExternalProviderGovernanceContractTest(unittest.TestCase):
         registry = governance.load_registry()
         self.assertEqual(provider_gate.message_transport_static_issues(registry), [])
         service_root = ROOT / "quwoquan_service" / "services"
-        roots = sorted(service_root.glob("*/cmd/**/message_transport.go"))
+        roots = [
+            path
+            for path in sorted(service_root.glob("*/cmd/**/*.go"))
+            if not path.name.endswith("_test.go")
+            and provider_gate.MESSAGE_TRANSPORT_ASSEMBLY_RE.search(
+                path.read_text(encoding="utf-8")
+            )
+        ]
         self.assertTrue(roots)
         for path in roots:
             source = path.read_text(encoding="utf-8")
             self.assertIn("CompiledBindingFor(", source, path)
             self.assertNotIn("ExternalProviderBindingFor(", source, path)
+
+    def test_message_transport_preflight_gap_is_reported(self) -> None:
+        """反向 fixture：放宽 servicekit 合法形态后，gate 仍抓得住 preflight 缺失。"""
+        registry = governance.load_registry()
+        with tempfile.TemporaryDirectory() as temporary:
+            services_root = Path(temporary)
+            cmd_dir = services_root / "fixture-service" / "cmd" / "api"
+            cmd_dir.mkdir(parents=True)
+            helper = cmd_dir / "message_transport.go"
+
+            # 两种合法 preflight 形态（RequireConfiguredRedisMessageTransport /
+            # servicekit.NewMessageTransport）都缺失时必须报 issue。
+            helper.write_text(
+                "package bootstrap\n\n"
+                'func newTransport() { _ = bindingdescriptor.CompiledBindingFor("runtime.message.transport") }\n',
+                encoding="utf-8",
+            )
+            issues = provider_gate.message_transport_static_issues(
+                registry, services_root=services_root
+            )
+            self.assertTrue(
+                any("must run generated-binding preflight" in issue for issue in issues),
+                issues,
+            )
+
+            # servicekit 形态在场时 preflight 判定放行。
+            helper.write_text(
+                "package bootstrap\n\n"
+                "func newTransport() error {\n"
+                '\tbinding, _ := bindingdescriptor.CompiledBindingFor("runtime.message.transport")\n'
+                "\t_, err := servicekit.NewMessageTransport(spec, binding)\n"
+                "\treturn err\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            issues = provider_gate.message_transport_static_issues(
+                registry, services_root=services_root
+            )
+            self.assertFalse(
+                any("must run generated-binding preflight" in issue for issue in issues),
+                issues,
+            )
+
+            # 直接构造 transport 的分支不接受 servicekit 形态替代显式 preflight：
+            # 既然绕开了 servicekit 封装直接构造，就必须自己执行
+            # RequireConfiguredRedisMessageTransport。
+            helper.write_text(
+                "package bootstrap\n\n"
+                "func newTransport() error {\n"
+                '\tbinding, _ := bindingdescriptor.CompiledBindingFor("runtime.message.transport")\n'
+                "\t_, _ = servicekit.NewMessageTransport(spec, binding)\n"
+                "\t_ = messaging.NewRedisMessageTransport(router)\n"
+                "\treturn nil\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            issues = provider_gate.message_transport_static_issues(
+                registry, services_root=services_root
+            )
+            self.assertTrue(
+                any(
+                    "direct transport construction lacks generated preflight" in issue
+                    for issue in issues
+                ),
+                issues,
+            )
 
     def test_provider_runtime_has_one_package_bound_launch_track(self) -> None:
         sources = {

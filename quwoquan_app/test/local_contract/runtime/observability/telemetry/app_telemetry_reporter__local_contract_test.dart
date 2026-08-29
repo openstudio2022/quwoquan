@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:quwoquan_app/runtime/context/actor_queue_partition.dart';
@@ -98,9 +99,8 @@ void main() {
     expect(event['networkClass'], 'wifi');
     expect(event['devicePlatform'], 'ios');
     expect(
-      AppTelemetrySessionStore.parseSessionId(
-        event['sessionId']! as String,
-      ).userKey,
+      AppTelemetrySessionStore.parseSessionId(event['sessionId']! as String)
+          .userKey,
       'account.with.dot',
     );
     expect(transport.idempotencyKey, hasLength(64));
@@ -188,6 +188,63 @@ void main() {
     expect(
       await reporter.record(
         AppTelemetryPayload.runtimeException(errorCode: 'APP.RUNTIME.test'),
+      ),
+      AppTelemetryRecordResult.accepted,
+    );
+  });
+
+  test('媒体加载异常结果始终保留，快速成功采样且慢成功保留', () async {
+    final definition = AppTelemetryCatalog.events['media_load_state']!;
+    expect(definition.normalSampleRate, 0.1);
+    expect(definition.slowThresholdMs, 3000);
+    expect(definition.alwaysKeepResults, <String>{
+      'failure',
+      'timeout',
+      'retry',
+      'absent',
+    });
+    final sessionId = sessionStore.sessionId;
+    final digest = sha256.convert(utf8.encode('$sessionId:media_load_state'));
+    final sampleBucket = ((digest.bytes[0] << 8) | digest.bytes[1]) / 65536;
+    expect(
+      sampleBucket,
+      greaterThanOrEqualTo(definition.normalSampleRate),
+      reason: '此测试会话必须确定落在快速成功的 10% 样本之外',
+    );
+
+    for (final result in definition.alwaysKeepResults) {
+      expect(
+        await reporter.record(
+          AppTelemetryPayload.mediaLoadState(
+            mediaType: 'image',
+            result: result,
+            durationMs: 120,
+            candidatesTried: result == 'absent' ? 0 : 1,
+          ),
+        ),
+        AppTelemetryRecordResult.accepted,
+        reason: '$result 不能被普通采样丢弃',
+      );
+    }
+    expect(
+      await reporter.record(
+        AppTelemetryPayload.mediaLoadState(
+          mediaType: 'image',
+          result: 'success',
+          durationMs: 120,
+          candidatesTried: 1,
+        ),
+      ),
+      AppTelemetryRecordResult.sampledOut,
+    );
+    expect(
+      await reporter.record(
+        AppTelemetryPayload.mediaLoadState(
+          mediaType: 'image',
+          result: 'success',
+          durationMs: definition.slowThresholdMs,
+          candidatesTried: 1,
+        ),
       ),
       AppTelemetryRecordResult.accepted,
     );

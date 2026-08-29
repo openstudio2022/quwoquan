@@ -18,42 +18,57 @@ class DeviceSummary {
   final ContextGranularity granularity;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'os': os,
-        'model': model,
-        'appVersion': appVersion,
-        'granularity': granularity.wireName,
-      };
+    'os': os,
+    'model': model,
+    'appVersion': appVersion,
+    'granularity': granularity.wireName,
+  };
 
   factory DeviceSummary.fromJson(Map<String, dynamic> json) {
-    const allowedFields = <String>{
-      'os',
-      'model',
-      'appVersion',
-      'granularity',
-    };
+    const allowedFields = <String>{'os', 'model', 'appVersion', 'granularity'};
     final unknownFields = json.keys
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('DeviceSummary response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'DeviceSummary response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (json.containsKey('os') && json['os'] != null && (json['os'] is! String)) {
-      throw const FormatException('DeviceSummary field os has an invalid wire value');
+    if (json.containsKey('os') &&
+        json['os'] != null &&
+        (json['os'] is! String)) {
+      throw const FormatException(
+        'DeviceSummary field os has an invalid wire value',
+      );
     }
-    if (json.containsKey('model') && json['model'] != null && (json['model'] is! String)) {
-      throw const FormatException('DeviceSummary field model has an invalid wire value');
+    if (json.containsKey('model') &&
+        json['model'] != null &&
+        (json['model'] is! String)) {
+      throw const FormatException(
+        'DeviceSummary field model has an invalid wire value',
+      );
     }
-    if (json.containsKey('appVersion') && json['appVersion'] != null && (json['appVersion'] is! String)) {
-      throw const FormatException('DeviceSummary field appVersion has an invalid wire value');
+    if (json.containsKey('appVersion') &&
+        json['appVersion'] != null &&
+        (json['appVersion'] is! String)) {
+      throw const FormatException(
+        'DeviceSummary field appVersion has an invalid wire value',
+      );
     }
-    if (json.containsKey('granularity') && json['granularity'] != null && (json['granularity'] is! String)) {
-      throw const FormatException('DeviceSummary field granularity has an invalid wire value');
+    if (json.containsKey('granularity') &&
+        json['granularity'] != null &&
+        (json['granularity'] is! String)) {
+      throw const FormatException(
+        'DeviceSummary field granularity has an invalid wire value',
+      );
     }
     return DeviceSummary(
       os: (json['os'] as String?)?.trim() ?? "",
       model: (json['model'] as String?)?.trim() ?? "",
       appVersion: (json['appVersion'] as String?)?.trim() ?? "",
-      granularity: parseContextGranularityStrict((json['granularity'] as String?)?.trim() ?? "coarse"),
+      granularity: parseContextGranularityStrict(
+        (json['granularity'] as String?)?.trim() ?? "coarse",
+      ),
     );
   }
 }
@@ -83,13 +98,13 @@ class PermissionSummary {
   final ContextGranularity granularity;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'locationGranted': locationGranted,
-        'contactsGranted': contactsGranted,
-        'photosGranted': photosGranted,
-        'cameraGranted': cameraGranted,
-        'notificationsGranted': notificationsGranted,
-        'granularity': granularity.wireName,
-      };
+    'locationGranted': locationGranted,
+    'contactsGranted': contactsGranted,
+    'photosGranted': photosGranted,
+    'cameraGranted': cameraGranted,
+    'notificationsGranted': notificationsGranted,
+    'granularity': granularity.wireName,
+  };
 
   factory PermissionSummary.fromJson(Map<String, dynamic> json) {
     const allowedFields = <String>{
@@ -104,25 +119,51 @@ class PermissionSummary {
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('PermissionSummary response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'PermissionSummary response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (json.containsKey('locationGranted') && json['locationGranted'] != null && (json['locationGranted'] is! bool)) {
-      throw const FormatException('PermissionSummary field locationGranted has an invalid wire value');
+    if (json.containsKey('locationGranted') &&
+        json['locationGranted'] != null &&
+        (json['locationGranted'] is! bool)) {
+      throw const FormatException(
+        'PermissionSummary field locationGranted has an invalid wire value',
+      );
     }
-    if (json.containsKey('contactsGranted') && json['contactsGranted'] != null && (json['contactsGranted'] is! bool)) {
-      throw const FormatException('PermissionSummary field contactsGranted has an invalid wire value');
+    if (json.containsKey('contactsGranted') &&
+        json['contactsGranted'] != null &&
+        (json['contactsGranted'] is! bool)) {
+      throw const FormatException(
+        'PermissionSummary field contactsGranted has an invalid wire value',
+      );
     }
-    if (json.containsKey('photosGranted') && json['photosGranted'] != null && (json['photosGranted'] is! bool)) {
-      throw const FormatException('PermissionSummary field photosGranted has an invalid wire value');
+    if (json.containsKey('photosGranted') &&
+        json['photosGranted'] != null &&
+        (json['photosGranted'] is! bool)) {
+      throw const FormatException(
+        'PermissionSummary field photosGranted has an invalid wire value',
+      );
     }
-    if (json.containsKey('cameraGranted') && json['cameraGranted'] != null && (json['cameraGranted'] is! bool)) {
-      throw const FormatException('PermissionSummary field cameraGranted has an invalid wire value');
+    if (json.containsKey('cameraGranted') &&
+        json['cameraGranted'] != null &&
+        (json['cameraGranted'] is! bool)) {
+      throw const FormatException(
+        'PermissionSummary field cameraGranted has an invalid wire value',
+      );
     }
-    if (json.containsKey('notificationsGranted') && json['notificationsGranted'] != null && (json['notificationsGranted'] is! bool)) {
-      throw const FormatException('PermissionSummary field notificationsGranted has an invalid wire value');
+    if (json.containsKey('notificationsGranted') &&
+        json['notificationsGranted'] != null &&
+        (json['notificationsGranted'] is! bool)) {
+      throw const FormatException(
+        'PermissionSummary field notificationsGranted has an invalid wire value',
+      );
     }
-    if (json.containsKey('granularity') && json['granularity'] != null && (json['granularity'] is! String)) {
-      throw const FormatException('PermissionSummary field granularity has an invalid wire value');
+    if (json.containsKey('granularity') &&
+        json['granularity'] != null &&
+        (json['granularity'] is! String)) {
+      throw const FormatException(
+        'PermissionSummary field granularity has an invalid wire value',
+      );
     }
     return PermissionSummary(
       locationGranted: json['locationGranted'] == true,
@@ -130,7 +171,9 @@ class PermissionSummary {
       photosGranted: json['photosGranted'] == true,
       cameraGranted: json['cameraGranted'] == true,
       notificationsGranted: json['notificationsGranted'] == true,
-      granularity: parseContextGranularityStrict((json['granularity'] as String?)?.trim() ?? "coarse"),
+      granularity: parseContextGranularityStrict(
+        (json['granularity'] as String?)?.trim() ?? "coarse",
+      ),
     );
   }
 }
@@ -168,16 +211,16 @@ class SystemLocationContext {
   final LocationGranularity granularity;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'countryCode': countryCode,
-        'countryName': countryName,
-        'adminAreaLevel1': adminAreaLevel1,
-        'adminAreaLevel2': adminAreaLevel2,
-        'adminAreaLevel3': adminAreaLevel3,
-        'adminAreaLevel4': adminAreaLevel4,
-        'formattedAddress': formattedAddress,
-        'timezone': timezone,
-        'granularity': granularity.wireName,
-      };
+    'countryCode': countryCode,
+    'countryName': countryName,
+    'adminAreaLevel1': adminAreaLevel1,
+    'adminAreaLevel2': adminAreaLevel2,
+    'adminAreaLevel3': adminAreaLevel3,
+    'adminAreaLevel4': adminAreaLevel4,
+    'formattedAddress': formattedAddress,
+    'timezone': timezone,
+    'granularity': granularity.wireName,
+  };
 
   factory SystemLocationContext.fromJson(Map<String, dynamic> json) {
     const allowedFields = <String>{
@@ -195,34 +238,72 @@ class SystemLocationContext {
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('SystemLocationContext response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'SystemLocationContext response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (json.containsKey('countryCode') && json['countryCode'] != null && (json['countryCode'] is! String)) {
-      throw const FormatException('SystemLocationContext field countryCode has an invalid wire value');
+    if (json.containsKey('countryCode') &&
+        json['countryCode'] != null &&
+        (json['countryCode'] is! String)) {
+      throw const FormatException(
+        'SystemLocationContext field countryCode has an invalid wire value',
+      );
     }
-    if (json.containsKey('countryName') && json['countryName'] != null && (json['countryName'] is! String)) {
-      throw const FormatException('SystemLocationContext field countryName has an invalid wire value');
+    if (json.containsKey('countryName') &&
+        json['countryName'] != null &&
+        (json['countryName'] is! String)) {
+      throw const FormatException(
+        'SystemLocationContext field countryName has an invalid wire value',
+      );
     }
-    if (json.containsKey('adminAreaLevel1') && json['adminAreaLevel1'] != null && (json['adminAreaLevel1'] is! String)) {
-      throw const FormatException('SystemLocationContext field adminAreaLevel1 has an invalid wire value');
+    if (json.containsKey('adminAreaLevel1') &&
+        json['adminAreaLevel1'] != null &&
+        (json['adminAreaLevel1'] is! String)) {
+      throw const FormatException(
+        'SystemLocationContext field adminAreaLevel1 has an invalid wire value',
+      );
     }
-    if (json.containsKey('adminAreaLevel2') && json['adminAreaLevel2'] != null && (json['adminAreaLevel2'] is! String)) {
-      throw const FormatException('SystemLocationContext field adminAreaLevel2 has an invalid wire value');
+    if (json.containsKey('adminAreaLevel2') &&
+        json['adminAreaLevel2'] != null &&
+        (json['adminAreaLevel2'] is! String)) {
+      throw const FormatException(
+        'SystemLocationContext field adminAreaLevel2 has an invalid wire value',
+      );
     }
-    if (json.containsKey('adminAreaLevel3') && json['adminAreaLevel3'] != null && (json['adminAreaLevel3'] is! String)) {
-      throw const FormatException('SystemLocationContext field adminAreaLevel3 has an invalid wire value');
+    if (json.containsKey('adminAreaLevel3') &&
+        json['adminAreaLevel3'] != null &&
+        (json['adminAreaLevel3'] is! String)) {
+      throw const FormatException(
+        'SystemLocationContext field adminAreaLevel3 has an invalid wire value',
+      );
     }
-    if (json.containsKey('adminAreaLevel4') && json['adminAreaLevel4'] != null && (json['adminAreaLevel4'] is! String)) {
-      throw const FormatException('SystemLocationContext field adminAreaLevel4 has an invalid wire value');
+    if (json.containsKey('adminAreaLevel4') &&
+        json['adminAreaLevel4'] != null &&
+        (json['adminAreaLevel4'] is! String)) {
+      throw const FormatException(
+        'SystemLocationContext field adminAreaLevel4 has an invalid wire value',
+      );
     }
-    if (json.containsKey('formattedAddress') && json['formattedAddress'] != null && (json['formattedAddress'] is! String)) {
-      throw const FormatException('SystemLocationContext field formattedAddress has an invalid wire value');
+    if (json.containsKey('formattedAddress') &&
+        json['formattedAddress'] != null &&
+        (json['formattedAddress'] is! String)) {
+      throw const FormatException(
+        'SystemLocationContext field formattedAddress has an invalid wire value',
+      );
     }
-    if (json.containsKey('timezone') && json['timezone'] != null && (json['timezone'] is! String)) {
-      throw const FormatException('SystemLocationContext field timezone has an invalid wire value');
+    if (json.containsKey('timezone') &&
+        json['timezone'] != null &&
+        (json['timezone'] is! String)) {
+      throw const FormatException(
+        'SystemLocationContext field timezone has an invalid wire value',
+      );
     }
-    if (json.containsKey('granularity') && json['granularity'] != null && (json['granularity'] is! String)) {
-      throw const FormatException('SystemLocationContext field granularity has an invalid wire value');
+    if (json.containsKey('granularity') &&
+        json['granularity'] != null &&
+        (json['granularity'] is! String)) {
+      throw const FormatException(
+        'SystemLocationContext field granularity has an invalid wire value',
+      );
     }
     return SystemLocationContext(
       countryCode: (json['countryCode'] as String?)?.trim() ?? "",
@@ -233,7 +314,9 @@ class SystemLocationContext {
       adminAreaLevel4: (json['adminAreaLevel4'] as String?)?.trim() ?? "",
       formattedAddress: (json['formattedAddress'] as String?)?.trim() ?? "",
       timezone: (json['timezone'] as String?)?.trim() ?? "",
-      granularity: parseLocationGranularityStrict((json['granularity'] as String?)?.trim() ?? "city"),
+      granularity: parseLocationGranularityStrict(
+        (json['granularity'] as String?)?.trim() ?? "city",
+      ),
     );
   }
 }
@@ -264,11 +347,11 @@ class SystemTimeContext {
   final ContextGranularity granularity;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'referenceNowIso': referenceNowIso,
-        'timezone': timezone,
-        'locale': locale,
-        'granularity': granularity.wireName,
-      };
+    'referenceNowIso': referenceNowIso,
+    'timezone': timezone,
+    'locale': locale,
+    'granularity': granularity.wireName,
+  };
 
   factory SystemTimeContext.fromJson(Map<String, dynamic> json) {
     const allowedFields = <String>{
@@ -281,25 +364,45 @@ class SystemTimeContext {
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('SystemTimeContext response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'SystemTimeContext response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (json.containsKey('referenceNowIso') && json['referenceNowIso'] != null && (json['referenceNowIso'] is! String)) {
-      throw const FormatException('SystemTimeContext field referenceNowIso has an invalid wire value');
+    if (json.containsKey('referenceNowIso') &&
+        json['referenceNowIso'] != null &&
+        (json['referenceNowIso'] is! String)) {
+      throw const FormatException(
+        'SystemTimeContext field referenceNowIso has an invalid wire value',
+      );
     }
-    if (json.containsKey('timezone') && json['timezone'] != null && (json['timezone'] is! String)) {
-      throw const FormatException('SystemTimeContext field timezone has an invalid wire value');
+    if (json.containsKey('timezone') &&
+        json['timezone'] != null &&
+        (json['timezone'] is! String)) {
+      throw const FormatException(
+        'SystemTimeContext field timezone has an invalid wire value',
+      );
     }
-    if (json.containsKey('locale') && json['locale'] != null && (json['locale'] is! String)) {
-      throw const FormatException('SystemTimeContext field locale has an invalid wire value');
+    if (json.containsKey('locale') &&
+        json['locale'] != null &&
+        (json['locale'] is! String)) {
+      throw const FormatException(
+        'SystemTimeContext field locale has an invalid wire value',
+      );
     }
-    if (json.containsKey('granularity') && json['granularity'] != null && (json['granularity'] is! String)) {
-      throw const FormatException('SystemTimeContext field granularity has an invalid wire value');
+    if (json.containsKey('granularity') &&
+        json['granularity'] != null &&
+        (json['granularity'] is! String)) {
+      throw const FormatException(
+        'SystemTimeContext field granularity has an invalid wire value',
+      );
     }
     return SystemTimeContext(
       referenceNowIso: (json['referenceNowIso'] as String?)?.trim() ?? "",
       timezone: (json['timezone'] as String?)?.trim() ?? "",
       locale: (json['locale'] as String?)?.trim() ?? "",
-      granularity: parseContextGranularityStrict((json['granularity'] as String?)?.trim() ?? "coarse"),
+      granularity: parseContextGranularityStrict(
+        (json['granularity'] as String?)?.trim() ?? "coarse",
+      ),
     );
   }
 }
@@ -327,12 +430,12 @@ class SystemContextEnvelope {
   final SystemLocationContext location;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'contractId': contractId,
-        'time': time.toJson(),
-        'device': device.toJson(),
-        'permissions': permissions.toJson(),
-        'location': location.toJson(),
-      };
+    'contractId': contractId,
+    'time': time.toJson(),
+    'device': device.toJson(),
+    'permissions': permissions.toJson(),
+    'location': location.toJson(),
+  };
 
   factory SystemContextEnvelope.fromJson(Map<String, dynamic> json) {
     const allowedFields = <String>{
@@ -346,32 +449,70 @@ class SystemContextEnvelope {
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('SystemContextEnvelope response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'SystemContextEnvelope response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (json.containsKey('contractId') && json['contractId'] != null && (json['contractId'] is! String)) {
-      throw const FormatException('SystemContextEnvelope field contractId has an invalid wire value');
+    if (json.containsKey('contractId') &&
+        json['contractId'] != null &&
+        (json['contractId'] is! String)) {
+      throw const FormatException(
+        'SystemContextEnvelope field contractId has an invalid wire value',
+      );
     }
-    if (json.containsKey('time') && json['time'] != null && (json['time'] is! Map)) {
-      throw const FormatException('SystemContextEnvelope field time has an invalid wire value');
+    if (json.containsKey('time') &&
+        json['time'] != null &&
+        (json['time'] is! Map)) {
+      throw const FormatException(
+        'SystemContextEnvelope field time has an invalid wire value',
+      );
     }
-    if (json.containsKey('device') && json['device'] != null && (json['device'] is! Map)) {
-      throw const FormatException('SystemContextEnvelope field device has an invalid wire value');
+    if (json.containsKey('device') &&
+        json['device'] != null &&
+        (json['device'] is! Map)) {
+      throw const FormatException(
+        'SystemContextEnvelope field device has an invalid wire value',
+      );
     }
-    if (json.containsKey('permissions') && json['permissions'] != null && (json['permissions'] is! Map)) {
-      throw const FormatException('SystemContextEnvelope field permissions has an invalid wire value');
+    if (json.containsKey('permissions') &&
+        json['permissions'] != null &&
+        (json['permissions'] is! Map)) {
+      throw const FormatException(
+        'SystemContextEnvelope field permissions has an invalid wire value',
+      );
     }
-    if (json.containsKey('location') && json['location'] != null && (json['location'] is! Map)) {
-      throw const FormatException('SystemContextEnvelope field location has an invalid wire value');
+    if (json.containsKey('location') &&
+        json['location'] != null &&
+        (json['location'] is! Map)) {
+      throw const FormatException(
+        'SystemContextEnvelope field location has an invalid wire value',
+      );
     }
     return SystemContextEnvelope(
-      contractId: (json['contractId'] as String?)?.trim() ?? "system_context_envelope",
-      time: json['time'] is Map ? SystemTimeContext.fromJson((json['time'] as Map).cast<String, dynamic>()) : const SystemTimeContext(),
-      device: json['device'] is Map ? DeviceSummary.fromJson((json['device'] as Map).cast<String, dynamic>()) : const DeviceSummary(),
-      permissions: json['permissions'] is Map ? PermissionSummary.fromJson((json['permissions'] as Map).cast<String, dynamic>()) : const PermissionSummary(),
-      location: json['location'] is Map ? SystemLocationContext.fromJson((json['location'] as Map).cast<String, dynamic>()) : const SystemLocationContext(),
+      contractId:
+          (json['contractId'] as String?)?.trim() ?? "system_context_envelope",
+      time: json['time'] is Map
+          ? SystemTimeContext.fromJson(
+              (json['time'] as Map).cast<String, dynamic>(),
+            )
+          : const SystemTimeContext(),
+      device: json['device'] is Map
+          ? DeviceSummary.fromJson(
+              (json['device'] as Map).cast<String, dynamic>(),
+            )
+          : const DeviceSummary(),
+      permissions: json['permissions'] is Map
+          ? PermissionSummary.fromJson(
+              (json['permissions'] as Map).cast<String, dynamic>(),
+            )
+          : const PermissionSummary(),
+      location: json['location'] is Map
+          ? SystemLocationContext.fromJson(
+              (json['location'] as Map).cast<String, dynamic>(),
+            )
+          : const SystemLocationContext(),
     );
   }
-
 }
 
 class SystemContextEnvelopeFields {

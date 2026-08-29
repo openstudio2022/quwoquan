@@ -78,11 +78,12 @@ func TestDeliveryPortPersistsImmutableBoundedPageInRealRedis(t *testing.T) {
 		Items: []deliverymodel.PostReference{
 			{PostID: "post-delivered", RecallPath: "candidate_index"},
 		},
-		ReleaseID:      "release-canonical",
-		ManifestDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-		PolicyDigest:   "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-		CreatedAt:      createdAt,
-		ExpiresAt:      createdAt.Add(deliverymodel.TTL),
+		ReleaseID:        "release-canonical",
+		ManifestDigest:   "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		PolicyDigest:     "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+		ExperimentBucket: "rule",
+		CreatedAt:        createdAt,
+		ExpiresAt:        createdAt.Add(deliverymodel.TTL),
 	}
 	first, err := port.Append(context.Background(), page)
 	if err != nil || first.DeliveryPageID != pageID {

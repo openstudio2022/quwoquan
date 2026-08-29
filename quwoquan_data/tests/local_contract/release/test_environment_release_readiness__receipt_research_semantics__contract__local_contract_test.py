@@ -17,6 +17,7 @@ from core.schema import assert_valid
 from quwoquan_data.tests.local_contract.release.test_environment_release_readiness__receipt_environment_scope__contract__local_contract_test import (
     ENTITY_REF,
     ENVIRONMENT,
+    NORMALIZED_ENTITY_REF,
     POSTS,
     RELEASE_ID,
     VERIFY_RUN_ID,
@@ -51,10 +52,15 @@ def test_environment_release_readiness__research_projects_internal_uat_without_g
             "releaseId": RELEASE_ID,
             "manifestDigest": payload_digest(paths["release"]),
             "subjectHash": subject_hash,
-            "entityRefs": [ENTITY_REF],
+            "entityRefs": [NORMALIZED_ENTITY_REF],
             "postIds": sorted(row[1] for row in POSTS),
             "mediaAssetIds": sorted(
-                row["assetId"] for row in media_manifest["assets"]
+                row["assetId"]
+                for row in media_manifest["assets"]
+                if any(
+                    str(owner_ref).startswith("posts/")
+                    for owner_ref in row["ownerRefs"]
+                )
             ),
         },
     }

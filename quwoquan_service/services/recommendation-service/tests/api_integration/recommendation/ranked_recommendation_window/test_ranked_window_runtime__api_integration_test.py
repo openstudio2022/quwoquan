@@ -223,6 +223,7 @@ def test_ranked_window_create_and_continue_over_real_redis_and_mongo(
     assert created.status_code == 200
     payload = created.json()
     window_id = payload["windowId"]
+    assert payload["experimentBucket"] == "rule"
     assert payload["modelBucket"] == "rule"
     assert payload["modelChannel"] is None
     assert payload["modelReleaseId"] is None

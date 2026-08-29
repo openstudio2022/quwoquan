@@ -139,6 +139,7 @@ def _pool_source_attribution() -> dict[str, object]:
         "propertyReleaseStatus": "not_required",
         "collectedAt": "2026-08-07T00:00:00Z",
         "takedownPolicy": "remove_on_verified_rights_or_source_dispute",
+        "derivedModifications": [],
     }
 
 

@@ -27,10 +27,58 @@ final class RemoteGatheringPlanFacet implements GatheringPlanBoardSliceSource {
 
   @override
   Future<GatheringBoardPlanSlice> readPlan(String gatheringId) async {
+    return (await readPlanResult(gatheringId)).board;
+  }
+
+  Future<GatheringPlanRemoteReadResult> readPlanResult(
+    String gatheringId,
+  ) async {
     final wire = await client.circleGatheringPlanGetGatheringPlan(
       cloud.GatheringPlanByGatheringQuery(gatheringId: gatheringId),
       context: invocationContext(CircleRequestPageIds.getGatheringPlan),
     );
-    return gatheringBoardPlanFromWire(wire);
+    return GatheringPlanRemoteReadResult(
+      planId: wire.id,
+      gatheringId: wire.gatheringId,
+      planVersion: wire.version,
+      currentRevisionId: wire.currentRevisionId,
+      currentRevisionNumber: wire.currentRevisionNumber,
+      currentRevisionDigest: wire.currentRevisionDigest,
+      board: gatheringBoardPlanFromWire(wire),
+    );
+  }
+
+  /// 按 canonical keyset cursor 读取 immutable revision history。
+  Future<GatheringPlanRevisionPageRemoteReadResult> listPlanRevisions(
+    String planId, {
+    String? cursor,
+    int? limit,
+  }) async {
+    final wire = await client.circleGatheringPlanListGatheringPlanRevisions(
+      cloud.GatheringPlanRevisionPageQuery(
+        planId: planId,
+        cursor: cursor,
+        limit: limit,
+      ),
+      context: invocationContext(
+        CircleRequestPageIds.listGatheringPlanRevisions,
+      ),
+    );
+    return GatheringPlanRevisionPageRemoteReadResult(
+      items: wire.items
+          .map(
+            (revision) => GatheringPlanRevisionRemoteReadResult(
+              revisionId: revision.revisionId,
+              revisionNumber: revision.revisionNumber,
+              revisionDigest: revision.revisionDigest,
+              committedByPersonaId: revision.committedByPersonaId,
+              committedAt: revision.committedAt,
+              board: gatheringBoardPlanRevisionFromWire(revision),
+            ),
+          )
+          .toList(growable: false),
+      nextCursor: wire.nextCursor,
+      hasMore: wire.hasMore,
+    );
   }
 }

@@ -377,6 +377,183 @@ void main() {
       expect(find.bySemanticsLabel('当前设备暂不支持支付宝登录'), findsOneWidget);
     });
 
+    testWidgets('主线步骤标题共享同一顶部基线', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(393, 852));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final cases = <(LoginFlowState, String)>[
+        (
+          LoginFlowState(
+            step: LoginStep.oneTap,
+            flowId: 'baseline-onetap',
+            entryMode: LoginEntryMode.carrier,
+            maskedPhone: '180****9016',
+          ),
+          '欢迎回来',
+        ),
+        (LoginFlowState(step: LoginStep.phoneEntry, flowId: 'baseline-phone'), '手机号登录'),
+        (_otpGoldenState(flowId: 'baseline-otp'), '输入验证码'),
+      ];
+      final titleTops = <double>[];
+      for (final (state, title) in cases) {
+        await _pumpFrame(tester, state: state, setSurfaceSize: false);
+        titleTops.add(tester.getTopLeft(find.text(title)).dy);
+      }
+      expect(titleTops.toSet(), hasLength(1));
+    });
+
+    testWidgets('OTP 反馈出现、输入与切换均不移动输入格及其上方内容', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(393, 852));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final sentSubtitle = FoundationText.loginOtpSentTo.replaceFirst(
+        '%s',
+        '180****9016',
+      );
+      await _pumpFrame(
+        tester,
+        state: _otpGoldenState(
+          flowId: 'stable-none',
+          deliveryState: OtpDeliveryState.sent,
+        ),
+        setSurfaceSize: false,
+      );
+      final titleBefore = tester.getTopLeft(find.text('输入验证码'));
+      final subtitleBefore = tester.getTopLeft(find.text(sentSubtitle));
+      final boxBefore = tester.getTopLeft(
+        find.byKey(const ValueKey<String>('loginOtpBox0')),
+      );
+
+      await _pumpFrame(
+        tester,
+        state: _otpGoldenState(
+          flowId: 'stable-error',
+          deliveryState: OtpDeliveryState.sent,
+          feedback: _feedback('验证码不正确，请重新输入', 'loginOtpMismatch'),
+        ),
+        setSurfaceSize: false,
+      );
+      expect(find.text('验证码不正确，请重新输入'), findsOneWidget);
+      expect(tester.getTopLeft(find.text('输入验证码')), titleBefore);
+      expect(tester.getTopLeft(find.text(sentSubtitle)), subtitleBefore);
+      expect(
+        tester.getTopLeft(find.byKey(const ValueKey<String>('loginOtpBox0'))),
+        boxBefore,
+      );
+
+      await _pumpFrame(
+        tester,
+        state: _otpGoldenState(
+          flowId: 'stable-typing',
+          deliveryState: OtpDeliveryState.sent,
+          code: '28',
+        ),
+        setSurfaceSize: false,
+      );
+      expect(find.text(sentSubtitle), findsOneWidget);
+      expect(tester.getTopLeft(find.text(sentSubtitle)), subtitleBefore);
+      expect(
+        tester.getTopLeft(find.byKey(const ValueKey<String>('loginOtpBox0'))),
+        boxBefore,
+      );
+    });
+
+    testWidgets('手机号步反馈出现不移动输入框、主按钮与协议行', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(393, 852));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await _pumpFrame(
+        tester,
+        state: LoginFlowState(
+          step: LoginStep.phoneEntry,
+          flowId: 'stable-phone',
+          otpReadinessState: OtpReadinessState.ready,
+          phone: '18013819016',
+        ),
+        setSurfaceSize: false,
+      );
+      final fieldBefore = tester.getTopLeft(find.byType(LoginPhoneField));
+      final primaryBefore = tester.getTopLeft(
+        find.byKey(const ValueKey<String>('loginPhonePrimary')),
+      );
+      final agreementBefore = tester.getTopLeft(find.byType(LoginAgreementRow));
+
+      await _pumpFrame(
+        tester,
+        state: LoginFlowState(
+          step: LoginStep.phoneEntry,
+          flowId: 'stable-phone-limited',
+          otpReadinessState: OtpReadinessState.ready,
+          phone: '18013819016',
+          otpChallengeState: OtpChallengeState.rateLimited,
+          resendDeadline: DateTime.now().add(const Duration(seconds: 42)),
+        ),
+        setSurfaceSize: false,
+      );
+      expect(find.textContaining('验证码获取太频繁'), findsOneWidget);
+      expect(tester.getTopLeft(find.byType(LoginPhoneField)), fieldBefore);
+      expect(
+        tester.getTopLeft(
+          find.byKey(const ValueKey<String>('loginPhonePrimary')),
+        ),
+        primaryBefore,
+      );
+      expect(
+        tester.getTopLeft(find.byType(LoginAgreementRow)),
+        agreementBefore,
+      );
+    });
+
+    testWidgets('blocked 终态显示关闭图标，其余步骤统一返回箭头', (tester) async {
+      final arrowSteps = <LoginFlowState>[
+        LoginFlowState(
+          step: LoginStep.oneTap,
+          flowId: 'nav-onetap',
+          entryMode: LoginEntryMode.carrier,
+          maskedPhone: '180****9016',
+        ),
+        LoginFlowState(step: LoginStep.phoneEntry, flowId: 'nav-phone'),
+        _otpGoldenState(flowId: 'nav-otp'),
+        LoginFlowState(
+          step: LoginStep.socialFailed,
+          flowId: 'nav-social-failed',
+          provider: 'wechat',
+          feedback: _feedback('授权未完成', 'loginSocialAuthorizationFailed'),
+        ),
+      ];
+      for (final state in arrowSteps) {
+        await _pumpFrame(tester, state: state);
+        expect(
+          find.byIcon(CupertinoIcons.back),
+          findsOneWidget,
+          reason: state.step.name,
+        );
+        expect(
+          find.byIcon(CupertinoIcons.xmark),
+          findsNothing,
+          reason: state.step.name,
+        );
+      }
+
+      await _pumpFrame(
+        tester,
+        state: LoginFlowState(
+          step: LoginStep.blocked,
+          flowId: 'nav-blocked',
+          feedback: _feedback('登录服务暂不可用，请使用其他方式登录', 'loginUnavailable'),
+        ),
+      );
+      expect(find.byIcon(CupertinoIcons.xmark), findsOneWidget);
+      expect(find.byIcon(CupertinoIcons.back), findsNothing);
+    });
+
+    testWidgets('顶栏导航图标视觉左缘与正文左边距对齐', (tester) async {
+      await _pumpFrame(
+        tester,
+        state: LoginFlowState(step: LoginStep.phoneEntry, flowId: 'nav-align'),
+      );
+      final iconLeft = tester.getTopLeft(find.byIcon(CupertinoIcons.back)).dx;
+      final fieldLeft = tester.getTopLeft(find.byType(LoginPhoneField)).dx;
+      expect(iconLeft, fieldLeft);
+    });
+
     testWidgets('320px、200% 字体、键盘与 reduced motion 均保留操作出口', (tester) async {
       await tester.binding.setSurfaceSize(const Size(320, 568));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -508,7 +685,12 @@ void main() {
       expect(auth.sendOtpCalls, 2);
       expect(auth.idempotencyKeys, hasLength(2));
       expect(auth.idempotencyKeys.toSet(), hasLength(1));
-      expect(find.text(FoundationText.loginOtpDeliverySent), findsOneWidget);
+      expect(
+        find.text(
+          FoundationText.loginOtpSentTo.replaceFirst('%s', '180****9016'),
+        ),
+        findsOneWidget,
+      );
     });
 
     testWidgets('排队状态持续同 key 确认并在 15 秒后停止自动轮询', (tester) async {
@@ -768,6 +950,8 @@ void main() {
             ?.text,
         '123456',
       );
+      // 恢复动作组包在 AnimatedSize 内，先让尺寸动画完成再点击。
+      await tester.pump(const Duration(milliseconds: 200));
       await tester.tap(
         find.byKey(const ValueKey<String>('loginOtpRecovery-retryVerify')),
       );
@@ -1033,7 +1217,6 @@ Future<void> _pumpFrame(
         key: boundaryKey,
         child: LoginFrame(
           state: state,
-          phoneEntryHasParent: false,
           socialMethodAvailability: availability,
           phoneController: phoneController,
           otpController: otpController,

@@ -276,6 +276,40 @@ class PackageReuseContractTest(unittest.TestCase):
         )
         package_reuse.verify_package_input_capsule(capsule_root)
 
+    def test_capsule_captures_untracked_cross_service_config_defaults(self) -> None:
+        global_defaults = self.root / "quwoquan_ops/environments/config-defaults.yaml"
+        environment_defaults = (
+            self.root / "quwoquan_ops/environments/alpha/config-defaults.yaml"
+        )
+        global_defaults.parent.mkdir(parents=True, exist_ok=True)
+        environment_defaults.parent.mkdir(parents=True, exist_ok=True)
+        global_defaults.write_text(
+            "defaults:\n  redis.*.mode: standalone\n",
+            encoding="utf-8",
+        )
+        environment_defaults.write_text(
+            "defaults:\n  redis.rec.mode: cluster\n",
+            encoding="utf-8",
+        )
+
+        capsule_root = self.root / "deployment/defaults-input-capsule"
+        manifest = package_reuse.materialize_package_input_capsule(
+            package_reuse.deployment_input_roots(
+                "alpha", "alpha-local", ["content-service", "user-service"]
+            ),
+            capsule_root=capsule_root,
+        )
+
+        logical_paths = {entry["logicalPath"] for entry in manifest["entries"]}
+        for source in (global_defaults, environment_defaults):
+            relative = source.relative_to(self.root)
+            self.assertIn(str(relative), logical_paths)
+            self.assertEqual(
+                (capsule_root / "repo" / relative).read_bytes(),
+                source.read_bytes(),
+            )
+        package_reuse.verify_package_input_capsule(capsule_root)
+
     def test_self_verify_ignores_current_source_but_rejects_package_drift(self) -> None:
         self._write()
         ok, detail = package_reuse.can_reuse_package("alpha", "alpha-local")
@@ -329,8 +363,25 @@ class PackageReuseContractTest(unittest.TestCase):
             ["content-service", "user-service"],
         )
 
+        self.assertIn("quwoquan_app", roots)
         self.assertIn("quwoquan_app/configs/alpha/app_runtime.yaml", roots)
+        for launch_root in (
+            "quwoquan_ops/cli",
+            "quwoquan_ops/ci",
+            "quwoquan_ops/environments",
+            "quwoquan_ops/external",
+            "quwoquan_ops/gate",
+            "quwoquan_ops/migrations",
+            "quwoquan_ops/observability",
+            "quwoquan_ops/policies",
+        ):
+            self.assertIn(launch_root, roots)
         self.assertIn("quwoquan_ops/cli/print_local_port_profile.py", roots)
+        self.assertIn("quwoquan_ops/environments/config-defaults.yaml", roots)
+        self.assertIn(
+            "quwoquan_ops/environments/alpha/config-defaults.yaml",
+            roots,
+        )
         self.assertIn("quwoquan_service", roots)
         self.assertIn("quwoquan_service/generated/contract_graph.json", roots)
         self.assertIn("quwoquan_service/contracts/metadata", roots)

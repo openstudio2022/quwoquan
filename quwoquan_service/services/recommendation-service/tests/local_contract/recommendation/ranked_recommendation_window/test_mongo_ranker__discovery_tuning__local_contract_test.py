@@ -315,7 +315,9 @@ def test_model_bucket_scoring_failure_degrades_to_rule_and_is_observable() -> No
         )
     )
 
-    # The window records the scorer that actually produced the ranking.
+    # Assignment attribution stays intent-to-treat even when the actual scorer
+    # degrades to the rule track.
+    assert result.experiment_bucket == "model"
     assert result.model_bucket == "rule"
     assert result.model_release_id is None
     assert result.model_channel is None
@@ -334,6 +336,7 @@ def test_model_bucket_without_active_release_degrades_to_rule() -> None:
             tuning=DiscoveryRankingTuning.neutral(),
         )
     )
+    assert result.experiment_bucket == "model"
     assert result.model_bucket == "rule"
     assert result.model_release_id is None
     assert len(result.candidates) == 1

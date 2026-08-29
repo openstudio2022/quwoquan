@@ -16,6 +16,7 @@ import (
 	"time"
 
 	rtmongo "quwoquan_service/internal/platform/mongodb"
+	"quwoquan_service/runtime/servicekit"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/runtimeconfig"
 	packageapplication "quwoquan_service/services/assistant-service/internal/assistant/skill_package_release/application"
 	packagemodel "quwoquan_service/services/assistant-service/internal/assistant/skill_package_release/domain/model"
@@ -98,17 +99,9 @@ func parseOptions(
 func run(parent context.Context, options options, output io.Writer) error {
 	ctx, cancel := context.WithTimeout(parent, options.Timeout)
 	defer cancel()
-	cfg, err := runtimeconfig.LoadRuntimeConfig(
-		"assistant-service",
-		options.Environment,
-		options.ConfigRoot,
-		options.ConfigVersion,
-	)
+	cfg, err := loadAssistantRuntimeConfig(options)
 	if err != nil {
-		return fmt.Errorf("load assistant runtime config: %w", err)
-	}
-	if err := runtimeconfig.ApplyEnvOverrides(&cfg); err != nil {
-		return fmt.Errorf("apply assistant runtime overrides: %w", err)
+		return err
 	}
 	publication, err := packageartifact.LoadPublicationArtifact(
 		options.AssetRoot,
@@ -190,4 +183,25 @@ func run(parent context.Context, options options, output io.Writer) error {
 		ActivationReplayed:    activated.Replayed,
 		PublicationCommand:    publication.CommandID,
 	})
+}
+
+// loadAssistantRuntimeConfig 与服务进程读同一份渲染快照、同一套 env 覆盖
+// 规则（servicekit），避免发布工具形成第二套配置解释。
+func loadAssistantRuntimeConfig(opts options) (runtimeconfig.Config, error) {
+	identity := servicekit.Identity{
+		ServiceName:   "assistant-service",
+		AppEnv:        opts.Environment,
+		ConfigRoot:    opts.ConfigRoot,
+		ConfigVersion: opts.ConfigVersion,
+	}
+	cfg := runtimeconfig.Config{}
+	if err := servicekit.LoadYAMLConfig(identity, &cfg); err != nil {
+		return runtimeconfig.Config{}, fmt.Errorf("load assistant runtime config: %w", err)
+	}
+	if err := servicekit.ApplyEnvOverrides(
+		servicekit.DefaultEnvPrefix("assistant-service"), &cfg,
+	); err != nil {
+		return runtimeconfig.Config{}, fmt.Errorf("apply assistant runtime overrides: %w", err)
+	}
+	return cfg, nil
 }

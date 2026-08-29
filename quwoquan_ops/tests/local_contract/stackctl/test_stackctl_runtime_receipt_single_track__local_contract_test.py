@@ -76,7 +76,7 @@ def _canonical_running_attempt(
         "target": target,
         "status": "running",
         "workload": workload,
-        "composeProject": f"quwoquan_{target.removesuffix('-local')}_release_test",
+        "composeProject": f"quwoquan_{target.removesuffix('-local')}_release",
         "candidateDigest": "sha256:" + "3" * 64,
         "configurationDigest": "sha256:" + "1" * 64,
         "providerRuntimeDigest": "sha256:" + "4" * 64,

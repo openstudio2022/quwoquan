@@ -22,22 +22,47 @@ if str(ROOT) not in sys.path:
 
 from quwoquan_ops.ci.device_matrix import android as android_device
 from quwoquan_ops.ci.device_matrix import evidence as device_evidence
+from quwoquan_ops.cli import stackctl
+from quwoquan_ops.cli.lib.content_release_readiness import VerificationProfile
+from quwoquan_ops.cli.lib.package_reuse import (
+    patrol_command_envelope as envelope_contract,
+)
 from quwoquan_ops.cli.smoke import run_environment_patrol_smoke as smoke
 
 # 入口拆为薄壳 + environment_patrol_smoke 子包后，mock.patch.object 必须打在
 # 被测函数实际读取全局名的实现模块上，而不是入口 re-export 的绑定上。
 from quwoquan_ops.cli.smoke.environment_patrol_smoke import (
     device_runtime as smoke_device_runtime,
-    handoff as smoke_handoff,
 )
-from quwoquan_ops.cli import stackctl
-from quwoquan_ops.cli.lib.content_release_readiness import VerificationProfile
 from quwoquan_ops.tests.support.environment_patrol_smoke_test_support import (
     EnvironmentPatrolSmokeCaseBase,
 )
 
 
 class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
+    def _sealed_flutter_environment(self) -> tuple[dict[str, str], dict[str, str]]:
+        identity = {
+            "executable": "/private/sdk/flutter/bin/flutter",
+            "flutterVersion": "3.47.0",
+            "commandResolutionDigest": "sha256:" + "f" * 64,
+        }
+        envelope = envelope_contract.patrol_command_envelope(
+            flutter_identity=identity,
+            path="/private/sdk/flutter/bin:/usr/bin:/bin",
+        )
+        with mock.patch.object(
+            envelope_contract,
+            "resolved_flutter_identity",
+            return_value=identity,
+        ):
+            environment = envelope_contract.rebuild_patrol_command_environment(
+                envelope=envelope,
+                ambient_environment={},
+                dependency_environment={},
+                command_environment={},
+            )
+        return environment, identity
+
     def test_device_command_env_configures_android_toolchain_without_private_ca(
         self,
     ) -> None:
@@ -73,6 +98,94 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
 
         self.assertEqual(env["QWQ_IOS_SIMULATOR_UDID"], "selected-ios-simulator")
         self.assertEqual(env["QWQ_LAUNCH_TARGET"], "gamma-local")
+
+    def test_sealed_flutter_identity_is_exact_for_android_and_ios_without_proxy(
+        self,
+    ) -> None:
+        sealed, identity = self._sealed_flutter_environment()
+        ambient = {
+            "JAVA_TOOL_OPTIONS": "-javaagent:/ambient/agent.jar",
+            "GRADLE_OPTS": "-Dambient=true",
+            "PUB_HOSTED_URL": "https://ambient-pub.invalid",
+            "FLUTTER_STORAGE_BASE_URL": "https://ambient-flutter.invalid",
+            "TEST_AUTH_TOKEN": "ambient-auth-token",
+            "QWQ_TEST_DATA_ACCESS_TOKEN": "ambient-actor-token",
+            **sealed,
+            **{
+                key: f"http://ambient-{key}.invalid"
+                for key in envelope_contract.PROXY_ENVIRONMENT_KEYS
+            },
+        }
+        devices = (
+            {
+                "id": "emulator-5554",
+                "targetPlatform": "android-arm64",
+                "emulator": True,
+            },
+            {
+                "id": "SIMULATOR-UDID",
+                "targetPlatform": "ios",
+                "emulator": True,
+            },
+        )
+        for device in devices:
+            with (
+                self.subTest(platform=device["targetPlatform"]),
+                mock.patch.dict(os.environ, ambient, clear=True),
+                mock.patch.object(
+                    envelope_contract,
+                    "resolved_flutter_identity",
+                    return_value=identity,
+                ),
+                mock.patch.object(
+                    smoke_device_runtime,
+                    "resolve_android_debug_bridge",
+                    return_value="/foreign/adb-parent/adb",
+                ),
+            ):
+                env = smoke._device_command_env(self._args(), device)
+            self.assertEqual(env["PATH"], sealed["PATH"])
+            self.assertEqual(
+                env[envelope_contract.PATROL_REAL_FLUTTER_ENV],
+                identity["executable"],
+            )
+            self.assertTrue(
+                all(key not in env for key in envelope_contract.PROXY_ENVIRONMENT_KEYS)
+            )
+            self.assertTrue(
+                all(
+                    key not in env
+                    for key in (
+                        "JAVA_TOOL_OPTIONS",
+                        "GRADLE_OPTS",
+                        "PUB_HOSTED_URL",
+                        "FLUTTER_STORAGE_BASE_URL",
+                    )
+                )
+            )
+            self.assertEqual(env["TEST_AUTH_TOKEN"], "")
+            self.assertEqual(env["QWQ_TEST_DATA_ACCESS_TOKEN"], "")
+
+    def test_sealed_flutter_actual_identity_drift_fails_closed(self) -> None:
+        sealed, identity = self._sealed_flutter_environment()
+        drifted = {**identity, "flutterVersion": "3.48.0"}
+        with (
+            mock.patch.dict(os.environ, sealed, clear=True),
+            mock.patch.object(
+                envelope_contract,
+                "resolved_flutter_identity",
+                return_value=drifted,
+            ),
+            self.assertRaisesRegex(RuntimeError, "sealed command environment drifted"),
+        ):
+            smoke._device_command_env(
+                self._args(),
+                {
+                    "id": "SIMULATOR-UDID",
+                    "targetPlatform": "ios",
+                    "emulator": True,
+                },
+            )
 
     def test_device_command_env_uses_canonical_alias_target_not_external_or_test_path(
         self,
@@ -119,8 +232,16 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
             stderr="",
         )
 
+        def run_builder(
+            command: list[str],
+            **_kwargs: object,
+        ) -> subprocess.CompletedProcess[str]:
+            trust_option = command.index("--runtime-config-trust-output")
+            Path(command[trust_option + 1]).write_text("{}", encoding="utf-8")
+            return completed
+
         with (
-            mock.patch.object(smoke.subprocess, "run", return_value=completed) as run,
+            mock.patch.object(smoke.subprocess, "run", side_effect=run_builder) as run,
         ):
             actual = smoke._canonical_test_live_launcher_handoff(
                 args,
@@ -130,6 +251,11 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
 
         self.assertEqual(actual, handoff)
         builder_command = run.call_args.args[0]
+        self.assertIn("--launch-provenance", builder_command)
+        self.assertEqual(
+            builder_command[builder_command.index("--launch-provenance") + 1],
+            "canonical_launcher",
+        )
         self.assertIn("--launch-policy", builder_command)
         self.assertEqual(
             builder_command[builder_command.index("--launch-policy") + 1],
@@ -208,6 +334,14 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
             handoff["effectiveLaunchManifestDigest"],
         )
         self.assertEqual(environment["QWQ_APP_BUILD_CONTEXT"], "runtime")
+        self.assertEqual(
+            environment["QWQ_APP_LAUNCH_PROVENANCE"],
+            "canonical_launcher",
+        )
+        self.assertEqual(
+            environment["QWQ_RUNTIME_CONFIG_SUPPLY_MODE"],
+            "external_runtime_package",
+        )
         self.assertEqual(environment["QWQ_APP_LAUNCH_POLICY"], "test_live")
         self.assertNotIn("QWQ_CONTENT_RELEASE_ID", environment)
         command_defines: dict[str, list[str]] = {}
@@ -224,6 +358,11 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
         self,
     ) -> None:
         args = self._args()
+        stale_field = self._launcher_handoff(args)
+        stale_field["launch" + "Mode"] = "canonical_launcher"
+        with self.assertRaisesRegex(ValueError, "generated contract"):
+            smoke._canonical_handoff_projection(stale_field)
+
         missing_value = self._launcher_handoff(args)
         del missing_value["runtimeConfigPackage"]["runtime"]["legalBaseUrl"]
         with self.assertRaisesRegex(ValueError, "runtime value is missing"):
@@ -262,7 +401,9 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
                 {"targetPlatform": "ios", "emulator": True},
             )
 
-    def test_android_debug_bridge_resolves_configured_sdk_when_adb_is_not_on_path(self) -> None:
+    def test_android_debug_bridge_resolves_configured_sdk_when_adb_is_not_on_path(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:
             sdk_root = Path(temporary_dir)
             adb = sdk_root / "platform-tools" / "adb"
@@ -292,7 +433,10 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
                     device_evidence.subprocess,
                     "run",
                     return_value=subprocess.CompletedProcess(
-                        ["/sdk/platform-tools/adb"], 0, stdout=b"png", stderr=b"",
+                        ["/sdk/platform-tools/adb"],
+                        0,
+                        stdout=b"png",
+                        stderr=b"",
                     ),
                 ),
             ):
@@ -339,7 +483,9 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
         }
         calls: list[list[str]] = []
 
-        def run_adb(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        def run_adb(
+            command: list[str], **_: object
+        ) -> subprocess.CompletedProcess[str]:
             calls.append(command)
             return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
@@ -376,9 +522,9 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
 
     def test_alpha_uses_the_shared_packaged_local_runtime_entrypoint(self) -> None:
         retired = ROOT / "quwoquan_ops/cli/alpha/start_alpha_mock_stack.sh"
-        stackctl_source = (
-            ROOT / "quwoquan_ops/cli/commands/up_runtime.py"
-        ).read_text(encoding="utf-8")
+        stackctl_source = (ROOT / "quwoquan_ops/cli/commands/up_runtime.py").read_text(
+            encoding="utf-8"
+        )
 
         self.assertFalse(retired.exists())
         self.assertIn(
@@ -399,16 +545,14 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
         beta_manual = (
             ROOT / "quwoquan_app/scripts/tools/device/beta_manual_app.sh"
         ).read_text(encoding="utf-8")
-        dev_up = (
-            ROOT / "quwoquan_ops/cli/lib/dev_up.py"
-        ).read_text(encoding="utf-8")
-        public_tls = (
-            ROOT / "quwoquan_ops/cli/lib/public_domain_tls.py"
-        ).read_text(encoding="utf-8")
+        dev_up = (ROOT / "quwoquan_ops/cli/lib/dev_up.py").read_text(encoding="utf-8")
+        public_tls = (ROOT / "quwoquan_ops/cli/lib/public_domain_tls.py").read_text(
+            encoding="utf-8"
+        )
 
-        self.assertIn("public_domain_tls.py\" verify", app_instance)
-        self.assertIn("--target \"$TARGET_NAME\"", app_instance)
-        self.assertIn("public_domain_tls.py\" paths", beta_manual)
+        self.assertIn('public_domain_tls.py" verify', app_instance)
+        self.assertIn('--target "$TARGET_NAME"', app_instance)
+        self.assertIn('public_domain_tls.py" paths', beta_manual)
         self.assertIn("--target beta-local", beta_manual)
         self.assertIn("fullchain.pem", public_tls)
         self.assertIn("privkey.pem", public_tls)
@@ -421,9 +565,9 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
         beta_manual = (
             ROOT / "quwoquan_app/scripts/tools/device/beta_manual_app.sh"
         ).read_text(encoding="utf-8")
-        beta_stack = (
-            ROOT / "quwoquan_ops/cli/beta/start_beta_stack.sh"
-        ).read_text(encoding="utf-8")
+        beta_stack = (ROOT / "quwoquan_ops/cli/beta/start_beta_stack.sh").read_text(
+            encoding="utf-8"
+        )
         beta_backing_compose = (
             ROOT / "quwoquan_ops/environments/compose/docker-compose.beta-backing.yaml"
         ).read_text(encoding="utf-8")
@@ -462,17 +606,17 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
         for token in (
             "docker-compose.beta-backing.yaml",
             "quwoquan-beta-backing",
-            'mongodb://127.0.0.1:${BETA_MONGO_PORT}/?directConnection=true',
-            '127.0.0.1:${BETA_REDIS_PORT}',
-            'ENTITY_REDIS_ADDR="127.0.0.1:${BETA_REDIS_PORT}"',
+            "mongodb://127.0.0.1:${BETA_MONGO_PORT}/?directConnection=true",
+            "127.0.0.1:${BETA_REDIS_PORT}",
+            'ENTITY_REDIS_GENERAL_ADDR="127.0.0.1:${BETA_REDIS_PORT}"',
             "export CONTENT_PORT",
             "export BETA_POSTGRES_PORT BETA_MONGO_PORT BETA_REDIS_PORT",
             "BETA_OBJECT_STORAGE_EDGE_PORT",
             "BETA_SERVICE_CONFIG_ROOT",
             "recommendation-service",
             "content-service",
-            'https://${PUBLIC_API_HOST}:${GATEWAY_PORT}',
-            'https://${PUBLIC_IMAGE_HOST}:${MEDIA_PORT}',
+            "https://${PUBLIC_API_HOST}:${GATEWAY_PORT}",
+            "https://${PUBLIC_IMAGE_HOST}:${MEDIA_PORT}",
             '-p "${GATEWAY_PORT}:${GATEWAY_PORT}"',
             '-p "${MEDIA_PORT}:${MEDIA_PORT}"',
             "ship apply is the only writer of this directory",
@@ -501,7 +645,7 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
         self.assertNotIn("content-service:", beta_backing_compose)
         self.assertIn("recommendation-service:", beta_service_compose)
         self.assertIn("content-service:", beta_service_compose)
-        self.assertIn("REPORT_DATABASE_URL", beta_service_compose)
+        self.assertIn("CONTENT_POSTGRES_REPORT_DSN", beta_service_compose)
         self.assertIn(
             'CONTENT_EMBEDDING_ENDPOINT: "${QWQ_COMPOSE_EMBEDDING_ENDPOINT:-}"',
             beta_service_compose,
@@ -564,11 +708,18 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
             "for service in content-service entity-service recommendation-service user-service",
             beta_manual,
         )
-        self.assertIn("@content_release path /content /content/* /config/app", beta_manual)
+        self.assertIn(
+            "@content_release path /content /content/* /config/app", beta_manual
+        )
         self.assertIn("@homepage_release path /homepages /homepages/*", beta_manual)
-        self.assertIn("@creator_profile_release path /auth /auth/* /user /user/* /users /users/*", beta_manual)
+        self.assertIn(
+            "@creator_profile_release path /auth /auth/* /user /user/* /users /users/*",
+            beta_manual,
+        )
 
-    def test_search_dependency_is_owned_by_each_environment_overlay_not_content_base(self) -> None:
+    def test_search_dependency_is_owned_by_each_environment_overlay_not_content_base(
+        self,
+    ) -> None:
         content_compose = (
             ROOT / "quwoquan_service/services/content-service/deploy/compose.yaml"
         ).read_text(encoding="utf-8")
@@ -609,9 +760,9 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
 
         for token in (
             'public_domain_tls.py" paths',
-            'https://${PUBLIC_API_HOST}:${API_EDGE_PORT}',
-            'https://${PUBLIC_PRODUCT_OPS_HOST}:${PRODUCT_OPS_PORT}',
-            'https://${PUBLIC_CDN_HOST}:${MEDIA_EDGE_PORT}',
+            "https://${PUBLIC_API_HOST}:${API_EDGE_PORT}",
+            "https://${PUBLIC_PRODUCT_OPS_HOST}:${PRODUCT_OPS_PORT}",
+            "https://${PUBLIC_CDN_HOST}:${MEDIA_EDGE_PORT}",
             "$QWQ_PUBLIC_TLS_CERT_FILE:/etc/caddy/tls/fullchain.pem:ro",
             '-p "${API_EDGE_PORT}:${API_EDGE_PORT}"',
             '-p "${PRODUCT_OPS_PORT}:${PRODUCT_OPS_PORT}"',
@@ -629,9 +780,9 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
         infrastructure_compose = (
             ROOT / "quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml"
         ).read_text(encoding="utf-8")
-        ports = (
-            ROOT / "quwoquan_ops/cli/print_local_port_profile.py"
-        ).read_text(encoding="utf-8")
+        ports = (ROOT / "quwoquan_ops/cli/print_local_port_profile.py").read_text(
+            encoding="utf-8"
+        )
 
         for token in (
             "https://{$QWQ_PUBLIC_API_HOST}:{$LOCAL_GAMMA_HTTP_PORT:",
@@ -715,9 +866,7 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
 
         search_patrol = commands[search_patrol_index]
         self.assertEqual(
-            search_patrol["argv"][
-                search_patrol["argv"].index("--target") + 1
-            ],
+            search_patrol["argv"][search_patrol["argv"].index("--target") + 1],
             (
                 "test/user_acceptance/journeys/cross_domain_search/"
                 "cross_domain_search_journey__user_acceptance_test.dart"

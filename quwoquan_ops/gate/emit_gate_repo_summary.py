@@ -23,6 +23,8 @@ import argparse
 import sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[2]
 ALLOWED_SCOPES = ("all", "service", "app", "portal", "data", "patrol")
 

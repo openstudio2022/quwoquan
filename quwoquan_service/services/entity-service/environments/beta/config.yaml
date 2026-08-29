@@ -1,7 +1,7 @@
-overrides:
-  sys.entity-service.redis.rec.addr: redis:6379
+# redis.general.addr 不在此声明：message transport 的物理组网只由环境装配注入
+# ENTITY_REDIS_GENERAL_ADDR。
+overrides: {}
 secretRefs:
   sys.entity-service.mongo.uri: ENTITY_MONGO_URI
-  sys.entity-service.redis.general.password: ENTITY_REDIS_PASSWORD
-  sys.entity-service.redis.rec.password: ENTITY_REDIS_PASSWORD
+  sys.entity-service.redis.general.password: ENTITY_REDIS_GENERAL_PASSWORD
 externalBindings:

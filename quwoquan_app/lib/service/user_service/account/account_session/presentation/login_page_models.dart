@@ -138,8 +138,13 @@ class LoginFeedback {
 
 /// The only user-facing projection for OTP delivery, verification and
 /// cooldown state. Widgets must not render those internal rails separately.
+///
+/// 布局契约（REQ-006）：`subtitle` 由页眉副标题承载，只反映发送事实，不随
+/// 输入或错误变化；`message` 只承载错误与「正在验证」，渲染在输入格下方的
+/// 固定占位状态区。两者分轨，保证反馈切换不移动输入格及其上方内容。
 class OtpPagePresentation {
   const OtpPagePresentation({
+    required this.subtitle,
     required this.message,
     required this.tone,
     required this.primaryAction,
@@ -151,11 +156,26 @@ class OtpPagePresentation {
 
   factory OtpPagePresentation.fromState(LoginFlowState state, DateTime now) {
     final remaining = state.remainingResendSeconds(now);
+    final subtitle = switch (state.otpDeliveryState) {
+      OtpDeliveryState.sent => FoundationText.loginOtpSentTo.replaceFirst(
+        '%s',
+        state.maskedPhone,
+      ),
+      OtpDeliveryState.queued => FoundationText.loginOtpDeliveryQueued,
+      OtpDeliveryState.confirming when state.deliveryConfirmationExhausted =>
+        FoundationText.loginOtpDeliveryUnknown,
+      OtpDeliveryState.confirming => FoundationText.loginOtpDeliveryConfirming,
+      OtpDeliveryState.none => FoundationText.loginOtpDeliveryUnknown,
+      // 发送失败的事实由下方状态区的错误承载，副标题保留目标手机号上下文，
+      // 与行内「更换手机号」动作衔接。
+      OtpDeliveryState.failed => state.maskedPhone,
+    };
     final verifying =
         state.operation == LoginOperation.verifyingOtp ||
         state.operation == LoginOperation.completingBinding;
     if (verifying) {
       return OtpPagePresentation(
+        subtitle: subtitle,
         message: FoundationText.loginOtpVerifying,
         tone: OtpPresentationTone.neutral,
         primaryAction: null,
@@ -192,6 +212,7 @@ class OtpPagePresentation {
           break;
       }
       return OtpPagePresentation(
+        subtitle: subtitle,
         message: feedback.message,
         tone: OtpPresentationTone.error,
         primaryAction: primary,
@@ -210,6 +231,7 @@ class OtpPagePresentation {
             )
           : FoundationText.loginOtpSendFailed;
       return OtpPagePresentation(
+        subtitle: subtitle,
         message: message,
         tone: OtpPresentationTone.error,
         primaryAction: remaining <= 0 ? OtpRecoveryAction.resend : null,
@@ -220,43 +242,19 @@ class OtpPagePresentation {
       );
     }
 
-    // Once the user starts typing, delivery detail is no longer the primary
-    // task and must not compete with the code input.
-    if (state.code.isNotEmpty) {
-      return OtpPagePresentation(
-        message: '',
-        tone: OtpPresentationTone.neutral,
-        primaryAction: null,
-        secondaryAction: null,
-        resendRemainingSeconds: remaining,
-        showDeliveryProgress: false,
-        announceKey: 'otp-input',
-      );
-    }
-
-    final message = switch (state.otpDeliveryState) {
-      OtpDeliveryState.queued => FoundationText.loginOtpDeliveryQueued,
-      OtpDeliveryState.sent => FoundationText.loginOtpDeliverySent,
-      OtpDeliveryState.confirming when state.deliveryConfirmationExhausted =>
-        FoundationText.loginOtpDeliveryUnknown,
-      OtpDeliveryState.confirming => FoundationText.loginOtpDeliveryConfirming,
-      OtpDeliveryState.none => FoundationText.loginOtpDeliveryUnknown,
-      OtpDeliveryState.failed => '',
-    };
     return OtpPagePresentation(
-      message: message,
+      subtitle: subtitle,
+      message: '',
       tone: OtpPresentationTone.neutral,
       primaryAction: null,
       secondaryAction: null,
       resendRemainingSeconds: remaining,
-      showDeliveryProgress:
-          state.otpDeliveryState == OtpDeliveryState.queued ||
-          (state.otpDeliveryState == OtpDeliveryState.confirming &&
-              !state.deliveryConfirmationExhausted),
+      showDeliveryProgress: false,
       announceKey: 'otp-delivery-${state.otpDeliveryState.name}',
     );
   }
 
+  final String subtitle;
   final String message;
   final OtpPresentationTone tone;
   final OtpRecoveryAction? primaryAction;

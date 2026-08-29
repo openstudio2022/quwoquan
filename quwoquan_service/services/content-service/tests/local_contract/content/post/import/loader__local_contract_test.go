@@ -689,7 +689,7 @@ func TestLoadManifestOnlyVideoPostAndCoverContract(t *testing.T) {
 		t.Fatalf("video cover strategy/duration wrong: %+v", asset)
 	}
 
-	media := ImportedMediaFields(post.Assets)
+	media := ImportedMediaFields(post.Assets, "")
 	if media.VideoURL != asset.CDNURL {
 		t.Fatalf("videoUrl = %q, want %q", media.VideoURL, asset.CDNURL)
 	}
@@ -853,14 +853,14 @@ func TestLoadReleaseMediaAssetsRejectsPrivateCASAndAcceptsCanonicalPublicSlice(t
 		"counts":{"assets":1,"issues":0}
 	}`
 	writeFile(t, path, validDocument)
-	assets, err := LoadReleaseMediaAssets(releaseRoot, "release-a")
+	assets, err := LoadReleaseMediaAssets(releaseRoot, "release-a", "commercial")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(assets) != 1 || strings.Contains(assets["杭州西湖_cover_三潭印月石塔_28_36eb11bd"].PublicSliceKey, "objects/") {
 		t.Fatalf("release media authority not loaded: %+v", assets)
 	}
-	if _, err := LoadReleaseMediaAssets(releaseRoot, "release-b"); err == nil {
+	if _, err := LoadReleaseMediaAssets(releaseRoot, "release-b", "commercial"); err == nil {
 		t.Fatal("release media manifest with a mismatched releaseId must fail closed")
 	}
 
@@ -873,7 +873,7 @@ func TestLoadReleaseMediaAssetsRejectsPrivateCASAndAcceptsCanonicalPublicSlice(t
 	if err := os.WriteFile(path, privateDocument, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := LoadReleaseMediaAssets(releaseRoot, "release-a"); err == nil {
+	if _, err := LoadReleaseMediaAssets(releaseRoot, "release-a", "commercial"); err == nil {
 		t.Fatal("release media manifest exposing objectKey must fail closed")
 	}
 
@@ -896,7 +896,7 @@ func TestLoadReleaseMediaAssetsRejectsPrivateCASAndAcceptsCanonicalPublicSlice(t
 	if err := os.WriteFile(path, raw, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := LoadReleaseMediaAssets(releaseRoot, "release-a"); err == nil {
+	if _, err := LoadReleaseMediaAssets(releaseRoot, "release-a", "commercial"); err == nil {
 		t.Fatal("two assets sharing one public slice must fail closed")
 	}
 
@@ -904,7 +904,7 @@ func TestLoadReleaseMediaAssetsRejectsPrivateCASAndAcceptsCanonicalPublicSlice(t
 	if err := os.WriteFile(path, []byte(kindDrift), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := LoadReleaseMediaAssets(releaseRoot, "release-a"); err == nil {
+	if _, err := LoadReleaseMediaAssets(releaseRoot, "release-a", "commercial"); err == nil {
 		t.Fatal("MediaAsset kind/contentType drift must fail closed")
 	}
 }
@@ -1063,11 +1063,27 @@ func TestImportedMediaFields(t *testing.T) {
 		Caption: "晨雾",
 		Width:   1600,
 		Height:  900,
-	}})
+	}}, "")
 	if len(media.MediaURLs) != 1 || len(media.MediaItems) != 1 || media.CoverURL != media.MediaURLs[0] {
 		t.Fatalf("media fields = %#v", media)
 	}
 	if media.MediaItems[0]["caption"] != "晨雾" || media.MediaItems[0]["width"] != int64(1600) {
 		t.Fatalf("media item = %#v", media.MediaItems[0])
+	}
+	// research readback closure 从 posts.mediaAssetIds 收集媒体身份，
+	// data release importer 必须与 UGC 路径同字段落库。
+	if len(media.MediaAssetIDs) != 1 || media.MediaAssetIDs[0] != "image_1" {
+		t.Fatalf("mediaAssetIds = %#v", media.MediaAssetIDs)
+	}
+}
+
+func TestImportedMediaFieldsDeduplicatesAssetIDs(t *testing.T) {
+	media := ImportedMediaFields([]AssetManifestItem{
+		{AssetID: "a1", Kind: "image", CDNURL: "media/objects/sha256/aa/bb/a.jpg"},
+		{AssetID: "a1", Kind: "image", CDNURL: "media/objects/sha256/aa/bb/a.jpg"},
+		{AssetID: "a2", Kind: "video", CDNURL: "media/objects/sha256/cc/dd/b.mp4"},
+	}, "")
+	if len(media.MediaAssetIDs) != 2 || media.MediaAssetIDs[0] != "a1" || media.MediaAssetIDs[1] != "a2" {
+		t.Fatalf("mediaAssetIds = %#v", media.MediaAssetIDs)
 	}
 }

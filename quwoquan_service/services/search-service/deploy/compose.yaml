@@ -26,6 +26,8 @@ services:
       # R-S07-5：搜索信号发布到 Redis Stream，供 content-service 消费注入推荐特征。
       SEARCH_REDIS_GENERAL_MODE: standalone
       SEARCH_REDIS_GENERAL_ADDR: redis:6379
+      SEARCH_REDIS_REC_MODE: standalone
+      SEARCH_REDIS_REC_ADDR: redis:6379
       CONTENT_SERVICE_BASE_URL: http://content-service:18080
       AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"
       AUTH_JWT_ISSUER: "${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}"
@@ -46,12 +48,19 @@ services:
         condition: service_healthy
       content-service:
         condition: service_healthy
+      # /readyz 对账号安全 authority 做 fail-closed 探测；不把真实 owner 纳入
+      # 启动依赖时，首次全栈 up 会停在 search-service unhealthy 上等一个尚未
+      # 创建的 user-service，形成确定的启动顺序死锁。
+      user-service:
+        condition: service_healthy
     ports:
       - "${QWQ_COMPOSE_SEARCH_PORT:-19280}:18095"
     volumes:
       - ${QWQ_COMPOSE_CONFIG_ROOT:?QWQ_COMPOSE_CONFIG_ROOT is required}:/etc/qwq-config:ro
       - ${QWQ_COMPOSE_ARTIFACT_IDENTITY_FILE:?artifact identity mount is required}:/etc/quwoquan/artifact-identity.json:ro
     healthcheck:
+      # compose 的 healthcheck 是 depends_on 的就绪门，指向 /readyz；纯 liveness
+      # 语义由 deploy/base 的 livenessProbe/startupProbe 走 /healthz 承担。
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18095/healthz >/dev/null 2>&1"]
       interval: 10s
       timeout: 3s

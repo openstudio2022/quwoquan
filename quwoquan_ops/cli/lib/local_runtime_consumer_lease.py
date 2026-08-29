@@ -19,6 +19,9 @@ CommandRunner = Callable[[Sequence[str]], subprocess.CompletedProcess[str]]
 DEFAULT_BUILD_GRACE_SECONDS = 20 * 60
 MAX_LEASE_AGE_SECONDS = 12 * 60 * 60
 SUPPORTED_PLATFORMS = frozenset({"android", "ios-simulator", "ios-physical"})
+# released 与 stale 都不占用运行时；前者是本代际已交回的证据，后者是失效残留。
+# 两者都必须允许其他消费方抢占，否则一次 UAT 之后本地运行时就锁死。
+OCCUPANCY_FREE_STATES = frozenset({"stale", "released"})
 
 
 def consumer_lease_dir() -> Path:
@@ -96,10 +99,24 @@ def acquire_consumer_lease(
 
 
 def release_consumer_lease(*, target: str, device: str, consumer: str) -> bool:
+    """标记 released 并保留回执。
+
+    互斥由状态承担，代际证据由保留的 releaseId/manifestDigest/
+    readinessReceiptDigest 承担。删除文件会让 device_bound 永远拿不到与本次
+    运行同代际的 lease 证据。
+    """
+
     path = _lease_path(target=target, device=device, consumer=consumer)
     if not path.is_file():
         return False
-    path.unlink()
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    if not isinstance(payload, dict):
+        return False
+    payload["releasedAt"] = utc_now()
+    write_json(path, payload)
     return True
 
 
@@ -163,7 +180,7 @@ def active_consumer_leases(
             adb_path=adb_path,
             xcrun_path=xcrun_path,
         )
-        if lease["state"] != "stale"
+        if lease["state"] not in OCCUPANCY_FREE_STATES
     ]
 
 
@@ -179,6 +196,13 @@ def _inspect_lease(
     if started_at is None:
         return "stale", "invalid startedAt"
     age_seconds = max(0, int((now - started_at).total_seconds()))
+    released_at = _parse_time(str(lease.get("releasedAt") or ""))
+    if released_at is not None:
+        # 已交回的回执不再探测进程存活：进程本就应当退出，探测只会把它降级成
+        # stale 并丢掉本代际证据。超过最大寿命后按 stale 处理，避免无限累积。
+        if age_seconds > MAX_LEASE_AGE_SECONDS:
+            return "stale", "released lease exceeded maximum age"
+        return "released", "lease was explicitly released with generation evidence"
     grace = max(0, int(lease.get("buildGraceSeconds") or 0))
     if age_seconds <= grace and age_seconds <= MAX_LEASE_AGE_SECONDS:
         return "build_grace", f"build grace active ({age_seconds}s/{grace}s)"

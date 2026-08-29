@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/spec.md#sit-001
+// spec_ref: specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/spec.md#sit-001.t2
 package feed_test
 
 import (
@@ -663,6 +664,9 @@ func TestListFeed_PreservesImmutableWindowModelReleaseAttribution(t *testing.T) 
 	events := probe.DeliveryEvents()
 	if len(events) != 1 || events[0].ModelReleaseID == nil || *events[0].ModelReleaseID != "model_release_call_1" {
 		t.Fatalf("delivered item must retain the immutable window model release, got=%+v", events)
+	}
+	if events[0].ExperimentBucket != "model" {
+		t.Fatalf("delivered page must retain the authoritative window experiment bucket, got=%+v", events[0])
 	}
 }
 

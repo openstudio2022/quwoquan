@@ -1,4 +1,6 @@
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/runtime/di/media_delivery_cover_slot.dart';
+import 'package:quwoquan_app/runtime/di/content_post_media_binding.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
@@ -516,6 +518,11 @@ class _WorksPostCard extends ConsumerWidget {
       title: _headlineText,
       supportingText: _supportingText,
       coverUrl: _coverUrl,
+      // 交付形态取自投影 mediaItems 的同一条目（DEC-033），不从 URL 反推。
+      mediaContent: mediaDeliveryCoverSlot(
+        binding: contentPostMediaBinding(post, _coverUrl),
+        placeholderColor: fgSecondary.withValues(alpha: 0.12),
+      ),
       mediaAspectRatio: _imageAspectRatio,
       showVideoBadge: post.isVideoLike,
       onTap: onTap,

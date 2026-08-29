@@ -76,7 +76,7 @@ func TestRuntimeExecutesSignedGetPostAfterSharedAdmission(t *testing.T) {
 		CandidateDigest:       "sha256:" + strings.Repeat("1", 64),
 		SchemaDigest:          "sha256:" + strings.Repeat("2", 64),
 		TrustedPublicKeysJSON: publicKeys,
-		OwnerTimeoutMS:        1000,
+		OwnerTimeoutMS:        2000,
 	}
 	minimum, err := rollouthttp.MinimumBuildMiddleware(
 		rolloutapp.MinimumBuildPolicy{
@@ -191,7 +191,7 @@ func TestRuntimeAuthorizesGatewayOwnedPersistedSearchOperation(t *testing.T) {
 			CandidateDigest:       "sha256:" + strings.Repeat("1", 64),
 			SchemaDigest:          "sha256:" + strings.Repeat("2", 64),
 			TrustedPublicKeysJSON: publicKeys,
-			OwnerTimeoutMS:        1000,
+			OwnerTimeoutMS:        2000,
 		},
 		RegistryLoader:  newGraphQLRegistryLoader(t, publicKeys),
 		OwnerExecutor:   graphQLExecutorStub{},
@@ -205,6 +205,101 @@ func TestRuntimeAuthorizesGatewayOwnedPersistedSearchOperation(t *testing.T) {
 	}
 	if err := runtime.Ready(context.Background()); err != nil {
 		t.Fatalf("gateway-owned persisted query readiness: %v", err)
+	}
+}
+
+func TestRuntimeAppliesCanonicalGraphQLAbsoluteDeadlineToRealHandler(t *testing.T) {
+	quota := &graphQLQuotaStore{}
+	admission, err := admissionapp.NewService("beta", quota, graphQLAdmissionPolicies(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rollout, err := rolloutapp.NewEvaluator(rolloutdomain.Policy{}, nil, nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry := validGraphQLRuntimeEntry()
+	registryPath, publicKeys := writeSignedGraphQLRegistry(t, entry)
+	owner := &deadlineBlockingGraphQLExecutor{
+		remaining: make(chan time.Duration, 1),
+		cause:     make(chan error, 1),
+	}
+	runtime, err := graphread.NewRuntime(context.Background(), graphread.Options{
+		Environment: "beta",
+		Config: graphread.Config{
+			Enabled:               true,
+			RegistryFile:          registryPath,
+			CandidateDigest:       "sha256:" + strings.Repeat("1", 64),
+			SchemaDigest:          "sha256:" + strings.Repeat("2", 64),
+			TrustedPublicKeysJSON: publicKeys,
+			OwnerTimeoutMS:        2000,
+		},
+		RegistryLoader: newGraphQLRegistryLoader(t, publicKeys),
+		OwnerExecutor:  owner,
+		EntryValidator: ownerinfra.ValidateExecutableEntry,
+		Admission:      admission,
+		Rollout:        rollout,
+	})
+	if err != nil {
+		t.Fatalf("build GraphQL runtime: %v", err)
+	}
+	handler := graphread.RequestMetadataMiddleware(
+		"X-Edge-Client-IP",
+		nil,
+		runtime.Handler(),
+	)
+	payload := map[string]any{
+		"operationName": entry.OperationName,
+		"variables":     map[string]any{"postId": "post-1"},
+		"extensions": map[string]any{
+			"persistedQuery": map[string]any{
+				"version": 1, "sha256Hash": entry.SHA256Hash,
+			},
+		},
+	}
+
+	startedAt := time.Now()
+	response := executeGraphQLRuntimeRequest(t, handler, payload)
+	elapsed := time.Since(startedAt)
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("deadline status=%d body=%s", response.Code, response.Body.String())
+	}
+	remaining := <-owner.remaining
+	if remaining < 2800*time.Millisecond || remaining > 3100*time.Millisecond {
+		t.Fatalf("handler deadline remaining=%s, want canonical 3000ms", remaining)
+	}
+	if elapsed < 2800*time.Millisecond || elapsed > 3600*time.Millisecond {
+		t.Fatalf("handler deadline elapsed=%s, want canonical 3000ms", elapsed)
+	}
+	if cause := <-owner.cause; cause != context.DeadlineExceeded {
+		t.Fatalf("owner cancellation cause=%v, want deadline exceeded", cause)
+	}
+}
+
+func TestRuntimePreservesExactCompositionBindingFailure(t *testing.T) {
+	entry := validGraphQLRuntimeEntry()
+	registryPath, publicKeys := writeSignedGraphQLRegistry(t, entry)
+	_, err := graphread.NewRuntime(context.Background(), graphread.Options{
+		Environment: "beta",
+		Config: graphread.Config{
+			Enabled:               true,
+			RegistryFile:          registryPath,
+			CandidateDigest:       "sha256:" + strings.Repeat("1", 64),
+			SchemaDigest:          "sha256:" + strings.Repeat("2", 64),
+			TrustedPublicKeysJSON: publicKeys,
+			OwnerTimeoutMS:        2000,
+		},
+		RegistryLoader: newGraphQLRegistryLoader(t, publicKeys),
+		OwnerExecutor:  graphQLExecutorStub{},
+		EntryValidator: func(graphdomain.Entry) error {
+			return fmt.Errorf("selectedFields drifted from owner response")
+		},
+	})
+	if err == nil || !strings.Contains(
+		err.Error(),
+		"composition binding is invalid: selectedFields drifted from owner response",
+	) {
+		t.Fatalf("composition error=%v", err)
 	}
 }
 
@@ -256,7 +351,7 @@ func TestConfigFailsClosedOnDisabledInputsAndDigestDrift(t *testing.T) {
 		SchemaDigest:          fmt.Sprintf("sha256:%x", sha256.Sum256(schema)),
 		CandidateDigest:       "sha256:" + strings.Repeat("1", 64),
 		TrustedPublicKeysJSON: `{"release-key":"value"}`,
-		OwnerTimeoutMS:        1000,
+		OwnerTimeoutMS:        2000,
 	}
 	if err := graphread.ValidateAndResolveConfig(
 		&config,
@@ -266,6 +361,16 @@ func TestConfigFailsClosedOnDisabledInputsAndDigestDrift(t *testing.T) {
 	); err != nil {
 		t.Fatalf("valid GraphQL config: %v", err)
 	}
+	config.OwnerTimeoutMS = 1500
+	if err := graphread.ValidateAndResolveConfig(
+		&config,
+		filepath.Join(directory, "config.yaml"),
+		false,
+		"",
+	); err == nil || !strings.Contains(err.Error(), "exactly 2000ms") {
+		t.Fatalf("equal owner/Search deadline was not rejected: %v", err)
+	}
+	config.OwnerTimeoutMS = 2000
 	config.SchemaDigest = "sha256:" + strings.Repeat("0", 64)
 	if err := graphread.ValidateAndResolveConfig(
 		&config,
@@ -339,6 +444,11 @@ type graphQLRegistryLoaderStub struct {
 
 type graphQLExecutorStub struct{}
 
+type deadlineBlockingGraphQLExecutor struct {
+	remaining chan time.Duration
+	cause     chan error
+}
+
 type graphQLServiceCredential struct{}
 
 func (graphQLServiceCredential) AuthorizationHeader(context.Context) (string, error) {
@@ -366,6 +476,23 @@ func (graphQLExecutorStub) Execute(
 			OwnerCalls: 1, BatchKeys: 1, ResponseBytes: len(data),
 		},
 	}, nil
+}
+
+func (executor *deadlineBlockingGraphQLExecutor) Execute(
+	ctx context.Context,
+	_ graphdomain.Entry,
+	_ map[string]any,
+) (graphapp.ExecutionResult, error) {
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		executor.remaining <- -1
+		executor.cause <- nil
+		return graphapp.ExecutionResult{}, context.Canceled
+	}
+	executor.remaining <- time.Until(deadline)
+	<-ctx.Done()
+	executor.cause <- ctx.Err()
+	return graphapp.ExecutionResult{}, ctx.Err()
 }
 
 func (resolver *graphQLNetworkAttributeResolver) Resolve(net.IP) rolloutapp.NetworkAttributes {
@@ -400,34 +527,7 @@ func graphQLAdmissionPolicies() admissionapp.PolicySet {
 }
 
 func validGraphQLRuntimeEntry() graphdomain.Entry {
-	plan := graphdomain.CostPlan{
-		BaseComplexity: 56, ListMultipliers: []graphdomain.ListMultiplier{},
-		MaxOwnerCalls: 1, MaxBatchKeys: 1, MaxResponseBytes: 64 * 1024,
-	}
-	digest, err := plan.Digest()
-	if err != nil {
-		panic(err)
-	}
-	return graphdomain.Entry{
-		SHA256Hash:           "3525412614f94647191c1fead96cc6da3bdc452bf0bec9edd92af4793aed3110",
-		OperationName:        "ContentPostDetailBase",
-		OperationType:        graphdomain.OperationTypeQuery,
-		CanonicalOperationID: "content.post.GetPost",
-		ObjectIDs:            []string{"content.post"},
-		Authorization: graphdomain.AuthorizationBinding{
-			Principal: "public", OwnershipPolicy: "visibility_filtered",
-		},
-		CostModelVersion: graphdomain.CostModelVersionV1,
-		CostPlanDigest:   digest,
-		Cost: graphdomain.CostBudget{
-			Depth: 3, TopLevelFields: 1, Complexity: 56,
-			VariablesMaxBytes: 1024, PageSizeMax: 1,
-			MaxOwnerCalls: 1, MaxBatchKeys: 1, MaxResponseBytes: 64 * 1024,
-			SLORef: "slo:gateway_graphql_read_detail",
-		},
-		CostPlan:    plan,
-		ExecutorKey: "content.post.getPost",
-	}
+	return contentPostBaseEntry()
 }
 
 func validSearchPageRuntimeEntry() graphdomain.Entry {

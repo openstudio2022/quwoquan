@@ -112,6 +112,8 @@ relationships:
 local_identity_reasons:
   displayUserRouteId: generated route, surface, or operation registry key used only for navigation or
     telemetry attribution
+  previewImageAssetId: immutable release MediaAsset authority reference projected from the Post media
+    delivery binding; it is never used as a ProfileInteractionActivityView identity or Store lookup
   previewRouteId: generated route, surface, or operation registry key used only for navigation or telemetry
     attribution
   sourceEventId: immutable source outbox identity used only for projector dedupe and replay traceability

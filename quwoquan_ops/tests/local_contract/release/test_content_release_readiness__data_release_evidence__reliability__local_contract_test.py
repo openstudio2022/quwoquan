@@ -322,6 +322,22 @@ def _convert_data_readiness_fixture_to_research(
     post["internalSubjectHash"] = receipt["internalSubjectHash"]
     post.pop("guestActorHash", None)
     post.pop("guestLogin", None)
+    # DEC-031：research 私有交付下 avatar 以相对 CAS key 闭合（probeCount=0），
+    # 图片以匿名 401/403 拒绝探测 + expectedSha256 闭合。
+    for row in post.get("creators") or []:
+        if row.get("avatarMediaReady") is True:
+            row["avatarProbeCount"] = 0
+            row["avatarProbe"] = None
+            row["avatarUrl"] = (
+                "media/objects/sha256/aa/aa/" + "a" * 64 + ".jpg"
+            )
+    for post_row in post.get("posts") or []:
+        for probe in post_row.get("mediaProbes") or []:
+            if probe.get("kind") == "image":
+                probe["deliveryRef"] = (
+                    "media/objects/sha256/88/88/" + "8" * 64 + ".jpg"
+                )
+                probe["anonymousStatus"] = 403
     post_path.write_text(json.dumps(post), encoding="utf-8")
     isolation_ref = (
         Path("env")

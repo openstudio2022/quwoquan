@@ -54,6 +54,27 @@ python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --profile int
   断链环节重跑幂等导入，不手补投影。
 - 环境不健康 → 走 `environment-ops` 工作流修环境，本阶段保持未完成。
 
+### verify 失败重试 SOP
+
+verify run 是 append-only 证据：失败的 run 目录原样保留，禁止改写或删除。
+失败重入的固定操作序，逐条依次判断：
+
+1. **换新 run-id 重跑 verify，不重导入**：`ship apply` 导入是幂等的且证据
+   独立于 verify；只要 release、导入结果与环境 runtime 没变，重试只发生在
+   verify 层。
+2. **research isolation proof 自动复用**：runtime proof 效度域为
+   `releaseId + manifestDigest + runtime 策略快照 + 24 小时时效`（DEC-034），
+   不绑 verify run。同一 release 的后续 verify run 会自动发现并复用最近一次
+   未超龄 PASS proof（重绑当前 run-id、`reusedFromVerifyRunId` 写明来源后
+   落盘），无需重跑完整 probe。release 内容、导入或 runtime 策略变更，或
+   proof 超过 24 小时时效时，必须重新执行
+   `stackctl research-isolation-probe`。
+3. **需要重导入的唯一情形**：release 本身变更（新 releaseId 或 manifest
+   digest 漂移），此时从 `ship apply` 重新开始，旧 run 证据保留。
+4. **环境卡点不在本阶段修**：`stackctl down` 对孤儿 compose 网络幂等回收；
+   若 down/up 仍不收敛，走 `stackctl doctor` → `repair`（environment-ops），
+   不得手工 `docker` 清理后继续本阶段。
+
 按 [handoff-protocol.md](../handoff-protocol.md) 落 receipt；
 `verdict=pass` 时 `task stage-record` 顺带置 `execution_state.status=succeeded`。
 

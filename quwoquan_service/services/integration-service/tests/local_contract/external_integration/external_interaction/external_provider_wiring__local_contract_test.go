@@ -53,7 +53,8 @@ func TestMaterializeReleaseBindingsFailClosedWithoutCompiledEnvironmentBinding(
 	}
 	for _, environment := range []string{"alpha", "beta", "gamma", "prod"} {
 		// 预置为已启用，用来证明 fail closed 返回零值配置，而不是把入参原样透传。
-		cfg := integrationconfig.Config{Environment: environment}
+		cfg := integrationconfig.Config{}
+		cfg.Environment = environment
 		cfg.Integration.ExternalInteraction.SMS.Enabled = true
 		cfg.Integration.ExternalInteraction.Push.Enabled = true
 		for _, material := range materials {
@@ -84,8 +85,10 @@ func TestMaterializeReleaseBindingsFailClosedWithoutCompiledEnvironmentBinding(
 
 // 纯守卫子句不依赖编译期绑定：缺 runtime config provider 必须 fail closed。
 func TestMaterializeReleaseBindingsRequiresRuntimeConfigProvider(t *testing.T) {
+	prodConfig := integrationconfig.Config{}
+	prodConfig.Environment = "prod"
 	if _, err := integrationconfig.MaterializeReleaseExternalInteractionBindings(
-		integrationconfig.Config{Environment: "prod"},
+		prodConfig,
 		nil,
 	); err == nil || !strings.Contains(err.Error(), "no runtime config provider") {
 		t.Fatalf("missing config provider must fail closed, got %v", err)

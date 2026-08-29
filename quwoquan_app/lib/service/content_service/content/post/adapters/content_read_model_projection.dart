@@ -18,6 +18,11 @@ ContentPostProjection contentPostProjectionFromReadModelMap(
     authorId: _optionalText(source['authorId']),
     authorDisplayName: _optionalText(source['authorDisplayName']),
     authorAvatarUrl: _optionalText(source['authorAvatarUrl']),
+    authorAvatarAssetId: _optionalText(source['authorAvatarAssetId']),
+    authorAvatarAccessMode: _optionalAccessMode(
+      source['authorAvatarAccessMode'],
+      'ContentPostProjection.authorAvatarAccessMode',
+    ),
     authorBackgroundUrl: _optionalText(source['authorBackgroundUrl']),
     authorRoleLabel: _optionalText(source['authorRoleLabel']),
     authorIdentityTags: _stringList(source['authorIdentityTags']),
@@ -32,6 +37,7 @@ ContentPostProjection contentPostProjectionFromReadModelMap(
     videoUrl: _optionalText(source['videoUrl']),
     mediaAssetId: _optionalText(source['mediaAssetId']),
     mediaAssetVersion: _optionalInt(source['mediaAssetVersion']),
+    mediaItems: _mediaItems(source['mediaItems']),
     hlsCmafMasterManifestUrl: _optionalText(source['hlsCmafMasterManifestUrl']),
     hlsCmafDescriptorVersion: _optionalInt(source['hlsCmafDescriptorVersion']),
     thumbnailUrl: _optionalText(source['thumbnailUrl']),
@@ -88,6 +94,32 @@ List<String>? _stringList(Object? value) {
     throw const FormatException('Content string collection must be a list');
   }
   return List<String>.unmodifiable(value.map((item) => item.toString()));
+}
+
+MediaDeliveryAccessMode? _optionalAccessMode(Object? value, String path) {
+  if (value == null) return null;
+  if (value is MediaDeliveryAccessMode) return value;
+  return MediaDeliveryAccessMode.fromWire(value, path);
+}
+
+List<PostMediaItem>? _mediaItems(Object? value) {
+  if (value == null) return null;
+  if (value is! List) {
+    throw const FormatException('mediaItems must be a list');
+  }
+  return List<PostMediaItem>.unmodifiable(
+    value.asMap().entries.map((entry) {
+      final item = entry.value;
+      if (item is PostMediaItem) return item;
+      if (item is Map) {
+        return PostMediaItem.fromWire(
+          Map<String, Object?>.from(item),
+          'ContentPostProjection.mediaItems[${entry.key}]',
+        );
+      }
+      throw const FormatException('Post media item must be an object');
+    }),
+  );
 }
 
 List<IntersectionReason>? _intersectionReasons(Object? value) {

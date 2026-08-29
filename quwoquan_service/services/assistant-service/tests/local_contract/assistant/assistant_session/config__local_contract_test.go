@@ -2,6 +2,7 @@ package local_contract
 
 import (
 	"path/filepath"
+	"quwoquan_service/runtime/servicekit"
 	. "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/runtimeconfig"
 	"strings"
 	"testing"
@@ -14,7 +15,9 @@ func TestRuntimeConfigDoesNotExposeProviderSelectorOverrides(t *testing.T) {
 	t.Setenv("ASSISTANT_SEARCH_PROVIDER", "duckduckgo_html")
 
 	cfg := Config{}
-	if err := ApplyEnvOverrides(&cfg); err != nil {
+	if err := servicekit.ApplyEnvOverrides(
+		servicekit.DefaultEnvPrefix("assistant-service"), &cfg,
+	); err != nil {
 		t.Fatalf("ApplyEnvOverrides() error = %v", err)
 	}
 	encoded, err := yaml.Marshal(cfg)

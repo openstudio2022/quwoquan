@@ -166,7 +166,13 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：当前旧编排层（`quwoquan_data/scripts/content/execution/` 的 `agent/`、`queue/`、`controller` 自动推进与 checkpoint 循环、`recovery/` rewind、campaign fleet 调度，约 4~5 万行）已按 [`DEC-005`](./design.md#dec-005) 判定为退役中存量，但尚缺 skill 驱动主线任何一次 M1 全链路 `succeeded` 的真实运行证据（stage receipt 链、immutable release 与环境导入回执均未产生），也缺删除编排层后治理门与测试全绿的证据（import 闭包影响面未验证）。保留原因是 verify/测试仍有 import 依赖且删除需与并发流协调；退役完成前它们不得作为新内容任务的执行入口，新任务一律走阶段契约 + 宿主 agent 主线。
+- 退役边界：`closure/`、`runtime_evidence/`、`scale/` 三个编排邻接目录整体保留，删除窗口据此执行不再重新裁定。裁定依据是实测消费面：
+  - `closure/` 被 receipt 协议的 `release/canonical/publish_execution.py`、`release_identity_recovery.py`、`execution_supersession.py`、`workspace.py` 与 `verify/verify_execution_readiness.py` 消费，属协议内核。
+  - `runtime_evidence/` 被保留态的 `planning/capacity_calibration_writer.py` 与 `preflight/pool_delivery.py` 消费。
+  - `scale/` 承载 M100 promotion，是分级晋升的当前实现。
+  - 删除面只覆盖这三个目录内 campaign 作用域的部分及其对 `campaign/`、`queue/`、`agent/`、`recovery/` 的 import，保留部分在删除前先解耦。
 - 完成判定：skill 驱动的 M1 全链路按 [`SIT-001`](#sit-001) 的同源输入与 release/导入证据连续 3 次以上 `succeeded`（恢复语义仍满足 [`SIT-002`](#sit-002) 的 terminal replay 约束）后，删除上述编排代码及其专属测试并原子更新受影响 import（无旧路径 shim）；删除后 `verify script-architecture`、`verify python-symbols`、`verify all` 与仓库 Python 治理门全绿。
+- 依赖：删除准入依赖 3 次 `succeeded` 的真实运行窗口，而放量窗口与改代码窗口互斥（`executionBundle` 含 `quwoquan_data/scripts`，运行期间改这些路径会让在飞 lane 全部 drift 成 `gate_block`），因此解耦与删除必须落在同一个不放量的代码窗口内一次做完。
 
 <a id="open-005"></a>
 ### OPEN-005 作废 canonical 内容的受治理 reset 与 exact replay

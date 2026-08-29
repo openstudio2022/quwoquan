@@ -132,13 +132,6 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
     );
   }
 
-  bool get _enableArticlePageCurl {
-    final runtimeConfig = ref.read(contentRuntimeConfigProvider);
-    return runtimeConfig.featureFlags.containsKey('enable_article_page_curl')
-        ? runtimeConfig.isEnabled('enable_article_page_curl')
-        : true;
-  }
-
   /// 精品流语义源（B3 读路径闭环）：与埋点 channelId 归一
   /// （[WorksImmersiveViewerObservability.immersiveChannelId]）同口径。
   /// 命中时数据源为 premium 频道单路（服务端 premium_stream fail-closed 池），

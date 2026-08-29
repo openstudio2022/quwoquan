@@ -1,0 +1,29 @@
+{
+  "schema": "quwoquan_data.review_attestation",
+  "stage": "5.review",
+  "executionId": "20260825--travel-homepage-m1-first--sichuan--pilot-004",
+  "executionBinding": "frozen",
+  "objectRef": "/entity/地点/景区/青城山",
+  "decision": "approved",
+  "deterministicGate": {
+    "status": "passed",
+    "issues": []
+  },
+  "independentReviewer": {
+    "status": "passed",
+    "provider": "codex_sdk",
+    "model": "gpt-5.6-terra",
+    "modelFamily": "gpt",
+    "runId": "01a0372f-787c-7161-adbf-0cff8b22194e",
+    "resultHash": "sha256:9bed5e237cba28ede3e89618dfb8f3f8d2806117473c8b3ef703553fdef9f69e"
+  },
+  "mediaRefReview": {
+    "status": "passed",
+    "issues": []
+  },
+  "repair": {
+    "status": "not_required"
+  },
+  "finalizationRef": "5.review/finalization_report.json",
+  "evidenceIndexRef": "5.review/evidence_index.json"
+}

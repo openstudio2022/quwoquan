@@ -2,12 +2,12 @@
 
 spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-002
 """
+
 from __future__ import annotations
 
+from quwoquan_ops.cli.commands import app_preflight_uat as uat
 from quwoquan_ops.tests.support.app_content_preflight_test_support import (
-    AUTHENTICATED_ACTORS,
     Path,
-    canonical_digest,
     json,
     patch,
     stackctl,
@@ -26,6 +26,15 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
             report = root / "report.json"
             payload = {
                 "status": "passed",
+                "testedAppArtifactBinding": {
+                    "status": "passed",
+                    "bindings": [],
+                    "comparisonProjections": [],
+                },
+                "externalProductionAutDriverArtifact": {
+                    "status": "passed",
+                    "marker": "native-driver-artifact",
+                },
                 "runs": [
                     {
                         "exitCode": 0,
@@ -60,8 +69,128 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
 
         self.assertRegex(live_capture["screenshotDigest"], r"^sha256:[0-9a-f]{64}$")
         self.assertEqual(live_capture["screenshotMarker"]["suite"], "homepage-feed")
+        self.assertEqual(
+            live_capture["testedAppArtifactBinding"]["status"],
+            "passed",
+        )
+        self.assertEqual(
+            live_capture["externalProductionAutDriverArtifact"]["marker"],
+            "native-driver-artifact",
+        )
 
-    def test_research_preflight_uses_research_readiness_without_lifecycle_exit(self) -> None:
+    def test_patrol_evidence_preserves_first_failed_run_blocker(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            report = Path(temporary_directory) / "report.json"
+            artifact_blocker = {
+                "errorCode": "APP.UAT.page_artifact_binding_missing",
+                "sourceOperationId": (
+                    "environment_page_smoke.tested_app_artifact_binding"
+                ),
+                "httpStatus": None,
+            }
+            first_blocker = {
+                "errorCode": "CONTENT.SYSTEM.required_dependency_unavailable",
+                "sourceOperationId": "content.feed.read",
+                "httpStatus": 503,
+            }
+            report.write_text(
+                json.dumps(
+                    {
+                        "status": "gate_block",
+                        "target": "test/example.dart",
+                        "environmentAlias": "beta-local",
+                        "platform": "android",
+                        "testedAppArtifactBinding": {
+                            "status": "gate_block",
+                            "errorCode": artifact_blocker["errorCode"],
+                            "bindings": [],
+                            "comparisonProjections": [],
+                        },
+                        "runs": [
+                            {
+                                "exitCode": 2,
+                                "device": {"id": "emulator-5556"},
+                                "typedBlocker": {
+                                    "errorCode": "APP.LAUNCH.compile_failed"
+                                },
+                                "artifactBindingBlocker": {},
+                                "evidence": {
+                                    "typedBlocker": first_blocker,
+                                    "artifactBindingBlocker": artifact_blocker,
+                                },
+                            },
+                            {
+                                "exitCode": 0,
+                                "device": {"id": "emulator-5558"},
+                                "evidence": {
+                                    "typedBlocker": {},
+                                    "artifactBindingBlocker": {},
+                                },
+                            },
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            evidence = stackctl._app_content_patrol_evidence(str(report))
+
+        self.assertEqual(evidence["typedBlocker"], first_blocker)
+        self.assertEqual(evidence["artifactBindingBlocker"], artifact_blocker)
+        self.assertEqual(evidence["deviceId"], "emulator-5556")
+        self.assertEqual(evidence["patrolTarget"], "test/example.dart")
+        self.assertEqual(evidence["environmentAlias"], "beta-local")
+        self.assertEqual(evidence["platform"], "android")
+
+    def test_patrol_evidence_projects_only_closed_child_receipt_blocker(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            report = Path(temporary_directory) / "report.json"
+            payload = {
+                "status": "passed",
+                "target": "test/example.dart",
+                "environmentAlias": "alpha-local",
+                "platform": "android",
+                "runs": [
+                    {
+                        "exitCode": 0,
+                        "firstBlocker": "APP.LAUNCH.runtime_config_activation_failed",
+                        "device": {"id": "emulator-5554"},
+                        "evidence": {},
+                    }
+                ],
+            }
+            report.write_text(json.dumps(payload), encoding="utf-8")
+            evidence = stackctl._app_content_patrol_evidence(str(report))
+
+            payload["runs"][0].pop("firstBlocker")
+            payload["runs"][0]["errorCode"] = (
+                "APP.LAUNCH.runtime_config_activation_failed"
+            )
+            report.write_text(json.dumps(payload), encoding="utf-8")
+            error_evidence = stackctl._app_content_patrol_evidence(str(report))
+
+            payload["runs"][0]["errorCode"] = "token=/private/secret-not-a-typed-code"
+            report.write_text(json.dumps(payload), encoding="utf-8")
+            invalid = stackctl._app_content_patrol_evidence(str(report))
+
+        self.assertEqual(
+            evidence["typedBlocker"],
+            {
+                "errorCode": "APP.LAUNCH.runtime_config_activation_failed",
+                "sourceOperationId": "environment_page_smoke.child_receipt",
+                "httpStatus": None,
+            },
+        )
+        self.assertEqual(error_evidence["typedBlocker"], evidence["typedBlocker"])
+        self.assertEqual(
+            invalid["typedBlocker"]["errorCode"],
+            "APP.LAUNCH.receipt_invalid",
+        )
+        self.assertNotIn("secret-not-a-typed-code", str(invalid))
+
+    def test_research_preflight_uses_research_readiness_without_lifecycle_exit(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             report_dir = Path(temporary_directory) / "research-report"
             readiness_path = Path(temporary_directory) / "release-readiness.json"
@@ -106,8 +235,8 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
             captured: dict[str, object] = {}
 
             def content_readiness(args: object) -> dict[str, object]:
-                captured["phase"] = getattr(args, "phase")
-                captured["lifecycleExitRef"] = getattr(args, "lifecycle_exit_ref")
+                captured["phase"] = vars(args)["phase"]
+                captured["lifecycleExitRef"] = vars(args)["lifecycle_exit_ref"]
                 return {"exitCode": 0, "details": ["passed"]}
 
             with (
@@ -143,12 +272,14 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                 "homepage-a",
             )
 
-    def test_three_environment_uat_binds_each_running_test_live_runtime_and_runs_suites(
+    def test_three_environment_uat_allows_target_baselines_on_one_release_train(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             report_dir = Path(temporary_directory) / "uat"
             manifest_digest = "sha256:" + "5" * 64
+            release_train_id = "sha256:" + "e" * 64
+            preflight_modes: list[tuple[str, str]] = []
             video_ids = [f"video-{index:02d}" for index in range(1, 21)]
             uat_plan = {
                 "releaseId": "release-a",
@@ -190,16 +321,26 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
             }
 
             def preflight(args: object) -> dict[str, object]:
-                target = str(getattr(args, "target"))
+                target = str(vars(args)["target"])
                 environment = target.removesuffix("-local")
                 ordinal = {"alpha": "a", "beta": "b", "gamma": "c"}[environment]
+                preflight_modes.append(
+                    (
+                        str(vars(args)["purpose"]),
+                        str(vars(args)["runtime_mode"]),
+                    )
+                )
                 return {
                     "exitCode": 0,
                     "target": target,
                     "environment": environment,
-                    "launchPolicy": "test_live",
+                    "purpose": "content_live",
+                    "launchPolicy": "immutable_candidate",
+                    "nonPromotable": False,
+                    "status": "passed",
+                    "contentLive": "passed",
                     "contentBindingState": "bound",
-                    "packageBaseline": "",
+                    "packageBaseline": "sha256:" + ordinal * 64,
                     "sourceRevision": ordinal * 40,
                     "configurationDigest": "sha256:" + ordinal * 64,
                     "providerRuntimeDigest": "sha256:" + "d" * 64,
@@ -228,64 +369,35 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                         "videoAttribution": "来源 A",
                     },
                     "appUatPlan": uat_plan,
-                    "appUatPlanDigest": stackctl._canonical_document_checksum(
-                        uat_plan
-                    ),
+                    "appUatPlanDigest": stackctl._canonical_document_checksum(uat_plan),
                 }
 
-            def startup(target: str) -> dict[str, object]:
+            def runtime_binding(result: object) -> dict[str, object]:
+                self.assertIsInstance(result, dict)
+                result = result if isinstance(result, dict) else {}
+                target = str(result["target"])
                 environment = target.removesuffix("-local")
-                ordinal = {"alpha": "a", "beta": "b", "gamma": "c"}[environment]
+                baseline = str(result["packageBaseline"])
                 return {
-                    "status": "running",
-                    "failure": None,
-                    "attemptId": f"{environment}-test-live-attempt",
-                    "environment": environment,
-                    "target": target,
-                    "composeProject": f"quwoquan_{environment}_test_live",
-                    "runRoot": f"/tmp/{environment}-test-live-run",
-                    "sourceRevision": ordinal * 40,
-                    "workspaceStatusDigest": "sha256:" + "1" * 64,
-                    "mutableStateDigest": "sha256:" + "2" * 64,
-                    "composeDigest": "sha256:" + "3" * 64,
-                    "configurationDigest": "sha256:" + ordinal * 64,
-                    "providerRuntimeDigest": "sha256:" + "d" * 64,
-                    "resolverHandoffDigest": "sha256:" + "4" * 64,
-                }
-
-            def content_binding(target: str) -> dict[str, object]:
-                active = startup(target)
-                environment = target.removesuffix("-local")
-                ordinal = {"alpha": "a", "beta": "b", "gamma": "c"}[environment]
-                return {
-                    "launchPolicy": "test_live",
-                    "nonPromotable": True,
-                    "retentionClass": "run_bound",
+                    "launchPolicy": "immutable_candidate",
+                    "nonPromotable": False,
+                    "retentionClass": "immutable_candidate",
                     "contentBindingState": "bound",
                     "environment": environment,
                     "target": target,
-                    "startupAttemptId": active["attemptId"],
+                    "packageBaseline": baseline,
+                    "candidateDigest": baseline,
+                    "releaseTrainId": release_train_id,
+                    "startupAttemptId": f"{environment}-candidate-attempt",
+                    "composeProject": f"quwoquan_{environment}_release",
                     "startupIdentity": {
-                        field: active[field]
-                        for field in stackctl._APP_CONTENT_TEST_LIVE_STARTUP_IDENTITY_FIELDS
+                        "candidateDigest": baseline,
+                        "configurationDigest": result["configurationDigest"],
                     },
                     "releaseId": "release-a",
                     "verifyRunId": "verify-a",
                     "manifestDigest": manifest_digest,
                     "readinessPhase": "research",
-                    "readinessReceiptRef": (
-                        f"env/{environment}/runs/data-release/"
-                        "release-a/verify-a/release-readiness.json"
-                    ),
-                    "readinessReceiptDigest": "sha256:" + ordinal * 64,
-                    "lifecycleExitRef": "",
-                    "appUatEnvelope": preflight(
-                        stackctl.argparse.Namespace(target=target)
-                    )["appUatEnvelope"],
-                    "appUatPlan": uat_plan,
-                    "appUatPlanDigest": stackctl._canonical_document_checksum(
-                        uat_plan
-                    ),
                 }
 
             def smoke_command(
@@ -300,7 +412,9 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                     "reportPath": f"reports/{target}-{kwargs['suite_name']}.json",
                 }
 
-            def execute(argv: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+            def execute(
+                argv: list[str], **_kwargs: object
+            ) -> subprocess.CompletedProcess[str]:
                 if "verify_ios_hot_restart.py" in " ".join(map(str, argv)):
                     return subprocess.CompletedProcess(
                         argv,
@@ -308,9 +422,10 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                         json.dumps(
                             {
                                 "status": "passed",
-                                "launchMode": "direct_flutter_run",
+                                "launchProvenance": "workspace_flutter_run",
+                                "runtimeConfigSupplyMode": ("external_runtime_package"),
                                 "consumerLeaseId": "sha256:" + "7" * 64,
-                                "reportPath": "reports/direct-flutter-run.json",
+                                "reportPath": "reports/workspace-flutter-run.json",
                             }
                         ),
                         "",
@@ -325,13 +440,13 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                 ),
                 patch.object(
                     stackctl,
-                    "load_test_live_startup_attempt",
-                    side_effect=startup,
+                    "_app_content_test_live_runtime_binding",
+                    side_effect=runtime_binding,
                 ),
                 patch.object(
-                    stackctl,
-                    "load_test_live_content_binding",
-                    side_effect=content_binding,
+                    uat,
+                    "_app_content_readiness_path",
+                    side_effect=lambda item: Path(str(item["readinessReceiptRef"])),
                 ),
                 patch.object(
                     stackctl,
@@ -356,8 +471,22 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
 
             self.assertEqual(result["exitCode"], 0)
             self.assertEqual(result["status"], "planned")
-            self.assertEqual(result["launchPolicy"], "test_live")
-            self.assertEqual(result["packageBaseline"], "")
+            self.assertEqual(result["launchPolicy"], "immutable_candidate")
+            self.assertTrue(result["nonPromotable"])
+            self.assertNotIn("packageBaseline", result)
+            self.assertEqual(
+                result["packageBaselines"],
+                {
+                    "alpha-local": "sha256:" + "a" * 64,
+                    "beta-local": "sha256:" + "b" * 64,
+                    "gamma-local": "sha256:" + "c" * 64,
+                },
+            )
+            self.assertEqual(result["releaseTrainId"], release_train_id)
+            self.assertEqual(
+                preflight_modes,
+                [("content_live", "immutable_candidate")] * 3,
+            )
             self.assertEqual(
                 set(result["runtimeBindings"]),
                 {"alpha-local", "beta-local", "gamma-local"},
@@ -371,9 +500,10 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                 result["appUatEnvelopeDigest"],
                 r"^sha256:[0-9a-f]{64}$",
             )
-            # 每环境 5 个页面 P0 suite + release probe + direct Flutter run。
-            self.assertEqual(len(result["runs"]), 21)
-            self.assertEqual(run.call_count, 18)
+            # 三个 target 均执行 6 个页面 P0 suite；每环境另有 release
+            # probe + workspace Flutter run。
+            self.assertEqual(len(result["runs"]), 24)
+            self.assertEqual(run.call_count, 21)
             self.assertEqual(result["appUatPlan"], uat_plan)
             direct_calls = [
                 call
@@ -383,7 +513,11 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
             self.assertEqual(len(direct_calls), 3)
             for call in direct_calls:
                 direct_argv = call.args[0]
-                self.assertIn("direct_flutter_run", direct_argv)
+                self.assertEqual(
+                    (call.kwargs.get("env") or {}).get("QWQ_OUTPUT_ROOT"),
+                    str(stackctl.output_root().expanduser().resolve()),
+                )
+                self.assertIn("workspace_flutter_run", direct_argv)
                 self.assertIn("--preflight-only", direct_argv)
                 timeout_argument = direct_argv.index("--ready-timeout-seconds")
                 self.assertEqual(
@@ -396,6 +530,21 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                 self.assertEqual(
                     direct_argv[cold_native_argument + 1],
                     "12000",
+                )
+            workspace_runs = [
+                item
+                for item in result["runs"]
+                if item["suite"] == "workspace-flutter-run"
+            ]
+            self.assertEqual(len(workspace_runs), 3)
+            for item in workspace_runs:
+                self.assertEqual(
+                    item["launchProvenance"],
+                    "workspace_flutter_run",
+                )
+                self.assertEqual(
+                    item["runtimeConfigSupplyMode"],
+                    "external_runtime_package",
                 )
             patrol_calls = [
                 call for call in run.call_args_list if call not in direct_calls
@@ -474,8 +623,7 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
             home_video_calls = [
                 call
                 for call in smoke_profile.call_args_list
-                if call.kwargs.get("suite_name")
-                == "app-content-home-video-playback"
+                if call.kwargs.get("suite_name") == "app-content-home-video-playback"
             ]
             self.assertEqual(len(home_video_calls), 3)
             for call in home_video_calls:
@@ -487,8 +635,7 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
             executed_home_video_calls = [
                 call
                 for call in patrol_calls
-                if "app-content-home-video-playback"
-                in " ".join(map(str, call.args[0]))
+                if "app-content-home-video-playback" in " ".join(map(str, call.args[0]))
             ]
             self.assertEqual(len(executed_home_video_calls), 3)
             for call in executed_home_video_calls:
@@ -535,7 +682,10 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
             ]
             self.assertEqual(len(planned_search), 3)
             self.assertTrue(
-                all(item.get("searchCanaries") == uat_plan["searchCanaries"] for item in planned_search)
+                all(
+                    item.get("searchCanaries") == uat_plan["searchCanaries"]
+                    for item in planned_search
+                )
             )
             fault_calls = [
                 call
@@ -543,7 +693,34 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                 if "app-content-controlled-edge-recovery"
                 in " ".join(map(str, call.args[0]))
             ]
-            self.assertEqual(fault_calls, [])
+            self.assertEqual(len(fault_calls), 3)
+            for fault_call in fault_calls:
+                self.assertIn(
+                    "--stackctl-controlled-edge-fault",
+                    fault_call.args[0],
+                )
+            fault_profile_calls = [
+                call
+                for call in smoke_profile.call_args_list
+                if call.kwargs.get("suite_name")
+                == "app-content-controlled-edge-recovery"
+            ]
+            self.assertEqual(len(fault_profile_calls), 3)
+            self.assertEqual(
+                {(call.args[0], call.args[1]) for call in fault_profile_calls},
+                {
+                    ("alpha", "alpha-local"),
+                    ("beta", "beta-local"),
+                    ("gamma", "gamma-local"),
+                },
+            )
+            self.assertTrue(
+                all(
+                    call.kwargs.get("patrol_target")
+                    == stackctl.CONTROLLED_EDGE_RECOVERY_UAT_TEST_TARGET
+                    for call in fault_profile_calls
+                )
+            )
             self.assertEqual(
                 {
                     str(call.kwargs.get("suite_name") or "")
@@ -555,352 +732,6 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                     "app-content-message-home",
                     "app-content-home-video-playback",
                     "app-content-app-core-readback",
+                    "app-content-controlled-edge-recovery",
                 },
             )
-
-    def test_android_content_uat_does_not_repeat_content_live_launcher_gate(
-        self,
-    ) -> None:
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            report_dir = Path(temporary_directory) / "android-uat"
-            readiness_path = Path(temporary_directory) / "readiness.json"
-            call_order: list[str] = []
-            preflight = {
-                "exitCode": 0,
-                "target": "beta-local",
-                "environment": "beta",
-                "launchPolicy": "test_live",
-                "contentBindingState": "bound",
-                "packageBaseline": "",
-                "releaseId": "beta-research-pool8",
-                "manifestDigest": "sha256:" + "5" * 64,
-                "readinessReceiptRef": str(readiness_path),
-                "readinessReceiptDigest": "sha256:" + "6" * 64,
-                "appUatEnvelope": {
-                    "releaseId": "beta-research-pool8",
-                    "videoWorkId": "video-01",
-                },
-                "appUatPlan": {
-                    "releaseId": "beta-research-pool8",
-                    "videoPagination": {"expectedWorkIds": ["video-01"]},
-                },
-            }
-
-            def smoke_command(
-                _environment: str,
-                target: str,
-                _report_dir: Path,
-                **kwargs: object,
-            ) -> dict[str, object]:
-                return {
-                    "argv": ["patrol", str(kwargs["suite_name"])],
-                    "cwd": Path(temporary_directory),
-                    "reportPath": f"reports/{target}-{kwargs['suite_name']}.json",
-                }
-
-            def execute(
-                argv: list[str], **_kwargs: object
-            ) -> subprocess.CompletedProcess[str]:
-                raise AssertionError(
-                    "Android page UAT must not repeat the content-live "
-                    f"launcher gate: {argv}"
-                )
-
-            def run_patrol(
-                *_args: object, **_kwargs: object
-            ) -> subprocess.CompletedProcess[str]:
-                call_order.append("patrol")
-                return subprocess.CompletedProcess(["patrol"], 0, "", "")
-
-            with (
-                patch.object(
-                    stackctl,
-                    "command_app_debug_preflight",
-                    return_value=preflight,
-                ),
-                patch.object(
-                    stackctl,
-                    "_app_content_test_live_runtime_binding",
-                    return_value={"target": "beta-local"},
-                ),
-                patch.object(
-                    stackctl,
-                    "_run_app_content_release_probe",
-                    return_value={
-                        "target": "beta-local",
-                        "suite": "release-bound-readback",
-                        "exitCode": 0,
-                    },
-                ),
-                patch.object(
-                    stackctl,
-                    "_app_content_test_live_actor_context",
-                    return_value=None,
-                ),
-                patch.object(
-                    stackctl,
-                    "_environment_page_smoke_profile_command",
-                    side_effect=smoke_command,
-                ),
-                patch.object(
-                    stackctl,
-                    "_run_profile_command",
-                    side_effect=run_patrol,
-                ),
-                patch.object(
-                    stackctl,
-                    "_run_app_content_message_home_command",
-                    side_effect=lambda *_args, **_kwargs: (run_patrol(), {}),
-                ),
-                patch.object(
-                    stackctl,
-                    "_app_content_patrol_evidence",
-                    return_value={},
-                ),
-                patch.object(
-                    stackctl,
-                    "_app_content_experience_screenshot_digests",
-                    return_value={
-                        "homepage-feed": "sha256:" + "1" * 64,
-                        "app-core-readback": "sha256:" + "2" * 64,
-                        "message-home": "sha256:" + "3" * 64,
-                        "profile-journey": "sha256:" + "4" * 64,
-                    },
-                ),
-                patch.object(stackctl, "run", side_effect=execute),
-            ):
-                result = stackctl._command_app_content_uat(
-                    stackctl.argparse.Namespace(
-                        targets="beta-local",
-                        platform="android",
-                        device_id="emulator-5556",
-                        dry_run=False,
-                        report_dir=str(report_dir),
-                    )
-                )
-
-        self.assertEqual(result["exitCode"], 0)
-        self.assertEqual(call_order, ["patrol"] * 5)
-
-    def test_app_content_uat_rejects_nonrunning_or_unbound_test_live(self) -> None:
-        preflight = {
-            "launchPolicy": "test_live",
-            "target": "alpha-local",
-            "environment": "alpha",
-            "packageBaseline": "",
-        }
-        with patch.object(
-            stackctl,
-            "load_test_live_startup_attempt",
-            return_value=None,
-        ), self.assertRaisesRegex(ValueError, "current running test_live receipt"):
-            stackctl._app_content_test_live_runtime_binding(preflight)
-
-        running = {
-            "status": "running",
-            "failure": None,
-        }
-        with (
-            patch.object(
-                stackctl,
-                "load_test_live_startup_attempt",
-                return_value=running,
-            ),
-            patch.object(
-                stackctl,
-                "load_test_live_content_binding",
-                return_value=None,
-            ),
-            self.assertRaisesRegex(ValueError, "run-bound content binding"),
-        ):
-            stackctl._app_content_test_live_runtime_binding(preflight)
-
-    def test_app_content_uat_typed_actor_policy_matches_runner_contract(self) -> None:
-        alpha_targets = {
-            stackctl.DISCOVERY_FEED_UAT_TEST_TARGET,
-            stackctl.PROFILE_JOURNEY_UAT_TEST_TARGET,
-            stackctl.MESSAGE_HOME_UAT_TEST_TARGET,
-            stackctl.APP_CORE_READBACK_UAT_TEST_TARGET,
-            stackctl.HOME_VIDEO_PLAYBACK_UAT_TEST_TARGET,
-            stackctl.VIDEO_PLAYBACK_CANARY_UAT_TEST_TARGET,
-            stackctl.CONTROLLED_EDGE_RECOVERY_UAT_TEST_TARGET,
-        }
-        for target in alpha_targets:
-            self.assertTrue(
-                stackctl._app_content_uat_requires_typed_actor("alpha", target)
-            )
-        for environment in ("beta", "gamma"):
-            for target in (
-                stackctl.PROFILE_JOURNEY_UAT_TEST_TARGET,
-                stackctl.MESSAGE_HOME_UAT_TEST_TARGET,
-                stackctl.APP_CORE_READBACK_UAT_TEST_TARGET,
-                stackctl.HOME_VIDEO_PLAYBACK_UAT_TEST_TARGET,
-            ):
-                self.assertTrue(
-                    stackctl._app_content_uat_requires_typed_actor(
-                        environment,
-                        target,
-                    )
-                )
-            for target in (
-                stackctl.DISCOVERY_FEED_UAT_TEST_TARGET,
-                stackctl.VIDEO_PLAYBACK_CANARY_UAT_TEST_TARGET,
-                stackctl.CONTROLLED_EDGE_RECOVERY_UAT_TEST_TARGET,
-            ):
-                self.assertFalse(
-                    stackctl._app_content_uat_requires_typed_actor(
-                        environment,
-                        target,
-                    )
-                )
-
-    def test_experience_screenshots_are_complete_and_distinct(self) -> None:
-        suites = (
-            "homepage-feed",
-            "app-core-readback",
-            "message-home",
-            "profile-journey",
-        )
-        runs = [
-            {
-                "target": "alpha-local",
-                "suite": suite,
-                "exitCode": 0,
-                "evidence": {
-                    "screenshotDigest": f"sha256:{index:064x}",
-                    "screenshotMarker": {
-                        "environment": "alpha",
-                        "suite": suite,
-                        "route": f"/terminal/{suite}",
-                        "terminalKey": f"terminal-{suite}",
-                    },
-                },
-            }
-            for index, suite in enumerate(suites, start=1)
-        ]
-        self.assertEqual(
-            set(
-                stackctl._app_content_experience_screenshot_digests(
-                    runs,
-                    target="alpha-local",
-                )
-            ),
-            set(suites),
-        )
-        runs[-1]["evidence"]["screenshotDigest"] = runs[0]["evidence"][
-            "screenshotDigest"
-        ]
-        with self.assertRaisesRegex(ValueError, "must be distinct"):
-            stackctl._app_content_experience_screenshot_digests(
-                runs,
-                target="alpha-local",
-            )
-        runs[-1]["evidence"] = {"screenshotDigest": ""}
-        with self.assertRaisesRegex(ValueError, "route/key marker"):
-            stackctl._app_content_experience_screenshot_digests(
-                runs,
-                target="alpha-local",
-            )
-        runs[-1]["evidence"] = {
-            "screenshotDigest": "sha256:" + "4" * 64,
-            "screenshotMarker": {
-                "environment": "alpha",
-                "suite": suites[-1],
-                "route": "/user/example",
-                "terminalKey": "profile-header-avatar",
-            },
-        }
-        runs[-1]["evidence"]["screenshotDigest"] = ""
-        with self.assertRaisesRegex(ValueError, "digest is missing"):
-            stackctl._app_content_experience_screenshot_digests(
-                runs,
-                target="alpha-local",
-            )
-
-    def test_app_content_uat_actor_context_binds_runtime_release_and_otp(self) -> None:
-        manifest_digest = "sha256:" + "7" * 64
-        startup_attempt_id = "alpha-test-live-current"
-        runtime_binding = {
-            "environment": "alpha",
-            "target": "alpha-local",
-            "startupAttemptId": startup_attempt_id,
-            "releaseId": "release-a",
-            "verifyRunId": "verify-a",
-            "manifestDigest": manifest_digest,
-            "readinessPhase": "consumer",
-            "startupIdentity": {
-                "sourceRevision": "a" * 40,
-                "mutableStateDigest": "sha256:" + "1" * 64,
-                "composeDigest": "sha256:" + "2" * 64,
-                "configurationDigest": "sha256:" + "3" * 64,
-            },
-        }
-        preflight = {
-            "provider": {
-                "adapterId": "ext.sms.local_capture",
-                "environment": "alpha",
-                "configurationDigest": "sha256:" + "3" * 64,
-                "nonPromotable": True,
-                "ready": True,
-            },
-            "loginJourney": {
-                "status": "passed",
-                "challengePresent": True,
-                "sessionPresent": True,
-                "startupAttemptId": startup_attempt_id,
-                "nonPromotable": True,
-                "receiptRef": "env/alpha/runs/login/report.json",
-                "receiptDigest": "sha256:" + "4" * 64,
-            },
-        }
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            root = Path(temporary_directory)
-            readiness_path = root / "release-readiness.json"
-            readiness = {
-                "passed": True,
-                "environment": "alpha",
-                "releaseId": "release-a",
-                "verifyRunId": "verify-a",
-                "manifestDigest": manifest_digest,
-                "readinessPhase": "consumer",
-                "releaseClass": "research",
-                "productLifecycleState": "research",
-                "importRunId": "import-a",
-                "sourceIdentities": [
-                    {
-                        "sourceRevision": "sha256:" + "5" * 64,
-                        "sourceDigest": "sha256:" + "6" * 64,
-                        "entityCatalogDigest": "sha256:" + "8" * 64,
-                        "executionIds": ["execution-a"],
-                    }
-                ],
-                "postIds": ["post-a"],
-                "creatorIds": ["creator-a"],
-                "entityRefs": ["entity-a"],
-                "tagRefs": ["tag-a"],
-                "mediaAssetIds": ["media-a"],
-            }
-            readiness["verificationChecksum"] = canonical_digest(readiness)
-            readiness_path.write_text(json.dumps(readiness), encoding="utf-8")
-            context = stackctl._app_content_test_live_actor_context(
-                preflight=preflight,
-                runtime_binding=runtime_binding,
-                readiness_path=readiness_path,
-                report_dir=root / "uat",
-            )
-
-        self.assertEqual(context.candidate.baseline_id, "sha256:" + "1" * 64)
-        self.assertEqual(context.candidate.package_digest, "sha256:" + "2" * 64)
-        self.assertEqual(context.candidate.readiness_phase, "consumer")
-        self.assertEqual(
-            tuple(item.object_id for item in context.candidate.release_posts),
-            ("post-a",),
-        )
-        self.assertEqual(
-            context.provider_evidence[
-                AUTHENTICATED_ACTORS.required_provider_capabilities[0].value
-            ][
-                "candidateBindingDigest"
-            ],
-            context.candidate.digest,
-        )

@@ -37,6 +37,7 @@
 - 若某域迁移失败，恢复代码但不得删除已经成立的 metadata 字段，也不得通过登记清单豁免回归。
 - 新增云接口或新页面数据模型：**须** 先改 metadata 再 codegen，**禁止** 仅端侧手写 DTO 作为长期方案。
 - alpha/beta/gamma/prod 统一使用 `lib/main.dart` 的 production Remote composition，代码图中不得保留 `AppDataSourceMode`、`appDataSourceModeProvider`、alpha runner、mock package 或同义运行时切换器；环境名和 runtime define 只能选择 endpoint/config，不得改变数据源。
+- 消费 DTO 抽象基类或共享接口时，差异收口到基类接口、抽象 getter 或语义化 capability；业务与 UI 代码不得以 `is`/`is!`/`as`/`whereType<T>()` 分支具体子类型。唯一例外是反序列化与工厂分发层可按 wire format 决定实例化的子类。测试可断言具体类型，生产代码不行，新增字段访问需求先补基类契约再改消费方。
 
 ## 4. 契约引用
 

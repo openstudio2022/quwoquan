@@ -144,6 +144,7 @@ def _window(
         scenario="content_feed",
         request_digest=f"request-{window_id}",
         ranking=RankingResult(
+            experiment_bucket="model",
             model_bucket="model",
             model_channel="champion",
             model_release_id="release-001",

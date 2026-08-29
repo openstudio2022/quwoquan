@@ -158,10 +158,18 @@ def _mutable_fixture(
         "providerRuntimeDigest": provider_digest,
         "portProfile": "alpha-local",
         "portBlock": {"start": 17000, "end": 17999},
-        "publishedPorts": {
-            "provider-protocol-substitute": 17360,
-            "sms-provider-substitute": 17330,
-        },
+        "publishedPorts": [
+            {
+                "role": "provider-protocol-substitute",
+                "hostPort": 17360,
+                "protocol": "tcp",
+            },
+            {
+                "role": "sms-provider-substitute",
+                "hostPort": 17330,
+                "protocol": "tcp",
+            },
+        ],
         "tlsProfile": "local-managed",
         "resolverHandoffDigest": _digest("resolver"),
         "publicWebPackage": {

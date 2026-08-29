@@ -44,11 +44,6 @@ final class IncomingCallPushCoordinator {
       defaults.removeObject(forKey: StoreKey.endpointMutations)
     }
   }
-
-  var backgroundPushConfigured: Bool {
-    pushRegistry != nil && SwiftFlutterCallkitIncomingPlugin.sharedInstance != nil
-  }
-
   func startPushKit(delegate: PKPushRegistryDelegate) {
     guard pushRegistry == nil,
           SwiftFlutterCallkitIncomingPlugin.sharedInstance != nil

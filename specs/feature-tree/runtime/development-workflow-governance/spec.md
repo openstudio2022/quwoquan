@@ -15,7 +15,7 @@
 - AppRoot/L1/L2/L3 的目录、规格、设计与验收规则。
 - 工作流技能（`explore/prd/design/dev/continue/plan-next/review/commit` 与自动触发的 `environment-ops/content-production/incident-inspection/distill`）的统一模板、上下文链与工作流间交接契约。
 - 按 `(workflow, deliverable, profiles)` 派发角色评审的 review 机制与分级语义。
-- 跨 harness（Cursor / Codex / Claude Code）的指令载体分配与上下文预算。
+- Cursor / Codex 两个 harness 的指令载体分配、渐进加载与上下文预算。
 - 动态特性上下文、总览、变更影响报告和机器门禁。
 
 ### Out of Scope
@@ -32,7 +32,7 @@
 
 
 - [`directory-native-sdd`](./directory-native-sdd/spec.md)：工具必须直接扫描目录与 Markdown；删除 `.qwq_output` 后仍可从受版本控制真相源重建上下文。
-- [`agent-skill-review-context-organization`](./agent-skill-review-context-organization/spec.md)：顶层 Skill 只收录完整工作流并套用统一八段模板，评审按 profile 精确装配且对无关 gate 零加载，三家 harness 从同一真相源加载。
+- [`agent-skill-review-context-organization`](./agent-skill-review-context-organization/spec.md)：规则按全局、子树、工作流、Feature、角色与 adapter 分层；开发与 Review 共用精确 owner manifest，POST 评审固定在主审加最多一名专审，Cursor/Codex 从同一真相源加载。
 
 ## 5. 能力要求
 
@@ -46,29 +46,24 @@
 <a id="req-002"></a>
 ### REQ-002 命令与自然语言一致执行
 
-- 显式调用工作流技能与自然语言意图必须使用同一 `RESOLVE / PRE / DURING / POST / HANDOFF` 五段执行契约；两者只在 RESOLVE 的输入方式上不同，产出同一 `(workflow, deliverable, scope)` 三元组。
-- 工作流之间必须经 HANDOFF 交接：未决项必须落到「最低可关闭节点 `OPEN-###`」「Out of Scope」「下一工作流承接」三者之一；HANDOFF 必须声明唯一合法下游并覆盖其输入必需项，下一工作流的 RESOLVE 必须消费上一工作流的 HANDOFF，断链必须阻断。
-- 轮次 HANDOFF 的物理形态是交接单：按需落 `.qwq_output/env/repo/runs/handoff/<轮次>/manifest.md`（宪法四项加证据字段「命令+退出码+时间戳+工作树 SHA」），由 `quwoquan_ops/gate/verify_handoff_manifest.py` 校验四项齐全、证据字段完整、未决项三向裁决零悬空。下游消费时证据过期即复跑，不得转抄结论。
-- 交接单每条未决项必须带泛化判定「孤例」或「一类」留痕，判为一类的须写明系统性排查方式。门禁只强制留痕存在（显式声明「无未决项」时豁免）；排查方式完整性由 POST 评审 check 承担，不在门禁强制范围内。
+- 显式调用工作流技能与自然语言意图必须使用同一 `RESOLVE / PRE / DURING / POST / HANDOFF` 生命周期；两者只在 RESOLVE 输入方式上不同，产出同一 `(workflow, deliverable, scope)`。
+- PRE 由主会话按 owner manifest 明确目标、验收、证据层、OPEN 与风险，不自动派 Reviewer；DURING 不再要求把角色 checklist 复制进回复。
+- 普通单步闭环的 HANDOFF 只需产物、验证与未决项。只有跨会话未完成、多人并行、环境/发布、外部阻断、证据需要后继复用或用户显式要求交接时，才落 `.qwq_output/env/repo/runs/handoff/<轮次>/manifest.md`。
+- 持久交接中的未决项必须落到「最低可关闭节点 `OPEN-###`」「Out of Scope」「下一工作流承接」之一；下游消费时证据字节或来源漂移即复跑，不得转抄结论。
 - 教训沉淀由 `distill` 工作流（`.agents/skills/distill/SKILL.md`）承接：输入为交接单跨轮重复缺口、评审 finding 复发、用户同类纠正第二次，输出为带触发场景、根因层、建议落点、gate/check 绑定四字段的规则候选（无绑定候选不得标 MUST）。回写只走「提议 + 人确认 + prd/dev 正常工作流」，agent 不得绕过工作流直接修改规则资产。
 - 资产垃圾回收报告（僵尸 reference、harness 分叉、AGENTS.md 与特性树重复正文）由 `make asset-gc-report` 可重复生成于 `.qwq_output/env/repo/runs/asset-gc/`，回收裁决走 distill / plan-next。
-- 各工作流完成判据以 `.agents/skills/review/references/completion-criteria.md` 为唯一判据表（完成 = 指定 verify 命令退出 0，禁止计数或抽样等代理指标），表存在性与各 SKILL.md HANDOFF 段引用由 `quwoquan_ops/gate/verify_agent_context_budget.py` 校验。
-- 动态上下文、总览和变更报告只写入 `.qwq_output`。
+- 各工作流在自身 Skill 内就地声明 1～3 条完成证据；完成只认指定命令/测试/人工终态的真实结果，不认计数、todo 或抽样代理指标。
+- 动态上下文、总览、变更报告和其他运行期可删除产物只写入 `.qwq_output`。由受版本控制中性源单向生成、且必须随仓库分发的 Cursor/Codex adapter 属于 tracked projection，不在此列，禁止手改。
 - 目录、链接、章节、验收证据和禁止文件必须由可执行门禁校验。
 
 <a id="req-003"></a>
 ### REQ-003 角色化评审与跨 harness 载体
 
-- 评审必须由 `review` 工作流按 `(workflow, deliverable, profiles)` 从注册表派发角色执行：profile 由 changed_paths 与 deliverable 派生，未匹配 profile 的角色不派发，选中 bundle 内相同 gate 只执行一次。角色名以 `.agents/skills/review/references/roles/` 为唯一真相源，其他文件不得自行列举角色清单。
-- Agent 上下文载体只允许顶层 Skill、role、checklist、reference 与 tool 五类，各有唯一职责。
-- 顶层 Skill 只收录可独立触发、有输入、步骤、交付件和失败终态的完整工作流；原则、标准、检查项不得作为顶层 Skill 存在。
-- role 定义评审或执行职责。
-- checklist 只放带分级的可执行判定。
-- reference 只放唯一 owner 的未分级知识。
-- tool 只放该工作流独占的小工具。
-- checklist 每条必须带 `MUST / MUST NOT / SHOULD / SHOULD NOT / MAY / ADVISORY` 分级；标 MUST 的条目必须绑定真实存在的 `gate:` 命令或客观可判定的 `check:` 谓词，否则必须降级为 SHOULD。
-- 指令真相源必须放在三家 harness 共享载体（`AGENTS.md` 与 `.agents/skills/`）；harness 专属目录只允许放触发加速器与生成产物。
-- 任一工作目录下 `AGENTS.md` 的合并总量必须落在最严 harness 的上下文预算内，超限必须阻断而不是静默截断。
+- context manifest、Review plan 与 typed terminal 的字段和恢复语义只由 `quwoquan_ops/policies/agent_governance_contract.yaml` 拥有；workflow/profile/evidence 的可变路由只由 Review registry 拥有。
+- profile 只拥有 specialist/evidence 路由，不拥有 Feature 事实；Feature 上下文由开发与 Review 共享的 owner resolver 直接指向 spec/design/contracts 锚点。
+- role 只定义职责与盲区；checklist 只放分级判定并引用 registry 的命名 evidence。功能、架构、页面和算法事实不得放在角色 reference 中。
+- 指令真相源只存在于 `AGENTS.md`、`.agents/skills/` 与 Feature Tree；Cursor/Codex 专属目录只允许命令薄壳与生成 adapter。
+- 常驻 AGENTS、默认 owner manifest 与单 Reviewer 上下文必须遵守 canonical contract、registry 和门禁绑定的预算，任一超限都阻断。
 
 <a id="req-004"></a>
 ### REQ-004 并行会话合法合入协议
@@ -79,12 +74,21 @@
 - 归因或取证用的 stash/restore 操作必须以 pathspec 显式限定在本会话 scope 内文件，禁止无差别 `git stash`/`git checkout --` 触碰并行会话未提交增量——无差别恢复会把他会话未提交的 spec 增量静默还原回 HEAD 态。
 - ContractGraph 静止窗口：contract view 构建与 accept 期间持有静止窗口，其他会话不得并发修改 canonical contracts；builder 对构建期漂移 fail-closed。遇 Graph 红先判定是否为窗口冲突（等待后复跑），再做失败归因。
 
+<a id="req-005"></a>
+### REQ-005 知识资产七类职责与动态 facets
+
+- 知识资产只有七类 owner：Feature Tree（行为与验收，层级验收所有权按 [`specs/feature-tree/README.md`](../../README.md) 的结构契约执行）、AppRoot/L1/L2 design（DEC）、服务 contracts（wire）、最近 `AGENTS.md`（耐久执行不变量）、Workflow Skill（流程）、policies/hooks/gates/tests/Review registry（强制与评价，分层细则由 [L3 REQ-001](./agent-skill-review-context-organization/spec.md#req-001) 拥有）、外部 live authority 与 runtime receipt（证据）。同一事实只有一个可写 owner。
+- 分类维度（authority、enforcement、scope、load-trigger、lifecycle）从路径、owner manifest、schema、binding 与 Git/provider 元数据动态派生；不建立手工维护的中央分类 registry、顶层 knowledge-base、tracked knowledge-extraction 根目录或中央 decisions/gotcha 库。
+- 知识生命周期为 raw evidence → candidate → 人工确认 → canonical → enforced/evaluated → observed → superseded/removed。未经人工确认的 candidate 不得驱动不可逆实现、生产写入或 contract migration；superseded 必须声明替代锚点并清零 dangling references。
+- 冲突裁决先识别事实类型再回该类型唯一 owner；两个 current canonical owner 声称同一事实时返回 typed `GATE_BLOCK(owner_conflict)`，不得以全局优先级掩盖双真相源。
+- 强制度由 binding closure 决定：绑定可执行 gate/test/required check 的条款是 hard-gate，其余为 review-required 或 advisory；自然语言条款本身不冒充硬门。
+
 ## 6. 契约与依赖
 
 - 上游能力：[`runtime`](../spec.md) 的仓库执行约束。
 - 下游能力：仓库内所有业务节点、metadata、代码和测试。
 - 读取事实：目录、Markdown、metadata、测试 `spec_ref` 与 Git diff。
-- 写入事实：只修改正式规格、设计、metadata、代码和测试；派生结果写入 `.qwq_output`。
+- 写入事实：正式规格、设计、metadata、代码、测试与 machine-readable contract 是 authoring source；运行期派生结果写入 `.qwq_output`，Cursor/Codex tracked projection 只允许由其 contract 指定的中性源和生成器更新。
 - 一致性要求：README 模板、命令和 gate 必须同步更新。
 
 ## 7. 集成验收
@@ -92,18 +96,18 @@
 <a id="sit-001"></a>
 ### SIT-001 目标节点可生成最小完整上下文
 
-- GIVEN 仓库中存在符合层级规范的目标 spec 或被 L1 工程归属覆盖的代码路径。
-- WHEN 开发者生成 feature context 并执行特性树门禁。
-- THEN 输出包含唯一 owner、父链、要求、验收、设计决定、metadata、测试证据、OPEN 与 Git 影响。
+- GIVEN 仓库中存在被稳定 L1 根与 L2 DEC 适用工程根覆盖的目标 spec 或代码路径。
+- WHEN 开发者生成默认 feature context 并执行特性树门禁。
+- THEN 输出符合 canonical agent governance contract 的紧凑 manifest，指向唯一 owner 与直接 canonical 锚点，不拼接父链正文。
 - AND 任何人工索引、节点级 acceptance、changelog 或中央 backlog 回潮都会阻断。
 
 <a id="sit-002"></a>
 ### SIT-002 轮次交接与完成判据机器可裁定
 
-- GIVEN 一个完成任一工作流轮次并进入 HANDOFF 的会话。
-- WHEN 轮次输出交接单且后继轮次的 RESOLVE 消费该交接单。
-- THEN 交接单含宪法 HANDOFF 四项与证据字段（命令、退出码、时间戳、工作树 SHA）并通过校验门禁，未决项三向裁决零悬空。
-- AND 各工作流的完成判据来自唯一判据表且为指定 verify 命令退出 0，证据过期时下游复跑而非转抄结论。
+- GIVEN 一个普通单步闭环或满足持久交接触发条件的工作流轮次。
+- WHEN 工作流完成并由后继轮次消费证据。
+- THEN 根据场景输出唯一适用的交付形式，普通闭环采用产物、验证和未决项，需持久场景采用可校验交接单并将未决项三向裁决至零悬空。
+- AND 完成证据由对应 Skill 就地声明，证据指纹过期时下游复跑而非转抄结论。
 
 <a id="sit-003"></a>
 ### SIT-003 教训沉淀与并行会话合法合入
@@ -112,6 +116,13 @@
 - WHEN 触发 distill 沉淀提议并有会话申请合入。
 - THEN 规则候选带触发场景、根因层、建议落点与 gate/check 绑定，经人确认后走 prd/dev 正常工作流落地。
 - AND 合入按「scope-green + foreign-red 登记」裁定：本会话 scope 内门禁全绿、域外已知红已登记进交接单缺口段。
+
+<a id="sit-004"></a>
+### SIT-004 知识资产唯一 owner 与分类回潮由结构门禁裁定
+
+- GIVEN 一个新增或变更的知识资产按 `REQ-005` 声明了唯一 owner。
+- WHEN 运行特性树门禁与 Agent 上下文治理门。
+- THEN 违反唯一 owner、层级验收所有权或中央分类 registry 禁令的变更被 typed 判否。
 
 ## 8. 开放事项
 

@@ -215,6 +215,29 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
         }
         test = evidence_root / "testEvidence.json"
         test.write_text(json.dumps(test_evidence), encoding="utf-8")
+        distribution_descriptors: dict[str, dict[str, str]] = {}
+        distribution_schemas = {
+            "publicWeb": "client-app.web.official-release",
+            "androidOfficialRelease": "client-app.android.official-release",
+        }
+        for evidence_key, relative in finalizer.DISTRIBUTION_EVIDENCE_PATHS.items():
+            distribution_path = root / relative
+            distribution_path.parent.mkdir(parents=True, exist_ok=True)
+            distribution_path.write_text(
+                json.dumps(
+                    {
+                        "schema": distribution_schemas[evidence_key],
+                        "sourceGitSha": "a" * 40,
+                        "sourceTreeDigest": "sha1:" + ("b" * 40),
+                    }
+                ),
+                encoding="utf-8",
+            )
+            distribution_descriptors[evidence_key] = {
+                "path": relative,
+                "digest": "sha256:"
+                + hashlib.sha256(distribution_path.read_bytes()).hexdigest(),
+            }
         payload = finalizer.seal_manifest({
             "schema": finalizer.SCHEMA,
             "releaseTrainId": None,
@@ -239,6 +262,10 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
                 for environment in finalizer.ENVIRONMENTS
             },
             "applicationPackages": application_packages,
+            "publicWeb": distribution_descriptors["publicWeb"],
+            "androidOfficialRelease": distribution_descriptors[
+                "androidOfficialRelease"
+            ],
             "opsPortal": ops_portal_package,
             "contractGraphDigest": "sha256:"
             + hashlib.sha256(contract_graph.read_bytes()).hexdigest(),

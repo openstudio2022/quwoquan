@@ -8,12 +8,15 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
     });
   }
 
-  Widget _buildCommentSplitContent(ContentPostViewData post) {
+  Widget _buildCommentSplitContent(
+    ContentPostViewData post, {
+    required bool enableArticlePageCurl,
+  }) {
     return ColoredBox(
       color: AppColors.worksBackground,
       child: _buildPostCanvas(
         post,
-        enableArticlePageCurl: _enableArticlePageCurl,
+        enableArticlePageCurl: enableArticlePageCurl,
         isVisible: true,
         videoViewportEpoch: _videoViewportEpoch,
       ),
@@ -377,17 +380,18 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
       return;
     }
     try {
-      final grant = await ref
-          .read(workBrowserContentMediaFacetProvider)
-          .requestOriginalAccess(
-            RequestContentMediaOriginalAccessCommand(mediaId: mediaId),
+      // grant 兑换、校验、缓存、单飞与换签只存在于 coordinator 一处（DEC-033）；
+      // 「查看原图」不再自建一条 facet 直调，否则同一资产会有两套授权路径。
+      final lease = await ref
+          .read(signedMediaDeliveryCoordinatorProvider)
+          .resolve(
+            assetId: mediaId,
+            kind: MediaDeliveryKind.image,
+            accessMode: MediaDeliveryAccessMode.signedGrant,
           );
-      if (grant.mediaId != mediaId) {
-        throw StateError('original access grant media id mismatch');
-      }
       final access = WorksViewerOriginalImageAccess(
-        url: grant.originalUrl.toString(),
-        expiresAt: grant.expiresAt,
+        url: lease.deliveryUri.toString(),
+        expiresAt: lease.expiresAt,
       );
       if (!access.isUsableAt(DateTime.now())) {
         throw StateError('original access grant already expired');

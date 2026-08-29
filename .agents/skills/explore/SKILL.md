@@ -8,70 +8,24 @@ metadata:
 
 # explore
 
-只读定位增量的产品归属、父链、边界与风险。**不写代码，也不写规格。**
-五段执行契约见根 `AGENTS.md`。
+## 触发与输入
 
-## 触发
-
-- 显式命令 `/explore`。
-- 自然语言：先分析、看归属、怎么拆、有哪些风险，或任何无法唯一 RESOLVE 的非平凡需求。
-
-## 输入
-
-- 用户意图描述（必需；连 Journey 都定位不到时先向用户澄清，不凭猜测往下走）。
-- 候选代码 / spec 路径（可选）。
-- 当前 Git 影响面（`git status`，必需）。
-
-## 角色
-
-主会话扮演 **domain-locator**（只读定位者）：只定位与提问，不做产品、架构或实现决定。
+用于非平凡变更的读取定位，或用户要求归属、拆分、风险分析时触发。输入是用户目标、候选 spec/代码路径和当前 Git/活跃 writer 状态。
 
 ## 执行
 
-自由度：高（文本指导，路径由目标决定）。
+1. 只读检查 HEAD、status、目标 diff 与 writer，不修改文件。
+2. 对已知路径运行 `make feature-context TARGET=<path>`，以 manifest 解析 AppRoot/L1/L2/L3、DEC/REQ/GWT、OPEN、适用 AGENTS 和 profiles。
+3. 明确 In Scope / Out of Scope、用户价值、验收意图、直接依赖、共享写点和最小后继工作流。默认不派 Reviewer。
 
-1. 读最近的 `AGENTS.md` 与 [`specs/feature-tree/README.md`](../../../specs/feature-tree/README.md)。
-2. 已知路径时 `make feature-context TARGET=<path>`；否则从 AppRoot Journey 与 L1 边界逐层定位。
-3. 判断触发面：metadata、runtime error、Mock 隔离、页面质量、Data/Service/App、观测、环境与回滚。
-4. 用 `git status` 找出脏工作树中并行会话改动与目标路径的交集，列出受影响的棘轮基线（ceiling 类门禁）当前值。
-5. 读目标父链的 `OPEN`。
-6. 意图含糊或存在多个待裁决分叉时，按 [references/decision-tree-interview.md](references/decision-tree-interview.md) 建决策树、按 frontier 分轮提问；事实自己查（可派子代理），决策才问用户。
+## 完成证据
 
-- [MUST NOT] 回滚、覆盖或清理与本目标无关的用户改动。**脏工作树是常态。**
-- [MUST NOT] 扫描或创建中央台账——本仓库不存在中央台账。
-
-交互协议（[interaction-protocols](../review/references/interaction-protocols.md)）：
-RESOLVE 产出后先做协议 1 做前反串讲——五项呈现即继续，写不出验证判据不许开工；
-澄清按协议 2 归宿分流。纯查询豁免反串讲与交接单。
-
-## 交付件
-
-**RESOLVE 报告**：唯一 `(workflow, deliverable, scope)`、完整父链、In/Out Scope、验收意图
-`UAT/DOM/SIT/GWT/contract`、证据层 `local_contract/api_integration/user_acceptance`、
-直接依赖、风险与下游 PRE 输入。
-
-送审前自检：
-
-- 无 TBD 占位；
-- 决策树 frontier 已清空，或残项显式列为风险；
-- 代码 owner 唯一，父子规格无冲突，验收意图可观察。
-
-## 内置评审
-
-- POST：调 `review`（workflow=`explore`，segment=POST，deliverable=`resolve-report`），
-  典型角色 product + architect，只校验归属唯一与范围完整，无 gate 执行。
+交付唯一 owner chain、canonical contexts/锨点、范围、验收层、风险与建议下游。证据是当前 manifest、Git 快照和引用的规格锨点，不是对话印象。
 
 ## 失败与停止
 
-- 代码 owner 缺失或被多个 L1 同优先级认领：`GATE_BLOCK`，先修规格归属。
-- 父子规格冲突、验收意图不可观察：`GATE_BLOCK`。
-- 不做 PRD、DEC 或实现。
+无 owner、多 owner、父链断裂、验收意图缺失或发现未授权并行写入时返回 typed `GATE_BLOCK`，不向 prd/design/dev 猜测前进。
 
-## HANDOFF
+## 条件性交接
 
-- **完成判据**：见 [completion-criteria](../review/references/completion-criteria.md) 本工作流段；证据链条目带命令+退出码+时间戳+SHA，下游过期即复跑。
-- **产出物**：RESOLVE 报告。
-- **未决项去向**：已知 OPEN 清单、并行冲突风险、受影响棘轮当前值。
-- **唯一合法下游**：`prd`（纯查询任务直接答复用户，不交接）；RESOLVE 报告必须覆盖 `prd` 输入段全部必需项。
-- **证据链**：`make feature-context` 输出、`git status` 交集结论。
-- **交接单**：轮次结束按需落 `.qwq_output/env/repo/runs/handoff/<轮次>/manifest.md` 并过 `make verify-handoff-manifest`（纯查询豁免）。
+普通定位只向用户交付结果。只有跨会话未完成、多人并行或外部阻断时，才持久化 owner manifest 指纹、范围、风险和 prd/design/dev 所需输入。

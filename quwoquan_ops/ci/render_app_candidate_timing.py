@@ -7,16 +7,20 @@ import json
 import os
 import sys
 import time
-import urllib.parse
-import urllib.request
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+sys.dont_write_bytecode = True
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from quwoquan_ops.ci.lib.github_actions_api import (
+    GithubActionsApiError,
+    load_run_and_jobs,
+)
 from quwoquan_ops.cli.lib.app_identity import supported_build_products
 
 BUILD_PRODUCT_IDS = tuple(
@@ -88,30 +92,6 @@ def calculate(jobs: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _jobs(repository: str, run_id: str, token: str) -> list[dict[str, Any]]:
-    jobs: list[dict[str, Any]] = []
-    page = 1
-    while True:
-        query = urllib.parse.urlencode({"filter": "latest", "per_page": 100, "page": page})
-        request = urllib.request.Request(
-            f"https://api.github.com/repos/{repository}/actions/runs/{run_id}/jobs?{query}",
-            headers={
-                "Accept": "application/vnd.github+json",
-                "Authorization": f"Bearer {token}",
-                "X-GitHub-Api-Version": "2022-11-28",
-            },
-        )
-        with urllib.request.urlopen(request, timeout=30) as response:
-            payload = json.load(response)
-        batch = payload.get("jobs") if isinstance(payload, dict) else None
-        if not isinstance(batch, list):
-            raise TypeError("GitHub Jobs API returned an invalid payload")
-        jobs.extend(item for item in batch if isinstance(item, dict))
-        if len(batch) < 100:
-            return jobs
-        page += 1
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repository", default=os.environ.get("GITHUB_REPOSITORY", ""))
@@ -135,7 +115,12 @@ def main() -> int:
                 if delay:
                     time.sleep(delay)
                 try:
-                    result = calculate(_jobs(args.repository, args.run_id, args.token))
+                    _, jobs, _ = load_run_and_jobs(
+                        args.repository,
+                        args.run_id,
+                        args.token,
+                    )
+                    result = calculate(jobs)
                     break
                 except ValueError as error:
                     last_error = error
@@ -147,7 +132,7 @@ def main() -> int:
             f"candidate_ready_at={result['candidate_ready_at']}\n",
             encoding="utf-8",
         )
-    except (OSError, ValueError, json.JSONDecodeError) as error:
+    except (GithubActionsApiError, OSError, ValueError, json.JSONDecodeError) as error:
         print(f"GATE_BLOCK: {error}")
         return 2
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))

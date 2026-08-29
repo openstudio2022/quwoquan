@@ -12,6 +12,8 @@ final class PostSearchItemView {
     this.title,
     this.summary,
     this.coverUrl,
+    this.coverAssetId,
+    this.coverAccessMode,
     this.authorId,
     this.authorDisplayName,
     this.authorAvatarUrl,
@@ -31,6 +33,11 @@ final class PostSearchItemView {
   final String? title;
   final String? summary;
   final String? coverUrl;
+
+  /// 封面的配对媒体资产标识与交付访问模式（DEC-033）；research 相位的
+  /// coverUrl 是相对私有 CAS 引用，消费面按 coverAssetId 换短签。
+  final String? coverAssetId;
+  final MediaDeliveryAccessMode? coverAccessMode;
   final String? authorId;
   final String? authorDisplayName;
   final String? authorAvatarUrl;
@@ -58,6 +65,8 @@ final class PostSearchItemView {
       title: hit.title,
       summary: hit.summary,
       coverUrl: hit.coverUrl,
+      coverAssetId: hit.coverAssetId,
+      coverAccessMode: hit.coverAccessMode,
       authorId: hit.authorId,
       authorDisplayName: hit.authorDisplayName,
       authorAvatarUrl: hit.authorAvatarUrl,

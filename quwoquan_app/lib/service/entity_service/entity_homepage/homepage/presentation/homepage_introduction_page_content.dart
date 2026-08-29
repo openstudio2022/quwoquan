@@ -1,9 +1,20 @@
 part of 'homepage_introduction_page.dart';
 
+/// introduction 资产是否声明为 signedGrant 私有交付（DEC-033）。
+/// assetId 缺席仍进入 typed 入口并 fail-closed，不预过滤成缺席。
+bool _declaresSignedGrantIntroAsset(HomepageIntroductionAsset asset) {
+  return asset.accessMode == MediaDeliveryAccessMode.signedGrant;
+}
+
 class _IntroductionHero extends StatelessWidget {
   const _IntroductionHero({required this.introduction});
 
   final HomepageIntroduction introduction;
+
+  /// hero cover 是否声明为 signedGrant 私有交付（DEC-033）。assetId 缺席仍
+  /// 进入 typed 入口并呈现不可恢复的投影矛盾终态。
+  bool get _declaresSignedGrantCover =>
+      introduction.coverAccessMode == MediaDeliveryAccessMode.signedGrant;
 
   @override
   Widget build(BuildContext context) {
@@ -25,22 +36,38 @@ class _IntroductionHero extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: <Widget>[
-            if (coverUrl.isNotEmpty)
-              AppMediaImage(
-                imageSource: coverUrl,
+            // DEC-033：hero cover 经统一 typed 分流入口，不再直接 import
+            // original_access_quota 对象的私有表现件。
+            if (_declaresSignedGrantCover || coverUrl.isNotEmpty)
+              mediaDeliveryImage(
+                binding: MediaDeliveryBinding(
+                  assetId: introduction.coverAssetId?.trim() ?? '',
+                  accessMode: introduction.coverAccessMode,
+                  publicUrl: coverUrl,
+                ),
+                kind: MediaDeliveryKind.image,
                 fit: BoxFit.cover,
                 placeholder: const SizedBox.shrink(),
-                errorWidget: const SizedBox.shrink(),
+                absentWidget: const SizedBox.shrink(),
+                publicBuilder: (context, publicUrl) => AppMediaImage(
+                  imageSource: publicUrl,
+                  fit: BoxFit.cover,
+                  placeholder: const SizedBox.shrink(),
+                  errorWidget: const SizedBox.shrink(),
+                ),
               ),
-            DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: <Color>[
-                    AppColors.black.withValues(alpha: 0.04),
-                    AppColors.black.withValues(alpha: 0.50),
-                  ],
+            // 纯视觉暗纱不得拦截底下媒体失败态的重试手势。
+            IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: <Color>[
+                      AppColors.black.withValues(alpha: 0.04),
+                      AppColors.black.withValues(alpha: 0.50),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -93,6 +120,18 @@ class _IntroductionSectionCard extends StatelessWidget {
       for (final asset in section.assets)
         if (asset.assetId.isNotEmpty) asset.assetId: asset,
     };
+    // inline-only section 无横滑兜底；signedGrant 若连 assetId 都缺失，无法被
+    // markdown 的 asset://<id> 引用命中，但仍必须显式 fail-closed，不能静默消失。
+    // public/契约缺席且无可渲染来源继续保持 absent，不额外占用正文空间。
+    final contradictoryInlineAssets = _assetsInlineOnly
+        ? section.assets
+              .where(
+                (asset) =>
+                    _declaresSignedGrantIntroAsset(asset) &&
+                    asset.assetId.trim().isEmpty,
+              )
+              .toList(growable: false)
+        : const <HomepageIntroductionAsset>[];
     return _IntroductionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -111,6 +150,10 @@ class _IntroductionSectionCard extends StatelessWidget {
               markdown: section.bodyMarkdown!.trim(),
               assetsById: assetsById,
             ),
+          ],
+          for (final asset in contradictoryInlineAssets) ...<Widget>[
+            SizedBox(height: AppSpacing.intraGroupSm),
+            _InlineFigure(asset: asset, caption: (asset.caption ?? '').trim()),
           ],
           if (section.timelineItems.isNotEmpty) ...<Widget>[
             SizedBox(height: AppSpacing.containerSm),
@@ -163,7 +206,11 @@ class _MarkdownLite extends StatelessWidget {
         }
         i = j;
         final asset = assetsById[assetId];
-        if (asset != null && asset.url.trim().isNotEmpty) {
+        // signedGrant 资产由 typed 绑定驱动渲染，不依赖 url 在场；
+        // 公开资产维持既有 url 在场判定。
+        if (asset != null &&
+            (asset.url.trim().isNotEmpty ||
+                _declaresSignedGrantIntroAsset(asset))) {
           widgets.add(_InlineFigure(asset: asset, caption: caption));
         }
         continue;
@@ -229,11 +276,24 @@ class _InlineFigure extends StatelessWidget {
             borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
             child: AspectRatio(
               aspectRatio: _introInlineFigureAspectRatio,
-              child: AppMediaImage(
-                imageSource: asset.url,
+              // DEC-033：内嵌图经统一 typed 分流入口；私有与公开两路共用
+              // 同一占位和失败体验，消费面不再手写 accessMode 三元判断。
+              child: mediaDeliveryImage(
+                binding: MediaDeliveryBinding(
+                  assetId: asset.assetId.trim(),
+                  accessMode: asset.accessMode,
+                  publicUrl: asset.url,
+                ),
+                kind: MediaDeliveryKind.image,
                 fit: BoxFit.cover,
                 placeholder: ColoredBox(color: AppColors.iosFill(context)),
-                errorWidget: ColoredBox(color: AppColors.iosFill(context)),
+                absentWidget: ColoredBox(color: AppColors.iosFill(context)),
+                publicBuilder: (context, publicUrl) => AppMediaImage(
+                  imageSource: publicUrl,
+                  fit: BoxFit.cover,
+                  placeholder: ColoredBox(color: AppColors.iosFill(context)),
+                  errorWidget: ColoredBox(color: AppColors.iosFill(context)),
+                ),
               ),
             ),
           ),
@@ -351,11 +411,28 @@ class _AssetStrip extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: <Widget>[
-                  AppMediaImage(
-                    imageSource: asset.url,
+                  // DEC-033：走唯一 typed 分流入口，不在消费点手写第二份
+                  // 「什么算私有」的判据。
+                  mediaDeliveryImage(
+                    binding: MediaDeliveryBinding(
+                      assetId: asset.assetId.trim(),
+                      accessMode: asset.accessMode,
+                      publicUrl: asset.url,
+                    ),
+                    kind: MediaDeliveryKind.image,
                     fit: BoxFit.cover,
                     placeholder: ColoredBox(color: AppColors.iosFill(context)),
-                    errorWidget: ColoredBox(color: AppColors.iosFill(context)),
+                    absentWidget: ColoredBox(color: AppColors.iosFill(context)),
+                    publicBuilder: (context, publicUrl) => AppMediaImage(
+                      imageSource: publicUrl,
+                      fit: BoxFit.cover,
+                      placeholder: ColoredBox(
+                        color: AppColors.iosFill(context),
+                      ),
+                      errorWidget: ColoredBox(
+                        color: AppColors.iosFill(context),
+                      ),
+                    ),
                   ),
                   if ((asset.caption ?? '').trim().isNotEmpty)
                     Positioned(

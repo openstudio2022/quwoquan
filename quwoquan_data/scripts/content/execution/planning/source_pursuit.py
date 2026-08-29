@@ -157,6 +157,7 @@ def pursue_qualified_target_pool(
     candidate_rows: list[dict[str, Any]],
     *,
     quota: int,
+    frozen_target_ceiling: int,
     discovery_ref: str,
     source_qualifier: TargetSourceQualifier,
     qualification_source_key: str = "qualifiedHomepageSource",
@@ -168,14 +169,20 @@ def pursue_qualified_target_pool(
 ) -> PursuedTargetPool:
     """Qualify candidates in replenishing rounds until the quota is attained.
 
+    The returned pool is what gets frozen as the execution's target set, so it
+    never exceeds ``frozen_target_ceiling`` — the count the request declared.
+    Candidates beyond the ceiling stay visible in the qualification report
+    instead: they were examined, they just are not this execution's targets.
+
     Raises ``DataIssueError`` carrying the exact stop reason when the reference
-    set, the round budget or the stall detector prevents attainment; a
-    below-quota pool is never returned as a success.
+    set, the target ceiling, the round budget or the stall detector prevents
+    attainment; a below-quota pool is never returned as a success.
     """
 
     runtime = active_runtime_policy()
     plan = QuotaPursuitPlan.for_quota(
         quota,
+        frozen_target_ceiling=frozen_target_ceiling,
         oversample_factor=(
             runtime.oversample_factor
             if oversample_factor is None
@@ -206,7 +213,7 @@ def pursue_qualified_target_pool(
         },
     )
     return PursuedTargetPool(
-        targets=tuple(draw.accepted_rows),
+        targets=tuple(draw.accepted_rows[:frozen_target_ceiling]),
         qualification_rows=tuple(draw.qualification_rows),
         progress=progress,
         diversity=(

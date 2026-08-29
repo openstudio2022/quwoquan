@@ -6,6 +6,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True
+
 _SCRIPTS_ROOT = next(
     parent
     for parent in Path(__file__).resolve().parents
@@ -63,17 +65,18 @@ def parse_generated_operations() -> dict[str, str]:
         sys.exit(1)
     text = OPERATION_CONTRACTS_DART.read_text(encoding="utf-8")
     blocks = re.findall(
-        r'^  "([A-Za-z0-9_.]+)": CloudOperationContract\(\n'
-        r"([\s\S]*?)^  \),$",
+        r'^ {2}"([A-Za-z0-9_.]+)"[ \t]*:[ \t\r\n]*'
+        r"CloudOperationContract\([ \t\r\n]*"
+        r'([\s\S]*?)(?=^ {2}"[A-Za-z0-9_.]+"[ \t]*:'
+        r"[ \t\r\n]*CloudOperationContract\(|^};)",
         text,
         flags=re.MULTILINE,
     )
     result: dict[str, str] = {}
     for canonical_id, block in blocks:
         mode_match = re.search(
-            r'^    authMode: "(public|optional|required)",$',
+            r'\bauthMode\s*:\s*"(public|optional|required)"\s*,',
             block,
-            flags=re.MULTILINE,
         )
         if mode_match is None:
             raise ValueError(

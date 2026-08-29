@@ -1,8 +1,7 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: 05b1683f93feb5234ad8184f318b5d32e9f340e4d7e36d1e833581cfc400702c
+// ContractGraph SHA256: 2ba8995ae51f9f431ebc75e30f64d31285cc4cfb724f0ef1d8473c11011a5469
 
 library;
-
 
 final class GreetingIntersectionSnapshot {
   const GreetingIntersectionSnapshot({
@@ -25,16 +24,42 @@ final class GreetingIntersectionSnapshot {
   final String? dimension;
   final DateTime resolvedAt;
 
-  factory GreetingIntersectionSnapshot.fromWire(Map<String, Object?> map, [String path = "GreetingIntersectionSnapshot"]) {
-    _rejectUnknownFields(map, const <String>{"intersectionId", "evidenceId", "sourceRef", "objectTypeRef", "objectId", "primaryText", "dimension", "resolvedAt"}, path);
+  factory GreetingIntersectionSnapshot.fromWire(
+    Map<String, Object?> map, [
+    String path = "GreetingIntersectionSnapshot",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "intersectionId",
+      "evidenceId",
+      "sourceRef",
+      "objectTypeRef",
+      "objectId",
+      "primaryText",
+      "dimension",
+      "resolvedAt",
+    }, path);
     return GreetingIntersectionSnapshot(
-      intersectionId: _requiredNonBlankString(map["intersectionId"], '$path.intersectionId'),
-      evidenceId: _requiredNonBlankString(map["evidenceId"], '$path.evidenceId'),
+      intersectionId: _requiredNonBlankString(
+        map["intersectionId"],
+        '$path.intersectionId',
+      ),
+      evidenceId: _requiredNonBlankString(
+        map["evidenceId"],
+        '$path.evidenceId',
+      ),
       sourceRef: _requiredNonBlankString(map["sourceRef"], '$path.sourceRef'),
-      objectTypeRef: _requiredNonBlankString(map["objectTypeRef"], '$path.objectTypeRef'),
+      objectTypeRef: _requiredNonBlankString(
+        map["objectTypeRef"],
+        '$path.objectTypeRef',
+      ),
       objectId: _requiredNonBlankString(map["objectId"], '$path.objectId'),
-      primaryText: _requiredNonBlankString(map["primaryText"], '$path.primaryText'),
-      dimension: map["dimension"] == null ? null : _requiredString(map["dimension"], '$path.dimension'),
+      primaryText: _requiredNonBlankString(
+        map["primaryText"],
+        '$path.primaryText',
+      ),
+      dimension: map["dimension"] == null
+          ? null
+          : _requiredString(map["dimension"], '$path.dimension'),
       resolvedAt: _requiredTimestamp(map["resolvedAt"], '$path.resolvedAt'),
     );
   }
@@ -51,7 +76,6 @@ final class GreetingIntersectionSnapshot {
   };
 }
 
-
 void _rejectUnknownFields(
   Map<String, Object?> value,
   Set<String> allowed,
@@ -60,7 +84,9 @@ void _rejectUnknownFields(
   final unknown = value.keys.where((key) => !allowed.contains(key)).toList()
     ..sort();
   if (unknown.isNotEmpty) {
-    throw FormatException('$path contains unknown fields: ${unknown.join(', ')}');
+    throw FormatException(
+      '$path contains unknown fields: ${unknown.join(', ')}',
+    );
   }
 }
 

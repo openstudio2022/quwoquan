@@ -1,6 +1,5 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
-import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 
@@ -17,6 +16,7 @@ class PostPreviewListTile extends StatelessWidget {
     required this.onTap,
     this.supportingText = '',
     this.coverUrl = '',
+    this.mediaContent,
     this.showVideoBadge = false,
     this.thumbnailWidth =
         AppSpacing.followButtonWidth + AppSpacing.intraGroupMd,
@@ -34,6 +34,11 @@ class PostPreviewListTile extends StatelessWidget {
   final String title;
   final String supportingText;
   final String coverUrl;
+
+  /// 缩略渲染插槽。design_system 是被服务层复用的壳层，不能反向依赖 service
+  /// 对象，因此这里不做 release 媒体的交付分流：消费 release 媒体的调用方必须
+  /// 把已分流的渲染件从这里传进来（DEC-033）。
+  final Widget? mediaContent;
   final bool showVideoBadge;
   final double thumbnailWidth;
   final double thumbnailHeight;
@@ -46,7 +51,7 @@ class PostPreviewListTile extends StatelessWidget {
   final int supportingTextMaxLines;
   final VoidCallback onTap;
 
-  bool get _hasCover => coverUrl.trim().isNotEmpty;
+  bool get _hasCover => mediaContent != null || coverUrl.trim().isNotEmpty;
 
   bool get _hasSupportingText => supportingText.trim().isNotEmpty;
 
@@ -107,21 +112,10 @@ class PostPreviewListTile extends StatelessWidget {
                     fit: StackFit.expand,
                     children: [
                       if (_hasCover)
-                        AppCachedNetworkImage(
-                          imageUrl: coverUrl,
-                          fit: BoxFit.cover,
-                          cdnPreset: CdnImagePreset.thumbnail,
-                          placeholder: ColoredBox(
-                            color: fgSecondary.withValues(alpha: 0.12),
-                          ),
-                          errorWidget: ColoredBox(
-                            color: fgSecondary.withValues(alpha: 0.12),
-                            child: Icon(
-                              CupertinoIcons.photo,
-                              color: fgSecondary,
-                            ),
-                          ),
-                        )
+                        mediaContent ??
+                            ColoredBox(
+                              color: fgSecondary.withValues(alpha: 0.12),
+                            )
                       else
                         ColoredBox(
                           color: fgSecondary.withValues(alpha: 0.12),

@@ -3,6 +3,70 @@ part of 'home_multi_form_feed.dart';
 
 const double _feedMediaGap = AppSpacing.xs;
 
+/// 首页视频卡的播放器装配。
+///
+/// 公开路与私有短签路只在取址来源上不同，播放 chrome、埋点与失败上报必须
+/// 完全一致；两处各写一遍会让两路观感与观测悄悄漂移。
+Widget _homeFeedVideoPlayer({
+  required ContentPostViewData dto,
+  required MediaDeliveryBinding coverBinding,
+  required bool initialize,
+  required bool autoPlay,
+  required bool sharedTimelineEnabled,
+  required VoidCallback? onTap,
+  required FeedPerformanceObservability performanceObservability,
+  required ContentBehaviorTrackerPort behaviorTracker,
+  MediaDeliveryReference? deliveryReference,
+  MediaDeliveryReference? adaptiveReference,
+  SignedVideoDelivery? signedDelivery,
+}) {
+  return HomeFeedCrossObjectComposition.videoPlayer(
+    key: ValueKey<String>('home-video-player-${dto.id}'),
+    deliveryReference: deliveryReference,
+    signedDelivery: signedDelivery,
+    adaptiveDeliveryReference: adaptiveReference,
+    adaptiveDescriptorVersion: dto.hlsCmafDescriptorVersion ?? 0,
+    thumbnailBinding: coverBinding,
+    initialize: initialize,
+    autoPlay: autoPlay,
+    inlineOverlay: sharedTimelineEnabled,
+    verifiedDuration: dto.durationMs == null
+        ? null
+        : Duration(milliseconds: dto.durationMs!),
+    aspectRatio: _mediaAspectRatio(dto),
+    onTap: onTap,
+    onPlaybackStarted: (startupLatency, candidateIndex) {
+      performanceObservability.recordVideoPlaybackStarted(
+        contentId: dto.id,
+        startupMs: startupLatency.inMilliseconds,
+        candidateIndex: candidateIndex,
+        autoPlay: autoPlay,
+      );
+    },
+    onEffectivePlayback: (evidence) {
+      behaviorTracker.trackEffectivePlayback(
+        dto.id,
+        playbackSessionId: evidence.playbackSessionId,
+        effectivePlayMs: evidence.effectivePlayMs,
+        consumedRatio: evidence.consumedRatio,
+        totalUnits: evidence.totalUnits,
+        contentType: 'video',
+        referralSource: ReferralSource.organicFeed,
+      );
+    },
+    onPlaybackFailed: (failure) {
+      performanceObservability.recordVideoPlaybackFailed(
+        contentId: dto.id,
+        candidatesTried: failure.candidatesTried,
+        failureKind: failure.kind.name,
+        userScene: failure.userScene.name,
+        retryable: failure.isRetryable,
+        autoPlay: autoPlay,
+      );
+    },
+  );
+}
+
 class _HomeFeedMediaOverlayPill extends StatelessWidget {
   const _HomeFeedMediaOverlayPill({super.key, required this.label});
 
@@ -63,11 +127,15 @@ class _HomeFeedMediaOverlayPill extends StatelessWidget {
 class _HomeMomentGridCard extends StatelessWidget {
   const _HomeMomentGridCard({
     required this.urls,
+    required this.deliveryIndex,
     required this.isDark,
     required this.onTap,
   });
 
   final List<String> urls;
+
+  /// URL → 交付绑定（DEC-033）：tile 按 typed 声明分流 signedGrant 资产。
+  final Map<String, _FeedImageDelivery> deliveryIndex;
   final bool isDark;
   final void Function(int index) onTap;
 
@@ -109,6 +177,7 @@ class _HomeMomentGridCard extends StatelessWidget {
                   child: _HomeMomentGridTile(
                     tileKey: ValueKey<String>('home-moment-grid-tile-$index'),
                     url: urls[index],
+                    delivery: deliveryIndex[urls[index].trim()],
                     isDark: isDark,
                     showMore: remaining > 0 && index == visibleCount - 1,
                     remaining: remaining,
@@ -127,6 +196,7 @@ class _HomeMomentGridTile extends ConsumerWidget {
   const _HomeMomentGridTile({
     required this.tileKey,
     required this.url,
+    required this.delivery,
     required this.isDark,
     required this.showMore,
     required this.remaining,
@@ -135,6 +205,7 @@ class _HomeMomentGridTile extends ConsumerWidget {
 
   final Key tileKey;
   final String url;
+  final _FeedImageDelivery? delivery;
   final bool isDark;
   final bool showMore;
   final int remaining;
@@ -142,6 +213,7 @@ class _HomeMomentGridTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final signedDelivery = delivery;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
@@ -149,16 +221,11 @@ class _HomeMomentGridTile extends ConsumerWidget {
         key: tileKey,
         fit: StackFit.expand,
         children: [
-          AppCachedNetworkImage(
-            imageUrl: url,
-            imageUrlCandidates: resolveContentMediaUrlCandidates(
-              url,
-              endpointConfig: ref.watch(mediaEndpointConfigProvider),
-            ),
+          _feedDeliveryImage(
+            binding: _feedBinding(url, signedDelivery),
+            isDark: isDark,
+            endpointConfig: ref.watch(mediaEndpointConfigProvider),
             cdnPreset: CdnImagePreset.thumbnail,
-            fit: BoxFit.cover,
-            placeholder: _mediaPlaceholder(isDark),
-            // 失败态走 AppCachedNetworkImage 显式失败件，与加载占位可区分。
           ),
           if (showMore)
             Positioned.fill(
@@ -200,12 +267,16 @@ class _HomeMomentGridTile extends ConsumerWidget {
 class _HomeFeedImageCarousel extends ConsumerStatefulWidget {
   const _HomeFeedImageCarousel({
     required this.urls,
+    required this.deliveryIndex,
     required this.isDark,
     required this.onTap,
     required this.aspectRatio,
   });
 
   final List<String> urls;
+
+  /// URL → 交付绑定（DEC-033）：逐页按 typed 声明分流 signedGrant 资产。
+  final Map<String, _FeedImageDelivery> deliveryIndex;
   final bool isDark;
   final void Function(int index) onTap;
   final double aspectRatio;
@@ -254,19 +325,17 @@ class _HomeFeedImageCarouselState
               itemCount: urls.length,
               onPageChanged: (next) => setState(() => _index = next),
               itemBuilder: (context, index) {
+                final delivery = widget.deliveryIndex[urls[index]];
                 return GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: () => widget.onTap(index),
-                  child: AppCachedNetworkImage(
-                    imageUrl: urls[index],
-                    imageUrlCandidates: resolveContentMediaUrlCandidates(
-                      urls[index],
-                      endpointConfig: ref.watch(mediaEndpointConfigProvider),
-                    ),
-                    cdnPreset: CdnImagePreset.cover,
-                    fit: BoxFit.cover,
+                  // DEC-033：signedGrant 资产分流到私有媒体桥接原子，
+                  // 公开资产维持既有路径不变。
+                  child: _feedDeliveryImage(
+                    binding: _feedBinding(urls[index], delivery),
+                    isDark: widget.isDark,
+                    endpointConfig: ref.watch(mediaEndpointConfigProvider),
                     placeholder: _placeholder(),
-                    // 失败态走显式失败件，与加载占位可区分。
                   ),
                 );
               },
@@ -431,11 +500,14 @@ class _HomeFeedVideoCard extends ConsumerWidget {
         : MediaDeliveryResolver(endpointConfig);
     final mediaAssetId = dto.mediaAssetId?.trim() ?? '';
     final mediaAssetVersion = dto.mediaAssetVersion ?? 0;
-    final videoReference = resolver?.tryResolve(
-      dto.mediaVideoUrl,
-      kind: MediaDeliveryKind.video,
-      assetId: mediaAssetId.isEmpty ? dto.id : mediaAssetId,
-      version: mediaAssetVersion,
+    // 视频本体的交付声明取自投影 mediaItems 的同一条目。私有视频走短签渐进式
+    // MP4：分段 Range 由原生播放器发起、交付边缘按段复算签名，因此单签 URL 即可
+    // 播放。绝不按公开地址播放私有资产——那会把授权判定悄悄跳过。
+    final videoDelivery = _feedImageDeliveryIndex(dto)[dto.mediaVideoUrl.trim()];
+    final videoBinding = MediaDeliveryBinding(
+      assetId: videoDelivery?.assetId ?? mediaAssetId,
+      accessMode: videoDelivery?.accessMode,
+      publicUrl: dto.mediaVideoUrl,
     );
     final adaptiveReference = mediaAssetId.isEmpty || mediaAssetVersion <= 0
         ? null
@@ -448,10 +520,14 @@ class _HomeFeedVideoCard extends ConsumerWidget {
     final coverRaw = dto.mediaVideoCoverUrl.isNotEmpty
         ? dto.mediaVideoCoverUrl
         : dto.primaryVisualUrl;
-    final coverReference = resolver?.tryResolve(
-      coverRaw,
-      kind: MediaDeliveryKind.image,
-      assetId: dto.id,
+    // 封面的 typed 交付绑定取自投影 mediaItems 的逐媒体声明（含 coverAssetId 与
+    // accessMode），不以 dto.id 冒充媒体资产标识。索引缺该 URL 即契约未声明，
+    // 显式落公开路。
+    final coverDelivery = _feedImageDeliveryIndex(dto)[coverRaw.trim()];
+    final coverBinding = MediaDeliveryBinding(
+      assetId: coverDelivery?.assetId ?? '',
+      accessMode: coverDelivery?.accessMode,
+      publicUrl: coverRaw,
     );
     return GestureDetector(
       onTap: onTap,
@@ -463,62 +539,73 @@ class _HomeFeedVideoCard extends ConsumerWidget {
           fit: StackFit.expand,
           children: [
             DecoratedBox(decoration: BoxDecoration(color: surfaceMuted)),
-            if (videoReference != null)
-              HomeFeedCrossObjectComposition.videoPlayer(
-                key: ValueKey<String>('home-video-player-${dto.id}'),
-                deliveryReference: videoReference,
-                adaptiveDeliveryReference: adaptiveReference,
-                adaptiveDescriptorVersion: dto.hlsCmafDescriptorVersion ?? 0,
-                thumbnailReference: coverReference,
-                initialize: initialize,
-                autoPlay: autoPlay,
-                inlineOverlay: sharedTimelineEnabled,
-                verifiedDuration: dto.durationMs == null
-                    ? null
-                    : Duration(milliseconds: dto.durationMs!),
-                aspectRatio: _mediaAspectRatio(dto),
-                onTap: onTap,
-                onPlaybackStarted: (startupLatency, candidateIndex) {
-                  performanceObservability.recordVideoPlaybackStarted(
-                    contentId: dto.id,
-                    startupMs: startupLatency.inMilliseconds,
-                    candidateIndex: candidateIndex,
+            if (videoBinding.hasRenderableSource)
+              mediaDeliveryVideo(
+                binding: videoBinding,
+                placeholder: coverBinding.hasRenderableSource
+                    ? _feedDeliveryImage(
+                        binding: coverBinding,
+                        isDark: isDark,
+                        endpointConfig: endpointConfig,
+                      )
+                    : null,
+                absentWidget: coverBinding.hasRenderableSource
+                    ? _feedDeliveryImage(
+                        binding: coverBinding,
+                        isDark: isDark,
+                        endpointConfig: endpointConfig,
+                      )
+                    : null,
+                publicBuilder: (context, publicUrl) {
+                  final videoReference = resolver?.tryResolve(
+                    publicUrl,
+                    kind: MediaDeliveryKind.video,
+                    // 资产身份缺席就传空：以 post 标识冒充媒体资产标识会让缓存与
+                    // 埋点按错误身份归并，封面侧已锁定禁止，视频侧同禁。
+                    assetId: mediaAssetId,
+                    version: mediaAssetVersion,
+                  );
+                  if (videoReference == null) {
+                    return coverBinding.hasRenderableSource
+                        // 同一封面在播放态由 typed 绑定交付，静态态若改回裸 URL，
+                        // 私有封面就会在未播放时空图——两态必须同源。
+                        ? _feedDeliveryImage(
+                            binding: coverBinding,
+                            isDark: isDark,
+                            endpointConfig: endpointConfig,
+                          )
+                        : const SizedBox.shrink();
+                  }
+                  return _homeFeedVideoPlayer(
+                    dto: dto,
+                    deliveryReference: videoReference,
+                    adaptiveReference: adaptiveReference,
+                    coverBinding: coverBinding,
+                    initialize: initialize,
                     autoPlay: autoPlay,
+                    sharedTimelineEnabled: sharedTimelineEnabled,
+                    onTap: onTap,
+                    performanceObservability: performanceObservability,
+                    behaviorTracker: behaviorTracker,
                   );
                 },
-                onEffectivePlayback: (evidence) {
-                  behaviorTracker.trackEffectivePlayback(
-                    dto.id,
-                    playbackSessionId: evidence.playbackSessionId,
-                    effectivePlayMs: evidence.effectivePlayMs,
-                    consumedRatio: evidence.consumedRatio,
-                    totalUnits: evidence.totalUnits,
-                    contentType: 'video',
-                    referralSource: ReferralSource.organicFeed,
-                  );
-                },
-                onPlaybackFailed: (failure) {
-                  performanceObservability.recordVideoPlaybackFailed(
-                    contentId: dto.id,
-                    candidatesTried: failure.candidatesTried,
-                    failureKind: failure.kind.name,
-                    userScene: failure.userScene.name,
-                    retryable: failure.isRetryable,
-                    autoPlay: autoPlay,
-                  );
-                },
-              )
-            else if (dto.primaryVisualUrl.trim().isNotEmpty)
-              AppCachedNetworkImage(
-                imageUrl: dto.primaryVisualUrl,
-                imageUrlCandidates: resolveContentMediaUrlCandidates(
-                  dto.primaryVisualUrl,
-                  endpointConfig: endpointConfig,
+                signedBuilder: (context, signedDelivery) => _homeFeedVideoPlayer(
+                  dto: dto,
+                  signedDelivery: signedDelivery,
+                  coverBinding: coverBinding,
+                  initialize: initialize,
+                  autoPlay: autoPlay,
+                  sharedTimelineEnabled: sharedTimelineEnabled,
+                  onTap: onTap,
+                  performanceObservability: performanceObservability,
+                  behaviorTracker: behaviorTracker,
                 ),
-                cdnPreset: CdnImagePreset.cover,
-                fit: BoxFit.cover,
-                placeholder: _mediaPlaceholder(isDark),
-                // 失败态走显式失败件，与加载占位可区分。
+              )
+            else if (coverBinding.hasRenderableSource)
+              _feedDeliveryImage(
+                binding: coverBinding,
+                isDark: isDark,
+                endpointConfig: endpointConfig,
               ),
             // 中央播放标识只属于完全未初始化的静态封面态；预热/初始化后由
             // VideoPlayerWidget 自己呈现加载或画面，避免长按时叠出两个播放按钮。

@@ -16,6 +16,17 @@ PROD_CADDY_IMAGE = (
     "docker.io/library/caddy:2.8.4-alpine@"
     "sha256:af32e97399febea808609119bb21544d0265c58a02836576e32a2d082c262c17"
 )
+
+PROD_PLANE_CADDY_ADMIN_CONTAINER_PORT = 2019
+# prod 平面的 Caddy admin 主机端口由 prod 渲染器拥有，不派生自 local port manifest。
+# prod/gray/prevalidate 是同一台机器上的三个实例，各自需要互不冲突的 admin 编号；
+# manifest 只有单个 `prod-sim` profile，把它们归一过去会让三实例塌缩成同一个端口，
+# 破坏隔离。集中声明是为了让这三个数字有唯一出处，而不是散落成看似漂移的字面量。
+PROD_PLANE_ADMIN_PORTS = {
+    "prod": 12019,
+    "gray": 22019,
+    "prevalidate": 32019,
+}
 RUNTIME_LOG_EXPORT_SERVICES = {
     "api-edge",
     "assistant-service",

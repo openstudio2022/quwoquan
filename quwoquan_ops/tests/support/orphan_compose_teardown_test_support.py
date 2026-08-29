@@ -17,6 +17,7 @@ import pytest
 
 from quwoquan_ops.cli import stackctl
 from quwoquan_ops.cli.lib import orphan_compose_teardown as contract
+from quwoquan_ops.cli.lib.port_manifest import load_port_manifest
 
 
 CONTAINER_ID = "a" * 64
@@ -31,25 +32,29 @@ def ports(*, opened: bool = True) -> list[dict[str, object]]:
     return [{"name": "api-edge", "port": 17000, "open": opened}]
 
 
-def docker_inventory() -> dict[tuple[str, ...], CompletedProcess[str]]:
+def docker_inventory(
+    *,
+    project: str = PROJECT,
+) -> dict[tuple[str, ...], CompletedProcess[str]]:
     labels = {
-        "com.docker.compose.project": PROJECT,
-        "com.docker.compose.service": "api-edge",
+        "com.docker.compose.project": project,
+        "com.docker.compose.service": "gamma-proxy",
         "com.docker.compose.config-hash": "config-a",
         "com.docker.compose.project.config_files": "/repo/compose.yaml",
         "com.docker.compose.project.working_dir": "/repo",
     }
     network_labels = {
-        "com.docker.compose.project": PROJECT,
+        "com.docker.compose.project": project,
         "com.docker.compose.network": "default",
         "com.docker.compose.config-hash": "config-b",
     }
     volume_labels = {
-        "com.docker.compose.project": PROJECT,
+        "com.docker.compose.project": project,
         "com.docker.compose.volume": "mongo-data",
         "com.docker.compose.config-hash": "config-c",
     }
-    label_filter = f"label=com.docker.compose.project={PROJECT}"
+    label_filter = f"label=com.docker.compose.project={project}"
+    volume_name = f"{project}_mongo-data"
     return {
         (
             "docker",
@@ -72,9 +77,7 @@ def docker_inventory() -> dict[tuple[str, ...], CompletedProcess[str]]:
         ): CompletedProcess(
             [], 0, NETWORK_ID + "\n", ""
         ),
-        ("docker", "volume", "ls", "-q", "--filter", label_filter): CompletedProcess(
-            [], 0, "quwoquan_alpha_release_mongo-data\n", ""
-        ),
+        ("docker", "volume", "ls", "-q", "--filter", label_filter        ): CompletedProcess([], 0, volume_name + "\n", ""),
         ("docker", "inspect", CONTAINER_ID): CompletedProcess(
             [],
             0,
@@ -82,7 +85,7 @@ def docker_inventory() -> dict[tuple[str, ...], CompletedProcess[str]]:
                 [
                     {
                         "Id": CONTAINER_ID,
-                        "Name": "/quwoquan_alpha_release-api-edge-1",
+                        "Name": f"/{project}-gamma-proxy-1",
                         "Image": IMAGE_DIGEST,
                         "Config": {
                             "Image": "quwoquan/api-edge:release",
@@ -91,7 +94,7 @@ def docker_inventory() -> dict[tuple[str, ...], CompletedProcess[str]]:
                         },
                         "HostConfig": {
                             "PortBindings": {
-                                "8443/tcp": [
+                                "17000/tcp": [
                                     {"HostIp": "127.0.0.1", "HostPort": "17000"}
                                 ]
                             }
@@ -110,7 +113,7 @@ def docker_inventory() -> dict[tuple[str, ...], CompletedProcess[str]]:
                 [
                     {
                         "Id": NETWORK_ID,
-                        "Name": "quwoquan_alpha_release_default",
+                        "Name": f"{project}_default",
                         "Labels": network_labels,
                         "Driver": "bridge",
                         "EnableIPv6": False,
@@ -127,14 +130,14 @@ def docker_inventory() -> dict[tuple[str, ...], CompletedProcess[str]]:
             "docker",
             "volume",
             "inspect",
-            "quwoquan_alpha_release_mongo-data",
+            volume_name,
         ): CompletedProcess(
             [],
             0,
             json.dumps(
                 [
                     {
-                        "Name": "quwoquan_alpha_release_mongo-data",
+                        "Name": volume_name,
                         "Labels": volume_labels,
                         "Driver": "local",
                         "Options": {},
@@ -147,15 +150,18 @@ def docker_inventory() -> dict[tuple[str, ...], CompletedProcess[str]]:
     }
 
 
-def sample() -> dict[str, object]:
-    inventory = docker_inventory()
+def sample(*, project: str = PROJECT) -> dict[str, object]:
+    inventory = docker_inventory(project=project)
 
     def run_command(argv: list[str]) -> CompletedProcess[str]:
         return inventory[tuple(argv)]
 
     return contract.sample_snapshot(
         target="alpha-local",
+        project=project,
         canonical_ports=ports(),
+        port_manifest=load_port_manifest(),
+        port_profile="alpha-local",
         run_command=run_command,
     )
 
@@ -163,26 +169,30 @@ def sample() -> dict[str, object]:
 def post_sample(snapshot: dict[str, object]) -> dict[str, object]:
     return {
         **snapshot,
-        "canonicalPorts": ports(opened=False),
+        "canonicalPorts": [
+            {**item, "open": False} for item in snapshot["canonicalPorts"]
+        ],
+        "publishedEndpoints": [],
         "containers": [],
         "networks": [],
     }
 
 
-def multi_sample() -> dict[str, object]:
-    snapshot = json.loads(json.dumps(sample()))
+def multi_sample(*, project: str = PROJECT) -> dict[str, object]:
+    snapshot = json.loads(json.dumps(sample(project=project)))
     second_container = dict(snapshot["containers"][0])
     second_container["id"] = SECOND_CONTAINER_ID
-    second_container["name"] = "quwoquan_alpha_release-worker-1"
+    second_container["name"] = f"{project}-worker-1"
     second_container["service"] = "worker"
     second_container["labels"] = {
         **second_container["labels"],
         "com.docker.compose.service": "worker",
     }
+    second_container["publishedEndpoints"] = []
     snapshot["containers"].append(second_container)
     second_network = dict(snapshot["networks"][0])
     second_network["id"] = SECOND_NETWORK_ID
-    second_network["name"] = "quwoquan_alpha_release_internal"
+    second_network["name"] = f"{project}_internal"
     second_network["labels"] = {
         **second_network["labels"],
         "com.docker.compose.network": "internal",
@@ -214,12 +224,16 @@ def install_stackctl_fakes(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> P
     monkeypatch.setattr(
         stackctl,
         "load_startup_attempt",
-        lambda _target: {"target": "alpha-local", "status": "stopped"},
+        lambda _target: {
+            "target": "alpha-local",
+            "status": "stopped",
+            "composeProject": PROJECT,
+        },
     )
     monkeypatch.setattr(
         stackctl,
         "_canonical_port_occupancy_report",
-        lambda _target: {"ports": ports()},
+        lambda _target: {"profile": "alpha-local", "ports": ports()},
     )
     monkeypatch.setattr(
         stackctl,
@@ -232,12 +246,12 @@ def install_stackctl_fakes(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> P
     monkeypatch.setattr(stackctl, "socket_probe", lambda _port: False)
     monkeypatch.setattr(
         stackctl,
-        "_wait_for_network_ports_released",
-        lambda *repair_args, **_kwargs: [],
+        "_published_endpoint_is_occupied",
+        lambda _endpoint: False,
     )
     monkeypatch.setattr(
         stackctl,
-        "_wait_for_exact_tcp_ports_released",
+        "_wait_for_published_endpoints_released",
         lambda *repair_args, **_kwargs: [],
     )
     monkeypatch.setattr(stackctl, "_write_summary_bundle", lambda *repair_args, **_kwargs: None)

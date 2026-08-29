@@ -35,13 +35,13 @@ RUNTIME_TARGETS = {
 def _build_handoff(
     environment: str,
     *,
-    launch_mode: str = "xcode_build",
+    launch_provenance: str = "canonical_launcher",
 ) -> tuple[dict[str, object], dict[str, object]]:
     return build_test_handoff_fixture(
         launcher,
         environment,
         RUNTIME_TARGETS[environment],
-        launch_mode=launch_mode,
+        launch_provenance=launch_provenance,
     )
 
 
@@ -68,12 +68,18 @@ def _apply_handoff_identity(
     environment: str,
     *,
     artifact_root: Path,
-    launch_mode: str = "xcode_build",
+    launch_provenance: str = "canonical_launcher",
     runtime_python: Path,
 ) -> dict[str, object]:
-    handoff, trust_envelope = _build_handoff(environment, launch_mode=launch_mode)
+    handoff, trust_envelope = _build_handoff(
+        environment,
+        launch_provenance=launch_provenance,
+    )
     env["QWQ_IOS_STACKCTL_PYTHON"] = str(runtime_python)
-    env["QWQ_APP_LAUNCH_MODE"] = launch_mode
+    env["QWQ_APP_LAUNCH_PROVENANCE"] = launch_provenance
+    env["QWQ_RUNTIME_CONFIG_SUPPLY_MODE"] = str(
+        handoff["runtimeConfigSupplyMode"]
+    )
     env["QWQ_APP_BUILD_PROFILE"] = str(handoff["buildProfile"])
     env["QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH"] = str(
         _write_trust_envelope(artifact_root, trust_envelope)
@@ -111,7 +117,7 @@ def _bound_test_live_handoff() -> dict[str, object]:
         launcher,
         "alpha",
         "alpha-local",
-        launch_mode="environment_patrol_smoke",
+        launch_provenance="canonical_launcher",
     )
     return handoff
 
@@ -133,7 +139,7 @@ def _install_direct_handoff(
 ) -> dict[str, object]:
     handoff, trust_envelope = _build_handoff(
         runtime_environment,
-        launch_mode="direct_flutter_run",
+        launch_provenance="workspace_flutter_run",
     )
     environment["QWQ_TEST_LAUNCHER_HANDOFF_JSON"] = json.dumps(
         handoff,

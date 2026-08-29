@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/recovery_next_action.schema.json",
+  "title": "按需入池链路上非成功终态的恢复动作闭集",
+  "description": "编译截面与 drain 截面共用本闭集，使同一恢复动作在两处只有一个词元；Python 侧闭集是 core.control_types.RecoveryNextAction。",
+  "enum": [
+    "supply_input",
+    "recompile_intent",
+    "retry_source_discovery",
+    "expand_scope",
+    "change_source_strategy",
+    "acquire_or_retry",
+    "repair_evidence",
+    "repair_identity",
+    "select_new_identity",
+    "resume_delivery",
+    "none"
+  ]
+}

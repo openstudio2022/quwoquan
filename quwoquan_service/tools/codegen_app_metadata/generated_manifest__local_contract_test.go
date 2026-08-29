@@ -1,8 +1,12 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -157,6 +161,109 @@ func TestGeneratedManifestRetiresZeroConsumerMixedOutputs(t *testing.T) {
 		if _, err := os.Stat(path); !os.IsNotExist(err) {
 			t.Fatalf("retired zero-consumer output still exists at %s: %v", path, err)
 		}
+	}
+}
+
+func TestGeneratedDartFormattingRefreshesManifestFromFinalBytes(t *testing.T) {
+	appRoot := t.TempDir()
+	beginGeneratedManifestForTest(t, appRoot, "canonical-graph")
+	original := map[string][]byte{
+		"lib/generated/b.g.dart": []byte("class B{}\n"),
+		"lib/generated/a.g.dart": []byte("class A{}\n"),
+		"generated/receipt.json": []byte("{}\n"),
+	}
+	formatted := map[string][]byte{
+		"lib/generated/a.g.dart": []byte("class A {}\n"),
+		"lib/generated/b.g.dart": []byte("class B {}\n"),
+	}
+	for relative, payload := range original {
+		path := filepath.Join(appRoot, filepath.FromSlash(relative))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, payload, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		recordGeneratedFile(path, payload)
+	}
+
+	err := formatGeneratedDartOutputsWith(
+		func(root string, relativePaths []string) (map[string][]byte, error) {
+			if root != appRoot {
+				t.Fatalf("formatter root = %q, want %q", root, appRoot)
+			}
+			if got, want := strings.Join(relativePaths, "\n"), "lib/generated/a.g.dart\nlib/generated/b.g.dart"; got != want {
+				t.Fatalf("formatter paths = %q, want %q", got, want)
+			}
+			return formatted, nil
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for relative, payload := range formatted {
+		output := generatedManifestOutputs[relative]
+		sum := sha256.Sum256(payload)
+		if output.SHA256 != hex.EncodeToString(sum[:]) || output.Bytes != len(payload) {
+			t.Fatalf("manifest output for %s does not describe final bytes: %#v", relative, output)
+		}
+	}
+	if got := generatedManifestOutputs["generated/receipt.json"].Bytes; got != len(original["generated/receipt.json"]) {
+		t.Fatalf("non-Dart manifest output bytes = %d", got)
+	}
+}
+
+func TestGeneratedDartFormattingFailsClosed(t *testing.T) {
+	appRoot := t.TempDir()
+	beginGeneratedManifestForTest(t, appRoot, "canonical-graph")
+	path := filepath.Join(appRoot, "lib", "generated", "a.g.dart")
+	payload := []byte("class A{}\n")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, payload, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	recordGeneratedFile(path, payload)
+
+	formatErr := errors.New("formatter failed")
+	err := formatGeneratedDartOutputsWith(
+		func(string, []string) (map[string][]byte, error) {
+			return nil, formatErr
+		},
+	)
+	if !errors.Is(err, formatErr) {
+		t.Fatalf("formatter error = %v, want %v", err, formatErr)
+	}
+}
+
+func TestGeneratedDartFormattingRejectsIncompleteOutputSet(t *testing.T) {
+	appRoot := t.TempDir()
+	beginGeneratedManifestForTest(t, appRoot, "canonical-graph")
+	for _, relative := range []string{
+		"lib/generated/a.g.dart",
+		"lib/generated/b.g.dart",
+	} {
+		path := filepath.Join(appRoot, filepath.FromSlash(relative))
+		payload := []byte("class A{}\n")
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, payload, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		recordGeneratedFile(path, payload)
+	}
+
+	err := formatGeneratedDartOutputsWith(
+		func(string, []string) (map[string][]byte, error) {
+			return map[string][]byte{
+				"lib/generated/a.g.dart": []byte("class A {}\n"),
+			}, nil
+		},
+	)
+	if err == nil || !strings.Contains(err.Error(), "output path set") {
+		t.Fatalf("incomplete formatter output error = %v", err)
 	}
 }
 

@@ -314,6 +314,7 @@ class ArticleMarkdownCodec {
                 block.id,
                 assetsById,
                 mediaUrlResolver: mediaUrlResolver,
+                mediaVariants: mediaAssetsById[ref.assetId.trim()],
               ),
             );
           }
@@ -326,6 +327,7 @@ class ArticleMarkdownCodec {
                 block.id,
                 assetsById,
                 mediaUrlResolver: mediaUrlResolver,
+                mediaVariants: mediaAssetsById[ref.assetId.trim()],
               ),
             );
           }
@@ -557,20 +559,28 @@ class ArticleMarkdownCodec {
     String blockId,
     Map<String, String> assetsById, {
     String Function(String raw)? mediaUrlResolver,
+    MediaAssetVariants? mediaVariants,
   }) {
     final assetId = ref.assetId.trim();
     final resolvedImageUrl =
         assetsById[assetId] ??
         _directMediaUrlFor(assetId, mediaUrlResolver: mediaUrlResolver);
+    // 引用无法解析出交付 URL 时 imageUrl 保持空（缺席语义，GWT-016）：
+    // 不得伪装成 asset:// URL 让加载栈以本地文件失败收场。
+    // 资产身份由 assetId 携带，序列化写回不受影响。
     return ArticleDocumentNode(
       id: blockId.isNotEmpty ? blockId : assetId,
       type: ArticleDocumentNodeType.figure,
       assetId: assetId,
-      imageUrl: resolvedImageUrl.isNotEmpty
-          ? resolvedImageUrl
-          : 'asset://$assetId',
+      // 交付形态只从 manifest 声明读取（DEC-033）；缺席保持空串，不按 URL
+      // 形态反推，否则私有资产会被当成公开图去直连。
+      accessMode: mediaVariants?.accessMode ?? '',
+      imageUrl: resolvedImageUrl,
       imageLayout: ref.layout.name,
       caption: ref.caption,
+      // manifest 声明的像素宽高（REQ-017）：分页与渲染据此预留占位框比例。
+      imageWidth: mediaVariants?.displayWidth,
+      imageHeight: mediaVariants?.displayHeight,
     );
   }
 

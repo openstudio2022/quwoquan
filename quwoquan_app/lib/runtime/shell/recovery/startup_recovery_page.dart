@@ -334,10 +334,13 @@ class _RecoveryActions extends StatelessWidget {
     final showsUpdate = snapshot.showsUpdate;
     final runtimeUnavailable = phase == RecoveryPhase.runtimeUnavailable;
     final runtimeReentering = phase == RecoveryPhase.runtimeReentering;
+    final canOpenWeb = snapshot.webTargetSource != RecoveryWebTargetSource.none;
     final onlyWeb =
         phase == RecoveryPhase.startupLatest ||
+        phase == RecoveryPhase.startupWebOnly ||
         phase == RecoveryPhase.startupVersionUnavailable ||
         phase == RecoveryPhase.runtimeLatest ||
+        phase == RecoveryPhase.runtimeWebOnly ||
         phase == RecoveryPhase.runtimeVersionUnavailable;
     final primaryLabel = runtimeUnavailable
         ? FoundationText.runtimeRecoveryAction
@@ -367,7 +370,7 @@ class _RecoveryActions extends StatelessWidget {
           const SizedBox(height: RecoverySurfaceSpacing.buttonGap),
           _RecoveryButton(
             label: FoundationText.startupRecoveryWebAction,
-            onPressed: openingExternalTarget ? null : onWeb,
+            onPressed: openingExternalTarget || !canOpenWeb ? null : onWeb,
             filled: false,
           ),
         ],
@@ -471,6 +474,16 @@ _RecoveryCopy _copyFor(RecoverySnapshot snapshot) {
               FoundationText.startupRecoveryUpdateAvailableTitle,
               FoundationText.startupRecoveryUpdateAvailableMessage,
             );
+    case RecoveryPhase.startupWebOnly:
+      return snapshot.requiresUpdate
+          ? const _RecoveryCopy(
+              FoundationText.startupRecoveryUpdateTitle,
+              FoundationText.startupRecoveryWebMessage,
+            )
+          : const _RecoveryCopy(
+              FoundationText.startupRecoveryUpdateAvailableTitle,
+              FoundationText.startupRecoveryWebMessage,
+            );
     case RecoveryPhase.startupLatest:
       return const _RecoveryCopy(
         FoundationText.startupRecoveryLatestTitle,
@@ -506,6 +519,16 @@ _RecoveryCopy _copyFor(RecoverySnapshot snapshot) {
               FoundationText.startupRecoveryUpdateAvailableTitle,
               FoundationText.runtimeRecoveryUpdateAvailableMessage,
             );
+    case RecoveryPhase.runtimeWebOnly:
+      return snapshot.requiresUpdate
+          ? const _RecoveryCopy(
+              FoundationText.startupRecoveryUpdateTitle,
+              FoundationText.startupRecoveryWebMessage,
+            )
+          : const _RecoveryCopy(
+              FoundationText.startupRecoveryUpdateAvailableTitle,
+              FoundationText.startupRecoveryWebMessage,
+            );
     case RecoveryPhase.runtimeLatest:
       return const _RecoveryCopy(
         FoundationText.startupRecoveryLatestTitle,
@@ -525,6 +548,8 @@ ops_contracts.StartupRecoveryPhase _telemetryPhase(RecoveryPhase phase) {
       ops_contracts.StartupRecoveryPhase.startupChecking,
     RecoveryPhase.startupUpdateRequired =>
       ops_contracts.StartupRecoveryPhase.startupUpdateRequired,
+    RecoveryPhase.startupWebOnly =>
+      ops_contracts.StartupRecoveryPhase.startupWebOnly,
     RecoveryPhase.startupLatest =>
       ops_contracts.StartupRecoveryPhase.startupLatest,
     RecoveryPhase.startupVersionUnavailable =>
@@ -537,6 +562,8 @@ ops_contracts.StartupRecoveryPhase _telemetryPhase(RecoveryPhase phase) {
       ops_contracts.StartupRecoveryPhase.runtimeVersionChecking,
     RecoveryPhase.runtimeUpdateRequired =>
       ops_contracts.StartupRecoveryPhase.runtimeUpdateRequired,
+    RecoveryPhase.runtimeWebOnly =>
+      ops_contracts.StartupRecoveryPhase.runtimeWebOnly,
     RecoveryPhase.runtimeLatest =>
       ops_contracts.StartupRecoveryPhase.runtimeLatest,
     RecoveryPhase.runtimeVersionUnavailable =>

@@ -17,6 +17,8 @@ from pathlib import Path
 
 import yaml  # noqa: F401  # 原单文件的模块属性，保持可经 lifecycle.yaml 访问
 
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))

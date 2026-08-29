@@ -19,50 +19,42 @@ not hash to.
 """
 from __future__ import annotations
 
-import re
 import sys
 from pathlib import Path
 
 SCRIPTS_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
+from content.release.canonical.media_holding_closure import (  # noqa: E402
+    media_references_in_tree,
+)
 from core.content_library import (  # noqa: E402
     MediaHoldingError,
     admit_library_entry,
+    carried_media_entry,
     resolve_media_holding,
 )
-from core.paths import PUBLISH_ROOT  # noqa: E402
-
-REFERENCE_MEDIA_ROOT = SCRIPTS_ROOT.parent / "reference/golden_media"
+from core.paths import PUBLISH_ROOT, carried_media_root  # noqa: E402
 MEDIA_KIND = "media"
-_CAS_OBJECT_KEY = re.compile(
-    r"media/objects/sha256/[0-9a-f]{2}/[0-9a-f]{2}/(?P<digest>[0-9a-f]{64})\.[a-z0-9]+"
-)
 
 
 def required_digests(publish_root: Path) -> set[str]:
-    """Every media digest the canonical tree references, counted once."""
+    """Every media digest the canonical tree references, counted once.
 
-    digests: set[str] = set()
-    for path in sorted(publish_root.rglob("*.json")):
-        try:
-            text = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            continue
-        for match in _CAS_OBJECT_KEY.finditer(text):
-            digests.add(match.group("digest"))
-    return digests
+    Which references the library is expected to hold is decided by the closure
+    module, not by a second scan here: two scans would eventually disagree about
+    whether a rights snapshot or a reclaimed source original counts, and this
+    step would then admit — or fail to admit — a different set than the closure
+    check judges.
+    """
+
+    return {reference.digest for reference in media_references_in_tree(publish_root)}
 
 
 def reference_entry(digest: str) -> Path | None:
     """The carried bytes for one holding, whatever container it was filed as."""
 
-    if not REFERENCE_MEDIA_ROOT.is_dir():
-        return None
-    for candidate in sorted(REFERENCE_MEDIA_ROOT.glob(f"{digest}.*")):
-        if candidate.is_file():
-            return candidate
-    return None
+    return carried_media_entry(digest)
 
 
 def rehydrate_one(digest: str) -> str:
@@ -95,7 +87,7 @@ def main(publish_root: Path | None = None) -> int:
         for digest in sorted(unresolved):
             print(
                 f"  - holding has no carried bytes: {digest} "
-                f"(expected {REFERENCE_MEDIA_ROOT}/{digest}.<ext>)"
+                f"(expected {carried_media_root()}/{digest}.<ext>)"
             )
         return 1
     print(f"[rehydrate_media_holdings] OK: {len(digests)} holdings")

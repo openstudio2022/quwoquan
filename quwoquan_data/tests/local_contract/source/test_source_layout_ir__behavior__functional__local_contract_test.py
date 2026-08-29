@@ -541,6 +541,7 @@ def test_download_source_unit_images_keeps_complete_source_page(monkeypatch) -> 
         object_dir=Path(tempfile.mkdtemp(prefix="grp_quota_")),
         ordinal=1,
         vertical="travel",
+        research_lane="homepage",
     )
     kept_urls = [img["url"] for img in images]
     for idx in range(1, 8):

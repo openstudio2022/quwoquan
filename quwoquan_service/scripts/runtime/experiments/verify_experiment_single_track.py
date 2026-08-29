@@ -15,12 +15,92 @@ durable runtime binding 和实际流量对账，而不能再增加第二个 reso
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
+import yaml
 
 ROOT = Path(__file__).resolve().parents[4]
 FROZEN_GAP = "OPS_EXPERIMENT_RUNTIME_BINDING_FROZEN"
+
+_ASSIGNMENT_OPERATIONS_PATH = (
+    "quwoquan_service/services/product-ops-service/contracts/"
+    "product_ops/experiment_assignment_fact/operations.yaml"
+)
+_ASSIGNMENT_HANDLER_PATH = (
+    "quwoquan_service/services/product-ops-service/internal/product_ops/"
+    "experiment_assignment_fact/adapters/inbound/http/handler.go"
+)
+_RESOLVER_SOURCE_ROOTS = (
+    "quwoquan_service/runtime/experiments",
+    "quwoquan_service/runtime/recpolicy",
+    "quwoquan_service/runtime/recommendation",
+    "quwoquan_service/services/search-service/internal/search/search_index_view",
+    (
+        "quwoquan_service/services/recommendation-service/internal/recommendation/"
+        "ranked_recommendation_window"
+    ),
+)
+_PRIVATE_CONFIG_ROOTS = (
+    "quwoquan_service/services/search-service/config",
+    "quwoquan_service/services/search-service/environments",
+    "quwoquan_service/services/recommendation-service/config",
+    "quwoquan_service/services/recommendation-service/environments",
+)
+_BOOTSTRAP_SOURCE_ROOTS = (
+    "quwoquan_ops/cli",
+    "quwoquan_app/scripts/gamma",
+    "quwoquan_service/services/search-service/cmd",
+    "quwoquan_service/services/search-service/deploy",
+    "quwoquan_service/services/search-service/environments",
+    "quwoquan_service/services/recommendation-service/cmd",
+    "quwoquan_service/services/recommendation-service/deploy",
+    "quwoquan_service/services/recommendation-service/environments",
+)
+_SOURCE_SUFFIXES = frozenset({".go", ".py", ".sh", ".sql", ".yaml", ".yml"})
+_RESOLVER_DECLARATION = re.compile(
+    r"(?m)^\s*(?:type|class)\s+"
+    r"([A-Za-z_][A-Za-z0-9_]*(?:Resolver|Bucketer|Assigner))\b"
+)
+_GO_RESOLVE_METHOD = re.compile(
+    r"(?s)func\s+\(\s*[A-Za-z_][A-Za-z0-9_]*\s+\*?"
+    r"([A-Za-z_][A-Za-z0-9_]*)\s*\)\s+Resolve\s*\("
+    r"\s*ctx\s+context\.Context\s*,\s*experimentID\s+string\s*,"
+    r"\s*subjectKey\s+string"
+)
+_ALLOWED_RESOLVERS = {
+    "quwoquan_service/runtime/experiments/experiments.go": frozenset(
+        {"Resolver", "HashResolver"}
+    ),
+}
+_CONFIG_SCHEMA_KEY = re.compile(r"^\s*-\s*key:\s*['\"]?([^'\"\s#]+)")
+_CONFIG_MAPPING_KEY = re.compile(r"^\s+([A-Za-z0-9_.-]+)\s*:")
+_PRIVATE_POLICY_KEY_MARKERS = (
+    "experiment",
+    "bucket",
+    "allocationbasispoints",
+    "policyversion",
+    "controlweightpct",
+    "termheatweightpct",
+    "modelweightpct",
+    "ruleweightpct",
+)
+_DIRECT_POLICY_SQL = re.compile(
+    r"(?is)\b(?:insert\s+into|update|delete\s+from|truncate(?:\s+table)?|copy)"
+    r"\s+(?:[A-Za-z0-9_\"`.]+\.)?[\"`]?"
+    r"(?:experiments|experiment_policy_revisions|experiment_assignment_facts)\b"
+)
+_DIRECT_PROJECTION_MUTATION = re.compile(
+    r"(?is)(?:rm_search_experiment_policy|rm_recommendation_experiment_policy)"
+    r".{0,240}\b(?:insert|replace|update|upsert|mongoimport)\b|"
+    r"\b(?:insert|replace|update|upsert|mongoimport)\b.{0,240}"
+    r"(?:rm_search_experiment_policy|rm_recommendation_experiment_policy)"
+)
+_DIRECT_SEED_SYMBOL = re.compile(
+    r"(?i)\b(?:seed|fixture)[A-Za-z0-9_-]{0,48}"
+    r"(?:experiment|assignment)(?:[A-Za-z0-9_-]{0,48})\b"
+)
 
 
 def _read(relative: str) -> str:
@@ -33,6 +113,151 @@ def _read(relative: str) -> str:
 def _require(text: str, fragment: str, source: str) -> None:
     if fragment not in text:
         raise AssertionError(f"{source}: missing required contract fragment {fragment!r}")
+
+
+def _relative(path: Path) -> str:
+    try:
+        return path.relative_to(ROOT).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def _iter_sources(relative_roots: tuple[str, ...]) -> tuple[Path, ...]:
+    sources: list[Path] = []
+    for relative_root in relative_roots:
+        source_root = ROOT / relative_root
+        if source_root.is_file() and source_root.suffix in _SOURCE_SUFFIXES:
+            sources.append(source_root)
+            continue
+        if not source_root.is_dir():
+            continue
+        sources.extend(
+            path
+            for path in source_root.rglob("*")
+            if path.is_file()
+            and path.suffix in _SOURCE_SUFFIXES
+            and "tests" not in path.parts
+            and not path.name.endswith("_test.go")
+        )
+    return tuple(sorted(set(sources)))
+
+
+def _assert_no_second_resolver() -> None:
+    sources = _iter_sources(_RESOLVER_SOURCE_ROOTS)
+    if not sources:
+        raise AssertionError("experiment resolver scan matched no production source")
+    for path in sources:
+        relative = _relative(path)
+        text = path.read_text(encoding="utf-8")
+        allowed = _ALLOWED_RESOLVERS.get(relative, frozenset())
+        declared_types = set(_RESOLVER_DECLARATION.findall(text))
+        if relative.startswith("quwoquan_service/runtime/experiments/"):
+            declarations = declared_types
+        else:
+            declarations = {
+                name
+                for name in declared_types
+                if "experiment" in name.lower() or "bucket" in name.lower()
+            }
+        declarations.update(_GO_RESOLVE_METHOD.findall(text))
+        unexpected = sorted(declarations - allowed)
+        if unexpected:
+            raise AssertionError(
+                f"{relative}: second experiment resolver is forbidden; "
+                f"unexpected resolver declarations={unexpected}"
+            )
+
+
+def _config_keys(text: str) -> tuple[str, ...]:
+    keys: list[str] = []
+    for line in text.splitlines():
+        schema_match = _CONFIG_SCHEMA_KEY.match(line)
+        if schema_match is not None:
+            keys.append(schema_match.group(1))
+            continue
+        mapping_match = _CONFIG_MAPPING_KEY.match(line)
+        if mapping_match is not None and mapping_match.group(1).startswith(
+            ("sys.search-service.", "sys.recommendation-service.")
+        ):
+            keys.append(mapping_match.group(1))
+    return tuple(keys)
+
+
+def _assert_no_private_runtime_config() -> None:
+    sources = _iter_sources(_PRIVATE_CONFIG_ROOTS)
+    if not sources:
+        raise AssertionError("experiment private-config scan matched no authored config")
+    for path in sources:
+        relative = _relative(path)
+        for key in _config_keys(path.read_text(encoding="utf-8")):
+            normalized = key.lower().replace("_", "").replace("-", "")
+            if any(marker in normalized for marker in _PRIVATE_POLICY_KEY_MARKERS):
+                raise AssertionError(
+                    f"{relative}: service-private experiment runtime config is "
+                    f"forbidden via {key!r}; consume ExperimentPolicyActivated"
+                )
+
+
+def _assert_no_direct_storage_seed() -> None:
+    sources = _iter_sources(_BOOTSTRAP_SOURCE_ROOTS)
+    if not sources:
+        raise AssertionError("experiment bootstrap scan matched no production source")
+    for path in sources:
+        relative = _relative(path)
+        text = path.read_text(encoding="utf-8")
+        if _DIRECT_POLICY_SQL.search(text):
+            raise AssertionError(
+                f"{relative}: direct experiment storage seed/mutation is forbidden; "
+                "use Product Ops public command and transactional outbox"
+            )
+        if _DIRECT_PROJECTION_MUTATION.search(text) or _DIRECT_SEED_SYMBOL.search(text):
+            raise AssertionError(
+                f"{relative}: direct experiment projection seed is forbidden; "
+                "consume ExperimentPolicyActivated"
+            )
+
+
+def _assert_no_assignment_write_api() -> None:
+    operations_text = _read(_ASSIGNMENT_OPERATIONS_PATH)
+    try:
+        document = yaml.safe_load(operations_text)
+    except yaml.YAMLError as exc:
+        raise AssertionError(
+            f"{_ASSIGNMENT_OPERATIONS_PATH}: invalid YAML: {exc}"
+        ) from exc
+    if not isinstance(document, dict) or not isinstance(document.get("api_routes"), list):
+        raise AssertionError(  # noqa: TRY004 - gate violations use one typed failure.
+            f"{_ASSIGNMENT_OPERATIONS_PATH}: api_routes must be a non-empty list"
+        )
+    routes = document["api_routes"]
+    if not routes:
+        raise AssertionError(
+            f"{_ASSIGNMENT_OPERATIONS_PATH}: assignment query routes are required"
+        )
+    for index, route in enumerate(routes):
+        if not isinstance(route, dict):
+            raise AssertionError(  # noqa: TRY004 - gate violations use one typed failure.
+                f"{_ASSIGNMENT_OPERATIONS_PATH}: api_routes[{index}] must be an object"
+            )
+        method = str(route.get("method") or "").upper()
+        application = route.get("application")
+        kind = application.get("kind") if isinstance(application, dict) else None
+        has_write_body = bool(route.get("request_entity") or route.get("request_body_kind"))
+        if method != "GET" or kind != "query" or has_write_body:
+            operation = str(route.get("operation") or f"api_routes[{index}]")
+            raise AssertionError(
+                f"{_ASSIGNMENT_OPERATIONS_PATH}: assignment write API is frozen; "
+                f"{operation} declares method={method!r}, kind={kind!r}"
+            )
+
+    handler = _read(_ASSIGNMENT_HANDLER_PATH)
+    _require(handler, "if r.Method != http.MethodGet", _ASSIGNMENT_HANDLER_PATH)
+    for method in ("Post", "Put", "Patch", "Delete"):
+        if f"http.Method{method}" in handler:
+            raise AssertionError(
+                f"{_ASSIGNMENT_HANDLER_PATH}: assignment write API is frozen; "
+                f"HTTP {method.upper()} handler is forbidden"
+            )
 
 
 def _assert_control_plane_frozen() -> None:
@@ -97,7 +322,7 @@ def _assert_canonical_runtime_track() -> None:
         "quwoquan_service/services/search-service/"
         "internal/search/search_index_view/application/experiments.go"
     )
-    search_main_path = "quwoquan_service/services/search-service/cmd/api/main.go"
+    search_main_path = "quwoquan_service/services/search-service/cmd/api/bootstrap.go"
     search_config_path = (
         "quwoquan_service/services/search-service/config/schema.yaml"
     )
@@ -204,12 +429,17 @@ def main() -> int:
     try:
         _assert_control_plane_frozen()
         _assert_canonical_runtime_track()
+        _assert_no_second_resolver()
+        _assert_no_private_runtime_config()
+        _assert_no_direct_storage_seed()
+        _assert_no_assignment_write_api()
     except AssertionError as exc:
         print(f"[experiment-single-track] FAIL: {exc}", file=sys.stderr)
         return 1
     print(
         "[experiment-single-track] PASS: runtime assignment policy uses one "
-        "content digest and fails closed; Product Ops immutable facts remain frozen"
+        "content digest and fails closed; second resolver, private config, direct "
+        "storage seed, and assignment write API regressions remain blocked"
     )
     return 0
 

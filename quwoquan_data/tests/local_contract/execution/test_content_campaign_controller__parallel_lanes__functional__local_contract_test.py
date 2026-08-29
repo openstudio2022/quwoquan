@@ -83,6 +83,41 @@ def test_run_phase_propagates_no_implicit_lane_timeout(monkeypatch) -> None:
     assert set(result) == set(CARRIERS)
 
 
+def test_run_phase_forwards_audited_recovery_into_each_lane(monkeypatch) -> None:
+    """受审计恢复起点必须从 run_phase 一路到达车道进程。
+
+    `_lane_argv` 与 CLI 两端都支持 `--recover-stage`/`--recovery-reason`，中间的
+    run_phase → run_lane 一旦不透传，5.review 的 fallbackStage 就再也回不到上游
+    阶段重跑，只能靠新建 executionId 绕过。
+    """
+    observed: list[tuple[str | None, str | None]] = []
+
+    def run_lane(_workspace, _submission, **kwargs):
+        observed.append((kwargs["recover_stage"], kwargs["recovery_reason"]))
+        return 0, None
+
+    monkeypatch.setattr(campaign_process, "run_lane", run_lane)
+    workspaces = {carrier: SimpleNamespace(carrier=carrier) for carrier in CARRIERS}
+    submissions = {
+        carrier: {"executionId": f"execution-{carrier}"} for carrier in CARRIERS
+    }
+
+    campaign_process.run_phase(
+        workspaces,
+        submissions,
+        stage="run",
+        runtime=SimpleNamespace(),
+        root_execution_id=ROOT_ID,
+        timeout_seconds=None,
+        lane_runner=None,
+        run_session=SimpleNamespace(),
+        recover_stage="build_homepage",
+        recovery_reason="5.review fallbackStage",
+    )
+
+    assert observed == [("build_homepage", "5.review fallbackStage")] * len(CARRIERS)
+
+
 def test_distributed_lane_command_preserves_frozen_source_pool_selection(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

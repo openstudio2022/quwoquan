@@ -13,6 +13,7 @@ from support.capacity_calibration_fixture import (
     synthetic_capacity_source_binding,
     synthetic_governed_execution_authority,
 )
+from support.scale_source_pool_projection_fixture import _media_admission_row
 from support.semantic_preflight_fixture import ready_semantic_preflight
 
 
@@ -125,6 +126,7 @@ def _source_attribution(carrier: str) -> dict[str, object]:
         "propertyReleaseStatus": "not_applicable",
         "collectedAt": "2026-08-05T00:00:00+00:00",
         "takedownPolicy": "remove_on_verified_request",
+        "derivedModifications": [],
     }
 
 
@@ -157,7 +159,33 @@ def _scale_source_pool(
         _write(path, document)
         return ref, _digest(document), _file_digest(path)
 
+    identity = {
+        "sourceRevision": source_revision,
+        "sourceDigest": SOURCE_DIGEST,
+        "entityCatalogDigest": CATALOG_DIGEST,
+    }
     for carrier in active_carriers:
+        # image/video 的物理证据是一份 admission receipt，池契约禁止它们携带 source-ready
+        # 套件字段；receipt 必须真实铸出并与引用它的候选同形，否则校验期整批 shortfall。
+        if carrier in {"image", "video"}:
+            admission = _media_admission_row(
+                evidence_root=evidence_root,
+                carrier=carrier,
+                index=1,
+                provider="fixture_provider",
+                candidate_id=f"{carrier}-candidate-001",
+                object_ref=object_refs[carrier],
+                identity=identity,
+                comparison_count=2,
+            )
+            candidates.append(
+                {
+                    **admission,
+                    "entityRef": "地点/景区/测试实体",
+                    "observedEntityRef": "地点/景区/测试实体",
+                }
+            )
+            continue
         source_unit = evidence(carrier, "source_unit")
         acquisition = evidence(carrier, "acquisition")
         rights = evidence(carrier, "rights")
@@ -514,6 +542,7 @@ def _fixture(
                 for carrier in active
             },
             "failure": None,
+            "revisionAudits": [],
             "startedAt": "2026-08-05T00:00:00+00:00",
             "updatedAt": "2026-08-05T00:01:00+00:00",
         },

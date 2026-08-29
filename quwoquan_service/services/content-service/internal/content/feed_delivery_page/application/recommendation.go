@@ -46,6 +46,7 @@ type FeedPageDelivered struct {
 	PersonaID             string                        `json:"personaId,omitempty"`
 	Scenario              string                        `json:"scenario"`
 	WindowID              string                        `json:"windowId"`
+	ExperimentBucket      string                        `json:"experimentBucket"`
 	ModelBucket           string                        `json:"modelBucket"`
 	ModelChannel          *string                       `json:"modelChannel,omitempty"`
 	ModelReleaseID        *string                       `json:"modelReleaseId,omitempty"`
@@ -63,11 +64,15 @@ func (event FeedPageDelivered) Validate() error {
 		event.SubjectID,
 		event.Scenario,
 		event.WindowID,
+		event.ExperimentBucket,
 		event.ModelBucket,
 		event.RankingSnapshotDigest,
 	) || event.FeatureSnapshotAt.IsZero() || event.OccurredAt.IsZero() ||
 		event.FeatureSnapshotAt.After(event.OccurredAt) ||
 		event.UserFeatureSnapshot == nil || len(event.Items) == 0 || len(event.Items) > 20 {
+		return ErrDeliveryEventInvalid
+	}
+	if event.ExperimentBucket != "model" && event.ExperimentBucket != "rule" {
 		return ErrDeliveryEventInvalid
 	}
 	modelChannel := optionalText(event.ModelChannel)

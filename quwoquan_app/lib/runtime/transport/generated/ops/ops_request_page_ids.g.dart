@@ -56,7 +56,8 @@ class OpsRequestPageIds {
     'ReportRuntimeLogBatch': 'ops.report.runtime.log.batch',
     'ReportStartupEventBatch': 'ops.report.startup.event.batch',
     'ResolveEffectiveConfig': 'ops.resolve.effective.config',
-    'ResolveEffectiveConfigForInstance': 'ops.resolve.effective.config.for.instance',
+    'ResolveEffectiveConfigForInstance':
+        'ops.resolve.effective.config.for.instance',
     'RetryAccountEnforcementDelivery': 'ops.retry.account.enforcement.delivery',
     'ReviewAccountEnforcementCase': 'ops.review.account.enforcement.case',
     'RollbackPremiumPoolEntry': 'ops.rollback.premium.pool.entry',
@@ -67,7 +68,8 @@ class OpsRequestPageIds {
 
   static const String acknowledgeAlert = 'ops.acknowledge.alert';
   static const String createExperiment = 'ops.create.experiment';
-  static const String getAccountEnforcementCase = 'ops.get.account.enforcement.case';
+  static const String getAccountEnforcementCase =
+      'ops.get.account.enforcement.case';
   static const String getAppRecoveryVersion = 'ops.get.app.recovery.version';
   static const String getConfigSnapshot = 'ops.get.config.snapshot';
   static const String getEventDrilldown = 'ops.get.event.drilldown';
@@ -77,23 +79,32 @@ class OpsRequestPageIds {
   static const String getGrayRoutingPolicy = 'ops.get.gray.routing.policy';
   static const String getGrowthOverview = 'ops.get.growth.overview';
   static const String getPageExperience = 'ops.get.page.experience';
-  static const String getPlatformProjectionSummary = 'ops.get.platform.projection.summary';
-  static const String getPlatformTriageSummary = 'ops.get.platform.triage.summary';
-  static const String getProdPlaneAccessIsolation = 'ops.get.prod.plane.access.isolation';
-  static const String getProductProjectionSummary = 'ops.get.product.projection.summary';
-  static const String getProductTriageSummary = 'ops.get.product.triage.summary';
+  static const String getPlatformProjectionSummary =
+      'ops.get.platform.projection.summary';
+  static const String getPlatformTriageSummary =
+      'ops.get.platform.triage.summary';
+  static const String getProdPlaneAccessIsolation =
+      'ops.get.prod.plane.access.isolation';
+  static const String getProductProjectionSummary =
+      'ops.get.product.projection.summary';
+  static const String getProductTriageSummary =
+      'ops.get.product.triage.summary';
   static const String getRtcMediaQoeSummary = 'ops.get.rtc.media.qoe.summary';
   static const String getRuntimeLogDrilldown = 'ops.get.runtime.log.drilldown';
   static const String getRuntimeLogSummary = 'ops.get.runtime.log.summary';
   static const String getServiceRouteRED = 'ops.get.service.route.r.e.d';
   static const String getVisitStats = 'ops.get.visit.stats';
-  static const String ingestAlertmanagerWebhook = 'ops.ingest.alertmanager.webhook';
+  static const String ingestAlertmanagerWebhook =
+      'ops.ingest.alertmanager.webhook';
   static const String listActiveAlerts = 'ops.list.active.alerts';
   static const String listConfigDomains = 'ops.list.config.domains';
-  static const String listConfigInstanceReports = 'ops.list.config.instance.reports';
-  static const String listEnvironmentTopologies = 'ops.list.environment.topologies';
+  static const String listConfigInstanceReports =
+      'ops.list.config.instance.reports';
+  static const String listEnvironmentTopologies =
+      'ops.list.environment.topologies';
   static const String listExperiments = 'ops.list.experiments';
-  static const String listL1L4MetricSnapshots = 'ops.list.l1.l4.metric.snapshots';
+  static const String listL1L4MetricSnapshots =
+      'ops.list.l1.l4.metric.snapshots';
   static const String listPlaneBindings = 'ops.list.plane.bindings';
   static const String listPlatformApprovals = 'ops.list.platform.approvals';
   static const String listPlatformAudits = 'ops.list.platform.audits';
@@ -101,26 +112,35 @@ class OpsRequestPageIds {
   static const String listProductApprovals = 'ops.list.product.approvals';
   static const String listProductAudits = 'ops.list.product.audits';
   static const String listProductWorkflows = 'ops.list.product.workflows';
-  static const String listReleaseCandidateAcks = 'ops.list.release.candidate.acks';
+  static const String listReleaseCandidateAcks =
+      'ops.list.release.candidate.acks';
   static const String listRuntimeClusters = 'ops.list.runtime.clusters';
   static const String listRuntimeInstances = 'ops.list.runtime.instances';
   static const String listRuntimeServices = 'ops.list.runtime.services';
-  static const String listServiceCatalogEntries = 'ops.list.service.catalog.entries';
+  static const String listServiceCatalogEntries =
+      'ops.list.service.catalog.entries';
   static const String listServiceConfigs = 'ops.list.service.configs';
   static const String openAccountAppealCase = 'ops.open.account.appeal.case';
-  static const String openAccountModerationCase = 'ops.open.account.moderation.case';
+  static const String openAccountModerationCase =
+      'ops.open.account.moderation.case';
   static const String recordVisit = 'ops.record.visit';
   static const String reportConfigInstance = 'ops.report.config.instance';
   static const String reportEventBatch = 'ops.report.event.batch';
   static const String reportRecoveryFailure = 'ops.report.recovery.failure';
   static const String reportRuntimeLogBatch = 'ops.report.runtime.log.batch';
-  static const String reportStartupEventBatch = 'ops.report.startup.event.batch';
+  static const String reportStartupEventBatch =
+      'ops.report.startup.event.batch';
   static const String resolveEffectiveConfig = 'ops.resolve.effective.config';
-  static const String resolveEffectiveConfigForInstance = 'ops.resolve.effective.config.for.instance';
-  static const String retryAccountEnforcementDelivery = 'ops.retry.account.enforcement.delivery';
-  static const String reviewAccountEnforcementCase = 'ops.review.account.enforcement.case';
-  static const String rollbackPremiumPoolEntry = 'ops.rollback.premium.pool.entry';
-  static const String takedownPremiumPoolEntry = 'ops.takedown.premium.pool.entry';
+  static const String resolveEffectiveConfigForInstance =
+      'ops.resolve.effective.config.for.instance';
+  static const String retryAccountEnforcementDelivery =
+      'ops.retry.account.enforcement.delivery';
+  static const String reviewAccountEnforcementCase =
+      'ops.review.account.enforcement.case';
+  static const String rollbackPremiumPoolEntry =
+      'ops.rollback.premium.pool.entry';
+  static const String takedownPremiumPoolEntry =
+      'ops.takedown.premium.pool.entry';
   static const String updateExperimentRollout = 'ops.update.experiment.rollout';
   static const String upsertPremiumPoolEntry = 'ops.upsert.premium.pool.entry';
 }

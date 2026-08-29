@@ -68,5 +68,6 @@ assistant_access:
   denied_reason: "原始行为与遥测事实不对小趣开放；小趣只读所属域的公开投影结果。"
 business_rules:
 - 每条推荐反馈必须引用 Recommendation 已持久化的 exposure；无 feedRequestId 或无法匹配曝光的 ContentBehaviorFact 不进入推荐反馈事实。
+- experimentBucket 必须从已持久化 exposure 复制，禁止采信或回填 ContentBehaviorFact 客户端 payload 中的同名字段。
 - source behavior eventId 幂等，重复投递不得产生第二条学习事实。
 - 账号关闭后拒绝新反馈；关闭事实先持久化，再硬删除历史可识别反馈，closure checkpoint 阻止旧事件重建。

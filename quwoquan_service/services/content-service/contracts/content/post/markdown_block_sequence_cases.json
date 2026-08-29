@@ -1,0 +1,44 @@
+{
+  "schema": "content_post_markdown_block_sequence_cases",
+  "cases": [
+    {
+      "name": "rich_article_body",
+      "markdown": "---\ntitle: 跨端块序列\nmarkdownDialect: qwq-rich-md\n---\n\n# 跨端块序列\n\n开场正文包含 **强调** 与 @[西湖](entity:景区:杭州西湖)。\n\n## 第一章\n\n### 行程提示\n\n1. 第一天\n2. 第二天\n\n- 装备一\n- 装备二\n\n> 引用提醒。\n\n:::callout type=\"tip\" title=\"提示\"\n慢一点，风景更清楚。\n第二行仍属于同一个提示块。\n:::\n\n```dart\nvoid main() { print('hello'); }\n```\n\n---\n\n:::figure id=\"hero\" layout=\"fullWidth\" caption=\"主图\"\nasset://hero\n:::\n\n:::gallery ids=\"gallery-a,gallery-b\" layout=\"masonry\" caption=\"图集\"\n:::\n\n:::align value=\"center\"\n收尾正文。\n:::\n",
+      "assets": [
+        {
+          "assetId": "hero",
+          "cdnUrl": "https://cdn.example.test/article/hero.webp",
+          "caption": "主图"
+        },
+        {
+          "assetId": "gallery-a",
+          "cdnUrl": "https://cdn.example.test/article/gallery-a.webp",
+          "caption": "图集 A"
+        },
+        {
+          "assetId": "gallery-b",
+          "cdnUrl": "https://cdn.example.test/article/gallery-b.webp",
+          "caption": "图集 B"
+        }
+      ],
+      "expectedSequence": [
+        {"type": "paragraph", "assetId": ""},
+        {"type": "heading2", "assetId": ""},
+        {"type": "heading3", "assetId": ""},
+        {"type": "orderedItem", "assetId": ""},
+        {"type": "orderedItem", "assetId": ""},
+        {"type": "bulletItem", "assetId": ""},
+        {"type": "bulletItem", "assetId": ""},
+        {"type": "quote", "assetId": ""},
+        {"type": "callout", "assetId": ""},
+        {"type": "codeBlock", "assetId": ""},
+        {"type": "divider", "assetId": ""},
+        {"type": "image", "assetId": "hero"},
+        {"type": "image", "assetId": "gallery-a"},
+        {"type": "image", "assetId": "gallery-b"},
+        {"type": "paragraph", "assetId": ""}
+      ],
+      "expectedFingerprint": "33941ececdc770248dbbf3c583f92f0c1397efcba79b9106d1a9dff921e4898f"
+    }
+  ]
+}

@@ -266,7 +266,9 @@ void main() {
       );
       // 恢复页有多个进入分支（runtime config activation 失败、confirmed fatal），
       // 因此顺序只能在 fatal 分支内部锚定，不能用全文首次出现位置。
-      final fatalEnqueueIndex = gate.indexOf('enqueueConfirmedStartupFatal(this)');
+      final fatalEnqueueIndex = gate.indexOf(
+        'enqueueConfirmedStartupFatal(this)',
+      );
       expect(fatalEnqueueIndex, greaterThanOrEqualTo(0));
       expect(
         gate.indexOf('showNativeStartupRecovery();', fatalEnqueueIndex),
@@ -338,10 +340,7 @@ void main() {
       expect(gate, isNot(contains('StartupEagerPluginRegistry')));
       expect(health, contains('AndroidRuntimeConfig.createStore(context)'));
       expect(health, contains('.currentIdentity()'));
-      expect(
-        health,
-        isNot(contains('BuildConfig.QWQ_RUNTIME_CONFIG_DIGEST')),
-      );
+      expect(health, isNot(contains('BuildConfig.QWQ_RUNTIME_CONFIG_DIGEST')));
       expect(
         health,
         isNot(contains('BuildConfig.QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST')),
@@ -548,10 +547,15 @@ void main() {
       expect(
         scene,
         contains(
-          'appDelegate.installNativeStartupRecoveryRoot(in: recoveryWindow)',
+          'appDelegate.connectNativeStartupSceneIfNeeded(in: recoveryWindow)',
         ),
       );
-      expect(scene, contains('appDelegate.showNativeStartupRecovery()'));
+      expect(ios, contains('func connectNativeStartupSceneIfNeeded('));
+      expect(
+        ios,
+        contains('installNativeStartupRecoveryRoot(in: sceneWindow)'),
+      );
+      expect(ios, contains('ios_native_activation_scene_connected'));
       final recoveryScene = scene.substring(
         scene.indexOf('class StartupRecoverySceneDelegate'),
         scene.indexOf('@objc final class AppSceneDelegate'),
@@ -559,6 +563,14 @@ void main() {
       expect(recoveryScene, isNot(contains('FlutterSceneDelegate')));
       final appSceneDelegate = scene.substring(
         scene.indexOf('@objc final class AppSceneDelegate'),
+      );
+      expect(
+        appSceneDelegate,
+        contains('connectNativeStartupSceneIfNeeded(in: recoveryWindow)'),
+      );
+      expect(
+        appSceneDelegate,
+        contains('nativeStartupWindow = recoveryWindow'),
       );
       expect(
         appSceneDelegate,
@@ -570,6 +582,12 @@ void main() {
       expect(appSceneDelegate, isNot(contains('NSUserActivity(')));
       final infoPlist = _readAppFile('ios/Runner/Info.plist');
       expect(infoPlist, isNot(contains('NSUserActivityTypes')));
+      // iOS 16+ normal launch owns Main.storyboard through the scene
+      // configuration.  A top-level main storyboard would instantiate the
+      // implicit Flutter engine before the activation-only recovery scene can
+      // replace it.
+      expect(infoPlist, isNot(contains('<key>UIMainStoryboardFile</key>')));
+      expect(infoPlist, contains('<key>UISceneStoryboardFile</key>'));
       final iosGateProbe = _readAppFile(
         'scripts/tools/device/inspect_ios_native_startup.py',
       );
@@ -1134,6 +1152,9 @@ void main() {
       final wrapper = _readAppFile('scripts/ios/build_xcode_backend.sh');
       final project = _readAppFile('ios/Runner.xcodeproj/project.pbxproj');
       final appDelegate = _readAppFile('ios/Runner/AppDelegate.swift');
+      final nativeSupply = _readAppFile(
+        'ios/Runner/NativeRuntimeConfigSupply.swift',
+      );
       final nativeBridge = _readAppFile(
         'lib/runtime/platform/native_runtime_config_bridge.dart',
       );
@@ -1147,11 +1168,15 @@ void main() {
         'lib/runtime/shell/startup/app_bootstrap.dart',
       );
       expect(script, contains(r'ios-${BUILD_PROFILE}-app'));
-      expect(script, contains('runtime-config-package.json'));
-      expect(script, contains('runtime-config-trust.json'));
+      expect(script, contains('build_embed_runtime_config_trust.py'));
+      expect(script, contains('embeddedRuntimePackage=0'));
+      expect(script, isNot(contains('runtime-config-package.json')));
       expect(script, contains('QWQ_IOS_RUNTIME_CONFIG_PACKAGE_PATH'));
       expect(script, contains('QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH'));
-      expect(script, contains('runtime configuration is forbidden in DART_DEFINES'));
+      expect(
+        script,
+        contains('runtime configuration is forbidden in DART_DEFINES'),
+      );
       expect(script, isNot(contains('runtimeDefines')));
       expect(script, isNot(contains('QWQNativeRuntime.plist')));
       expect(script, contains('print("export FLUTTER_TARGET="'));
@@ -1162,22 +1187,28 @@ void main() {
       expect(wrapper, contains('QWQ_IOS_DART_DEFINES_READY'));
       expect(project, contains('build_xcode_backend.sh'));
       expect(project, isNot(contains('eval \\"')));
-      expect(appDelegate, contains('quwoquan/runtime/config'));
-      expect(appDelegate, contains('readRuntimeConfig'));
-      expect(appDelegate, contains('readRuntimeConfigState'));
-      expect(appDelegate, isNot(contains('installRuntimeConfigPackage')));
-      expect(appDelegate, contains('bundledTrustURL()'));
-      expect(appDelegate, contains('runtimePackageURL(createDirectory: false)'));
-      expect(appDelegate, contains('let trust = try loadTrustEnvelope()'));
-      expect(appDelegate, contains('guard let trustURL = bundledTrustURL()'));
-      expect(appDelegate, isNot(contains('nativeRuntimeIdentityManifest')));
+      expect(appDelegate, contains('NativeRuntimeConfigChannel.register('));
+      expect(nativeSupply, contains('quwoquan/runtime/config'));
+      expect(nativeSupply, contains('readRuntimeConfig'));
+      expect(nativeSupply, contains('readRuntimeConfigState'));
+      expect(nativeSupply, isNot(contains('installRuntimeConfigPackage')));
+      expect(nativeSupply, contains('bundledTrustURL()'));
       expect(
-        appDelegate,
-        isNot(contains('runtimeConfigURL(fileName: nativeRuntimeTrustFileName)')),
+        nativeSupply,
+        contains('runtimePackageURL(createDirectory: false)'),
       );
-      expect(appDelegate, isNot(contains('bundleIdentifier.hasSuffix')));
+      expect(nativeSupply, contains('let trust = try loadTrustEnvelope()'));
+      expect(nativeSupply, contains('guard let trustURL = bundledTrustURL()'));
+      expect(nativeSupply, isNot(contains('nativeRuntimeIdentityManifest')));
       expect(
-        appDelegate,
+        nativeSupply,
+        isNot(
+          contains('runtimeConfigURL(fileName: nativeRuntimeTrustFileName)'),
+        ),
+      );
+      expect(nativeSupply, isNot(contains('bundleIdentifier.hasSuffix')));
+      expect(
+        nativeSupply,
         isNot(contains('object(forInfoDictionaryKey: "QWQRecoveryBaseURL")')),
       );
       expect(nativeBridge, contains('quwoquan/runtime/config'));
@@ -1195,10 +1226,7 @@ void main() {
         runtimePackageResolver,
         contains("'configurationState': 'complete'"),
       );
-      expect(
-        runtimeConfig,
-        contains("'configurationState': 'missing'"),
-      );
+      expect(runtimeConfig, contains("'configurationState': 'missing'"));
       expect(
         runtimeConfig,
         isNot(contains("'configurationState': 'complete'")),
@@ -1212,23 +1240,31 @@ void main() {
       final activity = _readAppFile(
         'android/app/src/main/java/com/quwoquan/quwoquan_app/MainActivity.java',
       );
+      final channel = _readAppFile(
+        'android/app/src/runtimeConfigShared/java/com/quwoquan/quwoquan_app/RuntimeConfigMethodChannel.java',
+      );
       final store = _readAppFile(
-        'android/app/src/main/java/com/quwoquan/quwoquan_app/RuntimeConfigPackageStore.java',
+        'android/app/src/runtimeConfigShared/java/com/quwoquan/quwoquan_app/RuntimeConfigPackageStore.java',
       );
       final coordinator = _readAppFile(
-        'android/app/src/main/java/com/quwoquan/quwoquan_app/RuntimeConfigActivationCoordinator.java',
+        'android/app/src/runtimeConfigShared/java/com/quwoquan/quwoquan_app/RuntimeConfigActivationCoordinator.java',
       );
       final retiredInstaller = _appFile(
         'android/app/src/main/java/com/quwoquan/quwoquan_app/RuntimeConfigPackageInstaller.java',
       );
 
-      expect(activity, contains('case "readRuntimeConfig":'));
-      expect(activity, contains('case "readRuntimeConfigState":'));
+      expect(activity, contains('registerNativeRuntimeConfigChannel'));
+      expect(channel, contains('case "readRuntimeConfig":'));
+      expect(channel, contains('case "readRuntimeConfigState":'));
       expect(activity, isNot(contains('installRuntimeConfigPackage')));
       expect(activity, isNot(contains('RuntimeConfigPackageInstaller')));
+      expect(channel, isNot(contains('installRuntimeConfigPackage')));
       expect(retiredInstaller.existsSync(), isFalse);
       expect(store, contains('synchronized ActivationResult activate('));
-      expect(store, isNot(contains('runtime_config_install_arguments_invalid')));
+      expect(
+        store,
+        isNot(contains('runtime_config_install_arguments_invalid')),
+      );
       expect(coordinator, contains('validateRequest(requestDocument)'));
       expect(coordinator, contains('store.activate('));
       expect(coordinator, contains('commitActivationReceipts('));
@@ -1254,11 +1290,14 @@ void main() {
       final activity = _readAppFile(
         'android/app/src/main/java/com/quwoquan/quwoquan_app/MainActivity.java',
       );
+      final runtimeConfigChannel = _readAppFile(
+        'android/app/src/runtimeConfigShared/java/com/quwoquan/quwoquan_app/RuntimeConfigMethodChannel.java',
+      );
       final runtimeConfigStore = _readAppFile(
-        'android/app/src/main/java/com/quwoquan/quwoquan_app/RuntimeConfigPackageStore.java',
+        'android/app/src/runtimeConfigShared/java/com/quwoquan/quwoquan_app/RuntimeConfigPackageStore.java',
       );
       final runtimeConfigCoordinator = _readAppFile(
-        'android/app/src/main/java/com/quwoquan/quwoquan_app/RuntimeConfigActivationCoordinator.java',
+        'android/app/src/runtimeConfigShared/java/com/quwoquan/quwoquan_app/RuntimeConfigActivationCoordinator.java',
       );
       final retiredRuntimeConfigInstaller = _appFile(
         'android/app/src/main/java/com/quwoquan/quwoquan_app/RuntimeConfigPackageInstaller.java',
@@ -1286,7 +1325,8 @@ void main() {
       expect(activity, contains('android_dart_jni_class_loader_initialized'));
       expect(activity, isNot(contains('installRuntimeConfigPackage')));
       expect(activity, isNot(contains('RuntimeConfigPackageInstaller')));
-      expect(activity, contains('readRuntimeConfigState'));
+      expect(activity, contains('registerNativeRuntimeConfigChannel'));
+      expect(runtimeConfigChannel, contains('readRuntimeConfigState'));
       expect(retiredRuntimeConfigInstaller.existsSync(), isFalse);
       expect(runtimeConfigStore, contains('runtime-config-package.json'));
       expect(runtimeConfigStore, contains('runtime-config-trust.json'));
@@ -1295,16 +1335,24 @@ void main() {
       expect(runtimeConfigStore, isNot(contains('BuildConfig')));
       expect(runtimeConfigStore, contains('expectedActiveDigest'));
       expect(runtimeConfigStore, contains('Ed25519Verify'));
-      expect(runtimeConfigStore, isNot(contains('getAssets().open(PACKAGE_FILE_NAME')));
+      expect(
+        runtimeConfigStore,
+        isNot(contains('getAssets().open(PACKAGE_FILE_NAME')),
+      );
       expect(runtimeConfigCoordinator, contains('REQUEST_FIELDS'));
-      expect(runtimeConfigCoordinator, contains('validateRequest(requestDocument)'));
-      expect(runtimeConfigStore, isNot(contains('runtime_config_install_arguments_invalid')));
+      expect(
+        runtimeConfigCoordinator,
+        contains('validateRequest(requestDocument)'),
+      );
+      expect(
+        runtimeConfigStore,
+        isNot(contains('runtime_config_install_arguments_invalid')),
+      );
       expect(runtimeConfigCoordinator, contains('store.activate('));
       expect(runtimeConfigCoordinator, contains('commitActivationReceipts('));
       expect(activity, isNot(contains('cachedNativeRuntimeConfigEnvelope')));
-      expect(activity, contains('result.error('));
-      expect(activity, contains('result.error('));
-      expect(activity, contains('error.code,'));
+      expect(runtimeConfigChannel, contains('result.error('));
+      expect(runtimeConfigChannel, contains('error.code,'));
       expect(activity, isNot(contains('QWQ_RUNTIME_DART_DEFINES_JSON')));
       expect(eagerRegistry, isNot(contains('FlutterWebRTCPlugin')));
       expect(eagerRegistry, isNot(contains('CameraAndroidCameraxPlugin')));
@@ -1375,7 +1423,9 @@ void main() {
       );
       expect(
         gradle,
-        isNot(contains('System.getenv("QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST")')),
+        isNot(
+          contains('System.getenv("QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST")'),
+        ),
       );
       for (final retiredField in const <String>[
         'QWQ_RUNTIME_ENVIRONMENT',
@@ -1398,8 +1448,8 @@ void main() {
         contains('private CommercialAuthPlugin commercialAuthPlugin;'),
       );
       expect(activity, contains('registerNativeRuntimeConfigChannel'));
-      expect(activity, contains('quwoquan/runtime/config'));
-      expect(activity, contains('readRuntimeConfig'));
+      expect(runtimeConfigChannel, contains('quwoquan/runtime/config'));
+      expect(runtimeConfigChannel, contains('readRuntimeConfig'));
       expect(
         activity,
         contains('private CommercialAuthPlugin commercialAuthPlugin()'),

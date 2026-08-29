@@ -10,6 +10,7 @@ class AcceptanceCaseId(StrEnum):
     CONTENT_REACTION = "content-reaction"
     CIRCLE_MEMBERSHIP = "circle-membership"
     CIRCLE_GATHERING = "circle-gathering"
+    CIRCLE_GATHERING_PLAN = "circle-gathering-plan"
     CIRCLE_PENDING_APPROVAL = "circle-pending-approval"
     CHAT_RECALL = "chat-recall"
     CHAT_GROUP_GOVERNANCE = "chat-group-governance"

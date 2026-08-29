@@ -1,11 +1,12 @@
 overrides:
   sys.chat-service.mongodb.database: quwoquan_chat_local
-  sys.chat-service.runtime.auth.account_security_authority.timeout_ms: 500
   sys.chat-service.runtime.media.group_avatar_cdn_base_url: ${CHAT_GROUP_AVATAR_CDN_BASE_URL}
   sys.chat-service.runtime.reliable_task.ready_index.group: chat.group_avatar_worker.alpha
   sys.chat-service.runtime.reliable_task.ready_index.stream: reliabletask:chat:avatar:ready:alpha
+  sys.chat-service.user_account_security_authority.base_url: http://user-service:18081
+  sys.chat-service.user_account_security_authority.timeout_ms: 500
 secretRefs:
-  sys.chat-service.mongodb.uri: MONGO_URI
+  sys.chat-service.mongodb.uri: CHAT_MONGO_URI
 externalBindings:
   runtime.message.transport:
     state: enabled

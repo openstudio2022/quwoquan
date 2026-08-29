@@ -515,6 +515,7 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
             "entityCatalogDigest": CATALOG_DIGEST,
             "lanes": {carrier: report_lane(carrier) for carrier in CARRIERS},
             "failure": None,
+            "revisionAudits": [],
             "startedAt": START.isoformat(),
             "updatedAt": (START + timedelta(seconds=3720)).isoformat(),
         },

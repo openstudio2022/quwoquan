@@ -22,18 +22,10 @@ class CanonicalSearchFacet {
   }
 
   Map<String, dynamic> toMap() {
-    return <String, dynamic>{
-      'key': key,
-      'label': label,
-      'count': count,
-    };
+    return <String, dynamic>{'key': key, 'label': label, 'count': count};
   }
 
-  CanonicalSearchFacet copyWith({
-    String? key,
-    String? label,
-    int? count,
-  }) {
+  CanonicalSearchFacet copyWith({String? key, String? label, int? count}) {
     return CanonicalSearchFacet(
       key: key ?? this.key,
       label: label ?? this.label,
@@ -43,22 +35,28 @@ class CanonicalSearchFacet {
 }
 
 void _validateCanonicalSearchFacetWire(Map<String, dynamic> m) {
-  const allowed = <String>{
-    'key',
-    'label',
-    'count',
-  };
-  final unknown = m.keys.where((key) => !allowed.contains(key)).toList(growable: false);
+  const allowed = <String>{'key', 'label', 'count'};
+  final unknown = m.keys
+      .where((key) => !allowed.contains(key))
+      .toList(growable: false);
   if (unknown.isNotEmpty) {
-    throw FormatException('CanonicalSearchFacet contains unknown fields: ${unknown.join(',')}');
+    throw FormatException(
+      'CanonicalSearchFacet contains unknown fields: ${unknown.join(',')}',
+    );
   }
   if (!m.containsKey('key') || m['key'] == null || (m['key'] is! String)) {
     throw FormatException('CanonicalSearchFacet.key has an invalid wire value');
   }
-  if (!m.containsKey('label') || m['label'] == null || (m['label'] is! String)) {
-    throw FormatException('CanonicalSearchFacet.label has an invalid wire value');
+  if (!m.containsKey('label') ||
+      m['label'] == null ||
+      (m['label'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchFacet.label has an invalid wire value',
+    );
   }
   if (!m.containsKey('count') || m['count'] == null || (m['count'] is! int)) {
-    throw FormatException('CanonicalSearchFacet.count has an invalid wire value');
+    throw FormatException(
+      'CanonicalSearchFacet.count has an invalid wire value',
+    );
   }
 }

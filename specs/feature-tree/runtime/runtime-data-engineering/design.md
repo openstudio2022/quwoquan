@@ -71,12 +71,12 @@
 
 <a id="dec-005"></a>
 ### DEC-005 内容生产执行推进主体退役为宿主 Agent + 阶段契约 + 检查脚本三层分工
-- 决策：内容生产执行的推进主体从仓内编排框架移交给宿主 agent 会话（Cursor/Codex/Claude Code 任一）。仓库执行代码只保留确定性 IO（下载、媒体 CAS、publish/release/ship 原子命令）与检查器（verify 门禁 + JSON schema）；阶段序与交接协议由 `.agents/skills/content-production/` 阶段契约文档拥有。每阶段收尾由 `task stage-record` 写 create-once stage receipt（executionId、stage、verdict、actor、artifacts、openItems、next、evidence），receipt 链加磁盘产物是跨会话交接与恢复的唯一状态源。
+- 决策：内容生产执行的推进主体从仓内编排框架移交给 Cursor 或 Codex 宿主 agent 会话。仓库执行代码只保留确定性 IO（下载、媒体 CAS、publish/release/ship 原子命令）与检查器（verify 门禁 + JSON schema）；阶段序与交接协议由 `.agents/skills/content-production/` 阶段契约文档拥有。每阶段收尾由 `task stage-record` 写 create-once stage receipt（executionId、stage、verdict、actor、artifacts、openItems、next、evidence），receipt 链加磁盘产物是跨会话交接与恢复的唯一状态源。
 - 理由：自建编排两个月产出为 6 次 execution 仅 1 次 succeeded、immutable release 为零；来源不足刚性停机、`waiting_agent` 交接挂起、publish 盲试放弃三类主失败全部位于「框架驱动 agent」的交接带。宿主 agent 作为唯一执行主体后交接断点归零，合规从过程控制转为产物证据门禁。
 - 被否决方案：继续扩展仓内 agent 驱动与队列舰队、为旧编排层保留兼容双轨、把阶段语义写进 loop 驱动、用会话上下文代替磁盘 receipt、按宿主分叉多套 skill 文本。
-- 约束与影响：唯一允许新增的编排是 `quwoquan_data/scripts/content/execution/runner/loop_driver.sh`（≤50 行，只读 receipt verdict 决定续/停）与 `quwoquan_data/scripts/content/execution/runner/fleet_dispatcher.sh`（≤100 行，只做进程起/收/记录与 ≤3 次基础设施退避），均不含业务判断。同一 executionId 同时只有一个执行者（single-writer claim + TTL 心跳）。`5.review` 由独立会话执行且 judge 模型族 ≠ generator 模型族。运行时模型与主控会话模型解耦、默认 auto。工作包布局、`retryOf` 身份、`execution_state` 终态语义与 publish/release 契约不变。
+- 约束与影响：唯一允许新增的编排是 `quwoquan_data/scripts/content/execution/runner/loop_driver.sh`（≤50 行，只读 receipt verdict 决定续/停）与 `quwoquan_data/scripts/content/execution/runner/fleet_dispatcher.sh`（≤100 行，只做进程起/收/记录与 ≤3 次基础设施退避），均不含业务判断。同一 executionId 同时只有一个执行者（single-writer claim + TTL 心跳）。`5.review` 由独立会话执行且 judge 模型族 ≠ generator 模型族；该约束要求派发面能指定具名模型，因此 judge 的唯一合法派发面是宿主子会话并显式传入 model slug，`auto` 派发不是合法 judge 派发面（其族别不可预先声明），取不到具名异族 slug 即落 `verdict=blocked` 而不是先评后补。运行时模型与主控会话模型解耦、默认 auto，但该默认不适用于 judge 派发。工作包布局、`retryOf` 身份、`execution_state` 终态语义与 publish/release 契约不变。
 - 失败恢复：阶段验收失败由执行者按 verify issue 自修 ≤3 轮，超限落 `verdict=blocked` receipt 停 lane 交人工。宿主瞬时错误由驱动退避重启 ≤3 次，崩溃后从 receipt 链续跑到精确断点。终态不可 resume，只能新 sequence + `retryOf`。
-- 可测试观察面：stage receipt schema 与 create-once 语义、layout 门对 receipt 位置的 allowlist、readiness 门对 receipt 链的消费、驱动脚本行数与无业务判断治理门、rubric 门的 judge 分离。
+- 可测试观察面：stage receipt schema 与 create-once 语义、layout 门对 receipt 位置的 allowlist、readiness 门对 receipt 链的消费、驱动脚本行数与无业务判断治理门、rubric 门的 judge 分离、judge 派发面在缺具名异族 slug 时的 `blocked` 终态。
 - 关联要求：`REQ-001`、`REQ-004`
 - 影响 Story：文章、地理三元组、图片与视频四条 carrier Story 的执行推进方式（对象与 release 契约不变）。
 - 关联验收：`SIT-001`、`SIT-002`

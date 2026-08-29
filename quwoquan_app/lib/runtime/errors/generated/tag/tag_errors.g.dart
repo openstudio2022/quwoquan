@@ -5,16 +5,52 @@ enum TagErrorCode {
   tagInvalidArgument('TAG.USER.invalid_argument', '标签请求参数不正确', 400),
   tagNotFound('TAG.USER.tag_not_found', '标签不存在或已下线', 404),
   tagStorageReadFailed('TAG.SYSTEM.storage_read_failed', '标签读取失败，请稍后重试', 500),
-  tagFeedbackInvalidAction('TAG.USER.feedback_invalid_action', '标签反馈动作不合法', 400),
-  tagFeedbackIdempotencyConflict('TAG.USER.feedback_idempotency_conflict', '重复反馈与原请求不一致', 409),
-  tagFeedbackStorageFailed('TAG.SYSTEM.feedback_storage_failed', '标签反馈暂时无法记录，请稍后重试', 500),
+  tagFeedbackInvalidAction(
+    'TAG.USER.feedback_invalid_action',
+    '标签反馈动作不合法',
+    400,
+  ),
+  tagFeedbackIdempotencyConflict(
+    'TAG.USER.feedback_idempotency_conflict',
+    '重复反馈与原请求不一致',
+    409,
+  ),
+  tagFeedbackStorageFailed(
+    'TAG.SYSTEM.feedback_storage_failed',
+    '标签反馈暂时无法记录，请稍后重试',
+    500,
+  ),
   tagReleaseNotFound('TAG.USER.release_not_found', '标签发布批次不存在', 404),
-  tagReleaseInvalidArgument('TAG.USER.release_invalid_argument', '标签发布请求不合法', 400),
-  tagReleaseInvalidTransition('TAG.USER.release_invalid_transition', '标签发布状态不允许该操作', 409),
-  tagReleaseSnapshotIncomplete('TAG.USER.release_snapshot_incomplete', '标签快照尚未完整导入，暂不能激活', 409),
-  tagReleaseVersionConflict('TAG.USER.release_version_conflict', '标签发布已更新，请刷新后重试', 409),
-  tagReleaseIdempotencyConflict('TAG.USER.release_idempotency_conflict', '重复请求与原发布操作不一致', 409),
-  tagReleaseStorageFailed('TAG.SYSTEM.release_storage_failed', '标签发布操作失败，请稍后重试', 500),
+  tagReleaseInvalidArgument(
+    'TAG.USER.release_invalid_argument',
+    '标签发布请求不合法',
+    400,
+  ),
+  tagReleaseInvalidTransition(
+    'TAG.USER.release_invalid_transition',
+    '标签发布状态不允许该操作',
+    409,
+  ),
+  tagReleaseSnapshotIncomplete(
+    'TAG.USER.release_snapshot_incomplete',
+    '标签快照尚未完整导入，暂不能激活',
+    409,
+  ),
+  tagReleaseVersionConflict(
+    'TAG.USER.release_version_conflict',
+    '标签发布已更新，请刷新后重试',
+    409,
+  ),
+  tagReleaseIdempotencyConflict(
+    'TAG.USER.release_idempotency_conflict',
+    '重复请求与原发布操作不一致',
+    409,
+  ),
+  tagReleaseStorageFailed(
+    'TAG.SYSTEM.release_storage_failed',
+    '标签发布操作失败，请稍后重试',
+    500,
+  ),
   unknown('', '标签服务异常，请稍后重试', 500);
 
   final String code;
@@ -56,14 +92,22 @@ class TagErrorMessages {
     TagErrorCode.tagNotFound: 'Tag not found or retired',
     TagErrorCode.tagStorageReadFailed: 'Unable to read tags, please retry',
     TagErrorCode.tagFeedbackInvalidAction: 'Invalid tag feedback action',
-    TagErrorCode.tagFeedbackIdempotencyConflict: 'The repeated feedback differs from the original request',
-    TagErrorCode.tagFeedbackStorageFailed: 'Unable to record tag feedback, please retry',
+    TagErrorCode.tagFeedbackIdempotencyConflict:
+        'The repeated feedback differs from the original request',
+    TagErrorCode.tagFeedbackStorageFailed:
+        'Unable to record tag feedback, please retry',
     TagErrorCode.tagReleaseNotFound: 'Tag taxonomy release not found',
-    TagErrorCode.tagReleaseInvalidArgument: 'Invalid tag taxonomy release request',
-    TagErrorCode.tagReleaseInvalidTransition: 'Tag taxonomy release state does not allow this operation',
-    TagErrorCode.tagReleaseSnapshotIncomplete: 'Tag taxonomy snapshot is incomplete and cannot be activated',
-    TagErrorCode.tagReleaseVersionConflict: 'Tag taxonomy release changed, refresh and retry',
-    TagErrorCode.tagReleaseIdempotencyConflict: 'The repeated request differs from the original release operation',
-    TagErrorCode.tagReleaseStorageFailed: 'Tag taxonomy release operation failed, please retry',
+    TagErrorCode.tagReleaseInvalidArgument:
+        'Invalid tag taxonomy release request',
+    TagErrorCode.tagReleaseInvalidTransition:
+        'Tag taxonomy release state does not allow this operation',
+    TagErrorCode.tagReleaseSnapshotIncomplete:
+        'Tag taxonomy snapshot is incomplete and cannot be activated',
+    TagErrorCode.tagReleaseVersionConflict:
+        'Tag taxonomy release changed, refresh and retry',
+    TagErrorCode.tagReleaseIdempotencyConflict:
+        'The repeated request differs from the original release operation',
+    TagErrorCode.tagReleaseStorageFailed:
+        'Tag taxonomy release operation failed, please retry',
   };
 }

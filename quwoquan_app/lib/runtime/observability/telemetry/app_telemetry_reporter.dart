@@ -102,13 +102,17 @@ final class AppTelemetryReporter implements AppTelemetryRecorder {
     final ttl = payload.logType == 'error'
         ? const Duration(hours: 72)
         : const Duration(hours: 24);
+    final alwaysKept = _isAlwaysKept(payload, definition);
     final queued = AppTelemetryQueuedRecord(
       wire: wire,
       logType: payload.logType,
       eventType: payload.eventType,
       enqueuedAt: _now().toUtc(),
       expiresAt: _now().toUtc().add(ttl),
-      droppable: payload.logType == 'event' && definition.normalSampleRate < 1,
+      droppable:
+          payload.logType == 'event' &&
+          definition.normalSampleRate < 1 &&
+          !alwaysKept,
       critical: definition.internalPriority == 'critical',
     );
     final critical = definition.internalPriority == 'critical';
@@ -185,7 +189,23 @@ final class AppTelemetryReporter implements AppTelemetryRecorder {
     AppTelemetryEventDefinition definition,
     String sessionId,
   ) {
+    if (_isAlwaysKept(payload, definition)) return true;
+    final digest = sha256.convert(
+      utf8.encode('$sessionId:${payload.eventType}'),
+    );
+    final bucket = (digest.bytes[0] << 8) | digest.bytes[1];
+    return bucket / 65536 < definition.normalSampleRate;
+  }
+
+  bool _isAlwaysKept(
+    AppTelemetryPayload payload,
+    AppTelemetryEventDefinition definition,
+  ) {
     if (payload.logType == 'error' || definition.normalSampleRate >= 1) {
+      return true;
+    }
+    final result = payload.extensions['result'];
+    if (result is String && definition.alwaysKeepResults.contains(result)) {
       return true;
     }
     final duration = payload.extensions['durationMs'];
@@ -196,16 +216,9 @@ final class AppTelemetryReporter implements AppTelemetryRecorder {
     }
     if (payload.extensions['hasError'] == true) return true;
     final startupDuration = payload.extensions['tClickToContentMs'];
-    if (startupDuration is int &&
+    return startupDuration is int &&
         definition.slowThresholdMs > 0 &&
-        startupDuration >= definition.slowThresholdMs) {
-      return true;
-    }
-    final digest = sha256.convert(
-      utf8.encode('$sessionId:${payload.eventType}'),
-    );
-    final bucket = (digest.bytes[0] << 8) | digest.bytes[1];
-    return bucket / 65536 < definition.normalSampleRate;
+        startupDuration >= definition.slowThresholdMs;
   }
 
   bool _isRegisteredPageName(String value) {

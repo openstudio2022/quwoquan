@@ -3,9 +3,24 @@
 所有档位共用同一套阶段契约、receipt 协议、single-writer claim 与恢复判定；
 档位只是「谁起会话、同时跑几条 lane」。**没有任何档位是某个宿主专属的**：
 正式无人值守路径只有一份实现（`loop_driver.sh` + `fleet_dispatcher.sh`），
-宿主命令经参数注入（Cursor `cursor-agent -p`、Codex `codex exec`、
-Claude Code `claude -p`），换宿主 = 换 `HOST_CMD` 参数值，脚本与契约零改动。
+宿主命令经参数注入（Cursor `cursor-agent -p`、Codex `codex exec`），
+在两个受支持宿主间切换只改 `HOST_CMD` 参数，脚本与契约零改动。
 驱动脚本内禁止任何 if-host 分支。
+
+## 输入面冻结（跨档通用前提）
+
+每个 execution 在 `0.plan` 冻结 `executionBundle` 摘要，其输入面包含
+`quwoquan_data/scripts`、`quwoquan_data/requirements*.txt`、
+`quwoquan_ops/policies/branch_policy.yaml` 与该载体所属的 L2/L3 `spec.md`/`design.md`
+（真相源是工作包 `execution_manifest.json` 的 `executionBundle.inputs`）。
+
+- 战役进行中修改上述任一输入，全部在飞 lane 会在下一阶段 PRE 的
+  `verify source-digest` 上报 `executionBundle drift` 并落 `gate_block`：同 ID
+  不可 resume，只能新建 `executionId` + `retryOf` 从 `0.plan` 重开。
+- 因此放量前必须先把脚本、依赖与所属规格的改动落完；开跑之后这些路径进入冻结期。
+  规格与实现的增量属于 `dev` 工作流的窗口，与 fleet 运行窗口互斥，不能重叠。
+- 不在输入面内因此运行中可改的：`.agents/skills/**`、`.qwq_output/**` 与不属于该
+  载体的其它节点规格。
 
 ## single-writer claim（跨档通用协议）
 
@@ -41,8 +56,8 @@ Claude Code `claude -p`），换宿主 = 换 `HOST_CMD` 参数值，脚本与契
 - 单轮 hard timeout（默认 30 分钟）：超时杀会话进程，不写假 receipt；
   下一轮从 receipt 断点重来。
 - 驱动不拼模型参数（`HOST_CMD` 自带 `--model auto` 等）；`5.review` 轮次的
-  异族 judge 约束由该轮会话按 5.review 契约 PRE 执行（读 `4.draft` receipt
-  指定异族），`verify rubric --generation-family` 门兜底。
+  异族 judge 约束由该轮会话按 5.review 契约 PRE 执行，派发面见
+  「异族 judge 派发面」——该轮会话自己派子会话并传具名异族 slug，驱动层不感知。
 
 ## D 档：fleet（M10 → M100k，唯一正式并发实现）
 
@@ -85,11 +100,30 @@ Claude Code `claude -p`），换宿主 = 换 `HOST_CMD` 参数值，脚本与契
 - **可追溯**：每份 receipt `actor` 记录宿主、实际模型族、会话标识；
   `task fleet-status` 可按模型族切产出质量与成本分布，为 auto 路由提供标定数据。
 
+## 异族 judge 派发面
+
+`5.review` 的异族约束要求**能指定具名模型**，而具名能力属于宿主的能力事实而非
+偏好：宿主 CLI 在受限计划下只接受 `--model auto` 并对具名值报
+`Named models unavailable`，此时 `auto` 的实际族别不可预先声明，异族约束在该派发面
+上结构性不可满足。因此本阶段的派发面单轨落在**宿主子会话**上：
+
+- 唯一合法派发面：宿主子会话，参数显式传入 model slug（宿主可用 slug 清单是宿主的
+  能力事实，由该宿主自己声明；skill 不硬编码具体模型名）。
+- 该 slug 的模型族必须与 `4.draft` receipt 的 `actor.modelFamily` 不同，判定在派发前
+  完成，不是评完再看。
+- 取不到具名异族 slug 就是能力缺席，本阶段落 `verdict=blocked` 并在 `openItems`
+  点名缺失的派发能力。**禁止**退回 `auto` 派发后再从 receipt 反读族别当作满足——
+  那让合规规则的成立与否取决于路由运气。
+- `verify rubric --generation-family` 仍然兜底，但它是事后对账，不能替代派发前判定。
+
+同一约束对所有档位一致：正式路径（B/D 档）的 `5.review` 天然独占一轮全新会话，
+该轮同样以具名异族 slug 派发，而不是靠「换了一轮会话」本身充当独立性证据。
+
 ## 评审独立性在各档位的实现
 
-- 正式路径（B/D 档）不依赖子会话能力：`5.review` 天然单独占一轮全新会话，
-  该轮注入 reviewer 人设 + 异族模型参数。
-- A 档可派子会话注入 [roles/quality-reviewer.md](roles/quality-reviewer.md)
-  / [roles/rights-reviewer.md](roles/rights-reviewer.md) 人设加速调试；
-  无子会话宿主另起新会话，义务相同。
+- 会话独立性与模型族独立性是两条独立义务，都要满足：换一轮全新会话解决前者，
+  具名异族 slug 解决后者，缺任一条都不算独立评审。
+- 各档位都注入 [roles/quality-reviewer.md](roles/quality-reviewer.md)
+  / [roles/rights-reviewer.md](roles/rights-reviewer.md) 人设，派发面按上节
+  「异族 judge 派发面」统一走宿主子会话。
 - 任何情况下 receipt `actor` 都必须记录会话与模型族。

@@ -1,8 +1,0 @@
----
-description: 登录入口无死循环指针：关闭回安全态，登录进目标态
-globs: quwoquan_app/lib/runtime/auth/**,quwoquan_app/lib/runtime/di/**,quwoquan_app/lib/runtime/shell/**,quwoquan_app/lib/service/**/presentation/**
-alwaysApply: false
----
-
-新增或改动登录门、游客限制、AuthContinuation 或账号态入口时，先读
-`.agents/skills/review/references/roles/user/references/auth-entry-continuation.md`。

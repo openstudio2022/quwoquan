@@ -190,7 +190,7 @@ func renderSharedRealtimeEventEnumsDart(names map[string]struct{}) (string, erro
 		if memberErr != nil {
 			return "", memberErr
 		}
-		renderDomainWireEnum(&output, name, members)
+		renderDomainWireEnum(&output, name, members, "")
 	}
 	return output.String(), nil
 }

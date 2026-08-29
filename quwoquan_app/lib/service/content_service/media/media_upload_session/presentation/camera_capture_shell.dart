@@ -2,7 +2,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:quwoquan_app/design_system/media/image_editor_semantic_icon.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
-import 'package:quwoquan_app/design_system/semantics/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
@@ -130,12 +129,12 @@ class CameraRoundIconButton extends StatelessWidget {
         minimumSize: Size.square(AppSpacing.minInteractiveSize),
         padding: EdgeInsets.zero,
         onPressed: enabled ? onTap : null,
-        // immersive 暗底：白色图标叠在实时取景（雪地/白墙等浅色画面）上仍可见。
+        // 相机操作钮（非导航钮）：显式保留暗圆底，白色图标叠在实时取景
+        // （雪地/白墙等浅色画面）上仍可见，且提供明确的操作热区轮廓。
+        // 沉浸导航钮的无底色+投影语义（REQ-019）不适用于操作钮。
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: AppNavigationSemanticConstants.chromeActionBackground(
-              surface: AppChromeSurface.immersive,
-            ),
+            color: AppColors.overlayLight,
             shape: BoxShape.circle,
           ),
           child: SizedBox(

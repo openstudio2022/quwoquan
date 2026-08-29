@@ -15,8 +15,10 @@ from typing import Any
 
 SCHEMA = "quwoquan_ops.app_debug_preflight"
 
-# content-live 要求 readiness 缺口直接阻断；ui-only 走 runtime purpose，
-# 让 runtime/Provider/TLS/content 问题记 warning 后继续编译启动。
+# 两个 App mode 都使用同一 test_live 严格度，只按 purpose 区分诊断面：
+# content-live 保留启动后 Remote 内容 outcome 所需诊断，ui-only 只请求 runtime 诊断；
+# service/Provider/TLS/transport/content/observability/capacity/drift 都不得成为
+# Alpha/Beta/Gamma test_live 的编译前门。
 PREFLIGHT_PURPOSE_BY_APP_MODE = {
     "content-live": "content_live",
     "ui-only": "runtime",

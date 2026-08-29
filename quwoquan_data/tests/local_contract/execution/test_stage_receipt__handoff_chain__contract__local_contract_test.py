@@ -6,6 +6,7 @@ single-writer claim（获取/刷新/冲突/TTL 接手/释放）。
 """
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from datetime import UTC, datetime, timedelta
@@ -220,3 +221,104 @@ def test_fleet_status_aggregates_latest_receipts() -> None:
     assert status["stageDistribution"] == {"blocked@sources": 1}
     assert status["modelFamilies"] == {"gpt": 1}
     assert status["blockedReasons"] == {"两个目标缺源": 1}
+
+
+# spec_ref: multi-carrier-release GWT-020.t4（round timeout 与 claim TTL 的关系约束）
+def test_round_timeout_must_stay_inside_the_claim_survival_window() -> None:
+    ttl = stage_receipt.DEFAULT_CLAIM_TTL_MINUTES
+    margin = stage_receipt.CLAIM_TTL_SAFETY_MARGIN_MINUTES
+    budget = (ttl - margin) * 60
+
+    admitted = stage_receipt.round_timeout_admission(
+        EXEC_ID, round_timeout_seconds=budget
+    )
+    assert admitted["admitted"] is True
+    assert admitted["ttlMinutes"] == ttl
+    assert admitted["reason"] == ""
+
+    refused = stage_receipt.round_timeout_admission(
+        EXEC_ID, round_timeout_seconds=budget + 1
+    )
+    assert refused["admitted"] is False
+    assert str(budget) in refused["reason"], "判否必须给出可执行的上限秒数"
+
+    # 单轮超时长于 TTL 是最危险的一档：在飞会话还活着，claim 已可被别的 lane 接手。
+    beyond_ttl = stage_receipt.round_timeout_admission(
+        EXEC_ID, round_timeout_seconds=ttl * 60 + 1
+    )
+    assert beyond_ttl["admitted"] is False
+
+
+def test_round_timeout_is_judged_against_the_claim_on_disk_not_the_default() -> None:
+    stage_receipt.acquire_lane_claim(
+        EXEC_ID, actor_host="cursor", actor_session="sess-A", ttl_minutes=10
+    )
+    margin = stage_receipt.CLAIM_TTL_SAFETY_MARGIN_MINUTES
+
+    verdict = stage_receipt.round_timeout_admission(
+        EXEC_ID, round_timeout_seconds=(10 - margin) * 60 + 1
+    )
+    assert verdict["admitted"] is False
+    assert verdict["ttlMinutes"] == 10, "判据要读执行者实际声明的 TTL"
+    assert stage_receipt.round_timeout_admission(
+        EXEC_ID, round_timeout_seconds=(10 - margin) * 60
+    )["admitted"] is True
+
+
+def test_non_positive_round_timeout_is_refused_rather_than_treated_as_no_timeout() -> None:
+    for seconds in (0, -1):
+        verdict = stage_receipt.round_timeout_admission(
+            EXEC_ID, round_timeout_seconds=seconds
+        )
+        assert verdict["admitted"] is False
+        assert verdict["ttlMinutes"] == 0
+
+
+# spec_ref: multi-carrier-release GWT-020.t4（stage 枚举收敛到单一真相源）
+def test_stage_enumerations_all_derive_from_one_closed_set() -> None:
+    from core import paths
+    from core.control_types import OBJECT_STAGE_SEQUENCE, RECEIPT_STAGE_SEQUENCE
+    from core.stage_artifact_contract import STAGES
+    from verify import handler as verify_handler
+
+    assert stage_receipt.RECEIPT_STAGES == tuple(
+        stage.value for stage in RECEIPT_STAGE_SEQUENCE
+    )
+    assert paths.OBJECT_STAGES == tuple(
+        stage.value for stage in OBJECT_STAGE_SEQUENCE
+    )
+    assert STAGES == paths.OBJECT_STAGES
+    assert set(paths.OBJECT_STAGES) <= set(stage_receipt.RECEIPT_STAGES), (
+        "对象过程阶段必须是 receipt 协议阶段的子集"
+    )
+    assert stage_receipt.RECEIPT_NEXT_VALUES == (
+        *stage_receipt.RECEIPT_STAGES,
+        "END",
+    )
+
+    # CLI 的 --through 闭集与库常量同源：改阶段名不会只改到其中一处。
+    parser = argparse.ArgumentParser()
+    verify_handler.register_parser(parser.add_subparsers(dest="command"))
+    for stage in paths.OBJECT_STAGES:
+        parsed = parser.parse_args(
+            [
+                "verify",
+                "stage-artifacts",
+                "--execution-id",
+                EXEC_ID,
+                "--through",
+                stage,
+            ]
+        )
+        assert parsed.through == stage
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            [
+                "verify",
+                "stage-artifacts",
+                "--execution-id",
+                EXEC_ID,
+                "--through",
+                "6.nonexistent",
+            ]
+        )

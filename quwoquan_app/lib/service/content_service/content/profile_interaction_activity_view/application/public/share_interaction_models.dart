@@ -15,6 +15,9 @@ enum ShareTargetAvailability {
   private,
   reviewing,
   authorDeactivated,
+  // 云侧取值不在本端闭集内时落这里。它是显式成员而不是放行态，
+  // 因此每个消费点的穷尽 switch 都必须给它一条分支。
+  unknown,
 }
 
 enum SharePreviewKind { image, video, text, discussion, unavailable }
@@ -217,8 +220,12 @@ ShareTargetAvailability _parseAvailability(String raw) {
       return ShareTargetAvailability.reviewing;
     case 'author_deactivated':
       return ShareTargetAvailability.authorDeactivated;
-    default:
+    case 'active':
       return ShareTargetAvailability.active;
+    default:
+      // 未识别的取值不能当可打开。「云侧新增了取值」与「本端解析错了」在这里形状相同，
+      // 前者该收缩、后者该报错，两者都不该表现为放行。
+      return ShareTargetAvailability.unknown;
   }
 }
 

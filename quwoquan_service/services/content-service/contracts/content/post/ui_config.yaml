@@ -458,7 +458,7 @@ feature_flags:
   runtime_overridable: true
   description: 启用文章全屏书本阅读器舞台
 - flag: enable_article_page_curl
-  default: false
+  default: true
   runtime_overridable: true
   description: 启用文章翻页卷角动效
 - flag: enable_shared_video_timeline

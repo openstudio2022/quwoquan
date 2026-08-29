@@ -154,7 +154,7 @@ func TestAssistantWorkerCompositionPreflightsStartsAndJoinsSingleTrack(
 	)
 	mainSource := readAssistantWorkerSource(
 		t,
-		filepath.Join(root, "cmd", "api", "main.go"),
+		filepath.Join(root, "cmd", "api", "bootstrap.go"),
 	)
 	sloSource := readAssistantWorkerSource(
 		t,
@@ -222,17 +222,21 @@ func TestAssistantWorkerCompositionPreflightsStartsAndJoinsSingleTrack(
 			t.Fatalf("worker supervisor is missing %q", required)
 		}
 	}
-	workerCloseIndex := strings.Index(
+	// 关闭次序由骨架的 CleanupStack 逆序语义保证：数据面连接在装配相位
+	// 先注册，worker join 在领域装配末尾注册，因此 Shutdown 时先 join
+	// worker、再断开 Mongo/Postgres，worker 不会写到已关闭的连接上。
+	if !strings.Contains(
 		mainSource,
-		"module.workers.Close()",
+		"asm.Cleanups.Add(func(context.Context) error { return workers.Close() })",
+	) {
+		t.Fatal("assistant must register the worker join as a cleanup on the assembly")
+	}
+	kitModule := readAssistantWorkerSource(
+		t,
+		filepath.Join(root, "..", "..", "runtime", "servicekit", "module.go"),
 	)
-	infrastructureCloseIndex := strings.Index(
-		mainSource,
-		"module.infrastructure.Close()",
-	)
-	if workerCloseIndex < 0 || infrastructureCloseIndex < 0 ||
-		workerCloseIndex > infrastructureCloseIndex {
-		t.Fatal("servicehost module must join workers before closing dependencies")
+	if !strings.Contains(kitModule, "for index := len(stack.entries) - 1; index >= 0; index--") {
+		t.Fatal("servicekit CleanupStack must close in reverse registration order")
 	}
 }
 

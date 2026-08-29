@@ -6,7 +6,8 @@
     "schema", "result", "milestone", "workloadMode", "activeCarriers",
     "workloadTargets", "targetAttained", "checks", "authors",
     "supply", "usageScope", "environmentCapacity", "reasons", "issueCount",
-    "nextWave", "canonicalIdentityStates", "pendingDelivery", "semanticScheduling"
+    "retired", "nextWave", "canonicalIdentityStates", "pendingDelivery",
+    "semanticScheduling"
   ],
   "additionalProperties": false,
   "properties": {
@@ -83,6 +84,20 @@
       "items": {"$ref": "#/$defs/reason"}
     },
     "issueCount": {"type": "integer", "minimum": 0},
+    "retired": {
+      "description": "带合法退役回执、已退出可选集的对象。已退役不是未准入的子类：这些对象不再产出 quality/eligibility issue，也不进入 supply 的任何计数。",
+      "type": "object",
+      "required": ["objectCount", "objects"],
+      "additionalProperties": false,
+      "properties": {
+        "objectCount": {"type": "integer", "minimum": 0},
+        "objects": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/retiredObject"}
+        }
+      }
+    },
     "nextWave": {
       "type": "array",
       "maxItems": 4,
@@ -185,6 +200,18 @@
         "code": {"type": "string", "minLength": 1},
         "count": {"type": "integer", "minimum": 1},
         "message": {"type": "string", "minLength": 1}
+      }
+    },
+    "retiredObject": {
+      "type": "object",
+      "required": ["objectType", "objectRef", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "objectType": {"enum": ["homepage", "content"]},
+        "objectRef": {"type": "string", "minLength": 1},
+        "reason": {
+          "$ref": "pool_object_retirement_receipt.schema.json#/properties/reason"
+        }
       }
     },
     "issue": {
@@ -359,10 +386,7 @@
     "semanticWaveCandidate": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "carrier", "candidateId", "objectRef", "sourceUnitRef",
-        "sourceReadyEvidenceRootRef", "entityRef"
-      ],
+      "required": ["carrier", "candidateId", "objectRef", "entityRef"],
       "properties": {
         "carrier": {"enum": ["homepage", "article", "image", "video"]},
         "candidateId": {"type": "string", "minLength": 1},
@@ -372,7 +396,22 @@
           "pattern": "^/entity/[^/]+/[^/]+/[^/]+$"
         },
         "sourceUnitRef": {"type": "string", "minLength": 1},
-        "sourceReadyEvidenceRootRef": {"type": "string", "minLength": 1}
+        "sourceReadyEvidenceRootRef": {"type": "string", "minLength": 1},
+        "sourceAdmissionRef": {"type": "string", "minLength": 1}
+      },
+      "if": {"properties": {"carrier": {"enum": ["image", "video"]}}},
+      "then": {
+        "required": ["sourceAdmissionRef"],
+        "not": {
+          "anyOf": [
+            {"required": ["sourceUnitRef"]},
+            {"required": ["sourceReadyEvidenceRootRef"]}
+          ]
+        }
+      },
+      "else": {
+        "required": ["sourceUnitRef", "sourceReadyEvidenceRootRef"],
+        "not": {"required": ["sourceAdmissionRef"]}
       }
     },
     "sourceReadyIdentityState": {

@@ -29,6 +29,7 @@ from quwoquan_ops.cli.lib.test_data.cases import (
     chat_group_governance_case,
     chat_recall_case,
     circle_gathering_case,
+    circle_gathering_plan_case,
     circle_membership_case,
     circle_pending_approval_case,
     content_comments_case,
@@ -85,6 +86,9 @@ class _PublicRemote:
         self.comments: dict[str, list[str]] = {}
         self.circles: dict[str, dict[str, object]] = {}
         self.gatherings: dict[str, dict[str, object]] = {}
+        self.gathering_plans: dict[str, dict[str, object]] = {}
+        self.gathering_plan_proposal_override: dict[str, object] | None = None
+        self.gathering_plan_commit_count = 0
         self.followed_subjects: set[tuple[str, str, str]] = set()
         self.post_likes: set[tuple[str, str]] = set()
         self.behavior_events: list[tuple[str, str, str]] = []
@@ -419,6 +423,111 @@ class _PublicRemote:
                     ],
                     "hasMore": False,
                 }
+            gathering_plan_path = re.fullmatch(
+                r"/gatherings/([^/:]+)/plan", clean_path
+            )
+            if gathering_plan_path:
+                gathering_id = gathering_plan_path.group(1)
+                if method == "POST":
+                    plan_id = f"plan-{len(self.gathering_plans) + 1}"
+                    revision_id = f"revision-{plan_id}-1"
+                    revision_digest = f"digest-{revision_id}"
+                    plan = {
+                        "id": plan_id,
+                        "gatheringId": gathering_id,
+                        "version": 1,
+                        "currentRevisionId": revision_id,
+                        "currentRevisionNumber": 1,
+                        "currentRevisionDigest": revision_digest,
+                        "items": (_kwargs.get("body") or {}).get("items") or [],
+                        "revisions": [
+                            {
+                                "revisionId": revision_id,
+                                "revisionNumber": 1,
+                                "revisionDigest": revision_digest,
+                            }
+                        ],
+                    }
+                    self.gathering_plans[gathering_id] = plan
+                    return {
+                        "planId": plan_id,
+                        "gatheringId": gathering_id,
+                        "planVersion": 1,
+                        "currentRevisionId": revision_id,
+                        "currentRevisionNumber": 1,
+                        "currentRevisionDigest": revision_digest,
+                        "replayed": False,
+                    }
+                if method == "GET":
+                    return dict(self.gathering_plans[gathering_id])
+            gathering_plan_action = re.fullmatch(
+                r"/gathering-plans/([^/]+)/(proposals|commit)", clean_path
+            )
+            if gathering_plan_action and method == "POST":
+                plan_id, action = gathering_plan_action.groups()
+                state = next(
+                    plan
+                    for plan in self.gathering_plans.values()
+                    if plan["id"] == plan_id
+                )
+                if action == "proposals":
+                    proposal_id = f"proposal-{plan_id}-1"
+                    proposal_digest = f"digest-{proposal_id}"
+                    state["version"] = 2
+                    state["proposalId"] = proposal_id
+                    state["proposalDigest"] = proposal_digest
+                    response = {
+                        "planId": plan_id,
+                        "gatheringId": state["gatheringId"],
+                        "planVersion": 2,
+                        "currentRevisionId": state["currentRevisionId"],
+                        "currentRevisionNumber": 1,
+                        "currentRevisionDigest": state["currentRevisionDigest"],
+                        "proposalId": proposal_id,
+                        "proposalDigest": proposal_digest,
+                        "replayed": False,
+                    }
+                    if self.gathering_plan_proposal_override is not None:
+                        response.update(self.gathering_plan_proposal_override)
+                    return response
+                self.gathering_plan_commit_count += 1
+                revision_id = f"revision-{plan_id}-2"
+                revision_digest = f"digest-{revision_id}"
+                state["version"] = 3
+                state["currentRevisionId"] = revision_id
+                state["currentRevisionNumber"] = 2
+                state["currentRevisionDigest"] = revision_digest
+                state["revisions"].append(
+                    {
+                        "revisionId": revision_id,
+                        "revisionNumber": 2,
+                        "revisionDigest": revision_digest,
+                    }
+                )
+                return {
+                    "planId": plan_id,
+                    "gatheringId": state["gatheringId"],
+                    "planVersion": 3,
+                    "currentRevisionId": revision_id,
+                    "currentRevisionNumber": 2,
+                    "currentRevisionDigest": revision_digest,
+                    "replayed": False,
+                }
+            gathering_plan_revisions = re.fullmatch(
+                r"/gathering-plans/([^/]+)/revisions", clean_path
+            )
+            if gathering_plan_revisions and method == "GET":
+                plan_id = gathering_plan_revisions.group(1)
+                state = next(
+                    plan
+                    for plan in self.gathering_plans.values()
+                    if plan["id"] == plan_id
+                )
+                return {
+                    "items": list(state["revisions"]),
+                    "nextCursor": None,
+                    "hasMore": False,
+                }
             gathering_path = re.fullmatch(r"/gatherings/([^/:]+)", clean_path)
             if gathering_path and method == "GET":
                 state = self.gatherings[gathering_path.group(1)]
@@ -702,6 +811,58 @@ class TestDataDomainProvidersContractTest(unittest.TestCase):
         self.assertEqual(remote.relationships, set())
         self.assertEqual(len(remote.closed_accounts), 2)
 
+    def test_gathering_plan_rejects_invalid_proposal_identity_before_commit(self) -> None:
+        candidate = _candidate()
+        case = circle_gathering_plan_case()
+        required_provider_capabilities = {
+            provider_key.value
+            for request in collect_request_graph((case.request,)).values()
+            for provider_key in request.capability.required_provider_capabilities
+        }
+        provider_evidence = {
+            capability_id: {
+                "status": "passed",
+                "candidateBindingDigest": candidate.digest,
+            }
+            for capability_id in required_provider_capabilities
+        }
+        invalid_identities = (
+            ({"proposalId": ""}, "proposalId"),
+            ({"proposalDigest": ""}, "proposalDigest"),
+            ({"planVersion": 0}, "planVersion"),
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            for index, (override, expected_error) in enumerate(invalid_identities):
+                with self.subTest(identity=expected_error):
+                    remote = _PublicRemote()
+                    remote.gathering_plan_proposal_override = override
+                    runtime = DataRuntime()
+                    context = DataContext(
+                        candidate=candidate,
+                        base_url="https://gamma.local.quwoquan.invalid",
+                        output_root=Path(temporary) / str(index),
+                        provider_evidence=provider_evidence,
+                        runtime=runtime,
+                    )
+                    with (
+                        mock.patch(
+                            "quwoquan_ops.cli.lib.test_data.providers.user_service."
+                            "open_test_data_acceptance_session",
+                            side_effect=remote.actor,
+                        ),
+                        mock.patch(
+                            "quwoquan_ops.cli.lib.test_data.operations."
+                            "request_local_environment_json",
+                            side_effect=remote.request,
+                        ),
+                        self.assertRaisesRegex(ValueError, expected_error),
+                    ):
+                        TestDataSession.for_case(
+                            case.case_id,
+                            context=context,
+                        ).execute(case)
+                    self.assertEqual(remote.gathering_plan_commit_count, 0)
+
     def test_every_domain_provider_executes_its_autonomous_closure(self) -> None:
         candidate = _candidate()
         cases = (
@@ -713,6 +874,7 @@ class TestDataDomainProvidersContractTest(unittest.TestCase):
             content_footprint_case(),
             circle_membership_case(),
             circle_gathering_case(),
+            circle_gathering_plan_case(),
             circle_pending_approval_case(),
             chat_recall_case(),
             chat_group_governance_case(),

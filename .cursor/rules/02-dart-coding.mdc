@@ -1,8 +1,0 @@
----
-description: Dart 编码标准指针：package 绝对 import、领域命名、codegen 错误码、Riverpod 约定
-globs: quwoquan_app/**/*.dart
-alwaysApply: false
----
-
-写或改任何 `.dart` 文件前，先读
-`.agents/skills/review/references/roles/developer/references/dart.md`。

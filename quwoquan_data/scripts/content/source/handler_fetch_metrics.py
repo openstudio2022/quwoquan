@@ -29,6 +29,7 @@ def apply_source_image_rejections(
         "rights_policy": "rights",
         "relevance_policy": "other",
         "invalid_payload": "other",
+        "budget_policy": "other",
         "duplicate": "other",
     }
     for category, count in drop_categories.items():

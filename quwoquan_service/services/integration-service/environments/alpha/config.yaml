@@ -1,6 +1,6 @@
 overrides:
-  sys.integration-service.account_security_authority.base_url: http://user-service:18081
-  sys.integration-service.account_security_authority.timeout_ms: 300
+  sys.integration-service.user_account_security_authority.base_url: http://user-service:18081
+  sys.integration-service.user_account_security_authority.timeout_ms: 300
   sys.integration-service.redis.general.addr: redis:6379
   sys.integration-service.redis.rec.addr: redis:6379
 secretRefs:

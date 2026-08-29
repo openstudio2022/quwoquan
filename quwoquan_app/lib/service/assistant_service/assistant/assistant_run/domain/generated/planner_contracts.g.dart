@@ -20,12 +20,12 @@ class SlotFillEntry {
   final double confidence;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'slotId': slotId,
-        'value': value,
-        'source': source.wireName,
-        'action': action.wireName,
-        'confidence': confidence,
-      };
+    'slotId': slotId,
+    'value': value,
+    'source': source.wireName,
+    'action': action.wireName,
+    'confidence': confidence,
+  };
 
   factory SlotFillEntry.fromJson(Map<String, dynamic> json) {
     const allowedFields = <String>{
@@ -39,25 +39,45 @@ class SlotFillEntry {
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('SlotFillEntry response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'SlotFillEntry response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (!json.containsKey('slotId') || json['slotId'] == null || (json['slotId'] is! String)) {
-      throw const FormatException('SlotFillEntry field slotId has an invalid wire value');
+    if (!json.containsKey('slotId') ||
+        json['slotId'] == null ||
+        (json['slotId'] is! String)) {
+      throw const FormatException(
+        'SlotFillEntry field slotId has an invalid wire value',
+      );
     }
-    if (json.containsKey('source') && json['source'] != null && (json['source'] is! String)) {
-      throw const FormatException('SlotFillEntry field source has an invalid wire value');
+    if (json.containsKey('source') &&
+        json['source'] != null &&
+        (json['source'] is! String)) {
+      throw const FormatException(
+        'SlotFillEntry field source has an invalid wire value',
+      );
     }
-    if (json.containsKey('action') && json['action'] != null && (json['action'] is! String)) {
-      throw const FormatException('SlotFillEntry field action has an invalid wire value');
+    if (json.containsKey('action') &&
+        json['action'] != null &&
+        (json['action'] is! String)) {
+      throw const FormatException(
+        'SlotFillEntry field action has an invalid wire value',
+      );
     }
-    if (json.containsKey('confidence') && json['confidence'] != null && (json['confidence'] is! num)) {
-      throw const FormatException('SlotFillEntry field confidence has an invalid wire value');
+    if (json.containsKey('confidence') &&
+        json['confidence'] != null &&
+        (json['confidence'] is! num)) {
+      throw const FormatException(
+        'SlotFillEntry field confidence has an invalid wire value',
+      );
     }
     return SlotFillEntry(
       slotId: (json['slotId'] as String?)?.trim() ?? "",
       value: json['value'],
       source: parseSlotSourceStrict((json['source'] as String?)?.trim() ?? ""),
-      action: parseSlotFillActionStrict((json['action'] as String?)?.trim() ?? ""),
+      action: parseSlotFillActionStrict(
+        (json['action'] as String?)?.trim() ?? "",
+      ),
       confidence: (json['confidence'] as num?)?.toDouble() ?? 0,
     );
   }
@@ -72,33 +92,38 @@ class SlotFillEntryFields {
 }
 
 class SlotFillPlanDto {
-  const SlotFillPlanDto({
-    this.entries = const <String, SlotFillEntry>{},
-  });
+  const SlotFillPlanDto({this.entries = const <String, SlotFillEntry>{}});
 
   final Map<String, SlotFillEntry> entries;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'entries': <String, dynamic>{
-          for (final entry in entries.entries) entry.key: entry.value.toJson(),
-        },
-      };
+    'entries': <String, dynamic>{
+      for (final entry in entries.entries) entry.key: entry.value.toJson(),
+    },
+  };
 
   factory SlotFillPlanDto.fromJson(Map<String, dynamic> json) {
-    const allowedFields = <String>{
-      'entries',
-    };
+    const allowedFields = <String>{'entries'};
     final unknownFields = json.keys
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('SlotFillPlanDto response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'SlotFillPlanDto response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (json.containsKey('entries') && json['entries'] != null && (json['entries'] is! Map)) {
-      throw const FormatException('SlotFillPlanDto field entries has an invalid wire value');
+    if (json.containsKey('entries') &&
+        json['entries'] != null &&
+        (json['entries'] is! Map)) {
+      throw const FormatException(
+        'SlotFillPlanDto field entries has an invalid wire value',
+      );
     }
     return SlotFillPlanDto(
-      entries: _assistantObjectMap(json['entries'], (key, value) => SlotFillEntry.fromJson(value)),
+      entries: _assistantObjectMap(
+        json['entries'],
+        (key, value) => SlotFillEntry.fromJson(value),
+      ),
     );
   }
 
@@ -111,7 +136,10 @@ class SlotFillPlanDto {
     for (final entry in value.entries) {
       final raw = entry.value;
       if (raw is! Map) continue;
-      typed[entry.key.toString()] = parser(entry.key.toString(), raw.cast<String, dynamic>());
+      typed[entry.key.toString()] = parser(
+        entry.key.toString(),
+        raw.cast<String, dynamic>(),
+      );
     }
     return typed;
   }

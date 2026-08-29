@@ -10,6 +10,8 @@ from pathlib import Path
 import subprocess
 import sys
 
+sys.dont_write_bytecode = True
+
 from cleanup_deployment_test_workspace import (
     validated_deployment_test_workspace,
 )

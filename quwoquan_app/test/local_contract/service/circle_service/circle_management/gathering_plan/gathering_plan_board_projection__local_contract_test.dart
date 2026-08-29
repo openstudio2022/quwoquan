@@ -8,6 +8,33 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
 
 void main() {
   group('GatheringPlan 看板只读投影', () {
+    test('闭集未知字符串与缺失/错误类型保持不同解码终态', () {
+      expect(
+        cloud.PlanItemKind.fromWire('future_kind', r'$.items[0].kind'),
+        cloud.PlanItemKind.unknown,
+      );
+      expect(
+        cloud.PlanTravelMode.fromWire('hovercraft', r'$.travelMode'),
+        cloud.PlanTravelMode.unknown,
+      );
+      for (final malformed in <Object?>[null, 7, <String, Object?>{}]) {
+        expect(
+          () => cloud.PlanItemKind.fromWire(malformed, r'$.items[0].kind'),
+          throwsA(
+            isA<FormatException>().having(
+              (error) => error.message,
+              'message',
+              contains(r'$.items[0].kind'),
+            ),
+          ),
+        );
+      }
+      expect(
+        () => cloud.PlanItemKind.unknown.wireName,
+        throwsA(isA<StateError>()),
+      );
+    });
+
     test('看板读的是 current Revision，而不是编号最大的历史版本', () {
       final slice = gatheringBoardPlanFromWire(
         _plan(
@@ -167,6 +194,76 @@ void main() {
       expect(slice.items[1].detail, '公共交通 · 约 25 分钟');
     });
 
+    test('闭集外 PlanItem kind 收缩为版本不支持终态，不伪造普通条目', () {
+      final slice = gatheringBoardPlanFromWire(
+        _plan(
+          currentRevisionId: 'revision-1',
+          currentRevisionNumber: 1,
+          revisions: <cloud.PlanRevision>[
+            _revision(
+              revisionId: 'revision-1',
+              revisionNumber: 1,
+              items: <cloud.PlanItem>[
+                _item(
+                  itemId: 'item-future',
+                  kind: cloud.PlanItemKind.unknown,
+                  order: 1,
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+
+      expect(slice.capability.state, GatheringBoardCapabilityState.unavailable);
+      expect(
+        slice.capability.unavailableReason,
+        GatheringBoardCapabilityUnavailableReason.unsupported,
+      );
+      expect(slice.capability.unavailableLabel, contains('当前版本暂不支持'));
+      expect(slice.items, isEmpty);
+    });
+
+    test('闭集外 travel mode 收缩为版本不支持终态，不回退为其他方式', () {
+      final slice = gatheringBoardPlanFromWire(
+        _plan(
+          currentRevisionId: 'revision-1',
+          currentRevisionNumber: 1,
+          revisions: <cloud.PlanRevision>[
+            _revision(
+              revisionId: 'revision-1',
+              revisionNumber: 1,
+              items: <cloud.PlanItem>[
+                _item(
+                  itemId: 'item-route-future',
+                  kind: cloud.PlanItemKind.routeSegment,
+                  order: 1,
+                  routeSegment: const cloud.PlanRouteSegmentItem(
+                    fromPlaceRef: cloud.GatheringPlanSourceRef(
+                      objectTypeRef: 'entity.homepage',
+                      objectId: 'homepage-from',
+                    ),
+                    toPlaceRef: cloud.GatheringPlanSourceRef(
+                      objectTypeRef: 'entity.homepage',
+                      objectId: 'homepage-to',
+                    ),
+                    travelMode: cloud.PlanTravelMode.unknown,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+
+      expect(
+        slice.capability.unavailableReason,
+        GatheringBoardCapabilityUnavailableReason.unsupported,
+      );
+      expect(slice.capability.unavailableLabel, contains('当前版本暂不支持'));
+      expect(slice.items, isEmpty);
+    });
+
     test('current pointer 指不到已提交 Revision 时判失败，不塌陷成空计划', () {
       final slice = gatheringBoardPlanFromWire(
         _plan(
@@ -190,9 +287,10 @@ void main() {
       expect(slice.items, isEmpty);
     });
 
-    test('计划不可读的三种原因各自可区分', () {
+    test('计划不可读的四种原因各自可区分', () {
       for (final reason in <GatheringBoardCapabilityUnavailableReason>[
         GatheringBoardCapabilityUnavailableReason.notConfigured,
+        GatheringBoardCapabilityUnavailableReason.unsupported,
         GatheringBoardCapabilityUnavailableReason.permissionDenied,
         GatheringBoardCapabilityUnavailableReason.temporarilyUnavailable,
       ]) {

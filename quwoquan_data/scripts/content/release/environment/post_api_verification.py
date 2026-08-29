@@ -1,25 +1,30 @@
 """Verify release-imported posts through the public content API."""
 from __future__ import annotations
 
+import json
+import subprocess
+import uuid
 from collections.abc import Mapping
 from datetime import datetime, timezone
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote, urlsplit, urlunsplit
+from urllib.parse import quote, urlsplit
 
-import yaml
+from content.release.environment.post_api_feed_verification import (
+    _verify_typed_feed,
+)
 from content.release.environment.post_api_media_verification import (
     PostApiCase,
     PostApiVerificationError,
-    _object,
+    ReleaseMediaAssetCase,
+    _optional_text,
+    _public_media_path,
     _require_media,
     _required_text,
     _verify_binary_media,
+    _verify_research_denied_media,
     _verify_source_attribution,
-)
-from content.release.environment.post_api_projection_verification import (
-    reject_unknown_content_post_projection_fields as _reject_unknown_content_post_projection_fields,
 )
 from content.release.environment.post_api_projection_verification import (
     verify_search_projection as _verify_search_projection,
@@ -36,77 +41,119 @@ from content.release.model import DeploymentEnvironment
 from core.control_types import ContentType
 from core.io import write_json
 from core.paths import OUTPUT_ROOT, REPO_ROOT
+from core.runtime_policy import active_runtime_policy
 from core.schema import assert_valid
 from verify.release_publishability import readiness_phase_issue
 
-CONTENT_POST_OPERATIONS_PATH = (
-    REPO_ROOT
-    / "quwoquan_service/services/content-service/contracts/content/post/operations.yaml"
-)
-FEED_PAGE_ID = "content.feed.list"
 POST_DETAIL_PAGE_ID = "content.post.get"
 USER_PROFILE_PAGE_ID = "user.profile"
+ORIGINAL_ACCESS_PAGE_ID = "content.media.original_access"
 
 
-def _operation_payload(response: Any, *, endpoint: str) -> dict[str, Any]:
-    operation = getattr(response, "operation", None)
-    if operation is None:
-        raise PostApiVerificationError(f"{endpoint} lacks request trace evidence")
-    return operation.as_payload()
-
-
-def _public_media_path(url: str) -> str:
-    parts = urlsplit(str(url or "").strip())
-    return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
-
-
-def _optional_text(payload: Mapping[str, Any], field: str, *, endpoint: str) -> str:
-    value = payload.get(field)
-    if value is None:
-        return ""
-    if not isinstance(value, str):
-        raise PostApiVerificationError(f"{endpoint} {field} must be a string or null")
-    return value.strip()
-
-
-def _post_feed_page_limit() -> int:
-    """Return GET /content/feed maximum_items from the owning operation contract."""
+def _research_consumer_credential(
+    *,
+    environment: str,
+    release_id: str,
+    run_id: str,
+) -> dict[str, str]:
+    """经 stackctl 签发 research 消费凭证；凭证只在进程内存传递。"""
+    command = [
+        "python3",
+        str(REPO_ROOT / "quwoquan_ops/cli/stackctl.py"),
+        "--output-format",
+        "json",
+        "research-consumer-credential",
+        "--env",
+        environment,
+        "--release-id",
+        release_id,
+        "--verify-run-id",
+        run_id,
+    ]
     try:
-        document = yaml.safe_load(
-            CONTENT_POST_OPERATIONS_PATH.read_text(encoding="utf-8")
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=active_runtime_policy().research_credential_issuance_timeout_seconds,
+            check=False,
+            cwd=str(REPO_ROOT),
         )
-    except (OSError, yaml.YAMLError) as exc:
+    except (OSError, subprocess.TimeoutExpired) as exc:
         raise PostApiVerificationError(
-            f"content post operations unreadable: {CONTENT_POST_OPERATIONS_PATH}"
+            f"research consumer credential issuance failed to run: {exc}"
         ) from exc
-    if not isinstance(document, Mapping):
-        raise PostApiVerificationError("content post operations must be an object")
-    routes = document.get("api_routes")
-    if not isinstance(routes, list):
-        raise PostApiVerificationError("content post api_routes must be an array")
-    for route in routes:
-        if not isinstance(route, Mapping):
-            continue
-        if (
-            str(route.get("method") or "").upper() != "GET"
-            or str(route.get("path") or "") != "/content/feed"
-            or str(route.get("operation") or "") != "GetFeed"
-        ):
-            continue
-        pagination = route.get("pagination")
-        if not isinstance(pagination, Mapping):
-            raise PostApiVerificationError("GetFeed pagination contract is missing")
-        maximum = pagination.get("maximum_items")
-        if isinstance(maximum, int) and maximum > 0:
-            return maximum
-        raise PostApiVerificationError("GetFeed pagination.maximum_items is invalid")
-    raise PostApiVerificationError("GetFeed route contract is missing")
+    try:
+        result = json.loads(completed.stdout or "{}")
+    except ValueError as exc:
+        raise PostApiVerificationError(
+            "research consumer credential issuance returned invalid JSON"
+        ) from exc
+    if completed.returncode != 0 or result.get("exitCode") != 0:
+        raise PostApiVerificationError(
+            "DATA.RESEARCH.CONSUMER_CREDENTIAL_UNAVAILABLE: "
+            f"{result.get('details') or completed.stderr.strip() or 'issuance failed'}"
+        )
+    evidence = result.get("evidence")
+    if not isinstance(evidence, Mapping):
+        raise PostApiVerificationError(
+            "research consumer credential issuance lacks evidence"
+        )
+    bearer_token = str(evidence.get("bearerToken") or "").strip()
+    subject_hash = str(evidence.get("subjectHash") or "").strip()
+    if not bearer_token or not subject_hash:
+        raise PostApiVerificationError(
+            "research consumer credential evidence lacks bearerToken/subjectHash"
+        )
+    return {"bearerToken": bearer_token, "subjectHash": subject_hash}
+
+
+def _research_signed_media_probe(
+    client: PublicApiClient,
+    asset: ReleaseMediaAssetCase,
+) -> dict[str, Any]:
+    """采样一次原图短签授权并按 release 权威校验取回字节。"""
+    issuance_path = (
+        f"content/media/{quote(asset.asset_id, safe='')}/original:access"
+    )
+    response = client.post_json(
+        issuance_path,
+        page_id=ORIGINAL_ACCESS_PAGE_ID,
+        body={"mediaId": asset.asset_id, "purpose": "view"},
+        extra_headers={"Idempotency-Key": f"readiness-{uuid.uuid4().hex}"},
+    )
+    if response.status != HTTPStatus.OK:
+        raise PostApiVerificationError(
+            "research signed media issuance returned "
+            f"status={response.status} for {asset.asset_id}"
+        )
+    original_url = _required_text(
+        response.payload,
+        "originalUrl",
+        endpoint="research signed media issuance",
+    )
+    if not urlsplit(original_url).query:
+        raise PostApiVerificationError(
+            f"research signed media URL lacks a signature: {asset.asset_id}"
+        )
+    return _verify_binary_media(
+        client,
+        original_url,
+        expected_kind="image",
+        expected_bytes=asset.expected_bytes,
+        expected_sha256=asset.expected_sha256,
+        expected_mime_type=asset.expected_mime_type,
+        evidence_policy="private_target",
+    )
 
 
 def _verify_detail(
     client: PublicApiClient,
     case: PostApiCase,
     creator: CreatorProfileCase,
+    *,
+    media_origin: str = "",
+    signed_sample_asset_id: str = "",
 ) -> dict[str, Any]:
     response = client.get_json(
         f"content/posts/{quote(case.post_id, safe='')}",
@@ -149,6 +196,18 @@ def _verify_detail(
         )
     probes: list[dict[str, Any]] = []
     for asset in case.media_assets:
+        if asset.delivery_ref:
+            # research：私有交付资产逐个证明匿名不可达；对采样资产附加一次
+            # 原图短签取回校验（配额窗口内只采样一次，避免撞 grant 限额）。
+            probe = _verify_research_denied_media(
+                client,
+                media_origin=media_origin,
+                asset=asset,
+            )
+            if asset.asset_id == signed_sample_asset_id:
+                probe["signedProbe"] = _research_signed_media_probe(client, asset)
+            probes.append(probe)
+            continue
         full_identity = asset.kind == "image"
         probe = _verify_binary_media(
             client,
@@ -234,6 +293,21 @@ def _verify_author_profile(
         raise PostApiVerificationError(
             f"creator avatar authority is incomplete for {creator.creator_ref}"
         )
+    if not creator.avatar_url.startswith("https://"):
+        # research 私有交付 avatar：回读与权威的相对 CAS key 一致即绪；
+        # 匿名不可达由 post 私有媒体探测与边缘守卫覆盖，不再按资产取回。
+        return {
+            "creatorRef": creator.creator_ref,
+            "authorId": creator.author_id,
+            "personaId": creator.persona_id,
+            "profileStatus": response.status,
+            "avatarAssetId": creator.avatar_asset_id,
+            "avatarUrl": creator.avatar_url,
+            "avatarMediaReady": True,
+            "avatarProbeCount": 0,
+            "avatarProbe": None,
+            "usesPlatformDefaultAvatar": False,
+        }
     avatar_probe = _verify_binary_media(
         client,
         avatar_url,
@@ -256,222 +330,6 @@ def _verify_author_profile(
     }
 
 
-def _feed_item_matches_release(
-    item: Mapping[str, Any],
-    *,
-    cases_by_id: Mapping[str, PostApiCase],
-    creators_by_author: Mapping[str, CreatorProfileCase],
-    endpoint: str,
-) -> str | None:
-    _reject_unknown_content_post_projection_fields(item, endpoint=endpoint)
-    post_id = _required_text(item, "postId", endpoint=endpoint)
-    case = cases_by_id.get(post_id)
-    if case is None:
-        return None
-    if _required_text(item, "contentIdentity", endpoint=endpoint) != "work":
-        raise PostApiVerificationError(
-            f"{endpoint} content identity mismatch for {case.post_ref}"
-        )
-    if _required_text(item, "authorId", endpoint=endpoint) != case.author_id:
-        raise PostApiVerificationError(f"{endpoint} author mismatch for {case.post_ref}")
-    creator = creators_by_author.get(case.author_id)
-    if creator is None:
-        raise PostApiVerificationError(
-            f"{endpoint} creator closure is missing for {case.post_ref}"
-        )
-    if _required_text(item, "authorDisplayName", endpoint=endpoint) != creator.display_name:
-        raise PostApiVerificationError(
-            f"{endpoint} author display name mismatch for {case.post_ref}"
-        )
-    item_avatar_url = (
-        _required_text(item, "authorAvatarUrl", endpoint=endpoint)
-        if creator.avatar_url
-        else _optional_text(item, "authorAvatarUrl", endpoint=endpoint)
-    )
-    if _public_media_path(item_avatar_url) != _public_media_path(creator.avatar_url):
-        raise PostApiVerificationError(
-            f"{endpoint} author avatar mismatch for {case.post_ref}"
-        )
-    if _required_text(item, "contentType", endpoint=endpoint) != case.content_type.value:
-        raise PostApiVerificationError(
-            f"{endpoint} content type mismatch for {case.post_ref}"
-        )
-    return post_id
-
-
-def _verify_visible_release_feed(
-    client: PublicApiClient,
-    *,
-    cases_by_id: Mapping[str, PostApiCase],
-    creators_by_author: Mapping[str, CreatorProfileCase],
-    name: str,
-    query: dict[str, str],
-) -> dict[str, Any]:
-    response = client.get_json(
-        "content/feed",
-        page_id=FEED_PAGE_ID,
-        query=query,
-    )
-    if response.status != HTTPStatus.OK:
-        raise PostApiVerificationError(f"{name} feed returned non-200")
-    payload = response.payload
-    if not isinstance(payload, dict):
-        raise PostApiVerificationError(
-            f"{name} feed response payload must be an object"
-        )
-    object_cards = payload.get("objectCards")
-    if not isinstance(object_cards, list):
-        raise PostApiVerificationError(f"{name} feed lacks objectCards array")
-    items = payload.get("items")
-    if not isinstance(items, list):
-        raise PostApiVerificationError(f"{name} feed lacks items")
-    matched = sorted(
-        post_id
-        for index, raw in enumerate(items)
-        if (
-            post_id := _feed_item_matches_release(
-                _object(raw, label=f"{name} feed item {index}"),
-                cases_by_id=cases_by_id,
-                creators_by_author=creators_by_author,
-                endpoint=f"{name} feed",
-            )
-        )
-        is not None
-    )
-    if not matched:
-        raise PostApiVerificationError(
-            f"{name} feed does not expose any release-bound postId"
-        )
-    canonical_query = "&".join(f"{key}={value}" for key, value in query.items())
-    return {
-        "name": name,
-        "path": "/content/feed",
-        "query": canonical_query,
-        "status": response.status,
-        "releaseBound": True,
-        "matchedPostIds": matched,
-        "requests": [_operation_payload(response, endpoint=f"{name} feed")],
-    }
-
-
-def _verify_typed_feed(
-    client: PublicApiClient,
-    cases: list[PostApiCase],
-    creators_by_author: Mapping[str, CreatorProfileCase],
-    *,
-    include_premium_stream: bool,
-) -> tuple[dict[str, int], list[dict[str, Any]]]:
-    page_limit = _post_feed_page_limit()
-    cases_by_id = {case.post_id: case for case in cases}
-    expected_by_type: dict[ContentType, dict[str, PostApiCase]] = {}
-    for case in cases:
-        expected_by_type.setdefault(case.content_type, {})[case.post_id] = case
-    feed_status: dict[str, int] = {}
-    feed_queries = [
-        _verify_visible_release_feed(
-            client,
-            cases_by_id=cases_by_id,
-            creators_by_author=creators_by_author,
-            name="discovery_work",
-            query={"identity": "work", "limit": str(page_limit)},
-        )
-    ]
-    for content_type, expected in expected_by_type.items():
-        cursor = ""
-        seen: set[str] = set()
-        seen_cursors: set[str] = set()
-        request_evidence: list[dict[str, Any]] = []
-        while len(seen) < len(expected):
-            query = {
-                "identity": "work",
-                "type": content_type.value,
-                "limit": str(page_limit),
-            }
-            if cursor:
-                query["cursor"] = cursor
-            response = client.get_json(
-                "content/feed",
-                page_id=FEED_PAGE_ID,
-                query=query,
-            )
-            request_evidence.append(
-                _operation_payload(
-                    response,
-                    endpoint=f"typed {content_type.value} feed",
-                )
-            )
-            if response.status != HTTPStatus.OK:
-                raise PostApiVerificationError(
-                    f"typed feed returned non-200 for {content_type.value}"
-                )
-            items = response.payload.get("items")
-            if not isinstance(items, list):
-                raise PostApiVerificationError("typed feed lacks items")
-            for index, raw in enumerate(items):
-                item = _object(raw, label=f"typed feed {content_type.value} item {index}")
-                post_id = _feed_item_matches_release(
-                    item,
-                    cases_by_id=expected,
-                    creators_by_author=creators_by_author,
-                    endpoint=f"typed {content_type.value} feed",
-                )
-                if post_id is None:
-                    continue
-                seen.add(post_id)
-                feed_status[post_id] = response.status
-            next_cursor = str(response.payload.get("nextCursor") or "").strip()
-            if len(seen) == len(expected):
-                break
-            if not next_cursor or next_cursor in seen_cursors:
-                missing = sorted(set(expected) - seen)
-                raise PostApiVerificationError(
-                    f"typed feed omitted imported {content_type.value} posts: {missing[:3]}"
-                )
-            seen_cursors.add(next_cursor)
-            cursor = next_cursor
-        feed_queries.append(
-            {
-                "name": f"typed_{content_type.value}",
-                "path": "/content/feed",
-                "query": (
-                    f"identity=work&type={content_type.value}&limit={page_limit}"
-                ),
-                "status": HTTPStatus.OK,
-                "releaseBound": True,
-                "matchedPostIds": sorted(seen),
-                "requests": request_evidence,
-            }
-        )
-    feed_queries.append(
-        _verify_visible_release_feed(
-            client,
-            cases_by_id=cases_by_id,
-            creators_by_author=creators_by_author,
-            name="homepage_recommend",
-            query={
-                "sort": "recommend",
-                "channelId": "recommend",
-                "limit": str(page_limit),
-            },
-        )
-    )
-    if include_premium_stream:
-        feed_queries.append(
-            _verify_visible_release_feed(
-                client,
-                cases_by_id=cases_by_id,
-                creators_by_author=creators_by_author,
-                name="premium_stream",
-                query={
-                    "sort": "recommend",
-                    "channelId": "premium_stream",
-                    "limit": str(page_limit),
-                },
-            )
-        )
-    return feed_status, feed_queries
-
-
 def write_post_api_verification(
     *,
     environment: DeploymentEnvironment,
@@ -490,13 +348,7 @@ def write_post_api_verification(
     phase_issue = readiness_phase_issue(readiness_phase)
     if phase_issue is not None:
         raise PostApiVerificationError(f"post API verification {phase_issue}")
-    if readiness_phase == "research":
-        raise PostApiVerificationError(
-            "DATA.RESEARCH.IDENTITY_ADAPTER_UNAVAILABLE: GATE_BLOCK research "
-            "API verification requires a protected, "
-            "whitelisted internal identity adapter; anonymous guest access "
-            "cannot be reused as research evidence"
-        )
+    research = readiness_phase == "research"
     try:
         cases, creators_by_author = read_post_and_creator_cases(
             environment=environment,
@@ -505,13 +357,42 @@ def write_post_api_verification(
             importer_report_path=importer_report_path,
             creator_importer_report_path=creator_importer_report_path,
             media_delivery_base_url=media_delivery_base_url,
+            readiness_phase=readiness_phase,
         )
-        unauthenticated_client = PublicApiClient(
-            base_url=api_base_url,
-            ssl_cafile=ssl_cafile,
-        )
-        guest = unauthenticated_client.login_fresh_guest()
-        client = unauthenticated_client.for_guest(guest)
+        media_origin = media_delivery_base_url.rstrip("/")
+        guest = None
+        internal_subject_hash = ""
+        signed_sample_asset_id = ""
+        if research:
+            # research 证据禁止匿名 guest；消费身份是受保护白名单研究账号，
+            # 凭证经 stackctl 进程内存签发（DEC-032 能力面之内的消费核验）。
+            credential = _research_consumer_credential(
+                environment=environment.value,
+                release_id=release_id,
+                run_id=run_id,
+            )
+            internal_subject_hash = credential["subjectHash"]
+            client = PublicApiClient(
+                base_url=api_base_url,
+                bearer_token=credential["bearerToken"],
+                ssl_cafile=ssl_cafile,
+            )
+            signed_sample_asset_id = min(
+                (
+                    asset.asset_id
+                    for case in cases
+                    for asset in case.media_assets
+                    if asset.kind == "image" and asset.delivery_ref
+                ),
+                default="",
+            )
+        else:
+            unauthenticated_client = PublicApiClient(
+                base_url=api_base_url,
+                ssl_cafile=ssl_cafile,
+            )
+            guest = unauthenticated_client.login_fresh_guest()
+            client = unauthenticated_client.for_guest(guest)
         feed_status, feed_queries = _verify_typed_feed(
             client,
             cases,
@@ -540,7 +421,13 @@ def write_post_api_verification(
         )
         rows = []
         for case in cases:
-            detail = _verify_detail(client, case, creators_by_author[case.author_id])
+            detail = _verify_detail(
+                client,
+                case,
+                creators_by_author[case.author_id],
+                media_origin=media_origin,
+                signed_sample_asset_id=signed_sample_asset_id,
+            )
             rows.append(
                 {
                     "postRef": case.post_ref,
@@ -563,6 +450,14 @@ def write_post_api_verification(
         creator_importer_ref = creator_importer_report_path.relative_to(OUTPUT_ROOT).as_posix()
     except ValueError as exc:
         raise PostApiVerificationError("post importer report must be below QWQ_OUTPUT_ROOT") from exc
+    identity_evidence: dict[str, Any] = (
+        {"internalSubjectHash": internal_subject_hash}
+        if research
+        else {
+            "guestActorHash": guest.guest_actor_hash,
+            "guestLogin": guest.login_operation.as_payload(),
+        }
+    )
     payload = {
         "schema": "quwoquan_data.post_api_verification",
         "environment": environment.value,
@@ -573,8 +468,7 @@ def write_post_api_verification(
         "creatorImportReportRef": creator_importer_ref,
         "apiBaseUrl": api_base_url.rstrip("/"),
         "mediaDeliveryBaseUrl": media_delivery_base_url.rstrip("/"),
-        "guestActorHash": guest.guest_actor_hash,
-        "guestLogin": guest.login_operation.as_payload(),
+        **identity_evidence,
         "verifiedAt": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "passed": True,
         "feedQueries": feed_queries,

@@ -31,9 +31,12 @@ from quwoquan_ops.cli.lib.app_launch_manifest_contract import (
 )
 from quwoquan_ops.cli.lib.dev_up import local_target_ports
 from quwoquan_ops.cli.lib.local_runtime_consumer_lease import (
+    MAX_LEASE_AGE_SECONDS,
     acquire_consumer_lease,
     active_consumer_leases,
+    inspect_consumer_leases,
     list_consumer_leases,
+    release_consumer_lease,
 )
 
 
@@ -87,6 +90,13 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
                 "#!/usr/bin/env bash\n"
                 "set -euo pipefail\n"
                 f"printf '%s\\n' \"$*\" >> {shlex.quote(str(flutter_log))}\n"
+                "if [[ \"$*\" == \"--version --machine\" ]]; then\n"
+                "  printf '%s\\n' '{\"frameworkVersion\":\"3.47.0\","
+                "\"frameworkRevision\":\"fixture-revision\","
+                "\"engineRevision\":\"fixture-engine\","
+                "\"dartSdkVersion\":\"3.10.0\",\"channel\":\"stable\"}'\n"
+                "  exit 0\n"
+                "fi\n"
                 "if [[ \"${1:-}\" == \"pub\" && \"${2:-}\" == \"get\" ]]; then exit 0; fi\n"
                 "if [[ \"$*\" == \"devices --machine\" ]]; then\n"
                 f"  printf '%s\\n' {shlex.quote(device_payload)}\n"
@@ -351,7 +361,10 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
         self.assertIn('"compileStatus": compile_status', script)
         self.assertIn('"installStatus": install_status', script)
         self.assertIn('"launchStatus": launch_status', script)
-        self.assertIn('"runtimeStatus": runtime_status', script)
+        self.assertIn(
+            '"runtimeStatus": receipt.get("runtimeHealthStatus")', script
+        )
+        self.assertIn("else runtime_status", script)
         self.assertIn('receipt.get("transitions")', script)
         self.assertNotIn('"compileStatus": "passed" if exit_code == 0', script)
         self.assertIn('"contentAvailability": preflight.get', script)
@@ -454,249 +467,12 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
             self.assertEqual(len(active), 1)
             self.assertEqual(active[0]["state"], "build_grace")
 
-    def test_ios_simulator_lease_records_release_bound_handoff_without_ports(self) -> None:
-        with tempfile.TemporaryDirectory() as output_root, patch.dict(
-            os.environ,
-            {"QWQ_OUTPUT_ROOT": output_root},
-        ):
-            lease = acquire_consumer_lease(
-                target="beta-local",
-                device="SIMULATOR-UDID",
-                consumer="direct-flutter-run",
-                package_name="com.example.quwoquanApp",
-                ports=(),
-                platform="ios-simulator",
-                handoff_digest="sha256:" + "1" * 64,
-                release_id="release-001",
-                manifest_digest="sha256:" + "2" * 64,
-                readiness_receipt_digest="sha256:" + "3" * 64,
-                build_grace_seconds=1,
-            )
-            self.assertEqual(lease["platform"], "ios-simulator")
-            self.assertEqual(lease["bundleId"], "com.example.quwoquanApp")
-            self.assertEqual(lease["ports"], [])
-            self.assertEqual(lease["releaseId"], "release-001")
+    def test_release_retains_generation_evidence_and_frees_occupancy(self) -> None:
+        """交回 lease 必须同时成立两件事：证据留下，占用让出。
 
-    def test_ios_physical_lease_records_bundle_without_transport_ports(self) -> None:
-        with tempfile.TemporaryDirectory() as output_root, patch.dict(
-            os.environ,
-            {"QWQ_OUTPUT_ROOT": output_root},
-        ):
-            lease = acquire_consumer_lease(
-                target="gamma-local",
-                device="REGISTERED-IPHONE-UDID",
-                consumer="canonical-launcher",
-                package_name="com.example.quwoquanApp.nonprod.debug",
-                ports=(),
-                platform="ios-physical",
-                handoff_digest="sha256:" + "4" * 64,
-                build_grace_seconds=1,
-            )
-            self.assertEqual(lease["platform"], "ios-physical")
-            self.assertEqual(
-                lease["bundleId"], "com.example.quwoquanApp.nonprod.debug"
-            )
-            self.assertEqual(lease["ports"], [])
-            self.assertEqual(lease["handoffDigest"], "sha256:" + "4" * 64)
-
-    def test_ios_physical_running_app_keeps_lease_after_grace(self) -> None:
-        with tempfile.TemporaryDirectory() as output_root, patch.dict(
-            os.environ,
-            {"QWQ_OUTPUT_ROOT": output_root},
-        ):
-            bundle_id = "com.example.quwoquanApp.nonprod.debug"
-            app_url = "/private/var/containers/Bundle/Application/ID/Runner.app"
-            lease = acquire_consumer_lease(
-                target="alpha-local",
-                device="REGISTERED-IPHONE-UDID",
-                consumer="canonical-launcher",
-                package_name=bundle_id,
-                ports=(),
-                platform="ios-physical",
-                build_grace_seconds=1,
-            )
-            started_at = datetime.fromisoformat(
-                str(lease["startedAt"]).replace("Z", "+00:00")
-            )
-            commands: list[list[str]] = []
-
-            def running(argv: list[str]) -> subprocess.CompletedProcess[str]:
-                command = list(argv)
-                commands.append(command)
-                output_path = Path(command[command.index("--json-output") + 1])
-                if "apps" in command:
-                    result = {
-                        "apps": [
-                            {
-                                "bundleIdentifier": bundle_id,
-                                "name": "Runner",
-                                "url": app_url,
-                            }
-                        ]
-                    }
-                else:
-                    result = {
-                        "runningProcesses": [
-                            {
-                                "executable": f"{app_url}/Runner",
-                                "processIdentifier": 4201,
-                            }
-                        ]
-                    }
-                output_path.write_text(
-                    json.dumps({"result": result}), encoding="utf-8"
-                )
-                return subprocess.CompletedProcess(command, 0, "", "")
-
-            active = active_consumer_leases(
-                "alpha-local",
-                now=started_at + timedelta(seconds=5),
-                runner=running,
-                xcrun_path="xcrun",
-            )
-            self.assertEqual(len(active), 1)
-            self.assertEqual(active[0]["state"], "active")
-            self.assertEqual(
-                [command[2:5] for command in commands],
-                [
-                    ["device", "info", "apps"],
-                    ["device", "info", "processes"],
-                ],
-            )
-
-    def test_ios_simulator_running_app_keeps_lease_after_grace(self) -> None:
-        with tempfile.TemporaryDirectory() as output_root, patch.dict(
-            os.environ,
-            {"QWQ_OUTPUT_ROOT": output_root},
-        ):
-            lease = acquire_consumer_lease(
-                target="alpha-local",
-                device="SIMULATOR-UDID",
-                consumer="flutter-run",
-                package_name="com.example.quwoquanApp",
-                ports=(),
-                platform="ios-simulator",
-                build_grace_seconds=1,
-            )
-            started_at = datetime.fromisoformat(
-                str(lease["startedAt"]).replace("Z", "+00:00")
-            )
-
-            def running(argv: list[str]) -> subprocess.CompletedProcess[str]:
-                if argv[-1] == "--json":
-                    return subprocess.CompletedProcess(
-                        argv,
-                        0,
-                        json.dumps(
-                            {
-                                "devices": {
-                                    "runtime": [
-                                        {
-                                            "udid": "SIMULATOR-UDID",
-                                            "state": "Booted",
-                                        }
-                                    ]
-                                }
-                            }
-                        ),
-                        "",
-                    )
-                if argv[-2:] == ["id", "-u"]:
-                    return subprocess.CompletedProcess(argv, 0, "501\n", "")
-                if "get_app_container" in argv:
-                    return subprocess.CompletedProcess(
-                        argv,
-                        0,
-                        "/tmp/Runner.app\n",
-                        "",
-                    )
-                return subprocess.CompletedProcess(
-                    argv,
-                    0,
-                    (
-                        "UIKitApplication:com.example.quwoquanApp[active]\n"
-                        "path = /tmp/Runner.app/Runner"
-                    ),
-                    "",
-                )
-
-            active = active_consumer_leases(
-                "alpha-local",
-                now=started_at + timedelta(seconds=5),
-                runner=running,
-                xcrun_path="xcrun",
-            )
-            self.assertEqual(len(active), 1)
-            self.assertEqual(active[0]["state"], "active")
-
-    def test_ios_simulator_verified_app_does_not_expire_after_twelve_hours(
-        self,
-    ) -> None:
-        with tempfile.TemporaryDirectory() as output_root, patch.dict(
-            os.environ,
-            {"QWQ_OUTPUT_ROOT": output_root},
-        ):
-            lease = acquire_consumer_lease(
-                target="alpha-local",
-                device="SIMULATOR-UDID",
-                consumer="flutter-run",
-                package_name="com.example.quwoquanApp",
-                ports=(),
-                platform="ios-simulator",
-                build_grace_seconds=1,
-            )
-            started_at = datetime.fromisoformat(
-                str(lease["startedAt"]).replace("Z", "+00:00")
-            )
-
-            def running(argv: list[str]) -> subprocess.CompletedProcess[str]:
-                if argv[-1] == "--json":
-                    return subprocess.CompletedProcess(
-                        argv,
-                        0,
-                        json.dumps(
-                            {
-                                "devices": {
-                                    "runtime": [
-                                        {
-                                            "udid": "SIMULATOR-UDID",
-                                            "state": "Booted",
-                                        }
-                                    ]
-                                }
-                            }
-                        ),
-                        "",
-                    )
-                if argv[-2:] == ["id", "-u"]:
-                    return subprocess.CompletedProcess(argv, 0, "501\n", "")
-                if "get_app_container" in argv:
-                    return subprocess.CompletedProcess(
-                        argv,
-                        0,
-                        "/tmp/Runner.app\n",
-                        "",
-                    )
-                return subprocess.CompletedProcess(
-                    argv,
-                    0,
-                    (
-                        "UIKitApplication:com.example.quwoquanApp[suspended]\n"
-                        "path = /tmp/Runner.app/Runner"
-                    ),
-                    "",
-                )
-
-            active = active_consumer_leases(
-                "alpha-local",
-                now=started_at + timedelta(hours=24),
-                runner=running,
-                xcrun_path="xcrun",
-            )
-            self.assertEqual(len(active), 1)
-            self.assertEqual(active[0]["state"], "active")
-
-    def test_ios_simulator_stopped_app_prunes_lease_after_grace(self) -> None:
+        删文件会让 device_bound 拿不到本代际证据；只改状态却仍计入占用，会让
+        下一个消费方永远抢不到本地运行时。
+        """
         with tempfile.TemporaryDirectory() as output_root, patch.dict(
             os.environ,
             {"QWQ_OUTPUT_ROOT": output_root},
@@ -704,58 +480,84 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
             lease = acquire_consumer_lease(
                 target="gamma-local",
                 device="SIMULATOR-UDID",
-                consumer="flutter-run",
-                package_name="com.example.quwoquanApp",
+                consumer="patrol",
+                package_name="com.quwoquan.testhost.patrol",
                 ports=(),
                 platform="ios-simulator",
-                build_grace_seconds=1,
+                release_id="release-1",
+                manifest_digest="sha256:" + "c" * 64,
+                readiness_receipt_digest="sha256:" + "d" * 64,
+                build_grace_seconds=0,
             )
             started_at = datetime.fromisoformat(
                 str(lease["startedAt"]).replace("Z", "+00:00")
             )
+            self.assertTrue(
+                release_consumer_lease(
+                    target="gamma-local",
+                    device="SIMULATOR-UDID",
+                    consumer="patrol",
+                )
+            )
 
-            def stopped(argv: list[str]) -> subprocess.CompletedProcess[str]:
-                if argv[-1] == "--json":
-                    return subprocess.CompletedProcess(
-                        argv,
-                        0,
-                        json.dumps(
-                            {
-                                "devices": {
-                                    "runtime": [
-                                        {
-                                            "udid": "SIMULATOR-UDID",
-                                            "state": "Booted",
-                                        }
-                                    ]
-                                }
-                            }
-                        ),
-                        "",
-                    )
-                if argv[-2:] == ["id", "-u"]:
-                    return subprocess.CompletedProcess(argv, 0, "501\n", "")
-                if "get_app_container" in argv:
-                    return subprocess.CompletedProcess(
-                        argv,
-                        0,
-                        "/tmp/Runner.app\n",
-                        "",
-                    )
-                return subprocess.CompletedProcess(argv, 0, "other services", "")
+            retained = list_consumer_leases("gamma-local")
+            self.assertEqual(len(retained), 1)
+            self.assertEqual(retained[0]["releaseId"], "release-1")
+            self.assertEqual(retained[0]["manifestDigest"], "sha256:" + "c" * 64)
+            self.assertEqual(
+                retained[0]["readinessReceiptDigest"],
+                "sha256:" + "d" * 64,
+            )
 
-            active = active_consumer_leases(
+            inspected = inspect_consumer_leases(
                 "gamma-local",
-                now=started_at + timedelta(seconds=5),
-                runner=stopped,
-                xcrun_path="xcrun",
+                now=started_at + timedelta(seconds=30),
+                runner=lambda _: self.fail(
+                    "released leases must not be probed for liveness"
+                ),
             )
-            self.assertEqual(active, [])
+            self.assertEqual([item["state"] for item in inspected], ["released"])
+
             self.assertEqual(
-                len(list_consumer_leases("gamma-local")),
-                1,
-                "status/liveness inspection must be strictly read-only",
+                active_consumer_leases(
+                    "gamma-local",
+                    now=started_at + timedelta(seconds=30),
+                    runner=lambda _: self.fail(
+                        "released leases must not be probed for liveness"
+                    ),
+                ),
+                [],
+                "released leases must not block another consumer",
             )
+
+    def test_released_lease_becomes_stale_after_maximum_age(self) -> None:
+        with tempfile.TemporaryDirectory() as output_root, patch.dict(
+            os.environ,
+            {"QWQ_OUTPUT_ROOT": output_root},
+        ):
+            lease = acquire_consumer_lease(
+                target="gamma-local",
+                device="device-1",
+                consumer="patrol",
+                package_name="com.quwoquan.testhost.patrol",
+                ports=(17000,),
+                build_grace_seconds=0,
+            )
+            started_at = datetime.fromisoformat(
+                str(lease["startedAt"]).replace("Z", "+00:00")
+            )
+            release_consumer_lease(
+                target="gamma-local",
+                device="device-1",
+                consumer="patrol",
+            )
+
+            inspected = inspect_consumer_leases(
+                "gamma-local",
+                now=started_at + timedelta(seconds=MAX_LEASE_AGE_SECONDS + 1),
+                runner=lambda _: self.fail("aged leases must not be probed"),
+            )
+            self.assertEqual([item["state"] for item in inspected], ["stale"])
 
     def test_disconnected_device_prunes_expired_build_lease(self) -> None:
         with tempfile.TemporaryDirectory() as output_root, patch.dict(
@@ -838,50 +640,6 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
             self.assertEqual(payload["exitCode"], 2)
             self.assertIn("consumer lease", " ".join(payload["details"]))
 
-    def test_stackctl_accepts_ios_leases_without_transport_ports(self) -> None:
-        for platform, device in (
-            ("ios-simulator", "SIMULATOR-UDID"),
-            ("ios-physical", "REGISTERED-IPHONE-UDID"),
-        ):
-            with self.subTest(platform=platform), tempfile.TemporaryDirectory() as output_root:
-                environment = {
-                    **os.environ,
-                    "QWQ_OUTPUT_ROOT": output_root,
-                    "PYTHONDONTWRITEBYTECODE": "1",
-                }
-                acquire = subprocess.run(
-                    [
-                        sys.executable,
-                        str(STACKCTL),
-                        "--output-format",
-                        "json",
-                        "consumer-lease",
-                        "acquire",
-                        "--target",
-                        "beta-local",
-                        "--platform",
-                        platform,
-                        "--device",
-                        device,
-                        "--bundle-id",
-                        "com.example.quwoquanApp",
-                        "--ports",
-                        "",
-                    ],
-                    cwd=ROOT,
-                    env=environment,
-                    check=False,
-                    capture_output=True,
-                    text=True,
-                )
-                self.assertEqual(acquire.returncode, 0, acquire.stderr)
-                payload = json.loads(acquire.stdout)
-                self.assertEqual(payload["lease"]["platform"], platform)
-                self.assertEqual(payload["lease"]["ports"], [])
-                self.assertEqual(
-                    payload["lease"]["bundleId"],
-                    "com.example.quwoquanApp",
-                )
 
 
 if __name__ == "__main__":

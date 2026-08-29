@@ -14,6 +14,16 @@ from pathlib import Path
 APP_DIR = Path(__file__).resolve().parents[3]
 SCRIPT = APP_DIR / "scripts/ios/build_prepare_dart_defines.sh"
 APP_DELEGATE = APP_DIR / "ios/Runner/AppDelegate.swift"
+# runtime config 原生供给面的真相源。生产 Runner 与 Patrol UAT test host 两个 Xcode 工程
+# 编译同一份，宿主读到的取值因此与生产同源。
+RUNTIME_CONFIG_SUPPLY = APP_DIR / "ios/Runner/NativeRuntimeConfigSupply.swift"
+GENERATED_LAUNCH_CONTRACT = APP_DIR / "ios/Runner/AppLaunchContract.generated.swift"
+GENERATED_LAUNCH_CONTRACT_JSON = (
+    APP_DIR / "tool/app_launch_contract_codegen/app_launch_contract.generated.json"
+)
+RUNNER_PROJECT = APP_DIR / "ios/Runner.xcodeproj/project.pbxproj"
+PATROL_PROJECT = APP_DIR / "test_host/patrol/ios/Runner.xcodeproj/project.pbxproj"
+PATROL_TRUST_SCRIPT = APP_DIR / "scripts/ios/build_test_host_embed_runtime_config_trust.sh"
 STACKCTL_PYTHON_RESOLVER = APP_DIR / "scripts/ios/build_resolve_stackctl_python.sh"
 
 
@@ -137,16 +147,21 @@ class IosRuntimeConfigBuildPreparationContractTest(unittest.TestCase):
             ("QWQ_LAUNCH_TARGET", "alpha-local"),
         ):
             with self.subTest(key=key):
-                environment = self._environment()
-                environment["DART_DEFINES"] = _encoded_define(key, value)
-                result = subprocess.run(
-                    ["bash", str(SCRIPT)],
-                    cwd=APP_DIR,
-                    env=environment,
-                    check=False,
-                    capture_output=True,
-                    text=True,
-                )
+                with tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory)
+                    environment = self._materialization_environment(
+                        root,
+                        _trust_envelope(root),
+                    )
+                    environment["DART_DEFINES"] = _encoded_define(key, value)
+                    result = subprocess.run(
+                        ["bash", str(SCRIPT)],
+                        cwd=APP_DIR,
+                        env=environment,
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                    )
                 self.assertEqual(result.returncode, 2)
                 self.assertIn("compile inputs contain runtime configuration", result.stderr)
 
@@ -217,7 +232,15 @@ class IosRuntimeConfigBuildPreparationContractTest(unittest.TestCase):
                 text=True,
             )
             self.assertEqual(missing_result.returncode, 2)
-            self.assertIn("trust envelope is required", missing_result.stderr)
+            self.assertIn(
+                "APP.LAUNCH.runtime_config_trust_missing",
+                missing_result.stderr,
+            )
+            self.assertIn(
+                "make app-activate-flutter-facade",
+                missing_result.stderr,
+            )
+            self.assertIn("command -v flutter", missing_result.stderr)
 
             trust = _trust_envelope(root)
             payload = json.loads(trust.read_text(encoding="utf-8"))
@@ -233,6 +256,10 @@ class IosRuntimeConfigBuildPreparationContractTest(unittest.TestCase):
             )
             self.assertNotEqual(invalid_result.returncode, 0)
             self.assertIn("canonical schema", invalid_result.stderr)
+            self.assertIn(
+                "APP.LAUNCH.runtime_config_trust_missing",
+                invalid_result.stderr,
+            )
 
     def test_manual_keyring_protocol_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -268,7 +295,10 @@ class IosRuntimeConfigBuildPreparationContractTest(unittest.TestCase):
                 self.assertIn("supports Release-prod only", result.stderr)
 
     def test_native_reader_and_cold_start_activation_contract_shape(self) -> None:
-        source = APP_DELEGATE.read_text(encoding="utf-8")
+        source = RUNTIME_CONFIG_SUPPLY.read_text(encoding="utf-8")
+        app_delegate_source = APP_DELEGATE.read_text(encoding="utf-8")
+        # 退役形态在整个 iOS 原生面都不得复活，因此反向断言同时覆盖 AppDelegate。
+        retired_scan = source + app_delegate_source
         for required in (
             "enum NativeRuntimeConfigReadState",
             "case present(NativeRuntimeConfigActiveProjection)",
@@ -298,17 +328,44 @@ class IosRuntimeConfigBuildPreparationContractTest(unittest.TestCase):
             "let activatedState = loadActivePackage()",
             "activated.packageDigest == validated.packageDigest",
             'subdirectory: nativeRuntimeConfigDirectory',
+            "AppLaunchContract.runtimeConfigPackageRequiredFields",
+            "AppLaunchContract.runtimeConfigPackageRuntimeRequiredFields",
+            "AppLaunchContract.runtimeConfigTrustEnvelopeRequiredFields",
+            "AppLaunchContract.runtimeConfigActivationRequestRequiredFields",
+            "AppLaunchContract.appEffectiveLaunchManifestRequiredFields",
+            "AppLaunchContract.runtimeConfigActivationReceiptRequiredFields",
+            "AppLaunchContract.targetEnvironment[target]",
+            "AppLaunchContract.runtimeConfigErrorCodes[code]",
+            'envelope["launchProvenance"] = identity.launchProvenance',
+            'envelope["runtimeConfigSupplyMode"] = identity.runtimeConfigSupplyMode',
+            'receipt["launchProvenance"]',
+            'receipt["runtimeConfigSupplyMode"]',
         ):
             self.assertIn(required, source)
-        self.assertNotIn('case "installRuntimeConfigPackage"', source)
-        self.assertNotIn("installArgumentsInvalid", source)
-        self.assertNotIn("Set(arguments.keys) == installFields", source)
-        self.assertNotIn("Bundle.main.url(\n      forResource: nativeRuntimePackageFileName", source)
-        self.assertNotIn("cachedTrustEnvelope", source)
-        self.assertNotIn("readTrustEnvelope()", source)
-        self.assertNotIn("dartDefinesDigest", source)
-        self.assertNotIn("nativeRuntimeConfigDigest", source)
-        self.assertIn("nativeActiveRuntimePackageDigest", source)
+        for retired_closed_set in (
+            "private static let packageFields: Set<String> = [",
+            "private static let runtimeFields: Set<String> = [",
+            "private static let targetEnvironments = [",
+            '"entrypoint", "launchMode"',
+            "runtime-config-effective-launch-manifest.json",
+        ):
+            self.assertNotIn(retired_closed_set, source)
+        self.assertNotIn('event["launchMode"]', app_delegate_source)
+        self.assertIn('event["launchProvenance"]', app_delegate_source)
+        self.assertIn('event["runtimeConfigSupplyMode"]', app_delegate_source)
+        self.assertNotIn('case "installRuntimeConfigPackage"', retired_scan)
+        self.assertNotIn("installArgumentsInvalid", retired_scan)
+        self.assertNotIn("Set(arguments.keys) == installFields", retired_scan)
+        self.assertNotIn(
+            "Bundle.main.url(\n      forResource: nativeRuntimePackageFileName",
+            retired_scan,
+        )
+        self.assertNotIn("cachedTrustEnvelope", retired_scan)
+        self.assertNotIn("readTrustEnvelope()", retired_scan)
+        self.assertNotIn("dartDefinesDigest", retired_scan)
+        self.assertNotIn("nativeRuntimeConfigDigest", retired_scan)
+        # 启动上报读的是当前生效 package 摘要，属于 AppDelegate 的启动面而非供给面。
+        self.assertIn("nativeActiveRuntimePackageDigest", app_delegate_source)
         info_plist = (APP_DIR / "ios/Runner/Info.plist").read_text(encoding="utf-8")
         for retired_key in (
             "QWQRecoveryBaseURL",
@@ -323,6 +380,66 @@ class IosRuntimeConfigBuildPreparationContractTest(unittest.TestCase):
             "Bundle.main.url(\n      forResource: nativeRuntimePackageFileName",
             source,
         )
+
+    def test_runner_and_patrol_compile_the_same_generated_launch_contract(self) -> None:
+        self.assertTrue(GENERATED_LAUNCH_CONTRACT.is_file())
+        runner = RUNNER_PROJECT.read_text(encoding="utf-8")
+        patrol = PATROL_PROJECT.read_text(encoding="utf-8")
+        for project in (runner, patrol):
+            self.assertIn("AppLaunchContract.generated.swift in Sources", project)
+            self.assertIn("NativeRuntimeConfigSupply.swift in Sources", project)
+        self.assertIn(
+            "../../../../ios/Runner/AppLaunchContract.generated.swift",
+            patrol,
+        )
+        phases = patrol[patrol.index("97C146ED1CF9000F007C117D /* Runner */ = {") :]
+        self.assertLess(
+            phases.index("Embed Runtime Config Trust"),
+            phases.index("9740EEB61CF901F6004384FC /* Run Script */"),
+        )
+
+    def test_active_receipt_is_the_only_restart_launch_identity_projection(self) -> None:
+        contract = json.loads(
+            GENERATED_LAUNCH_CONTRACT_JSON.read_text(encoding="utf-8")
+        )
+        receipt_fields = set(
+            contract["schemaRequiredFields"]["runtime_config_activation_receipt"]
+        )
+        self.assertIn("launchProvenance", receipt_fields)
+        self.assertIn("runtimeConfigSupplyMode", receipt_fields)
+        source = RUNTIME_CONFIG_SUPPLY.read_text(encoding="utf-8")
+        self.assertIn(
+            '"launchProvenance": effectiveManifest["launchProvenance"]',
+            source,
+        )
+        self.assertIn(
+            '"runtimeConfigSupplyMode": effectiveManifest["runtimeConfigSupplyMode"]',
+            source,
+        )
+        self.assertNotIn("runtime-config-effective-launch-manifest.json", source)
+
+    def test_patrol_host_missing_trust_uses_the_same_first_typed_blocker(self) -> None:
+        environment = dict(os.environ)
+        environment["QWQ_APP_BUILD_PROFILE"] = "nonprod"
+        environment["TARGET_BUILD_DIR"] = "/tmp/qwq-patrol-local-contract"
+        environment["UNLOCALIZED_RESOURCES_FOLDER_PATH"] = "Runner.app"
+        environment.pop("QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH", None)
+        # trust 缺席必须先判否，不能先被 Python/toolchain 差异遮蔽。
+        environment["QWQ_IOS_STACKCTL_PYTHON"] = "/invalid/python"
+        result = subprocess.run(
+            ["bash", str(PATROL_TRUST_SCRIPT)],
+            cwd=APP_DIR,
+            env=environment,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn(
+            "APP.LAUNCH.runtime_config_trust_missing",
+            result.stderr,
+        )
+        self.assertNotIn("requires Python", result.stderr)
 
     def test_configuration_identity_is_build_profile_and_mode_scoped(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

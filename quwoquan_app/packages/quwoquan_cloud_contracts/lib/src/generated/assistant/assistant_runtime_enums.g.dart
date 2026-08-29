@@ -52,7 +52,10 @@ AssistantPageContextType parseAssistantPageContextTypeStrict(String raw) {
     case "search":
       return AssistantPageContextType.search;
     default:
-      throw AssistantRuntimeEnumParseFailure("AssistantPageContextType", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "AssistantPageContextType",
+        raw.trim(),
+      );
   }
 }
 
@@ -104,11 +107,7 @@ extension AssistantPageContextTypeX on AssistantPageContextType {
   }
 }
 
-enum CitationDestinationKind {
-  unknown,
-  internal,
-  external,
-}
+enum CitationDestinationKind { unknown, internal, external }
 
 CitationDestinationKind parseCitationDestinationKindStrict(String raw) {
   switch (raw.trim()) {
@@ -119,7 +118,10 @@ CitationDestinationKind parseCitationDestinationKindStrict(String raw) {
     case "external":
       return CitationDestinationKind.external;
     default:
-      throw AssistantRuntimeEnumParseFailure("CitationDestinationKind", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "CitationDestinationKind",
+        raw.trim(),
+      );
   }
 }
 
@@ -201,7 +203,10 @@ AssistantStreamEventType parseAssistantStreamEventTypeStrict(String raw) {
     case "cancelled":
       return AssistantStreamEventType.cancelled;
     default:
-      throw AssistantRuntimeEnumParseFailure("AssistantStreamEventType", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "AssistantStreamEventType",
+        raw.trim(),
+      );
   }
 }
 
@@ -281,12 +286,7 @@ extension AssistantStreamEventTypeX on AssistantStreamEventType {
   }
 }
 
-enum AssistantWebTargetKind {
-  unknown,
-  url,
-  source,
-  documentLink,
-}
+enum AssistantWebTargetKind { unknown, url, source, documentLink }
 
 AssistantWebTargetKind parseAssistantWebTargetKindStrict(String raw) {
   switch (raw.trim()) {
@@ -299,7 +299,10 @@ AssistantWebTargetKind parseAssistantWebTargetKindStrict(String raw) {
     case "document_link":
       return AssistantWebTargetKind.documentLink;
     default:
-      throw AssistantRuntimeEnumParseFailure("AssistantWebTargetKind", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "AssistantWebTargetKind",
+        raw.trim(),
+      );
   }
 }
 
@@ -352,7 +355,10 @@ AssistantContextAuthority parseAssistantContextAuthorityStrict(String raw) {
     case "external_evidence":
       return AssistantContextAuthority.externalEvidence;
     default:
-      throw AssistantRuntimeEnumParseFailure("AssistantContextAuthority", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "AssistantContextAuthority",
+        raw.trim(),
+      );
   }
 }
 
@@ -388,12 +394,7 @@ extension AssistantContextAuthorityX on AssistantContextAuthority {
   }
 }
 
-enum AssistantContextSensitivity {
-  public,
-  internal,
-  private,
-  restricted,
-}
+enum AssistantContextSensitivity { public, internal, private, restricted }
 
 AssistantContextSensitivity parseAssistantContextSensitivityStrict(String raw) {
   switch (raw.trim()) {
@@ -406,7 +407,10 @@ AssistantContextSensitivity parseAssistantContextSensitivityStrict(String raw) {
     case "restricted":
       return AssistantContextSensitivity.restricted;
     default:
-      throw AssistantRuntimeEnumParseFailure("AssistantContextSensitivity", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "AssistantContextSensitivity",
+        raw.trim(),
+      );
   }
 }
 
@@ -425,12 +429,7 @@ extension AssistantContextSensitivityX on AssistantContextSensitivity {
   }
 }
 
-enum AssistantTriggerKind {
-  schedule,
-  event,
-  contextChange,
-  followUp,
-}
+enum AssistantTriggerKind { schedule, event, contextChange, followUp }
 
 AssistantTriggerKind parseAssistantTriggerKindStrict(String raw) {
   switch (raw.trim()) {
@@ -443,7 +442,10 @@ AssistantTriggerKind parseAssistantTriggerKindStrict(String raw) {
     case "follow_up":
       return AssistantTriggerKind.followUp;
     default:
-      throw AssistantRuntimeEnumParseFailure("AssistantTriggerKind", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "AssistantTriggerKind",
+        raw.trim(),
+      );
   }
 }
 
@@ -492,7 +494,9 @@ enum AssistantPresentationNodeKind {
   confirmationCard,
 }
 
-AssistantPresentationNodeKind parseAssistantPresentationNodeKindStrict(String raw) {
+AssistantPresentationNodeKind parseAssistantPresentationNodeKindStrict(
+  String raw,
+) {
   switch (raw.trim()) {
     case "":
       return AssistantPresentationNodeKind.unknown;
@@ -549,7 +553,10 @@ AssistantPresentationNodeKind parseAssistantPresentationNodeKindStrict(String ra
     case "confirmation_card":
       return AssistantPresentationNodeKind.confirmationCard;
     default:
-      throw AssistantRuntimeEnumParseFailure("AssistantPresentationNodeKind", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "AssistantPresentationNodeKind",
+        raw.trim(),
+      );
   }
 }
 
@@ -694,7 +701,10 @@ AssistantPresentationTone parseAssistantPresentationToneStrict(String raw) {
     case "critical":
       return AssistantPresentationTone.critical;
     default:
-      throw AssistantRuntimeEnumParseFailure("AssistantPresentationTone", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "AssistantPresentationTone",
+        raw.trim(),
+      );
   }
 }
 
@@ -715,13 +725,11 @@ extension AssistantPresentationToneX on AssistantPresentationTone {
   }
 }
 
-enum AssistantPresentationDensity {
-  compact,
-  standard,
-  immersive,
-}
+enum AssistantPresentationDensity { compact, standard, immersive }
 
-AssistantPresentationDensity parseAssistantPresentationDensityStrict(String raw) {
+AssistantPresentationDensity parseAssistantPresentationDensityStrict(
+  String raw,
+) {
   switch (raw.trim()) {
     case "compact":
       return AssistantPresentationDensity.compact;
@@ -730,7 +738,10 @@ AssistantPresentationDensity parseAssistantPresentationDensityStrict(String raw)
     case "immersive":
       return AssistantPresentationDensity.immersive;
     default:
-      throw AssistantRuntimeEnumParseFailure("AssistantPresentationDensity", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "AssistantPresentationDensity",
+        raw.trim(),
+      );
   }
 }
 
@@ -886,7 +897,10 @@ AssistantRunItemKind parseAssistantRunItemKindStrict(String raw) {
     case "final_answer":
       return AssistantRunItemKind.finalAnswer;
     default:
-      throw AssistantRuntimeEnumParseFailure("AssistantRunItemKind", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "AssistantRunItemKind",
+        raw.trim(),
+      );
   }
 }
 
@@ -950,12 +964,7 @@ extension AssistantRunItemKindX on AssistantRunItemKind {
   }
 }
 
-enum AssistantRunItemStatus {
-  started,
-  completed,
-  failed,
-  cancelled,
-}
+enum AssistantRunItemStatus { started, completed, failed, cancelled }
 
 AssistantRunItemStatus parseAssistantRunItemStatusStrict(String raw) {
   switch (raw.trim()) {
@@ -968,7 +977,10 @@ AssistantRunItemStatus parseAssistantRunItemStatusStrict(String raw) {
     case "cancelled":
       return AssistantRunItemStatus.cancelled;
     default:
-      throw AssistantRuntimeEnumParseFailure("AssistantRunItemStatus", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "AssistantRunItemStatus",
+        raw.trim(),
+      );
   }
 }
 
@@ -1039,12 +1051,7 @@ extension AssistantTaskStatusX on AssistantTaskStatus {
   }
 }
 
-enum AssistantReasoningProfile {
-  fast,
-  balanced,
-  deep,
-  backgroundLong,
-}
+enum AssistantReasoningProfile { fast, balanced, deep, backgroundLong }
 
 AssistantReasoningProfile parseAssistantReasoningProfileStrict(String raw) {
   switch (raw.trim()) {
@@ -1057,7 +1064,10 @@ AssistantReasoningProfile parseAssistantReasoningProfileStrict(String raw) {
     case "background_long":
       return AssistantReasoningProfile.backgroundLong;
     default:
-      throw AssistantRuntimeEnumParseFailure("AssistantReasoningProfile", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "AssistantReasoningProfile",
+        raw.trim(),
+      );
   }
 }
 
@@ -1076,11 +1086,7 @@ extension AssistantReasoningProfileX on AssistantReasoningProfile {
   }
 }
 
-enum SkillSubscriptionStatus {
-  active,
-  paused,
-  archived,
-}
+enum SkillSubscriptionStatus { active, paused, archived }
 
 SkillSubscriptionStatus parseSkillSubscriptionStatusStrict(String raw) {
   switch (raw.trim()) {
@@ -1091,7 +1097,10 @@ SkillSubscriptionStatus parseSkillSubscriptionStatusStrict(String raw) {
     case "archived":
       return SkillSubscriptionStatus.archived;
     default:
-      throw AssistantRuntimeEnumParseFailure("SkillSubscriptionStatus", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "SkillSubscriptionStatus",
+        raw.trim(),
+      );
   }
 }
 
@@ -1108,23 +1117,26 @@ extension SkillSubscriptionStatusX on SkillSubscriptionStatus {
   }
 }
 
-enum SkillSubscriptionDestinationType {
-  user,
-  chatConversation,
-}
+enum SkillSubscriptionDestinationType { user, chatConversation }
 
-SkillSubscriptionDestinationType parseSkillSubscriptionDestinationTypeStrict(String raw) {
+SkillSubscriptionDestinationType parseSkillSubscriptionDestinationTypeStrict(
+  String raw,
+) {
   switch (raw.trim()) {
     case "user":
       return SkillSubscriptionDestinationType.user;
     case "chat_conversation":
       return SkillSubscriptionDestinationType.chatConversation;
     default:
-      throw AssistantRuntimeEnumParseFailure("SkillSubscriptionDestinationType", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "SkillSubscriptionDestinationType",
+        raw.trim(),
+      );
   }
 }
 
-extension SkillSubscriptionDestinationTypeX on SkillSubscriptionDestinationType {
+extension SkillSubscriptionDestinationTypeX
+    on SkillSubscriptionDestinationType {
   String get wireName {
     switch (this) {
       case SkillSubscriptionDestinationType.user:
@@ -1135,10 +1147,7 @@ extension SkillSubscriptionDestinationTypeX on SkillSubscriptionDestinationType 
   }
 }
 
-enum SkillUserSettingStatus {
-  enabled,
-  disabled,
-}
+enum SkillUserSettingStatus { enabled, disabled }
 
 SkillUserSettingStatus parseSkillUserSettingStatusStrict(String raw) {
   switch (raw.trim()) {
@@ -1147,7 +1156,10 @@ SkillUserSettingStatus parseSkillUserSettingStatusStrict(String raw) {
     case "disabled":
       return SkillUserSettingStatus.disabled;
     default:
-      throw AssistantRuntimeEnumParseFailure("SkillUserSettingStatus", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "SkillUserSettingStatus",
+        raw.trim(),
+      );
   }
 }
 
@@ -1170,7 +1182,9 @@ enum SkillDataControlRequestStatus {
   failed,
 }
 
-SkillDataControlRequestStatus parseSkillDataControlRequestStatusStrict(String raw) {
+SkillDataControlRequestStatus parseSkillDataControlRequestStatusStrict(
+  String raw,
+) {
   switch (raw.trim()) {
     case "pending_confirmation":
       return SkillDataControlRequestStatus.pendingConfirmation;
@@ -1183,7 +1197,10 @@ SkillDataControlRequestStatus parseSkillDataControlRequestStatusStrict(String ra
     case "failed":
       return SkillDataControlRequestStatus.failed;
     default:
-      throw AssistantRuntimeEnumParseFailure("SkillDataControlRequestStatus", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "SkillDataControlRequestStatus",
+        raw.trim(),
+      );
   }
 }
 
@@ -1219,7 +1236,10 @@ SkillDataControlAction parseSkillDataControlActionStrict(String raw) {
     case "archive_subscriptions":
       return SkillDataControlAction.archiveSubscriptions;
     default:
-      throw AssistantRuntimeEnumParseFailure("SkillDataControlAction", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "SkillDataControlAction",
+        raw.trim(),
+      );
   }
 }
 
@@ -1236,12 +1256,7 @@ extension SkillDataControlActionX on SkillDataControlAction {
   }
 }
 
-enum SkillActivityKind {
-  run,
-  consent,
-  subscription,
-  dataControl,
-}
+enum SkillActivityKind { run, consent, subscription, dataControl }
 
 SkillActivityKind parseSkillActivityKindStrict(String raw) {
   switch (raw.trim()) {
@@ -1306,7 +1321,10 @@ SkillActivityRecoveryAction parseSkillActivityRecoveryActionStrict(String raw) {
     case "retry_data_control":
       return SkillActivityRecoveryAction.retryDataControl;
     default:
-      throw AssistantRuntimeEnumParseFailure("SkillActivityRecoveryAction", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "SkillActivityRecoveryAction",
+        raw.trim(),
+      );
   }
 }
 
@@ -1419,7 +1437,10 @@ SkillActivityDisplayKey parseSkillActivityDisplayKeyStrict(String raw) {
     case "assistant.skill_activity.data_control.failed":
       return SkillActivityDisplayKey.dataControlFailed;
     default:
-      throw AssistantRuntimeEnumParseFailure("SkillActivityDisplayKey", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "SkillActivityDisplayKey",
+        raw.trim(),
+      );
   }
 }
 
@@ -1482,11 +1503,7 @@ extension SkillActivityDisplayKeyX on SkillActivityDisplayKey {
   }
 }
 
-enum SkillMemoryPolicy {
-  packageDefault,
-  confirmBeforeSave,
-  disabled,
-}
+enum SkillMemoryPolicy { packageDefault, confirmBeforeSave, disabled }
 
 SkillMemoryPolicy parseSkillMemoryPolicyStrict(String raw) {
   switch (raw.trim()) {
@@ -1514,10 +1531,7 @@ extension SkillMemoryPolicyX on SkillMemoryPolicy {
   }
 }
 
-enum SkillSurfaceKind {
-  conversation,
-  circle,
-}
+enum SkillSurfaceKind { conversation, circle }
 
 SkillSurfaceKind parseSkillSurfaceKindStrict(String raw) {
   switch (raw.trim()) {
@@ -1541,16 +1555,17 @@ extension SkillSurfaceKindX on SkillSurfaceKind {
   }
 }
 
-enum SkillSurfacePlacementPolicy {
-  allSharedEligible,
-}
+enum SkillSurfacePlacementPolicy { allSharedEligible }
 
 SkillSurfacePlacementPolicy parseSkillSurfacePlacementPolicyStrict(String raw) {
   switch (raw.trim()) {
     case "all_shared_eligible":
       return SkillSurfacePlacementPolicy.allSharedEligible;
     default:
-      throw AssistantRuntimeEnumParseFailure("SkillSurfacePlacementPolicy", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "SkillSurfacePlacementPolicy",
+        raw.trim(),
+      );
   }
 }
 
@@ -1563,10 +1578,7 @@ extension SkillSurfacePlacementPolicyX on SkillSurfacePlacementPolicy {
   }
 }
 
-enum SkillSurfacePlacementStatus {
-  active,
-  archived,
-}
+enum SkillSurfacePlacementStatus { active, archived }
 
 SkillSurfacePlacementStatus parseSkillSurfacePlacementStatusStrict(String raw) {
   switch (raw.trim()) {
@@ -1575,7 +1587,10 @@ SkillSurfacePlacementStatus parseSkillSurfacePlacementStatusStrict(String raw) {
     case "archived":
       return SkillSurfacePlacementStatus.archived;
     default:
-      throw AssistantRuntimeEnumParseFailure("SkillSurfacePlacementStatus", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "SkillSurfacePlacementStatus",
+        raw.trim(),
+      );
   }
 }
 
@@ -1608,7 +1623,10 @@ AssistantLearningFactType parseAssistantLearningFactTypeStrict(String raw) {
     case "service_scorecard":
       return AssistantLearningFactType.serviceScorecard;
     default:
-      throw AssistantRuntimeEnumParseFailure("AssistantLearningFactType", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "AssistantLearningFactType",
+        raw.trim(),
+      );
   }
 }
 
@@ -1679,7 +1697,10 @@ AssistantReferralSource parseAssistantReferralSourceStrict(String raw) {
     case "service":
       return AssistantReferralSource.service;
     default:
-      throw AssistantRuntimeEnumParseFailure("AssistantReferralSource", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "AssistantReferralSource",
+        raw.trim(),
+      );
   }
 }
 
@@ -1769,7 +1790,10 @@ InteractionEventType parseInteractionEventTypeStrict(String raw) {
     case "error":
       return InteractionEventType.error;
     default:
-      throw AssistantRuntimeEnumParseFailure("InteractionEventType", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "InteractionEventType",
+        raw.trim(),
+      );
   }
 }
 
@@ -2063,11 +2087,7 @@ extension QueryIntentX on QueryIntent {
   }
 }
 
-enum SkillMode {
-  qa,
-  task,
-  hybrid,
-}
+enum SkillMode { qa, task, hybrid }
 
 SkillMode parseSkillModeStrict(String raw) {
   switch (raw.trim()) {
@@ -2108,12 +2128,7 @@ extension SkillModeX on SkillMode {
   }
 }
 
-enum ProviderPolicy {
-  inherit,
-  modelChoice,
-  authorityFirst,
-  preferredOnly,
-}
+enum ProviderPolicy { inherit, modelChoice, authorityFirst, preferredOnly }
 
 ProviderPolicy parseProviderPolicyStrict(String raw) {
   switch (raw.trim()) {
@@ -2158,11 +2173,7 @@ extension ProviderPolicyX on ProviderPolicy {
   }
 }
 
-enum SearchIntensity {
-  low,
-  medium,
-  high,
-}
+enum SearchIntensity { low, medium, high }
 
 SearchIntensity parseSearchIntensityStrict(String raw) {
   switch (raw.trim()) {
@@ -2203,11 +2214,7 @@ extension SearchIntensityX on SearchIntensity {
   }
 }
 
-enum AssistantRunIntentKind {
-  answer,
-  search,
-  creationAssistance,
-}
+enum AssistantRunIntentKind { answer, search, creationAssistance }
 
 AssistantRunIntentKind parseAssistantRunIntentKindStrict(String raw) {
   switch (raw.trim()) {
@@ -2218,7 +2225,10 @@ AssistantRunIntentKind parseAssistantRunIntentKindStrict(String raw) {
     case "creation_assistance":
       return AssistantRunIntentKind.creationAssistance;
     default:
-      throw AssistantRuntimeEnumParseFailure("AssistantRunIntentKind", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "AssistantRunIntentKind",
+        raw.trim(),
+      );
   }
 }
 
@@ -2235,11 +2245,7 @@ extension AssistantRunIntentKindX on AssistantRunIntentKind {
   }
 }
 
-enum StopPolicy {
-  balanced,
-  fastExit,
-  exhaustive,
-}
+enum StopPolicy { balanced, fastExit, exhaustive }
 
 StopPolicy parseStopPolicyStrict(String raw) {
   switch (raw.trim()) {
@@ -2280,14 +2286,7 @@ extension StopPolicyX on StopPolicy {
   }
 }
 
-enum FinalAnswerMode {
-  full,
-  boundedAnswer,
-  clarify,
-  replan,
-  retry,
-  blocked,
-}
+enum FinalAnswerMode { full, boundedAnswer, clarify, replan, retry, blocked }
 
 FinalAnswerMode parseFinalAnswerModeStrict(String raw) {
   switch (raw.trim()) {
@@ -2346,12 +2345,7 @@ extension FinalAnswerModeX on FinalAnswerMode {
   }
 }
 
-enum AnswerEligibility {
-  eligible,
-  clarify,
-  blocked,
-  unknown,
-}
+enum AnswerEligibility { eligible, clarify, blocked, unknown }
 
 AnswerEligibility parseAnswerEligibilityStrict(String raw) {
   switch (raw.trim()) {
@@ -2398,11 +2392,7 @@ extension AnswerEligibilityX on AnswerEligibility {
   }
 }
 
-enum ProblemShape {
-  singleSkill,
-  multiSkill,
-  unknown,
-}
+enum ProblemShape { singleSkill, multiSkill, unknown }
 
 ProblemShape parseProblemShapeStrict(String raw) {
   switch (raw.trim()) {
@@ -2441,12 +2431,7 @@ extension ProblemShapeX on ProblemShape {
   }
 }
 
-enum EvidenceSourceTier {
-  authority,
-  page,
-  web,
-  unknown,
-}
+enum EvidenceSourceTier { authority, page, web, unknown }
 
 EvidenceSourceTier parseEvidenceSourceTierStrict(String raw) {
   switch (raw.trim()) {
@@ -2586,7 +2571,10 @@ AssistantMessageKind parseAssistantMessageKindStrict(String raw) {
     case "":
       return AssistantMessageKind.unknown;
     default:
-      throw AssistantRuntimeEnumParseFailure("AssistantMessageKind", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "AssistantMessageKind",
+        raw.trim(),
+      );
   }
 }
 
@@ -2626,13 +2614,7 @@ extension AssistantMessageKindX on AssistantMessageKind {
   }
 }
 
-enum JourneyStageId {
-  unknown,
-  analyze,
-  search,
-  verify,
-  answer,
-}
+enum JourneyStageId { unknown, analyze, search, verify, answer }
 
 JourneyStageId parseJourneyStageIdStrict(String raw) {
   switch (raw.trim()) {
@@ -2747,12 +2729,7 @@ extension JourneyStageStatusX on JourneyStageStatus {
   }
 }
 
-enum JourneyEntryKind {
-  unknown,
-  narrative,
-  referenceBundle,
-  milestone,
-}
+enum JourneyEntryKind { unknown, narrative, referenceBundle, milestone }
 
 JourneyEntryKind parseJourneyEntryKindStrict(String raw) {
   switch (raw.trim()) {
@@ -2925,12 +2902,7 @@ extension DisplayBlockKindX on DisplayBlockKind {
   }
 }
 
-enum DisplayListStyle {
-  unknown,
-  plain,
-  bullet,
-  numbered,
-}
+enum DisplayListStyle { unknown, plain, bullet, numbered }
 
 DisplayListStyle parseDisplayListStyleStrict(String raw) {
   switch (raw.trim()) {
@@ -2975,12 +2947,7 @@ extension DisplayListStyleX on DisplayListStyle {
   }
 }
 
-enum ProcessDisplayBlockKind {
-  unknown,
-  summary,
-  points,
-  references,
-}
+enum ProcessDisplayBlockKind { unknown, summary, points, references }
 
 ProcessDisplayBlockKind parseProcessDisplayBlockKindStrict(String raw) {
   switch (raw.trim()) {
@@ -2993,7 +2960,10 @@ ProcessDisplayBlockKind parseProcessDisplayBlockKindStrict(String raw) {
     case "references":
       return ProcessDisplayBlockKind.references;
     default:
-      throw AssistantRuntimeEnumParseFailure("ProcessDisplayBlockKind", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "ProcessDisplayBlockKind",
+        raw.trim(),
+      );
   }
 }
 
@@ -3138,11 +3108,7 @@ extension SearchPlanDimensionX on SearchPlanDimension {
   }
 }
 
-enum TraceVisibility {
-  userVisible,
-  system,
-  internal,
-}
+enum TraceVisibility { userVisible, system, internal }
 
 TraceVisibility parseTraceVisibilityStrict(String raw) {
   switch (raw.trim()) {
@@ -3183,12 +3149,7 @@ extension TraceVisibilityX on TraceVisibility {
   }
 }
 
-enum ToolRecoveryAction {
-  unknown,
-  failTurn,
-  skipTool,
-  degradeAnswer,
-}
+enum ToolRecoveryAction { unknown, failTurn, skipTool, degradeAnswer }
 
 ToolRecoveryAction parseToolRecoveryActionStrict(String raw) {
   switch (raw.trim()) {
@@ -3233,12 +3194,7 @@ extension ToolRecoveryActionX on ToolRecoveryAction {
   }
 }
 
-enum ToolDisruptionLevel {
-  unknown,
-  none,
-  partial,
-  full,
-}
+enum ToolDisruptionLevel { unknown, none, partial, full }
 
 ToolDisruptionLevel parseToolDisruptionLevelStrict(String raw) {
   switch (raw.trim()) {
@@ -3283,13 +3239,7 @@ extension ToolDisruptionLevelX on ToolDisruptionLevel {
   }
 }
 
-enum SlotValueStatus {
-  missing,
-  inferred,
-  confirmed,
-  stale,
-  conflicted,
-}
+enum SlotValueStatus { missing, inferred, confirmed, stale, conflicted }
 
 SlotValueStatus parseSlotValueStatusStrict(String raw) {
   switch (raw.trim()) {
@@ -4020,12 +3970,7 @@ extension AssessmentTypeX on AssessmentType {
   }
 }
 
-enum ContextFillType {
-  contextFill,
-  gapFill,
-  replan,
-  unknown,
-}
+enum ContextFillType { contextFill, gapFill, replan, unknown }
 
 ContextFillType parseContextFillTypeStrict(String raw) {
   switch (raw.trim()) {
@@ -4145,7 +4090,10 @@ ContextScopeExpansionPolicy parseContextScopeExpansionPolicyStrict(String raw) {
     case "expand_provider_and_time_window":
       return ContextScopeExpansionPolicy.expandProviderAndTimeWindow;
     default:
-      throw AssistantRuntimeEnumParseFailure("ContextScopeExpansionPolicy", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "ContextScopeExpansionPolicy",
+        raw.trim(),
+      );
   }
 }
 
@@ -4177,10 +4125,7 @@ extension ContextScopeExpansionPolicyX on ContextScopeExpansionPolicy {
   }
 }
 
-enum ContextRetryPolicy {
-  singleRetry,
-  unknown,
-}
+enum ContextRetryPolicy { singleRetry, unknown }
 
 ContextRetryPolicy parseContextRetryPolicyStrict(String raw) {
   switch (raw.trim()) {
@@ -4213,12 +4158,7 @@ extension ContextRetryPolicyX on ContextRetryPolicy {
   }
 }
 
-enum ContextContinuityMode {
-  explicitFollowUp,
-  sameTopic,
-  freshTopic,
-  unknown,
-}
+enum ContextContinuityMode { explicitFollowUp, sameTopic, freshTopic, unknown }
 
 ContextContinuityMode parseContextContinuityModeStrict(String raw) {
   switch (raw.trim()) {
@@ -4231,7 +4171,10 @@ ContextContinuityMode parseContextContinuityModeStrict(String raw) {
     case "":
       return ContextContinuityMode.unknown;
     default:
-      throw AssistantRuntimeEnumParseFailure("ContextContinuityMode", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "ContextContinuityMode",
+        raw.trim(),
+      );
   }
 }
 
@@ -4263,11 +4206,7 @@ extension ContextContinuityModeX on ContextContinuityMode {
   }
 }
 
-enum AssistantPreferenceScope {
-  session,
-  longTerm,
-  unknown,
-}
+enum AssistantPreferenceScope { session, longTerm, unknown }
 
 AssistantPreferenceScope parseAssistantPreferenceScopeStrict(String raw) {
   switch (raw.trim()) {
@@ -4278,7 +4217,10 @@ AssistantPreferenceScope parseAssistantPreferenceScopeStrict(String raw) {
     case "":
       return AssistantPreferenceScope.unknown;
     default:
-      throw AssistantRuntimeEnumParseFailure("AssistantPreferenceScope", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "AssistantPreferenceScope",
+        raw.trim(),
+      );
   }
 }
 
@@ -4339,7 +4281,10 @@ AssistantPreferenceKind parseAssistantPreferenceKindStrict(String raw) {
     case "":
       return AssistantPreferenceKind.unknown;
     default:
-      throw AssistantRuntimeEnumParseFailure("AssistantPreferenceKind", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "AssistantPreferenceKind",
+        raw.trim(),
+      );
   }
 }
 
@@ -4398,7 +4343,9 @@ enum AssistantPreferenceSourceType {
   unknown,
 }
 
-AssistantPreferenceSourceType parseAssistantPreferenceSourceTypeStrict(String raw) {
+AssistantPreferenceSourceType parseAssistantPreferenceSourceTypeStrict(
+  String raw,
+) {
   switch (raw.trim()) {
     case "explicit_rewrite":
       return AssistantPreferenceSourceType.explicitRewrite;
@@ -4409,7 +4356,10 @@ AssistantPreferenceSourceType parseAssistantPreferenceSourceTypeStrict(String ra
     case "":
       return AssistantPreferenceSourceType.unknown;
     default:
-      throw AssistantRuntimeEnumParseFailure("AssistantPreferenceSourceType", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "AssistantPreferenceSourceType",
+        raw.trim(),
+      );
   }
 }
 
@@ -4441,10 +4391,7 @@ extension AssistantPreferenceSourceTypeX on AssistantPreferenceSourceType {
   }
 }
 
-enum AssistantPreferenceStatus {
-  active,
-  revoked,
-}
+enum AssistantPreferenceStatus { active, revoked }
 
 AssistantPreferenceStatus parseAssistantPreferenceStatusStrict(String raw) {
   switch (raw.trim()) {
@@ -4453,7 +4400,10 @@ AssistantPreferenceStatus parseAssistantPreferenceStatusStrict(String raw) {
     case "revoked":
       return AssistantPreferenceStatus.revoked;
     default:
-      throw AssistantRuntimeEnumParseFailure("AssistantPreferenceStatus", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "AssistantPreferenceStatus",
+        raw.trim(),
+      );
   }
 }
 
@@ -4468,13 +4418,7 @@ extension AssistantPreferenceStatusX on AssistantPreferenceStatus {
   }
 }
 
-enum AssistantResponseType {
-  text,
-  structured,
-  actionCard,
-  stream,
-  unknown,
-}
+enum AssistantResponseType { text, structured, actionCard, stream, unknown }
 
 AssistantResponseType parseAssistantResponseTypeStrict(String raw) {
   switch (raw.trim()) {
@@ -4489,7 +4433,10 @@ AssistantResponseType parseAssistantResponseTypeStrict(String raw) {
     case "":
       return AssistantResponseType.unknown;
     default:
-      throw AssistantRuntimeEnumParseFailure("AssistantResponseType", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "AssistantResponseType",
+        raw.trim(),
+      );
   }
 }
 
@@ -4525,11 +4472,7 @@ extension AssistantResponseTypeX on AssistantResponseType {
   }
 }
 
-enum ContextGranularity {
-  hidden,
-  coarse,
-  precise,
-}
+enum ContextGranularity { hidden, coarse, precise }
 
 ContextGranularity parseContextGranularityStrict(String raw) {
   switch (raw.trim()) {
@@ -4557,12 +4500,7 @@ extension ContextGranularityX on ContextGranularity {
   }
 }
 
-enum NextTurnMode {
-  answer,
-  continueExecution,
-  askUser,
-  blocked,
-}
+enum NextTurnMode { answer, continueExecution, askUser, blocked }
 
 NextTurnMode parseNextTurnModeStrict(String raw) {
   switch (raw.trim()) {
@@ -4609,12 +4547,7 @@ extension NextTurnModeX on NextTurnMode {
   }
 }
 
-enum LocationGranularity {
-  none,
-  city,
-  region,
-  precise,
-}
+enum LocationGranularity { none, city, region, precise }
 
 LocationGranularity parseLocationGranularityStrict(String raw) {
   switch (raw.trim()) {
@@ -4646,16 +4579,19 @@ extension LocationGranularityX on LocationGranularity {
   }
 }
 
-enum AssistantPolicyRolloutStatus {
-  active,
-}
+enum AssistantPolicyRolloutStatus { active }
 
-AssistantPolicyRolloutStatus parseAssistantPolicyRolloutStatusStrict(String raw) {
+AssistantPolicyRolloutStatus parseAssistantPolicyRolloutStatusStrict(
+  String raw,
+) {
   switch (raw.trim()) {
     case "active":
       return AssistantPolicyRolloutStatus.active;
     default:
-      throw AssistantRuntimeEnumParseFailure("AssistantPolicyRolloutStatus", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "AssistantPolicyRolloutStatus",
+        raw.trim(),
+      );
   }
 }
 
@@ -4668,10 +4604,7 @@ extension AssistantPolicyRolloutStatusX on AssistantPolicyRolloutStatus {
   }
 }
 
-enum AssistantSessionState {
-  active,
-  archived,
-}
+enum AssistantSessionState { active, archived }
 
 AssistantSessionState parseAssistantSessionStateStrict(String raw) {
   switch (raw.trim()) {
@@ -4680,7 +4613,10 @@ AssistantSessionState parseAssistantSessionStateStrict(String raw) {
     case "archived":
       return AssistantSessionState.archived;
     default:
-      throw AssistantRuntimeEnumParseFailure("AssistantSessionState", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "AssistantSessionState",
+        raw.trim(),
+      );
   }
 }
 
@@ -4710,7 +4646,10 @@ DomainReaderArtifactPolicy parseDomainReaderArtifactPolicyStrict(String raw) {
     case "artifact_required":
       return DomainReaderArtifactPolicy.artifactRequired;
     default:
-      throw AssistantRuntimeEnumParseFailure("DomainReaderArtifactPolicy", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "DomainReaderArtifactPolicy",
+        raw.trim(),
+      );
   }
 }
 
@@ -4727,11 +4666,7 @@ extension DomainReaderArtifactPolicyX on DomainReaderArtifactPolicy {
   }
 }
 
-enum DomainReaderCitationPolicy {
-  none,
-  sourceReference,
-  entityReference,
-}
+enum DomainReaderCitationPolicy { none, sourceReference, entityReference }
 
 DomainReaderCitationPolicy parseDomainReaderCitationPolicyStrict(String raw) {
   switch (raw.trim()) {
@@ -4742,7 +4677,10 @@ DomainReaderCitationPolicy parseDomainReaderCitationPolicyStrict(String raw) {
     case "entity_reference":
       return DomainReaderCitationPolicy.entityReference;
     default:
-      throw AssistantRuntimeEnumParseFailure("DomainReaderCitationPolicy", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "DomainReaderCitationPolicy",
+        raw.trim(),
+      );
   }
 }
 
@@ -4759,11 +4697,7 @@ extension DomainReaderCitationPolicyX on DomainReaderCitationPolicy {
   }
 }
 
-enum SkillActivationMode {
-  reactive,
-  proactive,
-  hybrid,
-}
+enum SkillActivationMode { reactive, proactive, hybrid }
 
 SkillActivationMode parseSkillActivationModeStrict(String raw) {
   switch (raw.trim()) {
@@ -4842,7 +4776,10 @@ SkillPackageAssetKind parseSkillPackageAssetKindStrict(String raw) {
     case "replay":
       return SkillPackageAssetKind.replay;
     default:
-      throw AssistantRuntimeEnumParseFailure("SkillPackageAssetKind", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "SkillPackageAssetKind",
+        raw.trim(),
+      );
   }
 }
 
@@ -4883,23 +4820,26 @@ extension SkillPackageAssetKindX on SkillPackageAssetKind {
   }
 }
 
-enum SkillPackageEvaluationConclusion {
-  passed,
-  failed,
-}
+enum SkillPackageEvaluationConclusion { passed, failed }
 
-SkillPackageEvaluationConclusion parseSkillPackageEvaluationConclusionStrict(String raw) {
+SkillPackageEvaluationConclusion parseSkillPackageEvaluationConclusionStrict(
+  String raw,
+) {
   switch (raw.trim()) {
     case "passed":
       return SkillPackageEvaluationConclusion.passed;
     case "failed":
       return SkillPackageEvaluationConclusion.failed;
     default:
-      throw AssistantRuntimeEnumParseFailure("SkillPackageEvaluationConclusion", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "SkillPackageEvaluationConclusion",
+        raw.trim(),
+      );
   }
 }
 
-extension SkillPackageEvaluationConclusionX on SkillPackageEvaluationConclusion {
+extension SkillPackageEvaluationConclusionX
+    on SkillPackageEvaluationConclusion {
   String get wireName {
     switch (this) {
       case SkillPackageEvaluationConclusion.passed:
@@ -4910,11 +4850,7 @@ extension SkillPackageEvaluationConclusionX on SkillPackageEvaluationConclusion 
   }
 }
 
-enum SkillPackageReleaseStatus {
-  staged,
-  active,
-  retired,
-}
+enum SkillPackageReleaseStatus { staged, active, retired }
 
 SkillPackageReleaseStatus parseSkillPackageReleaseStatusStrict(String raw) {
   switch (raw.trim()) {
@@ -4925,7 +4861,10 @@ SkillPackageReleaseStatus parseSkillPackageReleaseStatusStrict(String raw) {
     case "retired":
       return SkillPackageReleaseStatus.retired;
     default:
-      throw AssistantRuntimeEnumParseFailure("SkillPackageReleaseStatus", raw.trim());
+      throw AssistantRuntimeEnumParseFailure(
+        "SkillPackageReleaseStatus",
+        raw.trim(),
+      );
   }
 }
 
@@ -4941,4 +4880,3 @@ extension SkillPackageReleaseStatusX on SkillPackageReleaseStatus {
     }
   }
 }
-

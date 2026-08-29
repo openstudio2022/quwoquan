@@ -189,3 +189,73 @@ def test_handwritten_pass_receipt_cannot_bypass_missing_identity_adapter(
             data_readiness=readiness,
             data_readiness_path=path.with_name("release-readiness.json"),
         )
+
+
+def test_reused_proof_provenance_field_passes_receipt_field_closure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """DEC-034 复用溯源：reusedFromVerifyRunId 在场时字段闭集不拒绝。
+
+    spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-026
+    """
+    import quwoquan_ops.cli.lib.research_content_isolation as isolation
+
+    monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(tmp_path))
+    release_id = "research-release-a"
+    verify_run_id = "verify-research-b"
+    manifest_digest = "sha256:" + "1" * 64
+    ref = (
+        Path("env/alpha/runs/data-release")
+        / release_id
+        / verify_run_id
+        / "research-isolation-verification.json"
+    ).as_posix()
+    path = tmp_path / ref
+    policy_path = isolation.ROOT / "quwoquan_ops/environments/alpha/runtime.yaml"
+    receipt: dict[str, object] = {
+        "schema": "quwoquan_data.research_isolation_verification",
+        "environment": "alpha",
+        "releaseId": release_id,
+        "manifestDigest": manifest_digest,
+        "releaseClass": "research",
+        "productLifecycleState": "research",
+        "verifyRunId": verify_run_id,
+        "reusedFromVerifyRunId": "verify-research-a",
+        "policyRef": "quwoquan_ops/environments/alpha/runtime.yaml",
+        "policySha256": _sha256(policy_path.read_bytes()),
+        "outcome": "PASS",
+        "subjectHash": "sha256:" + "2" * 64,
+        "identityIssuance": {},
+        "identityAttestation": {},
+        "internalAppReadback": {},
+        "anonymousContentProbe": {},
+        "anonymousMediaProbe": {},
+        "networkExposureReadback": {},
+        "deniedCapabilities": {},
+        "signedMedia": {},
+        "positiveReadback": {},
+        "verifiedAt": "2026-08-05T00:00:00Z",
+    }
+    receipt["verificationChecksum"] = _checksum(receipt)
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        json.dumps(receipt, ensure_ascii=False, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    readiness = {
+        "researchIsolationVerificationRef": ref,
+        "researchIsolationVerificationDigest": _sha256(path.read_bytes()),
+    }
+
+    loaded, loaded_path, _digest = isolation._load_receipt(
+        environment="alpha",
+        release_id=release_id,
+        verify_run_id=verify_run_id,
+        manifest_digest=manifest_digest,
+        data_readiness=readiness,
+        data_readiness_path=path.with_name("release-readiness.json"),
+    )
+
+    assert loaded_path == path
+    assert loaded["reusedFromVerifyRunId"] == "verify-research-a"

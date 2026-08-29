@@ -9,6 +9,8 @@ import re
 from typing import Any
 from urllib.parse import urlparse
 
+from .generated.app_launch_contract import APP_ARTIFACT_CONTRACT
+
 
 def is_digest_identity(value: object, contract: dict[str, Any]) -> bool:
     if not isinstance(value, str):
@@ -102,7 +104,21 @@ def _validate_schema_value(
     if "const" in field_contract and value != field_contract["const"]:
         issues.append(f"{field_path} must equal {field_contract['const']}")
     allowed_values = field_contract.get("allowed_values")
-    if isinstance(allowed_values, list) and value not in allowed_values:
+    allowed_values_ref = field_contract.get("allowed_values_ref")
+    if isinstance(allowed_values_ref, str):
+        resolved_values = _resolve_allowed_values_ref(allowed_values_ref, contract)
+        if resolved_values is None:
+            issues.append(
+                f"metadata for {field_path} has unresolved allowed_values_ref "
+                f"{allowed_values_ref}"
+            )
+        else:
+            allowed_values = resolved_values
+    if (
+        isinstance(allowed_values, (list, tuple, set, frozenset, dict))
+        and not (field_contract.get("allow_empty") is True and value == "")
+        and value not in allowed_values
+    ):
         issues.append(f"{field_path} is not an allowed value")
     minimum_length = field_contract.get("min_length")
     if (
@@ -208,6 +224,22 @@ def _validate_schema_value(
             )
         )
     return issues
+
+
+def _resolve_allowed_values_ref(
+    reference: str,
+    contract: dict[str, Any],
+) -> object | None:
+    if reference == "app_artifact_manifest.launch_provenances":
+        return APP_ARTIFACT_CONTRACT.get("launch_provenances")
+    value: object = contract
+    for segment in reference.split("."):
+        if not isinstance(value, dict) or segment not in value:
+            return None
+        value = value[segment]
+    if isinstance(value, (list, tuple, set, frozenset, dict)):
+        return value
+    return None
 
 
 def _validate_url_format(value: object, format_name: str) -> bool:

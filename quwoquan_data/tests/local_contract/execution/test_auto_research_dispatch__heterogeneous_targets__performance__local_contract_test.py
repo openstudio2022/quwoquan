@@ -170,6 +170,7 @@ def test_auto_research_report_preserves_all_lane_evidence_across_waves(
             "ineligibleTargetCount": 0,
         }
         report["throughput"] = {
+            "factKind": "single_run_observation",
             "frozenMaxConcurrentWorkers": 4,
             "peakConcurrentWorkers": 3,
             "entityCount": 1,
@@ -196,6 +197,7 @@ def test_auto_research_report_preserves_all_lane_evidence_across_waves(
     assert aggregate["sourceAvailability"]["readyTargets"] == ["甲", "乙"]
     # 冻结上限与实测峰值各自保留，聚合不得把两者压成一个 worker 数。
     assert aggregate["throughput"] == {
+        "factKind": "single_run_observation",
         "frozenMaxConcurrentWorkers": 4,
         "peakConcurrentWorkers": 3,
         "entityCount": 2,
@@ -216,7 +218,7 @@ def test_m100_auto_research_soak_is_bounded_resumable_and_create_once(
         "video": 15,
     }
     calls: dict[str, list[str]] = {carrier: [] for carrier in carrier_sizes}
-    wave_sizes: dict[str, list[int]] = {carrier: [] for carrier in carrier_sizes}
+    dispatch_sizes: dict[str, list[int]] = {carrier: [] for carrier in carrier_sizes}
     active_carrier = {"value": ""}
     worker_ceiling = {"value": 0}
 
@@ -235,7 +237,7 @@ def test_m100_auto_research_soak_is_bounded_resumable_and_create_once(
         carrier = active_carrier["value"]
         assert f"--travel-{carrier}-" in execution_id
         assert max_workers == worker_ceiling["value"]
-        wave_sizes[carrier].append(len(target_ids))
+        dispatch_sizes[carrier].append(len(target_ids))
         calls[carrier].extend(target_ids)
         all_ids = [
             f"{carrier}-候选-{index:03d}"
@@ -266,6 +268,7 @@ def test_m100_auto_research_soak_is_bounded_resumable_and_create_once(
                 "ineligibleTargetCount": len(unavailable),
             },
             "throughput": {
+                "factKind": "single_run_observation",
                 "frozenMaxConcurrentWorkers": max_workers,
                 "peakConcurrentWorkers": min(max_workers, len(target_ids)),
                 "entityCount": len(target_ids),
@@ -295,9 +298,10 @@ def test_m100_auto_research_soak_is_bounded_resumable_and_create_once(
                 entity_type="地点/景区",
             )
 
-        # 规模增长只增加 wave 数，不增加同时运行的进程数。
-        assert max(wave_sizes[carrier]) <= ceiling
-        assert len(wave_sizes[carrier]) == -(-candidate_count // ceiling)
+        # 本次待处理实体一次性交给来源发现调度器：这一层不再按上限切批，
+        # 否则先完成的额度会空等本批最慢的实体。并发上限由调度器按冻结额度约束。
+        assert dispatch_sizes[carrier] == [candidate_count]
+        assert worker_ceiling["value"] == ceiling
         assert calls[carrier] == entity_ids
         assert len(set(calls[carrier])) == candidate_count
         assert report["sourceAvailability"]["readyTargetCount"] == 3
@@ -319,23 +323,40 @@ def test_m100_auto_research_soak_is_bounded_resumable_and_create_once(
         assert resumed["completedEntityCount"] == candidate_count
 
 
-def test_auto_research_stops_at_the_frozen_batch_deadline(monkeypatch, tmp_path):
+def test_auto_research_hands_back_entities_the_frozen_deadline_never_admitted(
+    monkeypatch,
+    tmp_path,
+):
+    """冻结批次截止由来源发现阶段在准入处判定，dispatch 层原样承接可续跑集合。
+
+    截止不再由这一层按 wave 边界推断，因此未准入实体来自阶段自己的准入判定，
+    dispatch 层既不重写这个集合，也不把它与已得出终态的实体混在一起。
+    """
     execution_id = "20260724--travel-homepage-coverage--test-region-a--scale-007"
     entity_ids = [f"截止候选-{index:03d}" for index in range(8)]
     ctx = _context(execution_id, entity_ids)
     policy = ctx.spec.execution_policy
     deadline = policy.fleet_batch_deadline_epoch_seconds
-    ceiling = policy.auto_research_max_concurrent_workers
+    admitted = entity_ids[:3]
+    never_admitted = entity_ids[3:]
     dispatched: list[list[str]] = []
 
-    monkeypatch.setattr(auto_research, "time", SimpleNamespace(time=lambda: deadline + 1))
     monkeypatch.setattr(auto_research, "_download_auto_research_lanes", lambda _ctx: {"homepage"})
     monkeypatch.setattr(download_unresolved, "_auto_research_plan_path", lambda _ctx: tmp_path / "plan.json")
     monkeypatch.setattr(auto_research, "_write_auto_research_report", lambda _ctx, report, **_kwargs: dict(report))
 
     def fake_write(_execution_id, target_ids, **_kwargs):
         dispatched.append(list(target_ids))
-        return {"updated": list(target_ids), "issues": [], "sourceUnavailable": []}
+        return {
+            "updated": list(admitted),
+            "issues": [],
+            "sourceUnavailable": [],
+            "partialRun": True,
+            "partialReason": "fleet_batch_deadline_exhausted",
+            "fleetBatchDeadlineEpochSeconds": deadline,
+            "remainingEntityIds": list(never_admitted),
+            "remainingEntityCount": len(never_admitted),
+        }
 
     monkeypatch.setattr(auto_plan_public, "write_auto_research_plans", fake_write)
 
@@ -345,11 +366,14 @@ def test_auto_research_stops_at_the_frozen_batch_deadline(monkeypatch, tmp_path)
         entity_type="地点/景区",
     )
 
-    assert dispatched == [entity_ids[:ceiling]]
+    # 整个待处理集合一次交给阶段，由阶段自己在准入处停下来。
+    assert dispatched == [entity_ids]
     assert report["partialRun"] is True
     assert report["partialReason"] == "fleet_batch_deadline_exhausted"
     assert report["fleetBatchDeadlineEpochSeconds"] == deadline
-    assert report["remainingEntityIds"] == entity_ids[ceiling:]
+    assert report["remainingEntityIds"] == never_admitted
+    assert report["completedEntityIds"] == admitted
+    assert set(report["completedEntityIds"]).isdisjoint(report["remainingEntityIds"])
 
 
 def test_download_plan_prompts_use_each_frozen_target_entity_type(

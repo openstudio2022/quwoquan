@@ -45,14 +45,16 @@ class SkillRun {
       domainId: (json['domainId'] as String?)?.trim() ?? '',
       goal: (json['goal'] as String?)?.trim() ?? '',
       problemClass: (json['problemClass'] as String?)?.trim() ?? '',
-      shell: (json['shell'] as Map?)?.cast<String, dynamic>() ??
+      shell:
+          (json['shell'] as Map?)?.cast<String, dynamic>() ??
           const <String, dynamic>{},
       slotState:
           (json['slotState'] as Map?)?.cast<String, dynamic>() ??
           const <String, dynamic>{},
       answerReady: json['answerReady'] == true,
       stopReason: (json['stopReason'] as String?)?.trim() ?? '',
-      references: (json['references'] as List?)
+      references:
+          (json['references'] as List?)
               ?.whereType<Map>()
               .map((item) => item.cast<String, dynamic>())
               .toList(growable: false) ??

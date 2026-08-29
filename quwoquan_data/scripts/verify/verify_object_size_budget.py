@@ -5,6 +5,12 @@ The budget is measured on the object's logical byte closure: the object's own
 documents plus each distinct media entry it references, counted once. Physical
 duplicates of the same content inside one object are a separate reference-
 semantics defect and must not be able to buy an object extra budget here.
+
+This module owns the measurement, not the numbers. The per-carrier budget table
+is declared once in ``control_plane/_shared/media_processing.policy.yaml`` and
+the ``1.download`` cross-section refuses over-budget candidates against that same
+table, so a candidate that passes download can no longer be rejected here for a
+single-asset budget it was never measured against.
 """
 from __future__ import annotations
 
@@ -15,19 +21,17 @@ from enum import StrEnum
 from pathlib import Path
 
 
+sys.dont_write_bytecode = True
+
 SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from core.content_library import MediaHoldingError, resolve_media_holding
 from core.media_asset_url import is_cas_media_object_key
+from core.object_storage_budget import object_storage_budget_bytes
 from core.paths import PUBLISH_ROOT
 
 MEBIBYTE = 1024 * 1024
-# One object is one unit of consumer value, so its cost is capped per carrier.
-# Video carries an encoded track and gets the larger cap; every text/image
-# carrier shares the smaller one.
-VIDEO_OBJECT_BUDGET_BYTES = 50 * MEBIBYTE
-DEFAULT_OBJECT_BUDGET_BYTES = 10 * MEBIBYTE
 _ASSET_REFS_FILENAMES = ("asset.refs.json", "assets.refs.json")
 
 
@@ -58,9 +62,14 @@ class ObjectBudgetVerdict(StrEnum):
 
 
 def _object_budget_bytes(carrier: str) -> int:
-    if carrier == "video":
-        return VIDEO_OBJECT_BUDGET_BYTES
-    return DEFAULT_OBJECT_BUDGET_BYTES
+    """一个对象是一份消费者价值，其成本按载体封顶。
+
+    数值不在本文件：逐载体预算表的唯一声明位是
+    `control_plane/_shared/media_processing.policy.yaml`，下载截面读的是同一张表。
+    在这里另立常量会让下载放行的上限与本门禁判否的上限各自漂移。
+    """
+
+    return object_storage_budget_bytes(carrier)
 
 
 def object_carrier(object_kind: str, object_ref: str) -> str:

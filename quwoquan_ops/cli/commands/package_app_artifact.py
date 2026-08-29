@@ -1,23 +1,13 @@
-"""Canonical build-product App compiler and artifact manifest writer.
-
-``stackctl package --kind app-artifact --build-product-id ...`` is the only
-production App build writer. It freezes one read-only source capsule, resolves the
-complete producer identity from canonical metadata, builds from a private writable
-projection, reads identity back from the result, scans production purity, and writes
-one ``app-artifact-manifest`` beside the immutable artifact.
-"""
+"""Canonical source-capsule App compiler and immutable artifact-manifest writer."""
 
 from __future__ import annotations
 
 import argparse
-import base64
-import hashlib
 import importlib.util
 import json
 import os
 import re
 import shutil
-import stat
 import subprocess
 import sys
 import tempfile
@@ -31,11 +21,30 @@ _ROOT = Path(__file__).resolve().parents[3]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
+from quwoquan_app.scripts.tools.flutter_facade.flutter_facade import (
+    FacadeError,
+    resolved_flutter_identity,
+)
+from quwoquan_ops.cli.commands.package_app_artifact_helpers import (
+    artifact_digest,
+    build_provenance_digest,
+)
 from quwoquan_ops.cli.commands.package_app_artifact_identity import (
     AppArtifactBuildError,
+    artifact_filesystem_identity,
     read_android_identity,
     read_ios_identity,
+    read_runtime_config_trust_envelope,
     signing_digest,
+)
+from quwoquan_ops.cli.commands.package_app_artifact_inputs import (
+    make_writable as _make_writable,
+)
+from quwoquan_ops.cli.commands.package_app_artifact_inputs import (
+    materialize_protected_inputs as _materialize_protected_inputs,
+)
+from quwoquan_ops.cli.commands.package_app_artifact_inputs import (
+    materialize_runtime_config_inputs as _materialize_runtime_config_inputs,
 )
 from quwoquan_ops.cli.lib.app_dependency_toolchain import (
     AppDependencyToolchainError,
@@ -49,15 +58,18 @@ from quwoquan_ops.cli.lib.app_identity import (
     resolve_build_product,
     supported_build_products,
 )
-from quwoquan_ops.cli.lib.app_launch_manifest_contract import (
-    runtime_config_trust_envelope_digest,
-    validate_runtime_config_trust_envelope,
-)
+from quwoquan_ops.cli.lib.app_source_capsule import app_source_capsule_roots
 from quwoquan_ops.cli.lib.common import load_json_yaml
 from quwoquan_ops.cli.lib.package_reuse import (
+    dependency_bundle_projection_verify as _dependency_cas,
+)
+from quwoquan_ops.cli.lib.package_reuse import (
+    materialize_dependency_bundle_projection,
     materialize_package_input_capsule,
+    replay_ios_dependency_projections,
     workspace_snapshot,
 )
+
 _BASELINE_BUILD_PRODUCT_IDS = (
     "android-nonprod-apk",
     "android-prod-apk",
@@ -78,35 +90,14 @@ _LEGACY_APP_BUILD_ARGUMENTS = (
     ("rollback_release_attestation", "--rollback-release-attestation"),
 )
 _REPO_BUILD_TARGET = "app-build-products"
-
-
-def _service_environment_capsule_roots() -> tuple[str, ...]:
-    services_root = _ROOT / "quwoquan_service/services"
-    roots = [
-        path.relative_to(_ROOT).as_posix()
-        for path in sorted(services_root.glob("*/environments"))
-        if path.is_dir()
-    ]
-    platform_environments = (
-        _ROOT / "quwoquan_service/control-plane/platform-ops/environments"
-    )
-    if platform_environments.is_dir():
-        roots.append(platform_environments.relative_to(_ROOT).as_posix())
-    return tuple(roots)
-
-
-_CAPSULE_ROOTS = (
-    "quwoquan_app",
-    "quwoquan_ops",
-    "quwoquan_service/contracts/metadata",
-    "quwoquan_service/contracts/runtime_errors/packages/dart/quwoquan_runtime_errors",
-    *_service_environment_capsule_roots(),
-)
+_CAPSULE_ROOTS = app_source_capsule_roots()
 _DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 _EMPTY_STATUS_DIGEST = (
-    "sha256:e3b0c44298fc1c149afbf4c8996fb924"
-    "27ae41e4649b934ca495991b7852b855"
+    "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 )
+# Existing direct tests inspect the producer's digest surface; keep that name as
+# a projection of the one canonical helper rather than a second implementation.
+_artifact_digest = artifact_digest
 
 
 def _distribution_classes() -> dict[str, Any]:
@@ -115,26 +106,6 @@ def _distribution_classes() -> dict[str, Any]:
     if not isinstance(classes, dict) or not classes:
         raise AppIdentityError("distribution_classes metadata is missing")
     return classes
-
-
-def _artifact_digest(path: Path) -> str:
-    digest = hashlib.sha256()
-    if path.is_file():
-        with path.open("rb") as handle:
-            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-                digest.update(chunk)
-        return "sha256:" + digest.hexdigest()
-    if not path.is_dir():
-        raise AppArtifactBuildError(f"APP.PACKAGE.artifact_missing: {path}")
-    for child in sorted(item for item in path.rglob("*") if item.is_file()):
-        relative = child.relative_to(path).as_posix().encode("utf-8")
-        digest.update(len(relative).to_bytes(8, "big"))
-        digest.update(relative)
-        digest.update(child.stat().st_size.to_bytes(8, "big"))
-        with child.open("rb") as handle:
-            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-                digest.update(chunk)
-    return "sha256:" + digest.hexdigest()
 
 
 def _scan_artifact(path: Path, platform: str) -> tuple[list[str], dict[str, object]]:
@@ -152,13 +123,7 @@ def _scan_artifact(path: Path, platform: str) -> tuple[list[str], dict[str, obje
     return module.scan_artifact(path, platform)
 
 
-def _run(
-    command: list[str],
-    *,
-    cwd: Path,
-    env: dict[str, str],
-    log_path: Path,
-) -> subprocess.CompletedProcess[str]:
+def _run(command: list[str], *, cwd: Path, env: dict[str, str], log_path: Path) -> Any:
     result = subprocess.run(
         command,
         cwd=cwd,
@@ -179,218 +144,150 @@ def _run(
     return result
 
 
-def _make_writable(root: Path) -> None:
-    for path in (root, *root.rglob("*")):
-        if path.is_symlink():
-            continue
-        mode = path.stat().st_mode
-        if path.is_dir():
-            path.chmod(mode | stat.S_IWUSR | stat.S_IXUSR)
-        else:
-            path.chmod(mode | stat.S_IWUSR)
-
-
-def _write_private(path: Path, content: bytes) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(content)
-    path.chmod(0o600)
-
-
-def _decode_secret(value: str, *, label: str) -> bytes:
-    try:
-        return base64.b64decode(value, validate=True)
-    except ValueError as error:
-        raise AppArtifactBuildError(
-            f"APP.PACKAGE.protected_input_invalid: {label} is not base64"
-        ) from error
-
-
-def _validated_google_services_bytes(
-    *,
-    raw: str,
-    expected_application_id: str,
-    label: str,
-) -> bytes:
-    try:
-        payload = json.loads(raw)
-    except json.JSONDecodeError as error:
-        raise AppArtifactBuildError(
-            f"APP.PACKAGE.protected_input_invalid: {label} is not JSON"
-        ) from error
-    clients = payload.get("client") if isinstance(payload, dict) else None
-    if not isinstance(clients, list):
-        raise AppArtifactBuildError(
-            f"APP.PACKAGE.protected_input_invalid: {label}.client is missing"
-        )
-    package_names = {
-        str(android_info.get("package_name") or "").strip()
-        for client in clients
-        if isinstance(client, dict)
-        for client_info in [client.get("client_info")]
-        if isinstance(client_info, dict)
-        for android_info in [client_info.get("android_client_info")]
-        if isinstance(android_info, dict)
-    }
-    if package_names != {expected_application_id}:
-        raise AppArtifactBuildError(
-            "APP.PACKAGE.provider_identity_mismatch: "
-            f"{label} package_name must be exactly {expected_application_id}"
-        )
-    return (json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode(
-        "utf-8"
+def _run_build_with_dependency_cas(command: list[str], *, context: tuple[Any, ...]):
+    root, source, projection, ios_results = context[:4]
+    attempt_dir, cwd, environment, log_path = context[4:]
+    expectation = _dependency_cas.prepare_dependency_projection_cas_evidence(
+        projection_root=root,
+        source_manifest_path=source,
+        dependency_projection=projection,
+        evidence_path=attempt_dir / "dependency-projection-expectation.json",
+        ios_install_results=ios_results,
     )
 
+    def readback(phase: str):
+        observed = _dependency_cas.revalidate_dependency_projection_cas(
+            projection_root=root,
+            evidence_path=expectation.evidence_path,
+            expected_digest=expectation.evidence_digest,
+            command_environment_owner="production",
+            command_environment=environment,
+        )
+        persisted = _dependency_cas.write_dependency_projection_cas_readback(
+            readback=observed,
+            evidence_path=attempt_dir / f"dependency-projection-{phase}-readback.json",
+        )
+        return _dependency_cas.load_dependency_projection_cas_readback(
+            evidence_path=persisted.evidence_path,
+            expected_digest=persisted.evidence_digest,
+            expected_expectation_digest=expectation.evidence_digest,
+        )
 
-def _materialize_runtime_config_inputs(
-    *,
-    app_dir: Path,
-    build_profile: str,
-    platform: str,
-    command_env: dict[str, str],
-) -> str:
-    package_path_value = os.environ.get("QWQ_APP_RUNTIME_CONFIG_PACKAGE_PATH", "").strip()
-    if package_path_value:
-        raise AppArtifactBuildError(
-            "APP.PACKAGE.runtime_config_package_forbidden: target runtime package must be "
-            "activated after installation and cannot enter AppArtifact"
-        )
-    trust_path_value = os.environ.get("QWQ_APP_RUNTIME_CONFIG_TRUST_PATH", "").strip()
-    if not trust_path_value:
-        raise AppArtifactBuildError(
-            "APP.PACKAGE.runtime_config_trust_missing: build-profile trust envelope is required"
-        )
-    trust_path = Path(trust_path_value).expanduser()
-    if not trust_path.is_absolute() or trust_path.is_symlink() or not trust_path.is_file():
-        raise AppArtifactBuildError(
-            "APP.PACKAGE.runtime_config_input_invalid: trust envelope must be an absolute "
-            "regular non-symlink file"
-        )
-    if trust_path.stat().st_size <= 0 or trust_path.stat().st_size > 1024 * 1024:
-        raise AppArtifactBuildError(
-            "APP.PACKAGE.runtime_config_input_invalid: trust envelope size is invalid"
-        )
+    prebuild = readback("prebuild")
+    build_completed = False
     try:
-        trust = json.loads(trust_path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise AppArtifactBuildError(
-            "APP.PACKAGE.runtime_config_input_invalid: trust envelope is malformed"
-        ) from error
-    if not isinstance(trust, dict):
-        raise AppArtifactBuildError(
-            "APP.PACKAGE.runtime_config_input_invalid: trust envelope must be an object"
+        _run(
+            command,
+            cwd=cwd,
+            env=environment,
+            log_path=log_path,
         )
-    issues = validate_runtime_config_trust_envelope(trust)
-    if issues:
-        raise AppArtifactBuildError(
-            "APP.PACKAGE.runtime_config_trust_invalid: " + "; ".join(issues)
-        )
-    if trust.get("buildProfile") != build_profile:
-        raise AppArtifactBuildError(
-            "APP.PACKAGE.runtime_config_profile_mismatch: trust envelope buildProfile "
-            "must match the build product"
-        )
-    serialized_trust = json.dumps(trust, ensure_ascii=False, separators=(",", ":"))
-    if re.search(r"private[_-]?key", serialized_trust, flags=re.IGNORECASE):
-        raise AppArtifactBuildError(
-            "APP.PACKAGE.private_key_forbidden: private signing material cannot enter App output"
-        )
-    trust_digest = runtime_config_trust_envelope_digest(trust)
-    if platform == "android":
-        runtime_root = app_dir / "android/app/src/main/assets/qwq_runtime"
-        _write_private(runtime_root / "runtime-config-trust.json", trust_path.read_bytes())
-    elif platform == "ios":
-        command_env["QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH"] = str(trust_path)
-    else:
-        raise AppArtifactBuildError(
-            "APP.PACKAGE.runtime_config_platform_invalid: trust envelope is mobile-only"
-        )
-    return trust_digest
+        build_completed = True
+    finally:
+        first_error = None if build_completed else sys.exception()
+        try:
+            postbuild = readback("postbuild")
+        except (OSError, TypeError, ValueError) as error:
+            if first_error is not None:
+                raise AppArtifactBuildError(f"{first_error}; {error}") from first_error
+            raise
+    return {
+        "dependencyProjectionExpectationRef": str(expectation.evidence_path),
+        "dependencyProjectionExpectationDigest": expectation.evidence_digest,
+        "dependencyProjectionPrebuildReadbackRef": str(prebuild.evidence_path),
+        "dependencyProjectionPrebuildReadbackDigest": prebuild.evidence_digest,
+        "dependencyProjectionPostbuildReadbackRef": str(postbuild.evidence_path),
+        "dependencyProjectionPostbuildReadbackDigest": postbuild.evidence_digest,
+    }
 
 
-def _materialize_protected_inputs(
+def _validate_persisted_dependency_evidence(
     *,
-    app_dir: Path,
-    build_profile: str,
-    platform: str,
-    build_mode: str,
-    artifact_format: str,
-    application_id: str,
-    command_env: dict[str, str],
-    private_dir: Path,
+    attempt_dir: Path,
+    deleted_projection_root: Path,
+    evidence: dict[str, str],
 ) -> None:
-    if platform == "android" and build_mode == "release":
-        firebase_key = f"QWQ_ANDROID_{build_profile.upper()}_GOOGLE_SERVICES_JSON"
-        firebase_json = os.environ.get(firebase_key, "").strip()
-        if not firebase_json:
+    """Re-open package CAS evidence only after the build projection is gone."""
+
+    expected_refs = {
+        "dependencyProjectionExpectationRef": "dependency-projection-expectation.json",
+        "dependencyProjectionPrebuildReadbackRef": (
+            "dependency-projection-prebuild-readback.json"
+        ),
+        "dependencyProjectionPostbuildReadbackRef": (
+            "dependency-projection-postbuild-readback.json"
+        ),
+    }
+    expected_fields = {
+        *expected_refs,
+        "dependencyProjectionExpectationDigest",
+        "dependencyProjectionPrebuildReadbackDigest",
+        "dependencyProjectionPostbuildReadbackDigest",
+    }
+    if set(evidence) != expected_fields:
+        raise AppArtifactBuildError(
+            "APP.PACKAGE.dependency_evidence_invalid: persisted fields drifted"
+        )
+    if deleted_projection_root.exists() or deleted_projection_root.is_symlink():
+        raise AppArtifactBuildError(
+            "APP.PACKAGE.dependency_projection_cleanup_failed"
+        )
+    attempt_root = attempt_dir.expanduser().resolve(strict=True)
+    paths: dict[str, Path] = {}
+    for field, filename in expected_refs.items():
+        raw = str(evidence.get(field) or "")
+        path = Path(raw).expanduser()
+        if (
+            not path.is_absolute()
+            or path.name != filename
+            or path.parent.resolve(strict=True) != attempt_root
+        ):
             raise AppArtifactBuildError(
-                f"APP.PACKAGE.protected_input_missing: {firebase_key}"
+                "APP.PACKAGE.dependency_evidence_invalid: "
+                f"{field} is not attempt-scoped"
             )
-        _write_private(
-            app_dir / "android/app/google-services.json",
-            _validated_google_services_bytes(
-                raw=firebase_json,
-                expected_application_id=application_id,
-                label=firebase_key,
-            ),
+        paths[field] = path
+    expectation = (
+        _dependency_cas.load_historical_dependency_projection_cas_evidence(
+            evidence_path=paths["dependencyProjectionExpectationRef"],
+            expected_digest=evidence["dependencyProjectionExpectationDigest"],
         )
-        keystore_b64 = os.environ.get(
-            "QWQ_ANDROID_RELEASE_KEYSTORE_B64", ""
-        ).strip()
-        required = {
-            "QWQ_ANDROID_RELEASE_KEYSTORE_B64": keystore_b64,
-            "QWQ_ANDROID_RELEASE_STORE_PASSWORD": os.environ.get(
-                "QWQ_ANDROID_RELEASE_STORE_PASSWORD", ""
-            ).strip(),
-            "QWQ_ANDROID_RELEASE_KEY_ALIAS": os.environ.get(
-                "QWQ_ANDROID_RELEASE_KEY_ALIAS", ""
-            ).strip(),
-            "QWQ_ANDROID_RELEASE_KEY_PASSWORD": os.environ.get(
-                "QWQ_ANDROID_RELEASE_KEY_PASSWORD", ""
-            ).strip(),
-        }
-        missing = [key for key, value in required.items() if not value]
-        if missing:
-            raise AppArtifactBuildError(
-                "APP.PACKAGE.protected_input_missing: " + ",".join(missing)
-            )
-        keystore = private_dir / "android-release.jks"
-        _write_private(
-            keystore,
-            _decode_secret(keystore_b64, label="Android release keystore"),
+    )
+    prebuild = _dependency_cas.load_dependency_projection_cas_readback(
+        evidence_path=paths["dependencyProjectionPrebuildReadbackRef"],
+        expected_digest=evidence["dependencyProjectionPrebuildReadbackDigest"],
+        expected_expectation_digest=expectation.evidence_digest,
+    )
+    postbuild = _dependency_cas.load_dependency_projection_cas_readback(
+        evidence_path=paths["dependencyProjectionPostbuildReadbackRef"],
+        expected_digest=evidence["dependencyProjectionPostbuildReadbackDigest"],
+        expected_expectation_digest=expectation.evidence_digest,
+    )
+    expected_projection_root = deleted_projection_root.expanduser().absolute()
+    if (
+        expectation.projection_root != expected_projection_root
+        or prebuild.manifest != postbuild.manifest
+        or prebuild.manifest.get("projectionRoot") != str(expected_projection_root)
+        or prebuild.manifest.get("sourceManifestDigest")
+        != expectation.manifest["source"].get("manifestDigest")
+    ):
+        raise AppArtifactBuildError(
+            "APP.PACKAGE.dependency_evidence_invalid: historical binding drifted"
         )
-        command_env.update(
-            {
-                "QWQ_ANDROID_RELEASE_KEYSTORE_PATH": str(keystore),
-                "QWQ_ANDROID_RELEASE_STORE_PASSWORD": required[
-                    "QWQ_ANDROID_RELEASE_STORE_PASSWORD"
-                ],
-                "QWQ_ANDROID_RELEASE_KEY_ALIAS": required[
-                    "QWQ_ANDROID_RELEASE_KEY_ALIAS"
-                ],
-                "QWQ_ANDROID_RELEASE_KEY_PASSWORD": required[
-                    "QWQ_ANDROID_RELEASE_KEY_PASSWORD"
-                ],
-            }
-        )
-    if platform == "ios" and artifact_format == "ipa":
-        export_options = os.environ.get("QWQ_IOS_EXPORT_OPTIONS_PLIST_B64", "").strip()
-        if not export_options:
-            raise AppArtifactBuildError(
-                "APP.PACKAGE.protected_input_missing: QWQ_IOS_EXPORT_OPTIONS_PLIST_B64"
-            )
-        export_path = private_dir / "ExportOptions.plist"
-        _write_private(
-            export_path,
-            _decode_secret(export_options, label="iOS export options"),
-        )
-        command_env["QWQ_IOS_EXPORT_OPTIONS_PLIST"] = str(export_path)
+
+
+def _resolve_flutter_identity() -> dict[str, str]:
+    try:
+        return resolved_flutter_identity(dict(os.environ))
+    except FacadeError as error:
+        raise AppArtifactBuildError(
+            f"APP.PACKAGE.flutter_identity_invalid: {error}"
+        ) from error
 
 
 def _copy_artifact(source: Path, destination: Path) -> Path:
     if destination.exists():
-        raise AppArtifactBuildError(
-            f"APP.PACKAGE.output_collision: {destination}"
-        )
+        raise AppArtifactBuildError(f"APP.PACKAGE.output_collision: {destination}")
     if source.is_dir():
         shutil.copytree(source, destination, symlinks=True)
     else:
@@ -403,9 +300,10 @@ def _ios_unsigned_release_command(
     *,
     build_profile: str,
     entrypoint: str = "lib/main_prod.dart",
+    flutter_executable: str = "flutter",
 ) -> list[str]:
     return [
-        "flutter",
+        flutter_executable,
         "build",
         "ios",
         "--release",
@@ -428,16 +326,20 @@ def _build_from_capsule(
     application_id: str,
     attempt_dir: Path,
 ) -> dict[str, Any]:
+    flutter_identity = _resolve_flutter_identity()
+    flutter_executable = flutter_identity["executable"]
     capsule_root = attempt_dir / "input-capsule"
     capsule = materialize_package_input_capsule(
         _CAPSULE_ROOTS,
         capsule_root=capsule_root,
     )
     log_path = attempt_dir / "compile.log"
-    with tempfile.TemporaryDirectory(
+    temporary_workspace = tempfile.TemporaryDirectory(
         prefix=f"qwq-app-{build_product_id}-",
         dir=str(attempt_dir.parent),
-    ) as raw_workspace:
+    )
+    try:
+        raw_workspace = temporary_workspace.name
         workspace = Path(raw_workspace) / "repo"
         shutil.copytree(capsule_root / "repo", workspace, symlinks=True)
         _make_writable(workspace)
@@ -446,7 +348,8 @@ def _build_from_capsule(
         for key in (
             "QWQ_APP_RUNTIME_ENV",
             "QWQ_LAUNCH_TARGET",
-            "QWQ_APP_LAUNCH_MODE",
+            "QWQ_APP_LAUNCH_PROVENANCE",
+            "QWQ_RUNTIME_CONFIG_SUPPLY_MODE",
             "QWQ_APP_LAUNCH_POLICY",
             "QWQ_DART_DEFINES_DIGEST",
             "QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST",
@@ -463,17 +366,41 @@ def _build_from_capsule(
                 "PYTHONDONTWRITEBYTECODE": "1",
                 "QWQ_APP_BUILD_CONTEXT": "package-only",
                 "QWQ_APP_BUILD_PROFILE": build_profile,
+                "QWQ_REAL_FLUTTER": flutter_executable,
             }
         )
+        pod: str | None = None
+        pod_results: tuple[tuple[str, Any], ...] = ()
+        if platform == "ios":
+            try:
+                pod = resolve_cocoapods_executable(
+                    os.environ.get("QWQ_COCOAPODS_EXECUTABLE", "")
+                )
+            except AppDependencyToolchainError as error:
+                raise AppArtifactBuildError(
+                    f"APP.DEPENDENCY.cocoapods_mixed: {error}"
+                ) from error
+        dependencies = materialize_dependency_bundle_projection(
+            manifest_path=capsule_root / "manifest.json",
+            projection_root=workspace,
+            private_state_root=Path(raw_workspace) / "dependencies",
+            platform=platform,
+            base_environment=command_env,
+            pod_executable=pod,
+            replay_ios=False,
+        )
+        command_env = dependencies.production_environment
         private_dir = Path(raw_workspace) / "protected"
         private_dir.mkdir(mode=0o700)
         runtime_config_trust_envelope_digest_value: str | None = None
         if platform in {"android", "ios"}:
-            runtime_config_trust_envelope_digest_value = _materialize_runtime_config_inputs(
-                app_dir=app_dir,
-                build_profile=build_profile,
-                platform=platform,
-                command_env=command_env,
+            runtime_config_trust_envelope_digest_value = (
+                _materialize_runtime_config_inputs(
+                    app_dir=app_dir,
+                    build_profile=build_profile,
+                    platform=platform,
+                    command_env=command_env,
+                )
             )
         _materialize_protected_inputs(
             app_dir=app_dir,
@@ -486,35 +413,38 @@ def _build_from_capsule(
             private_dir=private_dir,
         )
         _run(
-            ["flutter", "pub", "get", "--offline", "--enforce-lockfile"],
+            [flutter_executable, "pub", "get", "--offline", "--enforce-lockfile"],
             cwd=app_dir,
             env=command_env,
             log_path=log_path,
         )
         if platform == "ios":
-            try:
-                pod = resolve_cocoapods_executable(
-                    os.environ.get("QWQ_COCOAPODS_EXECUTABLE", "")
-                )
-            except AppDependencyToolchainError as error:
-                raise AppArtifactBuildError(
-                    f"APP.DEPENDENCY.cocoapods_mixed: {error}"
-                ) from error
-            _run(
-                [pod, "install", "--deployment"],
-                cwd=app_dir / "ios",
-                env=command_env,
-                log_path=log_path,
+            if pod is None:
+                raise AppArtifactBuildError("APP.DEPENDENCY.cocoapods_missing")
+            pod_results = replay_ios_dependency_projections(
+                dependency_projection=dependencies,
+                pod_executable=pod,
             )
+            with log_path.open("a", encoding="utf-8") as log:
+                for host, result in pod_results:
+                    log.write(f"$ [{host}] {' '.join(result.command)}\n")
+                    log.write(result.stdout)
+                    log.write(result.stderr)
+                    log.write("\n[exitCode=0; network=denied]\n")
+        dependency_cas = (
+            workspace,
+            capsule_root / "manifest.json",
+            dependencies,
+            pod_results,
+        )
+        dependency_cas += (attempt_dir, app_dir, command_env, log_path)
         mode_flag = f"--{build_mode}"
         entrypoint = "lib/main_prod.dart"
         if platform == "android":
-            # artifactFormat 是显式构建输入（DEC-005）；官网与全部 APK 市场
-            # 复用同一 release APK，AAB 只按渠道硬需求单独构建。
             kind = "appbundle" if artifact_format == "aab" else "apk"
-            _run(
+            dependency_evidence = _run_build_with_dependency_cas(
                 [
-                    "flutter",
+                    flutter_executable,
                     "build",
                     kind,
                     mode_flag,
@@ -524,9 +454,7 @@ def _build_from_capsule(
                     entrypoint,
                     "--no-pub",
                 ],
-                cwd=app_dir,
-                env=command_env,
-                log_path=log_path,
+                context=dependency_cas,
             )
             if kind == "appbundle":
                 source_artifact = (
@@ -534,7 +462,9 @@ def _build_from_capsule(
                     / f"build/app/outputs/bundle/{build_profile}Release/app-{build_profile}-release.aab"
                 )
                 if not source_artifact.is_file():
-                    source_artifact = app_dir / "build/app/outputs/bundle/release/app-release.aab"
+                    source_artifact = (
+                        app_dir / "build/app/outputs/bundle/release/app-release.aab"
+                    )
             else:
                 source_artifact = (
                     app_dir
@@ -552,9 +482,9 @@ def _build_from_capsule(
         elif platform == "ios":
             if artifact_format == "ipa":
                 export_options = command_env["QWQ_IOS_EXPORT_OPTIONS_PLIST"]
-                _run(
+                dependency_evidence = _run_build_with_dependency_cas(
                     [
-                        "flutter",
+                        flutter_executable,
                         "build",
                         "ipa",
                         mode_flag,
@@ -566,39 +496,31 @@ def _build_from_capsule(
                         "--export-options-plist",
                         export_options,
                     ],
-                    cwd=app_dir,
-                    env=command_env,
-                    log_path=log_path,
+                    context=dependency_cas,
                 )
                 ipa_files = sorted((app_dir / "build/ios/ipa").glob("*.ipa"))
                 if len(ipa_files) != 1:
                     raise AppArtifactBuildError(
                         "APP.PACKAGE.artifact_missing: expected one IPA"
                     )
-                artifact = _copy_artifact(
-                    ipa_files[0], attempt_dir / ipa_files[0].name
-                )
+                artifact = _copy_artifact(ipa_files[0], attempt_dir / ipa_files[0].name)
             elif build_mode == "release":
-                # Flutter AOT Release/Profile is physical-device only.  Build an
-                # unsigned iphoneos .app for compile evidence; simulator launch
-                # remains a separate non-promotable Debug gate.
-                _run(
+                dependency_evidence = _run_build_with_dependency_cas(
                     _ios_unsigned_release_command(
                         build_profile=build_profile,
                         entrypoint=entrypoint,
+                        flutter_executable=flutter_executable,
                     ),
-                    cwd=app_dir,
-                    env=command_env,
-                    log_path=log_path,
+                    context=dependency_cas,
                 )
                 artifact = _copy_artifact(
                     app_dir / "build/ios/iphoneos/Runner.app",
                     attempt_dir / f"{build_product_id}.app",
                 )
             else:
-                _run(
+                dependency_evidence = _run_build_with_dependency_cas(
                     [
-                        "flutter",
+                        flutter_executable,
                         "build",
                         "ios",
                         mode_flag,
@@ -610,9 +532,7 @@ def _build_from_capsule(
                         entrypoint,
                         "--no-pub",
                     ],
-                    cwd=app_dir,
-                    env=command_env,
-                    log_path=log_path,
+                    context=dependency_cas,
                 )
                 source_artifact = app_dir / "build/ios/iphonesimulator/Runner.app"
                 artifact = _copy_artifact(
@@ -623,9 +543,9 @@ def _build_from_capsule(
                 read_ios_identity(artifact, application_id)
         else:
             web_output = app_dir / "build/web-shared"
-            _run(
+            dependency_evidence = _run_build_with_dependency_cas(
                 [
-                    "flutter",
+                    flutter_executable,
                     "build",
                     "web",
                     "--release",
@@ -635,9 +555,7 @@ def _build_from_capsule(
                     entrypoint,
                     "--no-pub",
                 ],
-                cwd=app_dir,
-                env=command_env,
-                log_path=log_path,
+                context=dependency_cas,
             )
             required_web_outputs = (
                 "index.html",
@@ -646,7 +564,9 @@ def _build_from_capsule(
                 "flutter_service_worker.js",
             )
             missing_web_outputs = [
-                name for name in required_web_outputs if not (web_output / name).is_file()
+                name
+                for name in required_web_outputs
+                if not (web_output / name).is_file()
             ]
             if missing_web_outputs:
                 raise AppArtifactBuildError(
@@ -663,18 +583,43 @@ def _build_from_capsule(
             json.dumps(sbom, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
+        artifact_identity_before = artifact_filesystem_identity(artifact)
+        artifact_digest_before = artifact_digest(artifact)
+        observed_signing_identity_digest = signing_digest(platform, artifact)
+        observed_artifact_digest = artifact_digest(artifact)
+        artifact_identity_after = artifact_filesystem_identity(artifact)
+        if (
+            artifact_identity_before != artifact_identity_after
+            or artifact_digest_before != observed_artifact_digest
+        ):
+            raise AppArtifactBuildError(
+                "APP.PACKAGE.artifact_snapshot_drift: "
+                "artifact changed while build identity was observed"
+            )
         build: dict[str, Any] = {
             "artifactPath": str(artifact),
-            "artifactDigest": _artifact_digest(artifact),
-            "signingIdentityDigest": signing_digest(platform, artifact),
+            "artifactDigest": observed_artifact_digest,
+            "artifactFilesystemIdentity": artifact_identity_after,
+            "signingIdentityDigest": observed_signing_identity_digest,
             "sourceCapsuleDigest": str(capsule["deploymentInputDigest"]),
             "sourceStatusDigest": str(capsule["workspaceStatusDigest"]),
+            "flutterVersion": flutter_identity["flutterVersion"],
+            "commandResolutionDigest": flutter_identity["commandResolutionDigest"],
+            "dependencyProjectionEvidence": dependency_evidence,
         }
         if runtime_config_trust_envelope_digest_value is not None:
             build["runtimeConfigTrustEnvelopeDigest"] = (
                 runtime_config_trust_envelope_digest_value
             )
+        temporary_workspace.cleanup()
+        _validate_persisted_dependency_evidence(
+            attempt_dir=attempt_dir,
+            deleted_projection_root=workspace,
+            evidence=dependency_evidence,
+        )
         return build
+    finally:
+        temporary_workspace.cleanup()
 
 
 def _version() -> tuple[str, str]:
@@ -700,38 +645,6 @@ def _git_identity() -> tuple[str, str]:
         text=True,
     ).stdout.strip()
     return revision, "sha1:" + tree
-
-
-def _canonical_digest(value: object) -> str:
-    encoded = json.dumps(
-        value,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
-    return "sha256:" + hashlib.sha256(encoded).hexdigest()
-
-
-def _build_provenance_digest(
-    *,
-    build_product_id: str,
-    source_git_sha: str,
-    source_tree_digest: str,
-    source_capsule_digest: str,
-    artifact_digest: str,
-    signing_identity_digest: str,
-) -> str:
-    return _canonical_digest(
-        {
-            "schema": "app-build-provenance",
-            "buildProductId": build_product_id,
-            "sourceGitSha": source_git_sha,
-            "sourceTreeDigest": source_tree_digest,
-            "sourceCapsuleDigest": source_capsule_digest,
-            "artifactDigest": artifact_digest,
-            "signingIdentityDigest": signing_identity_digest,
-        }
-    )
 
 
 def command_package_app_artifact(args: argparse.Namespace) -> dict[str, Any]:
@@ -865,10 +778,8 @@ def command_package_app_artifact(args: argparse.Namespace) -> dict[str, Any]:
             source_start != source_end
             or source_git_sha != end_git_sha
             or source_tree_digest != end_tree_digest
-            or build["sourceCapsuleDigest"]
-            != source_start["deploymentInputDigest"]
-            or build["sourceStatusDigest"]
-            != source_start["workspaceStatusDigest"]
+            or build["sourceCapsuleDigest"] != source_start["deploymentInputDigest"]
+            or build["sourceStatusDigest"] != source_start["workspaceStatusDigest"]
         ):
             raise AppArtifactBuildError(
                 "WORKSPACE.CONCURRENT_WRITER: App source changed during package build"
@@ -877,6 +788,28 @@ def command_package_app_artifact(args: argparse.Namespace) -> dict[str, Any]:
             raise AppArtifactBuildError(
                 "APP.PACKAGE.promotable_dirty_source: source capsule is not a clean checkout"
             )
+        observed_artifact_digest = str(build["artifactDigest"])
+        observed_signing_identity_digest = str(build["signingIdentityDigest"])
+        observed_trust_digest = ""
+        if platform in {"android", "ios"}:
+            readback = read_runtime_config_trust_envelope(
+                artifact_root=attempt_dir,
+                artifact=Path(str(build.get("artifactPath") or "")),
+                platform=platform,
+                artifact_format=artifact_format,
+                build_profile=build_profile,
+                expected_build_input_digest=str(
+                    build.get("runtimeConfigTrustEnvelopeDigest") or ""
+                ),
+                expected_artifact_digest=observed_artifact_digest,
+                expected_artifact_filesystem_identity=build.get(
+                    "artifactFilesystemIdentity"
+                ),
+                expected_signing_identity_digest=observed_signing_identity_digest,
+            )
+            observed_artifact_digest = readback.artifact_digest
+            observed_signing_identity_digest = readback.signing_identity_digest
+            observed_trust_digest = readback.runtime_config_trust_envelope_digest
         manifest = {
             "schema": "app-artifact-manifest",
             "buildProductId": build_product_id,
@@ -888,27 +821,26 @@ def command_package_app_artifact(args: argparse.Namespace) -> dict[str, Any]:
             "applicationId": application_id,
             "displayVersion": display_version,
             "buildNumber": build_number,
-            "signingIdentityDigest": build["signingIdentityDigest"],
+            "signingIdentityDigest": observed_signing_identity_digest,
             "sourceGitSha": source_git_sha,
             "sourceTreeDigest": source_tree_digest,
-            "buildProvenanceDigest": _build_provenance_digest(
+            "buildProvenanceDigest": build_provenance_digest(
                 build_product_id=build_product_id,
                 source_git_sha=source_git_sha,
                 source_tree_digest=source_tree_digest,
                 source_capsule_digest=build["sourceCapsuleDigest"],
-                artifact_digest=build["artifactDigest"],
-                signing_identity_digest=build["signingIdentityDigest"],
+                artifact_digest=observed_artifact_digest,
+                signing_identity_digest=observed_signing_identity_digest,
             ),
-            "artifactDigest": build["artifactDigest"],
+            "artifactDigest": observed_artifact_digest,
             "promotable": promotable,
         }
         if platform in {"android", "ios"}:
-            trust_digest = str(build.get("runtimeConfigTrustEnvelopeDigest") or "")
-            if _DIGEST.fullmatch(trust_digest) is None:
+            if _DIGEST.fullmatch(observed_trust_digest) is None:
                 raise AppArtifactBuildError(
                     "APP.PACKAGE.runtime_config_trust_digest_invalid"
                 )
-            manifest["runtimeConfigTrustEnvelopeDigest"] = trust_digest
+            manifest["runtimeConfigTrustEnvelopeDigest"] = observed_trust_digest
         if any(
             _DIGEST.fullmatch(str(manifest[field])) is None
             for field in (
@@ -930,13 +862,25 @@ def command_package_app_artifact(args: argparse.Namespace) -> dict[str, Any]:
             "sourceCapsuleDigest": build["sourceCapsuleDigest"],
             "sourceStatusDigest": build["sourceStatusDigest"],
             "manifestPath": str(manifest_path),
+            "manifestDigest": artifact_digest(manifest_path),
             "artifactPath": build["artifactPath"],
+            "artifactDigest": manifest["artifactDigest"],
+            "buildProvenanceDigest": manifest["buildProvenanceDigest"],
+            "flutterVersion": build["flutterVersion"],
+            "commandResolutionDigest": build["commandResolutionDigest"],
+            **build["dependencyProjectionEvidence"],
         }
         (attempt_dir / "build-receipt.json").write_text(
             json.dumps(receipt, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
-    except (OSError, ValueError, AppArtifactBuildError, subprocess.SubprocessError) as error:
+    except (
+        OSError,
+        TypeError,
+        ValueError,
+        AppArtifactBuildError,
+        subprocess.SubprocessError,
+    ) as error:
         return {
             "exitCode": 2,
             "summary": f"stackctl app build product failed for {build_product_id}",
@@ -950,21 +894,16 @@ def command_package_app_artifact(args: argparse.Namespace) -> dict[str, Any]:
         "details": [
             f"artifact: {build['artifactPath']}",
             f"manifest: {manifest_path}",
-            f"artifactDigest: {build['artifactDigest']}",
+            f"artifactDigest: {manifest['artifactDigest']}",
         ],
         "decision": decision,
         "manifest": manifest,
         "attemptDir": str(attempt_dir),
+        **build["dependencyProjectionEvidence"],
     }
 
 
-def build_product_artifact_segment(
-    *,
-    build_product_id: str,
-    attempt_id: str,
-) -> str:
-    """Keep immutable attempts partitioned only by canonical build product."""
-
+def build_product_artifact_segment(*, build_product_id: str, attempt_id: str) -> str:
     if build_product_id not in _BASELINE_BUILD_PRODUCT_IDS:
         raise ValueError("build product id is not in the canonical baseline")
     if not re.fullmatch(r"[0-9a-f-]{36}", attempt_id):

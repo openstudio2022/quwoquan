@@ -75,11 +75,11 @@ def test_make_and_data_cli_use_the_single_verification_entrypoint() -> None:
 
 def test_service_runtime_config_has_no_retired_single_file_fallback() -> None:
     sources = (
-        "quwoquan_service/services/tag-service/cmd/api/main.go",
-        "quwoquan_service/services/entity-service/cmd/api/main.go",
-        "quwoquan_service/services/circle-service/cmd/api/main.go",
-        "quwoquan_service/services/chat-service/cmd/api/main.go",
-        "quwoquan_service/services/search-service/cmd/api/main.go",
+        "quwoquan_service/services/tag-service/cmd/api/bootstrap.go",
+        "quwoquan_service/services/entity-service/cmd/api/bootstrap.go",
+        "quwoquan_service/services/circle-service/cmd/api/bootstrap.go",
+        "quwoquan_service/services/chat-service/cmd/api/bootstrap.go",
+        "quwoquan_service/services/search-service/cmd/api/bootstrap.go",
         "quwoquan_service/services/rtc-service/cmd/api/main.go",
         "quwoquan_service/services/integration-service/cmd/api/runtime_config.go",
         "quwoquan_service/services/content-service/cmd/api/runtime_config_and_projection.go",

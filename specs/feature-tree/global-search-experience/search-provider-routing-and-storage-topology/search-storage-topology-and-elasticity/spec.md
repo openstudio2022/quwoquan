@@ -105,6 +105,7 @@
 - THEN up 阶段 quwoquan_objects backfill 完成（total/indexed），places 投影完成
 - AND health 全 healthy（search-service -> 200）
 - AND verify 全 checks passed。
+- AND Search operation、owner executor 与 Elasticsearch client 的超时预算由外向内严格递减；四环境不得用 overlay 把 Elasticsearch request timeout 放大到 canonical service schema 默认之上，配置合成与 local contract 必须证明实际绑定仍为内层预算。
 - THEN `SearchPage` 返回 typed slice（`searchRequestId`、item 级 `rankPosition`/`rankReason`）；/search/feedback 返回 202 accepted（反馈是 command，保持 REST 写入口）。
 
 <a id="gwt-003"></a>

@@ -434,6 +434,38 @@ export const eventCatalog = {
       ]
     },
     {
+      "always_keep_results": [
+        "failure",
+        "timeout",
+        "retry",
+        "absent"
+      ],
+      "event_type": "media_load_state",
+      "internal_priority": "normal",
+      "log_type": "event",
+      "normal_sample_rate": 0.1,
+      "optional_extensions": [
+        "surfaceId",
+        "objectType",
+        "objectId",
+        "copyKey",
+        "failReasonCode",
+        "recoveryAction",
+        "requestId",
+        "traceId",
+        "mediaFailureKind",
+        "userScene",
+        "retryable"
+      ],
+      "required_extensions": [
+        "mediaType",
+        "result",
+        "durationMs",
+        "candidatesTried"
+      ],
+      "slow_threshold_ms": 3000
+    },
+    {
       "event_type": "rtc_call_outcome",
       "internal_priority": "critical",
       "log_type": "event",
@@ -687,6 +719,10 @@ export const eventCatalog = {
       ],
       "type": "string"
     },
+    "candidatesTried": {
+      "minimum": 0,
+      "type": "int"
+    },
     "catalogSource": {
       "enum": [
         "remote",
@@ -936,6 +972,31 @@ export const eventCatalog = {
     "mediaConnected": {
       "type": "bool"
     },
+    "mediaFailureKind": {
+      "enum": [
+        "networkUnavailable",
+        "dnsNxdomain",
+        "handshakeTerminated",
+        "certificateVerifyFailed",
+        "connectionRefused",
+        "noPlayableSource",
+        "controllerSlotTimeout",
+        "initializationTimeout",
+        "decoderInitialization",
+        "http404",
+        "http4xx",
+        "http5xx",
+        "other"
+      ],
+      "type": "string"
+    },
+    "mediaType": {
+      "enum": [
+        "image",
+        "video"
+      ],
+      "type": "string"
+    },
     "memberCountBucket": {
       "enum": [
         "zero",
@@ -1103,6 +1164,9 @@ export const eventCatalog = {
       "minimum": 0,
       "type": "int"
     },
+    "retryable": {
+      "type": "bool"
+    },
     "sampledFrames": {
       "minimum": 1,
       "type": "int"
@@ -1214,6 +1278,16 @@ export const eventCatalog = {
         "six_to_fifty",
         "fifty_one_to_five_hundred",
         "five_hundred_one_to_one_thousand"
+      ],
+      "type": "string"
+    },
+    "userScene": {
+      "enum": [
+        "network",
+        "temporary",
+        "busy",
+        "unavailable",
+        "unsupported"
       ],
       "type": "string"
     },

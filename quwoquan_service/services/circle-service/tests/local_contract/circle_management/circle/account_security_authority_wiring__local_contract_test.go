@@ -311,21 +311,22 @@ func TestCircleAccountSecurityAuthorityConfigurationIsExplicitInEveryEnvironment
 
 func TestCircleAPIWiresAccountSecurityAuthorityAndNoPIISLO(t *testing.T) {
 	root := circleServiceRoot(t)
-	mainSource, err := os.ReadFile(filepath.Join(root, "cmd", "api", "main.go"))
+	mainSource, err := os.ReadFile(filepath.Join(root, "cmd", "api", "bootstrap.go"))
 	if err != nil {
 		t.Fatalf("read API composition: %v", err)
 	}
 	source := string(mainSource)
+	// 迁移到声明式 servicekit.Bootstrap 后（DEC-028），authority spec 的装配、
+	// 健康检查接线与认证中间件包裹全部由骨架承担，其必然性由 servicekit 同包
+	// 白盒测试锁定（TestBootstrapAssemblesFullChain 断言 account_security_authority
+	// 健康检查注册；NewAuthStack 用例锁定凭据与 authority 客户端 fail-closed）。
+	// composition 侧断言收敛为：走声明式骨架、authority 配置段来自内嵌
+	// BaseConfig、最小授权范围显式声明。
 	for _, required := range []string{
-		"rtauth.NewHS256ServiceAuthorizationProvider(",
-		`"circle-service"`,
+		`servicekit.Bootstrap("circle-service"`,
+		"servicekit.BaseConfig",
+		"AuthorityScopes:",
 		`"user.account.security.read"`,
-		"rtauth.NewHTTPAccountSecurityAuthority(",
-		"BaseURL:     cfg.UserAccountSecurityAuthority.BaseURL",
-		"Timeout:     accountSecurityAuthorityTimeout",
-		`healthChecker.Register("account_security_authority"`,
-		"return accountSecurityAuthority.CheckAccountSecurityAuthority(hctx)",
-		"AccountSecurityAuthority: accountSecurityAuthority",
 	} {
 		if !strings.Contains(source, required) {
 			t.Fatalf("circle API composition is missing %q", required)
@@ -498,7 +499,7 @@ func circleServiceRoot(t *testing.T) string {
 		t.Fatal("locate circle authority contract test")
 	}
 	root := filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "..", ".."))
-	if _, err := os.Stat(filepath.Join(root, "cmd", "api", "main.go")); err != nil {
+	if _, err := os.Stat(filepath.Join(root, "cmd", "api", "bootstrap.go")); err != nil {
 		t.Fatalf("resolve circle-service root: %v", err)
 	}
 	return root

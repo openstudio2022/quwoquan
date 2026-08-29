@@ -26,16 +26,21 @@ class ChatRequestPageIds {
     'ListMembers': 'chat.member.list',
     'ListMessageHome': 'chat.list.message.home',
     'ListMessages': 'chat.message.list',
-    'ListSelectableGroupContactMembers': 'chat.list.selectable.group.contact.members',
-    'ListSelectableGroupConversations': 'chat.list.selectable.group.conversations',
+    'ListSelectableGroupContactMembers':
+        'chat.list.selectable.group.contact.members',
+    'ListSelectableGroupConversations':
+        'chat.list.selectable.group.conversations',
     'MarkAsRead': 'chat.message.read',
     'ProjectGatheringConversation': 'chat.project.gathering.conversation',
-    'ProjectGatheringConversationMembership': 'chat.project.gathering.conversation.membership',
+    'ProjectGatheringConversationMembership':
+        'chat.project.gathering.conversation.membership',
     'RecallMessage': 'chat.message.recall',
-    'RecoverChatAccountClosureDeadLetter': 'chat.recover.chat.account.closure.dead.letter',
+    'RecoverChatAccountClosureDeadLetter':
+        'chat.recover.chat.account.closure.dead.letter',
     'RemoveAssistant': 'chat.assistant.remove',
     'RemoveMember': 'chat.member.remove',
-    'ResolveAssistantDeliveryMembership': 'chat.resolve.assistant.delivery.membership',
+    'ResolveAssistantDeliveryMembership':
+        'chat.resolve.assistant.delivery.membership',
     'SendAssistantDeliveryMessage': 'chat.send.assistant.delivery.message',
     'SendMessage': 'chat.message.send',
     'SyncMessages': 'chat.message.sync',
@@ -57,34 +62,45 @@ class ChatRequestPageIds {
   static const String getReceipts = 'chat.message.receipts';
   static const String inviteAssistant = 'chat.assistant.invite';
   static const String leaveConversation = 'chat.leave.conversation';
-  static const String listAssistantGroundingMessages = 'chat.list.assistant.grounding.messages';
+  static const String listAssistantGroundingMessages =
+      'chat.list.assistant.grounding.messages';
   static const String listContactHome = 'chat.list.contact.home';
   static const String listContacts = 'chat.contacts.list';
   static const String listConversationAssets = 'chat.list.conversation.assets';
-  static const String listConversationTimestamps = 'chat.conversation.timestamps';
+  static const String listConversationTimestamps =
+      'chat.conversation.timestamps';
   static const String listConversations = 'chat.conversation.list';
   static const String listGroupCandidates = 'chat.list.group.candidates';
   static const String listInbox = 'chat.list.inbox';
   static const String listMembers = 'chat.member.list';
   static const String listMessageHome = 'chat.list.message.home';
   static const String listMessages = 'chat.message.list';
-  static const String listSelectableGroupContactMembers = 'chat.list.selectable.group.contact.members';
-  static const String listSelectableGroupConversations = 'chat.list.selectable.group.conversations';
+  static const String listSelectableGroupContactMembers =
+      'chat.list.selectable.group.contact.members';
+  static const String listSelectableGroupConversations =
+      'chat.list.selectable.group.conversations';
   static const String markAsRead = 'chat.message.read';
-  static const String projectGatheringConversation = 'chat.project.gathering.conversation';
-  static const String projectGatheringConversationMembership = 'chat.project.gathering.conversation.membership';
+  static const String projectGatheringConversation =
+      'chat.project.gathering.conversation';
+  static const String projectGatheringConversationMembership =
+      'chat.project.gathering.conversation.membership';
   static const String recallMessage = 'chat.message.recall';
-  static const String recoverChatAccountClosureDeadLetter = 'chat.recover.chat.account.closure.dead.letter';
+  static const String recoverChatAccountClosureDeadLetter =
+      'chat.recover.chat.account.closure.dead.letter';
   static const String removeAssistant = 'chat.assistant.remove';
   static const String removeMember = 'chat.member.remove';
-  static const String resolveAssistantDeliveryMembership = 'chat.resolve.assistant.delivery.membership';
-  static const String sendAssistantDeliveryMessage = 'chat.send.assistant.delivery.message';
+  static const String resolveAssistantDeliveryMembership =
+      'chat.resolve.assistant.delivery.membership';
+  static const String sendAssistantDeliveryMessage =
+      'chat.send.assistant.delivery.message';
   static const String sendMessage = 'chat.message.send';
   static const String syncMessages = 'chat.message.sync';
   static const String transferOwnership = 'chat.owner.transfer';
   static const String updateAnnouncement = 'chat.update.announcement';
   static const String updateConversationSettings = 'chat.settings.update';
-  static const String updateConversationTitle = 'chat.update.conversation.title';
+  static const String updateConversationTitle =
+      'chat.update.conversation.title';
   static const String updateGroupAdmins = 'chat.admins.update';
-  static const String updateGroupGovernanceSettings = 'chat.update.group.governance.settings';
+  static const String updateGroupGovernanceSettings =
+      'chat.update.group.governance.settings';
 }

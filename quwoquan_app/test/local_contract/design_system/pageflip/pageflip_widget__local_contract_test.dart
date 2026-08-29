@@ -5,7 +5,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+
 import '../../../support/runtime/pageflip/pageflip.dart';
+
 import 'package:quwoquan_app/runtime/testing/test_keys.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/article_reader/content/article_reader_page_surfaces.dart';
 import 'package:quwoquan_app/service/content_service/content/post/domain/article_presentation_models.dart';
@@ -389,6 +391,7 @@ void main() {
                 template: ArticleTemplatePreset.tech,
                 fontPreset: ArticleFontPreset.mono,
                 metrics: metrics,
+                enablePageCurl: true,
                 pagePadding: articleReaderStagePagePadding(),
                 initialPage: 4,
                 coverUrl: '',
@@ -427,8 +430,7 @@ void main() {
         expect(
           backStates,
           isNotEmpty,
-          reason:
-              'slow BACK drag must keep producing paperFoldBackwardMainline samples.',
+          reason: 'slow BACK drag must keep producing paperFoldBackwardMainline samples.',
         );
         samples.add(backStates.last);
       }
@@ -442,8 +444,7 @@ void main() {
         expect(
           coveredWidths[index],
           greaterThanOrEqualTo(coveredWidths[index - 1] - 0.04),
-          reason:
-              'slow BACK drag must not stall or rewind while the finger remains down.',
+          reason: 'slow BACK drag must not stall or rewind while the finger remains down.',
         );
       }
       expect(
@@ -496,6 +497,7 @@ void main() {
                   template: ArticleTemplatePreset.tech,
                   fontPreset: ArticleFontPreset.classic,
                   metrics: metrics,
+                  enablePageCurl: true,
                   pagePadding: EdgeInsets.zero,
                   initialPage: 0,
                   coverUrl: '',
@@ -732,6 +734,7 @@ void main() {
                 template: ArticleTemplatePreset.tech,
                 fontPreset: ArticleFontPreset.mono,
                 metrics: metrics,
+                enablePageCurl: true,
                 pagePadding: articleReaderStagePagePadding(),
                 initialPage: 2,
                 coverUrl: '',
@@ -821,6 +824,7 @@ void main() {
               template: ArticleTemplatePreset.tech,
               fontPreset: ArticleFontPreset.mono,
               metrics: metrics,
+              enablePageCurl: true,
               pagePadding: articleReaderStagePagePadding(),
               initialPage: 2,
               coverUrl: '',
@@ -905,6 +909,7 @@ void main() {
                 template: ArticleTemplatePreset.tech,
                 fontPreset: ArticleFontPreset.mono,
                 metrics: metrics,
+                enablePageCurl: true,
                 pagePadding: articleReaderStagePagePadding(),
                 initialPage: 2,
                 coverUrl: '',
@@ -1031,6 +1036,7 @@ void main() {
               template: ArticleTemplatePreset.tech,
               fontPreset: ArticleFontPreset.mono,
               metrics: metrics,
+              enablePageCurl: true,
               pagePadding: articleReaderStagePagePadding(),
               initialPage: 3,
               coverUrl: '',
@@ -1208,14 +1214,12 @@ void main() {
     expect(
       interactiveState.backwardFoldX!,
       isA<double>(),
-      reason:
-          'direct BACK calculation keeps fold coordinates in page-calculation space',
+      reason: 'direct BACK calculation keeps fold coordinates in page-calculation space',
     );
     expect(
       interactiveState.backwardFoldSurfaceEdgeX!,
       isA<double>(),
-      reason:
-          'direct BACK calculation reports the fold edge in page-calculation space',
+      reason: 'direct BACK calculation reports the fold edge in page-calculation space',
     );
     expect(interactiveState.backwardCoveredWidth, isNotNull);
     expect(interactiveState.backwardRectoCoverage, isNotNull);
@@ -1394,8 +1398,7 @@ void main() {
     expect(
       lateBackStates,
       isNotEmpty,
-      reason:
-          'BACK late phase must keep a forward-equivalent back surface visible instead of jumping to a front-only state.',
+      reason: 'BACK late phase must keep a forward-equivalent back surface visible instead of jumping to a front-only state.',
     );
     expectForwardEquivalentBackSurface(lateBackStates.first, 'late');
     for (final state in visibleBackStates) {
@@ -1587,8 +1590,7 @@ void main() {
         expect(
           sample.latePoseFrontWidth,
           greaterThan(0),
-          reason:
-              'when previous front is visible it must be the page-space reveal segment.',
+          reason: 'when previous front is visible it must be the page-space reveal segment.',
         );
         expect(sample.latePoseFrontSheetId, equals('mainlineLeaf:2'));
         expect(sample.latePoseFrontSheetId, sample.latePoseBackSheetId);
@@ -1684,8 +1686,7 @@ void main() {
       expect(
         errors,
         isEmpty,
-        reason:
-            'angled -> horizontal -> opposite-angle BACK replay must not red-screen in paint.',
+        reason: 'angled -> horizontal -> opposite-angle BACK replay must not red-screen in paint.',
       );
 
       _expectSourceBoundsTransitionIsContinuous(
@@ -1701,78 +1702,79 @@ void main() {
     },
   );
 
-  testWidgets('BACK middle pose paints current with recto and verso on one sheet', (
-    WidgetTester tester,
-  ) async {
-    final samples = <_BackwardVersoTextureProbeSample>[];
-    for (final dragSteps in <List<Offset>>[
-      const <Offset>[Offset(36, -8), Offset(360, -36)],
-      List<Offset>.filled(4, const Offset(64, -8)),
-      List<Offset>.filled(4, const Offset(64, -16)),
-      List<Offset>.filled(4, const Offset(64, -32)),
-      List<Offset>.filled(3, const Offset(64, 0)),
-      List<Offset>.filled(4, const Offset(64, 0)),
-      List<Offset>.filled(5, const Offset(64, 0)),
-    ]) {
-      samples.add(
-        await _renderBackwardVersoTextureProbeScene(
-          tester,
-          surfaceSize: const Size(408, 916),
-          backwardDragSteps: dragSteps,
-        ),
+  testWidgets(
+    'BACK middle pose paints current with recto and verso on one sheet',
+    (WidgetTester tester) async {
+      final samples = <_BackwardVersoTextureProbeSample>[];
+      for (final dragSteps in <List<Offset>>[
+        const <Offset>[Offset(36, -8), Offset(360, -36)],
+        List<Offset>.filled(4, const Offset(64, -8)),
+        List<Offset>.filled(4, const Offset(64, -16)),
+        List<Offset>.filled(4, const Offset(64, -32)),
+        List<Offset>.filled(3, const Offset(64, 0)),
+        List<Offset>.filled(4, const Offset(64, 0)),
+        List<Offset>.filled(5, const Offset(64, 0)),
+      ]) {
+        samples.add(
+          await _renderBackwardVersoTextureProbeScene(
+            tester,
+            surfaceSize: const Size(408, 916),
+            backwardDragSteps: dragSteps,
+          ),
+        );
+      }
+
+      final qualifyingSamples = samples
+          .where((sample) {
+            final sources = <String, BackwardPaintSourceDiagnostic>{
+              for (final source in sample.paintSources) source.label: source,
+            };
+            final recto = sources['sheetRectoFront'];
+            final verso = sources['sheetVersoBack'];
+            final current = sources['staticCurrentFront'];
+            final rectoBounds = recto?.viewportBounds;
+            final currentBounds = current?.viewportBounds;
+            final rectoCounts =
+                sample.framebufferColorCountsBySource['sheetRectoFront'] ??
+                const <_ProbeColor, int>{};
+            final versoCounts =
+                sample.framebufferColorCountsBySource['sheetVersoBack'] ??
+                const <_ProbeColor, int>{};
+            final currentCounts =
+                sample.framebufferColorCountsBySource['staticCurrentFront'] ??
+                const <_ProbeColor, int>{};
+            return recto?.pageIndex == 2 &&
+                verso?.pageIndex == 2 &&
+                current?.pageIndex == 3 &&
+                recto?.surfaceKind == 'front' &&
+                verso?.surfaceKind == 'back' &&
+                rectoBounds != null &&
+                currentBounds != null &&
+                rectoBounds.intersect(currentBounds).width > 1 &&
+                rectoBounds.intersect(currentBounds).height > 1 &&
+                (rectoCounts[_ProbeColor.red] ?? 0) > 0 &&
+                _semanticBackVisiblePixels(versoCounts) > 0 &&
+                (currentCounts[_ProbeColor.green] ?? 0) > 0;
+          })
+          .toList(growable: false);
+      final sourceDiagnostics = samples
+          .map(
+            (sample) => sample.paintSources
+                .map((source) => '${source.label}:${source.viewportBounds}')
+                .join(','),
+          )
+          .join(' | ');
+
+      expect(
+        qualifyingSamples,
+        isNotEmpty,
+        reason:
+            'a late portrait BACK frame must paint current (L0), previous recto, '
+            'and previous verso (L1) together. The recto source must overlap the '
+            'visible current page in viewport space. samples=$sourceDiagnostics',
       );
-    }
-
-    final qualifyingSamples = samples
-        .where((sample) {
-          final sources = <String, BackwardPaintSourceDiagnostic>{
-            for (final source in sample.paintSources) source.label: source,
-          };
-          final recto = sources['sheetRectoFront'];
-          final verso = sources['sheetVersoBack'];
-          final current = sources['staticCurrentFront'];
-          final rectoBounds = recto?.viewportBounds;
-          final currentBounds = current?.viewportBounds;
-          final rectoCounts =
-              sample.framebufferColorCountsBySource['sheetRectoFront'] ??
-              const <_ProbeColor, int>{};
-          final versoCounts =
-              sample.framebufferColorCountsBySource['sheetVersoBack'] ??
-              const <_ProbeColor, int>{};
-          final currentCounts =
-              sample.framebufferColorCountsBySource['staticCurrentFront'] ??
-              const <_ProbeColor, int>{};
-          return recto?.pageIndex == 2 &&
-              verso?.pageIndex == 2 &&
-              current?.pageIndex == 3 &&
-              recto?.surfaceKind == 'front' &&
-              verso?.surfaceKind == 'back' &&
-              rectoBounds != null &&
-              currentBounds != null &&
-              rectoBounds.intersect(currentBounds).width > 1 &&
-              rectoBounds.intersect(currentBounds).height > 1 &&
-              (rectoCounts[_ProbeColor.red] ?? 0) > 0 &&
-              _semanticBackVisiblePixels(versoCounts) > 0 &&
-              (currentCounts[_ProbeColor.green] ?? 0) > 0;
-        })
-        .toList(growable: false);
-    final sourceDiagnostics = samples
-        .map(
-          (sample) => sample.paintSources
-              .map((source) => '${source.label}:${source.viewportBounds}')
-              .join(','),
-        )
-        .join(' | ');
-
-    expect(
-      qualifyingSamples,
-      isNotEmpty,
-      reason:
-          'a late portrait BACK frame must paint current (L0), previous recto, '
-          'and previous verso (L1) together. The recto source must overlap the '
-          'visible current page in viewport space. samples=$sourceDiagnostics',
-    );
-  });
+    },
+  );
 
   testWidgets('BACK zero-angle iPhone17 pose keeps sheetVersoBack', (
     WidgetTester tester,
@@ -1988,8 +1990,7 @@ void main() {
             const <_ProbeColor, int>{},
       ),
       greaterThan(0),
-      reason:
-          'source attribution is only useful when visible semantic-back pixels are proven.',
+      reason: 'source attribution is only useful when visible semantic-back pixels are proven.',
     );
     expect(
       sample.framebufferColorCountsBySource['sheetRectoFront']?[_ProbeColor
@@ -2012,46 +2013,43 @@ void main() {
               .green] ??
           0,
       greaterThan(0),
-      reason:
-          'the static current source must account for visible current-page pixels.',
+      reason: 'the static current source must account for visible current-page pixels.',
     );
   });
 
-  testWidgets('BACK completion enters static stage without a second page turn', (
-    WidgetTester tester,
-  ) async {
-    final sample = await _renderBackwardCompletionSample(tester);
+  testWidgets(
+    'BACK completion enters static stage without a second page turn',
+    (WidgetTester tester) async {
+      final sample = await _renderBackwardCompletionSample(tester);
 
-    expect(
-      sample.pageChanges,
-      equals(<int>[2]),
-      reason:
-          'a committed BACK turn from page index 3 must publish exactly one page change to index 2.',
-    );
-    expect(sample.finalPageIndex, 2);
-    expect(sample.minimumObservedPageIndex, greaterThanOrEqualTo(2));
-    expect(sample.sawDynamicBack, isTrue);
-    expect(sample.sawStaticAfterDynamic, isTrue);
-    expect(sample.lastDynamicFlippingPageIndex, sample.finalPageIndex);
-    expect(sample.firstStaticAfterDynamicPageIndex, sample.finalPageIndex);
-    expect(
-      sample.lastDynamicFrontSourceLabels,
-      isNot(contains('previousFrontFlat')),
-      reason:
-          'the final dynamic BACK frame must not hand off through the removed free flat branch.',
-    );
-    expect(
-      sample.lastDynamicUnifiedBackSourceLabels,
-      isEmpty,
-      reason:
-          'the final dynamic BACK frame must not normalize previous-front sources into semantic back.',
-    );
-    expect(
-      sample.finalRenderBranch,
-      ArticleReadOnlyBookRenderBranch.staticStage,
-    );
-    expect(sample.finalRenderDirection, isNull);
-  });
+      expect(
+        sample.pageChanges,
+        equals(<int>[2]),
+        reason: 'a committed BACK turn from page index 3 must publish exactly one page change to index 2.',
+      );
+      expect(sample.finalPageIndex, 2);
+      expect(sample.minimumObservedPageIndex, greaterThanOrEqualTo(2));
+      expect(sample.sawDynamicBack, isTrue);
+      expect(sample.sawStaticAfterDynamic, isTrue);
+      expect(sample.lastDynamicFlippingPageIndex, sample.finalPageIndex);
+      expect(sample.firstStaticAfterDynamicPageIndex, sample.finalPageIndex);
+      expect(
+        sample.lastDynamicFrontSourceLabels,
+        isNot(contains('previousFrontFlat')),
+        reason: 'the final dynamic BACK frame must not hand off through the removed free flat branch.',
+      );
+      expect(
+        sample.lastDynamicUnifiedBackSourceLabels,
+        isEmpty,
+        reason: 'the final dynamic BACK frame must not normalize previous-front sources into semantic back.',
+      );
+      expect(
+        sample.finalRenderBranch,
+        ArticleReadOnlyBookRenderBranch.staticStage,
+      );
+      expect(sample.finalRenderDirection, isNull);
+    },
+  );
 
   test('BACK fold band pixels match mirrored semantic back snapshot', () async {
     await _expectBackwardLeafVersoProbeMatchesSemanticSnapshot(
@@ -2152,8 +2150,7 @@ void main() {
     expect(
       narrowColor,
       isNot(_ProbeColor.other),
-      reason:
-          'widening the visible clip must not retarget BACK material UV sampling.',
+      reason: 'widening the visible clip must not retarget BACK material UV sampling.',
     );
     snapshotImage.dispose();
   });
@@ -2223,6 +2220,7 @@ Future<_BackwardCompositeProbeSample> _renderBackwardCompositeProbeScene(
             template: ArticleTemplatePreset.tech,
             fontPreset: ArticleFontPreset.mono,
             metrics: metrics,
+            enablePageCurl: true,
             pagePadding: articleReaderStagePagePadding(),
             initialPage: 2,
             coverUrl: '',
@@ -2425,6 +2423,7 @@ Future<_BackwardVersoTextureProbeSample> _renderBackwardVersoTextureProbeScene(
               template: ArticleTemplatePreset.tech,
               fontPreset: ArticleFontPreset.mono,
               metrics: metrics,
+              enablePageCurl: true,
               pagePadding: articleReaderStagePagePadding(),
               initialPage: 3,
               coverUrl: '',
@@ -2677,6 +2676,7 @@ Future<_BackwardCompletionSample> _renderBackwardCompletionSample(
             template: ArticleTemplatePreset.tech,
             fontPreset: ArticleFontPreset.mono,
             metrics: metrics,
+            enablePageCurl: true,
             pagePadding: articleReaderStagePagePadding(),
             initialPage: 3,
             coverUrl: '',
@@ -2792,6 +2792,7 @@ Future<_BackwardGeometrySweepSample> _renderBackwardGeometrySweepSample(
             template: ArticleTemplatePreset.tech,
             fontPreset: ArticleFontPreset.mono,
             metrics: metrics,
+            enablePageCurl: true,
             pagePadding: articleReaderStagePagePadding(),
             initialPage: 3,
             coverUrl: '',
@@ -2870,6 +2871,7 @@ _collectBackwardAngleToHorizontalSamples(WidgetTester tester) async {
             template: ArticleTemplatePreset.tech,
             fontPreset: ArticleFontPreset.mono,
             metrics: metrics,
+            enablePageCurl: true,
             pagePadding: articleReaderStagePagePadding(),
             initialPage: 3,
             coverUrl: '',
@@ -2947,6 +2949,7 @@ Future<List<_IPhone17ZeroAngleSample>> _collectBackwardIPhone17ZeroAngleSamples(
             template: ArticleTemplatePreset.tech,
             fontPreset: ArticleFontPreset.mono,
             metrics: metrics,
+            enablePageCurl: true,
             pagePadding: articleReaderStagePagePadding(),
             initialPage: initialPage,
             coverUrl: '',

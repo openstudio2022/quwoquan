@@ -25,7 +25,10 @@ func TestTelemetryEnumValuesAreGeneratedAndValidatedInAppCatalog(t *testing.T) {
 		"sourceSwitchSettleUnsupported = \"source_switch_settle_unsupported\"",
 		"sourceSwitchCommandFailed = \"source_switch_command_failed\"",
 		"sourceSwitchSuperseded = \"source_switch_superseded\"",
-		"return 'invalid_extension_value'",
+		"if (definition == null || definition.logType != payload.logType) {\n      return 'unknown_event';\n    }",
+		"if (!payload.extensions.keys.every(definition.allowedExtensions.contains)) {\n      return 'unknown_extension';\n    }",
+		"if (!definition.requiredExtensions.every(payload.extensions.containsKey)) {\n      return 'missing_extension';\n    }",
+		"if (allowedValues != null && !allowedValues.contains(extension.value)) {\n        return 'invalid_extension_value';\n      }",
 	} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("generated App telemetry catalog missing %q:\n%s", want, rendered)
@@ -59,6 +62,61 @@ func TestTelemetryEnumRejectsNonStringAndDartNameCollisions(t *testing.T) {
 				t.Fatal("invalid telemetry enum must fail closed")
 			}
 		})
+	}
+}
+
+func TestTelemetryAlwaysKeepResultsAreGeneratedAndValidated(t *testing.T) {
+	catalog := telemetryCatalogForEnumTest()
+	catalog.ExtensionFields["result"] = telemetryExtensionDef{Type: "string"}
+	catalog.Events = append(catalog.Events, telemetryEventDef{
+		EventType:          "media_load_state",
+		LogType:            "event",
+		RequiredExtensions: []string{"result"},
+		NormalSampleRate:   0.1,
+		SlowThresholdMS:    3000,
+		AlwaysKeepResults:  []string{"failure", "timeout", "retry", "absent"},
+		InternalPriority:   "normal",
+	})
+	if err := validateTelemetryMetadata(
+		catalog,
+		&appPagesFile{Pages: []appPageDef{{PageName: "home", RouteID: "home"}}},
+		&appRoutesFile{Routes: []appRouteDef{{ID: "home"}}},
+	); err != nil {
+		t.Fatalf("validate conditional telemetry retention: %v", err)
+	}
+
+	rendered := renderAppTelemetryCatalogDart(catalog)
+	for _, want := range []string{
+		"final Set<String> alwaysKeepResults;",
+		"alwaysKeepResults: <String>{'failure', 'timeout', 'retry', 'absent'}",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("generated App telemetry retention missing %q:\n%s", want, rendered)
+		}
+	}
+}
+
+func TestTelemetryAlwaysKeepResultsRejectInvalidBindings(t *testing.T) {
+	for _, values := range [][]string{{"failure"}, {""}, {"failure", "failure"}} {
+		catalog := telemetryCatalogForEnumTest()
+		catalog.ExtensionFields["result"] = telemetryExtensionDef{Type: "string"}
+		catalog.Events = append(catalog.Events, telemetryEventDef{
+			EventType:         "media_load_state",
+			LogType:           "event",
+			NormalSampleRate:  0.1,
+			AlwaysKeepResults: values,
+		})
+		if values[0] != "failure" || len(values) > 1 {
+			catalog.Events[len(catalog.Events)-1].RequiredExtensions = []string{"result"}
+		}
+		err := validateTelemetryMetadata(
+			catalog,
+			&appPagesFile{Pages: []appPageDef{{PageName: "home", RouteID: "home"}}},
+			&appRoutesFile{Routes: []appRouteDef{{ID: "home"}}},
+		)
+		if err == nil {
+			t.Fatalf("invalid always_keep_results binding accepted: %#v", values)
+		}
 	}
 }
 

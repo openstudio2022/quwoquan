@@ -2,6 +2,8 @@
 # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/work-request-compilation/spec.md#gwt-001.t4
 # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/work-request-compilation/spec.md#gwt-001.t5
 # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/work-request-compilation/spec.md#gwt-001.t2
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/work-request-compilation/spec.md#gwt-001.t6
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/work-request-compilation/spec.md#gwt-001.t9
 from __future__ import annotations
 
 from pathlib import Path
@@ -12,7 +14,10 @@ from content.execution.campaign import request_envelope_build, request_envelope_
 from content.execution.controller.execute import (
     pre_acquisition_handoff as handoff_api,
 )
-from content.execution.planning import work_request_contract
+from content.execution.planning import (
+    work_request_contract,
+    work_request_dependencies,
+)
 from content.execution.planning.work_request import (
     WorkRequestCommandWriter,
     WorkRequestCompilationQuery,
@@ -50,6 +55,10 @@ def _install_handoff(
         "relatedTopicRefs": [],
         "scale": f"M{max(targets.values())}",
         "workloadTargets": targets,
+        "sourceSelection": {
+            carrier: {"mode": "site_primary", "providers": ["wikipedia"]}
+            for carrier in targets
+        },
     }
     monkeypatch.setattr(
         handoff_api,
@@ -112,7 +121,7 @@ def _dependencies(
             "planDigest": "sha256:" + "4" * 64,
         },
         "dependencies": dependency_rows,
-        "dependencySetDigest": work_request_contract._digest(dependency_rows),
+        "dependencySetDigest": work_request_dependencies.canonical_digest(dependency_rows),
     }
 
 
@@ -122,9 +131,9 @@ def _prepare(
 ) -> tuple[dict[str, object], str, list[int]]:
     _patch_envelope_deps(monkeypatch)
     _install_handoff(monkeypatch)
-    monkeypatch.setattr(work_request_contract, "_dependency_bindings", _dependencies)
+    monkeypatch.setattr(work_request_contract, "dependency_bindings", _dependencies)
     monkeypatch.setattr(
-        work_request_contract, "_canonical_ref", _test_ref
+        work_request_contract, "canonical_dependency_ref", _test_ref
     )
     selected_counts: list[int] = []
     original_bind = request_envelope_build.bind_scale_source_pool
@@ -218,8 +227,8 @@ def test_four_carrier_build_failure_leaves_zero_visible_batch(
         monkeypatch,
         workloads={"homepage": 1, "article": 2, "image": 3, "video": 4},
     )
-    monkeypatch.setattr(work_request_contract, "_dependency_bindings", _dependencies)
-    monkeypatch.setattr(work_request_contract, "_canonical_ref", _test_ref)
+    monkeypatch.setattr(work_request_contract, "dependency_bindings", _dependencies)
+    monkeypatch.setattr(work_request_contract, "canonical_dependency_ref", _test_ref)
     original_build = request_envelope_writer.build_envelope
 
     def fail_image(*args: object, **kwargs: object):
@@ -257,11 +266,11 @@ def test_confirm_rechecks_preview_dependency_digest_before_allocating_sequence(
         rows = document["dependencies"]
         assert isinstance(rows, dict)
         rows["sourcePool"]["digest"] = generation["digest"]
-        document["dependencySetDigest"] = work_request_contract._digest(rows)
+        document["dependencySetDigest"] = work_request_dependencies.canonical_digest(rows)
         return document
 
-    monkeypatch.setattr(work_request_contract, "_dependency_bindings", dependencies)
-    monkeypatch.setattr(work_request_contract, "_canonical_ref", _test_ref)
+    monkeypatch.setattr(work_request_contract, "dependency_bindings", dependencies)
+    monkeypatch.setattr(work_request_contract, "canonical_dependency_ref", _test_ref)
     intent = _intent(tmp_path)
     preview = WorkRequestPreviewQuery().preview(intent)
     assert preview["outcome"] == "preview"
@@ -463,9 +472,9 @@ def test_four_carrier_confirm_preserves_each_heterogeneous_exact_quantity(
             "video": 4,
         },
     )
-    monkeypatch.setattr(work_request_contract, "_dependency_bindings", _dependencies)
+    monkeypatch.setattr(work_request_contract, "dependency_bindings", _dependencies)
     monkeypatch.setattr(
-        work_request_contract, "_canonical_ref", _test_ref
+        work_request_contract, "canonical_dependency_ref", _test_ref
     )
     intent = _intent(tmp_path)
     preview = WorkRequestPreviewQuery().preview(intent)

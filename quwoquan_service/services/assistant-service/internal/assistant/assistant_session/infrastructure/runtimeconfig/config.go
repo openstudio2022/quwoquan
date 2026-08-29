@@ -1,41 +1,22 @@
 package runtimeconfig
 
 import (
-	"fmt"
-	"os"
-	configrelease "quwoquan_service/runtime/configrelease"
-	"quwoquan_service/runtime/servicehost"
-	"strconv"
-	"strings"
-
-	"gopkg.in/yaml.v3"
+	"quwoquan_service/runtime/servicekit"
 )
 
-type RedisPoolConfig struct {
-	Size           int `yaml:"size"`
-	MinIdle        int `yaml:"min_idle"`
-	ReadTimeoutMs  int `yaml:"read_timeout_ms"`
-	WriteTimeoutMs int `yaml:"write_timeout_ms"`
-	DialTimeoutMs  int `yaml:"dial_timeout_ms"`
-}
-
-type RedisSceneConfig struct {
-	Mode     string          `yaml:"mode"`
-	Addr     string          `yaml:"addr"`
-	Addrs    []string        `yaml:"addrs"`
-	Password string          `yaml:"password"`
-	DB       int             `yaml:"db"`
-	TLS      bool            `yaml:"tls"`
-	Pool     RedisPoolConfig `yaml:"pool"`
-}
+// RedisSceneConfig 与 Mongo/Postgres 段统一使用 servicekit 的声明式类型：
+// 加载、env 覆盖、连接与健康检查都由骨架按声明装配（DEC-028）。
+type RedisSceneConfig = servicekit.RedisSceneConfig
 
 type UserProfileConfig struct {
 	BaseURL   string `yaml:"base_url"`
 	TimeoutMs int    `yaml:"timeout_ms"`
 }
 
+// ServiceEgressConfig 是一个出向服务依赖的配置段。base_url 接受部署面覆盖
+// （本地 compose 与 prod plane 都按拓扑注入），超时预算只来自渲染快照。
 type ServiceEgressConfig struct {
-	BaseURL   string `yaml:"base_url"`
+	BaseURL   string `yaml:"base_url" env:"BASE_URL"`
 	TimeoutMs int    `yaml:"timeout_ms"`
 }
 
@@ -52,205 +33,36 @@ type ModelConfig struct {
 	Tier              ModelTierConfig `yaml:"tier"`
 }
 
+// Config 是 assistant-service 的声明式运行时配置：通用段内嵌
+// servicekit.BaseConfig，Mongo/Postgres/Redis 按「声明即装配」自动连接。
+// env 覆盖键由服务名派生前缀 ASSISTANT 与 tag 链拼出。
 type Config struct {
-	Config struct {
-		Version string `yaml:"version"`
-	} `yaml:"config"`
-	Service struct {
-		Name string `yaml:"name"`
-		HTTP struct {
-			Addr string `yaml:"addr"`
-		} `yaml:"http"`
-	} `yaml:"service"`
-	Postgres struct {
-		DSN                    string `yaml:"dsn"`
-		MaxOpenConns           int    `yaml:"max_open_conns"`
-		MaxIdleConns           int    `yaml:"max_idle_conns"`
-		ConnMaxLifetimeMinutes int    `yaml:"conn_max_lifetime_minutes"`
-	} `yaml:"postgres"`
-	MongoDB struct {
-		URI      string `yaml:"uri"`
-		Database string `yaml:"database"`
-	} `yaml:"mongodb"`
+	servicekit.BaseConfig `yaml:",inline"`
+
+	Postgres servicekit.PostgresConfig `yaml:"postgres"`
+	MongoDB  servicekit.MongoConfig    `yaml:"mongodb"`
+
 	Redis struct {
-		Rec      RedisSceneConfig `yaml:"rec"`
-		General  RedisSceneConfig `yaml:"general"`
-		Realtime RedisSceneConfig `yaml:"realtime"`
+		Rec     RedisSceneConfig `yaml:"rec" envPrefix:"REDIS_REC"`
+		General RedisSceneConfig `yaml:"general" envPrefix:"REDIS_GENERAL"`
 	} `yaml:"redis"`
-	Model                    ModelConfig         `yaml:"model"`
-	SearchService            ServiceEgressConfig `yaml:"search_service"`
-	EntityService            ServiceEgressConfig `yaml:"entity_service"`
-	ContentService           ServiceEgressConfig `yaml:"content_service"`
-	IntegrationService       ServiceEgressConfig `yaml:"integration_service"`
-	UserProfile              UserProfileConfig   `yaml:"user_profile"`
-	UserService              ServiceEgressConfig `yaml:"user_service"`
-	ChatService              ServiceEgressConfig `yaml:"chat_service"`
-	CircleService            ServiceEgressConfig `yaml:"circle_service"`
-	NotificationService      ServiceEgressConfig `yaml:"notification_service"`
-	AccountSecurityAuthority ServiceEgressConfig `yaml:"account_security_authority"`
-	PolicyPublication        struct {
+
+	Model               ModelConfig         `yaml:"model"`
+	SearchService       ServiceEgressConfig `yaml:"search_service" envPrefix:"SEARCH_SERVICE"`
+	EntityService       ServiceEgressConfig `yaml:"entity_service" envPrefix:"ENTITY_SERVICE"`
+	ContentService      ServiceEgressConfig `yaml:"content_service" envPrefix:"CONTENT_SERVICE"`
+	IntegrationService  ServiceEgressConfig `yaml:"integration_service" envPrefix:"INTEGRATION"`
+	UserProfile         UserProfileConfig   `yaml:"user_profile"`
+	UserService         ServiceEgressConfig `yaml:"user_service" envPrefix:"USER_SERVICE"`
+	ChatService         ServiceEgressConfig `yaml:"chat_service" envPrefix:"CHAT"`
+	CircleService       ServiceEgressConfig `yaml:"circle_service" envPrefix:"CIRCLE"`
+	NotificationService ServiceEgressConfig `yaml:"notification_service" envPrefix:"NOTIFICATION"`
+	PolicyPublication   struct {
 		ReleaseArtifactRef string `yaml:"release_artifact_ref"`
 		RolloutArtifactRef string `yaml:"rollout_artifact_ref"`
 	} `yaml:"policy_publication"`
 	SkillPackage struct {
-		AssetRoot             string `yaml:"asset_root"`
-		TrustedPublicKeysJSON string `yaml:"trusted_public_keys_json"`
+		AssetRoot             string `yaml:"asset_root" env:"SKILL_PACKAGE_ROOT"`
+		TrustedPublicKeysJSON string `yaml:"trusted_public_keys_json" env:"SKILL_PACKAGE_TRUSTED_PUBLIC_KEYS_JSON"`
 	} `yaml:"skill_package"`
-}
-
-func ResolveRuntimeIdentity() (serviceName, appEnv, configRoot, configVersion, imageVersion string, err error) {
-	serviceName = strings.TrimSpace(
-		servicehost.ModuleEnvironmentValue("assistant-service", "SERVICE_NAME"),
-	)
-	if serviceName == "" {
-		serviceName = "assistant-service"
-	}
-	appEnv = getenvOrDefault("APP_ENV", "alpha")
-	configRoot = os.Getenv("CONFIG_ROOT")
-	configVersion = servicehost.ModuleEnvironmentValue(
-		"assistant-service",
-		"CONFIG_VERSION",
-	)
-	imageVersion = os.Getenv("IMAGE_VERSION")
-	if !IsValidAppEnv(appEnv) {
-		return "", "", "", "", "", fmt.Errorf("APP_ENV must be one of alpha|beta|gamma|prod, got %q", appEnv)
-	}
-	if RequiresConfigVersion(appEnv) && strings.TrimSpace(configVersion) == "" {
-		return "", "", "", "", "", fmt.Errorf("CONFIG_VERSION is required when APP_ENV=%s", appEnv)
-	}
-	return serviceName, appEnv, configRoot, configVersion, imageVersion, nil
-}
-
-func LoadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (Config, error) {
-	cfg := Config{}
-	path, err := configrelease.File(configRoot, serviceName, appEnv)
-	if err != nil {
-		return Config{}, err
-	}
-	if err := MergeConfigFile(&cfg, path); err != nil {
-		return Config{}, fmt.Errorf("read generated runtime config: %w", err)
-	}
-	return cfg, nil
-}
-
-func MergeConfigFile(cfg *Config, path string) error {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	return yaml.Unmarshal(raw, cfg)
-}
-
-func ApplyEnvOverrides(cfg *Config) error {
-	if v := strings.TrimSpace(os.Getenv("MONGODB_URI")); v != "" {
-		cfg.MongoDB.URI = v
-	}
-	if v := strings.TrimSpace(os.Getenv("MONGODB_DATABASE")); v != "" {
-		cfg.MongoDB.Database = v
-	}
-	if v := strings.TrimSpace(os.Getenv("POSTGRES_DSN")); v != "" {
-		cfg.Postgres.DSN = v
-	}
-	if err := applyRedisSceneEnvOverrides("REDIS_GENERAL", &cfg.Redis.General); err != nil {
-		return err
-	}
-	if err := applyRedisSceneEnvOverrides("REDIS_REC", &cfg.Redis.Rec); err != nil {
-		return err
-	}
-	if v := strings.TrimSpace(os.Getenv("ASSISTANT_CHAT_BASE_URL")); v != "" {
-		cfg.ChatService.BaseURL = v
-	}
-	if v := strings.TrimSpace(os.Getenv("ASSISTANT_CIRCLE_BASE_URL")); v != "" {
-		cfg.CircleService.BaseURL = v
-	}
-	if v := strings.TrimSpace(os.Getenv("ASSISTANT_USER_SERVICE_BASE_URL")); v != "" {
-		cfg.UserService.BaseURL = v
-	}
-	if v := strings.TrimSpace(os.Getenv("ASSISTANT_NOTIFICATION_BASE_URL")); v != "" {
-		cfg.NotificationService.BaseURL = v
-	}
-	if v := strings.TrimSpace(os.Getenv("ASSISTANT_SEARCH_SERVICE_BASE_URL")); v != "" {
-		cfg.SearchService.BaseURL = v
-	}
-	if v := strings.TrimSpace(os.Getenv("ASSISTANT_ENTITY_SERVICE_BASE_URL")); v != "" {
-		cfg.EntityService.BaseURL = v
-	}
-	if v := strings.TrimSpace(os.Getenv("ASSISTANT_CONTENT_SERVICE_BASE_URL")); v != "" {
-		cfg.ContentService.BaseURL = v
-	}
-	if v := strings.TrimSpace(os.Getenv("ASSISTANT_INTEGRATION_BASE_URL")); v != "" {
-		cfg.IntegrationService.BaseURL = v
-	}
-	if v := strings.TrimSpace(os.Getenv("ASSISTANT_SKILL_PACKAGE_ROOT")); v != "" {
-		cfg.SkillPackage.AssetRoot = v
-	}
-	if v := strings.TrimSpace(os.Getenv("ASSISTANT_SKILL_PACKAGE_TRUSTED_PUBLIC_KEYS_JSON")); v != "" {
-		cfg.SkillPackage.TrustedPublicKeysJSON = v
-	}
-	return nil
-}
-
-func IsValidAppEnv(env string) bool {
-	switch env {
-	case "alpha", "beta", "gamma", "prod":
-		return true
-	default:
-		return false
-	}
-}
-
-func RequiresConfigVersion(env string) bool {
-	switch env {
-	case "gamma", "prod":
-		return true
-	default:
-		return false
-	}
-}
-
-func applyRedisSceneEnvOverrides(prefix string, cfg *RedisSceneConfig) error {
-	if v := strings.TrimSpace(os.Getenv(prefix + "_MODE")); v != "" {
-		cfg.Mode = v
-	}
-	if v := strings.TrimSpace(os.Getenv(prefix + "_ADDR")); v != "" {
-		cfg.Addr = v
-	}
-	if v := strings.TrimSpace(os.Getenv(prefix + "_ADDRS")); v != "" {
-		cfg.Addrs = nonEmptyStrings(strings.Split(v, ","))
-	}
-	if v := os.Getenv(prefix + "_PASSWORD"); v != "" {
-		cfg.Password = v
-	}
-	if v := strings.TrimSpace(os.Getenv(prefix + "_TLS")); v != "" {
-		enabled, err := strconv.ParseBool(v)
-		if err != nil {
-			return fmt.Errorf("%s_TLS must be a boolean: %w", prefix, err)
-		}
-		cfg.TLS = enabled
-	}
-	if v := strings.TrimSpace(os.Getenv(prefix + "_DB")); v != "" {
-		db, err := strconv.Atoi(v)
-		if err != nil || db < 0 {
-			return fmt.Errorf("%s_DB must be a non-negative integer", prefix)
-		}
-		cfg.DB = db
-	}
-	return nil
-}
-
-func getenvOrDefault(key, fallback string) string {
-	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
-		return value
-	}
-	return fallback
-}
-
-func nonEmptyStrings(values []string) []string {
-	out := make([]string, 0, len(values))
-	for _, value := range values {
-		if trimmed := strings.TrimSpace(value); trimmed != "" {
-			out = append(out, trimmed)
-		}
-	}
-	return out
 }

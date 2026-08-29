@@ -5,45 +5,49 @@ from __future__ import annotations
 
 import argparse
 import base64
-from datetime import datetime, timedelta, timezone
 import json
 import os
 import re
 import subprocess
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+sys.dont_write_bytecode = True
 
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quwoquan_ops.cli.lib.app_launch_manifest_contract import (  # noqa: E402
+from quwoquan_ops.cli.lib.app_identity import (
+    build_profile_for_environment,
+    launch_policy_for_build_profile,
+)
+from quwoquan_ops.cli.lib.app_launch_manifest_contract import (
     build_runtime_config_trust_envelope,
     load_launch_manifest_contract,
     runtime_config_payload_digest,
     validate_runtime_config_package,
 )
-from quwoquan_ops.cli.lib.app_identity import (  # noqa: E402
-    build_profile_for_environment,
-    launch_policy_for_build_profile,
-)
-from quwoquan_ops.cli.lib.app_runtime_config_signing import (  # noqa: E402
+from quwoquan_ops.cli.lib.app_runtime_config_signing import (
     canonical_signed_payload,
     resolve_signing_material,
     sign_payload,
     validate_signing_material,
 )
-from quwoquan_ops.cli.lib.environment_topology import (  # noqa: E402
+from quwoquan_ops.cli.lib.environment_topology import (
     get_target,
     load_environment_topology,
 )
-from quwoquan_ops.cli.lib.local_app_runtime_config_keys import (  # noqa: E402
+from quwoquan_ops.cli.lib.generated.app_launch_contract import (
+    LAUNCH_PROVENANCES,
+)
+from quwoquan_ops.cli.lib.local_app_runtime_config_keys import (
     prepare_local_app_runtime_config_signing,
 )
-from quwoquan_ops.cli.lib.output_paths import (  # noqa: E402
+from quwoquan_ops.cli.lib.output_paths import (
     app_deployment_package_dir,
     deployment_target_for_env,
 )
@@ -169,6 +173,13 @@ def _source_identity(
             raise ValueError("sourceTreeDigest disagrees with source capsule")
         git_sha = capsule_git_sha
         tree_digest = capsule_tree_digest
+        if SOURCE_GIT_SHA.fullmatch(git_sha) is None:
+            raise ValueError("source capsule sourceRevision is invalid")
+        if SOURCE_TREE_DIGEST.fullmatch(tree_digest) is None:
+            raise ValueError("source capsule deploymentInputDigest is invalid")
+        # Capsule authority is self-verifying and intentionally independent of
+        # the projection's synthetic/incomplete .git directory.
+        return git_sha, tree_digest
     if not git_sha:
         git_sha = str(os.environ.get("QWQ_PACKAGE_SOURCE_REVISION") or "").strip()
     if not tree_digest:
@@ -301,7 +312,11 @@ def main() -> int:
     parser.add_argument("--media-video-base-url", default="")
     parser.add_argument("--media-upload-base-url", default="")
     parser.add_argument("--rtc-media-connection-url", default="")
-    parser.add_argument("--launch-mode", default="")
+    parser.add_argument(
+        "--launch-provenance",
+        choices=tuple(LAUNCH_PROVENANCES),
+        default="canonical_launcher",
+    )
     parser.add_argument(
         "--launch-policy",
         choices=("test_live", "prod_release"),

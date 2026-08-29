@@ -1,8 +1,10 @@
 """Candidate-independent, exact-resource recovery for orphaned local Compose stacks.
 
-This module deliberately does not accept a Compose project from argv.  The only
-eligible project is derived from the canonical Alpha/Beta/Gamma target.  A
-read-only inventory is sealed once, expires quickly, and must match a complete
+This module deliberately does not accept a Compose project from argv. The
+eligible project is either the exact formal identity bound by a receipt or
+attestation, or the one formal identity discovered from Docker labels when the
+receipt is absent. A read-only
+inventory is sealed once, expires quickly, and must match a complete
 second inventory before any exact resource ID is removed.
 
 原单文件 ``orphan_compose_teardown.py`` 拆分为同名包；本 ``__init__`` re-export
@@ -25,9 +27,11 @@ from .constants import (  # noqa: F401
     _SAFE_LABEL,
     _canonical_bytes,
     _digest,
+    _normalize_published_endpoints,
     _timestamp,
     _utc_text,
     canonical_project,
+    require_canonical_project,
 )
 from .inventory import (  # noqa: F401
     _canonical_mounts,
@@ -35,9 +39,10 @@ from .inventory import (  # noqa: F401
     _labels,
     _list_ids,
     _network_descriptor,
-    _published_ports,
+    _published_endpoints,
     _run_json,
     _volume_descriptor,
+    discover_exact_project,
     sample_snapshot,
 )
 from .attestation import (  # noqa: F401
@@ -53,8 +58,10 @@ from .receipts import (  # noqa: F401
     _write_create_once,
     assert_not_consumed,
     assert_post_teardown_state,
+    complete_execution_step_receipts,
     load_partial_consumption_for_convergence,
     validate_execution_evidence_for_convergence,
+    validate_execution_journal_for_recovery,
     write_consumption_create_once,
     write_convergence_create_once,
     write_execution_journal_create_once,

@@ -48,7 +48,7 @@ var persistedOperations = map[string]persistedOperation{
 	"ContentPostDetailBase": {
 		name:        "ContentPostDetailBase",
 		operationID: "content.post.GetPost",
-		hash:        "3525412614f94647191c1fead96cc6da3bdc452bf0bec9edd92af4793aed3110",
+		hash:        "3a73f535735fcbb64f7de0db524e9dab2ca1f41d7f1fec91c68053dfde5bc80f",
 		rootField:   "contentPostDetailBase",
 		project:     projectContentPostDetailBase,
 	},
@@ -80,6 +80,40 @@ var persistedOperations = map[string]persistedOperation{
 		rootField:   "contentPostDetailArticleEntities",
 		project:     projectContentPostDetailArticleEntities,
 	},
+}
+
+// PersistedOperationAuthoringBinding is the source-owned identity needed to
+// prove that the checked-in YAML/document pair and the handler's executable
+// dispatch table are the same closed set. It is consumed by the source-bound
+// registry gate; request execution continues to use persistedOperations.
+type PersistedOperationAuthoringBinding struct {
+	OperationName        string
+	CanonicalOperationID string
+	SHA256Hash           string
+	RootField            string
+}
+
+// ValidatePersistedOperationAuthoringBindings rejects a missing, extra, or
+// drifted authoring binding. This keeps the gate on the same dispatch table as
+// ServeHTTP instead of validating a second test-only runtime registry.
+func ValidatePersistedOperationAuthoringBindings(bindings []PersistedOperationAuthoringBinding) error {
+	if len(bindings) != len(persistedOperations) {
+		return fmt.Errorf("content post persisted operation authoring count=%d runtime count=%d", len(bindings), len(persistedOperations))
+	}
+	seen := make(map[string]struct{}, len(bindings))
+	for _, source := range bindings {
+		if _, duplicate := seen[source.OperationName]; duplicate {
+			return fmt.Errorf("content post persisted operation authoring duplicates %s", source.OperationName)
+		}
+		seen[source.OperationName] = struct{}{}
+		runtimeBinding, exists := persistedOperations[source.OperationName]
+		if !exists || runtimeBinding.name != source.OperationName ||
+			runtimeBinding.operationID != source.CanonicalOperationID ||
+			runtimeBinding.hash != source.SHA256Hash || runtimeBinding.rootField != source.RootField {
+			return fmt.Errorf("content post persisted operation %s does not match its executable runtime binding", source.OperationName)
+		}
+	}
+	return nil
 }
 
 type postQueryFacade interface {

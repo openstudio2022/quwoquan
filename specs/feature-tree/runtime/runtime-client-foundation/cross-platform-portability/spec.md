@@ -57,6 +57,13 @@
 - 解析出的 Flutter `minSdk` 对应 Android 正式发布必须已满五年；未满五年时不得跟随 SDK 上浮。
 - 本要求不改变 `targetSdk` / `compileSdk`，也不改变 Product Ops 的 App Build minimum。
 
+<a id="req-005"></a>
+### REQ-005 跨平台产品语义、依赖评估与行为测试同源
+
+- 受支持平台共用 IA、route/surface/operation ID、主任务流、埋点、空态、错误态、权限态和文案 key。平台差异只允许落在布局密度、导航壳、内容列数及悬停/快捷键等增强，不得复制产品流程。
+- 新增或升级平台依赖前，目标 Feature spec/design 必须声明 Android、iOS、OHOS、Web 的支持、替代、降级、owner 与风险；该事实不进入全局角色 reference 或第二套插件 registry。
+- 同一业务行为由 capability profile 驱动同一批合同；平台专属测试只验证 native adapter、构建和差异边界，不复制整套业务验收。
+
 ## 4. 契约引用
 
 - canonical：`specs/feature-tree/runtime/runtime-client-foundation/cross-platform-portability/spec.md`
@@ -86,6 +93,13 @@
 - THEN 工程声明为 `flutter.minSdkVersion`。
 - AND 解析出的 API 对应 Android 正式发布已满五年。
 
+<a id="gwt-004"></a>
+### GWT-004 跨平台产品语义与 capability-profile 测试同源
+
+- GIVEN 同一业务能力运行在两个受支持平台，或引入一项平台相关依赖。
+- WHEN 解析平台能力、产品 surface 与测试计划。
+- THEN route/surface/operation、终态和文案保持同源，依赖矩阵具有明确降级，且同一行为合同由 capability profile 驱动而不是按平台复制。
+
 ## 6. 依赖
 
 - 前置要求：[`runtime-client-foundation`](../spec.md) 的范围、要求与 SIT。
@@ -110,3 +124,12 @@
 - 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效——`PlatformCapabilities`
   登记导航/手势策略能力位（如 `edgeBackGesture` / `immersiveVerticalSwipe`），
   两个文件改为消费能力位；门禁扩展 `TargetPlatform` 业务层扫描且命中为 0。
+
+<a id="open-002"></a>
+### OPEN-002 跨平台产品语义与 capability-profile 合同尚缺直接证据
+
+- 类型：`capability_gap`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：尚缺覆盖 route/surface/operation 同源、Feature 内依赖矩阵和同一行为 capability-profile 驱动的直接合同；旧 Review reference 不再作为证据或事实 owner。
+- 完成判定：`GWT-004` 对应行为满足且真实测试 `spec_ref` 有效。

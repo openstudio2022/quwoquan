@@ -16,6 +16,7 @@ import 'package:quwoquan_app/design_system/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/design_system/navigation/tab_swipe_switch_region.dart';
 import 'package:quwoquan_app/design_system/object_page/object_chrome_actions.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/surfaces/app_action_sheet.dart';
@@ -180,16 +181,20 @@ class _CircleShellState extends ConsumerState<CircleShell> {
   }
 
   bool _canAccessPrimaryContent(CircleState state) {
-    final visibility = state.circleData?.visibility ?? CircleVisibility.public;
-    return visibility == CircleVisibility.public || _isMemberLike(state);
+    final circle = state.circleData;
+    if (circle == null) {
+      // 宿主对象缺席时没有可访问性事实可读；调用点必须先落缺席终态，
+      // 而不是让这里替缺席选一个可见性取值。
+      return false;
+    }
+    return circle.visibility == CircleVisibility.public || _isMemberLike(state);
   }
 
   bool _canAccessMemberSpaces(CircleState state) {
     return _isMemberLike(state);
   }
 
-  String _joinGateDescription(CircleJoinPolicy? policy) => switch (policy ??
-      CircleJoinPolicy.open) {
+  String _joinGateDescription(CircleJoinPolicy policy) => switch (policy) {
     CircleJoinPolicy.open => CommunityText.circleJoinOpenDescription,
     CircleJoinPolicy.approval => CommunityText.circleJoinApprovalDescription,
     CircleJoinPolicy.inviteOnly =>
@@ -595,9 +600,33 @@ class _CircleShellState extends ConsumerState<CircleShell> {
     final border = AppColors.iosSeparator(context);
     final fg = AppColors.iosLabel(context);
 
-    if (!state.isLoading &&
-        state.circleData == null &&
-        state.loadError != null) {
+    if (state.isLoading && state.circleData == null) {
+      return AppScaffold(
+        backgroundColor: bg,
+        navigationBar: AppNavigationBar(
+          automaticallyImplyLeading: false,
+          backgroundColor: bg,
+          leading: AppNavigationBarIconButton(
+            key: const ValueKey<String>('circle-shell-loading-back'),
+            icon: CupertinoIcons.back,
+            onPressed:
+                widget.onBack ??
+                () {
+                  Navigator.of(context).maybePop();
+                },
+          ),
+        ),
+        body: AppRequestFeedback.page(
+          key: const ValueKey<String>('circle-shell-loading'),
+        ),
+      );
+    }
+
+    // 详情缺席时不产出任何以圈子属性为输入的可访问性判定。失败对象在场走运行时
+    // 错误语义，缺席走 contentUnavailable 恢复组：两者都必须带恢复动作，落到无动作
+    // 的权限卡会把「数据没到」呈现成「这是私密圈子」且用户无处可点。
+    if (state.circleData == null) {
+      final loadError = state.loadError;
       return AppScaffold(
         backgroundColor: bg,
         navigationBar: AppNavigationBar(
@@ -614,16 +643,24 @@ class _CircleShellState extends ConsumerState<CircleShell> {
           ),
         ),
         body: AppPageErrorState(
-          semantic: ensureRetryUiErrorSemantic(
-            runtimeErrorSemantic(
-              context,
-              error: state.loadError!,
-              category: UiErrorCategory.pageLoad,
-              scope: UiErrorScope.page,
-              appearanceMode: widget.sourceAppearanceMode,
-              sourceRouteId: AppRoutePaths.circleDetailPathTemplate,
-            ),
-          ),
+          semantic: loadError != null
+              ? ensureRetryUiErrorSemantic(
+                  runtimeErrorSemantic(
+                    context,
+                    error: loadError,
+                    category: UiErrorCategory.pageLoad,
+                    scope: UiErrorScope.page,
+                    appearanceMode: widget.sourceAppearanceMode,
+                    sourceRouteId: AppRoutePaths.circleDetailPathTemplate,
+                  ),
+                )
+              : AppUserRecoveryContract.semanticFor(
+                  group: AppUserRecoveryGroup.contentUnavailable,
+                  category: UiErrorCategory.pageLoad,
+                  scope: UiErrorScope.page,
+                  appearanceMode: widget.sourceAppearanceMode,
+                  sourceRouteId: AppRoutePaths.circleDetailPathTemplate,
+                ),
           onRecovery: (action) async {
             if (action.type == UiErrorActionType.retry ||
                 action.type == UiErrorActionType.resubmit) {

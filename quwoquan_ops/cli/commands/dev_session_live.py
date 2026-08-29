@@ -75,26 +75,82 @@ def _start_mutable_test_live_runtime(
     ]
     for profile in rendered["composeProfiles"]:
         base_command.extend(("--profile", str(profile)))
-    render_command = [*base_command, "config", "--quiet"]
+    render_command = [*base_command, "config", "--format", "json"]
     render_result = _stackctl.run(
         render_command,
         env=dict(rendered["environment"]),
         timeout_seconds=90,
     )
-    phases.append(
-        {
-            "name": "compose-render",
-            "exitCode": render_result.returncode,
-            "summary": "mutable Compose render validated",
-            "details": _stackctl._command_details(render_result),
-            "reportDir": _stackctl.relpath(report_dir),
-        }
-    )
     if render_result.returncode != 0:
+        render_failure_details = [
+            f"docker compose config exited {render_result.returncode}",
+            "rendered Compose output omitted from evidence",
+        ]
+        phases.append(
+            {
+                "name": "compose-render",
+                "exitCode": render_result.returncode,
+                "summary": "mutable Compose render failed",
+                "details": render_failure_details,
+                "reportDir": _stackctl.relpath(report_dir),
+            }
+        )
         return {
             "exitCode": 2,
             "blockerKind": "mutable_compose_render_failed",
-            "details": _stackctl._command_details(render_result),
+            "details": render_failure_details,
+            "phases": phases,
+        }
+    try:
+        compose_model = json.loads(render_result.stdout)
+        if not isinstance(compose_model, Mapping):
+            raise ValueError("runtime Compose model must be a JSON object")
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        invalid_model_details = [
+            "rendered Compose model is not a valid JSON object",
+            f"errorType={type(exc).__name__}",
+        ]
+        phases.append(
+            {
+                "name": "compose-render",
+                "exitCode": 2,
+                "summary": "mutable Compose model validation failed",
+                "details": invalid_model_details,
+                "reportDir": _stackctl.relpath(report_dir),
+            }
+        )
+        return {
+            "exitCode": 2,
+            "blockerKind": "mutable_compose_ownership_invalid",
+            "details": invalid_model_details,
+            "phases": phases,
+        }
+    phases.append(
+        {
+            "name": "compose-render",
+            "exitCode": 0,
+            "summary": "mutable Compose render validated",
+            "details": [
+                "rendered Compose values omitted from evidence",
+                f"serviceCount={len(compose_model.get('services') or {})}",
+                f"networkCount={len(compose_model.get('networks') or {})}",
+                f"volumeCount={len(compose_model.get('volumes') or {})}",
+            ],
+            "reportDir": _stackctl.relpath(report_dir),
+        }
+    )
+    try:
+        plan = _stackctl._dev_session_finalize_runtime_plan(
+            runtime_plan=plan,
+            compose_model=compose_model,
+            report_dir=report_dir,
+        )
+        rendered = {**rendered, "plan": plan}
+    except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        return {
+            "exitCode": 2,
+            "blockerKind": "mutable_compose_ownership_invalid",
+            "details": [str(exc)],
             "phases": phases,
         }
     try:
@@ -183,10 +239,14 @@ def _start_mutable_test_live_runtime(
     )
     # A brand-new target has no Product Ops ExperimentPolicyActivated fact.
     # Recommendation intentionally refuses a full runtime without that fact,
-    # so test_live first brings up only the canonical Product Ops public
-    # command owner (and its authored dependencies), activates the exact
-    # run-bound policies, then starts the complete stack.  This is not a DB
-    # seed or a private Recommendation fallback.
+    # while Product Ops readiness requires the service-core hosted User account
+    # security authority.  Start service-core without its Recommendation
+    # dependency closure: the exact account-security health path is already a
+    # pre-admission route, and Product Ops' registered readiness probe consumes
+    # it with the canonical service credential.  Product Ops itself is then
+    # waited healthy before the existing public command activates the exact
+    # run-bound policies.  This is not a DB seed, private Recommendation
+    # fallback, or pre-admission business-route bypass.
     policy_owner_steps = (
         (
             "test-live-policy-owner-dependencies",
@@ -210,13 +270,28 @@ def _start_mutable_test_live_runtime(
             [*base_command, "up", "--no-deps", "mongo-init"],
         ),
         (
-            "test-live-policy-owner-bootstrap",
-            "Product Ops policy command owner bootstrap completed",
+            "test-live-policy-authority-bootstrap",
+            "service-core account security authority bootstrap completed",
             [
                 *base_command,
                 "up",
                 "--build",
                 "-d",
+                "--no-deps",
+                "service-core",
+            ],
+        ),
+        (
+            "test-live-policy-owner-bootstrap",
+            "Product Ops policy command owner became ready",
+            [
+                *base_command,
+                "up",
+                "--build",
+                "-d",
+                "--wait",
+                "--wait-timeout",
+                str(max(1, int(compose_up_timeout))),
                 "--no-deps",
                 "product-ops-service",
             ],
@@ -263,8 +338,10 @@ def _start_mutable_test_live_runtime(
             "startupAttempt": partial_receipt,
         }
     try:
-        product_ops_port = int(
-            (plan.get("publishedPorts") or {})["product-ops-service"]
+        product_ops_port = _stackctl.require_published_endpoint_port(
+            plan["publishedPorts"],
+            role="product-ops-service",
+            protocol="tcp",
         )
         policy_receipt = _stackctl.activate_test_live_experiment_policies(
             environment=environment,

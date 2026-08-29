@@ -171,10 +171,17 @@ def _validate_runtime_sample(
         issues.append(f"{label}: deviceId missing")
     if require_source_report and not str(payload.get("sourceReport") or "").strip():
         issues.append(f"{label}: sourceReport missing")
-    if not str(payload.get("launchMode") or "").strip() or payload.get(
-        "launchMode"
+    if not str(payload.get("launchProvenance") or "").strip() or payload.get(
+        "launchProvenance"
     ) == "unknown":
-        issues.append(f"{label}: launchMode missing from runtime evidence")
+        issues.append(
+            f"{label}: launchProvenance missing from runtime evidence"
+        )
+    if payload.get("runtimeConfigSupplyMode") != "external_runtime_package":
+        issues.append(
+            f"{label}: runtimeConfigSupplyMode must equal "
+            "external_runtime_package"
+        )
     if payload.get("runtimeConfigurationState") != "complete":
         issues.append(f"{label}: runtime configuration was not complete")
     if payload.get("missingDefineKeys"):

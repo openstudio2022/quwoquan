@@ -1,15 +1,14 @@
-"""stackctl `app-content-uat` 域 test-live 运行时绑定、typed Actor 与证据判定。
+"""stackctl `app-content-uat` immutable 运行时绑定、typed Actor 与证据判定。
 
 从 commands/app_preflight_uat.py 逐字迁出(该模块保留 UAT dart 目标常量
 家族与 `command_app_content_uat` 编排主干,绑定/证据家族随本职责聚合到
 本模块):
 
 - `_app_content_patrol_evidence`:Patrol 报告的证据投影与截图 digest;
-- `_APP_CONTENT_TEST_LIVE_STARTUP_IDENTITY_FIELDS` /
-  `_app_content_test_live_runtime_binding`:UAT target 到 running mutable
-  runtime 与 Data run 的精确身份绑定;
-- `_app_content_test_live_actor_context`:typed UAT Actor scope 到 mutable
-  runtime 与 release 的绑定;
+- `_app_content_immutable_runtime_binding`:UAT target 到 active candidate、
+  running startup attempt 与 Data release 的精确身份绑定;
+- `_app_content_immutable_actor_context`:typed UAT Actor scope 到真实
+  candidate manifest 与 release 的绑定;
 - `_ios_direct_flutter_log_reader_retryable`:iOS 日志读取器丢失后的
   fresh run 重试判定。
 
@@ -22,15 +21,31 @@ UAT dart 目标常量与 `_app_content_uat_requires_typed_actor` /
 
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 import subprocess
 import uuid
+from collections.abc import Mapping
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
+from quwoquan_ops.cli.commands.app_preflight_uat_binding_contract import (
+    _APP_CONTENT_IMMUTABLE_STARTUP_IDENTITY_FIELDS,
+    _APP_CONTENT_TEST_LIVE_STARTUP_IDENTITY_FIELDS,
+    _DIGEST_RE,
+)
+from quwoquan_ops.cli.commands.app_preflight_uat_launch_binding import (
+    _app_content_launch_binding,
+    _launch_evidence_path,
+    _verified_app_content_projection_build_seal,
+)
+from quwoquan_ops.cli.commands.app_preflight_uat_page_evidence import (
+    _app_content_page_artifact_binding,
+    _app_content_patrol_evidence,
+    _controlled_edge_recovery_evidence_issue,
+)
+from quwoquan_ops.cli.lib.content_release_readiness import ReadinessPhase
 from quwoquan_ops.cli.lib.test_data.capabilities.chat_service import (
     DIRECT_CONVERSATION_WITH_MESSAGES,
     DirectConversationResult,
@@ -44,173 +59,433 @@ from quwoquan_ops.cli.lib.test_data.capabilities.user_service import (
 )
 from quwoquan_ops.cli.lib.test_data.model import TestDataContext
 from quwoquan_ops.cli.lib.test_data.operations import TestDataRuntime
+from quwoquan_ops.cli.smoke.environment_patrol_smoke.artifact_binding import (
+    APP_PAGE_ARTIFACT_BINDING_BLOCKER,
+)
 from quwoquan_ops.cli.smoke.environment_patrol_smoke.constants import (
     TYPED_TEST_DATA_ACTOR_ENV,
     TYPED_TEST_DATA_CONVERSATION_ENV,
 )
 
+__all__ = [
+    "APP_PAGE_ARTIFACT_BINDING_BLOCKER",
+    "_APP_CONTENT_TEST_LIVE_STARTUP_IDENTITY_FIELDS",
+    "_app_content_launch_binding",
+    "_app_content_page_artifact_binding",
+    "_app_content_patrol_evidence",
+    "_controlled_edge_recovery_evidence_issue",
+    "_ios_direct_flutter_log_reader_retryable",
+    "_launch_evidence_path",
+    "_verified_app_content_projection_build_seal",
+]
 
-def _app_content_patrol_evidence(report_ref: str) -> dict[str, Any]:
+
+
+def _verified_app_content_readiness(
+    preflight: Mapping[str, Any],
+) -> tuple[dict[str, Any], Path]:
+    """Load the exact canonical readiness bytes projected by debug preflight."""
     import quwoquan_ops.cli.stackctl as _stackctl
 
-    report_path = Path(report_ref)
-    if not report_path.is_absolute():
-        report_path = _stackctl.ROOT / report_path
-    report = _stackctl._read_json_object(str(report_path))
-    report_runs = report.get("runs")
-    if not isinstance(report_runs, list):
-        report_runs = []
-    selected = next(
-        (
-            item
-            for item in report_runs
-            if isinstance(item, dict) and int(item.get("exitCode", 1)) == 0
-        ),
-        {},
-    )
-    evidence = selected.get("evidence") if isinstance(selected, dict) else {}
-    evidence = evidence if isinstance(evidence, dict) else {}
-    screenshot = evidence.get("afterScreenshot")
-    screenshot = screenshot if isinstance(screenshot, dict) else {}
-    screenshot_marker = screenshot.get("marker")
-    screenshot_marker = (
-        screenshot_marker if isinstance(screenshot_marker, dict) else {}
-    )
-    screenshot_is_live_page = (
-        screenshot.get("status") == "captured"
-        and screenshot.get("capturedDuringPatrol") is True
-        and all(
-            str(screenshot_marker.get(field) or "").strip()
-            for field in ("environment", "suite", "route", "terminalKey")
+    environment = str(preflight.get("environment") or "").strip()
+    release_id = str(preflight.get("releaseId") or "").strip()
+    manifest_digest = str(preflight.get("manifestDigest") or "").strip()
+    readiness_ref = str(preflight.get("readinessReceiptRef") or "").strip()
+    if not readiness_ref:
+        raise ValueError("App content UAT readiness receipt reference is missing")
+    evidence_root = _stackctl.output_root().expanduser().resolve()
+    candidate = Path(readiness_ref).expanduser()
+    if candidate.is_absolute():
+        readiness_path = candidate.resolve()
+    else:
+        repo_relative = (_stackctl.ROOT / candidate).resolve()
+        readiness_path = (
+            repo_relative
+            if repo_relative.is_relative_to(evidence_root)
+            else (evidence_root / candidate).resolve()
         )
+    try:
+        readiness_path.relative_to(evidence_root)
+    except ValueError as exc:
+        raise ValueError(
+            "App content UAT readiness receipt escapes QWQ_OUTPUT_ROOT"
+        ) from exc
+    if readiness_path.is_symlink() or not readiness_path.is_file():
+        raise ValueError("App content UAT readiness receipt is missing")
+    readiness = _stackctl._read_json_object(str(readiness_path))
+    if (
+        _stackctl._canonical_document_checksum(readiness)
+        != preflight.get("readinessReceiptDigest")
+    ):
+        raise ValueError("App content UAT readiness receipt digest drifted")
+    try:
+        readiness_phase = ReadinessPhase(str(readiness.get("readinessPhase") or ""))
+    except ValueError as exc:
+        raise ValueError("App content UAT readiness phase is invalid") from exc
+    canonical, canonical_path = _stackctl._load_data_release_readiness(
+        environment=environment,
+        release_id=release_id,
+        verify_run_id=str(readiness.get("verifyRunId") or ""),
+        manifest_digest=manifest_digest,
+        readiness_phase=readiness_phase,
     )
-    screenshot_ref = str(screenshot.get("path") or "").strip()
-    screenshot_path = Path(screenshot_ref)
-    if screenshot_ref and not screenshot_path.is_absolute():
-        screenshot_path = _stackctl.ROOT / screenshot_path
-    screenshot_digest = (
-        "sha256:" + hashlib.sha256(screenshot_path.read_bytes()).hexdigest()
-        if screenshot_is_live_page and screenshot_ref and screenshot_path.is_file()
-        else ""
+    if canonical_path.resolve() != readiness_path or canonical != readiness:
+        raise ValueError("App content UAT readiness canonical identity drifted")
+    expected = {
+        "passed": True,
+        "environment": environment,
+        "releaseId": release_id,
+        "manifestDigest": manifest_digest,
+        "appUatEnvelope": preflight.get("appUatEnvelope"),
+        "appUatEnvelopeDigest": preflight.get("appUatEnvelopeDigest"),
+    }
+    if any(readiness.get(field) != value for field, value in expected.items()):
+        raise ValueError("App content UAT readiness/preflight identity drifted")
+    return canonical, readiness_path
+
+
+def _app_content_readiness_path(preflight: Mapping[str, Any]) -> Path:
+    return _verified_app_content_readiness(preflight)[1]
+
+
+def _candidate_runtime_identities(
+    *,
+    manifest: Mapping[str, Any],
+    provider_binding: Mapping[str, Any],
+    observability_binding: Mapping[str, Any],
+) -> dict[str, str]:
+    artifact = manifest.get("environmentArtifact")
+    source_capsule = (
+        artifact.get("sourceCapsule") if isinstance(artifact, Mapping) else None
     )
+    configuration = (
+        artifact.get("configuration") if isinstance(artifact, Mapping) else None
+    )
+    artifact_provider = (
+        artifact.get("provider") if isinstance(artifact, Mapping) else None
+    )
+    provider_composition = provider_binding.get("composition")
+    observability_composition = observability_binding.get("composition")
+    if not all(
+        isinstance(value, Mapping)
+        for value in (
+            artifact,
+            source_capsule,
+            configuration,
+            artifact_provider,
+            provider_composition,
+            observability_composition,
+        )
+    ):
+        raise ValueError("App content UAT immutable candidate identity is incomplete")
     return {
-        "status": str(report.get("status") or ""),
-        "device": selected.get("device", {}) if isinstance(selected, dict) else {},
-        "testExecution": (
-            selected.get("testExecution", {}) if isinstance(selected, dict) else {}
+        "artifactBaseline": str(source_capsule.get("baselineId") or ""),
+        "sourceRevision": str(source_capsule.get("sourceRevision") or ""),
+        "sourceCapsuleDigest": str(source_capsule.get("digest") or ""),
+        "sourceCapsuleWorkspaceStatusDigest": str(
+            source_capsule.get("workspaceStatusDigest") or ""
         ),
-        "consumerLease": evidence.get("consumerLease", {}),
-        "feedContent": evidence.get("feedContent", {}),
-        "controlledEdgeFault": evidence.get("controlledEdgeFault", {}),
-        "controlledEdgeFaultReceipt": evidence.get(
-            "controlledEdgeFaultReceipt", {}
+        "releaseTrainId": str(artifact.get("releaseTrainId") or ""),
+        "environmentArtifactDigest": str(
+            artifact.get("environmentArtifactDigest") or ""
         ),
-        "screenshotRef": screenshot_ref,
-        "screenshotDigest": screenshot_digest,
-        "screenshotMarker": screenshot_marker if screenshot_is_live_page else {},
-        "remoteApi": report.get("remoteApiEvidence", {}),
+        "packageDigest": str(artifact.get("packageDigest") or ""),
+        "configurationDigest": str(configuration.get("serviceDigest") or ""),
+        "runtimeConfigDigest": str(configuration.get("appRuntimeDigest") or ""),
+        "environmentRuntimeDigest": str(
+            configuration.get("environmentRuntimeDigest") or ""
+        ),
+        "providerRuntimeDigest": str(
+            provider_composition.get("runtimeCompositionDigest") or ""
+        ),
+        "artifactProviderRuntimeDigest": str(
+            artifact_provider.get("runtimeCompositionDigest") or ""
+        ),
+        "observabilityLogSinkDigest": str(
+            observability_composition.get("composeDigest") or ""
+        ),
     }
 
 
+def _app_content_immutable_runtime_binding(
+    preflight: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Bind UAT to one fully validated immutable candidate/startup/release."""
+    import quwoquan_ops.cli.stackctl as _stackctl
 
-_APP_CONTENT_TEST_LIVE_STARTUP_IDENTITY_FIELDS = (
-    "sourceRevision",
-    "workspaceStatusDigest",
-    "mutableStateDigest",
-    "composeDigest",
-    "configurationDigest",
-    "providerRuntimeDigest",
-    "resolverHandoffDigest",
-)
+    target = str(preflight.get("target") or "").strip()
+    environment = str(preflight.get("environment") or "").strip()
+    expected_preflight_state = {
+        "launchPolicy": "immutable_candidate",
+        "purpose": "content_live",
+        "nonPromotable": False,
+        "contentBindingState": "bound",
+        "contentLive": "passed",
+        "status": "passed",
+    }
+    if (
+        target != f"{environment}-local"
+        or environment not in {"alpha", "beta", "gamma"}
+        or any(
+            preflight.get(field) != value
+            for field, value in expected_preflight_state.items()
+        )
+    ):
+        raise ValueError(
+            "App content UAT requires canonical immutable content_live preflight"
+        )
+
+    snapshot = _stackctl.active_deployment_candidate_snapshot(target)
+    if not isinstance(snapshot, Mapping):
+        raise TypeError("App content UAT requires an active immutable candidate")
+    baseline, candidate_root, manifest = _stackctl._fixed_candidate_identity(
+        snapshot,
+        environment_name=environment,
+        target_name=target,
+    )
+    provider_binding, observability_binding = (
+        _stackctl._candidate_bindings_from_snapshot(
+            snapshot,
+            environment_name=environment,
+            target_name=target,
+        )
+    )
+    identities = _candidate_runtime_identities(
+        manifest=manifest,
+        provider_binding=provider_binding,
+        observability_binding=observability_binding,
+    )
+    if (
+        provider_binding.get("baselineId") != baseline
+        or observability_binding.get("baselineId") != baseline
+    ):
+        raise ValueError("App content UAT candidate runtime binding drifted")
+    startup = _stackctl.load_startup_attempt(target)
+    if (
+        not isinstance(startup, Mapping)
+        or startup.get("status") != "running"
+        or startup.get("failure") not in {None, ""}
+        or startup.get("env") != environment
+        or startup.get("target") != target
+        or startup.get("workload") != "full"
+    ):
+        raise ValueError(
+            "App content UAT requires the current running immutable receipt"
+        )
+    readiness, _readiness_path = _verified_app_content_readiness(preflight)
+    release = manifest.get("release")
+    release_candidate = (
+        release.get("candidate") if isinstance(release, Mapping) else None
+    )
+    artifact = manifest.get("environmentArtifact")
+    if (
+        not isinstance(release_candidate, Mapping)
+        or not isinstance(artifact, Mapping)
+        or artifact.get("environment") != environment
+        or artifact.get("target") != target
+    ):
+        raise ValueError("App content UAT immutable release identity is incomplete")
+
+    baselines = {
+        baseline,
+        str(manifest.get("baselineId") or ""),
+        identities["artifactBaseline"],
+        str(preflight.get("packageBaseline") or ""),
+        str(startup.get("candidateDigest") or ""),
+    }
+    if len(baselines) != 1 or any(
+        _DIGEST_RE.fullmatch(value) is None for value in baselines
+    ):
+        raise ValueError(
+            "App content UAT package baseline does not match active manifest/startup"
+        )
+    for field in (
+        "releaseTrainId",
+        "environmentArtifactDigest",
+        "sourceCapsuleDigest",
+        "sourceCapsuleWorkspaceStatusDigest",
+        "packageDigest",
+        "configurationDigest",
+        "runtimeConfigDigest",
+        "environmentRuntimeDigest",
+        "providerRuntimeDigest",
+        "observabilityLogSinkDigest",
+    ):
+        if _DIGEST_RE.fullmatch(identities[field]) is None:
+            raise ValueError(f"App content UAT immutable {field} is invalid")
+
+    manifest_expected = {
+        "sourceRevision": identities["sourceRevision"],
+        "packageDigest": identities["packageDigest"],
+        "configurationDigest": identities["configurationDigest"],
+        "runtimeConfigDigest": identities["runtimeConfigDigest"],
+        "environmentRuntimeDigest": identities["environmentRuntimeDigest"],
+    }
+    if any(
+        manifest.get(field) != value
+        for field, value in manifest_expected.items()
+    ):
+        raise ValueError("App content UAT environmentArtifact identity drifted")
+    if (
+        identities["artifactProviderRuntimeDigest"]
+        != identities["providerRuntimeDigest"]
+    ):
+        raise ValueError("App content UAT Provider runtime identity drifted")
+    startup_expected = {
+        "candidateDigest": baseline,
+        "configurationDigest": identities["configurationDigest"],
+        "providerRuntimeDigest": identities["providerRuntimeDigest"],
+        "observabilityLogSinkDigest": identities["observabilityLogSinkDigest"],
+    }
+    if any(
+        startup.get(field) != value for field, value in startup_expected.items()
+    ):
+        raise ValueError("App content UAT immutable startup identity drifted")
+    expected_preflight = {
+        "packageBaseline": baseline,
+        "sourceRevision": identities["sourceRevision"],
+        "configurationDigest": identities["configurationDigest"],
+        "providerRuntimeDigest": identities["providerRuntimeDigest"],
+        "releaseId": release_candidate.get("releaseId"),
+        "manifestDigest": release_candidate.get("releaseDigest"),
+        "readinessReceiptDigest": _stackctl._canonical_document_checksum(readiness),
+        "appUatEnvelope": readiness.get("appUatEnvelope"),
+        "appUatEnvelopeDigest": readiness.get("appUatEnvelopeDigest"),
+    }
+    for field, expected in expected_preflight.items():
+        if preflight.get(field) != expected:
+            raise ValueError(f"App content UAT preflight/candidate drifted: {field}")
+    app_uat_plan = preflight.get("appUatPlan")
+    if (
+        not isinstance(app_uat_plan, Mapping)
+        or preflight.get("appUatPlanDigest")
+        != _stackctl._canonical_document_checksum(dict(app_uat_plan))
+    ):
+        raise ValueError("App content UAT plan digest drifted")
+    _stackctl.assert_active_deployment_candidate_snapshot(dict(snapshot))
+
+    startup_identity = {
+        field: str(startup.get(field) or "")
+        for field in _APP_CONTENT_IMMUTABLE_STARTUP_IDENTITY_FIELDS
+    }
+    return {
+        "launchPolicy": "immutable_candidate",
+        "nonPromotable": False,
+        "environment": environment,
+        "target": target,
+        "packageBaseline": baseline,
+        "candidateDigest": baseline,
+        "releaseTrainId": identities["releaseTrainId"],
+        "environmentArtifactDigest": identities["environmentArtifactDigest"],
+        "sourceCapsuleDigest": identities["sourceCapsuleDigest"],
+        "sourceCapsuleWorkspaceStatusDigest": identities[
+            "sourceCapsuleWorkspaceStatusDigest"
+        ],
+        "sourceCapsuleManifestRef": str(
+            candidate_root
+            / _stackctl.PACKAGE_INPUT_CAPSULE_DIRECTORY
+            / "manifest.json"
+        ),
+        "sourceRevision": identities["sourceRevision"],
+        "packageDigest": identities["packageDigest"],
+        "runtimeConfigDigest": identities["runtimeConfigDigest"],
+        "environmentRuntimeDigest": identities["environmentRuntimeDigest"],
+        "startupAttemptId": str(startup.get("attemptId") or ""),
+        "composeProject": str(startup.get("composeProject") or ""),
+        "runRoot": str(startup.get("runRoot") or ""),
+        "startupIdentity": startup_identity,
+        "contentBindingState": "bound",
+        "retentionClass": "immutable_candidate",
+        "releaseId": str(release_candidate.get("releaseId") or ""),
+        "verifyRunId": str(readiness.get("verifyRunId") or ""),
+        "manifestDigest": str(release_candidate.get("releaseDigest") or ""),
+        "readinessPhase": str(readiness.get("readinessPhase") or ""),
+        "readinessReceiptRef": str(preflight.get("readinessReceiptRef") or ""),
+        "readinessReceiptDigest": str(
+            preflight.get("readinessReceiptDigest") or ""
+        ),
+        "lifecycleExitRef": str(preflight.get("lifecycleExitRef") or ""),
+        "appUatEnvelope": dict(preflight.get("appUatEnvelope") or {}),
+        "appUatEnvelopeDigest": str(preflight.get("appUatEnvelopeDigest") or ""),
+        "appUatPlan": dict(app_uat_plan),
+        "appUatPlanDigest": str(preflight.get("appUatPlanDigest") or ""),
+    }
 
 
 def _app_content_test_live_runtime_binding(
     preflight: Mapping[str, Any],
 ) -> dict[str, Any]:
-    """Bind one UAT target to its exact running mutable runtime and Data run."""
+    """Compatibility surface for stackctl; test-live input is rejected."""
+    return _app_content_immutable_runtime_binding(preflight)
+
+
+def _app_content_immutable_actor_context(
+    *,
+    preflight: Mapping[str, Any],
+    runtime_binding: Mapping[str, Any],
+    readiness_path: Path,
+    report_dir: Path,
+) -> TestDataContext:
+    """Bind typed UAT Actors to the real active candidate manifest."""
     import quwoquan_ops.cli.stackctl as _stackctl
 
-    target = str(preflight.get("target") or "").strip()
-    environment = str(preflight.get("environment") or "").strip()
-    if (
-        preflight.get("launchPolicy") != "test_live"
-        or target != f"{environment}-local"
-        or environment not in {"alpha", "beta", "gamma"}
-    ):
-        raise ValueError("App content UAT requires canonical non-production test_live")
-    if str(preflight.get("packageBaseline") or ""):
-        raise ValueError("test_live App content UAT must not consume a package baseline")
-
-    startup = _stackctl.load_test_live_startup_attempt(target)
-    if (
-        not isinstance(startup, dict)
-        or startup.get("status") != "running"
-        or startup.get("failure") not in {None, ""}
-    ):
-        raise ValueError("App content UAT requires the current running test_live receipt")
-    content = _stackctl.load_test_live_content_binding(target)
-    if not isinstance(content, dict):
-        raise ValueError("App content UAT requires a run-bound content binding")
-    if (
-        content.get("launchPolicy") != "test_live"
-        or content.get("nonPromotable") is not True
-        or content.get("retentionClass") != "run_bound"
-        or content.get("contentBindingState") != "bound"
-        or content.get("environment") != environment
-        or content.get("target") != target
-        or content.get("startupAttemptId") != startup.get("attemptId")
-    ):
-        raise ValueError("App content UAT test_live binding identity drifted")
-
-    startup_identity = content.get("startupIdentity")
-    if not isinstance(startup_identity, Mapping):
-        raise ValueError("App content UAT test_live startup identity is missing")
-    for field in _stackctl._APP_CONTENT_TEST_LIVE_STARTUP_IDENTITY_FIELDS:
-        if str(startup_identity.get(field) or "") != str(startup.get(field) or ""):
-            raise ValueError(f"App content UAT test_live startup identity drifted: {field}")
-
-    expected_preflight = {
-        "contentBindingState": "bound",
-        "configurationDigest": startup["configurationDigest"],
-        "providerRuntimeDigest": startup["providerRuntimeDigest"],
-        "sourceRevision": startup["sourceRevision"],
-        "releaseId": content["releaseId"],
-        "manifestDigest": content["manifestDigest"],
-        "readinessReceiptRef": content["readinessReceiptRef"],
-        "readinessReceiptDigest": content["readinessReceiptDigest"],
-        "lifecycleExitRef": content["lifecycleExitRef"],
-        "appUatEnvelope": content["appUatEnvelope"],
-        "appUatPlan": content["appUatPlan"],
-        "appUatPlanDigest": content["appUatPlanDigest"],
+    target = str(runtime_binding.get("target") or "").strip()
+    environment = str(runtime_binding.get("environment") or "").strip()
+    startup = runtime_binding.get("startupIdentity")
+    if not isinstance(startup, Mapping):
+        raise TypeError("App content UAT typed Actor startup identity is missing")
+    readiness, canonical_readiness_path = _verified_app_content_readiness(preflight)
+    if canonical_readiness_path.resolve() != readiness_path.resolve():
+        raise ValueError("App content UAT typed Actor readiness path drifted")
+    snapshot = _stackctl.active_deployment_candidate_snapshot(target)
+    if not isinstance(snapshot, Mapping):
+        raise TypeError("App content UAT typed Actor candidate is missing")
+    baseline, _candidate_root, manifest = _stackctl._fixed_candidate_identity(
+        snapshot,
+        environment_name=environment,
+        target_name=target,
+    )
+    artifact = manifest.get("environmentArtifact")
+    source_capsule = (
+        artifact.get("sourceCapsule") if isinstance(artifact, Mapping) else None
+    )
+    if not isinstance(artifact, Mapping) or not isinstance(source_capsule, Mapping):
+        raise TypeError("App content UAT typed Actor candidate identity is incomplete")
+    expected_runtime = {
+        "candidateDigest": baseline,
+        "packageBaseline": baseline,
+        "releaseTrainId": artifact.get("releaseTrainId"),
+        "environmentArtifactDigest": artifact.get("environmentArtifactDigest"),
+        "sourceRevision": manifest.get("sourceRevision"),
+        "sourceCapsuleDigest": source_capsule.get("digest"),
+        "packageDigest": manifest.get("packageDigest"),
+        "runtimeConfigDigest": manifest.get("runtimeConfigDigest"),
+        "releaseId": readiness.get("releaseId"),
+        "manifestDigest": readiness.get("manifestDigest"),
+        "verifyRunId": readiness.get("verifyRunId"),
+        "readinessPhase": readiness.get("readinessPhase"),
     }
-    for field, expected in expected_preflight.items():
-        if preflight.get(field) != expected:
-            raise ValueError(f"App content UAT preflight/binding drifted: {field}")
-
-    return {
-        "launchPolicy": "test_live",
-        "nonPromotable": True,
-        "environment": environment,
-        "target": target,
-        "startupAttemptId": startup["attemptId"],
-        "composeProject": startup["composeProject"],
-        "runRoot": startup["runRoot"],
-        "startupIdentity": {
-            field: str(startup[field])
-            for field in _stackctl._APP_CONTENT_TEST_LIVE_STARTUP_IDENTITY_FIELDS
-        },
-        "contentBindingState": "bound",
-        "retentionClass": "run_bound",
-        "releaseId": content["releaseId"],
-        "verifyRunId": content["verifyRunId"],
-        "manifestDigest": content["manifestDigest"],
-        "readinessPhase": content["readinessPhase"],
-        "readinessReceiptRef": content["readinessReceiptRef"],
-        "readinessReceiptDigest": content["readinessReceiptDigest"],
-        "lifecycleExitRef": content["lifecycleExitRef"],
-        "appUatPlan": content["appUatPlan"],
-        "appUatPlanDigest": content["appUatPlanDigest"],
-    }
+    if any(
+        runtime_binding.get(field) != value
+        for field, value in expected_runtime.items()
+    ):
+        raise ValueError("App content UAT typed Actor candidate identity drifted")
+    candidate = _stackctl.build_candidate_binding(
+        environment=environment,
+        target=target,
+        manifest=manifest,
+        readiness=readiness,
+    )
+    if candidate.baseline_id != baseline:
+        raise ValueError("App content UAT typed Actor baseline identity drifted")
+    context = _app_content_actor_context_from_candidate(
+        preflight=preflight,
+        runtime_binding=runtime_binding,
+        candidate=candidate,
+        report_dir=report_dir,
+    )
+    _stackctl.assert_active_deployment_candidate_snapshot(dict(snapshot))
+    return context
 
 
 def _app_content_test_live_actor_context(
@@ -220,51 +495,34 @@ def _app_content_test_live_actor_context(
     readiness_path: Path,
     report_dir: Path,
 ) -> TestDataContext:
-    """Bind one typed UAT Actor scope to the exact mutable runtime and release."""
+    """Compatibility surface for stackctl; always uses immutable identity."""
+    return _app_content_immutable_actor_context(
+        preflight=preflight,
+        runtime_binding=runtime_binding,
+        readiness_path=readiness_path,
+        report_dir=report_dir,
+    )
+
+
+def _app_content_actor_context_from_candidate(
+    *,
+    preflight: Mapping[str, Any],
+    runtime_binding: Mapping[str, Any],
+    candidate: Any,
+    report_dir: Path,
+) -> TestDataContext:
+    """Project verified Provider/login evidence into a typed Actor context."""
     import quwoquan_ops.cli.stackctl as _stackctl
 
     target = str(runtime_binding.get("target") or "").strip()
     environment = str(runtime_binding.get("environment") or "").strip()
     startup = runtime_binding.get("startupIdentity")
     if not isinstance(startup, Mapping):
-        raise ValueError("App content UAT typed Actor startup identity is missing")
-    readiness = json.loads(readiness_path.read_text(encoding="utf-8"))
-    if not isinstance(readiness, Mapping):
-        raise ValueError("App content UAT typed Actor readiness is invalid")
-    expected_readiness = {
-        "passed": True,
-        "environment": environment,
-        "releaseId": runtime_binding.get("releaseId"),
-        "verifyRunId": runtime_binding.get("verifyRunId"),
-        "manifestDigest": runtime_binding.get("manifestDigest"),
-        "readinessPhase": runtime_binding.get("readinessPhase"),
-    }
-    if any(readiness.get(field) != value for field, value in expected_readiness.items()):
-        raise ValueError("App content UAT typed Actor readiness identity drifted")
-    candidate = _stackctl.build_candidate_binding(
-        environment=environment,
-        target=target,
-        manifest={
-            "sourceRevision": str(startup.get("sourceRevision") or ""),
-            "baselineId": str(startup.get("mutableStateDigest") or ""),
-            "packageDigest": str(startup.get("composeDigest") or ""),
-            "runtimeConfigDigest": str(startup.get("configurationDigest") or ""),
-            "release": {
-                "candidate": {
-                    "releaseId": str(runtime_binding.get("releaseId") or ""),
-                    "releaseDigest": str(
-                        runtime_binding.get("manifestDigest") or ""
-                    ),
-                }
-            },
-        },
-        readiness=readiness,
-        allow_consumer=True,
-    )
+        raise TypeError("App content UAT typed Actor startup identity is missing")
     provider = preflight.get("provider")
     login = preflight.get("loginJourney")
     if not isinstance(provider, Mapping) or not isinstance(login, Mapping):
-        raise ValueError("App content UAT typed Actor Provider evidence is missing")
+        raise TypeError("App content UAT typed Actor Provider evidence is missing")
     provider_expected = {
         "adapterId": "ext.sms.local_capture",
         "environment": environment,
@@ -276,6 +534,15 @@ def _app_content_test_live_actor_context(
         raise ValueError("App content UAT typed Actor Provider identity drifted")
     if (
         login.get("status") != "passed"
+        or login.get("launchPolicy") != "immutable_candidate"
+        or login.get("baselineId") != runtime_binding.get("candidateDigest")
+        or login.get("sourceRevision") != runtime_binding.get("sourceRevision")
+        or login.get("runtimeConfigDigest")
+        != runtime_binding.get("runtimeConfigDigest")
+        or login.get("configurationDigest")
+        != startup.get("configurationDigest")
+        or login.get("providerRuntimeDigest")
+        != startup.get("providerRuntimeDigest")
         or login.get("challengePresent") is not True
         or login.get("sessionPresent") is not True
         or login.get("startupAttemptId") != runtime_binding.get("startupAttemptId")
@@ -299,7 +566,7 @@ def _app_content_test_live_actor_context(
     }
     topology_target = _stackctl.get_target(_stackctl.load_environment_topology(), target)
     base_url = str(
-        ((topology_target.get("publicBases") or {}).get("api") or "")
+        (topology_target.get("publicBases") or {}).get("api") or ""
     ).rstrip("/")
     return TestDataContext(
         candidate=candidate,
@@ -423,6 +690,11 @@ def _ios_direct_flutter_log_reader_retryable(
     """
 
     if evidence.get("status") != "failed":
+        return False
+    if (
+        evidence.get("flutterProcessGroupStoppedBySigint") is not True
+        or not isinstance(evidence.get("flutterRunExitCode"), int)
+    ):
         return False
     issues = evidence.get("issues")
     if issues != ["expected 3 hot-restart Dart startup attempts, got 0"]:

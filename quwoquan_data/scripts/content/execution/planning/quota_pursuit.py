@@ -121,15 +121,33 @@ def initial_candidate_pool(quota: int, *, oversample_factor: float) -> int:
 
 @dataclass(frozen=True, slots=True)
 class QuotaPursuitPlan:
-    """The admitted, frozen bounds of one pursuit loop."""
+    """The admitted, frozen bounds of one pursuit loop.
+
+    ``frozen_target_ceiling`` bounds the target set this loop may freeze — for an
+    execution request that is ``--count``. It does not bound how many candidates
+    the loop may examine: a lane whose first candidates all fail source
+    qualification must be able to keep reading later slices of the ordered
+    reference set. What it does bound is what gets written into the frozen target
+    set, because a frozen set larger than the declared count blocks every retry
+    of that execution.
+    """
 
     approved_quota: int
     initial_pool: int
+    frozen_target_ceiling: int
     policy: QuotaPursuitPolicy
 
     def __post_init__(self) -> None:
         if isinstance(self.approved_quota, bool) or self.approved_quota < 1:
             raise ValueError("approvedQuota must be a positive integer")
+        if (
+            isinstance(self.frozen_target_ceiling, bool)
+            or not isinstance(self.frozen_target_ceiling, int)
+            or self.frozen_target_ceiling < self.approved_quota
+        ):
+            raise ValueError(
+                "frozen target ceiling cannot be smaller than the quota"
+            )
         if self.initial_pool < self.approved_quota:
             raise ValueError("initial candidate pool cannot be smaller than the quota")
 
@@ -138,6 +156,7 @@ class QuotaPursuitPlan:
         cls,
         quota: int,
         *,
+        frozen_target_ceiling: int,
         oversample_factor: float | None = None,
         policy: QuotaPursuitPolicy | None = None,
     ) -> "QuotaPursuitPlan":
@@ -150,6 +169,7 @@ class QuotaPursuitPlan:
         return cls(
             approved_quota=quota,
             initial_pool=initial_candidate_pool(quota, oversample_factor=factor),
+            frozen_target_ceiling=frozen_target_ceiling,
             policy=policy or runtime.quota_pursuit,
         )
 
@@ -157,6 +177,7 @@ class QuotaPursuitPlan:
         return {
             "approvedQuota": self.approved_quota,
             "initialPool": self.initial_pool,
+            "frozenTargetCeiling": self.frozen_target_ceiling,
             "replenishFactor": self.policy.replenish_factor,
             "maxRounds": self.policy.max_rounds,
             "stallRounds": self.policy.stall_rounds,
@@ -190,6 +211,10 @@ class QuotaPursuitProgress:
     @property
     def attained(self) -> bool:
         return self.remaining_deficit == 0
+
+    @property
+    def drawn_count(self) -> int:
+        return sum(row.drawn_count for row in self.rounds)
 
     def next_round_pool(self) -> int:
         """Candidates the next round should draw, sized to the open deficit."""
@@ -281,6 +306,8 @@ def pursuit_shortfall_issue(
             "roundCount": len(progress.rounds),
             "maxRounds": progress.plan.policy.max_rounds,
             "stalledRounds": progress.consecutive_stalled_rounds,
+            "frozenTargetCeiling": progress.plan.frozen_target_ceiling,
+            "drawnCount": progress.drawn_count,
             **dict(lane_attributes or {}),
         },
     )
@@ -396,6 +423,7 @@ def load_quota_pursuit_progress(
     plan = QuotaPursuitPlan(
         approved_quota=_required_int(raw_plan, "approvedQuota"),
         initial_pool=_required_int(raw_plan, "initialPool"),
+        frozen_target_ceiling=_required_int(raw_plan, "frozenTargetCeiling"),
         policy=policy,
     )
     progress = QuotaPursuitProgress(plan=plan, rounds=())

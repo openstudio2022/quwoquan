@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from typing import Any
 
 from content.release.canonical.acceptance_lease import (
     handle_acceptance_lease,  # noqa: F401
@@ -30,7 +31,9 @@ from content.release.canonical.commercial_transition import (
 from content.release.canonical.discard import handle_discard  # noqa: F401
 from content.release.canonical.garbage_collection import (
     apply_canonical_gc,
+    backfill_absent_execution_tombstones,
     plan_canonical_gc,
+    unresolved_execution_references,
 )
 from content.release.canonical.publish_execution import (
     handle_publish_execution,  # noqa: F401
@@ -41,6 +44,8 @@ from content.release.canonical.handler_pool import (
     handle_pool_backfill_plan,  # noqa: F401
     handle_pool_dispatch,  # noqa: F401
     handle_pool_inspect,  # noqa: F401
+    handle_pool_object_retire,  # noqa: F401
+    handle_pool_precheck,  # noqa: F401
     handle_pool_release_build,  # noqa: F401
 )
 from content.release.canonical.lifecycle_exit import (
@@ -452,6 +457,44 @@ def handle_gc_apply(args: argparse.Namespace) -> None:
             indent=2,
         )
     )
+
+
+def handle_gc_backfill_tombstones(args: argparse.Namespace) -> None:
+    output_root = Path(args.output_root or OUTPUT_ROOT)
+    publish_root = Path(args.publish_root or PUBLISH_ROOT)
+    release_root = Path(args.release_root or (output_root / "data/releases"))
+    try:
+        if args.dry_run:
+            unresolved = unresolved_execution_references(
+                output_root=output_root,
+                publish_root=publish_root,
+                release_root=release_root,
+            )
+            payload: dict[str, Any] = {
+                "backfillId": str(args.backfill_id),
+                "dryRun": True,
+                "unresolvedExecutionCount": len(unresolved),
+                "unresolvedExecutions": [
+                    {"executionId": execution_id, "referencedBy": list(referrers)}
+                    for execution_id, referrers in unresolved.items()
+                ],
+            }
+        else:
+            document, path = backfill_absent_execution_tombstones(
+                backfill_id=str(args.backfill_id),
+                output_root=output_root,
+                publish_root=publish_root,
+                release_root=release_root,
+            )
+            payload = {
+                **document,
+                "receiptRef": path.relative_to(output_root.resolve()).as_posix(),
+            }
+    except (FileNotFoundError, ObjectTransactionError, TypeError, ValueError) as exc:
+        raise SystemExit(
+            f"[release gc backfill-tombstones] GATE_BLOCK {exc}"
+        ) from exc
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
 
 
 def handle_campaign_scale_evidence(args: argparse.Namespace) -> None:

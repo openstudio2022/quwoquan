@@ -124,6 +124,8 @@ String _unavailableText(ShareTargetAvailability availability) {
     ShareTargetAvailability.reviewing => ProfileText.profileShareReviewing,
     ShareTargetAvailability.authorDeactivated =>
       ProfileText.profileShareAuthorDeactivated,
+    ShareTargetAvailability.unknown =>
+      ProfileText.profileShareUnsupportedAvailability,
     ShareTargetAvailability.active =>
       ProfileText.profileInteractionPreviewUnavailable,
   };

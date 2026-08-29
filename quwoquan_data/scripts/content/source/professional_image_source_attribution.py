@@ -4,7 +4,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from core.source_attribution import canonical_source_attribution
+from core.source_attribution import (
+    canonical_source_attribution,
+    derived_modifications_value,
+)
 
 
 def bound_image_source_attribution(
@@ -32,6 +35,9 @@ def bound_image_source_attribution(
         "modelReleaseStatus": str(item.get("modelReleaseStatus") or ""),
         "collectedAt": str(item.get("capturedAt") or ""),
         "takedownPolicy": "quwoquan_standard_notice_and_takedown",
+        # receipt 归因的是逐字节入 CAS 的 provider 原图，任何非空取值都说明有第二
+        # 个写点在采集之后改了字节，属于绑定漂移。
+        "derivedModifications": derived_modifications_value(),
     }
     if distribution_decision in {"research_allowed", "commercial_allowed"}:
         expected.update(

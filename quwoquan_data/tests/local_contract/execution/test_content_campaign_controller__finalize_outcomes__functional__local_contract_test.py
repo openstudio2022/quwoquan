@@ -426,10 +426,11 @@ def test_cursor_grok_first_submission_and_cursor_auto_retry_reach_lane_argv(
     assert argv[receipt_index + 1] == auto_preflight_binding["receiptRef"]
 
 
-def test_main_tree_drift_during_review_still_blocks_and_cleans(
+def test_main_tree_drift_during_review_is_recorded_not_blocking(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """DEC-030：review 期 digest 漂移降为审计记录，不再作废在途 campaign。"""
     repo = _create_repo(tmp_path)
     runtime = _runtime(tmp_path, repo)
     _submit_all(repo, runtime, monkeypatch)
@@ -437,15 +438,22 @@ def test_main_tree_drift_during_review_still_blocks_and_cleans(
     monkeypatch.setenv("CAMPAIGN_EVENT_LOG", str(event_log))
     monkeypatch.setenv("DRIFT_CARRIER", "video")
     monkeypatch.setenv("DRIFT_REPO", str(repo))
-    with pytest.raises(ValueError):
-        campaign_controller.run_campaign(
-            ROOT_ID,
-            submission_timeout_seconds=2,
-            lane_timeout_seconds=5,
-            runtime_paths=runtime,
-        )
+    campaign_controller.run_campaign(
+        ROOT_ID,
+        submission_timeout_seconds=2,
+        lane_timeout_seconds=5,
+        runtime_paths=runtime,
+    )
     report = read_json(runtime.campaigns_root / ROOT_ID / "campaign_report.json")
-    assert report["status"] == "blocked"
+    assert report["status"] == "succeeded"
+    audits = report["revisionAudits"]
+    assert audits, "stage boundaries must record revision audits"
+    drifted = [audit for audit in audits if audit["drifted"]]
+    assert drifted, "post-drift stage boundaries must observe drifted=true"
+    assert all(
+        audit["observedSourceDigest"] != audit["frozenSourceDigest"]
+        for audit in drifted
+    )
     _assert_capsule_reused_and_lane_roots_isolated(runtime, report)
 
 

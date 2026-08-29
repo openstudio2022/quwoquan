@@ -10,7 +10,7 @@ from typing import Any
 
 from content.release.environment.activation_envelope import (
     EnvironmentActivationEnvelopeError,
-    build_environment_activation_envelope,
+    build_release_activation_envelope,
     document_digest,
     file_digest,
 )
@@ -370,15 +370,20 @@ def environment_release_readiness_issues(
             import_report_ref = (
                 (import_run / "import.json").relative_to(output_root).as_posix()
             )
-            expected_activation_envelope = build_environment_activation_envelope(
+            # 与写入侧同一投影入口：header 决定 scalar / sourceIdentities 两种
+            # source identity 形态与 milestone。milestone 的 predecessor 从被验
+            # envelope 重放；predecessor 链的独立复核归前一环境自身的 readiness。
+            observed_envelope = readiness.get("activationEnvelope")
+            previous_environment_activation = (
+                observed_envelope.get("previousEnvironmentActivation")
+                if isinstance(observed_envelope, Mapping)
+                else None
+            )
+            expected_activation_envelope = build_release_activation_envelope(
+                header=release_header,
                 environment=environment,
                 release_id=release_id,
                 manifest_digest=str(attestation.get("payloadSha256") or ""),
-                source_revision=str(release_header.get("sourceRevision") or ""),
-                source_digest=str(release_header.get("sourceDigest") or ""),
-                entity_catalog_digest=str(
-                    release_header.get("entityCatalogDigest") or ""
-                ),
                 release_class=str(release_header.get("releaseClass") or ""),
                 product_lifecycle_state=str(
                     release_header.get("productLifecycleState") or ""
@@ -396,6 +401,7 @@ def environment_release_readiness_issues(
                 research_isolation_verification_digest=str(
                     readiness.get("researchIsolationVerificationDigest") or ""
                 ),
+                previous_environment_activation=previous_environment_activation,
             )
         except (ValueError, EnvironmentActivationEnvelopeError) as exc:
             issues.append(f"{path}: cannot project activationEnvelope: {exc}")

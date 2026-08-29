@@ -12,6 +12,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+sys.dont_write_bytecode = True
+
 _ROOT = Path(__file__).resolve().parents[2]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
@@ -21,6 +23,9 @@ from quwoquan_ops.cli.lib.app_identity import (  # noqa: E402
     application_id_for_build_product,
     resolve_build_product,
     supported_build_products,
+)
+from quwoquan_ops.cli.commands.package_app_artifact_helpers import (  # noqa: E402
+    artifact_digest,
 )
 from quwoquan_ops.cli.lib.common import load_json_yaml  # noqa: E402
 
@@ -117,14 +122,6 @@ def _canonical_json(payload: dict[str, Any]) -> str:
     return json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
 
 
-def _sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return "sha256:" + digest.hexdigest()
-
-
 def _sha256_tree(root: Path) -> str:
     digest = hashlib.sha256()
     if root.is_symlink() or not root.is_dir():
@@ -147,16 +144,12 @@ def _sha256_tree(root: Path) -> str:
 
 
 def _package_digest(path: Path) -> str:
-    resolved = path.expanduser().resolve()
-    if path.is_symlink() or not resolved.exists():
-        raise ValueError(f"package is missing or is a symlink: {path}")
-    if resolved.is_file():
-        if resolved.stat().st_size <= 0:
-            raise ValueError(f"package file is empty: {path}")
-        return _sha256_file(resolved)
-    if resolved.is_dir():
-        return _sha256_tree(resolved)
-    raise ValueError(f"package is not a regular file or directory: {path}")
+    """Compatibility projection of the canonical App artifact digest."""
+
+    try:
+        return artifact_digest(path)
+    except RuntimeError as error:
+        raise ValueError(str(error)) from error
 
 
 def _generic_package_digest(path: Path) -> str:

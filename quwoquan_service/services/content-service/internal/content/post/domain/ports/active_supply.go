@@ -17,9 +17,13 @@ type ActiveSupplySnapshot struct {
 	Status          string
 	ActiveReleaseID string
 	ManifestDigest  string
-	ReadbackStatus  string
-	Posts           int64
-	PlayableVideos  int64
+	// ReleaseClass 是激活 release 的 release 级类别（research|commercial），
+	// 由 importer 从 release.json 落到 data_release_state。research readback
+	// 用它判定 release 类别；per-post usageScope 只表达对象的最大许可范围。
+	ReleaseClass   string
+	ReadbackStatus string
+	Posts          int64
+	PlayableVideos int64
 }
 
 func (snapshot ActiveSupplySnapshot) ReleaseBoundReadbackReady() bool {
@@ -40,6 +44,7 @@ func (snapshot ActiveSupplySnapshot) IsEmpty() bool {
 		strings.TrimSpace(snapshot.Status) == "" &&
 		strings.TrimSpace(snapshot.ActiveReleaseID) == "" &&
 		strings.TrimSpace(snapshot.ManifestDigest) == "" &&
+		strings.TrimSpace(snapshot.ReleaseClass) == "" &&
 		strings.TrimSpace(snapshot.ReadbackStatus) == "" &&
 		snapshot.Posts == 0 &&
 		snapshot.PlayableVideos == 0

@@ -8,7 +8,11 @@ from pathlib import Path
 from typing import Any
 
 from core.image_rules import pixel_size_issue
-from core.image_safety import STATUS_SAFE, assess_image
+from core.image_safety import (
+    STATUS_SAFE,
+    assess_image,
+)
+from core.media_source_provenance import declared_provenance_exclusion_reason
 from core.runtime_policy import active_runtime_policy
 from content.source.contracts import MediaProvenance
 from content.source.research import network_io
@@ -36,6 +40,36 @@ def _asset_extension(mime_type: str) -> str:
     }.get(mime_type, "")
 
 
+def _provenance_admissible(raw: dict[str, Any]) -> bool:
+    """Whether one candidate row can still reach publication on paper alone.
+
+    Only license and watermark-prone provenance are decidable before download;
+    safety, faces and pixel size need the bytes.  Keeping this one predicate
+    shared means the supplement decision and the acquisition loop can never
+    disagree about which rows were never going to survive.
+    """
+
+    license_name = str(raw.get("license") or "")
+    terms_url = _canonical_terms_url(
+        raw.get("termsUrl"),
+        license_name=license_name,
+        source_url=raw.get("sourceUrl"),
+    )
+    if not license_allows_commercial_distribution(license_name, terms_url):
+        return False
+    # 水印高风险按出处类别裁决（原始平台 / 搬运路径 / 权利人是否第一手声明），
+    # 同一类出处结论稳定，不因文件名是否含平台字样而反转。
+    return not declared_provenance_exclusion_reason(raw)
+
+
+def provenance_admissible_image_rows(
+    image_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """The rows worth downloading, so callers size supplements by them."""
+
+    return [row for row in image_rows if _provenance_admissible(row)]
+
+
 def acquire_open_image_assets(
     image_rows: list[dict[str, Any]],
     *,
@@ -56,7 +90,9 @@ def acquire_open_image_assets(
             license_name=license_name,
             source_url=raw.get("sourceUrl"),
         )
-        if not license_allows_commercial_distribution(license_name, terms_url):
+        # 与 homepage/article 采纳门用同一条 license + provenance 判定：注定被排除的
+        # 水印高风险来源不得占用 hero 名额，否则整个实体在放量期只能拿到零张可发布图。
+        if not _provenance_admissible(raw):
             continue
         response = network_io.fetch_http(
             original_url,

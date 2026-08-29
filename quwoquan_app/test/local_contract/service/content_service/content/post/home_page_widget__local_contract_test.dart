@@ -11,6 +11,7 @@ import 'package:quwoquan_app/service/content_service/content/post/adapters/conte
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/design_system/semantics/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/design_system/semantics/settings_semantic_constants.dart';
 import 'package:quwoquan_app/runtime/testing/test_keys.dart';
 import 'package:quwoquan_app/runtime/shell/actions/global_surface_actions.dart';
@@ -447,6 +448,33 @@ void main() {
   });
 
   group('HomePage', () {
+    testWidgets(
+      'production accessibility tree exposes one stable home surface identity',
+      (tester) async {
+        // spec_ref: specs/feature-tree/spec.md#uat-001
+        final semantics = tester.ensureSemantics();
+        try {
+          _suppressExpectedErrors();
+
+          await tester.pumpWidget(_buildApp());
+          await tester.pump(const Duration(milliseconds: 300));
+
+          expect(
+            find.bySemanticsIdentifier(
+              AppNavigationSemanticConstants.homeSurfaceIdentifier,
+            ),
+            findsOneWidget,
+          );
+          expect(
+            AppNavigationSemanticConstants.homeSurfaceIdentifier,
+            'qwq.surface.home',
+          );
+        } finally {
+          semantics.dispose();
+        }
+      },
+    );
+
     testWidgets('展示八个首页文本频道并在频道条右侧保留全局搜索与小趣入口', (tester) async {
       _suppressExpectedErrors();
       await tester.pumpWidget(_buildApp());

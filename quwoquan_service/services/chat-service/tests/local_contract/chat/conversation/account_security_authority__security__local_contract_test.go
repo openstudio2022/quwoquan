@@ -19,11 +19,43 @@ import (
 
 	rtauth "quwoquan_service/runtime/auth"
 	rthealth "quwoquan_service/runtime/health"
-	chatconfig "quwoquan_service/services/chat-service/internal/chat/conversation/infrastructure/runtimeconfig"
 )
 
-const accountSecurityAuthorityTimeoutConfigKey = "sys.chat-service.runtime.auth.account_security_authority.timeout_ms"
+const (
+	accountSecurityAuthorityBaseURLConfigKey = "sys.chat-service.user_account_security_authority.base_url"
+	accountSecurityAuthorityTimeoutConfigKey = "sys.chat-service.user_account_security_authority.timeout_ms"
+)
 
+// newChatAccountSecurityAuthority 复刻 servicekit.NewAuthStack 对 chat 的装配
+// 路径：base_url + timeout_ms + BootstrapSpec 声明的服务间 scope。测试与
+// 运行时共用同一构造契约，authority 请求形态漂移即在此暴露。
+func newChatAccountSecurityAuthority(
+	tokenConfig rtauth.TokenConfig,
+	baseURL string,
+	timeoutMilliseconds int,
+) (*rtauth.HTTPAccountSecurityAuthority, error) {
+	credentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
+		tokenConfig,
+		"chat-service",
+		[]string{"user.account.security.read"},
+	)
+	if err != nil {
+		return nil, err
+	}
+	timeout := time.Duration(timeoutMilliseconds) * time.Millisecond
+	return rtauth.NewHTTPAccountSecurityAuthority(
+		rtauth.HTTPAccountSecurityAuthorityConfig{
+			BaseURL:     baseURL,
+			HTTPClient:  &http.Client{Timeout: timeout},
+			Credentials: credentials,
+			Timeout:     timeout,
+		},
+	)
+}
+
+// TestChatAccountSecurityAuthorityConstructionRejectsMissingOrInvalidRuntimeConfig
+// 覆盖装配期拒收。50ms~5s 的超时档位由 chat 的 ValidateConfig 钩子把守，
+// 断言在 cmd/api 的 bootstrap_env_keys__local_contract_test.go。
 func TestChatAccountSecurityAuthorityConstructionRejectsMissingOrInvalidRuntimeConfig(t *testing.T) {
 	validTokenConfig := chatAccountSecurityTokenConfig()
 	invalidTokenConfig := validTokenConfig
@@ -52,18 +84,6 @@ func TestChatAccountSecurityAuthorityConstructionRejectsMissingOrInvalidRuntimeC
 			baseURL: "https://user-service.internal",
 		},
 		{
-			name:    "timeout below bounded minimum",
-			token:   validTokenConfig,
-			baseURL: "https://user-service.internal",
-			timeout: 49,
-		},
-		{
-			name:    "timeout above bounded maximum",
-			token:   validTokenConfig,
-			baseURL: "https://user-service.internal",
-			timeout: 5001,
-		},
-		{
 			name:    "invalid signing configuration",
 			token:   invalidTokenConfig,
 			baseURL: "https://user-service.internal",
@@ -71,7 +91,7 @@ func TestChatAccountSecurityAuthorityConstructionRejectsMissingOrInvalidRuntimeC
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			if _, err := chatconfig.NewAccountSecurityAuthority(
+			if _, err := newChatAccountSecurityAuthority(
 				testCase.token,
 				testCase.baseURL,
 				testCase.timeout,
@@ -103,18 +123,26 @@ func TestChatAccountSecurityAuthorityTimeoutConfiguredForEveryEnvironment(t *tes
 		t.Fatal(err)
 	}
 
-	var timeoutDefinition *configDefinition
-	for index := range schema.Configs {
-		if schema.Configs[index].Key == accountSecurityAuthorityTimeoutConfigKey {
-			timeoutDefinition = &schema.Configs[index]
-			break
-		}
+	definitions := map[string]configDefinition{}
+	for _, definition := range schema.Configs {
+		definitions[definition.Key] = definition
 	}
-	if timeoutDefinition == nil || timeoutDefinition.Type != "int" {
+	timeoutDefinition, found := definitions[accountSecurityAuthorityTimeoutConfigKey]
+	if !found || timeoutDefinition.Type != "int" {
 		t.Fatalf("missing integer timeout config definition: %#v", timeoutDefinition)
 	}
 	if timeoutDefinition.Default != nil {
 		t.Fatal("account security authority timeout must not have a silent default")
+	}
+	baseURLDefinition, found := definitions[accountSecurityAuthorityBaseURLConfigKey]
+	if !found || baseURLDefinition.Type != "string" {
+		t.Fatalf("missing string base URL config definition: %#v", baseURLDefinition)
+	}
+	if baseURLDefinition.Default != nil {
+		t.Fatal("account security authority base URL must not have a silent default")
+	}
+	if _, retired := definitions["sys.chat-service.runtime.auth.account_security_authority.timeout_ms"]; retired {
+		t.Fatal("runtime.auth is retired; the authority segment now lives in user_account_security_authority")
 	}
 
 	for _, environment := range []string{"alpha", "beta", "gamma", "prod"} {
@@ -138,6 +166,13 @@ func TestChatAccountSecurityAuthorityTimeoutConfiguredForEveryEnvironment(t *tes
 			if !ok || timeout <= 0 {
 				t.Fatal("environment must declare an integer authority timeout")
 			}
+			baseURL, ok := environmentConfig.Overrides[accountSecurityAuthorityBaseURLConfigKey].(string)
+			if !ok || baseURL != "http://user-service:18081" {
+				t.Fatalf(
+					"environment must target the actual user-service origin, got %q",
+					baseURL,
+				)
+			}
 		})
 	}
 }
@@ -150,10 +185,6 @@ func TestChatMiddlewareSynchronouslyEnforcesAccountSecurityAuthority(t *testing.
 	}
 	deviceTokenConfig := tokenConfig
 	deviceTokenConfig.Type = rtauth.TokenTypeDevice
-	deviceVerifier, err := rtauth.NewHS256Verifier(deviceTokenConfig)
-	if err != nil {
-		t.Fatal(err)
-	}
 	signer, err := rtauth.NewHS256Signer(tokenConfig)
 	if err != nil {
 		t.Fatal(err)
@@ -226,14 +257,16 @@ func TestChatMiddlewareSynchronouslyEnforcesAccountSecurityAuthority(t *testing.
 	}))
 	defer server.Close()
 
-	authority, err := chatconfig.NewAccountSecurityAuthority(tokenConfig, server.URL, 500)
+	authority, err := newChatAccountSecurityAuthority(tokenConfig, server.URL, 500)
 	if err != nil {
 		t.Fatal(err)
 	}
 	businessCalls := 0
+	// chat 的 BootstrapSpec 声明 SkipDeviceTicketAuth，装配出的中间件没有
+	// 设备票据 verifier：这里按同一形状构造，才不会用一份服务不具备的
+	// 认证能力取证。
 	handler := rtauth.Middleware(rtauth.MiddlewareConfig{
 		AccessTokenVerifier:      accessVerifier,
-		DeviceTicketVerifier:     deviceVerifier,
 		AccountSecurityAuthority: authority,
 	})(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		businessCalls++
@@ -340,17 +373,27 @@ func TestChatMiddlewareSynchronouslyEnforcesAccountSecurityAuthority(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	for name, request := range map[string]*http.Request{
-		"service access token": func() *http.Request {
-			request := httptest.NewRequest(http.MethodGet, "/internal/chat", nil)
-			request.Header.Set("Authorization", "Bearer "+serviceToken)
-			return request
-		}(),
-		"device ticket": func() *http.Request {
-			request := httptest.NewRequest(http.MethodGet, "/device/chat", nil)
-			request.Header.Set(rtauth.DeviceTicketHeader, deviceTicket)
-			return request
-		}(),
+	for name, testCase := range map[string]struct {
+		request    *http.Request
+		wantStatus int
+	}{
+		"service access token": {
+			request: func() *http.Request {
+				request := httptest.NewRequest(http.MethodGet, "/internal/chat", nil)
+				request.Header.Set("Authorization", "Bearer "+serviceToken)
+				return request
+			}(),
+			wantStatus: http.StatusNoContent,
+		},
+		// chat 不提供设备票据认证能力：没有 verifier 即拒绝，而不是放行。
+		"device ticket": {
+			request: func() *http.Request {
+				request := httptest.NewRequest(http.MethodGet, "/device/chat", nil)
+				request.Header.Set(rtauth.DeviceTicketHeader, deviceTicket)
+				return request
+			}(),
+			wantStatus: http.StatusUnauthorized,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			requestMu.Lock()
@@ -358,10 +401,10 @@ func TestChatMiddlewareSynchronouslyEnforcesAccountSecurityAuthority(t *testing.
 			requestMu.Unlock()
 
 			recorder := httptest.NewRecorder()
-			handler.ServeHTTP(recorder, request)
+			handler.ServeHTTP(recorder, testCase.request)
 
-			if recorder.Code != http.StatusNoContent {
-				t.Fatalf("status=%d want=%d", recorder.Code, http.StatusNoContent)
+			if recorder.Code != testCase.wantStatus {
+				t.Fatalf("status=%d want=%d", recorder.Code, testCase.wantStatus)
 			}
 			requestMu.Lock()
 			after := len(requests)
@@ -430,7 +473,7 @@ func TestChatAccountSecurityAuthorityReadinessUsesScopedHealthRoute(t *testing.T
 	}))
 	defer server.Close()
 
-	authority, err := chatconfig.NewAccountSecurityAuthority(tokenConfig, server.URL, 500)
+	authority, err := newChatAccountSecurityAuthority(tokenConfig, server.URL, 500)
 	if err != nil {
 		t.Fatal(err)
 	}

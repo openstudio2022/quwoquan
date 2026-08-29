@@ -56,7 +56,7 @@
       "budgetSeconds": 1500,
       "hardFailSeconds": 1800,
       "criticalPath": "workflow run created_at -> candidate evidence completed_at, including queue and setup waits",
-      "machinePath": "topology_regression + max(quwoquan_service, quwoquan_service_packaging, quwoquan_service_coverage, search_contract_smoke, quwoquan_app_static, quwoquan_app_tests, quwoquan_app_serial, quwoquan_app_coverage, quwoquan_data, ops_portal)",
+      "machinePath": "topology_regression + max(quwoquan_service, quwoquan_service_packaging, quwoquan_service_coverage, search_contract_smoke, quwoquan_app_static, quwoquan_app_tests, quwoquan_app_serial, quwoquan_app_coverage, quwoquan_data, ops_portal); pull_request sources quwoquan_app_* from verified push evidence while calendar still ends at its own verifier completion",
       "phaseBudgetsSeconds": {
         "topology_regression": 120,
         "quwoquan_service": 1500,

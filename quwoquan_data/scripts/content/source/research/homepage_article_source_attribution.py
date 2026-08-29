@@ -4,7 +4,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from core.source_attribution import canonical_source_attribution
+from core.source_attribution import (
+    canonical_source_attribution,
+    derived_modifications_value,
+)
 
 _PLATFORMS = {
     "wikipedia": "维基百科",
@@ -58,6 +61,8 @@ def encyclopedia_source_attribution(
         "propertyReleaseStatus": "not_required",
         "collectedAt": str(captured_at).strip(),
         "takedownPolicy": "remove_on_verified_rights_or_source_dispute",
+        # 百科来源承载的是正文事实引用，本身不落媒体字节，因此没有衍生修改。
+        "derivedModifications": derived_modifications_value(),
     }
     return canonical_source_attribution(value)
 

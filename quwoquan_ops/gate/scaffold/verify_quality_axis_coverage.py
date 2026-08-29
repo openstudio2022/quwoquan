@@ -20,6 +20,8 @@ import json
 import sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True
+
 from nonfunctional_coverage_lib import ROOT
 from test_directory_layout_lib import iter_canonical_files
 

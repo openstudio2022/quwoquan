@@ -23,6 +23,8 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 
+sys.dont_write_bytecode = True
+
 _MODULE_DIR = Path(__file__).resolve().parent
 if str(_MODULE_DIR) not in sys.path:
     sys.path.insert(0, str(_MODULE_DIR))

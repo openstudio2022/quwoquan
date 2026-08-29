@@ -20,9 +20,11 @@ from .chat_service import (
 )
 from .circle_service import (
     CircleGatheringCase,
+    CircleGatheringPlanCase,
     CircleMembershipCase,
     CirclePendingApprovalCase,
     circle_gathering_case,
+    circle_gathering_plan_case,
     circle_membership_case,
     circle_pending_approval_case,
 )
@@ -53,6 +55,7 @@ __all__ = (
     "ChatGroupGovernanceCase",
     "ChatRecallCase",
     "CircleGatheringCase",
+    "CircleGatheringPlanCase",
     "CircleMembershipCase",
     "CirclePendingApprovalCase",
     "ContentCommentsCase",
@@ -69,6 +72,7 @@ __all__ = (
     "chat_group_governance_case",
     "chat_recall_case",
     "circle_gathering_case",
+    "circle_gathering_plan_case",
     "circle_membership_case",
     "circle_pending_approval_case",
     "content_comments_case",

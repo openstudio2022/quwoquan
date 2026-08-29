@@ -17,6 +17,8 @@ from content.release.canonical.pool_delivery_intent_inspection import (
     inspect_pool_delivery_intents,
 )
 from content.release.canonical.pool_inspection import inspect_pool
+from content.release.canonical.pool_object_retirement import retire_pool_object
+from content.release.canonical.pool_precheck import precheck_pool_release
 from content.release.canonical.pool_source_ready_input import (
     load_p10_throughput,
     load_source_ready_input,
@@ -74,6 +76,23 @@ def handle_pool_release_build(args: argparse.Namespace) -> None:
     ) as exc:
         raise SystemExit(f"[release pool-build] GATE_BLOCK {exc}") from exc
     print(json.dumps(report, ensure_ascii=False, indent=2))
+
+
+def handle_pool_precheck(args: argparse.Namespace) -> None:
+    publish_root = Path(args.publish_root or PUBLISH_ROOT).resolve()
+    try:
+        report = precheck_pool_release(
+            publish_root=publish_root,
+            milestone=str(args.milestone),
+            release_class=str(args.release_class),
+        )
+    except (FileNotFoundError, OSError, ObjectTransactionError, ValueError) as exc:
+        raise SystemExit(f"[release pool-precheck] GATE_BLOCK {exc}") from exc
+    document = report.as_document(details=bool(getattr(args, "details", False)))
+    print(json.dumps(document, ensure_ascii=False, indent=2))
+    if report.status != "passed":
+        codes = ",".join(sorted({blocker.code for blocker in report.blockers}))
+        raise SystemExit(f"[release pool-precheck] GATE_BLOCK {codes}")
 
 
 def handle_pool_inspect(args: argparse.Namespace) -> None:
@@ -289,6 +308,41 @@ def handle_pool_append(args: argparse.Namespace) -> None:
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
+def handle_pool_object_retire(args: argparse.Namespace) -> None:
+    """Write one create-once retirement receipt; never touch original evidence."""
+
+    publish_root = Path(args.publish_root or PUBLISH_ROOT).resolve()
+    try:
+        if bool(args.apply):
+            with canonical_publish_lock(publish_root):
+                report = retire_pool_object(
+                    publish_root=publish_root,
+                    object_type=str(args.object_type),
+                    object_ref=str(args.object_ref),
+                    reason=str(args.reason),
+                    retired_at=str(args.retired_at),
+                    apply=True,
+                )
+        else:
+            report = retire_pool_object(
+                publish_root=publish_root,
+                object_type=str(args.object_type),
+                object_ref=str(args.object_ref),
+                reason=str(args.reason),
+                retired_at=str(args.retired_at),
+                apply=False,
+            )
+    except (
+        FileNotFoundError,
+        OSError,
+        ObjectTransactionError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        raise SystemExit(f"[release pool-object retire] GATE_BLOCK {exc}") from exc
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+
+
 def handle_pool_attribution_repair(args: argparse.Namespace) -> None:
     publish_root = Path(args.publish_root or PUBLISH_ROOT).resolve()
     output_root = Path(OUTPUT_ROOT).resolve()
@@ -332,5 +386,6 @@ __all__ = [
     "handle_pool_backfill_plan",
     "handle_pool_dispatch",
     "handle_pool_inspect",
+    "handle_pool_object_retire",
     "handle_pool_release_build",
 ]

@@ -2,14 +2,19 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Mapping
 from dataclasses import dataclass
 from http import HTTPStatus
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Literal
+from urllib.parse import urlsplit, urlunsplit
 
+from content.release.environment.public_api_client import (
+    PublicApiClient,
+    _public_url_evidence,
+)
 from core.control_types import ContentType
 from core.io import read_json
-from content.release.environment.public_api_client import PublicApiClient
 
 
 class PostApiVerificationError(ValueError):
@@ -20,10 +25,14 @@ class PostApiVerificationError(ValueError):
 class ReleaseMediaAssetCase:
     asset_id: str
     kind: str
+    # commercial：匿名 CDN 绝对 URL；research：与 delivery_ref 同值的相对
+    # CAS key（App 回读比对用同一字段，探测语义由 delivery_ref 是否非空分流）。
     public_url: str
     expected_bytes: int
     expected_sha256: str
     expected_mime_type: str
+    # research 私有交付的相对 CAS objectKey（media/objects/sha256/...）。
+    delivery_ref: str = ""
 
 
 @dataclass(frozen=True)
@@ -47,6 +56,20 @@ def _object(value: Any, *, label: str) -> Mapping[str, Any]:
     if not isinstance(value, Mapping):
         raise PostApiVerificationError(f"{label} must be an object")
     return value
+
+
+def _optional_text(payload: Mapping[str, Any], field: str, *, endpoint: str) -> str:
+    value = payload.get(field)
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        raise PostApiVerificationError(f"{endpoint} {field} must be a string or null")
+    return value.strip()
+
+
+def _public_media_path(url: str) -> str:
+    parts = urlsplit(str(url or "").strip())
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
 
 
 def _source_attribution(
@@ -113,7 +136,11 @@ def _verify_binary_media(
     expected_bytes: int = 0,
     expected_sha256: str = "",
     expected_mime_type: str = "",
+    evidence_policy: Literal["public_url", "private_target"] = "public_url",
 ) -> dict[str, Any]:
+    if evidence_policy not in {"public_url", "private_target"}:
+        raise PostApiVerificationError("media evidence policy is unsupported")
+    target_evidence = _public_url_evidence(url)
     require_full_identity = expected_bytes > 0 or bool(expected_sha256)
     response = client.get_bytes(
         url,
@@ -122,54 +149,95 @@ def _verify_binary_media(
     )
     if response.status not in {HTTPStatus.OK, HTTPStatus.PARTIAL_CONTENT}:
         raise PostApiVerificationError(
-            f"public {expected_kind} media returned status={response.status}: {url}"
+            f"public {expected_kind} media returned status={response.status}: "
+            f"{target_evidence}"
         )
     content_type = response.content_type.split(";", 1)[0].strip().lower()
     if not content_type.startswith(f"{expected_kind}/"):
         raise PostApiVerificationError(
-            f"public media MIME mismatch for {url}: {response.content_type!r}"
+            f"public media MIME mismatch: {target_evidence}"
         )
     if not response.body:
-        raise PostApiVerificationError(f"public media returned empty bytes: {url}")
+        raise PostApiVerificationError(
+            f"public media returned empty bytes: {target_evidence}"
+        )
     if expected_mime_type and content_type != expected_mime_type:
         raise PostApiVerificationError(
-            f"public media MIME differs from release authority for {url}"
+            "public media MIME differs from release authority: "
+            f"{target_evidence}"
         )
     observed_sha256 = f"sha256:{hashlib.sha256(response.body).hexdigest()}"
     if require_full_identity:
         if response.status != HTTPStatus.OK:
             raise PostApiVerificationError(
-                f"public media full-byte probe returned status={response.status}: {url}"
+                "public media full-byte probe returned "
+                f"status={response.status}: {target_evidence}"
             )
         if len(response.body) != expected_bytes:
             raise PostApiVerificationError(
-                f"public media length differs from release authority for {url}"
+                "public media length differs from release authority: "
+                f"{target_evidence}"
             )
         if observed_sha256 != expected_sha256:
             raise PostApiVerificationError(
-                f"public media hash differs from release authority for {url}"
+                "public media hash differs from release authority: "
+                f"{target_evidence}"
             )
     if expected_kind == "video":
         if response.status != HTTPStatus.PARTIAL_CONTENT or not response.content_range.startswith(
             "bytes "
         ):
             raise PostApiVerificationError(
-                f"public video does not honor byte ranges: {url}"
+                f"public video does not honor byte ranges: {target_evidence}"
             )
         if b"ftyp" not in response.body[:64] and not response.body.startswith(
             b"\x1a\x45\xdf\xa3"
         ):
             raise PostApiVerificationError(
-                f"public video first range is not a playable MP4/WebM header: {url}"
+                "public video first range is not a playable MP4/WebM header: "
+                f"{target_evidence}"
             )
-    return {
-        "publicUrl": url,
+    receipt = {
         "status": response.status,
         "mimeType": content_type,
         "bytes": len(response.body),
         "sha256": observed_sha256 if require_full_identity else "",
-        "etag": str(getattr(response, "etag", "") or ""),
         "hashVerified": require_full_identity,
+    }
+    if evidence_policy == "private_target":
+        return {"targetEvidence": target_evidence, **receipt}
+    return {
+        "publicUrl": url,
+        **receipt,
+        "etag": str(getattr(response, "etag", "") or ""),
+    }
+
+
+def _verify_research_denied_media(
+    client: PublicApiClient,
+    *,
+    media_origin: str,
+    asset: ReleaseMediaAssetCase,
+) -> dict[str, Any]:
+    """匿名 GET research 私有交付 URL 必须被边缘 401/403 拒绝。"""
+    anonymous_url = f"{media_origin}/{asset.delivery_ref}"
+    response = client.get_bytes(anonymous_url, byte_range="", max_bytes=65536)
+    if response.status not in {
+        HTTPStatus.UNAUTHORIZED,
+        HTTPStatus.FORBIDDEN,
+    }:
+        raise PostApiVerificationError(
+            "research private media must deny anonymous access "
+            f"(status={response.status}): {_public_url_evidence(anonymous_url)}"
+        )
+    return {
+        "assetId": asset.asset_id,
+        "kind": asset.kind,
+        "deliveryRef": asset.delivery_ref,
+        "anonymousStatus": response.status,
+        "expectedBytes": asset.expected_bytes,
+        "expectedSha256": asset.expected_sha256,
+        "signedProbe": None,
     }
 
 

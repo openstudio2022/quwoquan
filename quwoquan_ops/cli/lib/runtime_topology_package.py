@@ -15,6 +15,10 @@ from typing import Any, Mapping
 
 import yaml
 
+import sys
+
+sys.dont_write_bytecode = True
+
 from quwoquan_ops.cli.lib.immutable_image_composition import first_party_service_names
 from quwoquan_ops.cli.lib.service_core_composition import (
     SERVICE_CORE_MODULE_SET,
@@ -42,6 +46,18 @@ CONTENT_RELEASE_SERVICES = frozenset(
 CONTENT_COMMERCIAL_SERVICES = frozenset(
     {*CONTENT_RELEASE_SERVICES, "product-ops-service"}
 )
+# workload 激活哪些 Compose profile 是唯一闭集：immutable 受回执约束的 down
+# 投影与 mutable test_live 装配都必须读同一处声明。任一侧漏掉一个 profile，
+# 被 profile 门控的服务就只存在于声明里而永不启动，运行态 roster 随之漂移。
+FULL_WORKLOAD_COMPOSE_PROFILES = frozenset(
+    {
+        "assistant-runtime",
+        "commercial-observability",
+        "control-plane",
+        "edge-media",
+    }
+)
+CONTENT_COMMERCIAL_COMPOSE_PROFILES = frozenset({"commercial-observability"})
 # 服务 Compose 允许以相对路径 bind 挂载的仓库真相源文件。candidate 是自
 # 包含 immutable 包，任何相对 bind 都必须在打包时封装并重写到包内位置；
 # 否则 docker 会对悬空的 host 路径自动创建目录，容器读到 is-a-directory

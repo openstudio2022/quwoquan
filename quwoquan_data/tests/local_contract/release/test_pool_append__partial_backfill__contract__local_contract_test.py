@@ -97,6 +97,8 @@ def _source_attribution() -> dict[str, object]:
         "propertyReleaseStatus": "not_required",
         "collectedAt": "2026-08-11T00:00:00Z",
         "takedownPolicy": "remove on substantiated request",
+        "derivedModifications": [],
+        "derivedModifications": [],
     }
 
 
@@ -227,7 +229,7 @@ def test_pool_append_isolates_business_apply_failure_from_successful_sibling(
         batch,
         {"schema": BATCH_SCHEMA, "appendSetId": "business-failure", "items": items},
     )
-    real_apply = pool_append_subject._apply_item
+    real_apply = pool_append_subject.apply_pool_item
 
     def flaky_apply(item: object, **kwargs: object) -> dict[str, object]:
         assert isinstance(item, dict)
@@ -235,7 +237,7 @@ def test_pool_append_isolates_business_apply_failure_from_successful_sibling(
             raise ObjectTransactionError("DATA.POOL.ADMISSION_FAILED")
         return real_apply(item, **kwargs)
 
-    monkeypatch.setattr(pool_append_subject, "_apply_item", flaky_apply)
+    monkeypatch.setattr(pool_append_subject, "apply_pool_item", flaky_apply)
 
     report = append_pool_batch(input_path=batch, publish_root=publish, apply=True)
 

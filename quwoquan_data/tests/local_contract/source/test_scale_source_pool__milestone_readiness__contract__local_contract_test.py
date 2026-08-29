@@ -64,6 +64,7 @@ def _source_attribution(carrier: str, index: int) -> dict[str, object]:
         "propertyReleaseStatus": "not_required",
         "collectedAt": "2026-08-08T00:00:00Z",
         "takedownPolicy": "remove on substantiated request",
+        "derivedModifications": [],
     }
 
 

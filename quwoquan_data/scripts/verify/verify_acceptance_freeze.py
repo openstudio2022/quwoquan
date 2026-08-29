@@ -22,6 +22,8 @@ from pathlib import Path
 
 
 
+sys.dont_write_bytecode = True
+
 DATA_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS_ROOT = DATA_ROOT / "scripts"
 if str(SCRIPTS_ROOT) not in sys.path:

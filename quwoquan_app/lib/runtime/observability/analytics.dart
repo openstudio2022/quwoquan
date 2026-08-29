@@ -174,6 +174,7 @@ class AnalyticsService {
   }
 
   static const Set<String> _localOnlyEventNames = <String>{
+    'media_load_state',
     'home_feed_frame_jank_ratio',
     'home_feed_image_cache_bytes',
     'home_feed_active_video_controller_count',

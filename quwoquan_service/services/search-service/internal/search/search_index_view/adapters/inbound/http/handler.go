@@ -185,14 +185,10 @@ func (h *Handler) handleSearch(w http.ResponseWriter, r *http.Request) {
 	// in the recall engine; nothing re-ranks after recall.
 	preparation, err := h.decorator.Prepare(r.Context(), normalizedQuery, experimentSubjectKey)
 	if err != nil {
-		writeErr(
+		writeSearchUnavailable(
 			w,
 			requestID,
-			rterrors.NewUnavailable(
-				moduleSearch,
-				"搜索暂时不可用，请稍后再试。",
-				"experiment assignment: "+err.Error(),
-			),
+			"experiment assignment: "+err.Error(),
 		)
 		return
 	}
@@ -340,7 +336,7 @@ func (h *Handler) writeSearchExecutionError(w http.ResponseWriter, requestID str
 		writeErr(w, requestID, rterrors.NewInvalidArgument(moduleSearch, "搜索请求格式不正确。", err.Error()))
 		return
 	}
-	writeErr(w, requestID, rterrors.NewUnavailable(moduleSearch, "搜索暂时不可用，请稍后再试。", "retrieve: "+err.Error()))
+	writeSearchUnavailable(w, requestID, "retrieve: "+err.Error())
 }
 
 func (h *Handler) logQueryAsync(r *http.Request, qlog requestapplication.QueryLog) {

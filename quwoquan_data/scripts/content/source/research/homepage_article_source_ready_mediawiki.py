@@ -18,6 +18,7 @@ from core.runtime_policy import active_runtime_policy
 
 from content.source.research.homepage_article_source_ready_assets import (
     acquire_open_image_assets as _acquire_open_image_assets,
+    provenance_admissible_image_rows,
 )
 from content.source.research.homepage_article_source_ready_types import (
     PUBLIC_ACCESS,
@@ -44,6 +45,7 @@ from content.source.research.homepage_article_source_ready_wikidata import (
     wikidata_structured_fact,
 )
 from content.source.research.homepage_structured_fact_text import (
+    extract_structured_fact_from_baike_infobox,
     extract_structured_fact_from_text,
 )
 from content.source.research.homepage_article_source_attribution import (
@@ -130,12 +132,14 @@ def _baike_structured_fact(
     text = str(payload.get("text") or "").strip()
     if not text:
         return None
-    extracted = extract_structured_fact_from_text(text)
+    raw_body = payload.get("htmlBytes")
+    raw_body = bytes(raw_body) if isinstance(raw_body, bytes | bytearray) else b""
+    extracted = extract_structured_fact_from_text(
+        text
+    ) or extract_structured_fact_from_baike_infobox(raw_body)
     if extracted is None:
         return None
     field, value = extracted
-    raw_body = payload.get("htmlBytes")
-    raw_body = bytes(raw_body) if isinstance(raw_body, bytes | bytearray) else b""
     raw = json.dumps(
         {
             "schema": "quwoquan_data.homepage_baike_fact_source_raw_evidence",
@@ -340,7 +344,12 @@ def acquire_mediawiki_source_ready_candidate(
             "MediaWiki page/image evidence changed during acquisition"
         )
     roles = ("hero",) if carrier == "homepage" else ("cover", "body")
-    if len(image_rows) < (6 if carrier == "article" else 1):
+    # 补充阈值按「还能走到发布的候选」计，而不是页面渲染出的原始张数：一张
+    # 注定被 license/水印 provenance 排除的图在数量上顶满名额，会让扩源永不触发，
+    # 实体最终拿到零张可发布图。
+    if len(provenance_admissible_image_rows(image_rows)) < (
+        6 if carrier == "article" else 1
+    ):
         supplement = [
             *wikidata_commons_images_for_entity(
                 bundle.resolved_title,

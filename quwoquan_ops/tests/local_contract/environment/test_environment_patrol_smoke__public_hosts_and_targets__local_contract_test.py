@@ -127,7 +127,7 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
                     "gamma",
                     "--target",
                     "gamma-local",
-                    "--launch-mode",
+                    "--launch-provenance",
                     "canonical_launcher",
                 ],
                 cwd=ROOT / "quwoquan_app",
@@ -179,7 +179,10 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
                         separators=(",", ":"),
                     ),
                     "QWQ_APP_RUNTIME_ENV": "gamma",
-                    "QWQ_APP_LAUNCH_MODE": "canonical_launcher",
+                    "QWQ_APP_LAUNCH_PROVENANCE": "canonical_launcher",
+                    "QWQ_RUNTIME_CONFIG_SUPPLY_MODE": (
+                        "external_runtime_package"
+                    ),
                     "QWQ_LAUNCH_TARGET": "gamma-local",
                     # buildProfile 身份由 Xcode configuration 显式给出，脚本
                     # 不从环境推断；缺席即 fail-closed。
